@@ -41,7 +41,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// 
 		/// Behavior:
 		/// - Inserts missing factions and updates existing factions by (CharacterID, TemplateID)
@@ -60,7 +61,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no factions, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteFactionsAsync(long characterId, CancellationToken cancellationToken = default);
@@ -75,7 +77,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// or error details on failure.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// Returns an empty collection if the character has no factions.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterFactionData>>> GetFactionsAsync(long characterId, CancellationToken cancellationToken = default);

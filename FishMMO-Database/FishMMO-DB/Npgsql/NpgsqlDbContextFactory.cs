@@ -19,7 +19,6 @@ namespace FishMMO.Database.Npgsql
 	public class NpgsqlDbContextFactory : INpgsqlDbContextFactory, IDesignTimeDbContextFactory<NpgsqlDbContext>
 	{
 		private int shutdown;
-		private readonly string connectionString;
 		private readonly string schema;
 		private readonly bool enableLogging;
 		private readonly int commandTimeout;
@@ -80,7 +79,7 @@ namespace FishMMO.Database.Npgsql
 			ValidateUnquotedIdentifierSetting("Npgsql:Database", database);
 			ValidateUnquotedIdentifierSetting("Npgsql:Schema", schema);
 
-			string userID = configuration.GetSection("Npgsql")["Username"] ?? "user";
+			string userId = configuration.GetSection("Npgsql")["Username"] ?? "user";
 			string password = configuration.GetSection("Npgsql")["Password"] ?? "pass";
 			string host = configuration.GetSection("Npgsql")["Host"] ?? "127.0.0.1";
 			string port = configuration.GetSection("Npgsql")["Port"] ?? "5432";
@@ -106,8 +105,8 @@ namespace FishMMO.Database.Npgsql
 
 			// Build connection string with pooling and separate timeout configuration
 			// Timeout = time to establish connection, Command Timeout = time for query execution
-			connectionString =
-				$"Host={host};Port={port};Database={database};Username={userID};Password={password};" +
+			var connectionString =
+				$"Host={host};Port={port};Database={database};Username={userId};Password={password};" +
 				$"Pooling=true;Minimum Pool Size={minPoolSize};Maximum Pool Size={maxPoolSize};" +
 				$"Timeout={connectionTimeout};Command Timeout={this.commandTimeout};";
 

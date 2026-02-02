@@ -34,18 +34,6 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class CharacterFriendService : BaseService<CharacterFriendEntity>, ICharacterFriendService
 	{
 		/// <summary>
-		/// Compiled query for checking whether a character exists and is not deleted.
-		/// Returns the character ID if active, otherwise 0.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
-				context.Characters
-					.AsNoTracking()
-					.Where(c => c.ID == characterId && !c.Deleted)
-					.Select(c => c.ID)
-					.FirstOrDefault());
-
-		/// <summary>
 		/// Compiled query for retrieving character friends.
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterFriendEntity>>> getFriendsQuery =
@@ -85,42 +73,40 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
+			var insertResult = await ExecuteWriteAsync(async dbContext =>
 			{
-				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-				if (activeCharacterId == 0)
-				{
-					return;
-				}
+				var now = DateTime.UtcNow;
+				var sql = $@"
+					WITH active_character AS (
+						SELECT 1 FROM character WHERE id = {{0}} AND deleted = FALSE
+					)
+					INSERT INTO {TableName}
+						(character_id, friend_character_id, version, time_created, deleted, time_deleted)
+					SELECT
+						{{0}},
+						{{1}},
+						1,
+						{{2}},
+						FALSE,
+						NULL
+					WHERE EXISTS (SELECT 1 FROM active_character)
+					ON CONFLICT (character_id, friend_character_id)
+					DO UPDATE SET
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = CASE
+							WHEN version < 1 THEN 1
+							ELSE version
+						END";
 
-				var existing = await dbContext.CharacterFriends
-					.FirstOrDefaultAsync(f => f.CharacterID == characterId && f.FriendCharacterID == friendCharacterId, cancellationToken)
+				await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { characterId, friendCharacterId, now },
+					cancellationToken)
 					.ConfigureAwait(false);
-				if (existing != null)
-				{
-					if (existing.Deleted)
-					{
-						existing.Deleted = false;
-						existing.TimeDeleted = null;
-					}
-					return;
-				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				var entity = new CharacterFriendEntity
-				{
-					CharacterID = characterId,
-					FriendCharacterID = friendCharacterId,
-					TimeCreated = DateTime.UtcNow
-				};
-				await dbContext.CharacterFriends.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-
-			if (insertResult.IsSuccess)
-			{
-				return DatabaseResult.Success();
-			}
-
-			return insertResult.ErrorCode == "UNIQUE_VIOLATION"
+			return insertResult.IsSuccess
 				? DatabaseResult.Success()
 				: DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 		}
@@ -136,7 +122,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -144,7 +130,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND friend_character_id = {{2}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId, friendCharacterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -158,7 +144,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -166,7 +152,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

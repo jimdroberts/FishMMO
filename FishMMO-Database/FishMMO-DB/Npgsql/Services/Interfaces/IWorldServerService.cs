@@ -11,7 +11,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </summary>
 	/// <remarks>
 	/// <para><b>Execution Strategy:</b> All write operations (AddOrUpdateAsync, PulseAsync, DeleteAsync) use execution strategy wrappers to handle transient database failures with automatic retry. FromSqlRaw and ExecuteSqlRawAsync calls do not automatically retry without manual wrapping.</para>
-	/// <para><b>Read Operations:</b> Read operations use LINQ queries and are executed via BaseService, which includes retry/transaction handling.</para>
+	/// <para><b>Read Operations:</b> Read operations use LINQ queries and are executed via BaseService execution wrappers for consistent exception mapping. Explicit transactions are used only when a write requires multiple database statements.</para>
 	/// <para><b>Error Handling:</b> All database operations return DatabaseResult or DatabaseResult&lt;T&gt; for comprehensive exception handling with typed database exceptions (DatabaseConnectionException, DatabaseConstraintException, DatabaseQueryException, DatabaseTimeoutException, DatabaseEntityNotFoundException).</para>
 	/// </remarks>
 	public interface IWorldServerService
@@ -29,7 +29,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <returns>DatabaseResult containing tuple (ServerId, ServerData) if successful.</returns>
 		/// <remarks>
 		/// <para><b>Operation:</b> Attempts INSERT; on unique violation, loads the existing row and updates it.</para>
-		/// <para><b>Returns:</b> The returned ServerId is populated after SaveChanges runs in the BaseService transaction wrapper.</para>
+		/// <para><b>Returns:</b> The returned ServerId is populated after SaveChanges completes inside the BaseService execution wrapper.</para>
 		/// <para><b>Returns:</b> Failure if name/address empty or operation fails; Success with (ServerId, ServerData) on success.</para>
 		/// </remarks>
 		Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> AddOrUpdateAsync(
@@ -78,7 +78,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <returns>DatabaseResult containing WorldServerData if found; DatabaseEntityNotFoundException if not found.</returns>
 		/// <remarks>
 		/// <para><b>Operation:</b> LINQ query with AsNoTracking for read-only retrieval.</para>
-		/// <para><b>Execution Strategy:</b> BaseService handles retries/transactions.</para>
+		/// <para><b>Execution Strategy:</b> BaseService handles retries and centralized exception mapping; explicit transactions are used only when a write requires multiple database statements.</para>
 		/// </remarks>
 		Task<DatabaseResult<WorldServerData>> GetServerAsync(long serverId, CancellationToken cancellationToken = default);
 
@@ -91,7 +91,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <returns>DatabaseResult containing List of active WorldServerData ordered by name; empty list if no active servers.</returns>
 		/// <remarks>
 		/// <para><b>Operation:</b> LINQ query filtering by last_pulse >= (UtcNow - timeout), ordered by name.</para>
-		/// <para><b>Execution Strategy:</b> BaseService handles retries/transactions.</para>
+		/// <para><b>Execution Strategy:</b> BaseService handles retries and centralized exception mapping; explicit transactions are used only when a write requires multiple database statements.</para>
 		/// </remarks>
 		Task<DatabaseResult<List<WorldServerData>>> GetActiveServersAsync(
 			float idleTimeoutSeconds = 60.0f,

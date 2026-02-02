@@ -14,10 +14,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (Enqueue*, Dequeue*, Update*, Set*, Pulse*, Delete*) in this service use execution strategies to ensure transient
-	/// database failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because SaveChangesAsync, ExecuteSqlRawAsync, and FromSqlRaw do not automatically
-	/// Execution is wrapped by BaseService for retries/transactions.
+	/// Write operations (Enqueue*, Dequeue*, Update*, Set*, Pulse*, Delete*) in this service use BaseService execution wrappers
+	/// to ensure transient database failures are automatically retried and exceptions are mapped to DatabaseResult.
+	/// When a write requires multiple database statements, it is wrapped in ExecuteTransactionAsync; single-statement SQL operations
+	/// (including CTE-based UPDATE/DELETE/UPSERT) are executed atomically without requiring an explicit transaction wrapper.
 	/// </para>
 	/// <para>
 	/// All methods use the DatabaseResult pattern to provide structured success/failure information:
@@ -46,7 +46,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Uses SaveChangesAsync with execution strategy wrapping to ensure transient database failures
 		/// are automatically retried.
-		/// Uses BaseService.ExecuteTransactionAsync for automatic transient failure retry and centralized exception mapping.
+		/// Uses BaseService execution wrappers for automatic transient failure retry and centralized exception mapping.
 		/// </remarks>
 		Task<DatabaseResult<long>> EnqueueAsync(
 			long worldServerId,

@@ -118,19 +118,25 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var entity = new AccountEntity
+				var sql = $@"INSERT INTO {TableName} (name, salt, verifier, access_level)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}})
+					ON CONFLICT (name) DO NOTHING";
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { accountName, salt, verifier, (byte)AccessLevel.Player },
+					cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected <= 0)
 				{
-					Name = accountName,
-					Salt = salt,
-					Verifier = verifier,
-					AccessLevel = (byte)AccessLevel.Player,
-					LastLogin = DateTime.UtcNow
-				};
+					throw new DatabaseException("Account name already exists.", "UNIQUE_VIOLATION", isTransient: false);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				await dbContext.Accounts.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -191,19 +197,18 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var account = await dbContext.Accounts
-					.FirstOrDefaultAsync(a => a.Name == accountName, cancellationToken)
+				var now = DateTime.UtcNow;
+				var sql = $@"UPDATE {TableName} SET last_login = {{0}} WHERE name = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { now, accountName }, cancellationToken)
 					.ConfigureAwait(false);
-
-				if (account == null)
+				if (rowsAffected == 0)
 				{
 					throw new DatabaseEntityNotFoundException("Account", accountName);
 				}
-
-				account.LastLogin = DateTime.UtcNow;
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

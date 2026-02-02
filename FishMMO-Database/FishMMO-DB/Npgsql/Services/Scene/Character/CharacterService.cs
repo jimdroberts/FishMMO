@@ -104,82 +104,164 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.DatabaseError);
 			}
 
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
+			var nameLower = characterData.Name.Trim().ToLowerInvariant();
+			var result = await ExecuteWriteAsync<int>(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var entity = new CharacterEntity
-				{
-					Name = characterData.Name,
-					Account = characterData.Account,
-					Selected = characterData.Selected,
-					WorldServerID = characterData.WorldServerID,
-					SceneName = characterData.SceneName ?? string.Empty,
-					SceneHandle = characterData.SceneHandle,
-					BindScene = characterData.BindScene ?? string.Empty,
-					BindX = characterData.BindX,
-					BindY = characterData.BindY,
-					BindZ = characterData.BindZ,
-					InstanceID = characterData.InstanceID,
-					InstanceX = characterData.InstanceX,
-					InstanceY = characterData.InstanceY,
-					InstanceZ = characterData.InstanceZ,
-					InstanceRotX = characterData.InstanceRotX,
-					InstanceRotY = characterData.InstanceRotY,
-					InstanceRotZ = characterData.InstanceRotZ,
-					InstanceRotW = characterData.InstanceRotW,
-					RaceID = characterData.RaceID,
-					ModelIndex = characterData.ModelIndex,
-					X = characterData.X,
-					Y = characterData.Y,
-					Z = characterData.Z,
-					RotX = characterData.RotX,
-					RotY = characterData.RotY,
-					RotZ = characterData.RotZ,
-					RotW = characterData.RotW,
-					AccessLevel = characterData.AccessLevel,
-					SessionState = CharacterSessionState.Offline,
-					SessionOwnerServerId = 0,
-					SessionOwnerToken = Guid.Empty,
-					SessionLeaseExpiresUtc = DateTime.UnixEpoch,
-					Flags = characterData.Flags,
-					Version = 1,
-					TimeCreated = now,
-					LastSaved = now,
-				};
+				var sceneName = characterData.SceneName ?? string.Empty;
+				var bindScene = characterData.BindScene ?? string.Empty;
 
-				await dbContext.Characters.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+				var sql = $@"
+					WITH inserted AS (
+						INSERT INTO {TableName} (
+							name,
+							account,
+							selected,
+							world_server_id,
+							scene_name,
+							scene_handle,
+							bind_scene,
+							bind_x,
+							bind_y,
+							bind_z,
+							instance_id,
+							instance_x,
+							instance_y,
+							instance_z,
+							instance_rot_x,
+							instance_rot_y,
+							instance_rot_z,
+							instance_rot_w,
+							race_id,
+							model_index,
+							x,
+							y,
+							z,
+							rot_x,
+							rot_y,
+							rot_z,
+							rot_w,
+							access_level,
+							session_state,
+							session_owner_server_id,
+							session_owner_token,
+							session_lease_expires_utc,
+							flags,
+							version,
+							time_created,
+							last_saved
+						)
+						VALUES (
+							{{0}},
+							{{1}},
+							{{2}},
+							{{3}},
+							{{4}},
+							{{5}},
+							{{6}},
+							{{7}},
+							{{8}},
+							{{9}},
+							{{10}},
+							{{11}},
+							{{12}},
+							{{13}},
+							{{14}},
+							{{15}},
+							{{16}},
+							{{17}},
+							{{18}},
+							{{19}},
+							{{20}},
+							{{21}},
+							{{22}},
+							{{23}},
+							{{24}},
+							{{25}},
+							{{26}},
+							{{27}},
+							0,
+							0,
+							{{28}},
+							{{29}},
+							{{30}},
+							1,
+							{{31}},
+							{{32}}
+						)
+						ON CONFLICT (name_lowercase)
+						DO NOTHING
+						RETURNING 1
+					),
+					existing AS (
+						SELECT account, deleted
+						FROM {TableName}
+						WHERE name_lowercase = {{33}}
+						LIMIT 1
+					)
+					SELECT CASE
+						WHEN EXISTS (SELECT 1 FROM inserted) THEN 0
+						WHEN EXISTS (SELECT 1 FROM existing WHERE deleted = FALSE AND account = {{1}}) THEN 1
+						WHEN EXISTS (SELECT 1 FROM existing WHERE deleted = FALSE AND account <> {{1}}) THEN 2
+						ELSE 3
+					END::integer AS value";
 
-			if (insertResult.IsSuccess)
+				var status = await dbContext.Set<SqlIntValue>()
+					.FromSqlRaw(
+						sql,
+						characterData.Name,
+						characterData.Account,
+						characterData.Selected,
+						characterData.WorldServerID,
+						sceneName,
+						characterData.SceneHandle,
+						bindScene,
+						characterData.BindX,
+						characterData.BindY,
+						characterData.BindZ,
+						characterData.InstanceID,
+						characterData.InstanceX,
+						characterData.InstanceY,
+						characterData.InstanceZ,
+						characterData.InstanceRotX,
+						characterData.InstanceRotY,
+						characterData.InstanceRotZ,
+						characterData.InstanceRotW,
+						characterData.RaceID,
+						characterData.ModelIndex,
+						characterData.X,
+						characterData.Y,
+						characterData.Z,
+						characterData.RotX,
+						characterData.RotY,
+						characterData.RotZ,
+						characterData.RotW,
+						characterData.AccessLevel,
+						Guid.Empty,
+						DateTime.UnixEpoch,
+						characterData.Flags,
+						now,
+						now,
+						nameLower)
+					.AsNoTracking()
+					.SingleAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				return status.Value;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			if (!result.IsSuccess)
 			{
-				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.CharacterCreated);
+				return DatabaseResult<CharacterOperationResult>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
 
-			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
+			return DatabaseResult<CharacterOperationResult>.Success(result.Data switch
 			{
-				return DatabaseResult<CharacterOperationResult>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
-			}
-
-			var nameLower = characterData.Name.Trim().ToLowerInvariant();
-			var existingResult = await ExecuteReadAsync(async dbContext =>
-				await GetCharacterByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false),
-				cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			if (!existingResult.IsSuccess)
-			{
-				return DatabaseResult<CharacterOperationResult>.Failure(existingResult.ErrorCode, existingResult.ErrorMessage, existingResult.IsTransient);
-			}
-
-			var existing = existingResult.Data;
-			if (existing == null)
-			{
-				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.DatabaseError);
-			}
-
-			return DatabaseResult<CharacterOperationResult>.Success(
-				string.Equals(existing.Account, characterData.Account, StringComparison.Ordinal)
-					? CharacterOperationResult.CharacterCreated
-					: CharacterOperationResult.NameAlreadyExists);
+				0 => CharacterOperationResult.CharacterCreated,
+				1 => CharacterOperationResult.CharacterCreated,
+				2 => CharacterOperationResult.NameAlreadyExists,
+				_ => CharacterOperationResult.DatabaseError
+			});
 		}
 
 		/// <inheritdoc/>
@@ -314,7 +396,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return SaveCharacterWriteOutcome.AuthorityLost;
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!saveResult.IsSuccess)
 			{
@@ -484,7 +566,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		/// <remarks>
 		/// <para><b>Concurrency Safety:</b></para>
-		/// Uses explicit transaction with SELECT FOR UPDATE to prevent race conditions
+			/// Uses a single atomic statement with SELECT FOR UPDATE to prevent race conditions
 		/// when multiple requests attempt to select different characters concurrently.
 		/// Row-level locks are acquired for all characters belonging to the account,
 		/// ensuring only one selection operation can proceed at a time per account.
@@ -496,7 +578,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid account or character ID");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var tableName = dbContext.GetTableName<CharacterEntity>();
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
@@ -517,7 +599,7 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -572,7 +654,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				throw new InvalidOperationException("Character is already owned or transitioning.");
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -622,7 +704,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				throw new InvalidOperationException("Character is not owned by this server or is not online.");
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -679,7 +761,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				throw new InvalidOperationException("Character is not transitioning under this server.");
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -731,7 +813,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				throw new InvalidOperationException("Character is not owned by this server.");
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -746,7 +828,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var tableName = dbContext.GetTableName<CharacterEntity>();
@@ -776,7 +858,7 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -791,7 +873,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var tableName = dbContext.GetTableName<CharacterEntity>();
@@ -811,7 +893,7 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()

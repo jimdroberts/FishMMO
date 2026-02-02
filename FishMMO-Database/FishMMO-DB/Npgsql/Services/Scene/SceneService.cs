@@ -84,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var entity = new SceneEntity
 				{
@@ -97,7 +97,7 @@ namespace FishMMO.Database.Npgsql.Services
 				};
 				await dbContext.Scenes.AddAsync(entity, cancellationToken).ConfigureAwait(false);
 				return entity;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
@@ -115,7 +115,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default)
 		{
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"WITH scene_to_update AS (
 						SELECT id FROM {TableName}
@@ -139,7 +139,7 @@ namespace FishMMO.Database.Npgsql.Services
 						.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
 				return entity != null ? (SceneData?)MapEntityToDto(entity) : null;
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			// Convert null result to business logic failure (not an exception case)
 			if (result.IsSuccess && result.Data == null)
@@ -165,7 +165,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid scene ID.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
 					SET scene_status = {{0}}
@@ -180,7 +180,7 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					throw new DatabaseEntityNotFoundException("Scene", sceneId.ToString());
 				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -262,7 +262,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> PulseAsync(int sceneHandle, int characterCount, CancellationToken cancellationToken = default)
 		{
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
 					SET character_count = {{0}}
@@ -277,7 +277,7 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					throw new DatabaseEntityNotFoundException("Scene", $"handle {sceneHandle}");
 				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -292,14 +292,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid scene server ID.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE scene_server_id = {{0}}";
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
 					new object[] { sceneServerId },
 					cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<int>.Success(result.Data)
@@ -314,14 +314,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE world_server_id = {{0}}";
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
 					new object[] { worldServerId },
 					cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<int>.Success(result.Data)
@@ -336,14 +336,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid scene server ID.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE scene_server_id = {{0}} AND scene_handle = {{1}}";
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
 					new object[] { sceneServerId, sceneHandle },
 					cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()

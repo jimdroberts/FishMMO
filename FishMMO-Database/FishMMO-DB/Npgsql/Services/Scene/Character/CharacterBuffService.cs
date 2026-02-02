@@ -60,6 +60,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (buffList.Any(b => b.Version <= 0))
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"One or more buffs had an invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			// Prevent duplicate keys within the same batch from causing
 			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
 			if (buffList.Count > 1)
@@ -129,11 +137,17 @@ namespace FishMMO.Database.Npgsql.Services
 						stacks = EXCLUDED.stacks,
 						deleted = FALSE,
 						time_deleted = NULL,
-						version = CASE
-							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-							ELSE {TableName}.version
-						END
-					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+						version = EXCLUDED.version
+					WHERE
+						EXCLUDED.version > {TableName}.version
+						OR (
+							EXCLUDED.version = {TableName}.version
+							AND {TableName}.remaining_time = EXCLUDED.remaining_time
+							AND {TableName}.tick_time = EXCLUDED.tick_time
+							AND {TableName}.stacks = EXCLUDED.stacks
+							AND {TableName}.deleted = FALSE
+							AND {TableName}.time_deleted IS NULL
+						);";
 
 				await ExecuteBulkUpsertAsync(
 					dbContext,
@@ -142,7 +156,7 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { characterIdArray, templateIdArray, versionArray, remainingTimeArray, tickTimeArray, stacksArray, now },
 					"One or more buffs were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -156,7 +170,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -164,7 +178,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

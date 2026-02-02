@@ -15,8 +15,9 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <para>
 	/// Write operations (Save*) in this service use execution strategies to ensure transient database
 	/// failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because retry/transaction handling is done by BaseService, not by provider-level retry.
-	/// without manual wrapping.
+	/// This is critical because retry handling is done by BaseService, not by provider-level retry.
+	/// BaseService uses explicit transactions only when a write requires multiple database statements.
+	/// This interface describes behavior; the implementation uses BaseService execution wrappers.
 	/// </para>
 	/// <para>
 	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide
@@ -47,7 +48,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Chat audit fields are denormalized so logs can survive character deletion.
 		/// Passing the names avoids a race where the character row is deleted between lookup and insert.
-		/// Uses BaseService.ExecuteTransactionAsync for:
+		/// Uses BaseService.ExecuteWriteAsync for:
 		/// - Automatic transient failure retry
 		/// - Centralized exception handling and mapping
 		/// - Consistent DatabaseResult pattern

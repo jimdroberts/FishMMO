@@ -81,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 
 			var channelByte = (byte)channel;
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var entity = new ChatEntity
 				{
@@ -97,7 +97,7 @@ namespace FishMMO.Database.Npgsql.Services
 				};
 
 				await dbContext.Chat.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()

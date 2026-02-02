@@ -37,7 +37,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				// Use database server time to avoid clock skew issues.
 				// Keep atomic UPSERT semantics to prevent duplicate kick requests under concurrency.
@@ -49,7 +49,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -60,12 +60,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $"DELETE FROM {TableName} WHERE account_name = {{0}}";
 				return await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

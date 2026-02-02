@@ -16,12 +16,13 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <para><b>Exception Handling Order:</b></para>
 	/// <list type="number">
 	/// <item>OperationCanceledException → DatabaseOperationCanceledException</item>
-	/// <item>PostgresException (SqlState "23505") → DatabaseConstraintException (Unique)</item>
+	/// <item>PostgresException (SqlState "23505") → DatabaseConstraintException (Unique, non-transient conflict)</item>
 	/// <item>PostgresException (SqlState "23503") → DatabaseConstraintException (ForeignKey)</item>
 	/// <item>NpgsqlException → DatabaseConnectionException</item>
 	/// <item>DbUpdateException → DatabaseQueryException</item>
 	/// <item>Exception → DatabaseQueryException</item>
 	/// </list>
+	/// <para>Unique constraint violations are treated as failures; this service generally avoids relying on 23505 by using atomic SQL (<c>ON CONFLICT</c>) where applicable.</para>
 	/// </remarks>
 	public sealed class WorldServerService : BaseService<WorldServerEntity>, IWorldServerService
 	{
@@ -48,7 +49,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"INSERT INTO {TableName} (name, address, port, character_count, locked)
 					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
@@ -66,7 +67,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstAsync(cancellationToken)
 					.ConfigureAwait(false);
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<(long ServerId, WorldServerData ServerData)>.Success((result.Data.ID, MapEntityToDto(result.Data)))
@@ -81,7 +82,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
 					SET last_pulse = CURRENT_TIMESTAMP, character_count = {{0}}
@@ -96,7 +97,7 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
 				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -107,12 +108,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { serverId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

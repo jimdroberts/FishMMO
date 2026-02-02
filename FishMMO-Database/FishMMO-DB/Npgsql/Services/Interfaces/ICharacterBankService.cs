@@ -37,7 +37,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult containing the saved bank item ID on success, or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// 
 		/// Behavior:
 		/// - Inserts a new item if missing, otherwise updates the existing item by (CharacterID, Slot)
@@ -56,7 +57,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// 
 		/// Behavior:
 		/// - Inserts missing items and updates existing ones by (CharacterID, Slot)
@@ -75,7 +77,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no bank items, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteBankItemsAsync(long characterId, CancellationToken cancellationToken = default);
@@ -91,7 +94,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the slot does not exist for the character, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteBankSlotAsync(long characterId, int slot, CancellationToken cancellationToken = default);
@@ -106,7 +110,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Returns empty collection if character has no items.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// Returns an empty collection if the character has no items.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterBankData>>> GetBankItemsAsync(long characterId, CancellationToken cancellationToken = default);

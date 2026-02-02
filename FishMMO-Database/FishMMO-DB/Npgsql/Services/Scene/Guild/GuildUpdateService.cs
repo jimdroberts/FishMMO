@@ -14,15 +14,6 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class GuildUpdateService : BaseService<GuildUpdateEntity>, IGuildUpdateService
 	{
 		/// <summary>
-		/// Compiled query for retrieving a tracked guild update row by guild ID.
-		/// </summary>
-#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<GuildUpdateEntity?>> getByGuildIdTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
-				context.GuildUpdates.FirstOrDefault(u => u.GuildID == guildId));
-#pragma warning restore CS8619
-
-		/// <summary>
 		/// Initializes a new instance of GuildUpdateService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
@@ -41,26 +32,19 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var now = DateTime.UtcNow;
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var existing = await getByGuildIdTrackingQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false);
-				if (existing == null)
-				{
-					existing = new GuildUpdateEntity
-					{
-						GuildID = guildId,
-						TimeCreated = now,
-						LastUpdate = now,
-					};
-					await dbContext.GuildUpdates.AddAsync(existing, cancellationToken).ConfigureAwait(false);
-					return;
-				}
+				var sql = $@"INSERT INTO {TableName} (guild_id, time_created, last_update)
+					VALUES ({{0}}, {{1}}, {{1}})
+					ON CONFLICT (guild_id) DO UPDATE
+					SET last_update = EXCLUDED.last_update
+					WHERE last_update < EXCLUDED.last_update";
 
-				if (existing.LastUpdate < now)
-				{
-					existing.LastUpdate = now;
-				}
-			}).ConfigureAwait(false);
+				await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { guildId, now },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -75,16 +59,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var existing = await getByGuildIdTrackingQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false);
-				if (existing == null)
-				{
-					return 0;
-				}
-				dbContext.GuildUpdates.Remove(existing);
-				return 1;
-			}).ConfigureAwait(false);
+				var sql = $@"DELETE FROM {TableName} WHERE guild_id = {{0}}";
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { guildId },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<int>.Success(result.Data)

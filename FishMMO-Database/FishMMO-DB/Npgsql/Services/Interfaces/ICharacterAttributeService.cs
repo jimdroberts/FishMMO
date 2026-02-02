@@ -37,7 +37,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// 
 		/// Behavior:
 		/// - Inserts missing attributes and updates existing ones by (CharacterID, TemplateID)
@@ -58,7 +59,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// 
 		/// Deletion behavior:
 		/// - Deletes all attributes for the specified character
@@ -77,7 +79,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult containing a read-only collection of character attribute data on success.</returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// Returns an empty collection if the character has no attributes.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterAttributeData>>> GetAttributesAsync(long characterId, CancellationToken cancellationToken = default);

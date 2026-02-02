@@ -91,97 +91,97 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var saveResult = await ExecuteTransactionAsync(async dbContext =>
+			if (petData.Version <= 0)
 			{
-				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (activeCharacterId == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString());
-				}
-
-				CharacterPetEntity? entity;
-				var isNew = false;
-				if (petData.ID > 0)
-				{
-					entity = await getByIdTrackingQuery(dbContext, petData.ID, cancellationToken).ConfigureAwait(false);
-					if (entity == null)
-					{
-						throw new DatabaseEntityNotFoundException("CharacterPet", petData.ID.ToString());
-					}
-				}
-				else
-				{
-					entity = await getByCharacterIdTrackingQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
-					if (entity == null)
-					{
-						entity = new CharacterPetEntity();
-						await dbContext.CharacterPets.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-						isNew = true;
-					}
-				}
-
-				ValidateVersion(entity, petData.Version);
-
-				if (entity.Deleted)
-				{
-					entity.Deleted = false;
-					entity.TimeDeleted = null;
-				}
-
-				entity.CharacterID = petData.CharacterID;
-				entity.TemplateID = petData.TemplateID;
-				entity.Abilities = petData.Abilities?.ToList() ?? new List<int>();
-				entity.Spawned = petData.Spawned;
-				if (isNew)
-				{
-					entity.TimeCreated = DateTime.UtcNow;
-				}
-			}).ConfigureAwait(false);
-
-			if (saveResult.IsSuccess)
-			{
-				return DatabaseResult.Success();
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid version. Version must be greater than 0.",
+					isTransient: false);
 			}
 
-			if (saveResult.ErrorCode != "UNIQUE_VIOLATION")
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				return DatabaseResult.Failure(saveResult.ErrorCode, saveResult.ErrorMessage, saveResult.IsTransient);
+				var now = DateTime.UtcNow;
+				var abilities = petData.Abilities?.ToArray() ?? Array.Empty<int>();
+				var sql = $@"
+					WITH active_character AS (
+						SELECT id FROM character WHERE id = {{0}} AND deleted = FALSE
+					),
+					id_ok AS (
+						SELECT CASE
+							WHEN {{6}}::bigint <= 0 THEN TRUE
+							WHEN EXISTS (SELECT 1 FROM {TableName} WHERE id = {{6}} AND character_id = {{0}}) THEN TRUE
+							ELSE FALSE
+						END AS ok
+					),
+					upserted AS (
+						INSERT INTO {TableName}
+							(character_id, template_id, version, abilities, spawned, time_created, deleted, time_deleted)
+						SELECT
+							{{0}},
+							{{1}},
+							{{2}},
+							{{3}},
+							{{4}},
+							{{5}},
+							FALSE,
+							NULL
+						WHERE EXISTS (SELECT 1 FROM active_character)
+							AND (SELECT ok FROM id_ok)
+						ON CONFLICT (character_id)
+						DO UPDATE SET
+							template_id = EXCLUDED.template_id,
+							abilities = EXCLUDED.abilities,
+							spawned = EXCLUDED.spawned,
+							deleted = FALSE,
+							time_deleted = NULL,
+							version = EXCLUDED.version
+						WHERE
+							EXCLUDED.version > {TableName}.version
+							OR (
+								EXCLUDED.version = {TableName}.version
+								AND {TableName}.template_id = EXCLUDED.template_id
+								AND {TableName}.abilities = EXCLUDED.abilities
+								AND {TableName}.spawned = EXCLUDED.spawned
+								AND {TableName}.deleted = FALSE
+								AND {TableName}.time_deleted IS NULL
+							)
+						RETURNING 1
+					)
+					SELECT CASE
+						WHEN NOT EXISTS (SELECT 1 FROM active_character) THEN 1
+						WHEN NOT (SELECT ok FROM id_ok) THEN 3
+						WHEN EXISTS (SELECT 1 FROM upserted) THEN 0
+						ELSE 2
+					END AS value";
+
+				var status = await dbContext.Set<SqlIntValue>()
+					.FromSqlRaw(sql, new object[] { petData.CharacterID, petData.TemplateID, petData.Version, abilities, petData.Spawned, now, petData.ID })
+					.AsNoTracking()
+					.SingleAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				return status.Value;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			if (!result.IsSuccess)
+			{
+				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
 
-			// Retry as update on unique violations.
-			var updateResult = await ExecuteTransactionAsync(async dbContext =>
+			switch (result.Data)
 			{
-				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (activeCharacterId == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString());
-				}
-
-				CharacterPetEntity? entity = petData.ID > 0
-					? await getByIdTrackingQuery(dbContext, petData.ID, cancellationToken).ConfigureAwait(false)
-					: await getByCharacterIdTrackingQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
-
-				if (entity == null)
-				{
-					throw new DatabaseEntityNotFoundException("CharacterPet", $"(CharacterID: {petData.CharacterID}, ID: {petData.ID})");
-				}
-
-				ValidateVersion(entity, petData.Version);
-
-				if (entity.Deleted)
-				{
-					entity.Deleted = false;
-					entity.TimeDeleted = null;
-				}
-
-				entity.TemplateID = petData.TemplateID;
-				entity.Abilities = petData.Abilities?.ToList() ?? new List<int>();
-				entity.Spawned = petData.Spawned;
-			}).ConfigureAwait(false);
-
-			return updateResult.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
+				case 0:
+					return DatabaseResult.Success();
+				case 1:
+					return DatabaseResult.Failure("DB_NOT_FOUND", "Character not found or deleted.", isTransient: false);
+				case 2:
+					return DatabaseResult.Failure("STALE_STATE", "Pet update rejected due to a stale Version.", isTransient: false);
+				case 3:
+					return DatabaseResult.Failure("ENTITY_NOT_FOUND", $"CharacterPet with ID {petData.ID} was not found for CharacterID {petData.CharacterID}.", isTransient: false);
+				default:
+					return DatabaseResult.Failure("DATABASE_ERROR", "A database error occurred.", isTransient: true);
+			}
 		}
 
 		/// <inheritdoc/>
@@ -193,6 +193,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
 					"Pets collection must not be null or empty.",
+					isTransient: false);
+			}
+
+			if (petList.Any(p => p.Version <= 0))
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"One or more pets had an invalid Version. Version must be greater than 0.",
 					isTransient: false);
 			}
 
@@ -281,10 +289,7 @@ namespace FishMMO.Database.Npgsql.Services
 							spawned = u.spawned,
 							deleted = FALSE,
 							time_deleted = NULL,
-							version = CASE
-								WHEN u.version > 0 THEN u.version
-								ELSE t.version
-							END
+							version = u.version
 						FROM UNNEST(
 							{{0}}::bigint[],
 							{{1}}::bigint[],
@@ -294,7 +299,18 @@ namespace FishMMO.Database.Npgsql.Services
 							{{5}}::boolean[]
 						) AS u(id, character_id, template_id, version, abilities, spawned)
 						WHERE t.id = u.id
-							AND (u.version <= 0 OR u.version > t.version);";
+							AND (
+								u.version > t.version
+								OR (
+									u.version = t.version
+									AND t.character_id = u.character_id
+									AND t.template_id = u.template_id
+									AND t.abilities = u.abilities
+									AND t.spawned = u.spawned
+									AND t.deleted = FALSE
+									AND t.time_deleted IS NULL
+								)
+							);";
 
 					await ExecuteBulkUpsertAsync(
 						dbContext,
@@ -321,10 +337,7 @@ namespace FishMMO.Database.Npgsql.Services
 						SELECT
 							u.character_id,
 							u.template_id,
-							CASE
-								WHEN u.version > 0 THEN u.version
-								ELSE 0
-							END,
+							u.version,
 							u.abilities,
 							u.spawned,
 							{{5}},
@@ -344,11 +357,17 @@ namespace FishMMO.Database.Npgsql.Services
 							spawned = EXCLUDED.spawned,
 							deleted = FALSE,
 							time_deleted = NULL,
-							version = CASE
-								WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-								ELSE {TableName}.version
-							END
-						WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+							version = EXCLUDED.version
+						WHERE
+							EXCLUDED.version > {TableName}.version
+							OR (
+								EXCLUDED.version = {TableName}.version
+								AND {TableName}.template_id = EXCLUDED.template_id
+								AND {TableName}.abilities = EXCLUDED.abilities
+								AND {TableName}.spawned = EXCLUDED.spawned
+								AND {TableName}.deleted = FALSE
+								AND {TableName}.time_deleted IS NULL
+							);";
 
 					await ExecuteBulkUpsertAsync(
 						dbContext,
@@ -358,7 +377,7 @@ namespace FishMMO.Database.Npgsql.Services
 						"One or more pets were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		public async Task<DatabaseResult> DeletePetAsync(long characterId, CancellationToken cancellationToken = default)
@@ -371,7 +390,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -379,7 +398,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

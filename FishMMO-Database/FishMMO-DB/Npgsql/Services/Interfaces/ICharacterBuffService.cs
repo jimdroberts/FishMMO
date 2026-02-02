@@ -36,7 +36,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// 
 		/// Behavior:
 		/// - Inserts missing buffs and updates existing ones by (CharacterID, TemplateID)
@@ -55,7 +56,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no buffs, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteBuffsAsync(long characterId, CancellationToken cancellationToken = default);
@@ -70,7 +72,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Returns empty collection if character has no buffs.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// Returns an empty collection if the character has no buffs.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterBuffData>>> GetBuffsAsync(long characterId, CancellationToken cancellationToken = default);

@@ -13,8 +13,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <para>
 	/// Write operations (Create*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because SaveChangesAsync and ExecuteSqlRawAsync do not automatically
-	/// Execution is wrapped by BaseService for retries/transactions.
+	/// Execution is wrapped by BaseService for retries and exception mapping.
 	/// </para>
 	/// <para>
 	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide
@@ -26,7 +25,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// - Unexpected runtime errors
 	/// </para>
 	/// <para>
-	/// All name lookups are case-insensitive using ToUpper() for consistency.
+	/// Name lookups are case-insensitive by using a normalized field (e.g. name_lowercase) in the database.
 	/// </para>
 	/// </remarks>
 	public interface IGuildService
@@ -72,7 +71,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses BaseService.ExecuteTransactionAsync for:
+		/// Uses BaseService.ExecuteWriteAsync for:
 		/// - Automatic transient failure retry
 		/// - Centralized exception handling and mapping
 		/// - Consistent DatabaseResult pattern

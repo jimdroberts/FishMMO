@@ -42,7 +42,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// 
 		/// Behavior:
 		/// - If the source character is missing or marked deleted: no-op success
@@ -62,7 +63,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the relationship doesn't exist, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteFriendAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default);
@@ -77,7 +79,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no friends, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteAllFriendsAsync(long characterId, CancellationToken cancellationToken = default);
@@ -92,7 +95,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// or error details on failure.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// Returns an empty collection if the character has no friends.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterFriendData>>> GetFriendsAsync(long characterId, CancellationToken cancellationToken = default);
@@ -106,7 +110,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult containing the count of friends on success, or error details on failure.
 		/// </returns>
 		/// <remarks>
-		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Executes inside the BaseService execution wrapper (retry + centralized exception mapping).
+		/// Uses an explicit transaction only when more than one database statement is required.
 		/// </remarks>
 		Task<DatabaseResult<int>> GetFriendCountAsync(long characterId, CancellationToken cancellationToken = default);
 	}

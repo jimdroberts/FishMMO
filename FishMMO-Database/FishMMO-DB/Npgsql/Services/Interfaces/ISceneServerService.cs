@@ -12,8 +12,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <para>
 	/// Write operations (AddOrUpdate*, Pulse*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because ExecuteSqlRawAsync and FromSqlRaw do not automatically
-	/// Execution is wrapped by BaseService for retries/transactions.
+	/// This is critical because ExecuteSqlRawAsync and FromSqlRaw do not automatically retry on transient failures
+	/// without an execution strategy wrapper.
+	/// BaseService provides execution wrappers for retry and centralized exception mapping; explicit transactions
+	/// are used only when a write requires multiple database statements.
 	/// </para>
 	/// <para>
 	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide

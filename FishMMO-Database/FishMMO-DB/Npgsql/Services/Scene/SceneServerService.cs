@@ -39,7 +39,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Name and address must not be empty.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"INSERT INTO {TableName} (name, address, port, character_count, locked)
 					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
@@ -57,7 +57,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstAsync(cancellationToken)
 					.ConfigureAwait(false);
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
@@ -87,20 +87,23 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			var now = DateTime.UtcNow;
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var server = await dbContext.SceneServers
-					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET last_pulse = CURRENT_TIMESTAMP,
+						character_count = {{0}},
+						locked = {{1}}
+					WHERE id = {{2}}";
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { characterCount, locked, serverId },
+					cancellationToken)
 					.ConfigureAwait(false);
-				if (server == null)
+				if (rowsAffected <= 0)
 				{
 					throw new DatabaseEntityNotFoundException("SceneServer", serverId.ToString());
 				}
-				server.LastPulse = now;
-				server.CharacterCount = characterCount;
-				server.Locked = locked;
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -115,17 +118,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var server = await dbContext.SceneServers
-					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken)
+				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { serverId }, cancellationToken)
 					.ConfigureAwait(false);
-				if (server == null)
-				{
-					return;
-				}
-				dbContext.SceneServers.Remove(server);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()

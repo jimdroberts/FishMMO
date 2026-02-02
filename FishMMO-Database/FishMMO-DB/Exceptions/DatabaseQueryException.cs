@@ -14,7 +14,7 @@ namespace FishMMO.Database.Exceptions
 		public string Operation { get; }
 
 		/// <summary>
-		/// Gets the PostgreSQL error code if available (e.g., "23505" for unique violation).
+		/// Gets the PostgreSQL error code if available (e.g., "23505" for a unique constraint conflict).
 		/// </summary>
 		public string? PostgreSqlErrorCode { get; }
 

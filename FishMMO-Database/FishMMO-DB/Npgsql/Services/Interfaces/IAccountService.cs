@@ -54,7 +54,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 
 		/// <summary>
 		/// Creates a new account with the specified credentials.
-		/// Creates a new account record.
 		/// </summary>
 		/// <param name="accountName">The account name. Must be 3-32 characters.</param>
 		/// <param name="salt">The salt for SRP password hashing. Must not be null or whitespace.</param>
@@ -65,8 +64,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Success: Account created with Player access level and current timestamp.
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Invalid username, salt, or verifier
-		/// - UNIQUE_VIOLATION: Account name already exists
-		/// - DATABASE_ERROR: Unexpected database error (transient)
+		/// - UNIQUE_VIOLATION: Account name already exists (non-transient)
+		/// - DATABASE_ERROR: Unexpected database error
 		/// </remarks>
 		Task<DatabaseResult> CreateAccountAsync(
 			string accountName,

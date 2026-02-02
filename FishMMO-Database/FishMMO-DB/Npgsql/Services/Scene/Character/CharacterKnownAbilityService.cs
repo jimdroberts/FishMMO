@@ -79,24 +79,25 @@ namespace FishMMO.Database.Npgsql.Services
 				var now = DateTime.UtcNow;
 				var sql = $@"INSERT INTO {TableName}
 					(character_id, template_id, version, time_created, deleted, time_deleted)
-					VALUES ({{0}}, {{1}}, 0, {{2}}, FALSE, NULL)
+					VALUES ({{0}}, {{1}}, 1, {{2}}, FALSE, NULL)
 					ON CONFLICT (character_id, template_id)
 					DO UPDATE SET
 						deleted = FALSE,
-						time_deleted = NULL";
+						time_deleted = NULL,
+						version = CASE
+							WHEN {TableName}.version < 1 THEN 1
+							ELSE {TableName}.version
+						END";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
 					new object[] { characterId, templateId, now },
 					cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			if (insertResult.IsSuccess || insertResult.ErrorCode == "UNIQUE_VIOLATION")
-			{
-				return DatabaseResult.Success();
-			}
-
-			return DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			return insertResult.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -108,6 +109,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
 					"Abilities collection must not be null or empty.",
+					isTransient: false);
+			}
+
+			if (abilityList.Any(a => a.Version <= 0))
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"One or more known abilities had an invalid Version. Version must be greater than 0.",
 					isTransient: false);
 			}
 
@@ -165,11 +174,14 @@ namespace FishMMO.Database.Npgsql.Services
 					DO UPDATE SET
 						deleted = FALSE,
 						time_deleted = NULL,
-						version = CASE
-							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-							ELSE {TableName}.version
-						END
-					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+						version = EXCLUDED.version
+					WHERE
+						EXCLUDED.version > {TableName}.version
+						OR (
+							EXCLUDED.version = {TableName}.version
+							AND {TableName}.deleted = FALSE
+							AND {TableName}.time_deleted IS NULL
+						);";
 
 				await ExecuteBulkUpsertAsync(
 					dbContext,
@@ -178,7 +190,7 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { characterIdArray, templateIdArray, versionArray, now },
 					"One or more known abilities were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (saveResult.IsSuccess)
 			{
@@ -207,7 +219,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -215,7 +227,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND template_id = {{2}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId, templateId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -229,7 +241,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -237,7 +249,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

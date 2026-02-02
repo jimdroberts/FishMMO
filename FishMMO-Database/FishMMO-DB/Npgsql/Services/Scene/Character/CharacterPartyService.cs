@@ -23,42 +23,19 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Party membership deletion
 	/// - Party membership and member retrieval
 	/// 
-	/// All database operations use BaseService.ExecuteTransactionAsync for:
+	/// Database operations are executed via the BaseService execution wrappers for:
 	/// - Automatic transient failure retry
 	/// - Centralized exception handling and mapping
 	/// - Consistent DatabaseResult pattern
+	/// 
+	/// When a write requires multiple database statements, it should be wrapped in
+	/// <see cref="BaseService{TEntity}.ExecuteTransactionAsync"/>. Single-statement SQL
+	/// operations (including CTE-based UPSERT/DELETE/UPDATE) are executed atomically without
+	/// requiring an explicit transaction wrapper.
 	/// </remarks>
 	public sealed class CharacterPartyService : BaseService<CharacterPartyEntity>, ICharacterPartyService
 	{
 		private const int MaxAllowedPartyCapacity = 40;
-
-		private sealed class SaveMembershipPrecheckResult
-		{
-			public bool IsAllowed { get; }
-			public string? ErrorCode { get; }
-			public string? ErrorMessage { get; }
-			public bool NeedsCapacityCheck { get; }
-
-			public SaveMembershipPrecheckResult(bool isAllowed, string? errorCode, string? errorMessage, bool needsCapacityCheck)
-			{
-				IsAllowed = isAllowed;
-				ErrorCode = errorCode;
-				ErrorMessage = errorMessage;
-				NeedsCapacityCheck = needsCapacityCheck;
-			}
-		}
-
-		/// <summary>
-		/// Compiled query for checking whether a character exists and is not deleted.
-		/// Returns the character ID if active, otherwise 0.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
-				context.Characters
-					.AsNoTracking()
-					.Where(c => c.ID == characterId && !c.Deleted)
-					.Select(c => c.ID)
-					.FirstOrDefault());
 
 		/// <summary>
 		/// Compiled query for retrieving party membership by character ID.
@@ -90,14 +67,6 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.Where(p => p.PartyID == partyId)
 					.Count());
-
-		/// <summary>
-		/// Compiled query for retrieving a tracked party membership by character ID.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPartyEntity?>> getMembershipByCharacterTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
-				(CharacterPartyEntity?)context.CharacterParties
-					.FirstOrDefault(p => p.CharacterID == characterId));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterPartyService"/> class.
@@ -135,105 +104,111 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var precheck = await ExecuteReadAsync(async dbContext =>
+			if (partyData.Version <= 0)
 			{
-				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, partyData.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (activeCharacterId == 0)
-				{
-					return new SaveMembershipPrecheckResult(false, "DB_NOT_FOUND", "Character not found or deleted.", false);
-				}
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid version. Version must be greater than 0.",
+					isTransient: false);
+			}
 
-				var existingPartyId = await dbContext.CharacterParties
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				var characterTableName = dbContext.GetTableName<CharacterEntity>();
+				var partyTableName = dbContext.GetTableName<PartyEntity>();
+
+				var sql = $@"
+					WITH
+					active_character AS (
+						SELECT id
+						FROM {characterTableName}
+						WHERE id = {{0}} AND deleted = FALSE
+					),
+					party_row AS (
+						SELECT id
+						FROM {partyTableName}
+						WHERE id = {{1}}
+						FOR UPDATE
+					),
+					existing_membership AS (
+						SELECT party_id, version, rank, health_pct
+						FROM {TableName}
+						WHERE character_id = {{0}}
+					),
+					capacity_ok AS (
+						SELECT CASE
+							WHEN NOT EXISTS (SELECT 1 FROM party_row) THEN FALSE
+							WHEN EXISTS (SELECT 1 FROM existing_membership WHERE party_id = {{1}}) THEN TRUE
+							WHEN (SELECT COUNT(*) FROM {TableName} WHERE party_id = {{1}}) < {{2}} THEN TRUE
+							ELSE FALSE
+						END AS ok
+					),
+					upserted AS (
+						INSERT INTO {TableName} (character_id, party_id, rank, health_pct, version, time_created)
+						SELECT {{0}}, {{1}}, {{3}}, {{4}}, {{5}}, CURRENT_TIMESTAMP
+						FROM active_character, capacity_ok
+						WHERE capacity_ok.ok = TRUE
+						ON CONFLICT (character_id)
+						DO UPDATE SET
+							party_id = EXCLUDED.party_id,
+							rank = EXCLUDED.rank,
+							health_pct = EXCLUDED.health_pct,
+							version = EXCLUDED.version
+						WHERE
+							EXCLUDED.version > {TableName}.version
+							OR (
+								EXCLUDED.version = {TableName}.version
+								AND {TableName}.party_id = EXCLUDED.party_id
+								AND {TableName}.rank = EXCLUDED.rank
+								AND {TableName}.health_pct = EXCLUDED.health_pct
+							)
+						RETURNING 1
+					)
+					SELECT
+						CASE
+							WHEN NOT EXISTS (SELECT 1 FROM active_character) THEN 1
+							WHEN NOT EXISTS (SELECT 1 FROM party_row) THEN 2
+							WHEN NOT (SELECT ok FROM capacity_ok) THEN 3
+							WHEN EXISTS (SELECT 1 FROM upserted) THEN 0
+							ELSE 4
+						END AS value";
+
+				var status = await dbContext.Set<SqlIntValue>()
+					.FromSqlRaw(
+						sql,
+						partyData.CharacterID,
+						partyData.PartyID,
+						maxCapacity,
+						partyData.Rank,
+						partyData.HealthPCT,
+						partyData.Version)
 					.AsNoTracking()
-					.Where(p => p.CharacterID == partyData.CharacterID)
-					.Select(p => p.PartyID)
-					.FirstOrDefaultAsync(cancellationToken)
+					.SingleAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				var needsCapacityCheck = existingPartyId == 0 || existingPartyId != partyData.PartyID;
-				if (!needsCapacityCheck)
-				{
-					return new SaveMembershipPrecheckResult(true, null, null, false);
-				}
+				return status.Value;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				var partyExists = await dbContext.Parties
-					.AsNoTracking()
-					.AnyAsync(p => p.ID == partyData.PartyID, cancellationToken)
-					.ConfigureAwait(false);
-				if (!partyExists)
-				{
-					return new SaveMembershipPrecheckResult(false, "NOT_FOUND", $"Party with ID {partyData.PartyID} does not exist.", true);
-				}
-
-				var currentCount = await getPartyMemberCountQuery(dbContext, partyData.PartyID, cancellationToken).ConfigureAwait(false);
-				if (currentCount >= maxCapacity)
-				{
-					return new SaveMembershipPrecheckResult(false, "CAPACITY_EXCEEDED", $"Party has reached maximum capacity of {maxCapacity} members.", true);
-				}
-
-				return new SaveMembershipPrecheckResult(true, null, null, true);
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			if (!precheck.IsSuccess)
+			if (!result.IsSuccess)
 			{
-				return DatabaseResult.Failure(precheck.ErrorCode, precheck.ErrorMessage, precheck.IsTransient);
+				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
 
-			var precheckResult = precheck.Data;
-			if (!precheckResult.IsAllowed)
+			switch (result.Data)
 			{
-				return DatabaseResult.Failure(precheckResult.ErrorCode!, precheckResult.ErrorMessage!, isTransient: false);
+				case 0:
+					return DatabaseResult.Success();
+				case 1:
+					return DatabaseResult.Failure("DB_NOT_FOUND", "Character not found or deleted.", isTransient: false);
+				case 2:
+					return DatabaseResult.Failure("NOT_FOUND", $"Party with ID {partyData.PartyID} does not exist.", isTransient: false);
+				case 3:
+					return DatabaseResult.Failure("CAPACITY_EXCEEDED", $"Party has reached maximum capacity of {maxCapacity} members.", isTransient: false);
+				case 4:
+					return DatabaseResult.Failure("STALE_STATE", "Party membership update rejected due to a stale Version.", isTransient: false);
+				default:
+					return DatabaseResult.Failure("DATABASE_ERROR", "A database error occurred.", isTransient: true);
 			}
-
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var membership = await getMembershipByCharacterTrackingQuery(dbContext, partyData.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (membership == null)
-				{
-					membership = new CharacterPartyEntity
-					{
-						CharacterID = partyData.CharacterID,
-						Version = partyData.Version,
-						TimeCreated = DateTime.UtcNow
-					};
-					await dbContext.CharacterParties.AddAsync(membership, cancellationToken).ConfigureAwait(false);
-				}
-
-				ValidateVersion(membership, partyData.Version);
-
-				membership.PartyID = partyData.PartyID;
-				membership.Rank = partyData.Rank;
-				membership.HealthPCT = partyData.HealthPCT;
-			}).ConfigureAwait(false);
-
-			if (insertResult.IsSuccess)
-			{
-				return DatabaseResult.Success();
-			}
-
-			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
-			{
-				return DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
-			}
-
-			var updateResult = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var membership = await getMembershipByCharacterTrackingQuery(dbContext, partyData.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (membership == null)
-				{
-					throw new DatabaseEntityNotFoundException("CharacterParty", partyData.CharacterID.ToString());
-				}
-
-				ValidateVersion(membership, partyData.Version);
-
-				membership.PartyID = partyData.PartyID;
-				membership.Rank = partyData.Rank;
-				membership.HealthPCT = partyData.HealthPCT;
-			}).ConfigureAwait(false);
-
-			return updateResult.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -247,14 +222,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				await dbContext.Database.ExecuteSqlRawAsync(
 					"DELETE FROM character_party WHERE character_id = {0}",
 					new object[] { characterId },
 					cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -268,17 +243,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var membership = await dbContext.CharacterParties
-					.FirstOrDefaultAsync(p => p.CharacterID == characterId && p.PartyID == partyId, cancellationToken)
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$"UPDATE {TableName} SET rank = {{2}} WHERE character_id = {{0}} AND party_id = {{1}}",
+					new object[] { characterId, partyId, rank },
+					cancellationToken)
 					.ConfigureAwait(false);
-				if (membership == null)
-				{
-					return;
-				}
-				membership.Rank = rank;
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

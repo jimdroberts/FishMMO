@@ -15,12 +15,13 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <para><b>Exception Handling:</b></para>
 	/// <list type="bullet">
 	/// <item><description><see cref="OperationCanceledException"/> → <see cref="DatabaseOperationCanceledException"/></description></item>
-	/// <item><description><see cref="Npgsql.PostgresException"/> (23505) → <see cref="DatabaseConstraintException"/> (Unique)</description></item>
+	/// <item><description><see cref="Npgsql.PostgresException"/> (23505) → <see cref="DatabaseConstraintException"/> (Unique, non-transient conflict)</description></item>
 	/// <item><description><see cref="Npgsql.PostgresException"/> (23503) → <see cref="DatabaseConstraintException"/> (ForeignKey)</description></item>
 	/// <item><description><see cref="Npgsql.NpgsqlException"/> → <see cref="DatabaseConnectionException"/></description></item>
 	/// <item><description><see cref="DbUpdateException"/> → <see cref="DatabaseQueryException"/></description></item>
 	/// <item><description><see cref="Exception"/> → <see cref="DatabaseQueryException"/></description></item>
 	/// </list>
+	/// <para>Unique constraint violations are treated as failures; callers should not depend on them for normal control flow.</para>
 	/// </remarks>
 	public sealed class GuildService : BaseService<GuildEntity>, IGuildService
 	{
@@ -102,47 +103,40 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var nameLowercase = name.ToLowerInvariant();
 
-			var insertResult = await ExecuteTransactionAsync(async context =>
+			var result = await ExecuteWriteAsync<long?>(async dbContext =>
 			{
-				var guild = new GuildEntity
-				{
-					Name = name,
-					Notice = string.Empty,
-					TimeCreated = DateTime.UtcNow
-				};
-				await context.Guilds.AddAsync(guild, cancellationToken).ConfigureAwait(false);
-				return guild;
-			}).ConfigureAwait(false);
+				var now = DateTime.UtcNow;
+				var sql = $@"
+					WITH inserted AS (
+						INSERT INTO {TableName} (name, notice, time_created)
+						VALUES ({{0}}, '', {{1}})
+						ON CONFLICT (name_lowercase)
+						DO NOTHING
+						RETURNING id
+					)
+					SELECT COALESCE(
+						(SELECT id FROM inserted),
+						(SELECT id FROM {TableName} WHERE name_lowercase = {{2}})
+					)::bigint AS value";
 
-			if (insertResult.IsSuccess)
-			{
-				return DatabaseResult<long?>.Success(insertResult.Data.ID);
-			}
-
-			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
-			{
-				return DatabaseResult<long?>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
-			}
-
-			var existingResult = await ExecuteReadAsync(async context =>
-			{
-				return await context.Guilds
+				var idRow = await dbContext.Set<SqlLongValue>()
+					.FromSqlRaw(sql, new object[] { name, now, nameLowercase })
 					.AsNoTracking()
-					.Where(g => g.NameLowercase == nameLowercase)
-					.Select(g => (long?)g.ID)
-					.FirstOrDefaultAsync(cancellationToken)
+					.SingleAsync(cancellationToken)
 					.ConfigureAwait(false);
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return existingResult.IsSuccess
-				? DatabaseResult<long?>.Success(existingResult.Data)
-				: DatabaseResult<long?>.Failure(existingResult.ErrorCode, existingResult.ErrorMessage, existingResult.IsTransient);
+				return (long?)idRow.Value;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<long?>.Success(result.Data)
+				: DatabaseResult<long?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
 		/// <remarks>
-		/// <para><b>Transaction Scope:</b></para>
-		/// This operation uses an explicit transaction to ensure atomicity.
+			/// <para><b>Atomicity:</b></para>
+			/// This operation uses a single DELETE statement.
 		/// CASCADE delete constraints automatically remove related data:
 		/// <list type="bullet">
 		/// <item>All character guild memberships (character_guild table)</item>
@@ -156,13 +150,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid guild ID");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				// Rely on ON DELETE CASCADE constraints to remove related rows.
 				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { guildId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()

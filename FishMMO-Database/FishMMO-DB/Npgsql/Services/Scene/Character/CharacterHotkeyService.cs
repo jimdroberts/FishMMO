@@ -19,13 +19,13 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <remarks>
 	/// This service manages character hotkey bars including:
 	/// - Single hotkey save/update with atomic UPSERT operations
-	/// - Batch hotkey save/update with transactions
+	/// - Batch hotkey save/update with explicit transactions
 	/// - Hotkey deletion (bulk operations)
 	/// - Hotkey retrieval and count queries
 	/// 
 	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
 	/// - OperationCanceledException → DatabaseOperationCanceledException
-	/// - PostgresException (23505) → DatabaseConstraintException (Unique violation)
+	/// - PostgresException (23505) → DatabaseConstraintException (Unique constraint conflict; non-transient failure)
 	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
 	/// - NpgsqlException → DatabaseConnectionException
 	/// - DbUpdateException → DatabaseQueryException
@@ -33,6 +33,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// 
 	/// Methods return DatabaseResult to provide structured error handling
 	/// without throwing exceptions to calling code.
+	/// Unique constraint violations are not used as normal control flow; write paths prefer deterministic SQL (e.g. UPSERT) where appropriate.
 	/// </remarks>
 	public sealed class CharacterHotkeyService : BaseService<CharacterHotkeyEntity>, ICharacterHotkeyService
 	{
@@ -88,6 +89,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (hotkey.Version <= 0)
+			{
+				return DatabaseResult<long>.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, hotkey.CharacterID, cancellationToken).ConfigureAwait(false);
@@ -126,7 +135,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return id;
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<long>.Success(result.Data)
@@ -142,6 +151,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
 					"Empty or null hotkeys collection",
+					isTransient: false);
+			}
+
+			if (hotkeyList.Any(h => h.Version <= 0))
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"One or more hotkeys had an invalid Version. Version must be greater than 0.",
 					isTransient: false);
 			}
 
@@ -194,7 +211,7 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { characterIdArray, slotArray, versionArray, typeArray, referenceIdArray, now },
 					"One or more hotkeys were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		private string GetUpsertSql()
@@ -224,11 +241,16 @@ namespace FishMMO.Database.Npgsql.Services
 					reference_id = EXCLUDED.reference_id,
 					deleted = FALSE,
 					time_deleted = NULL,
-					version = CASE
-						WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-						ELSE {TableName}.version
-					END
-				WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+					version = EXCLUDED.version
+				WHERE
+					EXCLUDED.version > {TableName}.version
+					OR (
+						EXCLUDED.version = {TableName}.version
+						AND {TableName}.type = EXCLUDED.type
+						AND {TableName}.reference_id = EXCLUDED.reference_id
+						AND {TableName}.deleted = FALSE
+						AND {TableName}.time_deleted IS NULL
+					);";
 		}
 
 		/// <inheritdoc/>
@@ -242,7 +264,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -250,7 +272,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

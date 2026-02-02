@@ -16,7 +16,9 @@ namespace FishMMO.Database.Npgsql.Services
 	/// All write operations (Create*, Save*, Delete*, Set*, Update*) in this service use execution strategies
 	/// to ensure transient database failures are automatically retried according to the retry policy configured
 	/// on the DbContext. This is critical because ExecuteSqlRawAsync and SaveChangesAsync do not
-	/// Execution is wrapped by BaseService for retries/transactions.
+	/// automatically retry on transient failures without an execution strategy wrapper.
+	/// BaseService provides execution wrappers for retry and centralized exception mapping;
+	/// explicit transactions are used only when a write requires multiple database statements.
 	/// </para>
 	/// <para>
 	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide
@@ -28,8 +30,9 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Unexpected runtime errors
 	/// </para>
 	/// <para>
-	/// All SQL operations use atomic UPDATE, INSERT, and DELETE commands to prevent race conditions
-	/// when multiple servers or clients modify character data simultaneously.
+	/// Write operations prefer single-statement SQL (UPDATE/INSERT/DELETE, UPSERT/CTEs) to preserve atomicity
+	/// and avoid race conditions when multiple servers or clients modify data simultaneously. When more than
+	/// one database statement is unavoidable, the implementation uses an explicit transaction wrapper.
 	/// </para>
 	/// </remarks>
 	public interface ICharacterService
@@ -74,10 +77,10 @@ namespace FishMMO.Database.Npgsql.Services
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses atomic UPDATE operation to save all character fields in one operation.
+		/// Saves character state using a transaction wrapper when more than one statement is required.
 		/// Requires <c>characterData.Version</c> to be greater than zero. Version is authoritative for write ordering.
 		/// Updates the last_saved timestamp automatically (analytics only; not used for concurrency).
-		/// Uses BaseService.ExecuteTransactionAsync for automatic transient failure retry and centralized exception mapping.
+		/// Uses BaseService execution wrappers for automatic transient failure retry and centralized exception mapping.
 		/// </remarks>
 		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
 

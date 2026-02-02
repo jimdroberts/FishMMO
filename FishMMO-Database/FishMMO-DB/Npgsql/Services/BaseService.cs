@@ -8,12 +8,60 @@ using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
-using FishMMO.Database.Npgsql.Monitoring.Health;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Exceptions;
 
 namespace FishMMO.Database.Npgsql.Services
 {
+	/// <summary>
+	/// Guards against nested database execution scopes within the same logical async flow.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// This guard must be shared across all services, regardless of <c>TEntity</c> generic arguments.
+	/// Therefore it is implemented as a non-generic static holder.
+	/// </para>
+	/// </remarks>
+	internal static class DatabaseExecutionScope
+	{
+		private static readonly AsyncLocal<int> ScopeDepth = new AsyncLocal<int>();
+
+		/// <summary>
+		/// Enters a database execution scope for the current logical async flow.
+		/// </summary>
+		/// <param name="requestedScope">The wrapper attempting to enter the scope (for diagnostics).</param>
+		/// <returns>A token that must be disposed to exit the scope.</returns>
+		/// <exception cref="InvalidOperationException">Thrown when a scope is already active in this async flow.</exception>
+		public static ScopeToken Enter(string requestedScope)
+		{
+			var depth = ScopeDepth.Value;
+			if (depth > 0)
+			{
+				throw new InvalidOperationException(
+					"Nested BaseService execution scopes are not supported. " +
+					$"Attempted to enter '{requestedScope}' while already inside another database execution scope. " +
+					"This usually indicates a service method calling another service method that also wraps its own DbContext/transaction. " +
+					"Refactor so the outermost method owns the DbContext/transaction and inner operations execute on that context.");
+			}
+
+			ScopeDepth.Value = depth + 1;
+			return new ScopeToken();
+		}
+
+		/// <summary>
+		/// Scope-exit token returned by <see cref="Enter"/>.
+		/// </summary>
+		public readonly struct ScopeToken : IDisposable
+		{
+			/// <inheritdoc />
+			public void Dispose()
+			{
+				var depth = ScopeDepth.Value;
+				ScopeDepth.Value = depth <= 0 ? 0 : depth - 1;
+			}
+		}
+	}
+
 	/// <summary>
 	/// Base class for database services that execute EF Core operations with consistent
 	/// execution behavior (transactional and read-only), retry behavior for transient failures, and standardized
@@ -59,64 +107,6 @@ namespace FishMMO.Database.Npgsql.Services
 	/// </remarks>
 	public abstract class BaseService<TEntity> where TEntity : class
 	{
-		/// <summary>
-		/// Tracks whether the current logical async flow is already executing inside a BaseService
-		/// database execution scope.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// This is used to prevent accidental nesting of <see cref="ExecuteTransactionAsync(System.Func{FishMMO.Database.Npgsql.NpgsqlDbContext,System.Threading.Tasks.Task},string,System.Threading.CancellationToken)"/>
-		/// and <see cref="ExecuteReadAsync(System.Func{FishMMO.Database.Npgsql.NpgsqlDbContext,System.Threading.Tasks.Task},string,System.Threading.CancellationToken)"/>
-		/// wrappers (including cross-service calls), which would otherwise create multiple DbContexts/transactions and break atomic UoW semantics.
-		/// </para>
-		/// <para>
-		/// <see cref="AsyncLocal{T}"/> values flow with the current <see cref="System.Threading.ExecutionContext"/>, so concurrent requests on different
-		/// threads do not interfere with each other. This guard does <b>not</b> serialize execution globally; it only detects reentrancy within the same
-		/// async call chain.
-		/// </para>
-		/// </remarks>
-		private static readonly AsyncLocal<int> ExecutionScopeDepth = new AsyncLocal<int>();
-
-		/// <summary>
-		/// Enters a BaseService execution scope for the current logical async flow.
-		/// Throws if a scope is already active to prevent nested BaseService wrapper calls.
-		/// </summary>
-		/// <param name="requestedScope">The name of the wrapper attempting to enter the scope (for diagnostics).</param>
-		/// <returns>A token that must be disposed to exit the scope.</returns>
-		/// <exception cref="InvalidOperationException">
-		/// Thrown when a BaseService execution scope is already active in this logical async flow.
-		/// </exception>
-		private static ExecutionScopeToken EnterExecutionScope(string requestedScope)
-		{
-			var depth = ExecutionScopeDepth.Value;
-			if (depth > 0)
-			{
-				throw new InvalidOperationException(
-					"Nested BaseService execution scopes are not supported. " +
-					$"Attempted to enter '{requestedScope}' while already inside another database execution scope. " +
-					"This usually indicates a service method calling another service method that also wraps its own DbContext/transaction. " +
-					"Refactor so the outermost method owns the DbContext/transaction and inner operations execute on that context.");
-			}
-
-			ExecutionScopeDepth.Value = depth + 1;
-			return new ExecutionScopeToken();
-		}
-
-		/// <summary>
-		/// Scope-exit token returned by <see cref="EnterExecutionScope"/>.
-		/// </summary>
-		/// <remarks>
-		/// Disposing the token decrements the current logical async flow depth.
-		/// </remarks>
-		private readonly struct ExecutionScopeToken : IDisposable
-		{
-			public void Dispose()
-			{
-				var depth = ExecutionScopeDepth.Value;
-				ExecutionScopeDepth.Value = depth <= 0 ? 0 : depth - 1;
-			}
-		}
-
 		/// <summary>
 		/// Factory used to create new <see cref="NpgsqlDbContext"/> instances.
 		/// </summary>
@@ -208,7 +198,7 @@ namespace FishMMO.Database.Npgsql.Services
 			CancellationToken cancellationToken = default)
 		{
 			var resolvedOperationName = ResolveOperationName(operationName);
-			using var scope = EnterExecutionScope("ExecuteTransactionAsync");
+			using var scope = DatabaseExecutionScope.Enter("ExecuteTransactionAsync");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -291,7 +281,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			TResult result = default!;
 			var resolvedOperationName = ResolveOperationName(operationName);
-			using var scope = EnterExecutionScope("ExecuteTransactionAsync<TResult>");
+			using var scope = DatabaseExecutionScope.Enter("ExecuteTransactionAsync<TResult>");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -369,7 +359,7 @@ namespace FishMMO.Database.Npgsql.Services
 			CancellationToken cancellationToken = default)
 		{
 			var resolvedOperationName = ResolveOperationName(operationName);
-			using var scope = EnterExecutionScope("ExecuteWriteAsync");
+			using var scope = DatabaseExecutionScope.Enter("ExecuteWriteAsync");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -438,7 +428,7 @@ namespace FishMMO.Database.Npgsql.Services
 			CancellationToken cancellationToken = default)
 		{
 			var resolvedOperationName = ResolveOperationName(operationName);
-			using var scope = EnterExecutionScope("ExecuteWriteAsync<TResult>");
+			using var scope = DatabaseExecutionScope.Enter("ExecuteWriteAsync<TResult>");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -501,7 +491,7 @@ namespace FishMMO.Database.Npgsql.Services
 			CancellationToken cancellationToken = default)
 		{
 			var resolvedOperationName = ResolveOperationName(operationName);
-			using var scope = EnterExecutionScope("ExecuteReadAsync");
+			using var scope = DatabaseExecutionScope.Enter("ExecuteReadAsync");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -560,7 +550,7 @@ namespace FishMMO.Database.Npgsql.Services
 			CancellationToken cancellationToken = default)
 		{
 			var resolvedOperationName = ResolveOperationName(operationName);
-			using var scope = EnterExecutionScope("ExecuteReadAsync<TResult>");
+			using var scope = DatabaseExecutionScope.Enter("ExecuteReadAsync<TResult>");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -824,7 +814,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		/// <param name="entity">The tracked entity being updated or inserted.</param>
 		/// <param name="incomingVersion">
-		/// The version provided by the caller. Values &lt;= 0 are treated as "legacy/no version" and are ignored.
+		/// The version provided by the caller. Values must be &gt; 0.
 		/// </param>
 		/// <remarks>
 		/// For inserts (<c>entity.ID &lt;= 0</c>), a positive <paramref name="incomingVersion"/> is applied.
@@ -837,9 +827,10 @@ namespace FishMMO.Database.Npgsql.Services
 		protected void ValidateVersion(IVersionedEntity entity, long incomingVersion)
 		{
 			if (entity == null) throw new ArgumentNullException(nameof(entity));
-
-			// Allow legacy callers during rollout.
-			if (incomingVersion <= 0) return;
+			if (incomingVersion <= 0)
+			{
+				throw new ArgumentOutOfRangeException(nameof(incomingVersion), incomingVersion, "Version must be greater than 0.");
+			}
 
 			// New entity (insert): accept incoming version and stamp it.
 			if (entity.ID <= 0)
@@ -896,10 +887,22 @@ namespace FishMMO.Database.Npgsql.Services
 				return;
 			}
 
-			var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken)
+			var upsertStatement = sql.Trim();
+			upsertStatement = upsertStatement.TrimEnd(';');
+
+			var countSql = $@"WITH upserted AS (
+				{upsertStatement}
+				RETURNING 1
+			)
+			SELECT COUNT(*)::integer AS value FROM upserted";
+
+			var countRow = await dbContext.Set<SqlIntValue>()
+				.FromSqlRaw(countSql, parameters)
+				.AsNoTracking()
+				.SingleAsync(cancellationToken)
 				.ConfigureAwait(false);
 
-			if (rowsAffected != expectedRowsAffected)
+			if (countRow.Value != expectedRowsAffected)
 			{
 				throw new StaleStateException(staleStateMessage);
 			}

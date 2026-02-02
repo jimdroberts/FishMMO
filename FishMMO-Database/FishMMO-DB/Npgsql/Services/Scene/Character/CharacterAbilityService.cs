@@ -84,6 +84,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (abilityData.Version <= 0)
+			{
+				return DatabaseResult<long>.Failure(
+					"VALIDATION_ERROR",
+					"Invalid version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			var abilityResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var isCharacterActive = await dbContext.Characters
@@ -124,7 +132,7 @@ namespace FishMMO.Database.Npgsql.Services
 				ability.Cooldown = abilityData.Cooldown;
 
 				return ability;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!abilityResult.IsSuccess)
 			{
@@ -146,6 +154,13 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var list = abilities.ToList();
+			if (list.Any(a => a.Version <= 0))
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"One or more abilities had an invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
 			var newItems = list.Where(a => a.ID <= 0).ToList();
 			var existingItems = list.Where(a => a.ID > 0).ToList();
 
@@ -231,10 +246,7 @@ namespace FishMMO.Database.Npgsql.Services
 							cooldown = u.cooldown,
 							deleted = FALSE,
 							time_deleted = NULL,
-							version = CASE
-								WHEN u.version > 0 THEN u.version
-								ELSE t.version
-							END
+							version = u.version
 						FROM UNNEST(
 							{{0}}::bigint[],
 							{{1}}::bigint[],
@@ -244,7 +256,18 @@ namespace FishMMO.Database.Npgsql.Services
 							{{5}}::real[]
 						) AS u(id, character_id, template_id, version, ability_events, cooldown)
 						WHERE t.id = u.id
-							AND (u.version <= 0 OR u.version > t.version);";
+							AND (
+								u.version > t.version
+								OR (
+									u.version = t.version
+									AND t.character_id = u.character_id
+									AND t.template_id = u.template_id
+									AND t.ability_events = u.ability_events
+									AND t.cooldown = u.cooldown
+									AND t.deleted = FALSE
+									AND t.time_deleted IS NULL
+								)
+							);";
 
 					await ExecuteBulkUpsertAsync(
 						dbContext,
@@ -271,10 +294,7 @@ namespace FishMMO.Database.Npgsql.Services
 						SELECT
 							u.character_id,
 							u.template_id,
-							CASE
-								WHEN u.version > 0 THEN u.version
-								ELSE 0
-							END,
+							u.version,
 							u.ability_events,
 							u.cooldown,
 							{{5}},
@@ -293,11 +313,16 @@ namespace FishMMO.Database.Npgsql.Services
 							cooldown = EXCLUDED.cooldown,
 							deleted = FALSE,
 							time_deleted = NULL,
-							version = CASE
-								WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-								ELSE {TableName}.version
-							END
-						WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+							version = EXCLUDED.version
+						WHERE
+							EXCLUDED.version > {TableName}.version
+							OR (
+								EXCLUDED.version = {TableName}.version
+								AND {TableName}.ability_events = EXCLUDED.ability_events
+								AND {TableName}.cooldown = EXCLUDED.cooldown
+								AND {TableName}.deleted = FALSE
+								AND {TableName}.time_deleted IS NULL
+							);";
 
 					await ExecuteBulkUpsertAsync(
 						dbContext,
@@ -307,7 +332,7 @@ namespace FishMMO.Database.Npgsql.Services
 						"One or more abilities were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -321,7 +346,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -329,7 +354,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -343,7 +368,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -351,7 +376,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE id = {{1}} AND character_id = {{2}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, abilityId, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

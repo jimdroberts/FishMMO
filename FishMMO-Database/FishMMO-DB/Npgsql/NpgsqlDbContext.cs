@@ -1,31 +1,38 @@
 ﻿using System;
-using System.Linq;
-using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Npgsql.Entities;
-using FishMMO.Database.Npgsql.Monitoring.Metrics;
 
 namespace FishMMO.Database.Npgsql
 {
+	/// <summary>
+	/// Entity Framework Core DbContext for the FishMMO PostgreSQL database.
+	/// </summary>
+	/// <remarks>
+	/// This DbContext is created as a short-lived instance via <see cref="INpgsqlDbContextFactory"/>
+	/// and is not pooled.
+	/// </remarks>
 	public class NpgsqlDbContext : DbContext
 	{
-			private int disposed = 0;
+		private int disposed;
 
 		/// <summary>
 		/// Gets the database schema name for this context.
 		/// </summary>
 		public string Schema { get; }
 
-			public NpgsqlDbContext(DbContextOptions options, string schema) : base(options)
+		/// <summary>
+		/// Initializes a new instance of the <see cref="NpgsqlDbContext"/> class.
+		/// </summary>
+		/// <param name="options">The DbContext options.</param>
+		/// <param name="schema">The database schema to use; defaults to <c>public</c> when empty.</param>
+		public NpgsqlDbContext(DbContextOptions options, string schema) : base(options)
 		{
 			schema = string.IsNullOrWhiteSpace(schema) ? "public" : schema;
 
 			Schema = schema;
 		}
-
-
 
 		//protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 		//    => optionsBuilder.LogTo(Console.WriteLine);
@@ -89,6 +96,9 @@ namespace FishMMO.Database.Npgsql
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{
 			base.OnModelCreating(modelBuilder);
+
+			modelBuilder.Entity<SqlIntValue>().HasNoKey();
+			modelBuilder.Entity<SqlLongValue>().HasNoKey();
 
 			// Set default schema for all entities
 			modelBuilder.HasDefaultSchema(Schema);

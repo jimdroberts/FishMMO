@@ -67,7 +67,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"INSERT INTO {TableName} (name, address, port)
 					VALUES ({{0}}, {{1}}, {{2}})
@@ -83,7 +83,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstAsync(cancellationToken)
 					.ConfigureAwait(false);
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<LoginServerData>.Success(MapEntityToDto(result.Data))
@@ -101,16 +101,23 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var server = await getByIdTrackingQuery(dbContext, serverId, cancellationToken).ConfigureAwait(false);
-				if (server == null)
+				var sql = $@"UPDATE {TableName}
+					SET last_pulse = {{0}}
+					WHERE id = {{1}}";
+
+				var affected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { DateTime.UtcNow, serverId },
+					cancellationToken)
+					.ConfigureAwait(false);
+
+				if (affected == 0)
 				{
 					throw new DatabaseEntityNotFoundException("LoginServer", serverId.ToString());
 				}
-
-				server.LastPulse = DateTime.UtcNow;
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
 		}
@@ -126,16 +133,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var server = await getByIdTrackingQuery(dbContext, serverId, cancellationToken).ConfigureAwait(false);
-				if (server == null)
-				{
-					return;
-				}
-
-				dbContext.LoginServers.Remove(server);
-			}).ConfigureAwait(false);
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$"DELETE FROM {TableName} WHERE id = {{0}}",
+					new object[] { serverId },
+					cancellationToken)
+					.ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

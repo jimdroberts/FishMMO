@@ -12,10 +12,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (Save*, Delete*) in this service use execution strategies to ensure transient
-	/// database failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because ExecuteSqlRawAsync does not automatically benefit from
-	/// Execution is wrapped by BaseService for retries/transactions.
+	/// Write operations (Save*, Delete*) are executed through <see cref="BaseService{TEntity}"/> wrappers,
+	/// which provide consistent retry and error mapping behavior for transient database failures.
 	/// </para>
 	/// <para>
 	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide
@@ -27,7 +25,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// - Unexpected runtime errors
 	/// </para>
 	/// <para>
-	/// SaveAsync uses atomic UPSERT to prevent race conditions during concurrent updates.
+	/// SaveAsync uses a single-statement UPSERT to prevent race conditions during concurrent updates.
 	/// </para>
 	/// </remarks>
 	public interface IPartyUpdateService
@@ -41,9 +39,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
-		/// failures are automatically retried. Uses PostgreSQL ON CONFLICT for atomic UPSERT with conditional
-		/// update to prevent race conditions.
+		/// Uses a single-statement PostgreSQL <c>INSERT ... ON CONFLICT DO UPDATE</c> with a conditional
+		/// update to avoid regressing <c>last_update</c>.
 		/// </remarks>
 		Task<DatabaseResult> SaveAsync(long partyId, CancellationToken cancellationToken = default);
 
@@ -57,8 +54,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
-		/// failures are automatically retried. Returns 0 rows deleted if party doesn't exist (idempotent).
+		/// Uses a single-statement <c>DELETE</c>. Returns 0 rows deleted if no record exists (idempotent).
 		/// </remarks>
 		Task<DatabaseResult<int>> DeleteAsync(long partyId, CancellationToken cancellationToken = default);
 
@@ -73,8 +69,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ (ToListAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
 		/// Filters by both timestamp and party ID list.
 		/// </remarks>
 		Task<DatabaseResult<List<PartyUpdateData>>> FetchAsync(

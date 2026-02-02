@@ -19,13 +19,13 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <remarks>
 	/// This service manages character inventory including:
 	/// - Single inventory item save/update with atomic UPSERT operations
-	/// - Batch inventory save/update with transactions
+	/// - Batch inventory save/update with explicit transactions
 	/// - Inventory deletion (bulk and slot-specific)
 	/// - Inventory retrieval
 	/// 
 	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
 	/// - OperationCanceledException → DatabaseOperationCanceledException
-	/// - PostgresException (23505) → DatabaseConstraintException (Unique violation)
+	/// - PostgresException (23505) → DatabaseConstraintException (Unique constraint conflict; non-transient failure)
 	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
 	/// - NpgsqlException → DatabaseConnectionException
 	/// - DbUpdateException → DatabaseQueryException
@@ -33,6 +33,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// 
 	/// Methods return DatabaseResult to provide structured error handling
 	/// without throwing exceptions to calling code.
+	/// Unique constraint violations are not used as normal control flow; write paths prefer deterministic SQL (e.g. UPSERT) where appropriate.
 	/// </remarks>
 	public sealed class CharacterInventoryService : BaseService<CharacterInventoryEntity>, ICharacterInventoryService
 	{
@@ -78,6 +79,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (item.Version <= 0)
+			{
+				return DatabaseResult<long>.Failure(
+					"VALIDATION_ERROR",
+					"Invalid version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, item.CharacterID, cancellationToken).ConfigureAwait(false);
@@ -97,11 +106,17 @@ namespace FishMMO.Database.Npgsql.Services
 						amount = EXCLUDED.amount,
 						deleted = FALSE,
 						time_deleted = NULL,
-						version = CASE
-							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-							ELSE {TableName}.version
-						END
-					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version
+						version = EXCLUDED.version
+					WHERE
+						EXCLUDED.version > {TableName}.version
+						OR (
+							EXCLUDED.version = {TableName}.version
+							AND {TableName}.template_id = EXCLUDED.template_id
+							AND {TableName}.seed = EXCLUDED.seed
+							AND {TableName}.amount = EXCLUDED.amount
+							AND {TableName}.deleted = FALSE
+							AND {TableName}.time_deleted IS NULL
+						)
 					RETURNING id, version, character_id, template_id, slot, seed, amount, time_created, deleted, time_deleted";
 
 				var upserted = await dbContext.CharacterInventoryItems
@@ -124,7 +139,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return upserted.ID;
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<long>.Success(result.Data)
@@ -157,6 +172,14 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					itemList = deduped.Values.ToList();
 				}
+			}
+
+			if (itemList.Any(i => i.Version <= 0))
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"One or more inventory items had an invalid Version. Version must be greater than 0.",
+					isTransient: false);
 			}
 
 			return await ExecuteTransactionAsync(async dbContext =>
@@ -193,7 +216,7 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { characterIdArray, slotArray, versionArray, templateIdArray, seedArray, amountArray, now },
 					"One or more inventory items were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		private string GetUpsertSql()
@@ -226,11 +249,17 @@ namespace FishMMO.Database.Npgsql.Services
 					amount = EXCLUDED.amount,
 					deleted = FALSE,
 					time_deleted = NULL,
-					version = CASE
-						WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-						ELSE {TableName}.version
-					END
-				WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+					version = EXCLUDED.version
+				WHERE
+					EXCLUDED.version > {TableName}.version
+					OR (
+						EXCLUDED.version = {TableName}.version
+						AND {TableName}.template_id = EXCLUDED.template_id
+						AND {TableName}.seed = EXCLUDED.seed
+						AND {TableName}.amount = EXCLUDED.amount
+						AND {TableName}.deleted = FALSE
+						AND {TableName}.time_deleted IS NULL
+					);";
 		}
 
 		/// <inheritdoc/>
@@ -244,7 +273,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -252,7 +281,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -266,7 +295,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -274,7 +303,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE character_id = {{1}} AND slot = {{2}} AND deleted = FALSE";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId, slot }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

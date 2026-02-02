@@ -53,7 +53,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid account ID.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var party = new PartyEntity
 				{
@@ -61,7 +61,7 @@ namespace FishMMO.Database.Npgsql.Services
 				};
 				await dbContext.Parties.AddAsync(party, cancellationToken).ConfigureAwait(false);
 				return party;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
@@ -78,8 +78,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		/// <remarks>
-		/// <para><b>Transaction Scope:</b></para>
-		/// This operation uses an explicit transaction to ensure atomicity.
+			/// <para><b>Atomicity:</b></para>
+			/// This operation uses a single DELETE statement.
 		/// CASCADE delete constraints automatically remove related data:
 		/// <list type="bullet">
 		/// <item>All character party memberships (character_party table)</item>
@@ -93,13 +93,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				// Rely on ON DELETE CASCADE constraints to remove related rows.
 				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { partyId }, cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()

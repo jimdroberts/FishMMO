@@ -38,20 +38,6 @@ namespace FishMMO.Database.Npgsql.Services
 	{
 		private const int MaxAllowedGuildCapacity = 256;
 
-		private sealed class SaveMembershipPrecheckResult
-		{
-			public bool IsAllowed { get; }
-			public string? ErrorCode { get; }
-			public string? ErrorMessage { get; }
-
-			public SaveMembershipPrecheckResult(bool isAllowed, string? errorCode, string? errorMessage)
-			{
-				IsAllowed = isAllowed;
-				ErrorCode = errorCode;
-				ErrorMessage = errorMessage;
-			}
-		}
-
 		/// <summary>
 		/// Compiled query for checking whether a character exists and is not deleted.
 		/// Returns the character ID if active, otherwise 0.
@@ -96,14 +82,6 @@ namespace FishMMO.Database.Npgsql.Services
 					.Count());
 
 		/// <summary>
-		/// Compiled query for retrieving a tracked guild membership by character ID.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterGuildEntity?>> getMembershipByCharacterTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
-				(CharacterGuildEntity?)context.CharacterGuilds
-					.FirstOrDefault(g => g.CharacterID == characterId));
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterGuildService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
@@ -136,105 +114,92 @@ namespace FishMMO.Database.Npgsql.Services
 					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedGuildCapacity}.");
 			}
 
-			var precheck = await ExecuteReadAsync(async dbContext =>
+			if (guildData.Version <= 0)
 			{
-				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (activeCharacterId == 0)
-				{
-					return new SaveMembershipPrecheckResult(false, "DB_NOT_FOUND", "Character not found or deleted.");
-				}
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
 
-				var existingGuildId = await dbContext.CharacterGuilds
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				var now = DateTime.UtcNow;
+				var characterTableName = dbContext.GetTableName<CharacterEntity>();
+				var guildTableName = dbContext.GetTableName<GuildEntity>();
+				var sql = $@"
+					WITH active_character AS (
+						SELECT id FROM {characterTableName} WHERE id = {{0}} AND deleted = FALSE
+					),
+					guild_row AS (
+						SELECT id FROM {guildTableName} WHERE id = {{1}} FOR UPDATE
+					),
+					existing_membership AS (
+						SELECT guild_id FROM {TableName} WHERE character_id = {{0}}
+					),
+					capacity_ok AS (
+						SELECT 1
+						WHERE EXISTS (SELECT 1 FROM existing_membership WHERE guild_id = {{1}})
+							OR (SELECT COUNT(*) FROM {TableName} WHERE guild_id = {{1}}) < {{2}}
+					),
+					upserted AS (
+						INSERT INTO {TableName}
+							(character_id, guild_id, version, rank, location, time_created)
+						SELECT
+							{{0}},
+							{{1}},
+							{{3}},
+							{{4}},
+							{{5}},
+							{{6}}
+						WHERE
+							EXISTS (SELECT 1 FROM active_character)
+							AND EXISTS (SELECT 1 FROM guild_row)
+							AND EXISTS (SELECT 1 FROM capacity_ok)
+						ON CONFLICT (character_id)
+						DO UPDATE SET
+							guild_id = EXCLUDED.guild_id,
+							rank = EXCLUDED.rank,
+							location = EXCLUDED.location,
+							version = EXCLUDED.version
+						WHERE
+							EXCLUDED.version > {TableName}.version
+							OR (
+								EXCLUDED.version = {TableName}.version
+								AND {TableName}.guild_id = EXCLUDED.guild_id
+								AND {TableName}.rank = EXCLUDED.rank
+								AND {TableName}.location = EXCLUDED.location
+							)
+						RETURNING 1
+					)
+					SELECT CASE
+						WHEN NOT EXISTS (SELECT 1 FROM active_character) THEN 1
+						WHEN NOT EXISTS (SELECT 1 FROM guild_row) THEN 2
+						WHEN NOT EXISTS (SELECT 1 FROM capacity_ok) THEN 3
+						WHEN EXISTS (SELECT 1 FROM upserted) THEN 0
+						ELSE 4
+					END AS value";
+
+				var status = await dbContext.Set<SqlIntValue>()
+					.FromSqlRaw(sql, new object[] { guildData.CharacterID, guildData.GuildID, maxCapacity, guildData.Version, guildData.Rank, guildData.Location ?? string.Empty, now })
 					.AsNoTracking()
-					.Where(g => g.CharacterID == guildData.CharacterID)
-					.Select(g => g.GuildID)
-					.FirstOrDefaultAsync(cancellationToken)
+					.SingleAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				var needsCapacityCheck = existingGuildId == 0 || existingGuildId != guildData.GuildID;
-				if (!needsCapacityCheck)
+				return status.Value;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? result.Data switch
 				{
-					return new SaveMembershipPrecheckResult(true, null, null);
+					0 => DatabaseResult.Success(),
+					1 => DatabaseResult.Failure("DB_NOT_FOUND", "Character not found or deleted.", isTransient: false),
+					2 => DatabaseResult.Failure("NOT_FOUND", $"Guild with ID {guildData.GuildID} does not exist.", isTransient: false),
+					3 => DatabaseResult.Failure("CAPACITY_EXCEEDED", $"Guild has reached maximum capacity of {maxCapacity} members.", isTransient: false),
+					4 => DatabaseResult.Failure("STALE_STATE", "Guild membership update rejected due to a stale Version.", isTransient: false),
+					_ => DatabaseResult.Failure("DATABASE_ERROR", "A database error occurred.", isTransient: true)
 				}
-
-				var guildExists = await dbContext.Guilds
-					.AsNoTracking()
-					.AnyAsync(g => g.ID == guildData.GuildID, cancellationToken)
-					.ConfigureAwait(false);
-				if (!guildExists)
-				{
-					return new SaveMembershipPrecheckResult(false, "NOT_FOUND", $"Guild with ID {guildData.GuildID} does not exist.");
-				}
-
-				var currentCount = await getGuildMemberCountQuery(dbContext, guildData.GuildID, cancellationToken).ConfigureAwait(false);
-				if (currentCount >= maxCapacity)
-				{
-					return new SaveMembershipPrecheckResult(false, "CAPACITY_EXCEEDED", $"Guild has reached maximum capacity of {maxCapacity} members.");
-				}
-
-				return new SaveMembershipPrecheckResult(true, null, null);
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			if (!precheck.IsSuccess)
-			{
-				return DatabaseResult.Failure(precheck.ErrorCode, precheck.ErrorMessage, precheck.IsTransient);
-			}
-
-			var precheckResult = precheck.Data;
-			if (!precheckResult.IsAllowed)
-			{
-				return DatabaseResult.Failure(precheckResult.ErrorCode!, precheckResult.ErrorMessage!, isTransient: false);
-			}
-
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var membership = await getMembershipByCharacterTrackingQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (membership == null)
-				{
-					membership = new CharacterGuildEntity
-					{
-						CharacterID = guildData.CharacterID,
-						Version = guildData.Version,
-						TimeCreated = DateTime.UtcNow
-					};
-					await dbContext.CharacterGuilds.AddAsync(membership, cancellationToken).ConfigureAwait(false);
-				}
-
-				ValidateVersion(membership, guildData.Version);
-
-				membership.GuildID = guildData.GuildID;
-				membership.Rank = guildData.Rank;
-				membership.Location = guildData.Location;
-			}).ConfigureAwait(false);
-
-			if (insertResult.IsSuccess)
-			{
-				return DatabaseResult.Success();
-			}
-
-			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
-			{
-				return DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
-			}
-
-			var updateResult = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var membership = await getMembershipByCharacterTrackingQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (membership == null)
-				{
-					throw new DatabaseEntityNotFoundException("CharacterGuild", guildData.CharacterID.ToString());
-				}
-
-				ValidateVersion(membership, guildData.Version);
-
-				membership.GuildID = guildData.GuildID;
-				membership.Rank = guildData.Rank;
-				membership.Location = guildData.Location;
-			}).ConfigureAwait(false);
-
-			return updateResult.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -247,17 +212,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var membership = await dbContext.CharacterGuilds
-					.FirstOrDefaultAsync(g => g.CharacterID == characterId && g.GuildID == guildId, cancellationToken)
+				var sql = $@"UPDATE {TableName} SET rank = {{0}} WHERE character_id = {{1}} AND guild_id = {{2}}";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { rank, characterId, guildId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				if (membership != null)
-				{
-					membership.Rank = rank;
-				}
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -274,14 +234,14 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				await dbContext.Database.ExecuteSqlRawAsync(
 					"DELETE FROM character_guild WHERE character_id = {0}",
 					new object[] { characterId },
 					cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()

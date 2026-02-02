@@ -30,7 +30,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Success: Returns complete server data including generated ID.
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Invalid name or address (null/whitespace)
-		/// - UNIQUE_VIOLATION: A concurrent registration caused a unique constraint violation
+		/// - UNIQUE_VIOLATION: A unique constraint was violated (non-transient). Note: normal concurrent registration by name is handled via UPSERT and should not produce this.
 		/// - DATABASE_ERROR: Unexpected database error
 		/// </remarks>
 		Task<DatabaseResult<LoginServerData>> AddOrUpdateAsync(
