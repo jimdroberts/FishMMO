@@ -30,7 +30,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// timestamp is updated instead, ensuring idempotency and preventing DOS attacks through
 		/// request flooding.
 		/// </remarks>
-		public async Task<DatabaseResult> SaveAsync(string accountName, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(string accountName, CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(accountName))
 			{

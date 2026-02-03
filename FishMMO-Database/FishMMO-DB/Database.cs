@@ -165,27 +165,39 @@ namespace FishMMO.Database
 					"Failed to locate NpgsqlServiceRegistry.Register<TService>(TService) method for dynamic registration.");
 			}
 
-			foreach (var serviceInterface in serviceInterfaces)
+			var interfaceToImplementation = serviceInterfaces
+				.Select(serviceInterface =>
+				{
+					var implementations = candidates
+						.Where(t => serviceInterface.IsAssignableFrom(t))
+						.ToArray();
+
+					if (implementations.Length == 0)
+					{
+						throw new InvalidOperationException(
+							$"No implementation found for service interface '{serviceInterface.FullName}'.");
+					}
+
+					if (implementations.Length > 1)
+					{
+						var implList = string.Join(", ", implementations.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
+						throw new InvalidOperationException(
+							$"Multiple implementations found for service interface '{serviceInterface.FullName}': {implList}." +
+							" Please keep exactly one implementation per service interface.");
+					}
+
+					return new { ServiceInterface = serviceInterface, Implementation = implementations[0] };
+				})
+				.ToArray();
+
+			var groupedByImplementation = interfaceToImplementation
+				.GroupBy(x => x.Implementation, x => x.ServiceInterface)
+				.OrderBy(g => g.Key.FullName, StringComparer.Ordinal)
+				.ToArray();
+
+			foreach (var group in groupedByImplementation)
 			{
-				var implementations = candidates
-					.Where(t => serviceInterface.IsAssignableFrom(t))
-					.ToArray();
-
-				if (implementations.Length == 0)
-				{
-					throw new InvalidOperationException(
-						$"No implementation found for service interface '{serviceInterface.FullName}'.");
-				}
-
-				if (implementations.Length > 1)
-				{
-					var implList = string.Join(", ", implementations.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
-					throw new InvalidOperationException(
-						$"Multiple implementations found for service interface '{serviceInterface.FullName}': {implList}." +
-						" Please keep exactly one implementation per service interface.");
-				}
-
-				var implementation = implementations[0];
+				var implementation = group.Key;
 				object instance;
 
 				try
@@ -195,20 +207,25 @@ namespace FishMMO.Database
 				catch (TargetInvocationException tie)
 				{
 					var inner = tie.InnerException ?? tie;
+					var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
 					throw new InvalidOperationException(
-						$"Failed to construct '{implementation.FullName}' for '{serviceInterface.FullName}': {inner.Message}",
+						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}. {inner.Message}",
 						inner);
 				}
 				catch (Exception ex)
 				{
+					var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
 					throw new InvalidOperationException(
-						$"Failed to construct '{implementation.FullName}' for '{serviceInterface.FullName}'. " +
+						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}. " +
 						$"Ensure it has a public constructor accepting '{nameof(INpgsqlDbContextFactory)}'.",
 						ex);
 				}
 
-				var registerMethod = registerOpenMethod.MakeGenericMethod(serviceInterface);
-				registerMethod.Invoke(registry, new[] { instance });
+				foreach (var serviceInterface in group.OrderBy(t => t.FullName, StringComparer.Ordinal))
+				{
+					var registerMethod = registerOpenMethod.MakeGenericMethod(serviceInterface);
+					registerMethod.Invoke(registry, new[] { instance });
+				}
 			}
 		}
 

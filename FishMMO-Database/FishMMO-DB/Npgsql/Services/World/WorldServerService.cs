@@ -36,7 +36,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> AddOrUpdateAsync(
+		public async Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> PersistAsync(
 			string name,
 			string address,
 			ushort port,
@@ -117,7 +117,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<WorldServerData>> GetServerAsync(long serverId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<WorldServerData>> FetchAsync(long serverId, CancellationToken cancellationToken = default)
 		{
 			if (serverId <= 0)
 			{
@@ -140,7 +140,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<List<WorldServerData>>> GetActiveServersAsync(
+		public async Task<DatabaseResult<List<WorldServerData>>> FetchActiveAsync(
 			float idleTimeoutSeconds = 60.0f,
 			CancellationToken cancellationToken = default)
 		{

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -56,7 +57,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveFactionsAsync(IEnumerable<CharacterFactionData> factions, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterFactionData> factions, CancellationToken cancellationToken = default)
 		{
 			var factionList = factions?.ToList();
 			if (factionList == null || factionList.Count == 0)
@@ -138,13 +139,7 @@ namespace FishMMO.Database.Npgsql.Services
 						time_deleted = NULL,
 						version = EXCLUDED.version
 					WHERE
-						EXCLUDED.version > {TableName}.version
-						OR (
-							EXCLUDED.version = {TableName}.version
-							AND {TableName}.value = EXCLUDED.value
-							AND {TableName}.deleted = FALSE
-							AND {TableName}.time_deleted IS NULL
-						);";
+						EXCLUDED.version > {TableName}.version;";
 
 				await ExecuteBulkUpsertAsync(
 					dbContext,
@@ -157,7 +152,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteFactionsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -201,7 +196,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterFactionData>>> GetFactionsAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterFactionData>>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{

@@ -8,11 +8,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
 	/// <summary>
 	/// Service interface for party update timestamp tracking.
-	/// Provides async methods for saving, deleting, and fetching party update records.
+	/// Provides async methods for persisting, deleting, and fetching party update records.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (Save*, Delete*) are executed through <see cref="BaseService{TEntity}"/> wrappers,
+	/// Write operations (Persist*, Delete*) are executed through <see cref="BaseService{TEntity}"/> wrappers,
 	/// which provide consistent retry and error mapping behavior for transient database failures.
 	/// </para>
 	/// <para>
@@ -25,7 +25,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// - Unexpected runtime errors
 	/// </para>
 	/// <para>
-	/// SaveAsync uses a single-statement UPSERT to prevent race conditions during concurrent updates.
+	/// PersistAsync uses a single-statement UPSERT to prevent race conditions during concurrent updates.
 	/// </para>
 	/// </remarks>
 	public interface IPartyUpdateService
@@ -42,7 +42,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Uses a single-statement PostgreSQL <c>INSERT ... ON CONFLICT DO UPDATE</c> with a conditional
 		/// update to avoid regressing <c>last_update</c>.
 		/// </remarks>
-		Task<DatabaseResult> SaveAsync(long partyId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> PersistAsync(long partyId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes all update records for a party.

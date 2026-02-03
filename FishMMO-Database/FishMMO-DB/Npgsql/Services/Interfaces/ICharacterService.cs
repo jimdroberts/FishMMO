@@ -1,11 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
-namespace FishMMO.Database.Npgsql.Services
+namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
 	/// <summary>
 	/// Service interface for managing character entities in the database.
@@ -13,7 +13,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// All write operations (Create*, Save*, Delete*, Set*, Update*) in this service use execution strategies
+	/// All write operations (Create*, Persist*, Delete*, Set*, Update*) in this service use execution strategies
 	/// to ensure transient database failures are automatically retried according to the retry policy configured
 	/// on the DbContext. This is critical because ExecuteSqlRawAsync and SaveChangesAsync do not
 	/// automatically retry on transient failures without an execution strategy wrapper.
@@ -35,25 +35,16 @@ namespace FishMMO.Database.Npgsql.Services
 	/// one database statement is unavoidable, the implementation uses an explicit transaction wrapper.
 	/// </para>
 	/// </remarks>
-	public interface ICharacterService
+	public interface ICharacterService :
+		ICountByKeyAction<string>,
+		IDeleteByKeyVersionedAction<long>,
+		IFetchByKeyAction<long, CharacterData?>,
+		IFetchByKeyAction<string, CharacterData?>,
+		IFetchManyByKeyAction<string, CharacterData>,
+		IPersistAction<CharacterData>
 	{
 		/// <summary>
-		/// Gets the count of characters for a specific account.
-		/// </summary>
-		/// <param name="account">The account name.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the character count on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (CountAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// </remarks>
-		Task<DatabaseResult<int>> GetCountAsync(string account, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Creates a new character in the database using SaveChangesAsync.
+		/// Creates a new character in the database.
 		/// </summary>
 		/// <param name="characterData">The character data to create.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
@@ -62,78 +53,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses EF Core's SaveChangesAsync for insert operations with execution strategy wrapping
+		/// Uses a single-statement SQL insert (CTE-based) with execution strategy wrapping
 		/// to ensure transient database failures are automatically retried.
 		/// Character names are stored with a lowercase version for case-insensitive uniqueness.
 		/// </remarks>
 		Task<DatabaseResult<CharacterOperationResult>> CreateCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Saves an existing character's data to the database using atomic UPDATE.
-		/// </summary>
-		/// <param name="characterData">The character data to save.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// Saves character state using a transaction wrapper when more than one statement is required.
-		/// Requires <c>characterData.Version</c> to be greater than zero. Version is authoritative for write ordering.
-		/// Updates the last_saved timestamp automatically (analytics only; not used for concurrency).
-		/// Uses BaseService execution wrappers for automatic transient failure retry and centralized exception mapping.
-		/// </remarks>
-		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Soft-deletes a character.
-		/// </summary>
-		/// <param name="characterId">The character ID to delete.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// Marks the character and all character-owned rows as deleted (soft cascade), without removing data.
-		/// To allow reusing the character name, the character is renamed by appending <c>_DELETED_{GUID}</c>
-		/// to <c>Name</c>. <c>NameLowercase</c> is derived from <c>Name</c> (case-insensitive uniqueness).
-		/// Character guild/party membership rows are hard-deleted (temporary state).
-		/// If the character does not exist (or is already deleted), this method returns success (idempotent).
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
-		/// </remarks>
-		Task<DatabaseResult> DeleteCharacterAsync(long characterId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Retrieves a character by its ID.
-		/// </summary>
-		/// <param name="characterId">The character ID.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the character data (or null if not found) on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		Task<DatabaseResult<CharacterData?>> GetCharacterAsync(long characterId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Retrieves all characters for a specific account.
-		/// </summary>
-		/// <param name="account">The account name.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing a list of character data on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		Task<DatabaseResult<IReadOnlyList<CharacterData>>> GetCharactersAsync(string account, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Retrieves a character by its name.
-		/// </summary>
-		/// <param name="name">The character name (case-insensitive).</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the character data (or null if not found) on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		Task<DatabaseResult<CharacterData?>> GetCharacterByNameAsync(string name, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Sets the selected character for an account atomically. Deselects all other characters for the account.

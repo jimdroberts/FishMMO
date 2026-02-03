@@ -27,10 +27,6 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-			builder.Property(e => e.Version)
-				.IsRequired()
-				.HasDefaultValue(1L);
-
 			builder.Property(e => e.SessionState)
 				.IsRequired()
 				.HasConversion<short>()
@@ -64,7 +60,7 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.NameLowercase)
 				.IsUnique();
 
-			// Performance index for account character queries (GetCharactersAsync hot path)
+			// Performance index for account character queries (FetchManyAsync hot path)
 			builder.HasIndex(e => e.Account);
 
 			// Performance index for session state filtering (online/transitioning queries).

@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -27,7 +28,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// - DatabaseResult pattern for safe, typed error handling
 	/// - Custom exceptions with sanitized messages for security
 	/// </remarks>
-	public interface IAccountService
+	public interface IAccountService : IExistsByKeyAction<string>
 	{
 		/// <summary>
 		/// Gets the last login time for an account.
@@ -48,7 +49,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// - DB_CONNECTION_FAILED: Database connection error (transient)
 		/// - DB_TIMEOUT: Query timeout (transient)
 		/// </remarks>
-		Task<DatabaseResult<DateTime>> GetLastLoginAsync(
+		Task<DatabaseResult<DateTime>> FetchLastLoginAsync(
 			string accountName,
 			CancellationToken cancellationToken = default);
 
@@ -67,7 +68,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// - UNIQUE_VIOLATION: Account name already exists (non-transient)
 		/// - DATABASE_ERROR: Unexpected database error
 		/// </remarks>
-		Task<DatabaseResult> CreateAccountAsync(
+		Task<DatabaseResult> PersistAsync(
 			string accountName,
 			string salt,
 			string verifier,
@@ -101,7 +102,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// The returned AccountData DTO is a defensive copy and can be safely used
 		/// after the database context is disposed.
 		/// </remarks>
-		Task<DatabaseResult<AccountData>> GetAccountForLoginAsync(
+		Task<DatabaseResult<AccountData>> FetchForLoginAsync(
 			string accountName,
 			CancellationToken cancellationToken = default);
 
@@ -124,34 +125,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// - DB_TIMEOUT: Operation timeout (transient)
 		/// - DB_QUERY_FAILED: Unexpected database error
 		/// </remarks>
-		Task<DatabaseResult> UpdateLastLoginAsync(
-			string accountName,
-			CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Checks if an account exists in the database.
-		/// </summary>
-		/// <param name="accountName">The account name to check. Must be 3-32 characters.</param>
-		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
-		/// <returns>
-		/// DatabaseResult containing true if account exists, false if not found.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ query which automatically benefits from EF Core's
-		/// configured retry policy for transient failures.
-		/// 
-		/// Success: Returns true if account exists, false otherwise.
-		/// Failure cases:
-		/// - VALIDATION_ERROR: Username validation failed (treated as not exists)
-		/// - DATABASE_ERROR: Unexpected database error (transient)
-		/// 
-		/// The query uses AsNoTracking() for optimal performance since entity
-		/// tracking is not required for existence checks.
-		/// 
-		/// Note: Returns false (not failure) for validation errors to reduce enumeration risk
-		/// and avoid unnecessary database queries.
-		/// </remarks>
-		Task<DatabaseResult<bool>> AccountExistsAsync(
+		Task<DatabaseResult> PersistLastLoginAsync(
 			string accountName,
 			CancellationToken cancellationToken = default);
 	}

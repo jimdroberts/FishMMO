@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -58,7 +59,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<int>> GetCountAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> CountAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -74,7 +75,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> SaveAbilityAsync(CharacterAbilityData abilityData, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> PersistAsync(CharacterAbilityData abilityData, CancellationToken cancellationToken = default)
 		{
 			if (abilityData.CharacterID <= 0)
 			{
@@ -92,7 +93,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var abilityResult = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync<long>(async dbContext =>
 			{
 				var isCharacterActive = await dbContext.Characters
 					.AsNoTracking()
@@ -103,47 +104,48 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", abilityData.CharacterID.ToString());
 				}
 
-				var ability = await getByCharacterAndTemplateQuery(dbContext, abilityData.CharacterID, abilityData.TemplateID, cancellationToken)
+				var now = DateTime.UtcNow;
+				var abilityEvents = abilityData.AbilityEvents?.ToArray() ?? Array.Empty<int>();
+				var sql = $@"
+					WITH upserted AS (
+						INSERT INTO {TableName}
+							(character_id, template_id, version, ability_events, cooldown, time_created, deleted, time_deleted)
+						VALUES
+							({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, FALSE, NULL)
+						ON CONFLICT (character_id, template_id)
+						DO UPDATE SET
+							ability_events = EXCLUDED.ability_events,
+							cooldown = EXCLUDED.cooldown,
+							deleted = FALSE,
+							time_deleted = NULL,
+							version = EXCLUDED.version
+						WHERE
+							EXCLUDED.version > {TableName}.version
+						RETURNING id
+					)
+					SELECT COALESCE((SELECT id FROM upserted LIMIT 1), 0)::bigint AS value";
+
+				var idRow = await dbContext.Set<SqlLongValue>()
+					.FromSqlRaw(sql, abilityData.CharacterID, abilityData.TemplateID, abilityData.Version, abilityEvents, abilityData.Cooldown, now)
+					.AsNoTracking()
+					.SingleAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				if (ability == null)
+				if (idRow.Value <= 0)
 				{
-					ability = new CharacterAbilityEntity
-					{
-						CharacterID = abilityData.CharacterID,
-						TemplateID = abilityData.TemplateID,
-						Version = abilityData.Version,
-						TimeCreated = DateTime.UtcNow
-					};
-
-					await dbContext.CharacterAbilities.AddAsync(ability, cancellationToken).ConfigureAwait(false);
+					throw new StaleStateException("Ability persist rejected due to a stale Version.");
 				}
 
-				ValidateVersion(ability, abilityData.Version);
-				if (ability.Deleted)
-				{
-					ability.Deleted = false;
-					ability.TimeDeleted = null;
-				}
+				return idRow.Value;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				ability.AbilityEvents = abilityData.AbilityEvents == null
-					? new List<int>()
-					: new List<int>(abilityData.AbilityEvents);
-				ability.Cooldown = abilityData.Cooldown;
-
-				return ability;
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			if (!abilityResult.IsSuccess)
-			{
-				return DatabaseResult<long>.Failure(abilityResult.ErrorCode, abilityResult.ErrorMessage, abilityResult.IsTransient);
-			}
-
-			return DatabaseResult<long>.Success(abilityResult.Data.ID);
+			return result.IsSuccess
+				? DatabaseResult<long>.Success(result.Data)
+				: DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveAbilitiesAsync(IEnumerable<CharacterAbilityData> abilities, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterAbilityData> abilities, CancellationToken cancellationToken = default)
 		{
 			if (abilities == null || !abilities.Any())
 			{
@@ -256,18 +258,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{5}}::real[]
 						) AS u(id, character_id, template_id, version, ability_events, cooldown)
 						WHERE t.id = u.id
-							AND (
-								u.version > t.version
-								OR (
-									u.version = t.version
-									AND t.character_id = u.character_id
-									AND t.template_id = u.template_id
-									AND t.ability_events = u.ability_events
-									AND t.cooldown = u.cooldown
-									AND t.deleted = FALSE
-									AND t.time_deleted IS NULL
-								)
-							);";
+							AND u.version > t.version;";
 
 					await ExecuteBulkUpsertAsync(
 						dbContext,
@@ -315,14 +306,7 @@ namespace FishMMO.Database.Npgsql.Services
 							time_deleted = NULL,
 							version = EXCLUDED.version
 						WHERE
-							EXCLUDED.version > {TableName}.version
-							OR (
-								EXCLUDED.version = {TableName}.version
-								AND {TableName}.ability_events = EXCLUDED.ability_events
-								AND {TableName}.cooldown = EXCLUDED.cooldown
-								AND {TableName}.deleted = FALSE
-								AND {TableName}.time_deleted IS NULL
-							);";
+							EXCLUDED.version > {TableName}.version;";
 
 					await ExecuteBulkUpsertAsync(
 						dbContext,
@@ -336,7 +320,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteAbilitiesAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -380,7 +364,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteAbilityAsync(long characterId, long abilityId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long abilityId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || abilityId <= 0)
 			{
@@ -424,7 +408,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterAbilityData>>> GetAbilitiesAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterAbilityData>>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{

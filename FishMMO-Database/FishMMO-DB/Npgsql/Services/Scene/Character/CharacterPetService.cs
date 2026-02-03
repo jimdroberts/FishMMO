@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -73,7 +74,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePetAsync(CharacterPetData petData, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(CharacterPetData petData, CancellationToken cancellationToken = default)
 		{
 			if (petData.CharacterID <= 0)
 			{
@@ -138,14 +139,6 @@ namespace FishMMO.Database.Npgsql.Services
 							version = EXCLUDED.version
 						WHERE
 							EXCLUDED.version > {TableName}.version
-							OR (
-								EXCLUDED.version = {TableName}.version
-								AND {TableName}.template_id = EXCLUDED.template_id
-								AND {TableName}.abilities = EXCLUDED.abilities
-								AND {TableName}.spawned = EXCLUDED.spawned
-								AND {TableName}.deleted = FALSE
-								AND {TableName}.time_deleted IS NULL
-							)
 						RETURNING 1
 					)
 					SELECT CASE
@@ -185,7 +178,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePetsAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
 		{
 			var petList = pets?.Where(p => p.CharacterID > 0).ToList();
 			if (petList == null || petList.Count == 0)
@@ -299,18 +292,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{5}}::boolean[]
 						) AS u(id, character_id, template_id, version, abilities, spawned)
 						WHERE t.id = u.id
-							AND (
-								u.version > t.version
-								OR (
-									u.version = t.version
-									AND t.character_id = u.character_id
-									AND t.template_id = u.template_id
-									AND t.abilities = u.abilities
-									AND t.spawned = u.spawned
-									AND t.deleted = FALSE
-									AND t.time_deleted IS NULL
-								)
-							);";
+							AND u.version > t.version;";
 
 					await ExecuteBulkUpsertAsync(
 						dbContext,
@@ -359,15 +341,7 @@ namespace FishMMO.Database.Npgsql.Services
 							time_deleted = NULL,
 							version = EXCLUDED.version
 						WHERE
-							EXCLUDED.version > {TableName}.version
-							OR (
-								EXCLUDED.version = {TableName}.version
-								AND {TableName}.template_id = EXCLUDED.template_id
-								AND {TableName}.abilities = EXCLUDED.abilities
-								AND {TableName}.spawned = EXCLUDED.spawned
-								AND {TableName}.deleted = FALSE
-								AND {TableName}.time_deleted IS NULL
-							);";
+							EXCLUDED.version > {TableName}.version;";
 
 					await ExecuteBulkUpsertAsync(
 						dbContext,
@@ -380,7 +354,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
-		public async Task<DatabaseResult> DeletePetAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -420,7 +394,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterPetData?>> GetPetAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<CharacterPetData?>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -448,7 +422,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterPetData?>> GetSpawnedPetAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<CharacterPetData?>> FetchSpawnedAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{

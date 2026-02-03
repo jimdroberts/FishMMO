@@ -186,7 +186,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <para>
 	/// A new context is created per attempt to avoid EF change-tracker state leaking across retries.
 		/// Transient database failures may be retried.
-		/// Optimistic concurrency conflicts (logical Version gating and technical xmin conflicts) are never retried;
+		/// Optimistic concurrency conflicts (Version-based authority) are never retried;
 		/// they are returned as a non-transient stale-state result so the caller can re-read and decide how to proceed.
 	/// Logical stale-state conflicts (<see cref="StaleStateException"/>) are never retried.
 	/// </para>
@@ -229,6 +229,9 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Maximum number of attempts for retryable operations.
 		/// </summary>
 		private const int MaxRetries = 3;
+
+		private const string DuplicateReplayErrorCode = "DUPLICATE_REPLAY";
+		private const string DuplicateReplayDefaultMessage = "Write rejected because the incoming Version equals the persisted Version (duplicate replay).";
 
 		private static TimeSpan GetRetryDelay(int attempt)
 		{
@@ -297,6 +300,11 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					return DatabaseResult.Failure("STALE_STATE", "Write rejected due to an optimistic concurrency conflict.", isTransient: false);
 				}
+				catch (DuplicateReplayException ex)
+				{
+					var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+					return DatabaseResult.Failure(DuplicateReplayErrorCode, message, isTransient: false);
+				}
 				catch (StaleStateException ex)
 				{
 					return DatabaseResult.Failure("STALE_STATE", ex.Message, isTransient: false);
@@ -343,6 +351,12 @@ namespace FishMMO.Database.Npgsql.Services
 					if (ex is DbUpdateConcurrencyException)
 					{
 						return DatabaseResult.Failure("STALE_STATE", "Write rejected due to an optimistic concurrency conflict.", isTransient: false);
+					}
+
+					if (ex is DuplicateReplayException)
+					{
+						var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+						return DatabaseResult.Failure(DuplicateReplayErrorCode, message, isTransient: false);
 					}
 
 					// Logic failures (Stale Version) should NEVER be retried
@@ -408,6 +422,11 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					return DatabaseResult<TResult>.Failure("STALE_STATE", "Write rejected due to an optimistic concurrency conflict.", isTransient: false);
 				}
+				catch (DuplicateReplayException ex)
+				{
+					var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+					return DatabaseResult<TResult>.Failure(DuplicateReplayErrorCode, message, isTransient: false);
+				}
 				catch (StaleStateException ex)
 				{
 					return DatabaseResult<TResult>.Failure("STALE_STATE", ex.Message, isTransient: false);
@@ -450,6 +469,12 @@ namespace FishMMO.Database.Npgsql.Services
 					if (ex is DbUpdateConcurrencyException)
 					{
 						return DatabaseResult<TResult>.Failure("STALE_STATE", "Write rejected due to an optimistic concurrency conflict.", isTransient: false);
+					}
+
+					if (ex is DuplicateReplayException)
+					{
+						var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+						return DatabaseResult<TResult>.Failure(DuplicateReplayErrorCode, message, isTransient: false);
 					}
 
 					if (ex is StaleStateException)
@@ -514,6 +539,11 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					return DatabaseResult.Failure("STALE_STATE", "Write rejected due to an optimistic concurrency conflict.", isTransient: false);
 				}
+				catch (DuplicateReplayException ex)
+				{
+					var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+					return DatabaseResult.Failure(DuplicateReplayErrorCode, message, isTransient: false);
+				}
 				catch (StaleStateException ex)
 				{
 					return DatabaseResult.Failure("STALE_STATE", ex.Message, isTransient: false);
@@ -552,6 +582,12 @@ namespace FishMMO.Database.Npgsql.Services
 					if (ex is DbUpdateConcurrencyException)
 					{
 						return DatabaseResult.Failure("STALE_STATE", "Write rejected due to an optimistic concurrency conflict.", isTransient: false);
+					}
+
+					if (ex is DuplicateReplayException)
+					{
+						var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+						return DatabaseResult.Failure(DuplicateReplayErrorCode, message, isTransient: false);
 					}
 
 					if (ex is StaleStateException)
@@ -611,6 +647,11 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					return DatabaseResult<TResult>.Failure("STALE_STATE", "Write rejected due to an optimistic concurrency conflict.", isTransient: false);
 				}
+				catch (DuplicateReplayException ex)
+				{
+					var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+					return DatabaseResult<TResult>.Failure(DuplicateReplayErrorCode, message, isTransient: false);
+				}
 				catch (StaleStateException ex)
 				{
 					return DatabaseResult<TResult>.Failure("STALE_STATE", ex.Message, isTransient: false);
@@ -649,6 +690,12 @@ namespace FishMMO.Database.Npgsql.Services
 					if (ex is DbUpdateConcurrencyException)
 					{
 						return DatabaseResult<TResult>.Failure("STALE_STATE", "Write rejected due to an optimistic concurrency conflict.", isTransient: false);
+					}
+
+					if (ex is DuplicateReplayException)
+					{
+						var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+						return DatabaseResult<TResult>.Failure(DuplicateReplayErrorCode, message, isTransient: false);
 					}
 
 					if (ex is StaleStateException)
@@ -730,6 +777,12 @@ namespace FishMMO.Database.Npgsql.Services
 						return DatabaseResult.Failure("STALE_STATE", ex.Message, isTransient: false);
 					}
 
+					if (ex is DuplicateReplayException)
+					{
+						var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+						return DatabaseResult.Failure(DuplicateReplayErrorCode, message, isTransient: false);
+					}
+
 					if (attempt < MaxRetries && IsTransientDatabaseFailure(ex, sqlState))
 					{
 						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
@@ -802,6 +855,12 @@ namespace FishMMO.Database.Npgsql.Services
 					if (ex is StaleStateException)
 					{
 						return DatabaseResult<TResult>.Failure("STALE_STATE", ex.Message, isTransient: false);
+					}
+
+					if (ex is DuplicateReplayException)
+					{
+						var message = string.IsNullOrWhiteSpace(ex.Message) ? DuplicateReplayDefaultMessage : ex.Message;
+						return DatabaseResult<TResult>.Failure(DuplicateReplayErrorCode, message, isTransient: false);
 					}
 
 					if (attempt < MaxRetries && IsTransientDatabaseFailure(ex, sqlState))
@@ -902,6 +961,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>A tuple of (Code, Message, IsTransient).</returns>
 		private static (string Code, string Message, bool IsTransient) MapFinalException(Exception ex, string? sqlState)
 		{
+			if (ex is DuplicateReplayException duplicateEx)
+			{
+				var message = string.IsNullOrWhiteSpace(duplicateEx.Message) ? DuplicateReplayDefaultMessage : duplicateEx.Message;
+				return (DuplicateReplayErrorCode, message, false);
+			}
+
 			if (ex is OperationCanceledException)
 			{
 				return ("DB_CANCELED", "The database operation was canceled.", false);
@@ -1035,46 +1100,6 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (string.IsNullOrWhiteSpace(sqlState)) return false;
 			return sqlState == "40P01" || sqlState == "40001" || sqlState == "55P03" || sqlState == "53300";
-		}
-
-		/// <summary>
-		/// Validates and applies an incoming logical version onto an entity.
-		/// </summary>
-		/// <param name="entity">The tracked entity being updated or inserted.</param>
-		/// <param name="incomingVersion">
-		/// The version provided by the caller. Values must be &gt; 0.
-		/// </param>
-		/// <remarks>
-		/// For inserts (<c>entity.ID &lt;= 0</c>), a positive <paramref name="incomingVersion"/> is applied.
-		/// For updates, the incoming version must be strictly greater than the stored version.
-		/// </remarks>
-		/// <exception cref="ArgumentNullException"><paramref name="entity"/> is null.</exception>
-		/// <exception cref="StaleStateException">
-		/// Thrown when <paramref name="incomingVersion"/> is not greater than the entity's current version.
-		/// </exception>
-		protected void ValidateVersion(IVersionedEntity entity, long incomingVersion)
-		{
-			if (entity == null) throw new ArgumentNullException(nameof(entity));
-			if (incomingVersion <= 0)
-			{
-				throw new ArgumentOutOfRangeException(nameof(incomingVersion), incomingVersion, "Version must be greater than 0.");
-			}
-
-			// New entity (insert): accept incoming version and stamp it.
-			if (entity.ID <= 0)
-			{
-				entity.Version = incomingVersion;
-				return;
-			}
-
-			if (entity.Version >= incomingVersion)
-			{
-				throw new StaleStateException(
-					$"Version mismatch on {entity.GetType().Name}! " +
-					$"DB: {entity.Version}, Incoming: {incomingVersion}.");
-			}
-
-			entity.Version = incomingVersion;
 		}
 
 		/// <summary>

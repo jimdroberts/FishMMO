@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -38,7 +39,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveAttributesAsync(IEnumerable<CharacterAttributeData> attributes, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterAttributeData> attributes, CancellationToken cancellationToken = default)
 		{
 			if (attributes == null || !attributes.Any())
 			{
@@ -124,14 +125,7 @@ namespace FishMMO.Database.Npgsql.Services
 						time_deleted = NULL,
 						version = EXCLUDED.version
 					WHERE
-						EXCLUDED.version > {TableName}.version
-						OR (
-							EXCLUDED.version = {TableName}.version
-							AND {TableName}.value = EXCLUDED.value
-							AND {TableName}.current_value = EXCLUDED.current_value
-							AND {TableName}.deleted = FALSE
-							AND {TableName}.time_deleted IS NULL
-						);";
+						EXCLUDED.version > {TableName}.version;";
 
 				await ExecuteBulkUpsertAsync(
 					dbContext,
@@ -144,7 +138,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteAttributesAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -188,7 +182,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterAttributeData>>> GetAttributesAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterAttributeData>>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{

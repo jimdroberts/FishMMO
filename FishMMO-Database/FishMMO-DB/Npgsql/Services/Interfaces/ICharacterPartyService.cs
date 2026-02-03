@@ -1,95 +1,41 @@
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
-namespace FishMMO.Database.Npgsql.Services
+namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
 	/// <summary>
-	/// Service interface for managing character party membership in the database.
-	/// Returns DatabaseResult for consistent, safe error handling.
+	/// Service interface for managing a character's party membership state.
 	/// </summary>
-	public interface ICharacterPartyService
+	/// <remarks>
+	/// Party membership updates should be version-gated via the logical <c>Version</c>
+	/// so stale updates are rejected and newer authoritative updates win.
+	/// </remarks>
+	public interface ICharacterPartyService :
+		ICountByKeyAction<long>,
+		IDeleteByKeyVersionedAction<long>,
+		IFetchByKeyAction<long, CharacterPartyData?>,
+		IFetchManyByKeyAction<long, CharacterPartyData>
 	{
 		/// <summary>
-		/// Saves or updates a character's party membership with capacity validation.
+		/// Persists the provided party membership data, enforcing capacity limits.
 		/// </summary>
-		/// <param name="partyData">The party membership data to save.</param>
-		/// <param name="maxCapacity">Maximum number of members allowed in the party. Must be between 1 and 40.</param>
+		/// <param name="partyData">The party membership data to persist.</param>
+		/// <param name="maxCapacity">The maximum number of members allowed in the party.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, int maxCapacity, CancellationToken cancellationToken = default);
+		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
+		Task<DatabaseResult> PersistAsync(CharacterPartyData partyData, int maxCapacity, CancellationToken cancellationToken = default);
+
 		/// <summary>
-		/// Updates a character's party rank atomically.
+		/// Updates a character's party rank if <paramref name="incomingVersion"/> is newer.
 		/// </summary>
 		/// <param name="characterId">The character ID.</param>
 		/// <param name="partyId">The party ID.</param>
 		/// <param name="rank">The new rank.</param>
+		/// <param name="incomingVersion">The authoritative, monotonic version for this update operation.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// DatabaseResult indicating success or containing error details.
-		/// </returns>
-		/// <remarks>
-		/// Uses atomic UPDATE without loading the entity. Returns DatabaseEntityNotFoundException if the membership doesn't exist.
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
-		/// </remarks>
+		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
 		Task<DatabaseResult> UpdateRankAsync(long characterId, long partyId, byte rank, long incomingVersion, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Deletes a character's party membership.
-		/// </summary>
-		/// <param name="characterId">The character ID.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// DatabaseResult indicating success or containing error details.
-		/// </returns>
-		/// <remarks>
-		/// Uses atomic DELETE operation. Returns success even if the membership doesn't exist (idempotent).
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
-		/// </remarks>
-		Task<DatabaseResult> DeletePartyMembershipAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Retrieves a character's party membership.
-		/// </summary>
-		/// <param name="characterId">The character ID.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// DatabaseResult containing the character party data if found (or null if not in a party),
-		/// or error details on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (AsNoTracking) for optimal read performance and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// </remarks>
-		Task<DatabaseResult<CharacterPartyData?>> GetPartyMembershipAsync(long characterId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Retrieves all members of a party.
-		/// </summary>
-		/// <param name="partyId">The party ID.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// DatabaseResult containing a read-only list of character party data on success,
-		/// or error details on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (AsNoTracking) for optimal read performance and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// </remarks>
-		Task<DatabaseResult<IReadOnlyList<CharacterPartyData>>> GetPartyMembersAsync(long partyId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Gets the count of members in a party.
-		/// </summary>
-		/// <param name="partyId">The party ID.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// DatabaseResult containing the count of party members on success, or error details on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (CountAsync with AsNoTracking) for optimal read performance and automatically
-		/// benefits from the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// </remarks>
-		Task<DatabaseResult<int>> GetPartyMemberCountAsync(long partyId, CancellationToken cancellationToken = default);
 	}
 }

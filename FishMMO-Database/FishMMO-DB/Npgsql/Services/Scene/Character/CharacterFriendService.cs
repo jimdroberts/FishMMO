@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -64,7 +65,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveFriendAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || friendCharacterId <= 0)
 			{
@@ -113,7 +114,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteFriendAsync(long characterId, long friendCharacterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long friendCharacterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || friendCharacterId <= 0)
 			{
@@ -157,7 +158,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteAllFriendsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -201,7 +202,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterFriendData>>> GetFriendsAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterFriendData>>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -226,7 +227,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<int>> GetFriendCountAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> CountAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{

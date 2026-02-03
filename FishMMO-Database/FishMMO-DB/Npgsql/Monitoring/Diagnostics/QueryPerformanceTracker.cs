@@ -77,7 +77,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		/// Records a query execution with automatic tracking level handling.
 		/// Zero overhead when disabled or level is None.
 		/// </summary>
-		/// <param name="operationName">The name of the database operation (e.g., "CharacterService.GetByIdAsync").</param>
+		/// <param name="operationName">The name of the database operation (e.g., "CharacterService.FetchAsync").</param>
 		/// <param name="duration">The execution duration.</param>
 		/// <param name="success">Whether the execution succeeded.</param>
 		public void RecordQuery(string operationName, TimeSpan duration, bool success)

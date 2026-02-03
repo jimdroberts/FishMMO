@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -11,7 +12,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (Create*, Delete*) in this service use execution strategies to ensure transient
+	/// Write operations (Persist*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
 	/// Execution is wrapped by BaseService for retries and exception mapping.
 	/// </para>
@@ -25,70 +26,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// - Unexpected runtime errors
 	/// </para>
 	/// </remarks>
-	public interface IPartyService
+	public interface IPartyService :
+		IExistsByKeyAction<long>,
+		IPersistAction<long, long>,
+		IDeleteByKeyAction<long>,
+		IFetchByKeyAction<long, PartyData>
 	{
-		/// <summary>
-		/// Checks if a party exists by ID.
-		/// </summary>
-		/// <param name="partyId">Party ID.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing true if party exists, false if not found,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (AnyAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// Returns Success(false) for invalid party ID.
-		/// </remarks>
-		Task<DatabaseResult<bool>> ExistsAsync(long partyId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Creates a new party.
-		/// </summary>
-		/// <param name="accountId">Account id associated with the request.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the party ID on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// Uses BaseService.ExecuteWriteAsync for:
-		/// - Automatic transient failure retry
-		/// - Centralized exception handling and mapping
-		/// - Consistent DatabaseResult pattern
-		/// </remarks>
-		Task<DatabaseResult<long>> CreateAsync(long accountId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Deletes a party by ID.
-		/// </summary>
-		/// <param name="partyId">Party ID to delete.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
-		/// Returns <see cref="DatabaseEntityNotFoundException"/> if party doesn't exist.
-		/// </returns>
-		/// <remarks>
-		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
-		/// failures are automatically retried.
-		/// </remarks>
-		Task<DatabaseResult> DeleteAsync(long partyId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Loads a party by ID.
-		/// </summary>
-		/// <param name="partyId">Party ID.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the party data on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// Returns <see cref="DatabaseEntityNotFoundException"/> if party not found.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (FirstOrDefaultAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// </remarks>
-		Task<DatabaseResult<PartyData>> LoadAsync(long partyId, CancellationToken cancellationToken = default);
 	}
 }

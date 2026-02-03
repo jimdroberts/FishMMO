@@ -40,7 +40,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveAsync(
+		public async Task<DatabaseResult> PersistAsync(
 			long characterId,
 			string characterName,
 			string accountName,

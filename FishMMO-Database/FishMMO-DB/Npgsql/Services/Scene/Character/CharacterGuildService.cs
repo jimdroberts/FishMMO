@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -91,7 +92,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(CharacterGuildData guildData, int maxCapacity, CancellationToken cancellationToken = default)
 		{
 			if (guildData.CharacterID == 0 || guildData.GuildID == 0)
 			{
@@ -164,12 +165,6 @@ namespace FishMMO.Database.Npgsql.Services
 							version = EXCLUDED.version
 						WHERE
 							EXCLUDED.version > {TableName}.version
-							OR (
-								EXCLUDED.version = {TableName}.version
-								AND {TableName}.guild_id = EXCLUDED.guild_id
-								AND {TableName}.rank = EXCLUDED.rank
-								AND {TableName}.location = EXCLUDED.location
-							)
 						RETURNING 1
 					)
 					SELECT CASE
@@ -242,9 +237,9 @@ namespace FishMMO.Database.Npgsql.Services
 						throw new DatabaseEntityNotFoundException("CharacterGuild", characterId.ToString());
 					}
 
-					if (existing.Version == incomingVersion && existing.Rank == rank)
+					if (existing.Version == incomingVersion)
 					{
-						return;
+						throw new DuplicateReplayException();
 					}
 
 					throw new StaleStateException("Guild rank update rejected due to a stale Version.");
@@ -257,7 +252,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteGuildMembershipAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId == 0)
 			{
@@ -303,7 +298,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterGuildData?>> GetGuildMembershipAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<CharacterGuildData?>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId == 0)
 			{
@@ -335,7 +330,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterGuildData>>> GetGuildMembersAsync(long guildId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterGuildData>>> FetchManyAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId == 0)
 			{
@@ -364,7 +359,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<int>> GetGuildMemberCountAsync(long guildId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> CountAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId == 0)
 			{

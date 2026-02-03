@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -69,7 +70,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> SaveInventoryItemAsync(CharacterInventoryData item, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> PersistAsync(CharacterInventoryData item, CancellationToken cancellationToken = default)
 		{
 			if (item.CharacterID <= 0)
 			{
@@ -109,14 +110,6 @@ namespace FishMMO.Database.Npgsql.Services
 						version = EXCLUDED.version
 					WHERE
 						EXCLUDED.version > {TableName}.version
-						OR (
-							EXCLUDED.version = {TableName}.version
-							AND {TableName}.template_id = EXCLUDED.template_id
-							AND {TableName}.seed = EXCLUDED.seed
-							AND {TableName}.amount = EXCLUDED.amount
-							AND {TableName}.deleted = FALSE
-							AND {TableName}.time_deleted IS NULL
-						)
 					RETURNING id, version, character_id, template_id, slot, seed, amount, time_created, deleted, time_deleted";
 
 				var upserted = await dbContext.CharacterInventoryItems
@@ -147,7 +140,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveInventoryItemsAsync(IEnumerable<CharacterInventoryData> items, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterInventoryData> items, CancellationToken cancellationToken = default)
 		{
 			var itemList = items?.ToList();
 			if (itemList == null || itemList.Count == 0)
@@ -251,19 +244,11 @@ namespace FishMMO.Database.Npgsql.Services
 					time_deleted = NULL,
 					version = EXCLUDED.version
 				WHERE
-					EXCLUDED.version > {TableName}.version
-					OR (
-						EXCLUDED.version = {TableName}.version
-						AND {TableName}.template_id = EXCLUDED.template_id
-						AND {TableName}.seed = EXCLUDED.seed
-						AND {TableName}.amount = EXCLUDED.amount
-						AND {TableName}.deleted = FALSE
-						AND {TableName}.time_deleted IS NULL
-					);";
+					EXCLUDED.version > {TableName}.version;";
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteInventoryItemsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -308,7 +293,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteInventorySlotAsync(long characterId, int slot, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, int slot, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -353,7 +338,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterInventoryData>>> GetInventoryItemsAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterInventoryData>>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{

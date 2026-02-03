@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -10,14 +11,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// Provides async methods for server registration, heartbeat updates, and retrieval.
 	/// </summary>
 	/// <remarks>
-	/// <para><b>Execution Strategy:</b> All write operations (AddOrUpdateAsync, PulseAsync, DeleteAsync) use execution strategy wrappers to handle transient database failures with automatic retry. FromSqlRaw and ExecuteSqlRawAsync calls do not automatically retry without manual wrapping.</para>
+	/// <para><b>Execution Strategy:</b> All write operations (PersistAsync, PulseAsync, DeleteAsync) use execution strategy wrappers to handle transient database failures with automatic retry. FromSqlRaw and ExecuteSqlRawAsync calls do not automatically retry without manual wrapping.</para>
 	/// <para><b>Read Operations:</b> Read operations use LINQ queries and are executed via BaseService execution wrappers for consistent exception mapping. Explicit transactions are used only when a write requires multiple database statements.</para>
 	/// <para><b>Error Handling:</b> All database operations return DatabaseResult or DatabaseResult&lt;T&gt; for comprehensive exception handling with typed database exceptions (DatabaseConnectionException, DatabaseConstraintException, DatabaseQueryException, DatabaseTimeoutException, DatabaseEntityNotFoundException).</para>
 	/// </remarks>
-	public interface IWorldServerService
+	public interface IWorldServerService : IFetchByKeyAction<long, WorldServerData>
 	{
 		/// <summary>
-		/// Adds or updates a world server registration.
+		/// Persists a world server registration (insert or update).
 		/// Uses an insert-first approach and falls back to update on unique constraint conflicts.
 		/// </summary>
 		/// <param name="name">Server name (unique identifier for conflict resolution).</param>
@@ -32,7 +33,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <para><b>Returns:</b> The returned ServerId is populated after SaveChanges completes inside the BaseService execution wrapper.</para>
 		/// <para><b>Returns:</b> Failure if name/address empty or operation fails; Success with (ServerId, ServerData) on success.</para>
 		/// </remarks>
-		Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> AddOrUpdateAsync(
+		Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> PersistAsync(
 			string name,
 			string address,
 			ushort port,
@@ -70,7 +71,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> DeleteAsync(long serverId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Gets a world server registration by ID.
+		/// Fetches a world server registration by ID.
 		/// Retrieves full server data including name, address, port, character count, locked status, and last pulse.
 		/// </summary>
 		/// <param name="serverId">Server ID to retrieve.</param>
@@ -80,10 +81,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <para><b>Operation:</b> LINQ query with AsNoTracking for read-only retrieval.</para>
 		/// <para><b>Execution Strategy:</b> BaseService handles retries and centralized exception mapping; explicit transactions are used only when a write requires multiple database statements.</para>
 		/// </remarks>
-		Task<DatabaseResult<WorldServerData>> GetServerAsync(long serverId, CancellationToken cancellationToken = default);
-
 		/// <summary>
-		/// Gets list of active world servers that have pulsed within the timeout window.
+		/// Fetches active world servers that have pulsed within the timeout window.
 		/// Filters servers by last_pulse timestamp to return only servers that are currently online.
 		/// </summary>
 		/// <param name="idleTimeoutSeconds">Idle timeout in seconds before server considered inactive (default 60).</param>
@@ -93,7 +92,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <para><b>Operation:</b> LINQ query filtering by last_pulse >= (UtcNow - timeout), ordered by name.</para>
 		/// <para><b>Execution Strategy:</b> BaseService handles retries and centralized exception mapping; explicit transactions are used only when a write requires multiple database statements.</para>
 		/// </remarks>
-		Task<DatabaseResult<List<WorldServerData>>> GetActiveServersAsync(
+		Task<DatabaseResult<List<WorldServerData>>> FetchActiveAsync(
 			float idleTimeoutSeconds = 60.0f,
 			CancellationToken cancellationToken = default);
 	}

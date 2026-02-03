@@ -97,6 +97,7 @@ Console.WriteLine($"Avg Response: {summary.AverageResponseTimeMs}ms");
 ### Query Performance Diagnostics
 
 ```csharp
+using System.Diagnostics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
 
 // Access through NpgsqlDbContextFactory (automatically configured from appsettings.json)
@@ -104,24 +105,24 @@ var factory = new NpgsqlDbContextFactory(configPath);
 var performanceTracker = factory.PerformanceTracker;
 
 // In your service methods:
-public async Task<DatabaseResult<Player>> GetPlayerAsync(long playerId, CancellationToken ct = default)
+public async Task<DatabaseResult<Player>> FetchPlayerAsync(long playerId, CancellationToken ct = default)
 {
-    const string operationName = "GetPlayer";
+    const string operationName = "FetchPlayer";
     var stopwatch = Stopwatch.StartNew();
-    Query Diagnostics Enhancements (Future)
-- SQL query plan analysis
-- Query execution plan caching
-- Index usage recommendations
-- Automated performance regression detection dbContext = dbContextFactory.CreateDbContext();
-        var player = await dbContext.Players.FindAsync(playerId, ct);
-        success = true;
-        return DatabaseResult<Player>.Success(player);
-    }
-    finally
-    {
-        stopwatch.Stop();
-        performanceTracker?.RecordQuery(operationName, stopwatch.ElapsedMilliseconds, success);
-    }
+	var success = false;
+
+	try
+	{
+		using var dbContext = factory.CreateDbContext();
+		var player = await dbContext.Players.FindAsync(new object[] { playerId }, ct);
+		success = true;
+		return DatabaseResult<Player>.Success(player);
+	}
+	finally
+	{
+		stopwatch.Stop();
+		performanceTracker?.RecordQuery(operationName, stopwatch.Elapsed, success);
+	}
 }
 
 // Subscribe to slow query events
@@ -137,6 +138,13 @@ foreach (var (opName, metrics) in slowestOps)
     Console.WriteLine($"{opName}: Avg={metrics.AverageMs}ms, P95={metrics.P95Ms}ms, P99={metrics.P99Ms}ms");
 }
 ```
+
+#### Query Diagnostics Enhancements (Future)
+
+- SQL query plan analysis
+- Query execution plan caching
+- Index usage recommendations
+- Automated performance regression detection
 
 #### Configuration (appsettings.json)
 

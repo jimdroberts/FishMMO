@@ -24,7 +24,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveAsync(long guildId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId <= 0)
 			{

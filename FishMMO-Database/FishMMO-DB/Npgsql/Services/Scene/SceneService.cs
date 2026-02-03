@@ -19,7 +19,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Compiled query for retrieving character instance scene (hot path for scene loading).
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<SceneEntity?>> GetCharacterInstanceQuery =
+		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<SceneEntity?>> getCharacterInstanceQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int sceneType, CancellationToken ct) =>
 				context.Scenes
 					.AsNoTracking()
@@ -30,7 +30,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Compiled query for retrieving scene by ID (hot path for scene loading).
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<SceneEntity?>> GetInstanceByIdQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<SceneEntity?>> fetchByIdQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long sceneId, CancellationToken ct) =>
 				context.Scenes
 					.AsNoTracking()
@@ -40,7 +40,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving available scenes (hot path for scene matchmaking).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, string, int, int, CancellationToken, Task<List<SceneEntity>>> GetAvailableScenesQuery =
+		private static readonly Func<NpgsqlDbContext, long, string, int, int, CancellationToken, Task<List<SceneEntity>>> fetchAvailableQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long worldServerId, string sceneName, int maxClients, int readyStatus, CancellationToken ct) =>
 				context.Scenes
 						.AsNoTracking()
@@ -54,7 +54,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving ready scenes (hot path for scene server queries).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<List<SceneEntity>>> GetReadyScenesQuery =
+		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<List<SceneEntity>>> fetchReadyQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long worldServerId, int readyStatus, CancellationToken ct) =>
 				context.Scenes
 					.AsNoTracking()
@@ -351,7 +351,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<SceneData>> GetCharacterInstanceAsync(
+		public async Task<DatabaseResult<SceneData>> FetchCharacterInstanceAsync(
 			long characterId,
 			SceneType sceneType,
 			CancellationToken cancellationToken = default)
@@ -364,7 +364,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var type = (int)sceneType;
-				var scene = await GetCharacterInstanceQuery(dbContext, characterId, type, cancellationToken).ConfigureAwait(false);
+				var scene = await getCharacterInstanceQuery(dbContext, characterId, type, cancellationToken).ConfigureAwait(false);
 
 				if (scene == null)
 				{
@@ -380,7 +380,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<SceneData>> GetInstanceByIdAsync(long sceneId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<SceneData>> FetchAsync(long sceneId, CancellationToken cancellationToken = default)
 		{
 			if (sceneId <= 0)
 			{
@@ -389,7 +389,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
-				var scene = await GetInstanceByIdQuery(dbContext, sceneId, cancellationToken).ConfigureAwait(false);
+				var scene = await fetchByIdQuery(dbContext, sceneId, cancellationToken).ConfigureAwait(false);
 
 				if (scene == null)
 				{
@@ -405,7 +405,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<List<SceneData>>> GetAvailableScenesAsync(
+		public async Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchAvailableAsync(
 			long worldServerId,
 			string sceneName,
 			int maxClients,
@@ -413,41 +413,41 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
-				return DatabaseResult<List<SceneData>>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
+				return DatabaseResult<IReadOnlyList<SceneData>>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await GetAvailableScenesQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, cancellationToken).ConfigureAwait(false);
+				var scenes = await fetchAvailableQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, cancellationToken).ConfigureAwait(false);
 
 				return scenes.Select(MapEntityToDto).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
-				? DatabaseResult<List<SceneData>>.Success(result.Data)
-				: DatabaseResult<List<SceneData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				? DatabaseResult<IReadOnlyList<SceneData>>.Success(result.Data)
+				: DatabaseResult<IReadOnlyList<SceneData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<List<SceneData>>> GetReadyScenesAsync(long worldServerId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchManyAsync(long worldServerId, CancellationToken cancellationToken = default)
 		{
 			if (worldServerId <= 0)
 			{
-				return DatabaseResult<List<SceneData>>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
+				return DatabaseResult<IReadOnlyList<SceneData>>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await GetReadyScenesQuery(dbContext, worldServerId, readyStatus, cancellationToken).ConfigureAwait(false);
+				var scenes = await fetchReadyQuery(dbContext, worldServerId, readyStatus, cancellationToken).ConfigureAwait(false);
 
 				return scenes.Select(MapEntityToDto).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
-				? DatabaseResult<List<SceneData>>.Success(result.Data)
-				: DatabaseResult<List<SceneData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				? DatabaseResult<IReadOnlyList<SceneData>>.Success(result.Data)
+				: DatabaseResult<IReadOnlyList<SceneData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <summary>

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -50,7 +51,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveBuffsAsync(IEnumerable<CharacterBuffData> buffs, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterBuffData> buffs, CancellationToken cancellationToken = default)
 		{
 			var buffList = buffs?.ToList();
 			if (buffList == null || buffList.Count == 0)
@@ -140,15 +141,7 @@ namespace FishMMO.Database.Npgsql.Services
 						time_deleted = NULL,
 						version = EXCLUDED.version
 					WHERE
-						EXCLUDED.version > {TableName}.version
-						OR (
-							EXCLUDED.version = {TableName}.version
-							AND {TableName}.remaining_time = EXCLUDED.remaining_time
-							AND {TableName}.tick_time = EXCLUDED.tick_time
-							AND {TableName}.stacks = EXCLUDED.stacks
-							AND {TableName}.deleted = FALSE
-							AND {TableName}.time_deleted IS NULL
-						);";
+						EXCLUDED.version > {TableName}.version;";
 
 				await ExecuteBulkUpsertAsync(
 					dbContext,
@@ -161,7 +154,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteBuffsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -205,7 +198,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterBuffData>>> GetBuffsAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterBuffData>>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{

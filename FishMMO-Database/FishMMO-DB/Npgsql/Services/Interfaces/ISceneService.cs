@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -30,7 +31,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// EnqueueAsync is retry-idempotent (protects against EF Core execution-strategy retries after transient failures).
 	/// </para>
 	/// </remarks>
-	public interface ISceneService
+	public interface ISceneService : IFetchByKeyAction<long, SceneData>, IFetchManyByKeyAction<long, SceneData>
 	{
 		/// <summary>
 		/// Enqueues a new scene load request.
@@ -175,25 +176,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
 		/// Returns entity not found exception if scene doesn't exist.
 		/// </remarks>
-		Task<DatabaseResult<SceneData>> GetCharacterInstanceAsync(
+		Task<DatabaseResult<SceneData>> FetchCharacterInstanceAsync(
 			long characterId,
 			SceneType sceneType,
 			CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Gets a scene instance by ID.
-		/// </summary>
-		/// <param name="sceneId">Scene ID.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// DatabaseResult containing scene data if found, or error information on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (FirstOrDefaultAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// Returns entity not found exception if scene doesn't exist.
-		/// </remarks>
-		Task<DatabaseResult<SceneData>> GetInstanceByIdAsync(long sceneId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Gets list of ready scenes for a world server and scene name with available capacity.
@@ -210,25 +196,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
 		/// Filters by Ready status and character_count less than maxClients. Returns empty list if no scenes match.
 		/// </remarks>
-		Task<DatabaseResult<List<SceneData>>> GetAvailableScenesAsync(
+		Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchAvailableAsync(
 			long worldServerId,
 			string sceneName,
 			int maxClients,
 			CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Gets all ready scenes for a world server.
-		/// </summary>
-		/// <param name="worldServerId">World server ID.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// DatabaseResult containing list of ready scene data for the world server, or error information on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (ToListAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// Filters by Ready status only. Returns empty list if no scenes match.
-		/// </remarks>
-		Task<DatabaseResult<List<SceneData>>> GetReadyScenesAsync(long worldServerId, CancellationToken cancellationToken = default);
 	}
 }

@@ -36,7 +36,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.Any(g => g.NameLowercase == nameLowercase));
 
 		/// <summary>
-		/// Compiled query for LoadByIdAsync hot path (guild data retrieval).
+		/// Compiled query for FetchAsync (by guild id) hot path (guild data retrieval).
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
@@ -74,7 +74,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<string>> GetNameByIdAsync(long guildId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<string>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId <= 0)
 				return DatabaseResult<string>.Failure("VALIDATION_ERROR", "Invalid guild ID");
@@ -96,7 +96,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long?>> CreateAsync(string name, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long?>> PersistAsync(string name, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedGuildName(name))
 				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", Authentication.InvalidGuildNameError);
@@ -164,7 +164,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<GuildData?>> LoadByNameAsync(string name, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<GuildData?>> FetchAsync(string name, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedGuildName(name))
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", Authentication.InvalidGuildNameError);
@@ -185,7 +185,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<GuildData?>> LoadByIdAsync(long guildId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<GuildData?>> FetchAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId <= 0)
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild ID");

@@ -19,7 +19,7 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class AccountService : BaseService<AccountEntity>, IAccountService
 	{
 		/// <summary>
-		/// Compiled query for AccountExistsAsync hot path.
+		/// Compiled query for ExistsAsync hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<bool>> accountExistsByNameQuery =
@@ -29,7 +29,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.Any(a => a.Name == accountName));
 
 		/// <summary>
-		/// Compiled query for GetAccountForLoginAsync hot path (login authentication).
+		/// Compiled query for FetchForLoginAsync hot path (login authentication).
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
@@ -41,7 +41,7 @@ namespace FishMMO.Database.Npgsql.Services
 #pragma warning restore CS8619
 
 		/// <summary>
-		/// Compiled query for GetLastLoginAsync hot path.
+		/// Compiled query for FetchLastLoginAsync hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
@@ -64,7 +64,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<DateTime>> GetLastLoginAsync(
+		public async Task<DatabaseResult<DateTime>> FetchLastLoginAsync(
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{
@@ -88,7 +88,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> CreateAccountAsync(
+		public async Task<DatabaseResult> PersistAsync(
 			string accountName,
 			string salt,
 			string verifier,
@@ -140,7 +140,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<AccountData>> GetAccountForLoginAsync(
+		public async Task<DatabaseResult<AccountData>> FetchForLoginAsync(
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{
@@ -185,7 +185,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> UpdateLastLoginAsync(
+		public async Task<DatabaseResult> PersistLastLoginAsync(
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{
@@ -212,7 +212,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<bool>> AccountExistsAsync(
+		public async Task<DatabaseResult<bool>> ExistsAsync(
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{

@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -16,7 +17,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// - Database errors (connection issues, constraint violations, transient failures)
 	/// - Unexpected runtime errors
 	/// </remarks>
-	public interface ILoginServerService
+	public interface ILoginServerService : IFetchByKeyAction<long, LoginServerData>
 	{
 		/// <summary>
 		/// Adds or updates a login server registration.
@@ -33,7 +34,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// - UNIQUE_VIOLATION: A unique constraint was violated (non-transient). Note: normal concurrent registration by name is handled via UPSERT and should not produce this.
 		/// - DATABASE_ERROR: Unexpected database error
 		/// </remarks>
-		Task<DatabaseResult<LoginServerData>> AddOrUpdateAsync(
+		Task<DatabaseResult<LoginServerData>> PersistAsync(
 			string name,
 			string address,
 			ushort port,
@@ -69,19 +70,5 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </remarks>
 		Task<DatabaseResult> DeleteAsync(long serverId, CancellationToken cancellationToken = default);
 
-		/// <summary>
-		/// Gets a login server by ID.
-		/// </summary>
-		/// <param name="serverId">Server ID. Must be greater than 0.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>DatabaseResult containing LoginServerData if found.</returns>
-		/// <remarks>
-		/// Success: Returns complete server data.
-		/// Failure cases:
-		/// - VALIDATION_ERROR: Invalid server ID (less than or equal to 0)
-		/// - ENTITY_NOT_FOUND: Server does not exist
-		/// - DATABASE_ERROR: Unexpected database error
-		/// </remarks>
-		Task<DatabaseResult<LoginServerData>> GetServerAsync(long serverId, CancellationToken cancellationToken = default);
 	}
 }

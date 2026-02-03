@@ -9,11 +9,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
 	/// <summary>
 	/// Service interface for chat message operations.
-	/// Provides async methods for saving, deleting, and fetching chat messages.
+	/// Provides async methods for persisting and fetching chat messages.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (Save*) in this service use execution strategies to ensure transient database
+	/// Write operations (Persist*) in this service use execution strategies to ensure transient database
 	/// failures are automatically retried according to the retry policy configured on the DbContext.
 	/// This is critical because retry handling is done by BaseService, not by provider-level retry.
 	/// BaseService uses explicit transactions only when a write requires multiple database statements.
@@ -31,7 +31,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	public interface IChatService
 	{
 		/// <summary>
-		/// Saves a chat message with denormalized audit fields.
+		/// Persists a chat message with denormalized audit fields.
 		/// </summary>
 		/// <param name="characterId">Character ID sending the message.</param>
 		/// <param name="characterName">Character name (denormalized for audit retention).</param>
@@ -53,7 +53,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// - Centralized exception handling and mapping
 		/// - Consistent DatabaseResult pattern
 		/// </remarks>
-		Task<DatabaseResult> SaveAsync(
+		Task<DatabaseResult> PersistAsync(
 			long characterId,
 			string characterName,
 			string accountName,

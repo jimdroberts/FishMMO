@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Npgsql.Entities;
-using Npgsql.EntityFrameworkCore.PostgreSQL;
 
 namespace FishMMO.Database.Npgsql
 {
@@ -107,33 +106,8 @@ namespace FishMMO.Database.Npgsql
 			// Apply all configurations in the assembly
 			modelBuilder.ApplyConfigurationsFromAssembly(typeof(NpgsqlDbContext).Assembly);
 
-			ApplyXminConcurrencyConventions(modelBuilder);
 			ApplyLogicalVersionConventions(modelBuilder);
 			ApplyTimeCreatedConventions(modelBuilder);
-		}
-
-		private static void ApplyXminConcurrencyConventions(ModelBuilder modelBuilder)
-		{
-			foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-			{
-				var clrType = entityType.ClrType;
-				if (clrType == null)
-					continue;
-
-				// Avoid adding duplicate shadow properties for derived types (TPH/TPT).
-				if (entityType.BaseType != null)
-					continue;
-
-				// Skip owned/keyless entity types.
-				if (entityType.FindOwnership() != null)
-					continue;
-				if (entityType.FindPrimaryKey() == null)
-					continue;
-
-				// Configure PostgreSQL system column xmin as an optimistic concurrency token.
-				// Use provider-supported configuration so migrations do not treat xmin as a normal mapped column.
-				modelBuilder.Entity(clrType).UseXminAsConcurrencyToken();
-			}
 		}
 
 		private static void ApplyLogicalVersionConventions(ModelBuilder modelBuilder)
@@ -152,10 +126,24 @@ namespace FishMMO.Database.Npgsql
 				if (entityType.FindPrimaryKey() == null)
 					continue;
 
-				modelBuilder.Entity(clrType)
+				var versionProperty = entityType.FindProperty(nameof(IVersionedEntity.Version));
+				if (versionProperty == null)
+				{
+					continue;
+				}
+
+				var hasExplicitDefault = versionProperty.GetDefaultValue() != null
+					|| !string.IsNullOrWhiteSpace(versionProperty.GetDefaultValueSql());
+
+				var versionBuilder = modelBuilder.Entity(clrType)
 					.Property<long>(nameof(IVersionedEntity.Version))
 					.IsRequired()
-					.HasDefaultValue(0L);
+					.ValueGeneratedNever();
+
+				if (!hasExplicitDefault)
+				{
+					versionBuilder.HasDefaultValue(1L);
+				}
 			}
 		}
 

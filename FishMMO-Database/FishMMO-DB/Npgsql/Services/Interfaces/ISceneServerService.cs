@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -10,7 +11,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (AddOrUpdate*, Pulse*, Delete*) in this service use execution strategies to ensure transient
+	/// Write operations (Persist*, Pulse*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
 	/// This is critical because ExecuteSqlRawAsync and FromSqlRaw do not automatically retry on transient failures
 	/// without an execution strategy wrapper.
@@ -27,13 +28,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// - Unexpected runtime errors
 	/// </para>
 	/// <para>
-	/// AddOrUpdateAsync uses atomic UPSERT to prevent race conditions during concurrent registrations.
+	/// PersistAsync uses atomic UPSERT to prevent race conditions during concurrent registrations.
 	/// </para>
 	/// </remarks>
-	public interface ISceneServerService
+	public interface ISceneServerService : IFetchByKeyAction<long, SceneServerData>
 	{
 		/// <summary>
-		/// Adds or updates a scene server registration with atomic UPSERT.
+		/// Persists a scene server registration with atomic UPSERT.
 		/// </summary>
 		/// <param name="name">Server name (unique identifier).</param>
 		/// <param name="address">Server address.</param>
@@ -49,7 +50,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Uses FromSqlRaw with RETURNING clause and execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Uses PostgreSQL ON CONFLICT for atomic UPSERT with full data return.
 		/// </remarks>
-		Task<DatabaseResult<(long ServerId, SceneServerData ServerData)>> AddOrUpdateAsync(
+		Task<DatabaseResult<(long ServerId, SceneServerData ServerData)>> PersistAsync(
 			string name,
 			string address,
 			ushort port,
@@ -89,20 +90,5 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </remarks>
 		Task<DatabaseResult> DeleteAsync(long serverId, CancellationToken cancellationToken = default);
 
-		/// <summary>
-		/// Gets a scene server by ID.
-		/// </summary>
-		/// <param name="serverId">Server ID.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the server data on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// Returns <see cref="DatabaseEntityNotFoundException"/> if server not found.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (FirstOrDefaultAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// </remarks>
-		Task<DatabaseResult<SceneServerData>> GetServerAsync(long serverId, CancellationToken cancellationToken = default);
 	}
 }

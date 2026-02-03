@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -78,7 +79,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, int maxCapacity, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(CharacterPartyData partyData, int maxCapacity, CancellationToken cancellationToken = default)
 		{
 			if (partyData.CharacterID <= 0 || partyData.PartyID <= 0)
 			{
@@ -156,12 +157,6 @@ namespace FishMMO.Database.Npgsql.Services
 							version = EXCLUDED.version
 						WHERE
 							EXCLUDED.version > {TableName}.version
-							OR (
-								EXCLUDED.version = {TableName}.version
-								AND {TableName}.party_id = EXCLUDED.party_id
-								AND {TableName}.rank = EXCLUDED.rank
-								AND {TableName}.health_pct = EXCLUDED.health_pct
-							)
 						RETURNING 1
 					)
 					SELECT
@@ -212,7 +207,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeletePartyMembershipAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -295,9 +290,9 @@ namespace FishMMO.Database.Npgsql.Services
 						throw new DatabaseEntityNotFoundException("CharacterParty", characterId.ToString());
 					}
 
-					if (existing.Version == incomingVersion && existing.Rank == rank)
+					if (existing.Version == incomingVersion)
 					{
-						return;
+						throw new DuplicateReplayException();
 					}
 
 					throw new StaleStateException("Party rank update rejected due to a stale Version.");
@@ -306,7 +301,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterPartyData?>> GetPartyMembershipAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<CharacterPartyData?>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -334,7 +329,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterPartyData>>> GetPartyMembersAsync(long partyId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterPartyData>>> FetchManyAsync(long partyId, CancellationToken cancellationToken = default)
 		{
 			if (partyId <= 0)
 			{
@@ -361,7 +356,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<int>> GetPartyMemberCountAsync(long partyId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> CountAsync(long partyId, CancellationToken cancellationToken = default)
 		{
 			if (partyId <= 0)
 			{

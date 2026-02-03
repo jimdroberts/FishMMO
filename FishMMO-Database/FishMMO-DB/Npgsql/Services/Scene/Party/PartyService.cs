@@ -46,7 +46,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> CreateAsync(long accountId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> PersistAsync(long accountId, CancellationToken cancellationToken = default)
 		{
 			if (accountId <= 0)
 			{
@@ -107,7 +107,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<PartyData>> LoadAsync(long partyId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<PartyData>> FetchAsync(long partyId, CancellationToken cancellationToken = default)
 		{
 			if (partyId <= 0)
 			{

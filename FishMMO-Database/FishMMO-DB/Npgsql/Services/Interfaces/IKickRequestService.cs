@@ -8,11 +8,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
 	/// <summary>
 	/// Service interface for kick request operations.
-	/// Provides async methods for saving, deleting, and fetching kick requests.
+	/// Provides async methods for persisting, deleting, and fetching kick requests.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (Save*, Delete*) in this service use execution strategies to ensure transient
+	/// Write operations (Persist*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
 	/// This is critical because SaveChangesAsync and ExecuteSqlRawAsync do not automatically retry on transient failures
 	/// without an execution strategy wrapper.
@@ -34,7 +34,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	public interface IKickRequestService
 	{
 		/// <summary>
-		/// Saves a kick request for the specified account.
+		/// Persists a kick request for the specified account.
 		/// </summary>
 		/// <param name="accountName">Account name to kick.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
@@ -45,7 +45,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Uses SaveChangesAsync with execution strategy wrapping to ensure transient database failures
 		/// are automatically retried. Creates new kick request with current UTC timestamp.
 		/// </remarks>
-		Task<DatabaseResult> SaveAsync(string accountName, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> PersistAsync(string accountName, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes all kick requests for the specified account.

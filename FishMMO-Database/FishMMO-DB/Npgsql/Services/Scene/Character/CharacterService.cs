@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Database.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,10 +25,10 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
-		/// Compiled query for GetCharacterAsync hot path.
+		/// Compiled query for FetchAsync (by id) hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterEntity?>> GetCharacterByIdQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterEntity?>> fetchByIdQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				(CharacterEntity?)context.Characters
 					.AsNoTracking()
@@ -38,7 +38,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Compiled query for retrieving character by name (hot path for login/character selection).
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<CharacterEntity?>> GetCharacterByNameQuery =
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<CharacterEntity?>> fetchByNameQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string nameLower, CancellationToken ct) =>
 				context.Characters
 					.AsNoTracking()
@@ -48,7 +48,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for counting characters by account (hot path for character creation validation).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<int>> GetCharacterCountByAccountQuery =
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<int>> countByAccountQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string account, CancellationToken ct) =>
 				context.Characters
 						.AsNoTracking()
@@ -58,7 +58,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving all characters by account (hot path for character selection).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<List<CharacterEntity>>> GetCharactersByAccountQuery =
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<List<CharacterEntity>>> fetchManyByAccountQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string account, CancellationToken ct) =>
 				context.Characters
 					.AsNoTracking()
@@ -75,7 +75,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<int>> GetCountAsync(string account, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> CountAsync(string account, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(account))
 			{
@@ -83,7 +83,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
-				await GetCharacterCountByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false),
+				await countByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false),
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -265,7 +265,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(CharacterData characterData, CancellationToken cancellationToken = default)
 		{
 			if (characterData.ID <= 0)
 			{
@@ -282,7 +282,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var saveResult = await ExecuteTransactionAsync(async dbContext =>
+			var saveResult = await ExecuteTransactionAsync<SaveCharacterWriteOutcome>(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var newLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
@@ -389,13 +389,7 @@ namespace FishMMO.Database.Npgsql.Services
 					return SaveCharacterWriteOutcome.AuthorityLost;
 				}
 
-				// Idempotency: allow replaying the same Version if and only if it results in the same final state.
-				if (current.Version == characterData.Version && HasSameState(current, characterData))
-				{
-					return SaveCharacterWriteOutcome.Success;
-				}
-
-				return SaveCharacterWriteOutcome.AuthorityLost;
+				throw new DuplicateReplayException();
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!saveResult.IsSuccess)
@@ -427,14 +421,20 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <para><b>Soft Delete:</b></para>
 		/// This performs an atomic soft delete rather than removing data.
 		/// It renames the character (appending <c>_DELETED_{GUID}</c>) to free up the original name,
-		/// sets <c>deleted=true</c>, and applies a soft-cascade update to all character-owned tables.
+		/// sets <c>deleted=true</c>, and stamps the character <c>Version</c> to the incoming authoritative value.
 		/// Character guild/party memberships are hard-deleted (temporary state).
+		/// This method does not soft-delete character-owned sub-entities; those entities have independent Version streams.
 		/// </remarks>
-		public async Task<DatabaseResult> DeleteCharacterAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
+			}
+
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid incoming version");
 			}
 
 			var transactionResult = await ExecuteTransactionAsync(async dbContext =>
@@ -447,14 +447,33 @@ namespace FishMMO.Database.Npgsql.Services
 					$@"UPDATE {tableName}
 						SET name = (COALESCE(name, '') || {{1}}),
 							deleted = TRUE,
-							time_deleted = CURRENT_TIMESTAMP
-						WHERE id = {{0}} AND deleted = FALSE",
-					new object[] { characterId, suffix },
+							time_deleted = CURRENT_TIMESTAMP,
+							version = {{2}}
+						WHERE id = {{0}} AND deleted = FALSE AND version < {{2}}",
+					new object[] { characterId, suffix, incomingVersion },
 					cancellationToken).ConfigureAwait(false);
 
 				if (rowsAffected <= 0)
 				{
-					return;
+					var currentState = await dbContext.Set<CharacterEntity>()
+						.AsNoTracking()
+						.IgnoreQueryFilters()
+						.Where(x => x.ID == characterId)
+						.Select(x => new { x.Deleted, x.Version })
+						.SingleOrDefaultAsync(cancellationToken)
+						.ConfigureAwait(false);
+
+					if (currentState == null || currentState.Deleted)
+					{
+						return;
+					}
+
+					if (currentState.Version == incomingVersion)
+					{
+						throw new DuplicateReplayException();
+					}
+
+					throw new StaleStateException("Stale character delete (incoming version is not newer than persisted state).");
 				}
 
 				// Hard-delete temporary membership state (intentional).
@@ -467,37 +486,6 @@ namespace FishMMO.Database.Npgsql.Services
 					"DELETE FROM character_party WHERE character_id = {0}",
 					new object[] { characterId },
 					cancellationToken).ConfigureAwait(false);
-
-				// Soft-cascade all character-owned tables.
-				static Task SoftDeleteTableAsync(NpgsqlDbContext ctx, string tableName, long id, CancellationToken token)
-				{
-					return ctx.Database.ExecuteSqlRawAsync(
-						$@"UPDATE {tableName}
-							SET deleted = TRUE,
-								time_deleted = CURRENT_TIMESTAMP
-							WHERE character_id = {{0}} AND deleted = FALSE",
-						new object[] { id },
-						token);
-				}
-
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterAbilityEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterKnownAbilityEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterAttributeEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterAchievementEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterInventoryEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterEquipmentEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterBankEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterHotkeyEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterMailEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterItemCooldownEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterSkillEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterBuffEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterPetEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterPetAttributeEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterPetBuffEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterFactionEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterQuestEntity>(), characterId, cancellationToken).ConfigureAwait(false);
-				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterFriendEntity>(), characterId, cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 
 			return transactionResult.IsSuccess
@@ -506,7 +494,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterData?>> GetCharacterAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<CharacterData?>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -515,7 +503,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync<CharacterData?>(async dbContext =>
 			{
-				var entity = await GetCharacterByIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entity = await fetchByIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				return entity == null ? null : MapEntityToData(entity);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -525,7 +513,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<IReadOnlyList<CharacterData>>> GetCharactersAsync(string account, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IReadOnlyList<CharacterData>>> FetchManyAsync(string account, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(account))
 			{
@@ -534,7 +522,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await GetCharactersByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false);
+				var entities = await fetchManyByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false);
 				return (IReadOnlyList<CharacterData>)entities.Select(MapEntityToData).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -544,7 +532,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterData?>> GetCharacterByNameAsync(string name, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<CharacterData?>> FetchAsync(string name, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedCharacterName(name))
 			{
@@ -554,7 +542,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteReadAsync<CharacterData?>(async dbContext =>
 			{
 				var nameLower = name.ToLowerInvariant();
-				var entity = await GetCharacterByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false);
+				var entity = await fetchByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false);
 				return entity == null ? null : MapEntityToData(entity);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -640,7 +628,7 @@ namespace FishMMO.Database.Npgsql.Services
 					(short)CharacterSessionState.Offline
 				).ConfigureAwait(false);
 
-				if (rowsAffected == 1)
+				if (rowsAffected > 0)
 				{
 					return newToken;
 				}
@@ -690,10 +678,10 @@ namespace FishMMO.Database.Npgsql.Services
 					ownerToken
 				).ConfigureAwait(false);
 
-				if (rowsAffected == 1)
-				{
-					return;
-				}
+					if (rowsAffected == 1)
+					{
+						return;
+					}
 
 				var exists = await dbContext.Characters
 					.AnyAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
@@ -898,43 +886,6 @@ namespace FishMMO.Database.Npgsql.Services
 			return result.IsSuccess
 				? DatabaseResult.Success()
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
-		}
-
-		private static bool HasSameState(CharacterEntity existing, CharacterData expected)
-		{
-			var existingOnline = existing.SessionState != CharacterSessionState.Offline;
-
-			return string.Equals(existing.Name ?? string.Empty, expected.Name ?? string.Empty, StringComparison.Ordinal)
-				&& string.Equals(existing.Account ?? string.Empty, expected.Account ?? string.Empty, StringComparison.Ordinal)
-				&& existing.Selected == expected.Selected
-				&& existing.WorldServerID == expected.WorldServerID
-				&& string.Equals(existing.SceneName ?? string.Empty, expected.SceneName ?? string.Empty, StringComparison.Ordinal)
-				&& existing.SceneHandle == expected.SceneHandle
-				&& string.Equals(existing.BindScene ?? string.Empty, expected.BindScene ?? string.Empty, StringComparison.Ordinal)
-				&& existing.BindX.Equals(expected.BindX)
-				&& existing.BindY.Equals(expected.BindY)
-				&& existing.BindZ.Equals(expected.BindZ)
-				&& existing.InstanceID == expected.InstanceID
-				&& existing.InstanceX.Equals(expected.InstanceX)
-				&& existing.InstanceY.Equals(expected.InstanceY)
-				&& existing.InstanceZ.Equals(expected.InstanceZ)
-				&& existing.InstanceRotX.Equals(expected.InstanceRotX)
-				&& existing.InstanceRotY.Equals(expected.InstanceRotY)
-				&& existing.InstanceRotZ.Equals(expected.InstanceRotZ)
-				&& existing.InstanceRotW.Equals(expected.InstanceRotW)
-				&& existing.RaceID == expected.RaceID
-				&& existing.ModelIndex == expected.ModelIndex
-				&& existing.X.Equals(expected.X)
-				&& existing.Y.Equals(expected.Y)
-				&& existing.Z.Equals(expected.Z)
-				&& existing.RotX.Equals(expected.RotX)
-				&& existing.RotY.Equals(expected.RotY)
-				&& existing.RotZ.Equals(expected.RotZ)
-				&& existing.RotW.Equals(expected.RotW)
-				&& existing.AccessLevel == expected.AccessLevel
-				&& existingOnline == expected.Online
-				&& existing.Flags == expected.Flags
-				&& existing.Version == expected.Version;
 		}
 
 		/// <summary>

@@ -53,7 +53,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<LoginServerData>> AddOrUpdateAsync(
+		public async Task<DatabaseResult<LoginServerData>> PersistAsync(
 			string name,
 			string address,
 			ushort port,
@@ -144,7 +144,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<LoginServerData>> GetServerAsync(long serverId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<LoginServerData>> FetchAsync(long serverId, CancellationToken cancellationToken = default)
 		{
 			if (serverId <= 0)
 			{

@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -11,7 +12,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (Create*, Delete*) in this service use execution strategies to ensure transient
+	/// Write operations (Persist*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
 	/// Execution is wrapped by BaseService for retries and exception mapping.
 	/// </para>
@@ -28,26 +29,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// Name lookups are case-insensitive by using a normalized field (e.g. name_lowercase) in the database.
 	/// </para>
 	/// </remarks>
-	public interface IGuildService
+	public interface IGuildService :
+		IExistsByKeyAction<string>,
+		IPersistAction<string, long?>,
+		IDeleteByKeyAction<long>,
+		IFetchByKeyAction<long, GuildData?>,
+		IFetchByKeyAction<string, GuildData?>
 	{
 		/// <summary>
-		/// Checks if a guild exists by name (case-insensitive).
-		/// </summary>
-		/// <param name="name">Guild name.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing true if guild exists, false if not found,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (AnyAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// Uses case-insensitive comparison via ToUpper().
-		/// </remarks>
-		Task<DatabaseResult<bool>> ExistsAsync(string name, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Gets the name of a guild by ID.
+		/// Fetches the name of a guild by ID.
 		/// </summary>
 		/// <param name="guildId">Guild ID.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
@@ -59,69 +49,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// This method uses LINQ (FirstOrDefaultAsync with AsNoTracking) and automatically benefits from
 		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
 		/// </remarks>
-		Task<DatabaseResult<string>> GetNameByIdAsync(long guildId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Creates a new guild if name is available (case-insensitive uniqueness).
-		/// </summary>
-		/// <param name="name">Guild name.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the guild ID on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// Uses BaseService.ExecuteWriteAsync for:
-		/// - Automatic transient failure retry
-		/// - Centralized exception handling and mapping
-		/// - Consistent DatabaseResult pattern
-		/// 
-		/// If the guild already exists (unique name conflict), the existing guild ID is returned.
-		/// </remarks>
-		Task<DatabaseResult<long?>> CreateAsync(string name, CancellationToken cancellationToken = default);
-		/// <summary>
-		/// Deletes a guild by ID using atomic DELETE operation.
-		/// </summary>
-		/// <param name="guildId">Guild ID to delete.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
-		/// failures are automatically retried. Returns success even if guild doesn't exist (idempotent).
-		/// </remarks>
-		Task<DatabaseResult> DeleteAsync(long guildId, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Loads a guild by name (case-insensitive).
-		/// </summary>
-		/// <param name="name">Guild name.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the guild data (or null if not found) on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (FirstOrDefaultAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// Uses case-insensitive comparison via ToUpper().
-		/// </remarks>
-		Task<DatabaseResult<GuildData?>> LoadByNameAsync(string name, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Loads a guild by ID.
-		/// </summary>
-		/// <param name="guildId">Guild ID.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the guild data (or null if not found) on success,
-		/// or a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// This method uses LINQ (FirstOrDefaultAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// </remarks>
-		Task<DatabaseResult<GuildData?>> LoadByIdAsync(long guildId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<string>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default);
 	}
 }
