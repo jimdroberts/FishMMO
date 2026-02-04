@@ -98,7 +98,7 @@ flowchart TD
   F -->|ExecuteWriteAsync| W[Optional: create Savepoint if transaction supports it]
   W --> W1[Run delegate]
   W1 --> W2{saveChanges?}
-  W2 -->|true| W3[SaveChangesAsync (flushes tracked changes into the current tx)]
+  W2 -->|true| W3[SaveChangesAsync]
   W2 -->|false| W4[Skip SaveChanges]
   W3 --> W5[Release savepoint]
   W4 --> W5
