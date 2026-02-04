@@ -60,12 +60,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		public CharacterFriendService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
+			public CharacterFriendService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || friendCharacterId <= 0)
 			{
@@ -75,42 +75,68 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			var insertResult = await ExecuteWriteAsync(async dbContext =>
 			{
+				var isActiveCharacter = await dbContext.Characters
+					.AsNoTracking()
+					.AnyAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (!isActiveCharacter)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString(), "Character not found or deleted.");
+				}
+
 				var now = DateTime.UtcNow;
 				var sql = $@"
-					WITH active_character AS (
-						SELECT 1 FROM character WHERE id = {{0}} AND deleted = FALSE
-					)
 					INSERT INTO {TableName}
 						(character_id, friend_character_id, version, time_created, deleted, time_deleted)
-					SELECT
-						{{0}},
-						{{1}},
-						1,
-						{{2}},
-						FALSE,
-						NULL
-					WHERE EXISTS (SELECT 1 FROM active_character)
+					VALUES
+						({{0}}, {{1}}, {{2}}, {{3}}, FALSE, NULL)
 					ON CONFLICT (character_id, friend_character_id)
 					DO UPDATE SET
 						deleted = FALSE,
 						time_deleted = NULL,
-						version = CASE
-							WHEN version < 1 THEN 1
-							ELSE version
-						END";
+						version = EXCLUDED.version
+					WHERE
+						EXCLUDED.version > {TableName}.version";
 
-				await dbContext.Database.ExecuteSqlRawAsync(
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { characterId, friendCharacterId, now },
+					new object[] { characterId, friendCharacterId, incomingVersion, now },
 					cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var existing = await dbContext.CharacterFriends
+						.AsNoTracking()
+						.Where(f => f.CharacterID == characterId && f.FriendCharacterID == friendCharacterId)
+						.Select(f => new { f.Version })
+						.FirstOrDefaultAsync(cancellationToken)
+						.ConfigureAwait(false);
+
+					if (existing != null)
+					{
+							if (existing.Version == incomingVersion)
+						{
+							throw new DuplicateReplayException("Friend persist rejected because the Version was a duplicate replay.");
+						}
+
+						throw new StaleStateException("Friend persist rejected due to a stale Version.");
+					}
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return insertResult.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			return insertResult;
 		}
 
 		/// <inheritdoc/>

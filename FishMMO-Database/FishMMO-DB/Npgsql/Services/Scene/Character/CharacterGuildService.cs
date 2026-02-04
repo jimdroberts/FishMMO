@@ -40,18 +40,6 @@ namespace FishMMO.Database.Npgsql.Services
 		private const int MaxAllowedGuildCapacity = 256;
 
 		/// <summary>
-		/// Compiled query for checking whether a character exists and is not deleted.
-		/// Returns the character ID if active, otherwise 0.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
-				context.Characters
-					.AsNoTracking()
-					.Where(c => c.ID == characterId && !c.Deleted)
-					.Select(c => c.ID)
-					.FirstOrDefault());
-
-		/// <summary>
 		/// Compiled query for retrieving guild membership by character ID.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
@@ -94,11 +82,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> PersistAsync(CharacterGuildData guildData, int maxCapacity, CancellationToken cancellationToken = default)
 		{
-			if (guildData.CharacterID == 0 || guildData.GuildID == 0)
+			if (guildData.CharacterID <= 0 || guildData.GuildID <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID or guild ID. Both must be greater than 0.");
+					"Invalid character ID or guild ID. Both must be greater than 0.",
+					isTransient: false);
 			}
 
 			if (maxCapacity <= 0)
@@ -188,7 +177,7 @@ namespace FishMMO.Database.Npgsql.Services
 				? result.Data switch
 				{
 					0 => DatabaseResult.Success(),
-					1 => DatabaseResult.Failure("DB_NOT_FOUND", "Character not found or deleted.", isTransient: false),
+					1 => throw new DatabaseEntityNotFoundException("Character", guildData.CharacterID.ToString(), "Character not found or deleted."),
 					2 => DatabaseResult.Failure("NOT_FOUND", $"Guild with ID {guildData.GuildID} does not exist.", isTransient: false),
 					3 => DatabaseResult.Failure("CAPACITY_EXCEEDED", $"Guild has reached maximum capacity of {maxCapacity} members.", isTransient: false),
 					4 => DatabaseResult.Failure("STALE_STATE", "Guild membership update rejected due to a stale Version.", isTransient: false),
@@ -245,10 +234,7 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new StaleStateException("Guild rank update rejected due to a stale Version.");
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -291,10 +277,7 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -323,10 +306,7 @@ namespace FishMMO.Database.Npgsql.Services
 					rank: entity.Rank,
 					location: entity.Location);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<CharacterGuildData?>.Success(result.Data)
-				: DatabaseResult<CharacterGuildData?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -352,10 +332,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return (IReadOnlyList<CharacterGuildData>)members;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<IReadOnlyList<CharacterGuildData>>.Success(result.Data)
-				: DatabaseResult<IReadOnlyList<CharacterGuildData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -371,10 +348,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteReadAsync(async dbContext =>
 				await getGuildMemberCountQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false),
 				cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<int>.Success(result.Data)
-				: DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 	}
 }

@@ -120,10 +120,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return id;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<long>.Success(result.Data)
-				: DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -172,6 +169,12 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+				if (activeCharacterIdSet.Count != characterIds.Length)
+				{
+					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
+					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
+				}
 
 				var activeEquipment = equipmentList.Where(e => activeCharacterIdSet.Contains(e.CharacterID)).ToList();
 				if (activeEquipment.Count == 0)

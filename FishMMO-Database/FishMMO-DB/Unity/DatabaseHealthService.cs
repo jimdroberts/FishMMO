@@ -136,14 +136,17 @@ namespace FishMMO.Server.Database
 		/// </summary>
 		/// <param name="database">The database orchestrator instance.</param>
 		/// <exception cref="ArgumentNullException">Thrown when database is null.</exception>
-		/// <exception cref="InvalidOperationException">Thrown when already initialized.</exception>
+		/// <exception cref="FishMMO.Database.Exceptions.DatabaseException">Thrown when already initialized.</exception>
 		public void Initialize(FishMMO.Database.Database database)
 		{
 			if (database == null)
 				throw new ArgumentNullException(nameof(database));
 
 			if (isInitialized)
-				throw new InvalidOperationException("DatabaseHealthService is already initialized.");
+				throw new FishMMO.Database.Exceptions.DatabaseException(
+					"DatabaseHealthService is already initialized.",
+					"INVALID_OPERATION",
+					isTransient: false);
 
 			this.database = database;
 			isInitialized = true;

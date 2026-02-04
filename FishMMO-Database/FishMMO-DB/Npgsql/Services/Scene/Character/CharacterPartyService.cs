@@ -194,7 +194,7 @@ namespace FishMMO.Database.Npgsql.Services
 				case 0:
 					return DatabaseResult.Success();
 				case 1:
-					return DatabaseResult.Failure("DB_NOT_FOUND", "Character not found or deleted.", isTransient: false);
+					throw new DatabaseEntityNotFoundException("Character", partyData.CharacterID.ToString(), "Character not found or deleted.");
 				case 2:
 					return DatabaseResult.Failure("NOT_FOUND", $"Party with ID {partyData.PartyID} does not exist.", isTransient: false);
 				case 3:

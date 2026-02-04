@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using FishMMO.Database.Exceptions;
 
 namespace FishMMO.Database.Npgsql
 {
@@ -81,13 +82,18 @@ namespace FishMMO.Database.Npgsql
 			// This avoids multiple registrations for the same concrete service under different keys.
 			if (!typeof(TService).IsInterface)
 			{
-				throw new InvalidOperationException(
-					$"Services must be registered by interface type. Attempted to register '{typeof(TService).FullName}'.");
+				throw new DatabaseException(
+					$"Services must be registered by interface type. Attempted to register '{typeof(TService).FullName}'.",
+					"INVALID_OPERATION",
+					isTransient: false);
 			}
 
 			if (!services.TryAdd(typeof(TService), serviceInstance))
 			{
-				throw new InvalidOperationException($"Service already registered: {typeof(TService).FullName}");
+				throw new DatabaseException(
+					$"Service already registered: {typeof(TService).FullName}",
+					"INVALID_OPERATION",
+					isTransient: false);
 			}
 		}
 	}

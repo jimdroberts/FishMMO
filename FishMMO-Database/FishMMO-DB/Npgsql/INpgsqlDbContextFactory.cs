@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
@@ -10,7 +11,7 @@ namespace FishMMO.Database.Npgsql
 	/// Implementations must be thread-safe and create new contexts per call.
 	/// DbContext instances are short-lived and should not be pooled.
 	/// </summary>
-	public interface INpgsqlDbContextFactory
+	public interface INpgsqlDbContextFactory : IDisposable
 	{
 		/// <summary>
 		/// Gets the connection pool metrics for monitoring and diagnostics.

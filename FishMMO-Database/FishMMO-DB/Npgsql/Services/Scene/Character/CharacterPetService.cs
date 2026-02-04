@@ -49,22 +49,6 @@ namespace FishMMO.Database.Npgsql.Services
 #pragma warning restore CS8619
 
 		/// <summary>
-		/// Compiled query for retrieving a tracked pet by ID.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> getByIdTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long id, CancellationToken ct) =>
-				(CharacterPetEntity?)context.CharacterPets
-					.FirstOrDefault(p => p.ID == id));
-
-		/// <summary>
-		/// Compiled query for retrieving a tracked pet by character ID.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> getByCharacterIdTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
-				(CharacterPetEntity?)context.CharacterPets
-					.FirstOrDefault(p => p.CharacterID == characterId));
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterPetService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
@@ -104,9 +88,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var now = DateTime.UtcNow;
 				var abilities = petData.Abilities?.ToArray() ?? Array.Empty<int>();
+				var characterTableName = dbContext.GetTableName<CharacterEntity>();
 				var sql = $@"
 					WITH active_character AS (
-						SELECT id FROM character WHERE id = {{0}} AND deleted = FALSE
+						SELECT id FROM {characterTableName} WHERE id = {{0}} AND deleted = FALSE
 					),
 					id_ok AS (
 						SELECT CASE
@@ -167,7 +152,7 @@ namespace FishMMO.Database.Npgsql.Services
 				case 0:
 					return DatabaseResult.Success();
 				case 1:
-					return DatabaseResult.Failure("DB_NOT_FOUND", "Character not found or deleted.", isTransient: false);
+					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString(), "Character not found or deleted.");
 				case 2:
 					return DatabaseResult.Failure("STALE_STATE", "Pet update rejected due to a stale Version.", isTransient: false);
 				case 3:
@@ -240,6 +225,13 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+				if (activeCharacterIdSet.Count != characterIds.Length)
+				{
+					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
+					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
+				}
+
 				var now = DateTime.UtcNow;
 
 				var activeUpdates = petsToUpdate
@@ -354,6 +346,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)

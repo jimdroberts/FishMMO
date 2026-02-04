@@ -40,16 +40,6 @@ namespace FishMMO.Database.Npgsql.Services
 					.Count());
 
 		/// <summary>
-		/// Compiled query for retrieving an existing ability by composite key (character ID + template ID).
-		/// </summary>
-#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<CharacterAbilityEntity?>> getByCharacterAndTemplateQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int templateId, CancellationToken ct) =>
-				context.CharacterAbilities
-					.FirstOrDefault(a => a.CharacterID == characterId && a.TemplateID == templateId));
-#pragma warning restore CS8619
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterAbilityService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
@@ -138,10 +128,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return idRow.Value;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<long>.Success(result.Data)
-				: DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -205,6 +192,12 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+				if (activeCharacterIdSet.Count != allCharacterIds.Length)
+				{
+					var missingCharacterId = allCharacterIds.First(id => !activeCharacterIdSet.Contains(id));
+					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
+				}
 
 				var activeNewItems = newItems
 					.Where(a => activeCharacterIdSet.Contains(a.CharacterID))

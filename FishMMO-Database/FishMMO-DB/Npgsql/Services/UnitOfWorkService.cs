@@ -59,12 +59,15 @@ namespace FishMMO.Database.Npgsql.Services
 			/// This is a one-way operation. After commit (or rollback), the unit of work is disposed
 			/// and cannot be used again.
 			/// </remarks>
-			public async Task CommitAsync(CancellationToken cancellationToken = default)
+			public async Task<DatabaseResult> CommitAsync(CancellationToken cancellationToken = default)
 			{
-				ThrowIfDisposed();
+				if (isDisposed)
+				{
+					return DatabaseResult.Failure("OBJECT_DISPOSED", "Unit of work is already disposed.");
+				}
 				if (isCompleted)
 				{
-					return;
+					return DatabaseResult.Success();
 				}
 
 				try
@@ -72,6 +75,15 @@ namespace FishMMO.Database.Npgsql.Services
 					await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 					await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 					isCompleted = true;
+					return DatabaseResult.Success();
+				}
+				catch (OperationCanceledException)
+				{
+					return DatabaseResult.Failure("OPERATION_CANCELED", "Operation was canceled.", isTransient: false);
+				}
+				catch
+				{
+					return DatabaseResult.Failure("DATABASE_ERROR", "Failed to commit the unit of work.", isTransient: true);
 				}
 				finally
 				{
@@ -87,18 +99,30 @@ namespace FishMMO.Database.Npgsql.Services
 			/// This is a one-way operation. After rollback (or commit), the unit of work is disposed
 			/// and cannot be used again.
 			/// </remarks>
-			public async Task RollbackAsync(CancellationToken cancellationToken = default)
+			public async Task<DatabaseResult> RollbackAsync(CancellationToken cancellationToken = default)
 			{
-				ThrowIfDisposed();
+				if (isDisposed)
+				{
+					return DatabaseResult.Failure("OBJECT_DISPOSED", "Unit of work is already disposed.");
+				}
 				if (isCompleted)
 				{
-					return;
+					return DatabaseResult.Success();
 				}
 
 				try
 				{
 					await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
 					isCompleted = true;
+					return DatabaseResult.Success();
+				}
+				catch (OperationCanceledException)
+				{
+					return DatabaseResult.Failure("OPERATION_CANCELED", "Operation was canceled.", isTransient: false);
+				}
+				catch
+				{
+					return DatabaseResult.Failure("DATABASE_ERROR", "Failed to roll back the unit of work.", isTransient: true);
 				}
 				finally
 				{
@@ -168,13 +192,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			private void ThrowIfDisposed()
-			{
-				if (isDisposed)
-				{
-					throw new ObjectDisposedException(nameof(NpgsqlUnitOfWork));
-				}
-			}
 		}
 
 		private readonly INpgsqlDbContextFactory dbContextFactory;
@@ -190,38 +207,50 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		/// <exception cref="InvalidOperationException">
-		/// Thrown when a unit of work is started inside an existing ambient database execution scope.
-		/// </exception>
 		/// <remarks>
 		/// BeginAsync must be the outermost database scope for the logical operation.
 		/// Once started, service methods called within the scope will reuse the ambient context/transaction.
 		/// </remarks>
-		public async Task<IUnitOfWork> BeginAsync(CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<IUnitOfWork>> BeginAsync(CancellationToken cancellationToken = default)
 		{
 			if (DatabaseExecutionScope.IsActive)
 			{
-				throw new InvalidOperationException(
-					"A unit of work cannot be started inside an ambient database execution scope. " +
-					"Ensure BeginAsync is the outermost scope for the logical operation.");
+				return DatabaseResult<IUnitOfWork>.Failure(
+					"INVALID_OPERATION",
+					"A unit of work cannot be started inside an ambient database execution scope.");
 			}
 
-			var context = dbContextFactory.CreateDbContext();
-			var scopeToken = DatabaseExecutionScope.Enter("UnitOfWork", context, isTransactionScope: true);
+			NpgsqlDbContext context;
+			try
+			{
+				context = dbContextFactory.CreateDbContext();
+			}
+			catch
+			{
+				return DatabaseResult<IUnitOfWork>.Failure("DATABASE_ERROR", "Failed to create database context.", isTransient: true);
+			}
+
+			var scopeToken = DatabaseExecutionScope.Enter(context, isTransactionScope: true);
 
 			IDbContextTransaction transaction;
 			try
 			{
 				transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 			}
+			catch (OperationCanceledException)
+			{
+				scopeToken.Dispose();
+				context.Dispose();
+				return DatabaseResult<IUnitOfWork>.Failure("OPERATION_CANCELED", "Operation was canceled.", isTransient: false);
+			}
 			catch
 			{
 				scopeToken.Dispose();
 				context.Dispose();
-				throw;
+				return DatabaseResult<IUnitOfWork>.Failure("DATABASE_ERROR", "Failed to begin transaction.", isTransient: true);
 			}
 
-			return new NpgsqlUnitOfWork(context, transaction, scopeToken);
+			return DatabaseResult<IUnitOfWork>.Success(new NpgsqlUnitOfWork(context, transaction, scopeToken));
 		}
 	}
 }

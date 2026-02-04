@@ -103,6 +103,12 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
+				if (activeCharacterIdSet.Count != characterIds.Length)
+				{
+					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
+					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
+				}
+
 				var activeFactions = factionList.Where(f => activeCharacterIdSet.Contains(f.CharacterID)).ToList();
 				if (activeFactions.Count == 0)
 				{

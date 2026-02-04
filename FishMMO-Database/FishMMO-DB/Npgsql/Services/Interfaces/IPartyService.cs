@@ -12,7 +12,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Write operations (Persist*, Delete*) in this service use execution strategies to ensure transient
+	/// Write operations (Create*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
 	/// Execution is wrapped by BaseService for retries and exception mapping.
 	/// </para>
@@ -28,9 +28,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </remarks>
 	public interface IPartyService :
 		IExistsByKeyAction<long>,
-		IPersistAction<long, long>,
 		IDeleteByKeyAction<long>,
 		IFetchByKeyAction<long, PartyData>
 	{
+		/// <summary>
+		/// Creates a new party and returns the generated party ID.
+		/// </summary>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>A <see cref="DatabaseResult{T}"/> containing the new party ID on success.</returns>
+		/// <remarks>
+		/// Parties are independent entities that do not belong to a specific account.
+		/// Characters join parties through the party membership relationship.
+		/// </remarks>
+		Task<DatabaseResult<long>> CreateAsync(CancellationToken cancellationToken = default);
 	}
 }

@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using FishMMO.Database;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -19,11 +20,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Begins a new unit of work for the current logical async flow.
 		/// </summary>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>An active <see cref="IUnitOfWork"/>.</returns>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing an active <see cref="IUnitOfWork"/> on success.
+		/// </returns>
 		/// <remarks>
 		/// The returned unit of work establishes an ambient <c>NpgsqlDbContext</c>.
 		/// Service calls made within the scope will reuse that context and transaction.
 		/// </remarks>
-		Task<IUnitOfWork> BeginAsync(CancellationToken cancellationToken = default);
+		Task<DatabaseResult<IUnitOfWork>> BeginAsync(CancellationToken cancellationToken = default);
 	}
 }

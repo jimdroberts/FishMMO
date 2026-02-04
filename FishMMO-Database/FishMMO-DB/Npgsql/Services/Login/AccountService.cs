@@ -133,10 +133,7 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseException("Account name already exists.", "UNIQUE_VIOLATION", isTransient: false);
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>

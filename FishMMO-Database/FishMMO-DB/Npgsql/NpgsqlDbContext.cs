@@ -15,6 +15,11 @@ namespace FishMMO.Database.Npgsql
 	/// </remarks>
 	public class NpgsqlDbContext : DbContext
 	{
+		/// <summary>
+		/// Default schema name used when no schema is specified.
+		/// </summary>
+		public const string DefaultSchema = "public";
+
 		private int disposed;
 
 		/// <summary>
@@ -26,16 +31,13 @@ namespace FishMMO.Database.Npgsql
 		/// Initializes a new instance of the <see cref="NpgsqlDbContext"/> class.
 		/// </summary>
 		/// <param name="options">The DbContext options.</param>
-		/// <param name="schema">The database schema to use; defaults to <c>public</c> when empty.</param>
+		/// <param name="schema">The database schema to use; defaults to <see cref="DefaultSchema"/> when empty.</param>
 		public NpgsqlDbContext(DbContextOptions options, string schema) : base(options)
 		{
-			schema = string.IsNullOrWhiteSpace(schema) ? "public" : schema;
+			schema = string.IsNullOrWhiteSpace(schema) ? DefaultSchema : schema;
 
 			Schema = schema;
 		}
-
-		//protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-		//    => optionsBuilder.LogTo(Console.WriteLine);
 
 		public DbSet<PatchServerEntity> PatchServers { get; set; }
 		public DbSet<LoginServerEntity> LoginServers { get; set; }
@@ -45,7 +47,6 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<AccountEntity> Accounts { get; set; }
 		public DbSet<KickRequestEntity> KickRequests { get; set; }
 
-		// character tables
 		public DbSet<CharacterEntity> Characters { get; set; }
 		public DbSet<CharacterAbilityEntity> CharacterAbilities { get; set; }
 		public DbSet<CharacterKnownAbilityEntity> CharacterKnownAbilities { get; set; }
@@ -72,9 +73,6 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<PartyEntity> Parties { get; set; }
 		public DbSet<PartyUpdateEntity> PartyUpdates { get; set; }
 		public DbSet<ChatEntity> Chat { get; set; }
-
-		// game data (?)
-		//public DbSet<QuestEntity> Quests { get; set; }
 
 		public override void Dispose()
 		{

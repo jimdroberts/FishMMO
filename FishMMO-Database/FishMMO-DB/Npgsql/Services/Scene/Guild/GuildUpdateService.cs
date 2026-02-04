@@ -46,9 +46,7 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -68,9 +66,7 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult<int>.Success(result.Data)
-				: DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -98,9 +94,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return updates.Select(MapEntityToDto).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult<List<GuildUpdateData>>.Success(result.Data)
-				: DatabaseResult<List<GuildUpdateData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <summary>

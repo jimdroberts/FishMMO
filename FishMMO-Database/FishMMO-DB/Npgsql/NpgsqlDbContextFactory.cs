@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Npgsql;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
+using FishMMO.Database.Exceptions;
 
 namespace FishMMO.Database.Npgsql
 {
@@ -18,6 +19,7 @@ namespace FishMMO.Database.Npgsql
 	/// </summary>
 	public class NpgsqlDbContextFactory : INpgsqlDbContextFactory, IDesignTimeDbContextFactory<NpgsqlDbContext>
 	{
+		private int disposed;
 		private int shutdown;
 		private readonly string schema;
 		private readonly bool enableLogging;
@@ -74,7 +76,7 @@ namespace FishMMO.Database.Npgsql
 				.Build();
 
 			string database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
-			schema = configuration.GetSection("Npgsql")["Schema"] ?? "public";
+			schema = configuration.GetSection("Npgsql")["Schema"] ?? NpgsqlDbContext.DefaultSchema;
 
 			ValidateUnquotedIdentifierSetting("Npgsql:Database", database);
 			ValidateUnquotedIdentifierSetting("Npgsql:Schema", schema);
@@ -86,14 +88,14 @@ namespace FishMMO.Database.Npgsql
 
 			// Read pooling configuration from settings
 			int minPoolSize = 5;
-			int maxPoolSize = 100;
+			int maxPoolSizeSetting = 100;
 			int configTimeout = 10;
 			int connectionTimeout = 15; // Default connection timeout
 
 			if (int.TryParse(configuration.GetSection("Npgsql")["MinPoolSize"], out int minSize))
 				minPoolSize = minSize;
 			if (int.TryParse(configuration.GetSection("Npgsql")["MaxPoolSize"], out int maxSize))
-				maxPoolSize = maxSize;
+				maxPoolSizeSetting = maxSize;
 			if (int.TryParse(configuration.GetSection("Npgsql")["CommandTimeout"], out int cfgTimeout))
 				configTimeout = cfgTimeout;
 			if (int.TryParse(configuration.GetSection("Npgsql")["ConnectionTimeout"], out int connTimeout))
@@ -103,15 +105,31 @@ namespace FishMMO.Database.Npgsql
 			if (this.commandTimeout == 10 && configTimeout != 10)
 				this.commandTimeout = configTimeout;
 
-			// Build connection string with pooling and separate timeout configuration
-			// Timeout = time to establish connection, Command Timeout = time for query execution
-			var connectionString =
-				$"Host={host};Port={port};Database={database};Username={userId};Password={password};" +
-				$"Pooling=true;Minimum Pool Size={minPoolSize};Maximum Pool Size={maxPoolSize};" +
-				$"Timeout={connectionTimeout};Command Timeout={this.commandTimeout};";
+			// Build connection string using NpgsqlConnectionStringBuilder for correctness and clarity.
+			// Timeout = time to establish connection, CommandTimeout = time for query execution.
+			if (!int.TryParse(port, out int portNumber) || portNumber <= 0)
+			{
+				portNumber = 5432;
+			}
+
+			var connectionStringBuilder = new NpgsqlConnectionStringBuilder
+			{
+				Host = host,
+				Port = portNumber,
+				Database = database,
+				Username = userId,
+				Password = password,
+				Pooling = true,
+				MinPoolSize = minPoolSize,
+				MaxPoolSize = maxPoolSizeSetting,
+				Timeout = connectionTimeout,
+				CommandTimeout = this.commandTimeout,
+			};
+
+			var connectionString = connectionStringBuilder.ConnectionString;
 
 			// Initialize pool metrics tracker
-			this.maxPoolSize = maxPoolSize;
+			this.maxPoolSize = maxPoolSizeSetting;
 			poolMetrics = new ConnectionPoolMetrics();
 			var connectionMetricsInterceptor = new ConnectionMetricsInterceptor(poolMetrics);
 
@@ -152,10 +170,12 @@ namespace FishMMO.Database.Npgsql
 				return;
 			}
 
-			throw new InvalidOperationException(
+			throw new DatabaseException(
 				$"Invalid configuration value for '{settingPath}': '{value}'. " +
 				"The value must be a valid unquoted PostgreSQL identifier (snake_case only): " +
-				"lowercase letters, digits, and underscores; starting with a letter or underscore.");
+				"lowercase letters, digits, and underscores; starting with a letter or underscore.",
+				"INVALID_CONFIGURATION",
+				isTransient: false);
 		}
 
 		/// <summary>
@@ -281,6 +301,20 @@ namespace FishMMO.Database.Npgsql
 				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
 
 			return CreateDbContext();
+		}
+
+		/// <summary>
+		/// Disposes the factory and releases all resources.
+		/// Calls Shutdown() to reject new context creation, then disposes monitoring resources.
+		/// </summary>
+		public void Dispose()
+		{
+			if (Interlocked.Exchange(ref disposed, 1) != 0)
+				return;
+
+			Shutdown();
+			performanceTracker.Dispose();
+			poolMetrics.Reset();
 		}
 	}
 }

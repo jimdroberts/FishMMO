@@ -22,9 +22,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </summary>
 		/// <param name="characterId">The character ID.</param>
 		/// <param name="templateId">The ability template ID.</param>
+		/// <param name="incomingVersion">The authoritative, monotonic version for this persist operation.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
-		Task<DatabaseResult> PersistAsync(long characterId, int templateId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> PersistAsync(long characterId, int templateId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a known ability for the specified character if <paramref name="incomingVersion"/> is newer.

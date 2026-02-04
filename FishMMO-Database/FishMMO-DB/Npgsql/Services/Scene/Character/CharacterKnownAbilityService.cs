@@ -51,7 +51,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(long characterId, int templateId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(long characterId, int templateId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -69,37 +69,60 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
 				{
-					// Preserve previous behavior: no-op if character is missing/deleted.
-					return;
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString(), "Character not found or deleted.");
 				}
 
 				var now = DateTime.UtcNow;
 				var sql = $@"INSERT INTO {TableName}
 					(character_id, template_id, version, time_created, deleted, time_deleted)
-					VALUES ({{0}}, {{1}}, 1, {{2}}, FALSE, NULL)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, FALSE, NULL)
 					ON CONFLICT (character_id, template_id)
 					DO UPDATE SET
 						deleted = FALSE,
 						time_deleted = NULL,
-						version = CASE
-							WHEN {TableName}.version < 1 THEN 1
-							ELSE {TableName}.version
-						END";
+						version = EXCLUDED.version
+					WHERE
+						EXCLUDED.version > {TableName}.version";
 
-				await dbContext.Database.ExecuteSqlRawAsync(
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { characterId, templateId, now },
+					new object[] { characterId, templateId, incomingVersion, now },
 					cancellationToken).ConfigureAwait(false);
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return insertResult.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+				if (rowsAffected == 0)
+				{
+					var existing = await dbContext.CharacterKnownAbilities
+						.AsNoTracking()
+						.Where(a => a.CharacterID == characterId && a.TemplateID == templateId)
+						.Select(a => new { a.Version })
+						.FirstOrDefaultAsync(cancellationToken)
+						.ConfigureAwait(false);
+
+					if (existing != null)
+					{
+						if (existing.Version == incomingVersion)
+						{
+							throw new DuplicateReplayException("Known ability persist rejected because the Version was a duplicate replay.");
+						}
+
+						throw new StaleStateException("Known ability persist rejected due to a stale Version.");
+					}
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+			return insertResult;
 		}
 
 		/// <inheritdoc/>
@@ -143,6 +166,12 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+				if (activeCharacterIdSet.Count != characterIds.Length)
+				{
+					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
+					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
+				}
 
 				var activeAbilities = abilityList
 					.Where(a => a.TemplateID > 0 && activeCharacterIdSet.Contains(a.CharacterID))

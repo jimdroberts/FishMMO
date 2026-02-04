@@ -12,7 +12,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 	/// Thread-safe implementation with configurable tracking levels and overhead control.
 	/// Complements DatabaseMetricsTracker with operation-specific insights.
 	/// </summary>
-	public sealed class QueryPerformanceTracker
+	public sealed class QueryPerformanceTracker : IDisposable
 	{
 		private readonly QueryPerformanceConfiguration configuration;
 		private readonly ConcurrentDictionary<string, (QueryMetrics Metrics, long LastAccessTicks)> operationMetrics;
@@ -20,6 +20,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		private volatile TrackingLevel currentLevel;
 		private readonly object evictionGate;
 		private long lastEvictionTicks;
+		private int disposed;
 		private const int MaxOperationNameLength = 128;
 		private const int EvictionSampleSize = 32;
 		private static readonly TimeSpan MinEvictionInterval = TimeSpan.FromSeconds(1);
@@ -428,6 +429,20 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 			}
 
 			return candidateKey ?? string.Empty;
+		}
+
+		/// <summary>
+		/// Disposes the tracker and releases all resources.
+		/// Clears all recorded metrics and disables tracking.
+		/// </summary>
+		public void Dispose()
+		{
+			if (Interlocked.Exchange(ref disposed, 1) != 0)
+				return;
+
+			isEnabled = false;
+			operationMetrics.Clear();
+			SlowQueryDetected = null;
 		}
 	}
 

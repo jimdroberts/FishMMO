@@ -15,15 +15,15 @@ namespace FishMMO.Database
 
 		/// <summary>
 		/// Gets the error code if the operation failed.
-		/// Null if operation succeeded.
+		/// Null when <see cref="IsSuccess"/> is true; non-null when <see cref="IsSuccess"/> is false.
 		/// </summary>
-		public string ErrorCode { get; }
+		public string? ErrorCode { get; }
 
 		/// <summary>
 		/// Gets the safe error message suitable for client communication.
-		/// Null if operation succeeded.
+		/// Null when <see cref="IsSuccess"/> is true; non-null when <see cref="IsSuccess"/> is false.
 		/// </summary>
-		public string ErrorMessage { get; }
+		public string? ErrorMessage { get; }
 
 		/// <summary>
 		/// Gets the result data if the operation succeeded.
@@ -32,7 +32,7 @@ namespace FishMMO.Database
 		public T Data { get; }
 
 		/// <summary>
-		/// Gets a value indicating whether the error isE transient and the operation can be retried.
+		/// Gets a value indicating whether the error is transient and the operation can be retried.
 		/// False if operation succeeded or error is permanent.
 		/// </summary>
 		public bool IsTransient { get; }
@@ -56,7 +56,7 @@ namespace FishMMO.Database
 		/// <param name="errorCode">The error code.</param>
 		/// <param name="errorMessage">The safe error message.</param>
 		/// <param name="isTransient">Whether the error is transient.</param>
-		private DatabaseResult(string errorCode, string errorMessage, bool isTransient)
+		private DatabaseResult(string? errorCode, string? errorMessage, bool isTransient)
 		{
 			IsSuccess = false;
 			Data = default!;
@@ -78,11 +78,11 @@ namespace FishMMO.Database
 		/// <summary>
 		/// Creates a failed result with error information.
 		/// </summary>
-		/// <param name="errorCode">The error code for categorization.</param>
-		/// <param name="errorMessage">Safe error message for client communication.</param>
+		/// <param name="errorCode">The error code for categorization. Defaults to <c>DB_ERROR</c> if null.</param>
+		/// <param name="errorMessage">Safe error message for client communication. Defaults to a generic message if null.</param>
 		/// <param name="isTransient">Whether the error is transient and retryable.</param>
 		/// <returns>A failed DatabaseResult containing error information.</returns>
-		public static DatabaseResult<T> Failure(string errorCode, string errorMessage, bool isTransient = false)
+		public static DatabaseResult<T> Failure(string? errorCode, string? errorMessage, bool isTransient = false)
 		{
 			return new DatabaseResult<T>(errorCode, errorMessage, isTransient);
 		}
@@ -107,7 +107,7 @@ namespace FishMMO.Database
 		/// <param name="data">The result data (default if failed).</param>
 		/// <param name="errorCode">The error code (null if succeeded).</param>
 		/// <param name="errorMessage">The error message (null if succeeded).</param>
-		public void Deconstruct(out bool isSuccess, out T data, out string errorCode, out string errorMessage)
+		public void Deconstruct(out bool isSuccess, out T data, out string? errorCode, out string? errorMessage)
 		{
 			isSuccess = IsSuccess;
 			data = Data;
@@ -141,13 +141,15 @@ namespace FishMMO.Database
 
 		/// <summary>
 		/// Gets the error code if the operation failed.
+		/// Null when <see cref="IsSuccess"/> is true; non-null when <see cref="IsSuccess"/> is false.
 		/// </summary>
-		public string ErrorCode { get; }
+		public string? ErrorCode { get; }
 
 		/// <summary>
 		/// Gets the safe error message suitable for client communication.
+		/// Null when <see cref="IsSuccess"/> is true; non-null when <see cref="IsSuccess"/> is false.
 		/// </summary>
-		public string ErrorMessage { get; }
+		public string? ErrorMessage { get; }
 
 		/// <summary>
 		/// Gets a value indicating whether the error is transient and the operation can be retried.
@@ -161,7 +163,7 @@ namespace FishMMO.Database
 		/// <param name="errorCode">The error code (null if succeeded).</param>
 		/// <param name="errorMessage">The error message (null if succeeded).</param>
 		/// <param name="isTransient">Whether the error is transient.</param>
-		private DatabaseResult(bool isSuccess, string errorCode, string errorMessage, bool isTransient)
+		private DatabaseResult(bool isSuccess, string? errorCode, string? errorMessage, bool isTransient)
 		{
 			IsSuccess = isSuccess;
 			ErrorCode = errorCode;
@@ -181,11 +183,11 @@ namespace FishMMO.Database
 		/// <summary>
 		/// Creates a failed result with error information.
 		/// </summary>
-		/// <param name="errorCode">The error code for categorization.</param>
-		/// <param name="errorMessage">Safe error message for client communication.</param>
+		/// <param name="errorCode">The error code for categorization. Defaults to <c>DB_ERROR</c> if null.</param>
+		/// <param name="errorMessage">Safe error message for client communication. Defaults to a generic message if null.</param>
 		/// <param name="isTransient">Whether the error is transient and retryable.</param>
 		/// <returns>A failed DatabaseResult containing error information.</returns>
-		public static DatabaseResult Failure(string errorCode, string errorMessage, bool isTransient = false)
+		public static DatabaseResult Failure(string? errorCode, string? errorMessage, bool isTransient = false)
 		{
 			return new DatabaseResult(false, errorCode ?? "DB_ERROR", errorMessage ?? "An error occurred.", isTransient);
 		}
@@ -210,7 +212,7 @@ namespace FishMMO.Database
 		/// <param name="isSuccess">Whether the operation succeeded.</param>
 		/// <param name="errorCode">The error code (null if succeeded).</param>
 		/// <param name="errorMessage">The error message (null if succeeded).</param>
-		public void Deconstruct(out bool isSuccess, out string errorCode, out string errorMessage)
+		public void Deconstruct(out bool isSuccess, out string? errorCode, out string? errorMessage)
 		{
 			isSuccess = IsSuccess;
 			errorCode = ErrorCode;

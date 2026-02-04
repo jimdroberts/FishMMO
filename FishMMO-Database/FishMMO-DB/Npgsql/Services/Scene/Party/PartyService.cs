@@ -40,19 +40,12 @@ namespace FishMMO.Database.Npgsql.Services
 				await partyExistsQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false),
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult<bool>.Success(result.Data)
-				: DatabaseResult<bool>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> PersistAsync(long accountId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> CreateAsync(CancellationToken cancellationToken = default)
 		{
-			if (accountId <= 0)
-			{
-				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid account ID.");
-			}
-
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var party = new PartyEntity
@@ -78,8 +71,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		/// <remarks>
-			/// <para><b>Atomicity:</b></para>
-			/// This operation uses a single DELETE statement.
+		/// <para><b>Atomicity:</b></para>
+		/// This operation uses a single DELETE statement.
 		/// CASCADE delete constraints automatically remove related data:
 		/// <list type="bullet">
 		/// <item>All character party memberships (character_party table)</item>
@@ -97,13 +90,16 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				// Rely on ON DELETE CASCADE constraints to remove related rows.
 				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { partyId }, cancellationToken)
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { partyId }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected <= 0)
+				{
+					throw new DatabaseEntityNotFoundException("Party", partyId.ToString());
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -127,9 +123,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return MapEntityToDto(party);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult<PartyData>.Success(result.Data)
-				: DatabaseResult<PartyData>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <summary>

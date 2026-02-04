@@ -67,10 +67,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var nameLowercase = name.ToLowerInvariant();
 				return await guildExistsByNameQuery(context, nameLowercase, cancellationToken).ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<bool>.Success(result.Data)
-				: DatabaseResult<bool>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -89,10 +86,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return guild ?? string.Empty;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<string>.Success(result.Data)
-				: DatabaseResult<string>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -127,16 +121,13 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return (long?)idRow.Value;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<long?>.Success(result.Data)
-				: DatabaseResult<long?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
 		/// <remarks>
-			/// <para><b>Atomicity:</b></para>
-			/// This operation uses a single DELETE statement.
+		/// <para><b>Atomicity:</b></para>
+		/// This operation uses a single DELETE statement.
 		/// CASCADE delete constraints automatically remove related data:
 		/// <list type="bullet">
 		/// <item>All character guild memberships (character_guild table)</item>
@@ -154,13 +145,15 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				// Rely on ON DELETE CASCADE constraints to remove related rows.
 				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { guildId }, cancellationToken)
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { guildId }, cancellationToken)
 					.ConfigureAwait(false);
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				if (rowsAffected <= 0)
+				{
+					throw new DatabaseEntityNotFoundException("Guild", guildId.ToString());
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -178,10 +171,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<GuildData?>.Success(result.Data)
-				: DatabaseResult<GuildData?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -195,10 +185,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var guild = await getGuildByIdQuery(context, guildId, cancellationToken).ConfigureAwait(false);
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<GuildData?>.Success(result.Data)
-				: DatabaseResult<GuildData?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <summary>

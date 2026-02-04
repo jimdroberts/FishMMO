@@ -98,10 +98,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				await dbContext.Chat.AddAsync(entity, cancellationToken).ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -139,10 +136,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return messages.Select(MapEntityToDto).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<List<ChatData>>.Success(result.Data)
-				: DatabaseResult<List<ChatData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <summary>

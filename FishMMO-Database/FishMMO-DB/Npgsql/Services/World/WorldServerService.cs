@@ -111,8 +111,12 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { serverId }, cancellationToken)
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { serverId }, cancellationToken)
 					.ConfigureAwait(false);
+				if (rowsAffected <= 0)
+				{
+					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

@@ -105,9 +105,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -121,13 +119,15 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { serverId }, cancellationToken)
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { serverId }, cancellationToken)
 					.ConfigureAwait(false);
+				if (rowsAffected <= 0)
+				{
+					throw new DatabaseEntityNotFoundException("SceneServer", serverId.ToString());
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -151,9 +151,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return MapEntityToDto(server);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult<SceneServerData>.Success(result.Data)
-				: DatabaseResult<SceneServerData>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <summary>

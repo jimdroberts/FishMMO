@@ -7,6 +7,7 @@ using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Monitoring.Health;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
+using FishMMO.Database.Exceptions;
 
 namespace FishMMO.Database
 {
@@ -41,7 +42,7 @@ namespace FishMMO.Database
 		/// <param name="healthCheckWarningMs">Health check warning threshold in milliseconds (default: 100).</param>
 		/// <param name="healthCheckCriticalMs">Health check critical threshold in milliseconds (default: 500).</param>
 		/// <exception cref="ArgumentNullException">Thrown when configPath is null or empty.</exception>
-		/// <exception cref="InvalidOperationException">Thrown when initialization fails.</exception>
+		/// <exception cref="DatabaseException">Thrown when initialization fails due to configuration or registration issues.</exception>
 		public Database(
 			string configPath,
 			bool enableLogging = false,
@@ -74,9 +75,11 @@ namespace FishMMO.Database
 			}
 			catch (Exception ex)
 			{
-				throw new InvalidOperationException(
-					$"Failed to initialize database orchestrator: {ex.Message}",
-					ex);
+				throw new DatabaseException(
+					"Failed to initialize database orchestrator.",
+					ex,
+					"INVALID_CONFIGURATION",
+					isTransient: false);
 			}
 		}
 
@@ -88,7 +91,7 @@ namespace FishMMO.Database
 		/// <param name="commandTimeout">Database command timeout in seconds (default: 10).</param>
 		/// <param name="healthCheckWarningMs">Health check warning threshold in milliseconds (default: 100).</param>
 		/// <param name="healthCheckCriticalMs">Health check critical threshold in milliseconds (default: 500).</param>
-		/// <exception cref="InvalidOperationException">Thrown when initialization fails.</exception>
+		/// <exception cref="DatabaseException">Thrown when initialization fails due to configuration or registration issues.</exception>
 		public Database(
 			bool enableLogging = false,
 			int commandTimeout = 10,
@@ -114,9 +117,11 @@ namespace FishMMO.Database
 			}
 			catch (Exception ex)
 			{
-				throw new InvalidOperationException(
-					$"Failed to initialize database orchestrator: {ex.Message}",
-					ex);
+				throw new DatabaseException(
+					"Failed to initialize database orchestrator.",
+					ex,
+					"INVALID_CONFIGURATION",
+					isTransient: false);
 			}
 		}
 
@@ -161,8 +166,10 @@ namespace FishMMO.Database
 				BindingFlags.Instance | BindingFlags.NonPublic);
 			if (registerOpenMethod == null)
 			{
-				throw new InvalidOperationException(
-					"Failed to locate NpgsqlServiceRegistry.Register<TService>(TService) method for dynamic registration.");
+				throw new DatabaseException(
+					"Failed to locate service registry registration method for dynamic registration.",
+					"INVALID_CONFIGURATION",
+					isTransient: false);
 			}
 
 			var interfaceToImplementation = serviceInterfaces
@@ -174,16 +181,20 @@ namespace FishMMO.Database
 
 					if (implementations.Length == 0)
 					{
-						throw new InvalidOperationException(
-							$"No implementation found for service interface '{serviceInterface.FullName}'.");
+						throw new DatabaseException(
+							$"No implementation found for service interface '{serviceInterface.FullName}'.",
+							"INVALID_CONFIGURATION",
+							isTransient: false);
 					}
 
 					if (implementations.Length > 1)
 					{
 						var implList = string.Join(", ", implementations.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
-						throw new InvalidOperationException(
+						throw new DatabaseException(
 							$"Multiple implementations found for service interface '{serviceInterface.FullName}': {implList}." +
-							" Please keep exactly one implementation per service interface.");
+							" Please keep exactly one implementation per service interface.",
+							"INVALID_CONFIGURATION",
+							isTransient: false);
 					}
 
 					return new { ServiceInterface = serviceInterface, Implementation = implementations[0] };
@@ -208,17 +219,21 @@ namespace FishMMO.Database
 				{
 					var inner = tie.InnerException ?? tie;
 					var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
-					throw new InvalidOperationException(
-						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}. {inner.Message}",
-						inner);
+					throw new DatabaseException(
+						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}.",
+						inner,
+						"INVALID_CONFIGURATION",
+						isTransient: false);
 				}
 				catch (Exception ex)
 				{
 					var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
-					throw new InvalidOperationException(
+					throw new DatabaseException(
 						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}. " +
 						$"Ensure it has a public constructor accepting '{nameof(INpgsqlDbContextFactory)}'.",
-						ex);
+						ex,
+						"INVALID_CONFIGURATION",
+						isTransient: false);
 				}
 
 				foreach (var serviceInterface in group.OrderBy(t => t.FullName, StringComparer.Ordinal))

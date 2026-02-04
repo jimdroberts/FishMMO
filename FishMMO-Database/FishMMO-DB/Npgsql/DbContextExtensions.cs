@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using FishMMO.Database.Exceptions;
 
 namespace FishMMO.Database.Npgsql
 {
@@ -31,7 +32,7 @@ namespace FishMMO.Database.Npgsql
 		/// <param name="context">The database context.</param>
 		/// <returns>The fully qualified table name in the format "schema.table_name".</returns>
 		/// <exception cref="System.ArgumentNullException">Thrown when context is null.</exception>
-		/// <exception cref="System.InvalidOperationException">Thrown when entity type is not found in the model.</exception>
+		/// <exception cref="DatabaseException">Thrown when the entity metadata resolves to an unsafe or missing identifier.</exception>
 		/// <remarks>
 		/// <para><b>Identifier Safety:</b> The schema and table name are resolved from EF Core metadata (not user input).
 		/// However, SQL identifiers cannot be passed as parameters. When using interpolated SQL APIs (e.g., ExecuteSqlInterpolatedAsync
@@ -52,15 +53,20 @@ namespace FishMMO.Database.Npgsql
 				var entityType = context.Model.FindEntityType(typeof(TEntity));
 				if (entityType == null)
 				{
-					throw new InvalidOperationException($"Entity type {typeof(TEntity).Name} not found in model.");
+					throw new DatabaseException(
+						$"Entity type {typeof(TEntity).Name} not found in model.",
+						"INVALID_CONFIGURATION",
+						isTransient: false);
 				}
 
 				var tableName = entityType.GetTableName();
 				if (string.IsNullOrWhiteSpace(tableName))
 				{
-					throw new InvalidOperationException(
+					throw new DatabaseException(
 						$"Entity type {typeof(TEntity).Name} does not have a table name. " +
-						"This entity may be an owned type, keyless entity, or view.");
+						"This entity may be an owned type, keyless entity, or view.",
+						"INVALID_CONFIGURATION",
+						isTransient: false);
 				}
 
 				var schema = entityType.GetSchema();
@@ -69,9 +75,11 @@ namespace FishMMO.Database.Npgsql
 				// If schema is null, it will be resolved from context.Schema on each call.
 				if (!IsValidUnquotedIdentifier(tableName) || (schema != null && !IsValidUnquotedIdentifier(schema)))
 				{
-					throw new InvalidOperationException(
+					throw new DatabaseException(
 						$"Entity type {typeof(TEntity).Name} resolves to an identifier that cannot be safely represented as an unquoted PostgreSQL identifier. " +
-						$"Schema='{schema}', Table='{tableName}'. Ensure schema/table names contain only lowercase letters, digits, and underscores and start with a letter or underscore.");
+						$"Schema='{schema}', Table='{tableName}'. Ensure schema/table names contain only lowercase letters, digits, and underscores and start with a letter or underscore.",
+						"INVALID_CONFIGURATION",
+						isTransient: false);
 				}
 
 				return new TableInfo(tableName, schema);
@@ -80,9 +88,11 @@ namespace FishMMO.Database.Npgsql
 			var resolvedSchema = tableInfo.Schema ?? context.Schema;
 			if (!IsValidUnquotedIdentifier(resolvedSchema))
 			{
-				throw new InvalidOperationException(
+				throw new DatabaseException(
 					$"Entity type {typeof(TEntity).Name} resolves to an identifier that cannot be safely represented as an unquoted PostgreSQL identifier. " +
-					$"Schema='{resolvedSchema}', Table='{tableInfo.TableName}'. Ensure schema/table names contain only lowercase letters, digits, and underscores and start with a letter or underscore.");
+					$"Schema='{resolvedSchema}', Table='{tableInfo.TableName}'. Ensure schema/table names contain only lowercase letters, digits, and underscores and start with a letter or underscore.",
+					"INVALID_CONFIGURATION",
+					isTransient: false);
 			}
 
 			return $"{resolvedSchema}.{tableInfo.TableName}";

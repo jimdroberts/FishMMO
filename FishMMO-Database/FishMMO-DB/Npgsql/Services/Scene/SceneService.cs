@@ -181,10 +181,7 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Scene", sceneId.ToString());
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -278,10 +275,7 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Scene", $"handle {sceneHandle}");
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -300,10 +294,7 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { sceneServerId },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<int>.Success(result.Data)
-				: DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -322,10 +313,7 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { worldServerId },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<int>.Success(result.Data)
-				: DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -344,10 +332,7 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { sceneServerId, sceneHandle },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -373,10 +358,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return MapEntityToDto(scene);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<SceneData>.Success(result.Data)
-				: DatabaseResult<SceneData>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -398,10 +380,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return MapEntityToDto(scene);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<SceneData>.Success(result.Data)
-				: DatabaseResult<SceneData>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -420,13 +399,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var readyStatus = (int)SceneStatus.Ready;
 				var scenes = await fetchAvailableQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, cancellationToken).ConfigureAwait(false);
-
-				return scenes.Select(MapEntityToDto).ToList();
+				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
+				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<IReadOnlyList<SceneData>>.Success(result.Data)
-				: DatabaseResult<IReadOnlyList<SceneData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -441,13 +417,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var readyStatus = (int)SceneStatus.Ready;
 				var scenes = await fetchReadyQuery(dbContext, worldServerId, readyStatus, cancellationToken).ConfigureAwait(false);
-
-				return scenes.Select(MapEntityToDto).ToList();
+				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
+				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<IReadOnlyList<SceneData>>.Success(result.Data)
-				: DatabaseResult<IReadOnlyList<SceneData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <summary>

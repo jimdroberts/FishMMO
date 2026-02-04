@@ -85,10 +85,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteReadAsync(async dbContext =>
 				await countByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false),
 				cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<int>.Success(result.Data)
-				: DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -488,9 +485,7 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 
-			return transactionResult.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
+			return transactionResult;
 		}
 
 		/// <inheritdoc/>
@@ -506,10 +501,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var entity = await fetchByIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				return entity == null ? null : MapEntityToData(entity);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<CharacterData?>.Success(result.Data)
-				: DatabaseResult<CharacterData?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -525,10 +517,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var entities = await fetchManyByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false);
 				return (IReadOnlyList<CharacterData>)entities.Select(MapEntityToData).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<IReadOnlyList<CharacterData>>.Success(result.Data)
-				: DatabaseResult<IReadOnlyList<CharacterData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -545,10 +534,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var entity = await fetchByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false);
 				return entity == null ? null : MapEntityToData(entity);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult<CharacterData?>.Success(result.Data)
-				: DatabaseResult<CharacterData?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -588,10 +574,7 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -641,7 +624,10 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
 
-				throw new InvalidOperationException("Character is already owned or transitioning.");
+				throw new DatabaseException(
+					"Character is already owned or transitioning.",
+					"INVALID_OPERATION",
+					isTransient: false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -691,12 +677,12 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
 
-				throw new InvalidOperationException("Character is not owned by this server or is not online.");
+				throw new DatabaseException(
+					"Character is not owned by this server or is not online.",
+					"INVALID_OPERATION",
+					isTransient: false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -748,12 +734,12 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
 
-				throw new InvalidOperationException("Character is not transitioning under this server.");
+				throw new DatabaseException(
+					"Character is not transitioning under this server.",
+					"INVALID_OPERATION",
+					isTransient: false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -800,12 +786,12 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
 
-				throw new InvalidOperationException("Character is not owned by this server.");
+				throw new DatabaseException(
+					"Character is not owned by this server.",
+					"INVALID_OPERATION",
+					isTransient: false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -848,9 +834,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -883,9 +867,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <summary>

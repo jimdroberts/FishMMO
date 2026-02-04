@@ -26,21 +26,6 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefault(s => s.ID == serverId));
 
-		/// <summary>
-		/// Compiled query for retrieving a login server by ID with tracking.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<LoginServerEntity?>> getByIdTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long serverId, CancellationToken ct) =>
-				context.LoginServers
-					.FirstOrDefault(s => s.ID == serverId));
-
-		/// <summary>
-		/// Compiled query for retrieving a login server by unique name with tracking.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<LoginServerEntity?>> getByNameTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, string name, CancellationToken ct) =>
-				context.LoginServers
-					.FirstOrDefault(s => s.Name == name));
 #pragma warning restore CS8619
 
 		/// <summary>
@@ -135,11 +120,16 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				await dbContext.Database.ExecuteSqlRawAsync(
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					$"DELETE FROM {TableName} WHERE id = {{0}}",
 					new object[] { serverId },
 					cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected <= 0)
+				{
+					throw new DatabaseEntityNotFoundException("LoginServer", serverId.ToString());
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

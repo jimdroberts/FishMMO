@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using FishMMO.Database;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
@@ -17,11 +18,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <summary>
 		/// Persists any tracked EF Core changes and commits the underlying transaction.
 		/// </summary>
-		Task CommitAsync(CancellationToken cancellationToken = default);
+		Task<DatabaseResult> CommitAsync(CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Rolls back the underlying transaction.
 		/// </summary>
-		Task RollbackAsync(CancellationToken cancellationToken = default);
+		Task<DatabaseResult> RollbackAsync(CancellationToken cancellationToken = default);
 	}
 }
