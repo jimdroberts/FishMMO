@@ -83,7 +83,7 @@ What happens (high level):
 flowchart TD
   A[Caller] --> B[BeginAsync]
   B --> B1[Create DbContext]
-  B1 --> B2[Enter DatabaseExecutionScope (ambient DbContext)]
+  B1 --> B2[Enter DatabaseExecutionScope]
   B2 --> B3[BeginTransaction on ambient DbContext]
   B3 --> C[Caller invokes multiple Service methods]
 
