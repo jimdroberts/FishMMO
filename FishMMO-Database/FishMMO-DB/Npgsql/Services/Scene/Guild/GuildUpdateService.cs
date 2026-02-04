@@ -10,7 +10,26 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
-	/// <inheritdoc/>
+	/// <summary>
+	/// Service for managing guild update notifications in the database.
+	/// Tracks when guilds have been modified so clients can poll for changes.
+	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Returns DatabaseResult for consistent, safe error handling.
+	/// </summary>
+	/// <remarks>
+	/// This service manages guild update tracking including:
+	/// - Recording guild updates with atomic UPSERT operations
+	/// - Fetching guilds modified since a given timestamp
+	/// - Cleaning up update records for deleted guilds
+	/// 
+	/// Database operations are executed via the BaseService execution wrappers for:
+	/// - Automatic transient failure retry
+	/// - Centralized exception handling and mapping
+	/// - Consistent DatabaseResult pattern
+	/// 
+	/// The update tracking pattern allows clients to efficiently poll for changes
+	/// without needing to re-fetch all guild data on each request.
+	/// </remarks>
 	public sealed class GuildUpdateService : BaseService<GuildUpdateEntity>, IGuildUpdateService
 	{
 		/// <summary>

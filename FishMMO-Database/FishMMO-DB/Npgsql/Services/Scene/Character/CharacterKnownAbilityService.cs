@@ -218,12 +218,7 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			if (saveResult.IsSuccess)
-			{
-				return DatabaseResult.Success();
-			}
-
-			return DatabaseResult.Failure(saveResult.ErrorCode, saveResult.ErrorMessage, saveResult.IsTransient);
+			return saveResult;
 		}
 
 		/// <inheritdoc/>

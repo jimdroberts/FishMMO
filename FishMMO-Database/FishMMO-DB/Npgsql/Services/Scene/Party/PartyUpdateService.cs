@@ -10,7 +10,26 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
-	/// <inheritdoc/>
+	/// <summary>
+	/// Service for managing party update notifications in the database.
+	/// Tracks when parties have been modified so clients can poll for changes.
+	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Returns DatabaseResult for consistent, safe error handling.
+	/// </summary>
+	/// <remarks>
+	/// This service manages party update tracking including:
+	/// - Recording party updates with atomic UPSERT operations
+	/// - Fetching parties modified since a given timestamp
+	/// - Cleaning up update records for deleted parties
+	/// 
+	/// Database operations are executed via the BaseService execution wrappers for:
+	/// - Automatic transient failure retry
+	/// - Centralized exception handling and mapping
+	/// - Consistent DatabaseResult pattern
+	/// 
+	/// The update tracking pattern allows clients to efficiently poll for changes
+	/// without needing to re-fetch all party data on each request.
+	/// </remarks>
 	public sealed class PartyUpdateService : BaseService<PartyUpdateEntity>, IPartyUpdateService
 	{
 		/// <summary>

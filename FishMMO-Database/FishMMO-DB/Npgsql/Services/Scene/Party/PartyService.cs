@@ -10,7 +10,26 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
-	/// <inheritdoc/>
+	/// <summary>
+	/// Service for managing party entities in the database.
+	/// Provides async operations for party creation, deletion, and retrieval.
+	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Returns DatabaseResult for consistent, safe error handling.
+	/// </summary>
+	/// <remarks>
+	/// This service manages party lifecycle including:
+	/// - Party creation with generated IDs
+	/// - Party deletion with CASCADE cleanup of memberships and update records
+	/// - Party existence checks and retrieval
+	/// 
+	/// Database operations are executed via the BaseService execution wrappers for:
+	/// - Automatic transient failure retry
+	/// - Centralized exception handling and mapping
+	/// - Consistent DatabaseResult pattern
+	/// 
+	/// Party membership is managed separately by <see cref="CharacterPartyService"/>.
+	/// Party updates are tracked by <see cref="PartyUpdateService"/>.
+	/// </remarks>
 	public sealed class PartyService : BaseService<PartyEntity>, IPartyService
 	{
 		/// <summary>
@@ -103,11 +122,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<PartyData>> FetchAsync(long partyId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<PartyData?>> FetchAsync(long partyId, CancellationToken cancellationToken = default)
 		{
 			if (partyId <= 0)
 			{
-				return DatabaseResult<PartyData>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
+				return DatabaseResult<PartyData?>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
@@ -116,11 +135,8 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefaultAsync(p => p.ID == partyId, cancellationToken)
 					.ConfigureAwait(false);
-				if (party == null)
-				{
-					throw new DatabaseEntityNotFoundException("Party", partyId.ToString());
-				}
-				return MapEntityToDto(party);
+
+				return party != null ? MapEntityToDto(party) : (PartyData?)null;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;

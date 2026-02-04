@@ -89,36 +89,41 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				var now = DateTime.UtcNow;
-				await ExecuteBulkUpsertAsync(
-					dbContext,
-					GetUpsertSql(),
-					expectedRowsAffected: 1,
-					new object[]
-					{
-						new[] { equipment.CharacterID },
-						new[] { equipment.Slot },
-						new[] { equipment.Version },
-						new[] { equipment.TemplateID },
-						new[] { equipment.Seed },
-						new[] { equipment.Amount },
-						now,
-					},
-					"Equipment item was rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+				var sql = $@"INSERT INTO {TableName}
+					(character_id, slot, version, template_id, seed, amount, time_created, deleted, time_deleted)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, FALSE, NULL)
+					ON CONFLICT (character_id, slot)
+					DO UPDATE SET
+						template_id = EXCLUDED.template_id,
+						seed = EXCLUDED.seed,
+						amount = EXCLUDED.amount,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = EXCLUDED.version
+					WHERE
+						EXCLUDED.version > {TableName}.version
+					RETURNING id, version, character_id, template_id, slot, seed, amount, time_created, deleted, time_deleted";
 
-				var id = await dbContext.CharacterEquippedItems
+				var upserted = await dbContext.CharacterEquippedItems
+					.FromSqlRaw(
+						sql,
+						equipment.CharacterID,
+						equipment.Slot,
+						equipment.Version,
+						equipment.TemplateID,
+						equipment.Seed,
+						equipment.Amount,
+						now)
 					.AsNoTracking()
-					.Where(e => e.CharacterID == equipment.CharacterID && e.Slot == equipment.Slot && !e.Deleted)
-					.Select(e => e.ID)
 					.FirstOrDefaultAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				if (id <= 0)
+				if (upserted == null)
 				{
-					throw new DatabaseEntityNotFoundException("CharacterEquipment", $"(CharacterID: {equipment.CharacterID}, Slot: {equipment.Slot})");
+					throw new StaleStateException("Equipment item was rejected due to a stale Version.");
 				}
 
-				return id;
+				return upserted.ID;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}

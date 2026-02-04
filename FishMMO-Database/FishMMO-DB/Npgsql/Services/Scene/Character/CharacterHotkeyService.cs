@@ -86,7 +86,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<long>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID",
+					"Invalid character ID.",
 					isTransient: false);
 			}
 
@@ -107,35 +107,39 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				var now = DateTime.UtcNow;
-				await ExecuteBulkUpsertAsync(
-					dbContext,
-					GetUpsertSql(),
-					expectedRowsAffected: 1,
-					new object[]
-					{
-						new[] { hotkey.CharacterID },
-						new[] { hotkey.Slot },
-						new[] { hotkey.Version },
-						new[] { (short)hotkey.Type },
-						new[] { hotkey.ReferenceID },
-						now,
-					},
-					"Hotkey was rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+				var sql = $@"INSERT INTO {TableName}
+					(character_id, slot, version, type, reference_id, time_created, deleted, time_deleted)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, FALSE, NULL)
+					ON CONFLICT (character_id, slot)
+					DO UPDATE SET
+						type = EXCLUDED.type,
+						reference_id = EXCLUDED.reference_id,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = EXCLUDED.version
+					WHERE
+						EXCLUDED.version > {TableName}.version
+					RETURNING id, version, character_id, type, slot, reference_id, time_created, deleted, time_deleted";
 
-				var id = await dbContext.CharacterHotkeys
+				var upserted = await dbContext.CharacterHotkeys
+					.FromSqlRaw(
+						sql,
+						hotkey.CharacterID,
+						hotkey.Slot,
+						hotkey.Version,
+						(short)hotkey.Type,
+						hotkey.ReferenceID,
+						now)
 					.AsNoTracking()
-					.Where(h => h.CharacterID == hotkey.CharacterID && h.Slot == hotkey.Slot && !h.Deleted)
-					.Select(h => h.ID)
 					.FirstOrDefaultAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				if (id <= 0)
+				if (upserted == null)
 				{
-					throw new DatabaseEntityNotFoundException("CharacterHotkey", $"(CharacterID: {hotkey.CharacterID}, Slot: {hotkey.Slot})");
+					throw new StaleStateException("Hotkey was rejected due to a stale Version.");
 				}
 
-				return id;
+				return upserted.ID;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}

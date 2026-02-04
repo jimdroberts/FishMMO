@@ -60,7 +60,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-			public CharacterFriendService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
+		public CharacterFriendService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
 		}
 
@@ -126,7 +126,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 					if (existing != null)
 					{
-							if (existing.Version == incomingVersion)
+						if (existing.Version == incomingVersion)
 						{
 							throw new DuplicateReplayException("Friend persist rejected because the Version was a duplicate replay.");
 						}

@@ -11,7 +11,30 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
-	/// <inheritdoc/>
+	/// <summary>
+	/// Service for managing character pet data in the database.
+	/// Provides async operations for CRUD operations on character pet data.
+	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Returns DatabaseResult for consistent, safe error handling.
+	/// </summary>
+	/// <remarks>
+	/// This service manages character pet persistence including:
+	/// - Pet save/update with atomic UPSERT operations
+	/// - Pet spawn state management
+	/// - Pet deletion (soft delete)
+	/// - Pet retrieval (including spawned pet queries)
+	/// - Pet attribute and buff data management
+	/// 
+	/// Database operations are executed via the BaseService execution wrappers for:
+	/// - Automatic transient failure retry
+	/// - Centralized exception handling and mapping
+	/// - Consistent DatabaseResult pattern
+	/// 
+	/// When a write requires multiple database statements, it should be wrapped in
+	/// <see cref="BaseService{TEntity}.ExecuteTransactionAsync"/>. Single-statement SQL
+	/// operations (including CTE-based UPSERT/DELETE/UPDATE) are executed atomically without
+	/// requiring an explicit transaction wrapper.
+	/// </remarks>
 	public sealed class CharacterPetService : BaseService<CharacterPetEntity>, ICharacterPetService
 	{
 		/// <summary>

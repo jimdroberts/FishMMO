@@ -94,14 +94,16 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid max capacity. Max capacity must be greater than 0.");
+					"Invalid max capacity. Max capacity must be greater than 0.",
+					isTransient: false);
 			}
 
 			if (maxCapacity > MaxAllowedGuildCapacity)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedGuildCapacity}.");
+					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedGuildCapacity}.",
+					isTransient: false);
 			}
 
 			if (guildData.Version <= 0)
@@ -189,11 +191,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> UpdateRankAsync(long characterId, long guildId, byte rank, long incomingVersion, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0 || guildId == 0)
+			if (characterId <= 0 || guildId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID or guild ID. Both must be greater than 0.");
+					"Invalid character ID or guild ID. Both must be greater than 0.",
+					isTransient: false);
 			}
 
 			if (incomingVersion <= 0)
@@ -240,11 +243,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
 			if (incomingVersion <= 0)
@@ -283,11 +287,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<CharacterGuildData?>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult<CharacterGuildData?>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
 			var result = await ExecuteReadAsync<CharacterGuildData?>(async dbContext =>
@@ -312,11 +317,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterGuildData>>> FetchManyAsync(long guildId, CancellationToken cancellationToken = default)
 		{
-			if (guildId == 0)
+			if (guildId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterGuildData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid guild ID. Guild ID must be greater than 0.");
+					"Invalid guild ID. Guild ID must be greater than 0.",
+					isTransient: false);
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
@@ -338,11 +344,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> CountAsync(long guildId, CancellationToken cancellationToken = default)
 		{
-			if (guildId == 0)
+			if (guildId <= 0)
 			{
 				return DatabaseResult<int>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid guild ID. Guild ID must be greater than 0.");
+					"Invalid guild ID. Guild ID must be greater than 0.",
+					isTransient: false);
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>

@@ -28,8 +28,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </remarks>
 	public interface IPartyService :
 		IExistsByKeyAction<long>,
-		IDeleteByKeyAction<long>,
-		IFetchByKeyAction<long, PartyData>
+		IDeleteByKeyAction<long>
 	{
 		/// <summary>
 		/// Creates a new party and returns the generated party ID.
@@ -41,5 +40,16 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Characters join parties through the party membership relationship.
 		/// </remarks>
 		Task<DatabaseResult<long>> CreateAsync(CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches a party by its ID.
+		/// </summary>
+		/// <param name="partyId">The party ID.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing the party data if found,
+		/// or null if the party does not exist.
+		/// </returns>
+		Task<DatabaseResult<PartyData?>> FetchAsync(long partyId, CancellationToken cancellationToken = default);
 	}
 }
