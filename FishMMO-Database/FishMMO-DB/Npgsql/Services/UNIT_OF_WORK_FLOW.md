@@ -102,7 +102,7 @@ flowchart TD
   W2 -->|false| W4[Skip SaveChanges]
   W3 --> W5[Release savepoint]
   W4 --> W5
-  W1 -->|exception| W6[Rollback to savepoint (keeps outer tx usable)]
+  W1 -->|exception| W6[Rollback to savepoint]
 
   F -->|ExecuteTransactionAsync| T{Ambient tx exists?}
   T -->|Yes| S[Create savepoint + run delegate]
