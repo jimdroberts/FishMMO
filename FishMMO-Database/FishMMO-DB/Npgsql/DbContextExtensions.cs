@@ -11,6 +11,14 @@ namespace FishMMO.Database.Npgsql
 	/// </summary>
 	public static class DbContextExtensions
 	{
+		/// <summary>
+		/// Compiled regex for validating unquoted PostgreSQL identifiers.
+		/// Must start with lowercase letter or underscore, followed by lowercase letters, digits, or underscores.
+		/// </summary>
+		private static readonly Regex ValidIdentifierRegex = new Regex(
+			"^[a-z_][a-z0-9_]*$",
+			RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
 		private readonly struct TableInfo
 		{
 			public TableInfo(string tableName, string? schema)
@@ -105,7 +113,7 @@ namespace FishMMO.Database.Npgsql
 				return false;
 			}
 
-			return Regex.IsMatch(identifier, "^[a-z_][a-z0-9_]*$");
+			return ValidIdentifierRegex.IsMatch(identifier);
 		}
 	}
 }

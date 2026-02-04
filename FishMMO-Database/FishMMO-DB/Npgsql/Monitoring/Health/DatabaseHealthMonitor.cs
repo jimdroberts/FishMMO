@@ -323,19 +323,10 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 		/// <returns>The current pool health result.</returns>
 		public PoolHealthResult GetPoolHealth()
 		{
-			if (dbContextFactory is NpgsqlDbContextFactory factory)
-			{
-				return factory.PoolMetrics.GetPoolHealth(
-					factory.MaxPoolSize,
-					poolWarningThreshold,
-					poolCriticalThreshold);
-			}
-
-			return new PoolHealthResult
-			{
-				Status = PoolHealthStatus.Unknown,
-				Message = "Pool health unavailable - factory type not supported"
-			};
+			return dbContextFactory.PoolMetrics.GetPoolHealth(
+				dbContextFactory.MaxPoolSize,
+				poolWarningThreshold,
+				poolCriticalThreshold);
 		}
 
 		/// <summary>
@@ -366,48 +357,47 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 		{
 			try
 			{
-				if (dbContextFactory is NpgsqlDbContextFactory factory)
+				var metrics = dbContextFactory.PoolMetrics;
+				var maxPoolSize = dbContextFactory.MaxPoolSize;
+
+				result.ActiveConnections = metrics.ActiveConnections;
+				result.PeakConnections = metrics.PeakActiveConnections;
+				result.TotalConnectionsCreated = metrics.TotalConnectionsCreated;
+				result.ConnectionErrors = metrics.ConnectionErrors;
+				result.PoolExhaustionCount = metrics.PoolExhaustionCount;
+				result.PoolUtilizationPercent = metrics.GetUtilizationPercentage(maxPoolSize);
+
+				// Assess pool health
+				var poolHealth = metrics.GetPoolHealth(
+					maxPoolSize,
+					poolWarningThreshold,
+					poolCriticalThreshold);
+
+				result.PoolHealthStatus = poolHealth.Status;
+				result.PoolHealthMessage = poolHealth.Message;
+				result.PoolRequiresAction = poolHealth.RequiresAction;
+
+				// Append runtime metrics to PoolInfo
+				if (!string.IsNullOrEmpty(result.PoolInfo))
 				{
-					var metrics = factory.PoolMetrics;
-					result.ActiveConnections = metrics.ActiveConnections;
-					result.PeakConnections = metrics.PeakActiveConnections;
-					result.TotalConnectionsCreated = metrics.TotalConnectionsCreated;
-					result.ConnectionErrors = metrics.ConnectionErrors;
-					result.PoolExhaustionCount = metrics.PoolExhaustionCount;
-					result.PoolUtilizationPercent = metrics.GetUtilizationPercentage(factory.MaxPoolSize);
+					result.PoolInfo += $" | Active: {metrics.ActiveConnections}/{maxPoolSize} " +
+									   $"({result.PoolUtilizationPercent:F1}%), Peak: {metrics.PeakActiveConnections}, " +
+									   $"Errors: {metrics.ConnectionErrors}, Status: {poolHealth.Status}";
+				}
 
-					// Assess pool health
-					var poolHealth = metrics.GetPoolHealth(
-						factory.MaxPoolSize,
-						poolWarningThreshold,
-						poolCriticalThreshold);
-
-					result.PoolHealthStatus = poolHealth.Status;
-					result.PoolHealthMessage = poolHealth.Message;
-					result.PoolRequiresAction = poolHealth.RequiresAction;
-
-					// Append runtime metrics to PoolInfo
-					if (!string.IsNullOrEmpty(result.PoolInfo))
+				// Degrade overall health status if pool health is critical or unhealthy
+				if (result.Status == HealthStatus.Healthy)
+				{
+					if (poolHealth.Status == PoolHealthStatus.Unhealthy ||
+						(poolHealth.Status == PoolHealthStatus.Critical && poolHealth.RequiresAction))
 					{
-						result.PoolInfo += $" | Active: {metrics.ActiveConnections}/{factory.MaxPoolSize} " +
-										   $"({result.PoolUtilizationPercent:F1}%), Peak: {metrics.PeakActiveConnections}, " +
-										   $"Errors: {metrics.ConnectionErrors}, Status: {poolHealth.Status}";
+						result.Status = HealthStatus.Degraded;
+						result.Message += $" | Pool: {poolHealth.Message}";
+						result.HasWarning = true;
 					}
-
-					// Degrade overall health status if pool health is critical or unhealthy
-					if (result.Status == HealthStatus.Healthy)
+					else if (poolHealth.Status == PoolHealthStatus.Warning)
 					{
-						if (poolHealth.Status == PoolHealthStatus.Unhealthy ||
-							(poolHealth.Status == PoolHealthStatus.Critical && poolHealth.RequiresAction))
-						{
-							result.Status = HealthStatus.Degraded;
-							result.Message += $" | Pool: {poolHealth.Message}";
-							result.HasWarning = true;
-						}
-						else if (poolHealth.Status == PoolHealthStatus.Warning)
-						{
-							result.HasWarning = true;
-						}
+						result.HasWarning = true;
 					}
 				}
 			}

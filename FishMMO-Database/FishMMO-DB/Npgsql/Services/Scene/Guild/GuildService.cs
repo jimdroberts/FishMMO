@@ -71,20 +71,18 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<string>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<string?>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId <= 0)
-				return DatabaseResult<string>.Failure("VALIDATION_ERROR", "Invalid guild ID");
+				return DatabaseResult<string?>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
 			var result = await ExecuteReadAsync(async context =>
 			{
-				var guild = await context.Guilds
+				return await context.Guilds
 					.AsNoTracking()
 					.Where(g => g.ID == guildId)
 					.Select(g => g.Name)
 					.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-
-				return guild ?? string.Empty;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}

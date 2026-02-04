@@ -136,7 +136,8 @@ namespace FishMMO.Database.Npgsql
 				var versionBuilder = modelBuilder.Entity(clrType)
 					.Property<long>(nameof(IVersionedEntity.Version))
 					.IsRequired()
-					.ValueGeneratedNever();
+					.ValueGeneratedNever()
+					.IsConcurrencyToken();
 
 				if (!hasExplicitDefault)
 				{

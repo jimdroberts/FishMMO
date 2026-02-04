@@ -42,13 +42,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="guildId">Guild ID.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the guild name (or empty string if not found) on success,
-		/// or a <see cref="DatabaseException"/> on failure.
+		/// A <see cref="DatabaseResult{T}"/> containing the guild name on success,
+		/// or <c>null</c> if the guild was not found.
+		/// Returns a failure result on database errors.
 		/// </returns>
 		/// <remarks>
 		/// This method uses LINQ (FirstOrDefaultAsync with AsNoTracking) and automatically benefits from
 		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
 		/// </remarks>
-		Task<DatabaseResult<string>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<string?>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default);
 	}
 }
