@@ -71,9 +71,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult<DateTime>.Failure(
-					"VALIDATION_ERROR",
-					Authentication.InvalidUsernameError,
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
 			}
 
 			return await ExecuteReadAsync(async dbContext =>
@@ -97,25 +96,22 @@ namespace FishMMO.Database.Npgsql.Services
 			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					Authentication.InvalidUsernameError,
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
 			}
 
 			if (string.IsNullOrWhiteSpace(salt))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Salt is required for account creation.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Salt is required for account creation.");
 			}
 
 			if (string.IsNullOrWhiteSpace(verifier))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Verifier is required for account creation.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Verifier is required for account creation.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -130,7 +126,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 				if (rowsAffected <= 0)
 				{
-					throw new DatabaseException("Account name already exists.", "UNIQUE_VIOLATION", isTransient: false);
+					throw new DatabaseException("Account name already exists.", errorCode: DatabaseErrorCodes.UniqueViolation);
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
@@ -144,9 +140,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult<AccountData>.Failure(
-					"VALIDATION_ERROR",
-					Authentication.InvalidUsernameError,
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
@@ -163,17 +158,15 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				// Return generic error to prevent username enumeration
 				return DatabaseResult<AccountData>.Failure(
-					"ACCOUNT_NOT_FOUND",
-					"Invalid account credentials.",
-					isTransient: false);
+					DatabaseErrorCodes.NotFound,
+					"Invalid account credentials.");
 			}
 
 			if ((AccessLevel)accountEntity.AccessLevel == AccessLevel.Banned)
 			{
 				return DatabaseResult<AccountData>.Failure(
-					"ACCOUNT_BANNED",
-					"This account has been banned.",
-					isTransient: false);
+					DatabaseErrorCodes.Forbidden,
+					"This account has been banned.");
 			}
 
 			// Map Entity to DTO
@@ -189,9 +182,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					Authentication.InvalidUsernameError,
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>

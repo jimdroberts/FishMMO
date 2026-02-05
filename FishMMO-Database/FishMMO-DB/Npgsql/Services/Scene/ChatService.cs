@@ -53,22 +53,22 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "CharacterId must be greater than 0.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "CharacterId must be greater than 0.");
 			}
 
 			if (!Enum.IsDefined(typeof(ChatChannel), channel))
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid chat channel.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid chat channel.");
 			}
 
 			if (worldServerId <= 0 || sceneServerId <= 0 || string.IsNullOrWhiteSpace(message))
 			{
-				return DatabaseResult.Failure("INVALID_PARAMETERS", "World server ID, scene server ID must be greater than zero and message must not be empty.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "World server ID, scene server ID must be greater than zero and message must not be empty.");
 			}
 
 			if (message.Length > MaxMessageLength)
 			{
-				return DatabaseResult.Failure("MESSAGE_TOO_LONG", "Message exceeds maximum length.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Message exceeds maximum length.");
 			}
 
 			var normalizedCharacterName = string.IsNullOrWhiteSpace(characterName) ? string.Empty : characterName;

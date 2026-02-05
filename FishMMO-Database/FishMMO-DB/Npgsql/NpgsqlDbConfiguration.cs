@@ -224,8 +224,7 @@ namespace FishMMO.Database.Npgsql
 				$"Invalid configuration value for '{settingPath}': '{value}'. " +
 				"The value must be a valid unquoted PostgreSQL identifier (snake_case only): " +
 				"lowercase letters, digits, and underscores; starting with a letter or underscore.",
-				"INVALID_CONFIGURATION",
-				isTransient: false);
+				errorCode: "INVALID_CONFIGURATION");
 		}
 
 		/// <summary>

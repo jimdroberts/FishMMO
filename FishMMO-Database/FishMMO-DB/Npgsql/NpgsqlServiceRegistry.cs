@@ -84,16 +84,14 @@ namespace FishMMO.Database.Npgsql
 			{
 				throw new DatabaseException(
 					$"Services must be registered by interface type. Attempted to register '{typeof(TService).FullName}'.",
-					"INVALID_OPERATION",
-					isTransient: false);
+					errorCode: "INVALID_OPERATION");
 			}
 
 			if (!services.TryAdd(typeof(TService), serviceInstance))
 			{
 				throw new DatabaseException(
 					$"Service already registered: {typeof(TService).FullName}",
-					"INVALID_OPERATION",
-					isTransient: false);
+					errorCode: "INVALID_OPERATION");
 			}
 		}
 	}

@@ -81,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
-				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
+				return DatabaseResult<long>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -106,7 +106,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (result.Data.ID <= 0)
 			{
-				return DatabaseResult<long>.Failure("DATABASE_ERROR", "Failed to enqueue scene.", isTransient: true);
+				return DatabaseResult<long>.Failure(DatabaseErrorCodes.DatabaseError, "Failed to enqueue scene.", isTransient: true);
 			}
 
 			return DatabaseResult<long>.Success(result.Data.ID);
@@ -144,7 +144,7 @@ namespace FishMMO.Database.Npgsql.Services
 			// Convert null result to business logic failure (not an exception case)
 			if (result.IsSuccess && result.Data == null)
 			{
-				return DatabaseResult<SceneData>.Failure("NO_PENDING_SCENES", "No pending scenes available.");
+				return DatabaseResult<SceneData>.Failure(DatabaseErrorCodes.NotFound, "No pending scenes available.");
 			}
 
 			// If failed, propagate the failure
@@ -162,7 +162,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (sceneId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid scene ID.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene ID.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -194,7 +194,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (sceneServerId <= 0 || worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid parameters: scene server ID, world server ID, and scene name are required.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: scene server ID, world server ID, and scene name are required.");
 			}
 
 			// Still performs a best-effort "already ready" check to be robust to in-call retries.
@@ -252,7 +252,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
-				? (result.Data.HasValue ? DatabaseResult.Success() : DatabaseResult.Failure("SCENE_NOT_CLAIMABLE", "No matching loading scene could be claimed."))
+				? (result.Data.HasValue ? DatabaseResult.Success() : DatabaseResult.Failure(DatabaseErrorCodes.NotFound, "No matching loading scene could be claimed."))
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
@@ -283,7 +283,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (sceneServerId <= 0)
 			{
-				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid scene server ID.");
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene server ID.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -302,7 +302,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (worldServerId <= 0)
 			{
-				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Invalid world server ID.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -321,18 +321,22 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (sceneServerId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid scene server ID.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene server ID.");
 			}
 
-			var result = await ExecuteWriteAsync(async dbContext =>
+			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE scene_server_id = {{0}} AND scene_handle = {{1}}";
-				await dbContext.Database.ExecuteSqlRawAsync(
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
 					new object[] { sceneServerId, sceneHandle },
 					cancellationToken).ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Scene", $"SceneServerId={sceneServerId}, Handle={sceneHandle}");
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-			return result;
 		}
 
 		/// <inheritdoc/>
@@ -343,7 +347,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult<SceneData>.Failure("VALIDATION_ERROR", "Invalid character ID.");
+				return DatabaseResult<SceneData>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
@@ -366,7 +370,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (sceneId <= 0)
 			{
-				return DatabaseResult<SceneData>.Failure("VALIDATION_ERROR", "Invalid scene ID.");
+				return DatabaseResult<SceneData>.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene ID.");
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
@@ -392,7 +396,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
-				return DatabaseResult<IReadOnlyList<SceneData>>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
+				return DatabaseResult<IReadOnlyList<SceneData>>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
@@ -410,7 +414,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (worldServerId <= 0)
 			{
-				return DatabaseResult<IReadOnlyList<SceneData>>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
+				return DatabaseResult<IReadOnlyList<SceneData>>.Failure(DatabaseErrorCodes.ValidationError, "Invalid world server ID.");
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>

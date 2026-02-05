@@ -79,7 +79,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (!Authentication.IsAllowedUsername(account))
 			{
-				return DatabaseResult<int>.Failure("VALIDATION_ERROR", Authentication.InvalidUsernameError);
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
@@ -266,7 +266,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterData.ID <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
 			}
 
 			// Version is required and authoritative.
@@ -274,9 +274,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterData.Version <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than zero.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than zero.");
 			}
 
 			var saveResult = await ExecuteTransactionAsync<SaveCharacterWriteOutcome>(async dbContext =>
@@ -400,16 +399,14 @@ namespace FishMMO.Database.Npgsql.Services
 					return DatabaseResult.Success();
 				case SaveCharacterWriteOutcome.NotFound:
 					return DatabaseResult.Failure(
-						"DB_NOT_FOUND",
-						"Character not found.",
-						isTransient: false);
+						DatabaseErrorCodes.NotFound,
+						"Character not found.");
 				case SaveCharacterWriteOutcome.AuthorityLost:
 					return DatabaseResult.Failure(
-						"AUTHORITY_LOST",
-						"A newer server process has already saved this character. Refusing to overwrite progress.",
-						isTransient: false);
+						DatabaseErrorCodes.StaleState,
+						"A newer server process has already saved this character. Refusing to overwrite progress.");
 				default:
-					return DatabaseResult.Failure("DATABASE_ERROR", "Unexpected save outcome.");
+					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, "Unexpected save outcome.");
 			}
 		}
 
@@ -426,12 +423,12 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
 			}
 
 			if (incomingVersion <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid incoming version.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid incoming version.");
 			}
 
 			var transactionResult = await ExecuteTransactionAsync(async dbContext =>
@@ -493,7 +490,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Invalid character ID.", isTransient: false);
+				return DatabaseResult<CharacterData?>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
 			}
 
 			var result = await ExecuteReadAsync<CharacterData?>(async dbContext =>
@@ -509,7 +506,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (!Authentication.IsAllowedUsername(account))
 			{
-				return DatabaseResult<IReadOnlyList<CharacterData>>.Failure("VALIDATION_ERROR", Authentication.InvalidUsernameError);
+				return DatabaseResult<IReadOnlyList<CharacterData>>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
@@ -525,7 +522,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (!Authentication.IsAllowedCharacterName(name))
 			{
-				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", Authentication.InvalidCharacterNameError);
+				return DatabaseResult<CharacterData?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidCharacterNameError);
 			}
 
 			var result = await ExecuteReadAsync<CharacterData?>(async dbContext =>
@@ -549,7 +546,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (!Authentication.IsAllowedUsername(account) || characterId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid account or character ID.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid account or character ID.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -582,7 +579,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0 || ownerServerId <= 0)
 			{
-				return DatabaseResult<Guid>.Failure("VALIDATION_ERROR", "Invalid character ID or owner server ID.", isTransient: false);
+				return DatabaseResult<Guid>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID or owner server ID.");
 			}
 
 			return await ExecuteTransactionAsync(async dbContext =>
@@ -626,8 +623,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				throw new DatabaseException(
 					"Character is already owned or transitioning.",
-					"INVALID_OPERATION",
-					isTransient: false);
+					errorCode: DatabaseErrorCodes.InvalidOperation);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -636,7 +632,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0 || ownerServerId <= 0 || ownerToken == Guid.Empty)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID, owner server ID, or owner token.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID, owner server ID, or owner token.");
 			}
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
@@ -679,8 +675,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				throw new DatabaseException(
 					"Character is not owned by this server or is not online.",
-					"INVALID_OPERATION",
-					isTransient: false);
+					errorCode: DatabaseErrorCodes.InvalidOperation);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}
@@ -690,7 +685,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0 || ownerServerId <= 0 || ownerToken == Guid.Empty)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID, owner server ID, or owner token.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID, owner server ID, or owner token.");
 			}
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
@@ -736,8 +731,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				throw new DatabaseException(
 					"Character is not transitioning under this server.",
-					"INVALID_OPERATION",
-					isTransient: false);
+					errorCode: DatabaseErrorCodes.InvalidOperation);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}
@@ -747,7 +741,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0 || ownerServerId <= 0 || ownerToken == Guid.Empty)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID, owner server ID, or owner token.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID, owner server ID, or owner token.");
 			}
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
@@ -788,8 +782,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				throw new DatabaseException(
 					"Character is not owned by this server.",
-					"INVALID_OPERATION",
-					isTransient: false);
+					errorCode: DatabaseErrorCodes.InvalidOperation);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}
@@ -799,7 +792,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -842,7 +835,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID.", isTransient: false);
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>

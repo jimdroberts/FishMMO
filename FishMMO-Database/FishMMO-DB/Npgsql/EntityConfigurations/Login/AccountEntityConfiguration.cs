@@ -31,10 +31,6 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.AccessLevel)
 				.IsRequired();
 
-			builder.Property(e => e.TimeCreated)
-				.IsRequired()
-				.HasDefaultValueSql("CURRENT_TIMESTAMP");
-
 			builder.Property(e => e.LastLogin)
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");

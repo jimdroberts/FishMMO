@@ -39,10 +39,6 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.ServerReceivedTime)
 				.IsRequired();
 
-			builder.Property(e => e.TimeCreated)
-				.IsRequired()
-				.HasDefaultValueSql("CURRENT_TIMESTAMP");
-
 			builder.Property(e => e.Channel)
 				.IsRequired();
 

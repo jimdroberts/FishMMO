@@ -33,8 +33,7 @@ namespace FishMMO.Database.Exceptions
 			: base(
 				safeMessage: safeMessage ?? "The operation conflicts with existing data.",
 				detailedMessage: $"Constraint violation: {constraintType} constraint '{constraintName}' failed.",
-				errorCode: $"DB_CONSTRAINT_{constraintType.ToString().ToUpperInvariant()}",
-				isTransient: false)
+				errorCode: $"DB_CONSTRAINT_{constraintType.ToString().ToUpperInvariant()}")
 		{
 			ConstraintType = constraintType;
 			ConstraintName = constraintName ?? "unknown";

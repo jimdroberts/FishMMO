@@ -86,25 +86,22 @@ namespace FishMMO.Database.Npgsql.Services
 			if (petData.CharacterID <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			if (petData.TemplateID <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Template ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Template ID must be greater than 0.");
 			}
 
 			if (petData.Version <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid version. Version must be greater than 0.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -177,11 +174,11 @@ namespace FishMMO.Database.Npgsql.Services
 				case 1:
 					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString(), "Character not found or deleted.");
 				case 2:
-					return DatabaseResult.Failure("STALE_STATE", "Pet update rejected due to a stale Version.", isTransient: false);
+					return DatabaseResult.Failure(DatabaseErrorCodes.StaleState, "Pet update rejected due to a stale Version.");
 				case 3:
-					return DatabaseResult.Failure("ENTITY_NOT_FOUND", $"CharacterPet with ID {petData.ID} was not found for CharacterID {petData.CharacterID}.", isTransient: false);
+					return DatabaseResult.Failure(DatabaseErrorCodes.NotFound, $"CharacterPet with ID {petData.ID} was not found for CharacterID {petData.CharacterID}.");
 				default:
-					return DatabaseResult.Failure("DATABASE_ERROR", "A database error occurred.", isTransient: true);
+					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, "A database error occurred.", isTransient: true);
 			}
 		}
 
@@ -192,17 +189,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (petList == null || petList.Count == 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Pets collection must not be null or empty.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Pets collection must not be null or empty.");
 			}
 
 			if (petList.Any(p => p.Version <= 0))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"One or more pets had an invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"One or more pets had an invalid Version. Version must be greater than 0.");
 			}
 
 			// Separate pets into updates and inserts based on ID
@@ -375,17 +370,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -415,9 +408,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<CharacterPetData?>.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync<CharacterPetData?>(async dbContext =>
@@ -443,9 +435,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<CharacterPetData?>.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync<CharacterPetData?>(async dbContext =>

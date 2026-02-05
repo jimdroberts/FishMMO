@@ -57,8 +57,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
+		/// <para>
+		/// This is an idempotent cleanup operation. Unlike entity delete methods, this method does NOT throw
+		/// <see cref="DatabaseEntityNotFoundException"/> when no records exist. Instead, it returns 0 rows deleted.
+		/// This design supports safe concurrent cleanup where multiple callers may attempt to delete the same records.
+		/// </para>
+		/// <para>
 		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
-		/// failures are automatically retried. Returns 0 rows deleted if no requests exist (idempotent).
+		/// failures are automatically retried.
+		/// </para>
 		/// </remarks>
 		Task<DatabaseResult<int>> DeleteAsync(string accountName, CancellationToken cancellationToken = default);
 

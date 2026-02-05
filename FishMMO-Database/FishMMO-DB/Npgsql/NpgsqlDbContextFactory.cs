@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Design;
 using Npgsql;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
+using FishMMO.Database.Npgsql.Services;
 
 namespace FishMMO.Database.Npgsql
 {
@@ -17,6 +17,16 @@ namespace FishMMO.Database.Npgsql
 	/// </summary>
 	public class NpgsqlDbContextFactory : INpgsqlDbContextFactory, IDesignTimeDbContextFactory<NpgsqlDbContext>
 	{
+		/// <summary>
+		/// Maximum time in milliseconds to wait for active contexts during disposal.
+		/// </summary>
+		private const int DisposeWaitTimeoutMs = 5000;
+
+		/// <summary>
+		/// Interval in milliseconds between polls when waiting for contexts to complete.
+		/// </summary>
+		private const int ShutdownPollIntervalMs = 50;
+
 		private int disposed;
 		private int shutdown;
 		private int activeContextCount;
@@ -173,11 +183,11 @@ namespace FishMMO.Database.Npgsql
 				return true;
 			}
 
-			// Check inner PostgresException for SqlState 53300 (too_many_connections)
+			// Check inner PostgresException for too_many_connections
 			var innerException = exception.InnerException;
 			while (innerException != null)
 			{
-				if (innerException is PostgresException pgEx && pgEx.SqlState == "53300")
+				if (innerException is PostgresException pgEx && pgEx.SqlState == PostgresSqlState.TooManyConnections)
 				{
 					return true;
 				}
@@ -229,7 +239,6 @@ namespace FishMMO.Database.Npgsql
 			Shutdown();
 
 			var deadline = DateTime.UtcNow + timeout;
-			const int pollIntervalMs = 50;
 
 			while (Volatile.Read(ref activeContextCount) > 0)
 			{
@@ -240,7 +249,7 @@ namespace FishMMO.Database.Npgsql
 					return false;
 				}
 
-				await Task.Delay(pollIntervalMs, cancellationToken).ConfigureAwait(false);
+				await Task.Delay(ShutdownPollIntervalMs, cancellationToken).ConfigureAwait(false);
 			}
 
 			return true;
@@ -267,8 +276,13 @@ namespace FishMMO.Database.Npgsql
 
 		/// <summary>
 		/// Disposes the factory and releases all resources.
-		/// Calls Shutdown() to reject new context creation, then disposes monitoring resources.
+		/// Calls Shutdown() to reject new context creation, waits briefly for active contexts to complete,
+		/// then disposes monitoring resources.
 		/// </summary>
+		/// <remarks>
+		/// This method will wait up to 5 seconds for active contexts to be disposed before proceeding.
+		/// For longer waits, use <see cref="ShutdownGracefullyAsync"/> before calling Dispose.
+		/// </remarks>
 		public void Dispose()
 		{
 			if (Interlocked.Exchange(ref disposed, 1) != 0)
@@ -276,6 +290,15 @@ namespace FishMMO.Database.Npgsql
 
 			GC.SuppressFinalize(this);
 			Shutdown();
+
+			// Wait briefly for active contexts to complete (consistent with ShutdownGracefullyAsync behavior)
+			var deadline = DateTime.UtcNow.AddMilliseconds(DisposeWaitTimeoutMs);
+
+			while (Volatile.Read(ref activeContextCount) > 0 && DateTime.UtcNow < deadline)
+			{
+				Thread.Sleep(ShutdownPollIntervalMs);
+			}
+
 			performanceTracker.Dispose();
 			poolMetrics.Reset();
 		}

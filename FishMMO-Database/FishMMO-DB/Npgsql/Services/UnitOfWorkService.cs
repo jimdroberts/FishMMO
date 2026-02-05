@@ -63,7 +63,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				if (isDisposed)
 				{
-					return DatabaseResult.Failure("OBJECT_DISPOSED", "Unit of work is already disposed.");
+					return DatabaseResult.Failure(DatabaseErrorCodes.ObjectDisposed, "Unit of work is already disposed.");
 				}
 				if (isCompleted)
 				{
@@ -79,11 +79,11 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (OperationCanceledException)
 				{
-					return DatabaseResult.Failure("OPERATION_CANCELED", "Operation was canceled.", isTransient: false);
+					return DatabaseResult.Failure(DatabaseErrorCodes.Canceled, "Operation was canceled.");
 				}
 				catch
 				{
-					return DatabaseResult.Failure("DATABASE_ERROR", "Failed to commit the unit of work.", isTransient: true);
+					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, "Failed to commit the unit of work.", isTransient: true);
 				}
 				finally
 				{
@@ -103,7 +103,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				if (isDisposed)
 				{
-					return DatabaseResult.Failure("OBJECT_DISPOSED", "Unit of work is already disposed.");
+					return DatabaseResult.Failure(DatabaseErrorCodes.ObjectDisposed, "Unit of work is already disposed.");
 				}
 				if (isCompleted)
 				{
@@ -118,11 +118,11 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (OperationCanceledException)
 				{
-					return DatabaseResult.Failure("OPERATION_CANCELED", "Operation was canceled.", isTransient: false);
+					return DatabaseResult.Failure(DatabaseErrorCodes.Canceled, "Operation was canceled.");
 				}
 				catch
 				{
-					return DatabaseResult.Failure("DATABASE_ERROR", "Failed to roll back the unit of work.", isTransient: true);
+					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, "Failed to roll back the unit of work.", isTransient: true);
 				}
 				finally
 				{
@@ -216,7 +216,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (DatabaseExecutionScope.IsActive)
 			{
 				return DatabaseResult<IUnitOfWork>.Failure(
-					"INVALID_OPERATION",
+					DatabaseErrorCodes.InvalidOperation,
 					"A unit of work cannot be started inside an ambient database execution scope.");
 			}
 
@@ -227,7 +227,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 			catch
 			{
-				return DatabaseResult<IUnitOfWork>.Failure("DATABASE_ERROR", "Failed to create database context.", isTransient: true);
+				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, "Failed to create database context.", isTransient: true);
 			}
 
 			var scopeToken = DatabaseExecutionScope.Enter(context, isTransactionScope: true);
@@ -241,13 +241,13 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				scopeToken.Dispose();
 				context.Dispose();
-				return DatabaseResult<IUnitOfWork>.Failure("OPERATION_CANCELED", "Operation was canceled.", isTransient: false);
+				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.Canceled, "Operation was canceled.");
 			}
 			catch
 			{
 				scopeToken.Dispose();
 				context.Dispose();
-				return DatabaseResult<IUnitOfWork>.Failure("DATABASE_ERROR", "Failed to begin transaction.", isTransient: true);
+				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, "Failed to begin transaction.", isTransient: true);
 			}
 
 			return DatabaseResult<IUnitOfWork>.Success(new NpgsqlUnitOfWork(context, transaction, scopeToken));

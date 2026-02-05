@@ -60,7 +60,7 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<bool>> ExistsAsync(string name, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedGuildName(name))
-				return DatabaseResult<bool>.Failure("VALIDATION_ERROR", Authentication.InvalidGuildNameError);
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidGuildNameError);
 
 			var result = await ExecuteReadAsync(async context =>
 			{
@@ -74,7 +74,7 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<string?>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId <= 0)
-				return DatabaseResult<string?>.Failure("VALIDATION_ERROR", "Invalid guild ID");
+				return DatabaseResult<string?>.Failure(DatabaseErrorCodes.ValidationError, "Invalid guild ID.");
 
 			var result = await ExecuteReadAsync(async context =>
 			{
@@ -91,7 +91,7 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<long?>> PersistAsync(string name, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedGuildName(name))
-				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", Authentication.InvalidGuildNameError);
+				return DatabaseResult<long?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidGuildNameError);
 
 			var nameLowercase = name.ToLowerInvariant();
 
@@ -136,7 +136,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (guildId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid guild ID");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid guild ID.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -158,7 +158,7 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<GuildData?>> FetchAsync(string name, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedGuildName(name))
-				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", Authentication.InvalidGuildNameError);
+				return DatabaseResult<GuildData?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidGuildNameError);
 
 			var result = await ExecuteReadAsync(async context =>
 			{
@@ -176,7 +176,7 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<GuildData?>> FetchAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId <= 0)
-				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild ID");
+				return DatabaseResult<GuildData?>.Failure(DatabaseErrorCodes.ValidationError, "Invalid guild ID.");
 
 			var result = await ExecuteReadAsync(async context =>
 			{

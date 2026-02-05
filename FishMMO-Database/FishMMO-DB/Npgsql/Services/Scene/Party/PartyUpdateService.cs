@@ -47,7 +47,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (partyId <= 0)
 			{
-				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Party ID must be greater than zero.");
 			}
 
 			var now = DateTime.UtcNow;
@@ -73,7 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (partyId <= 0)
 			{
-				return DatabaseResult<int>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Party ID must be greater than zero.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>

@@ -58,7 +58,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool IsTimeoutSqlState(string? sqlState) =>
-			string.Equals(sqlState, "57014", StringComparison.Ordinal);
+			string.Equals(sqlState, PostgresSqlState.QueryCanceled, StringComparison.Ordinal);
 
 		/// <summary>
 		/// Determines whether a SQLSTATE represents a connection-level failure.
@@ -68,8 +68,10 @@ namespace FishMMO.Database.Npgsql.Services
 		public static bool IsConnectionSqlState(string? sqlState)
 		{
 			if (string.IsNullOrWhiteSpace(sqlState)) return false;
-			return sqlState.StartsWith("08", StringComparison.Ordinal)
-				|| sqlState == "57P01" || sqlState == "57P02" || sqlState == "57P03";
+			return sqlState.StartsWith(PostgresSqlState.ConnectionClassPrefix, StringComparison.Ordinal)
+				|| sqlState == PostgresSqlState.AdminShutdown
+				|| sqlState == PostgresSqlState.CrashShutdown
+				|| sqlState == PostgresSqlState.CannotConnectNow;
 		}
 
 		/// <summary>
@@ -81,7 +83,10 @@ namespace FishMMO.Database.Npgsql.Services
 		public static bool IsTransientSqlState(string? sqlState)
 		{
 			if (string.IsNullOrWhiteSpace(sqlState)) return false;
-			return sqlState == "40P01" || sqlState == "40001" || sqlState == "55P03" || sqlState == "53300";
+			return sqlState == PostgresSqlState.DeadlockDetected
+				|| sqlState == PostgresSqlState.SerializationFailure
+				|| sqlState == PostgresSqlState.LockNotAvailable
+				|| sqlState == PostgresSqlState.TooManyConnections;
 		}
 	}
 }

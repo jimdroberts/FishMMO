@@ -47,9 +47,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
 			{
 				return DatabaseResult<LoginServerData>.Failure(
-					"VALIDATION_ERROR",
-					"Server name and address must not be empty.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Server name and address must not be empty.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -81,9 +80,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (serverId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Server ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Server ID must be greater than 0.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -113,19 +111,22 @@ namespace FishMMO.Database.Npgsql.Services
 			if (serverId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Server ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Server ID must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				// Idempotent delete: success even if the server doesn't exist.
-				await dbContext.Database.ExecuteSqlRawAsync(
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					$"DELETE FROM {TableName} WHERE id = {{0}}",
 					new object[] { serverId },
 					cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("LoginServer", serverId.ToString());
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -135,9 +136,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (serverId <= 0)
 			{
 				return DatabaseResult<LoginServerData>.Failure(
-					"VALIDATION_ERROR",
-					"Server ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Server ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>

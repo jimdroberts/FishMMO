@@ -67,17 +67,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (item.CharacterID <= 0)
 			{
 				return DatabaseResult<long>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
 			if (item.Version <= 0)
 			{
 				return DatabaseResult<long>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
@@ -135,17 +133,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (itemList == null || itemList.Count == 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"No items to save. Items collection must not be null or empty.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"No items to save. Items collection must not be null or empty.");
 			}
 
 			if (itemList.Any(i => i.Version <= 0))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"One or more bank items had an invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"One or more bank items had an invalid Version. Version must be greater than 0.");
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -248,17 +244,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -292,17 +286,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -336,9 +328,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterBankData>>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>

@@ -22,8 +22,7 @@ namespace FishMMO.Database.Exceptions
 			: base(
 				safeMessage: "The database operation was canceled.",
 				detailedMessage: $"Database operation '{operation}' was canceled by the caller.",
-				errorCode: "DB_CANCELED",
-				isTransient: false)
+				errorCode: "DB_CANCELED")
 		{
 			Operation = operation ?? "unknown";
 

@@ -84,33 +84,29 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyData.CharacterID <= 0 || partyData.PartyID <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character or party ID.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character or party ID.");
 			}
 
 			if (maxCapacity <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid max capacity. Max capacity must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid max capacity. Max capacity must be greater than 0.");
 			}
 
 			if (maxCapacity > MaxAllowedPartyCapacity)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedPartyCapacity}.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedPartyCapacity}.");
 			}
 
 			if (partyData.Version <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid version. Version must be greater than 0.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -194,15 +190,15 @@ namespace FishMMO.Database.Npgsql.Services
 				case 0:
 					return DatabaseResult.Success();
 				case 1:
-					return DatabaseResult.Failure("NOT_FOUND", $"Character with ID {partyData.CharacterID} not found or deleted.", isTransient: false);
+					return DatabaseResult.Failure(DatabaseErrorCodes.NotFound, $"Character with ID {partyData.CharacterID} not found or deleted.");
 				case 2:
-					return DatabaseResult.Failure("NOT_FOUND", $"Party with ID {partyData.PartyID} does not exist.", isTransient: false);
+					return DatabaseResult.Failure(DatabaseErrorCodes.NotFound, $"Party with ID {partyData.PartyID} does not exist.");
 				case 3:
-					return DatabaseResult.Failure("CAPACITY_EXCEEDED", $"Party has reached maximum capacity of {maxCapacity} members.", isTransient: false);
+					return DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, $"Party has reached maximum capacity of {maxCapacity} members.");
 				case 4:
-					return DatabaseResult.Failure("STALE_STATE", "Party membership update rejected due to a stale Version.", isTransient: false);
+					return DatabaseResult.Failure(DatabaseErrorCodes.StaleState, "Party membership update rejected due to a stale Version.");
 				default:
-					return DatabaseResult.Failure("DATABASE_ERROR", "A database error occurred.", isTransient: true);
+					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, "A database error occurred.", isTransient: true);
 			}
 		}
 
@@ -212,17 +208,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -255,17 +249,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0 || partyId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character or party ID.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character or party ID.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -306,9 +298,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<CharacterPartyData?>.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>
@@ -334,9 +325,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterPartyData>>.Failure(
-					"VALIDATION_ERROR",
-					"Party ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Party ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>
@@ -361,9 +351,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyId <= 0)
 			{
 				return DatabaseResult<int>.Failure(
-					"VALIDATION_ERROR",
-					"Party ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Party ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>

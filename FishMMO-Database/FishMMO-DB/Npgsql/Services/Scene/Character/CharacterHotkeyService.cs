@@ -85,17 +85,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (hotkey.CharacterID <= 0)
 			{
 				return DatabaseResult<long>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID.");
 			}
 
 			if (hotkey.Version <= 0)
 			{
 				return DatabaseResult<long>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
@@ -151,17 +149,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (hotkeyList == null || hotkeyList.Count == 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Empty or null hotkeys collection",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Empty or null hotkeys collection");
 			}
 
 			if (hotkeyList.Any(h => h.Version <= 0))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"One or more hotkeys had an invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"One or more hotkeys had an invalid Version. Version must be greater than 0.");
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -260,17 +256,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -304,9 +298,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterHotkeyData>>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>
@@ -331,9 +324,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<int>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>

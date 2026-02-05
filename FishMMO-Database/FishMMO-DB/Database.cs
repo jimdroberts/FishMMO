@@ -78,8 +78,7 @@ namespace FishMMO.Database
 				throw new DatabaseException(
 					"Failed to initialize database orchestrator.",
 					ex,
-					"INVALID_CONFIGURATION",
-					isTransient: false);
+					"INVALID_CONFIGURATION");
 			}
 		}
 
@@ -120,8 +119,7 @@ namespace FishMMO.Database
 				throw new DatabaseException(
 					"Failed to initialize database orchestrator.",
 					ex,
-					"INVALID_CONFIGURATION",
-					isTransient: false);
+					"INVALID_CONFIGURATION");
 			}
 		}
 
@@ -168,8 +166,7 @@ namespace FishMMO.Database
 			{
 				throw new DatabaseException(
 					"Failed to locate service registry registration method for dynamic registration.",
-					"INVALID_CONFIGURATION",
-					isTransient: false);
+					errorCode: "INVALID_CONFIGURATION");
 			}
 
 			var interfaceToImplementation = serviceInterfaces
@@ -183,8 +180,7 @@ namespace FishMMO.Database
 					{
 						throw new DatabaseException(
 							$"No implementation found for service interface '{serviceInterface.FullName}'.",
-							"INVALID_CONFIGURATION",
-							isTransient: false);
+							errorCode: "INVALID_CONFIGURATION");
 					}
 
 					if (implementations.Length > 1)
@@ -193,8 +189,7 @@ namespace FishMMO.Database
 						throw new DatabaseException(
 							$"Multiple implementations found for service interface '{serviceInterface.FullName}': {implList}." +
 							" Please keep exactly one implementation per service interface.",
-							"INVALID_CONFIGURATION",
-							isTransient: false);
+							errorCode: "INVALID_CONFIGURATION");
 					}
 
 					return new { ServiceInterface = serviceInterface, Implementation = implementations[0] };
@@ -221,9 +216,8 @@ namespace FishMMO.Database
 					var serviceInterfacesList = string.Join(", ", group.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
 					throw new DatabaseException(
 						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}.",
-						inner,
-						"INVALID_CONFIGURATION",
-						isTransient: false);
+						innerException: inner,
+						errorCode: "INVALID_CONFIGURATION");
 				}
 				catch (Exception ex)
 				{
@@ -231,9 +225,8 @@ namespace FishMMO.Database
 					throw new DatabaseException(
 						$"Failed to construct '{implementation.FullName}' for: {serviceInterfacesList}. " +
 						$"Ensure it has a public constructor accepting '{nameof(INpgsqlDbContextFactory)}'.",
-						ex,
-						"INVALID_CONFIGURATION",
-						isTransient: false);
+						innerException: ex,
+						errorCode: "INVALID_CONFIGURATION");
 				}
 
 				foreach (var serviceInterface in group.OrderBy(t => t.FullName, StringComparer.Ordinal))

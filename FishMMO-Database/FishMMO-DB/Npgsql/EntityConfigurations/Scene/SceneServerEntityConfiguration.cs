@@ -23,10 +23,6 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasMaxLength(100);
 
-			builder.Property(e => e.TimeCreated)
-				.IsRequired()
-				.HasDefaultValueSql("CURRENT_TIMESTAMP");
-
 			builder.Property(e => e.LastPulse)
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");

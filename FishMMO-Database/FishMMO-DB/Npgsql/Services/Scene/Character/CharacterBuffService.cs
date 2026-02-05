@@ -57,17 +57,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (buffList == null || buffList.Count == 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"No buffs to save. Buffs collection must not be null or empty.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"No buffs to save. Buffs collection must not be null or empty.");
 			}
 
 			if (buffList.Any(b => b.Version <= 0))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"One or more buffs had an invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"One or more buffs had an invalid Version. Version must be greater than 0.");
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -165,17 +163,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -209,9 +205,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterBuffData>>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>

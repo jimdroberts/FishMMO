@@ -54,9 +54,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<int>.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>
@@ -70,17 +69,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (abilityData.CharacterID <= 0)
 			{
 				return DatabaseResult<long>.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			if (abilityData.Version <= 0)
 			{
 				return DatabaseResult<long>.Failure(
-					"VALIDATION_ERROR",
-					"Invalid version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid version. Version must be greater than 0.");
 			}
 
 			var result = await ExecuteTransactionAsync<long>(async dbContext =>
@@ -137,18 +134,16 @@ namespace FishMMO.Database.Npgsql.Services
 			if (abilities == null || !abilities.Any())
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Abilities collection must not be null or empty.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Abilities collection must not be null or empty.");
 			}
 
 			var list = abilities.ToList();
 			if (list.Any(a => a.Version <= 0))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"One or more abilities had an invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"One or more abilities had an invalid Version. Version must be greater than 0.");
 			}
 			var newItems = list.Where(a => a.ID <= 0).ToList();
 			var existingItems = list.Where(a => a.ID > 0).ToList();
@@ -318,17 +313,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -362,17 +355,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0 || abilityId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Character ID and ability ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID and ability ID must be greater than 0.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -406,9 +397,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterAbilityData>>.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>

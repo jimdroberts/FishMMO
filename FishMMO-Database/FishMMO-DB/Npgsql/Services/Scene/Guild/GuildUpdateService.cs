@@ -47,7 +47,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (guildId <= 0)
 			{
-				return DatabaseResult.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Guild ID must be greater than zero.");
 			}
 
 			var now = DateTime.UtcNow;
@@ -73,7 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (guildId <= 0)
 			{
-				return DatabaseResult<int>.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Guild ID must be greater than zero.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>

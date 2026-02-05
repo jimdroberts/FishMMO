@@ -63,8 +63,7 @@ namespace FishMMO.Database.Npgsql
 				{
 					throw new DatabaseException(
 						$"Entity type {typeof(TEntity).Name} not found in model.",
-						"INVALID_CONFIGURATION",
-						isTransient: false);
+						errorCode: "INVALID_CONFIGURATION");
 				}
 
 				var tableName = entityType.GetTableName();
@@ -73,8 +72,7 @@ namespace FishMMO.Database.Npgsql
 					throw new DatabaseException(
 						$"Entity type {typeof(TEntity).Name} does not have a table name. " +
 						"This entity may be an owned type, keyless entity, or view.",
-						"INVALID_CONFIGURATION",
-						isTransient: false);
+						errorCode: "INVALID_CONFIGURATION");
 				}
 
 				var schema = entityType.GetSchema();
@@ -86,8 +84,7 @@ namespace FishMMO.Database.Npgsql
 					throw new DatabaseException(
 						$"Entity type {typeof(TEntity).Name} resolves to an identifier that cannot be safely represented as an unquoted PostgreSQL identifier. " +
 						$"Schema='{schema}', Table='{tableName}'. Ensure schema/table names contain only lowercase letters, digits, and underscores and start with a letter or underscore.",
-						"INVALID_CONFIGURATION",
-						isTransient: false);
+						errorCode: "INVALID_CONFIGURATION");
 				}
 
 				return new TableInfo(tableName, schema);
@@ -99,8 +96,7 @@ namespace FishMMO.Database.Npgsql
 				throw new DatabaseException(
 					$"Entity type {typeof(TEntity).Name} resolves to an identifier that cannot be safely represented as an unquoted PostgreSQL identifier. " +
 					$"Schema='{resolvedSchema}', Table='{tableInfo.TableName}'. Ensure schema/table names contain only lowercase letters, digits, and underscores and start with a letter or underscore.",
-					"INVALID_CONFIGURATION",
-					isTransient: false);
+					errorCode: "INVALID_CONFIGURATION");
 			}
 
 			return $"{resolvedSchema}.{tableInfo.TableName}";

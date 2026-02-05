@@ -44,18 +44,16 @@ namespace FishMMO.Database.Npgsql.Services
 			if (attributes == null || !attributes.Any())
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Attributes collection must not be null or empty.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Attributes collection must not be null or empty.");
 			}
 
 			var attributeList = attributes.ToList();
 			if (attributeList.Any(a => a.Version <= 0))
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"One or more attributes had an invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"One or more attributes had an invalid Version. Version must be greater than 0.");
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -149,17 +147,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			if (incomingVersion <= 0)
 			{
 				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Invalid Version. Version must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -193,9 +189,8 @@ namespace FishMMO.Database.Npgsql.Services
 			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterAttributeData>>.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.",
-					isTransient: false);
+					DatabaseErrorCodes.ValidationError,
+					"Character ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>

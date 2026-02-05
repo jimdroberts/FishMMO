@@ -45,10 +45,6 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(0);
 
-			builder.Property(e => e.TimeCreated)
-				.IsRequired()
-				.HasDefaultValueSql("CURRENT_TIMESTAMP");
-
 			// Performance index for character mail queries (hot path)
 			builder.HasIndex(e => e.CharacterID);
 

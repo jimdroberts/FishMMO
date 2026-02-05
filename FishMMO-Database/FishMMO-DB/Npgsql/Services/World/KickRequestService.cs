@@ -34,7 +34,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (string.IsNullOrWhiteSpace(accountName))
 			{
-				return DatabaseResult.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Account name must not be empty.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -57,7 +57,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (string.IsNullOrWhiteSpace(accountName))
 			{
-				return DatabaseResult<int>.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Account name must not be empty.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>

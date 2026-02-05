@@ -76,8 +76,7 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseException(
 						"A write operation was attempted inside an ambient read-only database scope. " +
 						"Ensure the outermost scope is ExecuteWriteAsync/ExecuteTransactionAsync when writes are required.",
-						"INVALID_OPERATION",
-						isTransient: false);
+						errorCode: DatabaseErrorCodes.InvalidOperation);
 				}
 
 				// Promote mode from Write to Transaction when an inner scope requests it.

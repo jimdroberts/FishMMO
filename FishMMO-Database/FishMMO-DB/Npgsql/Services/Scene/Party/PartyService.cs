@@ -82,7 +82,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (result.Data.ID <= 0)
 			{
-				return DatabaseResult<long>.Failure("DATABASE_ERROR", "Failed to create party.", isTransient: true);
+				return DatabaseResult<long>.Failure(DatabaseErrorCodes.DatabaseError, "Failed to create party.", isTransient: true);
 			}
 
 			return DatabaseResult<long>.Success(result.Data.ID);
@@ -102,7 +102,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (partyId <= 0)
 			{
-				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Party ID must be greater than zero.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -126,7 +126,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (partyId <= 0)
 			{
-				return DatabaseResult<PartyData?>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
+				return DatabaseResult<PartyData?>.Failure(DatabaseErrorCodes.ValidationError, "Party ID must be greater than zero.");
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>

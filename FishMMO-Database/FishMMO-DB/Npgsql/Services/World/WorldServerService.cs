@@ -46,7 +46,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
 			{
-				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
+				return DatabaseResult<(long, WorldServerData)>.Failure(DatabaseErrorCodes.ValidationError, "Server name and address must not be empty.");
 			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
@@ -79,7 +79,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (serverId <= 0)
 			{
-				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Server ID must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -105,7 +105,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (serverId <= 0)
 			{
-				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Server ID must be greater than 0.");
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
@@ -125,7 +125,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (serverId <= 0)
 			{
-				return DatabaseResult<WorldServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
+				return DatabaseResult<WorldServerData>.Failure(DatabaseErrorCodes.ValidationError, "Server ID must be greater than 0.");
 			}
 
 			return await ExecuteReadAsync(async dbContext =>

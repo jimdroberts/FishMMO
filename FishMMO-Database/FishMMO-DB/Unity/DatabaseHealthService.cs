@@ -145,8 +145,7 @@ namespace FishMMO.Server.Database
 			if (isInitialized)
 				throw new FishMMO.Database.Exceptions.DatabaseException(
 					"DatabaseHealthService is already initialized.",
-					"INVALID_OPERATION",
-					isTransient: false);
+					"INVALID_OPERATION");
 
 			this.database = database;
 			isInitialized = true;
