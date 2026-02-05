@@ -3,7 +3,7 @@ namespace FishMMO.Database.Data
 	/// <summary>
 	/// Character quest data transfer object.
 	/// </summary>
-	public struct CharacterQuestData
+	public struct CharacterQuestData : IVersioned<CharacterQuestData>
 	{
 		public readonly long ID;
 		public readonly long Version;
@@ -11,6 +11,8 @@ namespace FishMMO.Database.Data
 		public readonly int TemplateID;
 		public readonly int Progress;
 		public readonly bool Completed;
+
+		long IVersioned<CharacterQuestData>.Version => Version;
 
 		public CharacterQuestData(long id, long characterID, int templateID, int progress, bool completed)
 			: this(id, version: 0, characterID, templateID, progress, completed)
@@ -25,6 +27,11 @@ namespace FishMMO.Database.Data
 			TemplateID = templateID;
 			Progress = progress;
 			Completed = completed;
+		}
+
+		public CharacterQuestData WithVersion(long newVersion)
+		{
+			return new CharacterQuestData(ID, newVersion, CharacterID, TemplateID, Progress, Completed);
 		}
 	}
 }

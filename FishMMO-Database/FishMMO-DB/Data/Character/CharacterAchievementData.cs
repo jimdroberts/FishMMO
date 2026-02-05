@@ -3,7 +3,7 @@ namespace FishMMO.Database.Data
 	/// <summary>
 	/// Character achievement data transfer object.
 	/// </summary>
-	public struct CharacterAchievementData
+	public struct CharacterAchievementData : IVersioned<CharacterAchievementData>
 	{
 		public readonly long ID;
 		public readonly long Version;
@@ -11,6 +11,8 @@ namespace FishMMO.Database.Data
 		public readonly int TemplateID;
 		public readonly byte Tier;
 		public readonly uint Value;
+
+		long IVersioned<CharacterAchievementData>.Version => Version;
 
 		public CharacterAchievementData(long id, long characterID, int templateID, byte tier, uint value)
 			: this(id, version: 0, characterID, templateID, tier, value)
@@ -25,6 +27,11 @@ namespace FishMMO.Database.Data
 			TemplateID = templateID;
 			Tier = tier;
 			Value = value;
+		}
+
+		public CharacterAchievementData WithVersion(long newVersion)
+		{
+			return new CharacterAchievementData(ID, newVersion, CharacterID, TemplateID, Tier, Value);
 		}
 	}
 }

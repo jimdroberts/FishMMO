@@ -4,11 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
-using FishMMO.Database.Exceptions;
 
 namespace FishMMO.Database.Npgsql
 {
@@ -21,19 +19,17 @@ namespace FishMMO.Database.Npgsql
 	{
 		private int disposed;
 		private int shutdown;
-		private readonly string schema;
-		private readonly bool enableLogging;
-		private readonly int commandTimeout;
+		private int activeContextCount;
+		private readonly NpgsqlDbConfiguration configuration;
 		private readonly DbContextOptions<NpgsqlDbContext> cachedOptions;
 		private readonly ConnectionPoolMetrics poolMetrics;
-		private readonly int maxPoolSize;
 		private readonly QueryPerformanceTracker performanceTracker;
 
 		/// <summary>
 		/// Initializes a new instance of NpgsqlDbContextFactory with default configuration path.
 		/// </summary>
 		public NpgsqlDbContextFactory()
-			: this(Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.FullName ?? AppDomain.CurrentDomain.BaseDirectory, false, 10)
+			: this(NpgsqlDbConfiguration.CreateDefault())
 		{
 		}
 
@@ -42,7 +38,7 @@ namespace FishMMO.Database.Npgsql
 		/// </summary>
 		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
 		public NpgsqlDbContextFactory(string configPath)
-			: this(configPath, false, 10)
+			: this(new NpgsqlDbConfiguration(configPath))
 		{
 		}
 
@@ -52,7 +48,7 @@ namespace FishMMO.Database.Npgsql
 		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
 		/// <param name="enableLogging">Enable sensitive data logging for development.</param>
 		public NpgsqlDbContextFactory(string configPath, bool enableLogging)
-			: this(configPath, enableLogging, 10)
+			: this(new NpgsqlDbConfiguration(configPath, enableLogging, null))
 		{
 		}
 
@@ -63,139 +59,55 @@ namespace FishMMO.Database.Npgsql
 		/// <param name="enableLogging">Enable sensitive data logging for development.</param>
 		/// <param name="commandTimeout">Command timeout in seconds (overrides config file value).</param>
 		public NpgsqlDbContextFactory(string configPath, bool enableLogging, int commandTimeout)
+			: this(new NpgsqlDbConfiguration(configPath, enableLogging, commandTimeout))
 		{
-			this.enableLogging = enableLogging;
-			this.commandTimeout = commandTimeout;
+		}
 
-			// Load configuration once in constructor - immutable after initialization
-			string basePath = string.IsNullOrWhiteSpace(configPath) ? AppDomain.CurrentDomain.BaseDirectory : configPath;
+		/// <summary>
+		/// Initializes a new instance of NpgsqlDbContextFactory with a pre-built configuration.
+		/// </summary>
+		/// <param name="configuration">The database configuration.</param>
+		/// <exception cref="ArgumentNullException">Thrown when configuration is null.</exception>
+		public NpgsqlDbContextFactory(NpgsqlDbConfiguration configuration)
+		{
+			this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
 
-			IConfiguration configuration = new ConfigurationBuilder()
-				.SetBasePath(basePath)
-				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-				.Build();
-
-			string database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
-			schema = configuration.GetSection("Npgsql")["Schema"] ?? NpgsqlDbContext.DefaultSchema;
-
-			ValidateUnquotedIdentifierSetting("Npgsql:Database", database);
-			ValidateUnquotedIdentifierSetting("Npgsql:Schema", schema);
-
-			string userId = configuration.GetSection("Npgsql")["Username"] ?? "user";
-			string password = configuration.GetSection("Npgsql")["Password"] ?? "pass";
-			string host = configuration.GetSection("Npgsql")["Host"] ?? "127.0.0.1";
-			string port = configuration.GetSection("Npgsql")["Port"] ?? "5432";
-
-			// Read pooling configuration from settings
-			int minPoolSize = 5;
-			int maxPoolSizeSetting = 100;
-			int configTimeout = 10;
-			int connectionTimeout = 15; // Default connection timeout
-
-			if (int.TryParse(configuration.GetSection("Npgsql")["MinPoolSize"], out int minSize))
-				minPoolSize = minSize;
-			if (int.TryParse(configuration.GetSection("Npgsql")["MaxPoolSize"], out int maxSize))
-				maxPoolSizeSetting = maxSize;
-			if (int.TryParse(configuration.GetSection("Npgsql")["CommandTimeout"], out int cfgTimeout))
-				configTimeout = cfgTimeout;
-			if (int.TryParse(configuration.GetSection("Npgsql")["ConnectionTimeout"], out int connTimeout))
-				connectionTimeout = connTimeout;
-
-			// Use provided timeout or fall back to config
-			if (this.commandTimeout == 10 && configTimeout != 10)
-				this.commandTimeout = configTimeout;
-
-			// Build connection string using NpgsqlConnectionStringBuilder for correctness and clarity.
-			// Timeout = time to establish connection, CommandTimeout = time for query execution.
-			if (!int.TryParse(port, out int portNumber) || portNumber <= 0)
-			{
-				portNumber = 5432;
-			}
-
-			var connectionStringBuilder = new NpgsqlConnectionStringBuilder
-			{
-				Host = host,
-				Port = portNumber,
-				Database = database,
-				Username = userId,
-				Password = password,
-				Pooling = true,
-				MinPoolSize = minPoolSize,
-				MaxPoolSize = maxPoolSizeSetting,
-				Timeout = connectionTimeout,
-				CommandTimeout = this.commandTimeout,
-			};
-
-			var connectionString = connectionStringBuilder.ConnectionString;
-
-			// Initialize pool metrics tracker
-			this.maxPoolSize = maxPoolSizeSetting;
 			poolMetrics = new ConnectionPoolMetrics();
 			var connectionMetricsInterceptor = new ConnectionMetricsInterceptor(poolMetrics);
 
-			// Cache DbContext options once to avoid rebuilding fluent configuration on every call.
 			var optionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>()
-				.UseNpgsql(connectionString, npgsqlOptions =>
+				.UseNpgsql(configuration.ConnectionString, npgsqlOptions =>
 				{
-					npgsqlOptions.CommandTimeout(this.commandTimeout);
+					npgsqlOptions.CommandTimeout(configuration.CommandTimeout);
 				})
 				.UseSnakeCaseNamingConvention()
 				.AddInterceptors(connectionMetricsInterceptor);
 
-			if (this.enableLogging)
+			if (configuration.EnableLogging)
 			{
 				optionsBuilder.EnableSensitiveDataLogging(true);
 			}
 
 			cachedOptions = optionsBuilder.Options;
-
-			// Initialize query performance tracker with configuration from appsettings
-			var perfConfig = new QueryPerformanceConfiguration();
-			if (bool.TryParse(configuration.GetSection("QueryPerformanceTracking")["Enabled"], out bool perfEnabled))
-				perfConfig.Enabled = perfEnabled;
-			if (Enum.TryParse<TrackingLevel>(configuration.GetSection("QueryPerformanceTracking")["Level"], out var level))
-				perfConfig.Level = level;
-			if (double.TryParse(configuration.GetSection("QueryPerformanceTracking")["SlowQueryThresholdMs"], out double threshold))
-				perfConfig.SlowQueryThresholdMs = threshold;
-			if (double.TryParse(configuration.GetSection("QueryPerformanceTracking")["SampleRate"], out double sampleRate))
-				perfConfig.SampleRate = sampleRate;
-
-			performanceTracker = new QueryPerformanceTracker(perfConfig);
+			performanceTracker = new QueryPerformanceTracker(configuration.PerformanceConfiguration);
 		}
 
-		private static void ValidateUnquotedIdentifierSetting(string settingPath, string value)
-		{
-			if (DbContextExtensions.IsValidUnquotedIdentifier(value))
-			{
-				return;
-			}
-
-			throw new DatabaseException(
-				$"Invalid configuration value for '{settingPath}': '{value}'. " +
-				"The value must be a valid unquoted PostgreSQL identifier (snake_case only): " +
-				"lowercase letters, digits, and underscores; starting with a letter or underscore.",
-				"INVALID_CONFIGURATION",
-				isTransient: false);
-		}
-
-		/// <summary>
-		/// Gets the connection pool metrics for monitoring and diagnostics.
-		/// </summary>
+		/// <inheritdoc />
 		public ConnectionPoolMetrics PoolMetrics => poolMetrics;
 
-		/// <summary>
-		/// Gets the configured maximum pool size.
-		/// </summary>
-		public int MaxPoolSize => maxPoolSize;
+		/// <inheritdoc />
+		public int MaxPoolSize => configuration.MaxPoolSize;
 
-		/// <summary>
-		/// Gets the query performance tracker for operation-level monitoring.
-		/// </summary>
+		/// <inheritdoc />
 		public QueryPerformanceTracker PerformanceTracker => performanceTracker;
+
+		/// <inheritdoc />
+		public RetryPolicyConfiguration RetryPolicy => configuration.RetryPolicy;
 
 		/// <summary>
 		/// Creates a new DbContext instance. Thread-safe.
 		/// Each call creates a fresh context with new options - safe for concurrent use.
+		/// The factory tracks active contexts for graceful shutdown support.
 		/// </summary>
 		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public NpgsqlDbContext CreateDbContext()
@@ -205,21 +117,36 @@ namespace FishMMO.Database.Npgsql
 
 			try
 			{
-				return new NpgsqlDbContext(cachedOptions, schema);
+				Interlocked.Increment(ref activeContextCount);
+				var context = new NpgsqlDbContext(cachedOptions, configuration.Schema);
+				context.Disposed += OnContextDisposed;
+				return context;
 			}
 			catch (NpgsqlException npgsqlEx) when (IsPoolExhaustionException(npgsqlEx))
 			{
-				// Track both pool exhaustion and generic connection error
+				Interlocked.Decrement(ref activeContextCount);
 				poolMetrics.RecordPoolExhaustion();
 				poolMetrics.RecordConnectionError();
 				throw;
 			}
 			catch
 			{
-				// Track generic connection error
+				Interlocked.Decrement(ref activeContextCount);
 				poolMetrics.RecordConnectionError();
 				throw;
 			}
+		}
+
+		/// <summary>
+		/// Callback invoked when a context is disposed, decrements the active context count.
+		/// </summary>
+		private void OnContextDisposed(object sender, EventArgs e)
+		{
+			if (sender is NpgsqlDbContext context)
+			{
+				context.Disposed -= OnContextDisposed;
+			}
+			Interlocked.Decrement(ref activeContextCount);
 		}
 
 		/// <summary>
@@ -263,16 +190,18 @@ namespace FishMMO.Database.Npgsql
 		/// <summary>
 		/// Asynchronously creates a new DbContext instance.
 		/// DbContext creation is CPU-bound, not I/O-bound, so this returns a completed task.
+		/// The cancellation token is checked before context creation.
 		/// </summary>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A new NpgsqlDbContext instance.</returns>
+		/// <exception cref="OperationCanceledException">Thrown if cancellation is requested.</exception>
 		public Task<NpgsqlDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
 		{
+			cancellationToken.ThrowIfCancellationRequested();
+
 			if (Volatile.Read(ref shutdown) != 0)
 				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
 
-			// DbContext creation is CPU-bound, not I/O-bound
-			// Return completed task with synchronous result
 			return Task.FromResult(CreateDbContext());
 		}
 
@@ -288,6 +217,39 @@ namespace FishMMO.Database.Npgsql
 			Shutdown();
 			return Task.CompletedTask;
 		}
+
+		/// <summary>
+		/// Initiates shutdown and waits for all active contexts to be disposed.
+		/// </summary>
+		/// <param name="timeout">Maximum time to wait for active contexts to complete.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>True if all contexts completed within the timeout; false if timed out.</returns>
+		public async Task<bool> ShutdownGracefullyAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+		{
+			Shutdown();
+
+			var deadline = DateTime.UtcNow + timeout;
+			const int pollIntervalMs = 50;
+
+			while (Volatile.Read(ref activeContextCount) > 0)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+
+				if (DateTime.UtcNow >= deadline)
+				{
+					return false;
+				}
+
+				await Task.Delay(pollIntervalMs, cancellationToken).ConfigureAwait(false);
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Gets the current number of active (not yet disposed) DbContext instances.
+		/// </summary>
+		public int ActiveContextCount => Volatile.Read(ref activeContextCount);
 
 		/// <summary>
 		/// IDesignTimeDbContextFactory implementation for EF Core migrations.
@@ -312,9 +274,39 @@ namespace FishMMO.Database.Npgsql
 			if (Interlocked.Exchange(ref disposed, 1) != 0)
 				return;
 
+			GC.SuppressFinalize(this);
 			Shutdown();
 			performanceTracker.Dispose();
 			poolMetrics.Reset();
+		}
+
+		/// <summary>
+		/// Tests whether the database is reachable.
+		/// Useful for startup validation or health checks.
+		/// </summary>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>True if a connection can be established; false otherwise.</returns>
+		public async Task<bool> CanConnectAsync(CancellationToken cancellationToken = default)
+		{
+			try
+			{
+				using var context = CreateDbContext();
+				return await context.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false);
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously disposes the factory and releases all resources.
+		/// </summary>
+		/// <returns>A ValueTask representing the asynchronous dispose operation.</returns>
+		public ValueTask DisposeAsync()
+		{
+			Dispose();
+			return default;
 		}
 	}
 }

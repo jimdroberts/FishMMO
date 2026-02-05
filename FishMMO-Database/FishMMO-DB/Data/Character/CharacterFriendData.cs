@@ -3,12 +3,14 @@ namespace FishMMO.Database.Data
 	/// <summary>
 	/// Character friend data transfer object.
 	/// </summary>
-	public struct CharacterFriendData
+	public struct CharacterFriendData : IVersioned<CharacterFriendData>
 	{
 		public readonly long ID;
 		public readonly long Version;
 		public readonly long CharacterID;
 		public readonly long FriendCharacterID;
+
+		long IVersioned<CharacterFriendData>.Version => Version;
 
 		public CharacterFriendData(long id, long characterID, long friendCharacterID)
 			: this(id, version: 0, characterID, friendCharacterID)
@@ -21,6 +23,11 @@ namespace FishMMO.Database.Data
 			Version = version;
 			CharacterID = characterID;
 			FriendCharacterID = friendCharacterID;
+		}
+
+		public CharacterFriendData WithVersion(long newVersion)
+		{
+			return new CharacterFriendData(ID, newVersion, CharacterID, FriendCharacterID);
 		}
 	}
 }

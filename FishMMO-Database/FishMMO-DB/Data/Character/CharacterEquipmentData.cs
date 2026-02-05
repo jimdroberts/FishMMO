@@ -3,7 +3,7 @@ namespace FishMMO.Database.Data
 	/// <summary>
 	/// Character equipment item data transfer object.
 	/// </summary>
-	public struct CharacterEquipmentData
+	public struct CharacterEquipmentData : IVersioned<CharacterEquipmentData>
 	{
 		public readonly long ID;
 		public readonly long Version;
@@ -12,6 +12,8 @@ namespace FishMMO.Database.Data
 		public readonly int Slot;
 		public readonly int Seed;
 		public readonly uint Amount;
+
+		long IVersioned<CharacterEquipmentData>.Version => Version;
 
 		public CharacterEquipmentData(long id, long characterID, int templateID, int slot, int seed, uint amount)
 			: this(id, version: 0, characterID, templateID, slot, seed, amount)
@@ -27,6 +29,11 @@ namespace FishMMO.Database.Data
 			Slot = slot;
 			Seed = seed;
 			Amount = amount;
+		}
+
+		public CharacterEquipmentData WithVersion(long newVersion)
+		{
+			return new CharacterEquipmentData(ID, newVersion, CharacterID, TemplateID, Slot, Seed, Amount);
 		}
 	}
 }

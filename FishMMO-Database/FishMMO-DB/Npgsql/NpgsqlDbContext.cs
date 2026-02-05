@@ -23,6 +23,12 @@ namespace FishMMO.Database.Npgsql
 		private int disposed;
 
 		/// <summary>
+		/// Raised when this context is disposed.
+		/// Used by <see cref="NpgsqlDbContextFactory"/> to track active context count.
+		/// </summary>
+		public event EventHandler? Disposed;
+
+		/// <summary>
 		/// Gets the database schema name for this context.
 		/// </summary>
 		public string Schema { get; }
@@ -78,6 +84,7 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
+				Disposed?.Invoke(this, EventArgs.Empty);
 				base.Dispose();
 			}
 		}
@@ -86,6 +93,7 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
+				Disposed?.Invoke(this, EventArgs.Empty);
 				return base.DisposeAsync();
 			}
 			return default;

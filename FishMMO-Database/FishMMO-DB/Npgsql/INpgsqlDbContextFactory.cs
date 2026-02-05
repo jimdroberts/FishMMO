@@ -7,51 +7,26 @@ using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
 namespace FishMMO.Database.Npgsql
 {
 	/// <summary>
-	/// Factory interface for creating NpgsqlDbContext instances.
+	/// Combined factory interface for creating NpgsqlDbContext instances with full monitoring capabilities.
+	/// Extends both <see cref="IDbContextFactory"/> for core functionality and
+	/// <see cref="IDbContextFactoryMonitoring"/> for monitoring features.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// This interface provides backwards compatibility for consumers that need both
+	/// context creation and monitoring capabilities. New consumers should prefer
+	/// depending on the narrower interfaces:
+	/// </para>
+	/// <list type="bullet">
+	/// <item><description><see cref="IDbContextFactory"/> - For core context creation only</description></item>
+	/// <item><description><see cref="IDbContextFactoryMonitoring"/> - For monitoring access only</description></item>
+	/// </list>
+	/// <para>
 	/// Implementations must be thread-safe and create new contexts per call.
 	/// DbContext instances are short-lived and should not be pooled.
-	/// </summary>
-	public interface INpgsqlDbContextFactory : IDisposable
+	/// </para>
+	/// </remarks>
+	public interface INpgsqlDbContextFactory : IDbContextFactory, IDbContextFactoryMonitoring
 	{
-		/// <summary>
-		/// Gets the connection pool metrics for monitoring and diagnostics.
-		/// </summary>
-		ConnectionPoolMetrics PoolMetrics { get; }
-
-		/// <summary>
-		/// Gets the configured maximum pool size.
-		/// </summary>
-		int MaxPoolSize { get; }
-
-		/// <summary>
-		/// Gets the query performance tracker for operation-level monitoring.
-		/// </summary>
-		QueryPerformanceTracker PerformanceTracker { get; }
-
-		/// <summary>
-		/// Creates a new DbContext instance.
-		/// Each call creates a fresh context - safe for concurrent use.
-		/// </summary>
-		/// <returns>A new NpgsqlDbContext instance.</returns>
-		NpgsqlDbContext CreateDbContext();
-
-		/// <summary>
-		/// Asynchronously creates a new DbContext instance.
-		/// Each call creates a fresh context - safe for concurrent use.
-		/// </summary>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>A new NpgsqlDbContext instance.</returns>
-		Task<NpgsqlDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Shuts down the factory and rejects new DbContext creation.
-		/// Unity-friendly synchronous shutdown (safe to call from main thread).
-		/// </summary>
-		void Shutdown();
-
-		/// <summary>
-		/// Asynchronously shuts down the factory and rejects new DbContext creation.
-		/// </summary>
-		Task ShutdownAsync(CancellationToken cancellationToken = default);
 	}
 }

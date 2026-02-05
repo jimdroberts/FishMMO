@@ -5,7 +5,7 @@ namespace FishMMO.Database.Data
 	/// <summary>
 	/// Character ability data transfer object.
 	/// </summary>
-	public struct CharacterAbilityData
+	public struct CharacterAbilityData : IVersioned<CharacterAbilityData>
 	{
 		public readonly long ID;
 		public readonly long Version;
@@ -13,6 +13,8 @@ namespace FishMMO.Database.Data
 		public readonly int TemplateID;
 		public readonly List<int> AbilityEvents;
 		public readonly float Cooldown;
+
+		long IVersioned<CharacterAbilityData>.Version => Version;
 
 		public CharacterAbilityData(long id, long characterID, int templateID, List<int> abilityEvents, float cooldown)
 			: this(id, version: 0, characterID, templateID, abilityEvents, cooldown)
@@ -27,6 +29,11 @@ namespace FishMMO.Database.Data
 			TemplateID = templateID;
 			AbilityEvents = abilityEvents;
 			Cooldown = cooldown;
+		}
+
+		public CharacterAbilityData WithVersion(long newVersion)
+		{
+			return new CharacterAbilityData(ID, newVersion, CharacterID, TemplateID, AbilityEvents, Cooldown);
 		}
 	}
 }

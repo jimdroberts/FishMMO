@@ -5,7 +5,7 @@ namespace FishMMO.Database.Data
 	/// <summary>
 	/// Character data transfer object.
 	/// </summary>
-	public struct CharacterData
+	public struct CharacterData : IVersioned<CharacterData>
 	{
 		public readonly long ID;
 		public readonly string Name;
@@ -42,6 +42,8 @@ namespace FishMMO.Database.Data
 		public readonly long Version;
 		public readonly DateTime TimeCreated;
 		public readonly DateTime LastSaved;
+
+		long IVersioned<CharacterData>.Version => Version;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterData"/> struct.
@@ -83,6 +85,11 @@ namespace FishMMO.Database.Data
 			Version = version;
 			TimeCreated = timeCreated;
 			LastSaved = lastSaved;
+		}
+
+		public CharacterData WithVersion(long newVersion)
+		{
+			return new CharacterData(ID, Name, NameLowercase, Account, Selected, WorldServerID, SceneName, SceneHandle, BindScene, BindX, BindY, BindZ, InstanceID, InstanceX, InstanceY, InstanceZ, InstanceRotX, InstanceRotY, InstanceRotZ, InstanceRotW, RaceID, ModelIndex, X, Y, Z, RotX, RotY, RotZ, RotW, AccessLevel, Online, Flags, newVersion, TimeCreated, LastSaved);
 		}
 	}
 }

@@ -5,7 +5,7 @@ namespace FishMMO.Database.Data
 	/// <summary>
 	/// Character mail data transfer object.
 	/// </summary>
-	public struct CharacterMailData
+	public struct CharacterMailData : IVersioned<CharacterMailData>
 	{
 		public readonly long ID;
 		public readonly long Version;
@@ -18,6 +18,8 @@ namespace FishMMO.Database.Data
 		public readonly bool Read;
 		public readonly int CurrencyAttachment;
 		public readonly int ItemAttachment;
+
+		long IVersioned<CharacterMailData>.Version => Version;
 
 		public CharacterMailData(long id, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachment)
 			: this(id, version: 0, characterID, senderID, senderName, subject, body, timeSent, read, currencyAttachment, itemAttachment)
@@ -37,6 +39,11 @@ namespace FishMMO.Database.Data
 			Read = read;
 			CurrencyAttachment = currencyAttachment;
 			ItemAttachment = itemAttachment;
+		}
+
+		public CharacterMailData WithVersion(long newVersion)
+		{
+			return new CharacterMailData(ID, newVersion, CharacterID, SenderID, SenderName, Subject, Body, TimeSent, Read, CurrencyAttachment, ItemAttachment);
 		}
 	}
 }
