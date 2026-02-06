@@ -202,21 +202,6 @@ namespace FishMMO.Shared
 			KnownAbilityOnPreSpawnEvents = new HashSet<int>();
 			KnownAbilityOnSpawnEvents = new HashSet<int>();
 			KnownAbilityOnDestroyEvents = new HashSet<int>();
-
-#if UNITY_SERVER
-			// Check if we already instantiated an RNG for this ability controller
-			if (abilitySeedGenerator == null)
-			{
-				// Generate an AbilitySeedGenerator Seed
-				abilitySeed = playerSeedGenerator.Next();
-
-				// Instantiate the AbilitySeedGenerator on the server
-				abilitySeedGenerator = new System.Random(abilitySeed);
-
-				// Set the initial seed
-				currentSeed = abilitySeedGenerator.Next();
-			}
-#endif
 		}
 
 		public override void OnStartNetwork()
@@ -254,6 +239,9 @@ namespace FishMMO.Shared
 			KnownAbilityOnPreSpawnEvents.Clear();
 			KnownAbilityOnSpawnEvents.Clear();
 			KnownAbilityOnDestroyEvents.Clear();
+
+			// Reset the Ability Seed Generator to null
+			abilitySeedGenerator = null;
 		}
 
 #if !UNITY_SERVER
@@ -461,6 +449,19 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer to write to.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			// Check if we already instantiated an RNG for this ability controller
+			if (abilitySeedGenerator == null)
+			{
+				// Generate an AbilitySeedGenerator Seed
+				abilitySeed = playerSeedGenerator.Next();
+
+				// Instantiate the AbilitySeedGenerator on the server
+				abilitySeedGenerator = new System.Random(abilitySeed);
+
+				// Set the initial seed
+				currentSeed = abilitySeedGenerator.Next();
+			}
+
 			// Write the ability RNG seed for the clients
 			writer.WriteInt32(abilitySeed);
 
