@@ -3,24 +3,34 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
-using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// Manages party creation, invitations, membership, and updates for the MMO server.
 	/// Handles party broadcasts, chat commands, and synchronizes party state with the database.
+	/// Game logic and Broadcasts run synchronously on the main thread.
+	/// Database operations are async to avoid blocking the main thread.
+	/// Results from async DB queries that require main-thread state changes or Broadcasts are marshalled
+	/// via IPartySystemMainThreadQueueData.
 	/// </summary>
 	[CreateAssetMenu(fileName = "PartySystem", menuName = "FishMMO/Server/SceneServer/Party System", order = 1)]
 	[RequiresDataContainer(typeof(PartySystemRuntimeData))]
 	[RequiresDataContainer(typeof(PartyCharacterMappingData))]
+	[RequiresDataContainer(typeof(PartySystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class PartySystem : ServerBehaviour, IPartySystem<NetworkConnection>
 	{
 		/// <summary>
@@ -67,6 +77,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Error("PartySystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IPartySystemMainThreadQueueData>(out _))
+			{
+				Log.Error("PartySystem", "Failed to initialize: IPartySystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
 			if (!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) ||
@@ -118,6 +134,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Drain any remaining queued main-thread actions
+			DrainMainThreadQueue();
+
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived);
@@ -142,138 +161,198 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Periodic callback that fetches and processes party updates from the database.
+		/// Drains queued main-thread actions from the IPartySystemMainThreadQueueData container.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<IPartySystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an action to be executed on the main thread.
+		/// </summary>
+		/// <param name="action">The action to enqueue.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IPartySystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread queue each frame.
+		/// </summary>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			DrainMainThreadQueue();
+		}
+
+		/// <summary>
+		/// Periodic callback that fetches and processes party updates from the database asynchronously.
 		/// </summary>
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicUpdate(float deltaTime)
 		{
-			if (Server.ServerState == ConnectionState.Started)
+			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
-				List<PartyUpdateEntity> updates = FetchPartyUpdates();
-				ProcessPartyUpdates(updates);
+				EnqueueAsyncWork(() => FetchAndProcessPartyUpdatesAsync());
 			}
 		}
 
 		/// <summary>
-		/// Fetches new party updates from the database since the last fetch.
+		/// Asynchronously fetches party updates from the database and marshals the processing back to the main thread.
 		/// </summary>
-		/// <returns>List of new party update entities.</returns>
-		private List<PartyUpdateEntity> FetchPartyUpdates()
+		private async Task FetchAndProcessPartyUpdatesAsync()
 		{
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-
-			// Fetch party updates from the database
-			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+			try
 			{
-				return new List<PartyUpdateEntity>();
-			}
-
-			if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData))
-			{
-				return new List<PartyUpdateEntity>();
-			}
-
-			List<PartyUpdateEntity> updates = PartyUpdateService.Fetch(dbContext, mappingData.PartyCharacterTracker.Keys.ToList(), runtimeData.LastFetchTime);
-			if (updates != null && updates.Count > 0)
-			{
-				runtimeData.LastFetchTime = DateTime.UtcNow;
-			}
-			return updates;
-		}
-
-		/// <summary>
-		/// Processes a list of party updates, synchronizing party membership and broadcasting changes to clients.
-		/// </summary>
-		/// <param name="updates">List of party update entities to process.</param>
-		private void ProcessPartyUpdates(List<PartyUpdateEntity> updates)
-		{
-			if (Server == null || Server.CoreServer.NpgsqlDbContextFactory == null || updates == null || updates.Count < 1)
-			{
-				return;
-			}
-
-			// Parties that have previously been updated, to avoid duplicate updates
-			HashSet<long> updatedParties = new HashSet<long>();
-
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			foreach (PartyUpdateEntity update in updates)
-			{
-				// Check if we have already updated this party
-				if (updatedParties.Contains(update.PartyID))
+				if (Server?.Database?.ServiceRegistry == null)
 				{
-					continue;
+					return;
 				}
-				// Otherwise add the party to our list and continue with the update
-				updatedParties.Add(update.PartyID);
-
-				// Get the current party members from the database
-				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, update.PartyID);
-
-				// Get the current member IDs
-				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
-
-				if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
 				{
-					continue;
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+				{
+					return;
 				}
 
+				// Read containers on main thread before awaiting (periodic callback runs on main thread)
 				if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData))
 				{
-					continue;
+					return;
+				}
+				if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+				{
+					return;
 				}
 
-				// Check if we have previously cached the party member list
-				if (mappingData.PartyMemberTracker.TryGetValue(update.PartyID, out var previousMembers))
-				{
-					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
-					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
+				List<long> partyIds = mappingData.PartyCharacterTracker.Keys.ToList();
+				DateTime lastFetch = runtimeData.LastFetchTime;
 
-					foreach (long memberID in difference)
+				if (partyIds == null || partyIds.Count == 0)
+				{
+					return;
+				}
+
+				// Async DB fetch
+				DatabaseResult<List<PartyUpdateData>> fetchResult = await partyUpdateService.FetchAsync(partyIds, lastFetch);
+				if (!fetchResult.IsSuccess || fetchResult.Data == null || fetchResult.Data.Count < 1)
+				{
+					return;
+				}
+
+				List<PartyUpdateData> updates = fetchResult.Data;
+
+				// For each unique party that was updated, fetch the current members
+				HashSet<long> updatedParties = new HashSet<long>();
+				Dictionary<long, IReadOnlyList<CharacterPartyData>> partyMembersMap = new Dictionary<long, IReadOnlyList<CharacterPartyData>>();
+
+				foreach (PartyUpdateData update in updates)
+				{
+					if (updatedParties.Contains(update.PartyID))
 					{
-						// Tell the member connection to leave their party immediately
-						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var partyCharacterMappingData) &&
-							partyCharacterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
-								character != null &&
-								character.TryGet(out IPartyController targetPartyController))
-						{
-							targetPartyController.ID = 0;
-							Server.NetworkWrapper.Broadcast(character.Owner, new PartyLeaveBroadcast(), true, Channel.Reliable);
-						}
+						continue;
+					}
+					updatedParties.Add(update.PartyID);
+
+					DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(update.PartyID);
+					if (membersResult.IsSuccess && membersResult.Data != null)
+					{
+						partyMembersMap[update.PartyID] = membersResult.Data;
 					}
 				}
-				// Cache the party member IDs
-				mappingData.PartyMemberTracker[update.PartyID] = currentMemberIDs;
 
-				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
+				// Marshal all main-thread state changes + broadcasts
+				EnqueueMainThread(() =>
 				{
-					PartyID = x.PartyID,
-					CharacterID = x.CharacterID,
-					Rank = (PartyRank)x.Rank,
-					HealthPCT = x.HealthPCT,
-				}).ToList();
-
-				PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
-				{
-					Members = addBroadcasts,
-				};
-
-				if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
-				{
-					// Tell all of the local party members to update their party member lists
-					foreach (CharacterPartyEntity entity in dbMembers)
+					if (Server == null)
 					{
-						if (characterMappingData.CharactersByID.TryGetValue(entity.CharacterID, out IPlayerCharacter character))
+						return;
+					}
+
+					// Update last fetch time
+					if (Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData rtData))
+					{
+						rtData.LastFetchTime = DateTime.UtcNow;
+					}
+
+					if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mapData))
+					{
+						return;
+					}
+
+					foreach (var kvp in partyMembersMap)
+					{
+						long partyID = kvp.Key;
+						IReadOnlyList<CharacterPartyData> dbMembers = kvp.Value;
+
+						var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
+
+						// Check if we have previously cached the party member list
+						if (mapData.PartyMemberTracker.TryGetValue(partyID, out var previousMembers))
 						{
-							if (!character.TryGet(out IPartyController partyController) ||
-								partyController.ID < 1)
+							// Compute the difference: members that are in previousMembers but not in currentMemberIDs
+							List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
+
+							foreach (long memberID in difference)
 							{
-								continue;
+								// Tell the member connection to leave their party immediately
+								if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var partyCharacterMappingData) &&
+									partyCharacterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
+									character != null &&
+									character.TryGet(out IPartyController targetPartyController))
+								{
+									targetPartyController.ID = 0;
+									Server.NetworkWrapper.Broadcast(character.Owner, new PartyLeaveBroadcast(), true, Channel.Reliable);
+								}
 							}
-							partyController.Rank = (PartyRank)entity.Rank;
-							Server.NetworkWrapper.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
+						}
+						// Cache the party member IDs
+						mapData.PartyMemberTracker[partyID] = currentMemberIDs;
+
+						var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
+						{
+							PartyID = x.PartyID,
+							CharacterID = x.CharacterID,
+							Rank = (PartyRank)x.Rank,
+							HealthPCT = x.HealthPCT,
+						}).ToList();
+
+						PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
+						{
+							Members = addBroadcasts,
+						};
+
+						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+						{
+							// Tell all of the local party members to update their party member lists
+							foreach (CharacterPartyData member in dbMembers)
+							{
+								if (characterMappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
+								{
+									if (!character.TryGet(out IPartyController partyController) ||
+										partyController.ID < 1)
+									{
+										continue;
+									}
+									partyController.Rank = (PartyRank)member.Rank;
+									Server.NetworkWrapper.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
+								}
+							}
 						}
 					}
-				}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error fetching/processing party updates: {ex}");
 			}
 		}
 
@@ -337,7 +416,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -351,8 +430,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			AddPartyCharacterTracker(partyController.ID, character.ID);
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			PartyUpdateService.Save(dbContext, partyController.ID);
+			// Fire-and-forget async DB persist
+			long characterID = character.ID;
+			long partyID = partyController.ID;
+			byte rank = (byte)partyController.Rank;
+			float healthPCT = character.TryGet(out ICharacterAttributeController attrController)
+				? attrController.GetHealthResourceAttributeCurrentPercentage()
+				: 0.0f;
+
+			EnqueueAsyncWork(() => PersistPartyMemberAndNotifyAsync(characterID, partyID, rank, healthPCT));
 		}
 
 		/// <summary>
@@ -370,7 +456,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -384,8 +470,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			RemovePartyCharacterTracker(partyController.ID, character.ID);
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			PartyUpdateService.Save(dbContext, partyController.ID);
+			// Fire-and-forget async DB persist
+			long partyID = partyController.ID;
+			EnqueueAsyncWork(() => PersistPartyUpdateAsync(partyID));
+		}
+
+		/// <summary>
+		/// Asynchronously persists a party member's data and triggers a party update notification.
+		/// </summary>
+		private async Task PersistPartyMemberAndNotifyAsync(long characterID, long partyID, byte rank, float healthPCT)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return;
+				}
+
+				CharacterPartyData partyData = new CharacterPartyData(0, characterID, partyID, rank, healthPCT);
+				await charPartyService.PersistAsync(partyData, MaxPartySize);
+				await partyUpdateService.PersistAsync(partyID);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error persisting party member (CharID={characterID}, PartyID={partyID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously persists a party update notification.
+		/// </summary>
+		private async Task PersistPartyUpdateAsync(long partyID)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return;
+				}
+
+				await partyUpdateService.PersistAsync(partyID);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error persisting party update (PartyID={partyID}): {ex}");
+			}
 		}
 
 		/// <summary>
@@ -397,7 +538,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -409,25 +550,77 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (PartyService.TryCreate(dbContext, out PartyEntity newParty))
+			// Capture immutable data for the async path
+			long characterID = partyController.Character.ID;
+			string sceneName = conn.FirstObject.gameObject.scene.name;
+			float healthPCT = partyController.Character.TryGet(out ICharacterAttributeController attributeController)
+				? attributeController.GetHealthResourceAttributeCurrentPercentage()
+				: 0.0f;
+
+			EnqueueAsyncWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT));
+		}
+
+		/// <summary>
+		/// Asynchronously creates a new party, persists membership, and marshals state changes back to the main thread.
+		/// </summary>
+		private async Task CreatePartyAsync(NetworkConnection conn, long characterID, string sceneName, float healthPCT)
+		{
+			try
 			{
-				partyController.ID = newParty.ID;
-				partyController.Rank = PartyRank.Leader;
-				CharacterPartyService.Save(dbContext,
-										   partyController.Character.ID,
-										   partyController.ID,
-										   partyController.Rank,
-										   partyController.Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 0.0f);
-
-				AddPartyCharacterTracker(partyController.ID, partyController.Character.ID);
-
-				// tell the character we made their party successfully
-				Server.NetworkWrapper.Broadcast(conn, new PartyCreateBroadcast()
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyService>(out var partyService))
 				{
-					PartyID = newParty.ID,
-					Location = conn.FirstObject.gameObject.scene.name,
-				}, true, Channel.Reliable);
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+				{
+					return;
+				}
+
+				DatabaseResult<long> createResult = await partyService.CreateAsync();
+				if (!createResult.IsSuccess)
+				{
+					return;
+				}
+
+				long newPartyID = createResult.Data;
+
+				CharacterPartyData partyData = new CharacterPartyData(0, characterID, newPartyID, (byte)PartyRank.Leader, healthPCT);
+				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
+				if (!persistResult.IsSuccess)
+				{
+					return;
+				}
+
+				// Marshal state changes + broadcast to main thread
+				EnqueueMainThread(() =>
+				{
+					if (Server == null)
+					{
+						return;
+					}
+
+					IPartyController pc = conn.FirstObject?.GetComponent<IPartyController>();
+					if (pc == null)
+					{
+						return;
+					}
+
+					pc.ID = newPartyID;
+					pc.Rank = PartyRank.Leader;
+
+					AddPartyCharacterTracker(newPartyID, characterID);
+
+					// tell the character we made their party successfully
+					Server.NetworkWrapper.Broadcast(conn, new PartyCreateBroadcast()
+					{
+						PartyID = newPartyID,
+						Location = sceneName,
+					}, true, Channel.Reliable);
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error creating party (CharID={characterID}): {ex}");
 			}
 		}
 
@@ -440,7 +633,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyInviteBroadcastReceived(NetworkConnection conn, PartyInviteBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -449,48 +642,87 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 			IPartyController inviter = conn.FirstObject.GetComponent<IPartyController>();
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate party leader is inviting
 			if (inviter == null ||
 				inviter.ID < 1 ||
-				inviter.Rank != PartyRank.Leader ||
-				!CharacterPartyService.ExistsNotFull(dbContext, inviter.ID, MaxPartySize))
+				inviter.Rank != PartyRank.Leader)
 			{
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
-			{
-				return;
-			}
+			// Capture immutable data for the async path
+			long inviterPartyID = inviter.ID;
+			long inviterCharacterID = inviter.Character.ID;
+			long targetCharacterID = msg.TargetCharacterID;
 
-			// if the target doesn't already have a pending invite
-			if (!runtimeData.PendingInvitations.ContainsKey(msg.TargetCharacterID) &&
-				Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
-				characterMappingData.CharactersByID.TryGetValue(msg.TargetCharacterID, out IPlayerCharacter targetCharacter) &&
-				targetCharacter.TryGet(out IPartyController targetPartyController))
+			EnqueueAsyncWork(() => ValidateAndSendPartyInviteAsync(conn, inviterPartyID, inviterCharacterID, targetCharacterID));
+		}
+
+		/// <summary>
+		/// Asynchronously validates party capacity and marshals the invitation back to the main thread.
+		/// </summary>
+		private async Task ValidateAndSendPartyInviteAsync(NetworkConnection conn, long inviterPartyID, long inviterCharacterID, long targetCharacterID)
+		{
+			try
 			{
-				// validate target
-				if (targetPartyController.ID > 0)
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
 				{
-					// we should tell the inviter the target is already in a party
-					Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
-					{
-						Channel = ChatChannel.Party,
-						SenderID = msg.TargetCharacterID,
-						Text = ChatHelper.PARTY_ERROR_TARGET_IN_PARTY + " ",
-					}, true, Channel.Reliable);
 					return;
 				}
 
-				// add to our list of pending invitations... used for validation when accepting/declining a party invite
-				runtimeData.PendingInvitations.Add(targetCharacter.ID, inviter.ID);
-				Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new PartyInviteBroadcast()
+				// Check that the party is not full
+				DatabaseResult<int> countResult = await charPartyService.CountAsync(inviterPartyID);
+				if (!countResult.IsSuccess || countResult.Data >= MaxPartySize)
 				{
-					InviterCharacterID = inviter.Character.ID,
-					TargetCharacterID = targetCharacter.ID
-				}, true, Channel.Reliable);
+					return;
+				}
+
+				// Marshal the invitation logic back to the main thread
+				EnqueueMainThread(() =>
+				{
+					if (Server == null)
+					{
+						return;
+					}
+
+					if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+					{
+						return;
+					}
+
+					// if the target doesn't already have a pending invite
+					if (!runtimeData.PendingInvitations.ContainsKey(targetCharacterID) &&
+						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
+						characterMappingData.CharactersByID.TryGetValue(targetCharacterID, out IPlayerCharacter targetCharacter) &&
+						targetCharacter.TryGet(out IPartyController targetPartyController))
+					{
+						// validate target
+						if (targetPartyController.ID > 0)
+						{
+							// we should tell the inviter the target is already in a party
+							Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
+							{
+								Channel = ChatChannel.Party,
+								SenderID = targetCharacterID,
+								Text = ChatHelper.PARTY_ERROR_TARGET_IN_PARTY + " ",
+							}, true, Channel.Reliable);
+							return;
+						}
+
+						// add to our list of pending invitations... used for validation when accepting/declining a party invite
+						runtimeData.PendingInvitations.Add(targetCharacter.ID, inviterCharacterID);
+						Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new PartyInviteBroadcast()
+						{
+							InviterCharacterID = inviterCharacterID,
+							TargetCharacterID = targetCharacter.ID
+						}, true, Channel.Reliable);
+					}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error validating party invite (PartyID={inviterPartyID}): {ex}");
 			}
 		}
 
@@ -524,40 +756,85 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				runtimeData.PendingInvitations.Remove(partyController.Character.ID);
 
-				if (Server == null || Server.CoreServer.NpgsqlDbContextFactory == null)
+				if (Server?.Database?.ServiceRegistry == null)
 				{
 					return;
 				}
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				List<CharacterPartyEntity> members = CharacterPartyService.Members(dbContext, pendingPartyID);
-				if (members != null &&
-					members.Count < MaxPartySize)
+
+				// Capture immutable data for the async path
+				long characterID = partyController.Character.ID;
+				bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
+				float healthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f;
+
+				EnqueueAsyncWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT));
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously validates party capacity, persists membership, and marshals state changes back to the main thread.
+		/// </summary>
+		private async Task AcceptPartyInviteAsync(NetworkConnection conn, long characterID, long partyID, float healthPCT)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
 				{
-					bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return;
+				}
 
-					partyController.ID = pendingPartyID;
-					partyController.Rank = PartyRank.Member;
+				// Check party capacity
+				DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
+				if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count >= MaxPartySize)
+				{
+					return;
+				}
 
-					CharacterPartyService.Save(dbContext,
-											   partyController.Character.ID,
-											   partyController.ID,
-											   partyController.Rank,
-											   attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f);
+				CharacterPartyData partyData = new CharacterPartyData(0, characterID, partyID, (byte)PartyRank.Member, healthPCT);
+				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
+				if (!persistResult.IsSuccess)
+				{
+					return;
+				}
 
-					AddPartyCharacterTracker(partyController.ID, partyController.Character.ID);
+				// Tell the other servers to update their party lists
+				await partyUpdateService.PersistAsync(partyID);
 
-					// tell the other servers to update their party lists
-					PartyUpdateService.Save(dbContext, partyController.ID);
+				// Marshal state changes + broadcast to main thread
+				EnqueueMainThread(() =>
+				{
+					if (Server == null)
+					{
+						return;
+					}
+
+					IPartyController pc = conn.FirstObject?.GetComponent<IPartyController>();
+					if (pc == null)
+					{
+						return;
+					}
+
+					pc.ID = partyID;
+					pc.Rank = PartyRank.Member;
+
+					AddPartyCharacterTracker(partyID, characterID);
 
 					// tell the new member they joined immediately, other clients will catch up with the PartyUpdate pass
 					Server.NetworkWrapper.Broadcast(conn, new PartyAddBroadcast()
 					{
-						PartyID = pendingPartyID,
-						CharacterID = partyController.Character.ID,
+						PartyID = partyID,
+						CharacterID = characterID,
 						Rank = PartyRank.Member,
-						HealthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f,
+						HealthPCT = healthPCT,
 					}, true, Channel.Reliable);
-				}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error accepting party invite (CharID={characterID}, PartyID={partyID}): {ex}");
 			}
 		}
 
@@ -584,7 +861,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyLeaveBroadcastReceived(NetworkConnection conn, PartyLeaveBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -601,67 +878,93 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+			// Capture immutable data for the async path
+			long partyID = partyController.ID;
+			long characterID = partyController.Character.ID;
+			PartyRank rank = partyController.Rank;
 
-			// validate party
-			List<CharacterPartyEntity> members = CharacterPartyService.Members(dbContext, partyController.ID);
-			if (members != null &&
-				members.Count > 0)
+			// Immediate main-thread state update
+			partyController.ID = 0;
+			partyController.Rank = PartyRank.None;
+			RemovePartyCharacterTracker(partyID, characterID);
+
+			// Tell character that they left the party immediately
+			Server.NetworkWrapper.Broadcast(conn, new PartyLeaveBroadcast(), true, Channel.Reliable);
+
+			// Fire-and-forget async DB cleanup
+			EnqueueAsyncWork(() => LeavePartyAsync(characterID, partyID, rank));
+		}
+
+		/// <summary>
+		/// Asynchronously handles party leave DB operations: fetches members, transfers leadership if needed,
+		/// deletes the leaving member, and cleans up or notifies other servers.
+		/// </summary>
+		private async Task LeavePartyAsync(long characterID, long partyID, PartyRank rank)
+		{
+			try
 			{
-				int remainingCount = members.Count - 1;
-
-				List<CharacterPartyEntity> remainingMembers = new List<CharacterPartyEntity>();
-
-				// are there any other members in the party? if so we transfer leadership
-				if (partyController.Rank == PartyRank.Leader && remainingCount > 0)
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
 				{
-					foreach (CharacterPartyEntity member in members)
-					{
-						if (member.CharacterID == partyController.Character.ID)
-						{
-							continue;
-						}
-						remainingMembers.Add(member);
-					}
-
-					CharacterPartyEntity newLeader = null;
-					if (remainingMembers.Count > 0)
-					{
-						// pick a random member
-						newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];
-					}
-
-					// update the party leader status in the database
-					if (newLeader != null)
-					{
-						CharacterPartyService.Save(dbContext, newLeader.CharacterID, newLeader.PartyID, PartyRank.Leader, newLeader.HealthPCT);
-					}
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyService>(out var partyService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return;
 				}
 
-				long partyID = partyController.ID;
+				// Fetch current members
+				DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
+				if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count == 0)
+				{
+					return;
+				}
 
-				partyController.ID = 0;
-				partyController.Rank = PartyRank.None;
+				IReadOnlyList<CharacterPartyData> members = membersResult.Data;
 
-				RemovePartyCharacterTracker(partyController.ID, partyController.Character.ID);
+				// Count remaining (excluding the leaving character)
+				List<CharacterPartyData> remainingMembers = new List<CharacterPartyData>();
+				CharacterPartyData leavingMember = default;
+				foreach (CharacterPartyData member in members)
+				{
+					if (member.CharacterID == characterID)
+					{
+						leavingMember = member;
+						continue;
+					}
+					remainingMembers.Add(member);
+				}
 
-				// tell character that they left the party immediately, other clients will catch up with the PartyUpdate pass
-				Server.NetworkWrapper.Broadcast(conn, new PartyLeaveBroadcast(), true, Channel.Reliable);
+				int remainingCount = remainingMembers.Count;
 
-				// remove the party member
-				CharacterPartyService.Delete(dbContext, partyController.Character.ID);
+				// Transfer leadership if the leaving character was leader and others remain
+				if (rank == PartyRank.Leader && remainingCount > 0)
+				{
+					CharacterPartyData newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];
+					await charPartyService.UpdateRankAsync(newLeader.CharacterID, partyID, (byte)PartyRank.Leader, newLeader.Version + 1);
+				}
+
+				// Delete the leaving member
+				await charPartyService.DeleteAsync(characterID, leavingMember.Version + 1);
 
 				if (remainingCount < 1)
 				{
-					// delete the party
-					PartyService.Delete(dbContext, partyID);
-					PartyUpdateService.Delete(dbContext, partyID);
+					// Delete the party
+					await partyService.DeleteAsync(partyID);
+					await partyUpdateService.DeleteAsync(partyID);
 				}
 				else
 				{
-					// tell the other servers to update their party lists
-					PartyUpdateService.Save(dbContext, partyID);
+					// Tell the other servers to update their party lists
+					await partyUpdateService.PersistAsync(partyID);
 				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error leaving party (CharID={characterID}, PartyID={partyID}): {ex}");
 			}
 		}
 
@@ -674,7 +977,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyRemoveBroadcastReceived(NetworkConnection conn, PartyRemoveBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -703,15 +1006,61 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// Remove the character from the party in the database.
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, msg.MemberID);
-			if (result)
-			{
-				RemovePartyCharacterTracker(partyController.ID, partyController.Character.ID);
+			// Capture immutable data for the async path
+			long partyID = partyController.ID;
+			long memberID = msg.MemberID;
+			long characterID = partyController.Character.ID;
 
-				// Tell the other servers to update their party lists.
-				PartyUpdateService.Save(dbContext, partyController.ID);
+			EnqueueAsyncWork(() => RemovePartyMemberAsync(partyID, memberID, characterID));
+		}
+
+		/// <summary>
+		/// Asynchronously removes a member from the party, verifying rank permission and notifying other servers.
+		/// </summary>
+		private async Task RemovePartyMemberAsync(long partyID, long memberID, long requesterCharacterID)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return;
+				}
+
+				// Fetch the target member to get their version for the versioned delete
+				DatabaseResult<CharacterPartyData?> fetchResult = await charPartyService.FetchAsync(memberID);
+				if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
+				{
+					return;
+				}
+
+				CharacterPartyData targetMember = fetchResult.Data.Value;
+
+				// Verify the target is actually in this party
+				if (targetMember.PartyID != partyID)
+				{
+					return;
+				}
+
+				DatabaseResult deleteResult = await charPartyService.DeleteAsync(memberID, targetMember.Version + 1);
+				if (deleteResult.IsSuccess)
+				{
+					// Marshal tracker update to main thread
+					EnqueueMainThread(() =>
+					{
+						RemovePartyCharacterTracker(partyID, memberID);
+					});
+
+					// Tell the other servers to update their party lists.
+					await partyUpdateService.PersistAsync(partyID);
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error removing party member (PartyID={partyID}, MemberID={memberID}): {ex}");
 			}
 		}
 
@@ -724,7 +1073,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyChangeRankBroadcastReceived(NetworkConnection conn, PartyChangeRankBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -753,13 +1102,84 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// update the leader and target party ranks in the party in the database
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (CharacterPartyService.TrySaveRank(dbContext, partyController.Character.ID, partyController.ID, PartyRank.Member) &&
-				CharacterPartyService.TrySaveRank(dbContext, msg.MemberID, partyController.ID, PartyRank.Leader))
+			// Capture immutable data for the async path
+			long partyID = partyController.ID;
+			long leaderCharacterID = partyController.Character.ID;
+			long targetMemberID = msg.MemberID;
+
+			EnqueueAsyncWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID));
+		}
+
+		/// <summary>
+		/// Asynchronously swaps ranks between the current leader and the target member.
+		/// </summary>
+		private async Task ChangePartyRankAsync(long partyID, long leaderCharacterID, long targetMemberID)
+		{
+			try
 			{
-				// tell the other servers to update their party lists
-				PartyUpdateService.Save(dbContext, partyController.ID);
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return;
+				}
+
+				// Fetch both members to get their versions
+				DatabaseResult<CharacterPartyData?> leaderResult = await charPartyService.FetchAsync(leaderCharacterID);
+				if (!leaderResult.IsSuccess || !leaderResult.Data.HasValue)
+				{
+					return;
+				}
+
+				DatabaseResult<CharacterPartyData?> targetResult = await charPartyService.FetchAsync(targetMemberID);
+				if (!targetResult.IsSuccess || !targetResult.Data.HasValue)
+				{
+					return;
+				}
+
+				CharacterPartyData leaderData = leaderResult.Data.Value;
+				CharacterPartyData targetData = targetResult.Data.Value;
+
+				// Verify both are in the same party
+				if (leaderData.PartyID != partyID || targetData.PartyID != partyID)
+				{
+					return;
+				}
+
+				// Demote the current leader to member
+				DatabaseResult demoteResult = await charPartyService.UpdateRankAsync(leaderCharacterID, partyID, (byte)PartyRank.Member, leaderData.Version + 1);
+				if (!demoteResult.IsSuccess)
+				{
+					return;
+				}
+
+				// Promote the target to leader
+				DatabaseResult promoteResult = await charPartyService.UpdateRankAsync(targetMemberID, partyID, (byte)PartyRank.Leader, targetData.Version + 1);
+				if (promoteResult.IsSuccess)
+				{
+					// Tell the other servers to update their party lists
+					await partyUpdateService.PersistAsync(partyID);
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error changing party rank (PartyID={partyID}, Leader={leaderCharacterID}, Target={targetMemberID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

@@ -15,5 +15,7 @@
 		CharacterNameTaken,
 		/// <summary>Spawn location or spawner is invalid.</summary>
 		InvalidSpawn,
+		/// <summary>An internal server error occurred during character creation.</summary>
+		Error,
 	}
 }

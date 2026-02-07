@@ -1,6 +1,4 @@
 using System;
-using System.IO;
-using FishMMO.Database.Npgsql;
 using FishMMO.Database.Redis;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -8,15 +6,10 @@ using FishMMO.Logging;
 namespace FishMMO.Server.Core
 {
 	/// <summary>
-	/// Core, engine-agnostic server logic: configuration and database initialization.
+	/// Core, engine-agnostic server logic: configuration and lifecycle event dispatching.
 	/// </summary>
 	public class CoreServer : ICoreServer
 	{
-		/// <summary>
-		/// Gets the Npgsql database context factory for PostgreSQL operations.
-		/// </summary>
-		public NpgsqlDbContextFactory NpgsqlDbContextFactory { get; private set; }
-
 		/// <summary>
 		/// Gets the Redis database context factory for Redis operations.
 		/// </summary>
@@ -77,15 +70,6 @@ namespace FishMMO.Server.Core
 			Address = config.GetString("Address", "127.0.0.1");
 			Port = config.GetUShort("Port", 7777);
 
-#if UNITY_EDITOR
-			string dbConfigurationPath = Path.Combine(
-				Path.Combine(workingDirectory, Constants.Configuration.SetupDirectory),
-				"Development");
-			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(dbConfigurationPath, false);
-#else
-			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(workingDirectory, false);
-#endif
-
 			RaiseLifecycleEvent();
 		}
 
@@ -94,7 +78,6 @@ namespace FishMMO.Server.Core
 		/// </summary>
 		public void Deinitialize()
 		{
-			NpgsqlDbContextFactory = null;
 			RedisDbContextFactory = null;
 		}
 

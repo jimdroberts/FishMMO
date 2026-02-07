@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Generic;
 using FishMMO.Shared;
-using FishMMO.Database.Npgsql;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
@@ -12,37 +12,28 @@ namespace FishMMO.Server.Core.World.SceneServer
 	public interface ICharacterInventorySystem : IServerBehaviour
 	{
 		/// <summary>
-		/// Swaps two item slots within the same container and invokes a callback for
-		/// each affected item so the caller can persist the change to the database.
+		/// Swaps two item slots within the same container and collects the affected items.
 		/// </summary>
-		/// <param name="dbContext">Database context used for persistence operations.</param>
-		/// <param name="characterID">ID of the character that owns the container.</param>
 		/// <param name="container">The container instance in which the swap occurs.</param>
 		/// <param name="fromIndex">Source slot index.</param>
 		/// <param name="toIndex">Target slot index.</param>
-		/// <param name="onDatabaseUpdateSlot">Callback invoked for each item that needs to be persisted. The callback
-		/// receives (dbContext, characterID, item).</param>
+		/// <param name="affectedItems">Out: list of items whose slot assignments changed and need persistence.</param>
 		/// <returns>True when the swap succeeded; otherwise false.</returns>
-		bool SwapContainerItems(NpgsqlDbContext dbContext, long characterID, IItemContainer container, int fromIndex, int toIndex, Action<NpgsqlDbContext, long, Item> onDatabaseUpdateSlot);
+		bool SwapContainerItems(IItemContainer container, int fromIndex, int toIndex, out List<Item> affectedItems);
 
 		/// <summary>
-		/// Swaps items between two containers and invokes optional callbacks to update
-		/// the database for removed/added/updated item slots. This overload supports
-		/// moving items across different containers (inventory, bank, equipment, etc.).
+		/// Swaps items between two containers and collects the affected items along
+		/// with any slot deletions that occurred during the cross-container move.
 		/// </summary>
-		/// <param name="dbContext">Database context used for persistence operations.</param>
-		/// <param name="characterID">ID of the character that owns the containers.</param>
 		/// <param name="from">Source container.</param>
 		/// <param name="to">Destination container.</param>
 		/// <param name="fromIndex">Source slot index.</param>
 		/// <param name="toIndex">Destination slot index.</param>
-		/// <param name="onDatabaseSetOldSlot">Optional callback invoked to persist an item that was placed into the old slot.</param>
-		/// <param name="onDatabaseDeleteOldSlot">Optional callback invoked to delete an old slot entry in the database (signature: dbContext, characterID, slotIndex).</param>
-		/// <param name="onDatabaseSetNewSlot">Optional callback invoked to persist the item placed into the new slot.</param>
+		/// <param name="affectedFromItems">Out: items placed into the source container that need persistence.</param>
+		/// <param name="deletedFromSlots">Out: slot indices that were vacated in the source container and need deletion.</param>
+		/// <param name="affectedToItems">Out: items placed into the destination container that need persistence.</param>
 		/// <returns>True when the cross-container swap succeeded; otherwise false.</returns>
-		bool SwapContainerItems(NpgsqlDbContext dbContext, long characterID, IItemContainer from, IItemContainer to, int fromIndex, int toIndex,
-			Action<NpgsqlDbContext, long, Item> onDatabaseSetOldSlot = null,
-			Action<NpgsqlDbContext, long, long> onDatabaseDeleteOldSlot = null,
-			Action<NpgsqlDbContext, long, Item> onDatabaseSetNewSlot = null);
+		bool SwapContainerItems(IItemContainer from, IItemContainer to, int fromIndex, int toIndex,
+			out List<Item> affectedFromItems, out List<long> deletedFromSlots, out List<Item> affectedToItems);
 	}
 }

@@ -1,22 +1,29 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System;
-using FishMMO.Database.Npgsql;
-using FishMMO.Database.Npgsql.Entities;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Data.Enums;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
-using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.LoginServer
 {
 	/// <summary>
 	/// Manages character creation for player accounts, validates character data, and initializes starting equipment and abilities.
+	/// All Unity object access (templates, prefabs) occurs on the main thread. Only database operations run asynchronously.
+	/// Broadcast replies are marshalled back to the main thread via a thread-safe queue drained in OnLateUpdate.
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterCreateSystem", menuName = "FishMMO/Server/LoginServer/Character Create System", order = 1)]
+	[RequiresDataContainer(typeof(CharacterCreateSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterCreateSystem : ServerBehaviour, ICharacterCreateSystem
 	{
 		/// <summary>
@@ -54,6 +61,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
+			// Verify required data containers
+			if (!Server.DataContainerRegistry.TryGet<ICharacterCreateSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("CharacterCreateSystem", "Failed to initialize: ICharacterCreateSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived, true);
 
@@ -63,6 +77,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 		/// <summary>
 		/// Cleans up the character creation system, unregistering broadcast handlers for character creation requests.
+		/// Drains remaining main-thread responses so clients get their final messages.
 		/// </summary>
 		public override void OnDeinitialize()
 		{
@@ -72,322 +87,489 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
+			// Drain remaining responses so clients get their final messages.
+			DrainMainThreadQueue();
+
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived);
 		}
 
 		/// <summary>
-		/// Handles broadcast to create a new character, validates input, creates character and initial data, and notifies the client.
+		/// Handles broadcast to create a new character. Performs Unity API validation
+		/// (RaceTemplate.Get, GetComponent, SpawnablePrefabs) on the main thread, then dispatches
+		/// DTO construction and database operations to an async worker. All immutable template data
+		/// (WorldSceneDetailsCache, StartingAbilities, StartingInventoryItems, StartingEquipment)
+		/// is safely read from the worker thread. Responses are marshalled back via the main-thread queue.
 		/// </summary>
 		/// <param name="conn">Network connection of the client.</param>
 		/// <param name="msg">CharacterCreateBroadcast message.</param>
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCharacterCreateBroadcastReceived(NetworkConnection conn, CharacterCreateBroadcast msg, Channel channel)
 		{
-			if (conn.IsActive)
+			if (!conn.IsActive)
 			{
-				// Validate character creation data
-				if (!Constants.Authentication.IsAllowedCharacterName(msg.CharacterName))
+				return;
+			}
+
+			// --- Main-thread-only validation ---
+
+			// Validate character name
+			if (!Constants.Authentication.IsAllowedCharacterName(msg.CharacterName))
+			{
+				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
-					//Log.Debug("CharacterCreateSystem", "Invalid Character Name.");
+					Result = CharacterCreateResult.InvalidCharacterName,
+				}, true, Channel.Reliable);
+				return;
+			}
 
-					// Invalid character name
-					Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
-					{
-						Result = CharacterCreateResult.InvalidCharacterName,
-					}, true, Channel.Reliable);
-					return;
-				}
+			// Validate account
+			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
 
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			// Validate services are available
+			var registry = Server.Database?.ServiceRegistry;
+			if (registry == null ||
+				!registry.TryGet<ICharacterService>(out var characterService) ||
+				!registry.TryGet<ICharacterFactionService>(out var factionService) ||
+				!registry.TryGet<ICharacterAbilityService>(out var abilityService) ||
+				!registry.TryGet<ICharacterInventoryService>(out var inventoryService) ||
+				!registry.TryGet<ICharacterEquipmentService>(out var equipmentService) ||
+				!registry.TryGet<ICharacterAttributeService>(out var attributeService) ||
+				!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
+			{
+				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
-					//Log.Debug("CharacterCreateSystem", "Account not found.");
+					Result = CharacterCreateResult.Error,
+				}, true, Channel.Reliable);
+				return;
+			}
 
-					// Account not found??
-					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-					return;
-				}
-				int characterCount = CharacterService.GetCount(dbContext, accountName);
-				if (characterCount >= MaxCharacters)
-				{
-					//Log.Debug("CharacterCreateSystem", "Too many characters.");
+			// --- Unity API calls that require the main thread ---
 
-					// Too many characters
-					Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
-					{
-						Result = CharacterCreateResult.TooMany,
-					}, true, Channel.Reliable);
-					return;
-				}
-				var character = CharacterService.GetByName(dbContext, msg.CharacterName);
-				if (character != null)
-				{
-					//Log.Debug("CharacterCreateSystem", "Character name is taken.");
+			// Validate race template via Unity ScriptableObject lookup
+			RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(msg.RaceTemplateID);
+			if (raceTemplate == null ||
+				raceTemplate.Prefab == null ||
+				raceTemplate.GetModelReference(msg.ModelIndex) == null)
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
 
-					// Character name already taken
-					Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
-					{
-						Result = CharacterCreateResult.CharacterNameTaken,
-					}, true, Channel.Reliable);
-					return;
-				}
+			// Validate spawnable prefab via Unity API
+			IPlayerCharacter characterPrefab = raceTemplate.Prefab.GetComponent<IPlayerCharacter>();
+			if (characterPrefab == null ||
+				Server.NetworkWrapper.NetworkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			// --- Dispatch DTO construction + DB work to async (all template data is immutable) ---
+			EnqueueAsyncWork(() => ProcessCharacterCreateAsync(
+				conn, msg, accountName, raceTemplate,
+				characterService, factionService, abilityService,
+				inventoryService, equipmentService, attributeService,
+				unitOfWorkService));
+		}
+
+		/// <summary>
+		/// Processes character creation on a background thread. Validates immutable spawn/race data,
+		/// builds all DTOs, performs database operations within a Unit of Work for atomicity,
+		/// and marshals responses to the main thread.
+		/// All template data (WorldSceneDetailsCache, StartingAbilities, StartingInventoryItems,
+		/// StartingEquipment, RaceTemplate) is immutable and safe to read from any thread.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">Original CharacterCreateBroadcast to echo back on success.</param>
+		/// <param name="accountName">Validated account name.</param>
+		/// <param name="raceTemplate">Validated race template (immutable, main-thread lookup already done).</param>
+		/// <param name="characterService">Resolved character service.</param>
+		/// <param name="factionService">Resolved faction service.</param>
+		/// <param name="abilityService">Resolved ability service.</param>
+		/// <param name="inventoryService">Resolved inventory service.</param>
+		/// <param name="equipmentService">Resolved equipment service.</param>
+		/// <param name="attributeService">Resolved attribute service.</param>
+		/// <param name="unitOfWorkService">Resolved unit of work service for transactional consistency.</param>
+		private async Task ProcessCharacterCreateAsync(
+			NetworkConnection conn,
+			CharacterCreateBroadcast msg,
+			string accountName,
+			RaceTemplate raceTemplate,
+			ICharacterService characterService,
+			ICharacterFactionService factionService,
+			ICharacterAbilityService abilityService,
+			ICharacterInventoryService inventoryService,
+			ICharacterEquipmentService equipmentService,
+			ICharacterAttributeService attributeService,
+			IUnitOfWorkService unitOfWorkService)
+		{
+			try
+			{
+				// --- Validate immutable spawn data (safe to read off main thread) ---
 
 				if (WorldSceneDetailsCache == null ||
 					WorldSceneDetailsCache.Scenes == null ||
 					WorldSceneDetailsCache.Scenes.Count < 1)
 				{
-					//Log.Debug("CharacterCreateSystem", "Spawn positions invalid.");
-
-					// Failed to find spawn positions to validate with
-					Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+					EnqueueMainThread(() =>
 					{
-						Result = CharacterCreateResult.InvalidSpawn,
-					}, true, Channel.Reliable);
+						if (conn != null && conn.IsActive)
+						{
+							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+							{
+								Result = CharacterCreateResult.InvalidSpawn,
+							}, true, Channel.Reliable);
+						}
+					});
 					return;
 				}
-				// Validate spawn details
-				if (WorldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails details))
+
+				if (!WorldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails details))
 				{
-					// Validate spawner
-					if (details.InitialSpawnPositions.TryGetValue(msg.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
+					await Log.Debug("CharacterCreateSystem", "Unable to get World Scene Details.");
+					return;
+				}
+
+				if (!details.InitialSpawnPositions.TryGetValue(msg.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
+				{
+					await Log.Debug("CharacterCreateSystem", "Unable to find initial spawn position for Spawner.");
+					return;
+				}
+
+				// Validate allowed race against spawn position (immutable data)
+				bool validateAllowedRace = false;
+				foreach (RaceTemplate t in initialSpawnPosition.AllowedRaces)
+				{
+					if (t.Name == raceTemplate.Name)
 					{
-						//Log.Debug("CharacterCreateSystem", $"RaceTemplate ID: {msg.RaceTemplateID}");
-
-						// Validate race
-						RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(msg.RaceTemplateID);
-						if (raceTemplate == null)
+						validateAllowedRace = true;
+						break;
+					}
+				}
+				if (!validateAllowedRace)
+				{
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
 						{
-							//Log.Debug("CharacterCreateSystem", "RaceTemplate is invalid.");
-
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-							return;
 						}
-						if (raceTemplate.Prefab == null)
-						{
-							//Log.Debug("CharacterCreateSystem", "RaceTemplate Prefab is invalid.");
+					});
+					return;
+				}
 
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-							return;
-						}
-						if (raceTemplate.GetModelReference(msg.ModelIndex) == null)
-						{
-							//Log.Debug("CharacterCreateSystem", "ModelIndex is invalid.");
+				// --- Check character count limit ---
 
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-							return;
-						}
-
-						bool validateAllowedRace = false;
-						foreach (RaceTemplate t in initialSpawnPosition.AllowedRaces)
+				DatabaseResult<int> countResult = await characterService.CountAsync(accountName);
+				if (!countResult.IsSuccess || countResult.Data >= MaxCharacters)
+				{
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
 						{
-							if (t.Name == raceTemplate.Name)
+							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 							{
-								validateAllowedRace = true;
-								break;
-							}
+								Result = CharacterCreateResult.TooMany,
+							}, true, Channel.Reliable);
 						}
-						if (!validateAllowedRace)
-						{
-							//Log.Debug("CharacterCreateSystem", "Race not allowed.");
+					});
+					return;
+				}
 
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-							return;
+				// --- Build all DTOs (immutable template data, safe off main thread) ---
+
+				var characterData = new CharacterData(
+					id: 0,
+					name: msg.CharacterName,
+					nameLowercase: msg.CharacterName?.ToLower(),
+					account: accountName,
+					selected: false,
+					worldServerID: 0,
+					sceneName: initialSpawnPosition.SceneName,
+					sceneHandle: 0,
+					bindScene: msg.SceneName,
+					bindX: initialSpawnPosition.Position.x,
+					bindY: initialSpawnPosition.Position.y,
+					bindZ: initialSpawnPosition.Position.z,
+					instanceID: 0,
+					instanceX: 0f,
+					instanceY: 0f,
+					instanceZ: 0f,
+					instanceRotX: 0f,
+					instanceRotY: 0f,
+					instanceRotZ: 0f,
+					instanceRotW: 0f,
+					raceID: msg.RaceTemplateID,
+					modelIndex: msg.ModelIndex,
+					x: initialSpawnPosition.Position.x,
+					y: initialSpawnPosition.Position.y,
+					z: initialSpawnPosition.Position.z,
+					rotX: initialSpawnPosition.Rotation.x,
+					rotY: initialSpawnPosition.Rotation.y,
+					rotZ: initialSpawnPosition.Rotation.z,
+					rotW: initialSpawnPosition.Rotation.w,
+					accessLevel: (byte)AccessLevel.Player,
+					online: false,
+					flags: 0,
+					version: 0,
+					timeCreated: DateTime.UtcNow,
+					lastSaved: DateTime.UtcNow
+				);
+
+				// --- Begin Unit of Work for atomic character creation ---
+
+				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
+				if (!uowResult.IsSuccess)
+				{
+					await Log.Error("CharacterCreateSystem", $"Failed to begin unit of work: {uowResult.ErrorMessage}");
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+							{
+								Result = CharacterCreateResult.Error,
+							}, true, Channel.Reliable);
 						}
+					});
+					return;
+				}
 
-						// Validate spawnable prefab
-						IPlayerCharacter characterPrefab = raceTemplate.Prefab.GetComponent<IPlayerCharacter>();
-						if (characterPrefab == null ||
-							Server.NetworkWrapper.NetworkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
+				await using (IUnitOfWork uow = uowResult.Data)
+				{
+					// Create the character row — returns the new ID directly
+					DatabaseResult<long> createResult = await characterService.CreateCharacterAsync(characterData);
+					if (!createResult.IsSuccess || createResult.Data <= 0)
+					{
+						CharacterCreateResult clientResult = createResult.ErrorCode switch
 						{
-							//Log.Debug("CharacterCreateSystem", "Character prefab is broken or not loaded.");
-
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-							return;
-						}
-
-						// Create the new character
-						var newCharacter = new CharacterEntity()
-						{
-							Account = accountName,
-							Name = msg.CharacterName,
-							NameLowercase = msg.CharacterName?.ToLower(),
-							RaceID = msg.RaceTemplateID,
-							ModelIndex = msg.ModelIndex,
-							BindScene = msg.SceneName,
-							BindX = initialSpawnPosition.Position.x,
-							BindY = initialSpawnPosition.Position.y,
-							BindZ = initialSpawnPosition.Position.z,
-							SceneName = initialSpawnPosition.SceneName,
-							X = initialSpawnPosition.Position.x,
-							Y = initialSpawnPosition.Position.y,
-							Z = initialSpawnPosition.Position.z,
-							RotX = initialSpawnPosition.Rotation.x,
-							RotY = initialSpawnPosition.Rotation.y,
-							RotZ = initialSpawnPosition.Rotation.z,
-							RotW = initialSpawnPosition.Rotation.w,
-							AccessLevel = (byte)AccessLevel.Player,
-							TimeCreated = DateTime.UtcNow,
+							DatabaseErrorCodes.AlreadyExists => CharacterCreateResult.CharacterNameTaken,
+							DatabaseErrorCodes.ValidationError => CharacterCreateResult.InvalidCharacterName,
+							_ => CharacterCreateResult.Error,
 						};
-						dbContext.Characters.Add(newCharacter);
-						dbContext.SaveChanges();
-
-						Dictionary<int, CharacterAttributeEntity> initialAttributes = new Dictionary<int, CharacterAttributeEntity>();
-
-						// Create the initial character attributes set
-						if (raceTemplate.InitialAttributes != null &&
-							raceTemplate.InitialAttributes.Attributes.Count > 0)
+						EnqueueMainThread(() =>
 						{
-							foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes)
+							if (conn != null && conn.IsActive)
 							{
-								initialAttributes.Add(template.ID, new CharacterAttributeEntity()
+								Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 								{
-									CharacterID = newCharacter.ID,
-									TemplateID = template.ID,
-									Value = template.InitialValue,
-									CurrentValue = template.IsResourceAttribute ? template.InitialValue : 0.0f,
-								});
-
-								//Log.Debug("CharacterCreateSystem", $"{template.Name} : Initial {template.InitialValue}");
+									Result = clientResult,
+								}, true, Channel.Reliable);
 							}
-						}
+						});
+						return;
+					}
 
-						// Add character factions
-						if (raceTemplate.InitialFaction != null)
+					long characterID = createResult.Data;
+
+					// Build sub-entity DTOs with the real character ID (immutable templates)
+					Dictionary<int, CharacterAttributeData> initialAttributes = new Dictionary<int, CharacterAttributeData>();
+					if (raceTemplate.InitialAttributes != null &&
+						raceTemplate.InitialAttributes.Attributes.Count > 0)
+					{
+						foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes)
 						{
-							foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultAllied)
-							{
-								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
-								{
-									CharacterID = newCharacter.ID,
-									TemplateID = faction.ID,
-									Value = FactionTemplate.Maximum,
-								});
-							}
-							foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultNeutral)
-							{
-								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
-								{
-									CharacterID = newCharacter.ID,
-									TemplateID = faction.ID,
-									Value = 0,
-								});
-							}
-							foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultHostile)
-							{
-								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
-								{
-									CharacterID = newCharacter.ID,
-									TemplateID = faction.ID,
-									Value = FactionTemplate.Minimum,
-								});
-							}
-							dbContext.SaveChanges();
+							initialAttributes.Add(template.ID, new CharacterAttributeData(
+								id: 0,
+								characterID: characterID,
+								templateID: template.ID,
+								value: template.InitialValue,
+								currentValue: template.IsResourceAttribute ? template.InitialValue : 0.0f
+							));
 						}
+					}
 
-						// Add starting abilities
-						AddStartingAbilities(dbContext, newCharacter.ID, StartingAbilities);
-						AddStartingAbilities(dbContext, newCharacter.ID, raceTemplate.StartingAbilities);
+					List<CharacterFactionData> factions = BuildStartingFactions(characterID, raceTemplate);
 
-						// Add inventory items
-						AddStartingItems(dbContext, newCharacter.ID, StartingInventoryItems);
-						AddStartingItems(dbContext, newCharacter.ID, raceTemplate.StartingInventoryItems);
+					List<CharacterAbilityData> abilities = new List<CharacterAbilityData>();
+					BuildStartingAbilities(characterID, StartingAbilities, abilities);
+					BuildStartingAbilities(characterID, raceTemplate.StartingAbilities, abilities);
 
-						// Add equipped items
-						AddStartingEquipment(dbContext, newCharacter.ID, StartingEquipment, initialAttributes);
-						AddStartingEquipment(dbContext, newCharacter.ID, raceTemplate.StartingEquipment, initialAttributes);
+					List<CharacterInventoryData> inventoryItems = new List<CharacterInventoryData>();
+					BuildStartingItems(characterID, StartingInventoryItems, inventoryItems);
+					BuildStartingItems(characterID, raceTemplate.StartingInventoryItems, inventoryItems);
 
-						// Save the initial character attributes to the database
-						if (initialAttributes != null &&
-							initialAttributes.Count > 0)
+					List<CharacterEquipmentData> equipment = new List<CharacterEquipmentData>();
+					BuildStartingEquipment(characterID, StartingEquipment, equipment, initialAttributes);
+					BuildStartingEquipment(characterID, raceTemplate.StartingEquipment, equipment, initialAttributes);
+
+					// --- Persist all sub-entities within the same transaction ---
+
+					if (factions.Count > 0)
+					{
+						await factionService.PersistAsync(factions);
+					}
+					if (abilities.Count > 0)
+					{
+						await abilityService.PersistAsync(abilities);
+					}
+					if (inventoryItems.Count > 0)
+					{
+						await inventoryService.PersistAsync(inventoryItems);
+					}
+					if (equipment.Count > 0)
+					{
+						await equipmentService.PersistAsync(equipment);
+					}
+					if (initialAttributes.Count > 0)
+					{
+						await attributeService.PersistAsync(initialAttributes.Values);
+					}
+
+					// All writes succeeded — commit the transaction
+					DatabaseResult commitResult = await uow.CommitAsync();
+					if (!commitResult.IsSuccess)
+					{
+						await Log.Error("CharacterCreateSystem", $"Failed to commit unit of work: {commitResult.ErrorMessage}");
+						EnqueueMainThread(() =>
 						{
-							foreach (KeyValuePair<int, CharacterAttributeEntity> pair in initialAttributes)
+							if (conn != null && conn.IsActive)
 							{
-								dbContext.CharacterAttributes.Add(pair.Value);
+								Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+								{
+									Result = CharacterCreateResult.Error,
+								}, true, Channel.Reliable);
 							}
-							dbContext.SaveChanges();
-						}
+						});
+						return;
+					}
+				}
 
-						// Send success to the client
+				// Marshal success response back to main thread
+				EnqueueMainThread(() =>
+				{
+					if (conn != null && conn.IsActive)
+					{
 						Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 						{
 							Result = CharacterCreateResult.Success,
 						}, true, Channel.Reliable);
 
-						// Send the create broadcast back to the client
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 					}
-					else
-					{
-						Log.Debug("CharacterCreateSystem", "Unable to get find initial spawn position for Spawner.");
-					}
-				}
-				else
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterCreateSystem", $"ProcessCharacterCreateAsync failed: {ex.Message}");
+				EnqueueMainThread(() =>
 				{
-					Log.Debug("CharacterCreateSystem", "Unable to get World Scene Details.");
-				}
+					if (conn != null && conn.IsActive)
+					{
+						Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+						{
+							Result = CharacterCreateResult.Error,
+						}, true, Channel.Reliable);
+					}
+				});
 			}
 		}
 
 		/// <summary>
-		/// Adds starting abilities to the character in the database.
+		/// Builds starting faction data for a newly created character based on race template.
 		/// </summary>
-		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="characterID">ID of the newly created character.</param>
+		/// <param name="raceTemplate">Race template containing initial faction definitions.</param>
+		/// <returns>List of faction data objects to persist.</returns>
+		private List<CharacterFactionData> BuildStartingFactions(long characterID, RaceTemplate raceTemplate)
+		{
+			var factions = new List<CharacterFactionData>();
+			if (raceTemplate.InitialFaction == null)
+			{
+				return factions;
+			}
+			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultAllied)
+			{
+				factions.Add(new CharacterFactionData(
+					id: 0,
+					characterID: characterID,
+					templateID: faction.ID,
+					value: FactionTemplate.Maximum
+				));
+			}
+			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultNeutral)
+			{
+				factions.Add(new CharacterFactionData(
+					id: 0,
+					characterID: characterID,
+					templateID: faction.ID,
+					value: 0
+				));
+			}
+			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultHostile)
+			{
+				factions.Add(new CharacterFactionData(
+					id: 0,
+					characterID: characterID,
+					templateID: faction.ID,
+					value: FactionTemplate.Minimum
+				));
+			}
+			return factions;
+		}
+
+		/// <summary>
+		/// Builds starting ability data for a newly created character.
+		/// </summary>
 		/// <param name="characterID">ID of the character to add abilities to.</param>
 		/// <param name="startingAbilities">List of ability templates to add.</param>
-		private void AddStartingAbilities(NpgsqlDbContext dbContext, long characterID, List<AbilityTemplate> startingAbilities)
+		/// <param name="abilities">Target list to append ability data to.</param>
+		private void BuildStartingAbilities(long characterID, List<AbilityTemplate> startingAbilities, List<CharacterAbilityData> abilities)
 		{
 			if (startingAbilities != null)
 			{
 				foreach (AbilityTemplate startingAbility in startingAbilities)
 				{
-					var dbAbility = new CharacterAbilityEntity()
-					{
-						CharacterID = characterID,
-						TemplateID = startingAbility.ID,
-						AbilityEvents = startingAbility.GetAllAbilityEventIDs(),
-					};
-					dbContext.CharacterAbilities.Add(dbAbility);
+					abilities.Add(new CharacterAbilityData(
+						id: 0,
+						characterID: characterID,
+						templateID: startingAbility.ID,
+						abilityEvents: startingAbility.GetAllAbilityEventIDs(),
+						cooldown: 0f
+					));
 				}
-				dbContext.SaveChanges();
 			}
 		}
 
 		/// <summary>
-		/// Adds starting items to the character's inventory in the database.
+		/// Builds starting inventory item data for a newly created character.
 		/// </summary>
-		/// <param name="dbContext">Database context for updates.</param>
 		/// <param name="characterID">ID of the character to add items to.</param>
 		/// <param name="startingItems">List of item templates to add.</param>
-		private void AddStartingItems(NpgsqlDbContext dbContext, long characterID, List<BaseItemTemplate> startingItems)
+		/// <param name="items">Target list to append inventory data to.</param>
+		private void BuildStartingItems(long characterID, List<BaseItemTemplate> startingItems, List<CharacterInventoryData> items)
 		{
 			if (startingItems != null)
 			{
+				int slotOffset = items.Count;
 				for (int i = 0; i < startingItems.Count; ++i)
 				{
 					BaseItemTemplate itemTemplate = startingItems[i];
-					var dbItem = new CharacterInventoryEntity()
-					{
-						CharacterID = characterID,
-						TemplateID = itemTemplate.ID,
-						Slot = i,
-						Seed = 0,
-						Amount = 1,
-					};
-					dbContext.CharacterInventoryItems.Add(dbItem);
+					items.Add(new CharacterInventoryData(
+						id: 0,
+						characterID: characterID,
+						templateID: itemTemplate.ID,
+						slot: slotOffset + i,
+						seed: 0,
+						amount: 1
+					));
 				}
-				dbContext.SaveChanges();
 			}
 		}
 
 		/// <summary>
-		/// Adds starting equipment to the character in the database and updates initial attributes.
+		/// Builds starting equipment data for a newly created character and updates initial attribute values.
 		/// </summary>
-		/// <param name="dbContext">Database context for updates.</param>
 		/// <param name="characterID">ID of the character to add equipment to.</param>
 		/// <param name="startingEquipment">List of equipment templates to add.</param>
-		/// <param name="initialAttributes">Dictionary of initial character attributes to update.</param>
-		private void AddStartingEquipment(NpgsqlDbContext dbContext, long characterID, List<EquippableItemTemplate> startingEquipment, Dictionary<int, CharacterAttributeEntity> initialAttributes)
+		/// <param name="equipment">Target list to append equipment data to.</param>
+		/// <param name="initialAttributes">Dictionary of initial character attributes to update with equipment bonuses.</param>
+		private void BuildStartingEquipment(long characterID, List<EquippableItemTemplate> startingEquipment, List<CharacterEquipmentData> equipment, Dictionary<int, CharacterAttributeData> initialAttributes)
 		{
 			if (startingEquipment != null)
 			{
@@ -402,25 +584,77 @@ namespace FishMMO.Server.Implementation.LoginServer
 					// Update our initial attribute values to include equipped item attributes
 					foreach (ItemAttribute itemAttribute in itemGenerator.Attributes.Values)
 					{
-						if (initialAttributes.TryGetValue(itemAttribute.Template.CharacterAttribute.ID, out CharacterAttributeEntity attributeEntity))
+						if (initialAttributes.TryGetValue(itemAttribute.Template.CharacterAttribute.ID, out CharacterAttributeData attributeData))
 						{
-							//Log.Debug("CharacterCreateSystem", $"{itemTemplate.Name} - {itemAttribute.Template.CharacterAttribute.Name} adding {itemAttribute.value}");
-							attributeEntity.Value += itemAttribute.value;
+							initialAttributes[itemAttribute.Template.CharacterAttribute.ID] = new CharacterAttributeData(
+								id: attributeData.ID,
+								characterID: attributeData.CharacterID,
+								templateID: attributeData.TemplateID,
+								value: attributeData.Value + (int)itemAttribute.value,
+								currentValue: attributeData.CurrentValue
+							);
 						}
 					}
 
-					// Add the equipped item to the database
-					var dbItem = new CharacterEquipmentEntity()
-					{
-						CharacterID = characterID,
-						TemplateID = itemTemplate.ID,
-						Slot = (int)itemTemplate.Slot,
-						Seed = itemGenerator.Seed,
-						Amount = 0,
-					};
-					dbContext.CharacterEquippedItems.Add(dbItem);
+					// Add the equipped item data
+					equipment.Add(new CharacterEquipmentData(
+						id: 0,
+						characterID: characterID,
+						templateID: itemTemplate.ID,
+						slot: (int)itemTemplate.Slot,
+						seed: itemGenerator.Seed,
+						amount: 0
+					));
 				}
-				dbContext.SaveChanges();
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread response queue each frame.
+		/// All network operations from async workers are marshalled through this queue
+		/// to ensure they execute on the main Unity thread.
+		/// </summary>
+		/// <param name="deltaTime">Time elapsed since last frame.</param>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			DrainMainThreadQueue();
+		}
+
+		/// <summary>
+		/// Drains the main-thread queue via the RuntimeDataContainer.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<ICharacterCreateSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Thread-safe enqueue of an action to be executed on the main Unity thread
+		/// via the RuntimeDataContainer.
+		/// </summary>
+		/// <param name="action">The action to execute on the main thread.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<ICharacterCreateSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

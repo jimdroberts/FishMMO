@@ -63,12 +63,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
 			playerCharacter.Owner.Broadcast(new FactionUpdateBroadcast()
 			{
 				TemplateID = faction.Template.ID,

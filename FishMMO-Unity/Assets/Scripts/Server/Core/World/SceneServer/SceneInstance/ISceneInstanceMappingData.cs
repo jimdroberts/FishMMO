@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Data;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
@@ -22,6 +22,6 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Tracks pending scene load requests by scene ID.
 		/// </summary>
-		Dictionary<long, SceneEntity> PendingScenes { get; }
+		Dictionary<long, SceneData> PendingScenes { get; }
 	}
 }

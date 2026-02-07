@@ -2,9 +2,16 @@ using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Transporting;
 using FishNet.Utility.Performance;
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -15,8 +22,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// <summary>
 	/// Manages pet-related server logic, including pet summoning, following, staying, releasing, and persistence.
 	/// Handles pet broadcasts, character events, and pet AI initialization for player characters.
+	/// Game logic and Broadcasts run synchronously on the main thread.
+	/// Database operations are async to avoid blocking the main thread.
+	/// Results from async DB queries that require main-thread state changes or Broadcasts are marshalled
+	/// via IPetSystemMainThreadQueueData.
 	/// </summary>
 	[CreateAssetMenu(fileName = "PetSystem", menuName = "FishMMO/Server/SceneServer/Pet System", order = 1)]
+	[RequiresDataContainer(typeof(PetSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class PetSystem : ServerBehaviour, IPetSystem
 	{
 		/// <summary>
@@ -28,6 +41,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Error("PetSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IPetSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("PetSystem", "Failed to initialize: IPetSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
 			// Network broadcasts
@@ -62,6 +81,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Drain any remaining queued main-thread actions
+			DrainMainThreadQueue();
+
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<PetFollowBroadcast>(OnPetFollowBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<PetStayBroadcast>(OnPetStayBroadcastReceived);
@@ -81,15 +103,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Drains queued main-thread actions from the IPetSystemMainThreadQueueData container.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<IPetSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an action to be executed on the main thread.
+		/// </summary>
+		/// <param name="action">The action to enqueue.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IPetSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread queue each frame.
+		/// </summary>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			DrainMainThreadQueue();
+		}
+
+		/// <summary>
 		/// Handles pet follow broadcast, updating pet AI to follow the character.
 		/// </summary>
 		private void OnPetFollowBroadcastReceived(NetworkConnection conn, PetFollowBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
-			{
-				return;
-			}
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -117,10 +166,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
-			{
-				return;
-			}
 
 			IPetController petController = conn.FirstObject.GetComponent<IPetController>();
 			if (petController == null || petController.Pet == null)
@@ -142,10 +187,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void OnPetSummonBroadcastReceived(NetworkConnection conn, PetSummonBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
-			{
-				return;
-			}
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -172,7 +213,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -184,14 +225,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			CharacterPetService.Save(dbContext, petController.Character, false);
+			// Capture immutable data for the async path
+			long characterID = petController.Character.ID;
+			int templateID = petController.Pet.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
+			List<int> abilities = petController.Pet.Abilities != null ? new List<int>(petController.Pet.Abilities) : new List<int>();
 
 			if (petController.Pet != null &&
 				petController.Pet.NetworkObject.IsSpawned)
@@ -202,6 +239,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			petController.Pet = null;
 
 			Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
+
+			// Fire-and-forget async DB save with spawned=false
+			EnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, false));
 		}
 
 		/// <summary>
@@ -224,44 +264,105 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-
-			if (dbContext == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
 
-			if (!CharacterPetService.TryLoad(dbContext, character, out Pet pet))
+			// Capture immutable data for the async path
+			long characterID = character.ID;
+
+			EnqueueAsyncWork(() => LoadAndSpawnPetAsync(conn, character, scene, characterID));
+		}
+
+		/// <summary>
+		/// Asynchronously fetches the spawned pet from the database and marshals pet instantiation back to the main thread.
+		/// </summary>
+		private async Task LoadAndSpawnPetAsync(NetworkConnection conn, IPlayerCharacter character, Scene scene, long characterID)
+		{
+			try
 			{
-				return;
-			}
-
-			pet.PetOwner = character;
-			petController.Pet = pet;
-
-			if (pet.TryGet(out IAIController aiController))
-			{
-				// Initialize AI Controller
-				aiController.Initialize(Vector3.zero);
-				aiController.Target = character.Transform;
-			}
-
-			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(pet.GameObject, character.GameObject.scene);
-
-			// Ensure the game object is active, pooled objects are disabled
-			pet.GameObject.SetActive(true);
-
-			ServerManager.Spawn(pet.GameObject, character.NetworkObject.Owner, character.GameObject.scene);
-
-			if (pet.TryGet(out IFactionController petFactionController))
-			{
-				if (character.TryGet(out IFactionController casterFactionController))
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPetService>(out var charPetService))
 				{
-					petFactionController.CopyFrom(casterFactionController);
+					return;
 				}
-			}
 
-			Server.NetworkWrapper.Broadcast(conn, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
+				DatabaseResult<CharacterPetData?> fetchResult = await charPetService.FetchSpawnedAsync(characterID);
+				if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
+				{
+					return;
+				}
+
+				CharacterPetData petData = fetchResult.Data.Value;
+
+				// Marshal pet instantiation back to the main thread
+				EnqueueMainThread(() =>
+				{
+					if (Server == null)
+					{
+						return;
+					}
+
+					// Look up the pet ability template by ID
+					PetAbilityTemplate petAbilityTemplate = BaseAbilityTemplate.Get<PetAbilityTemplate>(petData.TemplateID);
+					if (petAbilityTemplate == null || petAbilityTemplate.PetPrefab == null)
+					{
+						return;
+					}
+
+					if (!character.TryGet(out IPetController petController))
+					{
+						return;
+					}
+
+					// Instantiate the pet from the prefab pool
+					Vector3 spawnPosition = character.Transform.position;
+					NetworkObject nob = Server.NetworkWrapper.NetworkManager.GetPooledInstantiated(
+						petAbilityTemplate.PetPrefab.PrefabId,
+						petAbilityTemplate.PetPrefab.SpawnableCollectionId,
+						ObjectPoolRetrieveOption.Unset,
+						null, spawnPosition, character.Transform.rotation, null, true);
+
+					Pet pet = nob.GetComponent<Pet>();
+					if (pet == null)
+					{
+						return;
+					}
+
+					pet.PetOwner = character;
+					pet.PetAbilityTemplate = petAbilityTemplate;
+					pet.Abilities = petData.Abilities != null ? new List<int>(petData.Abilities) : new List<int>();
+					petController.Pet = pet;
+
+					if (pet.TryGet(out IAIController aiController))
+					{
+						// Initialize AI Controller
+						aiController.Initialize(Vector3.zero);
+						aiController.Target = character.Transform;
+					}
+
+					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(pet.GameObject, character.GameObject.scene);
+
+					// Ensure the game object is active, pooled objects are disabled
+					pet.GameObject.SetActive(true);
+
+					ServerManager.Spawn(pet.GameObject, character.NetworkObject.Owner, character.GameObject.scene);
+
+					if (pet.TryGet(out IFactionController petFactionController))
+					{
+						if (character.TryGet(out IFactionController casterFactionController))
+						{
+							petFactionController.CopyFrom(casterFactionController);
+						}
+					}
+
+					Server.NetworkWrapper.Broadcast(conn, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PetSystem", $"Error loading/spawning pet (CharID={characterID}): {ex}");
+			}
 		}
 
 		/// <summary>
@@ -279,9 +380,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-
-			if (dbContext == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -294,12 +393,60 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				currentHealth = health.CurrentValue;
 			}
 
-			CharacterPetService.Save(dbContext, character, petController.Pet != null && currentHealth > 0.0f);
+			// Capture immutable data for the async path
+			long characterID = character.ID;
+			int templateID = petController.Pet?.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
+			List<int> abilities = petController.Pet?.Abilities != null ? new List<int>(petController.Pet.Abilities) : new List<int>();
+			bool spawned = petController.Pet != null && currentHealth > 0.0f;
 
 			if (petController.Pet != null &&
 				petController.Pet.NetworkObject.IsSpawned)
 			{
 				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
+			}
+
+			// Fire-and-forget async DB save
+			EnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, spawned));
+		}
+
+		/// <summary>
+		/// Asynchronously persists pet state to the database.
+		/// Fetches the existing pet record to obtain the version, then persists with version+1.
+		/// </summary>
+		private async Task SavePetAsync(long characterID, int templateID, List<int> abilities, bool spawned)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPetService>(out var charPetService))
+				{
+					return;
+				}
+
+				if (templateID <= 0)
+				{
+					return;
+				}
+
+				// Fetch existing pet record to get ID and version
+				DatabaseResult<CharacterPetData?> fetchResult = await charPetService.FetchAsync(characterID);
+				long existingID = 0;
+				long existingVersion = 0;
+				if (fetchResult.IsSuccess && fetchResult.Data.HasValue)
+				{
+					existingID = fetchResult.Data.Value.ID;
+					existingVersion = fetchResult.Data.Value.Version;
+				}
+
+				CharacterPetData petData = new CharacterPetData(existingID, existingVersion + 1, characterID, templateID, abilities, spawned);
+				await charPetService.PersistAsync(petData);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PetSystem", $"Error saving pet (CharID={characterID}): {ex}");
 			}
 		}
 
@@ -388,6 +535,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Server.NetworkWrapper.Broadcast(caster.Owner, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
+			}
 		}
 	}
 }

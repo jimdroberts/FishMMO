@@ -1,5 +1,5 @@
 using System;
-using FishMMO.Shared;
+using FishMMO.Database.Data.Enums;
 using FishMMO.Server.Core.Account.SRP;
 
 namespace FishMMO.Server.Core.Account

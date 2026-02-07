@@ -38,19 +38,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			else if (character.TryGet(out IInventoryController inventoryController))
 			{
 				//Log.Debug($"WorldItem Amount {worldItem.Amount}");
-				using var dbContext = serverInstance.Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				if (dbContext == null)
-				{
-					return;
-				}
-
 				Item newItem = new Item(worldItem.Template, worldItem.Amount);
 				if (newItem == null)
 				{
 					return;
 				}
 
-				if (serverInstance.SendNewItemBroadcast(dbContext, character.Owner, character, inventoryController, newItem))
+				if (serverInstance.SendNewItemBroadcast(character.Owner, character, inventoryController, newItem))
 				{
 					if (newItem.IsStackable &&
 						newItem.Stackable.Amount > 1)

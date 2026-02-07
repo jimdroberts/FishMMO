@@ -2,10 +2,14 @@
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using FishMMO.Database.Npgsql.Entities;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
 using FishMMO.Logging;
 using UnityEngine;
 
@@ -13,10 +17,13 @@ namespace FishMMO.Server.Implementation.World
 {
 	/// <summary>
 	/// System for processing kick requests from the database and disconnecting accounts as needed.
-	/// Periodically polls the database for new kick requests and processes them.
+	/// Periodically polls the database for new kick requests and processes them asynchronously.
+	/// Kick/Disconnect calls are marshalled back to the main thread via a RuntimeDataContainer queue.
 	/// </summary>
 	[CreateAssetMenu(fileName = "KickRequestSystem", menuName = "FishMMO/Server/WorldServer/Kick Request System", order = 1)]
 	[RequiresDataContainer(typeof(KickRequestSystemQueueData))]
+	[RequiresDataContainer(typeof(KickRequestSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class KickRequestSystem : ServerBehaviour, IKickRequestSystem
 	{
 		/// <summary>
@@ -57,6 +64,19 @@ namespace FishMMO.Server.Implementation.World
 				return ServerComponentInitializationStatus.FailedToFindServerManager;
 			}
 
+			// Verify required data containers
+			if (!Server.DataContainerRegistry.TryGet<IKickRequestSystemQueueData>(out _))
+			{
+				Log.Error("KickRequestSystem", "Failed to initialize: IKickRequestSystemQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IKickRequestSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("KickRequestSystem", "Failed to initialize: IKickRequestSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
 			// Connection state events
 			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
@@ -72,6 +92,7 @@ namespace FishMMO.Server.Implementation.World
 
 		/// <summary>
 		/// Called when the system is being destroyed. Unsubscribes from server connection state events.
+		/// Drains remaining main-thread responses so clients get their final messages.
 		/// </summary>
 		public override void OnDeinitialize()
 		{
@@ -87,6 +108,9 @@ namespace FishMMO.Server.Implementation.World
 				return;
 			}
 
+			// Drain remaining responses
+			DrainMainThreadQueue();
+
 			// Connection state events
 			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
 
@@ -99,6 +123,7 @@ namespace FishMMO.Server.Implementation.World
 
 		/// <summary>
 		/// Handles remote connection state changes. Deletes kick requests for accounts that disconnect.
+		/// Database operation is performed asynchronously to avoid blocking the callback thread.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
 		/// <param name="args">Remote connection state arguments.</param>
@@ -107,104 +132,172 @@ namespace FishMMO.Server.Implementation.World
 			if (args.ConnectionState == RemoteConnectionState.Stopped &&
 				Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				if (dbContext != null)
-				{
-					KickRequestService.Delete(dbContext, accountName);
-				}
+				long entityKey = (long)accountName.GetHashCode();
+				EnqueueAsyncWork(() => DeleteKickRequestAsync(accountName), entityKey);
 			}
 		}
 
 		/// <summary>
-		/// Called by the server's LateUpdate. Polls the database for kick requests at the specified rate and processes them.
+		/// Asynchronously deletes a kick request for the specified account.
+		/// </summary>
+		/// <param name="accountName">The account name to delete the kick request for.</param>
+		private async Task DeleteKickRequestAsync(string accountName)
+		{
+			try
+			{
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var kickRequestService))
+				{
+					return;
+				}
+
+				await kickRequestService.DeleteAsync(accountName);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("KickRequestSystem", $"Error deleting kick request for {accountName}: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread response queue each frame.
+		/// All network operations from async workers are marshalled through this queue
+		/// to ensure they execute on the main Unity thread.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
+			DrainMainThreadQueue();
 		}
 
 		/// <summary>
-		/// Periodic callback that fetches and processes kick requests from the database.
+		/// Periodic callback that fetches and processes kick requests from the database asynchronously.
 		/// </summary>
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicUpdate(float deltaTime)
 		{
 			if (Server.ServerState == ConnectionState.Started)
 			{
-				List<KickRequestEntity> updates = FetchKickRequests();
-				ProcessKickRequests(updates);
+				EnqueueAsyncWork(() => ProcessKickRequestsAsync());
 			}
 		}
 
 		/// <summary>
-		/// Fetches new kick requests from the database since the last fetch.
-		/// Updates lastFetchTime and lastPosition for incremental polling.
+		/// Asynchronously fetches and processes kick requests from the database.
+		/// Fetches new requests since the last poll, then kicks matching connections.
+		/// Kick calls are marshalled to the main thread since FishNet is not thread-safe.
 		/// </summary>
-		/// <returns>List of new kick request entities.</returns>
-		private List<KickRequestEntity> FetchKickRequests()
+		private async Task ProcessKickRequestsAsync()
 		{
-			if (!Server.DataContainerRegistry.TryGet(out IKickRequestSystemQueueData data))
-			{
-				return null;
-			}
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-
-			// Fetch kick requests from the database
-			List<KickRequestEntity> updates = KickRequestService.Fetch(dbContext, data.LastFetchTime, data.LastPosition, UpdateFetchCount);
-			if (updates != null && updates.Count > 0)
-			{
-				KickRequestEntity latest = updates[updates.Count - 1];
-				if (latest != null)
-				{
-					data.LastFetchTime = latest.TimeCreated;
-					data.LastPosition = latest.ID;
-				}
-			}
-			return updates;
-		}
-
-		/// <summary>
-		/// Processes a list of kick requests, setting accounts offline and kicking connections as needed.
-		/// </summary>
-		/// <param name="requests">List of kick request entities to process.</param>
-		private void ProcessKickRequests(List<KickRequestEntity> requests)
-		{
-			if (requests == null || requests.Count < 1)
+			if (!Server.DataContainerRegistry.TryGet<IKickRequestSystemQueueData>(out var data))
 			{
 				return;
 			}
 
-			for (int i = 0; i < requests.Count; ++i)
+			if (data.IsProcessing) return;
+
+			data.IsProcessing = true;
+
+			try
 			{
-				KickRequestEntity kickRequest = requests[i];
-				if (kickRequest == null)
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var kickRequestService) ||
+					!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
 				{
-					continue;
+					return;
 				}
 
-				// Check if the last successful login happened after the kick request.
-				if (Server != null && Server.CoreServer.NpgsqlDbContextFactory != null)
+				// Fetch kick requests from the database
+				DatabaseResult<List<KickRequestData>> dbResult = await kickRequestService.FetchAsync(
+					data.LastFetchTime, data.LastPosition, UpdateFetchCount);
+
+				if (!dbResult.IsSuccess || dbResult.Data == null || dbResult.Data.Count == 0)
 				{
-					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+					return;
+				}
 
-					// Immediately set all characters for the account to offline. Kick will be processed on scene servers.
-					CharacterService.SetOnlineState(dbContext, kickRequest.AccountName, false);
+				// Update polling position
+				KickRequestData latest = dbResult.Data[dbResult.Data.Count - 1];
+				data.LastFetchTime = latest.TimeCreated;
+				data.LastPosition = latest.ID;
 
-					if (AccountService.TryGetLastLogin(dbContext, kickRequest.AccountName, out DateTime lastLogin))
+				// Fire all last-login checks in parallel
+				var loginTasks = new Task<DatabaseResult<DateTime>>[dbResult.Data.Count];
+				for (int i = 0; i < dbResult.Data.Count; i++)
+				{
+					loginTasks[i] = accountService.FetchLastLoginAsync(dbResult.Data[i].AccountName);
+				}
+				await Task.WhenAll(loginTasks);
+
+				// Process results — kick any accounts that haven't reconnected since the request
+				for (int i = 0; i < dbResult.Data.Count; i++)
+				{
+					KickRequestData kickRequest = dbResult.Data[i];
+					DatabaseResult<DateTime> lastLoginResult = loginTasks[i].Result;
+
+					// If the last successful login happened after the kick request,
+					// the account reconnected and the kick is stale.
+					if (lastLoginResult.IsSuccess && lastLoginResult.Data >= kickRequest.TimeCreated)
 					{
-						if (lastLogin >= kickRequest.TimeCreated)
-						{
-							// Account is recently connected, skip kicking.
-							return;
-						}
+						continue;
 					}
-				}
 
-				if (Server.AccountManager.GetConnectionByAccountName(kickRequest.AccountName, out NetworkConnection conn))
-				{
-					// Kick the connection for the account.
-					conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+					// Marshal Kick to main thread - FishNet is not thread-safe
+					string accountName = kickRequest.AccountName;
+					EnqueueMainThread(() =>
+					{
+						if (Server.AccountManager.GetConnectionByAccountName(accountName, out NetworkConnection conn))
+						{
+							conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+						}
+					});
 				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("KickRequestSystem", $"Error processing kick requests: {ex}");
+			}
+			finally
+			{
+				data.IsProcessing = false;
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread queue via the RuntimeDataContainer.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<IKickRequestSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Thread-safe enqueue of an action to be executed on the main Unity thread
+		/// via the RuntimeDataContainer.
+		/// </summary>
+		/// <param name="action">The action to execute on the main thread.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IKickRequestSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

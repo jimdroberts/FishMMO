@@ -1,19 +1,28 @@
 ﻿using FishNet.Connection;
-using FishMMO.Server.DatabaseServices;
-using UnityEngine;
-using FishMMO.Shared;
+using FishNet.Transporting;
+using System;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.WorldServer;
+using FishMMO.Server.Implementation;
+using FishMMO.Shared;
 using FishMMO.Logging;
+using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.WorldServer
 {
 	/// <summary>
 	/// Handles world server registration and heartbeat (pulse) updates in the database.
 	/// Periodically updates the world server's status and character count.
+	/// Database operations are async to avoid blocking the main thread.
 	/// </summary>
 	[CreateAssetMenu(fileName = "WorldServerSystem", menuName = "FishMMO/Server/WorldServer/World Server System", order = 1)]
 	[RequiresDataContainer(typeof(WorldServerSystemRuntimeData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class WorldServerSystem : ServerBehaviour, IWorldServerSystem
 	{
 		/// <summary>
@@ -29,10 +38,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
+			if (Server.Database?.ServiceRegistry == null)
 			{
-				Log.Error("WorldServerSystem", "InitializeOnce: Failed to create database context");
+				Log.Error("WorldServerSystem", "InitializeOnce: Database ServiceRegistry is null");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
+			}
+
+			if (!Server.Database.ServiceRegistry.TryGet<IWorldServerService>(out _))
+			{
+				Log.Error("WorldServerSystem", "InitializeOnce: IWorldServerService not found");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -86,16 +100,25 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				throw new UnityException("Failed to get IWorldServerSystemRuntimeData.");
 			}
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IWorldServerService>(out var worldServerService))
 			{
-				throw new UnityException("Failed to get dbContext.");
+				throw new UnityException("Failed to resolve IWorldServerService from database service registry.");
 			}
 
 			if (Server.Configuration.TryGetString("ServerName", out string name))
 			{
-				WorldServerService.Add(dbContext, name, serverAddress, port, characterCount, data.IsLocked, out long id);
-				data.ID = id;
+				// Task.Run avoids deadlock from Unity's SynchronizationContext when blocking on async during init
+				DatabaseResult<(long ServerId, WorldServerData ServerData)> result = Task.Run(() =>
+					worldServerService.PersistAsync(name, serverAddress, port, characterCount, data.IsLocked))
+					.GetAwaiter().GetResult();
+
+				if (!result.IsSuccess)
+				{
+					throw new UnityException($"Failed to register world server: {result.ErrorMessage}");
+				}
+
+				data.ID = result.Data.ServerId;
 			}
 		}
 
@@ -109,8 +132,32 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				return;
 			}
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			WorldServerService.Pulse(dbContext, data.ID, characterCount);
+
+			// Fire-and-forget async DB pulse
+			EnqueueAsyncWork(() => PulseAsync(data.ID, characterCount));
+		}
+
+		/// <summary>
+		/// Asynchronously sends a heartbeat pulse to the database.
+		/// </summary>
+		private async Task PulseAsync(long serverId, int characterCount)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IWorldServerService>(out var worldServerService))
+				{
+					return;
+				}
+				await worldServerService.PulseAsync(serverId, characterCount);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("WorldServerSystem", $"Error during pulse (ServerID={serverId}): {ex}");
+			}
 		}
 
 		/// <summary>
@@ -126,6 +173,20 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				// Send a heartbeat pulse to the database with the current character count using the interface method.
 				int characterCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) ? sceneData.ConnectionCount : 0;
 				Pulse(characterCount);
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

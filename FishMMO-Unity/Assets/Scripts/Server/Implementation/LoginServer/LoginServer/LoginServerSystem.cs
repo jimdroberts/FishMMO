@@ -1,6 +1,12 @@
-﻿using FishMMO.Server.Core;
+﻿using System;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -12,6 +18,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// </summary>
 	[CreateAssetMenu(fileName = "LoginServerSystem", menuName = "FishMMO/Server/LoginServer/Login Server System", order = 1)]
 	[RequiresDataContainer(typeof(LoginServerRuntimeData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class LoginServerSystem : ServerBehaviour, ILoginServerSystem
 	{
 		/// <summary>
@@ -36,13 +43,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				Log.Error("LoginServerSystem", "Failed to initialize: Could not create database context");
-				return ServerComponentInitializationStatus.FailedToGetDbContext;
-			}
-
 			if (!Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server))
 			{
 				Log.Error("LoginServerSystem", "Failed to initialize: Could not get server IP address");
@@ -56,8 +56,26 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Register login server in database
-			LoginServerService.Add(dbContext, name, server.Address, server.Port, out long serverId);
-			runtimeData.ID = serverId;
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ILoginServerService>(out var loginServerService))
+			{
+				Log.Error("LoginServerSystem", "Failed to resolve ILoginServerService from database service registry");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
+			}
+
+			// Register login server in database (Task.Run avoids deadlock from
+			// Unity's SynchronizationContext when blocking on async during init)
+			DatabaseResult<LoginServerData> dbResult = Task.Run(() =>
+				loginServerService.PersistAsync(name, server.Address, server.Port))
+				.GetAwaiter().GetResult();
+
+			if (!dbResult.IsSuccess)
+			{
+				Log.Error("LoginServerSystem", $"Failed to register login server in database: {dbResult.ErrorMessage}");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
+			}
+
+			runtimeData.ID = dbResult.Data.ID;
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -65,7 +83,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				periodicSystem.RegisterPeriodicCallback(PulseRate, OnPeriodicPulse);
 			}
 
-			Log.Debug("LoginServerSystem", $"Initialized (ServerID={serverId}, Address={server.Address}:{server.Port}, PulseRate={PulseRate}s)");
+			Log.Debug("LoginServerSystem", $"Initialized (ServerID={runtimeData.ID}, Address={server.Address}:{server.Port}, PulseRate={PulseRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -104,10 +122,48 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server.ServerState == ConnectionState.Started &&
 				Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
 			{
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+				EnqueueAsyncWork(() => PulseAsync(runtimeData.ID));
+			}
+		}
 
-				//Log.Debug("Login Server System: Pulse");
-				LoginServerService.Pulse(dbContext, runtimeData.ID);
+		/// <summary>
+		/// Asynchronously sends a heartbeat pulse to the database.
+		/// </summary>
+		/// <param name="serverId">The login server's database ID.</param>
+		private async Task PulseAsync(long serverId)
+		{
+			try
+			{
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ILoginServerService>(out var loginServerService))
+				{
+					return;
+				}
+
+				DatabaseResult dbResult = await loginServerService.PulseAsync(serverId);
+
+				if (!dbResult.IsSuccess)
+				{
+					await Log.Warning("LoginServerSystem", $"Pulse failed: {dbResult.ErrorMessage}");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("LoginServerSystem", $"Error during pulse: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

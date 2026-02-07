@@ -11,6 +11,11 @@ namespace FishMMO.Server.Implementation.World
 	public class KickRequestSystemQueueData : RuntimeDataContainer, IKickRequestSystemQueueData
 	{
 		/// <summary>
+		/// Indicates whether the system is currently processing kick requests to prevent overlapping fetches.
+		/// </summary>
+		public bool IsProcessing { get; set; } = false;
+		
+		/// <summary>
 		/// Timestamp of the last successful database fetch for kick requests.
 		/// </summary>
 		public DateTime LastFetchTime { get; set; }

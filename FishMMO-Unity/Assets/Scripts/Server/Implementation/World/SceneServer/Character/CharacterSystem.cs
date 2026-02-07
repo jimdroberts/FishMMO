@@ -6,12 +6,18 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Data.Enums;
+using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Implementation.World.SceneServer.Character;
 using FishMMO.Shared;
 using FishMMO.Logging;
-using FishMMO.Database.Npgsql.Entities;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -22,12 +28,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterSystem", menuName = "FishMMO/Server/SceneServer/Character System", order = 1)]
 	[RequiresDataContainer(typeof(CharacterMappingData))]
+	[RequiresDataContainer(typeof(CharacterSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterSystem : ServerBehaviour, ICharacterSystem<NetworkConnection, Scene>
 	{
 		/// <summary>
 		/// Authenticator for login and character loading.
 		/// </summary>
 		private SceneServerAuthenticator loginAuthenticator;
+
+		/// <summary>
+		/// Prevents overlapping async periodic save operations.
+		/// </summary>
+		private volatile bool _isProcessing;
 
 		/// <summary>
 		/// Interval in seconds between periodic character saves.
@@ -88,6 +101,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				Log.Error("CharacterSystem", "Failed to initialize: ISceneServerSystem not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (Server.Database?.ServiceRegistry == null)
+			{
+				Log.Error("CharacterSystem", "Failed to initialize: Database ServiceRegistry is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out _))
+			{
+				Log.Error("CharacterSystem", "Failed to initialize: ICharacterService not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
@@ -168,12 +193,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Save all characters before shutdown
-			if (Server.CoreServer.NpgsqlDbContextFactory != null)
+			if (Server.Database?.ServiceRegistry != null &&
+				Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 			{
 				if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 				{
-					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-					CharacterService.Save(dbContext, new List<IPlayerCharacter>(data.CharactersByID.Values), false);
+					var characters = new List<IPlayerCharacter>(data.CharactersByID.Values);
+					Task.Run(async () =>
+					{
+						foreach (var character in characters)
+						{
+							try
+							{
+								CharacterData charData = BuildCharacterData(character);
+								await characterService.PersistAsync(charData);
+							}
+							catch (Exception ex)
+							{
+								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {character.ID}: {ex.Message}");
+							}
+						}
+					}).GetAwaiter().GetResult();
 				}
 			}
 		}
@@ -263,8 +303,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Log.Debug("CharacterSystem", "Save" + "[" + DateTime.UtcNow + "]");
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			CharacterService.Save(dbContext, new List<IPlayerCharacter>(data.CharactersByID.Values));
+			if (_isProcessing)
+			{
+				return;
+			}
+
+			// Snapshot character data on the main thread
+			var characterDataList = new List<CharacterData>(data.CharactersByID.Count);
+			foreach (var character in data.CharactersByID.Values)
+			{
+				characterDataList.Add(BuildCharacterData(character));
+			}
+
+			EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList));
 		}
 
 		/// <summary>
@@ -334,14 +385,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">Player character to save and despawn.</param>
 		private void SaveAndDespawnCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
-			// Save the character and set online status to false
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			CharacterService.Save(dbContext, character, false);
+			// Snapshot character data on the main thread and fire-and-forget save
+			CharacterData charData = BuildCharacterData(character);
+			EnqueueAsyncWork(() => SaveCharacterAsync(charData));
 
 			// Immediately log out for now.. we could add a timeout later on..?
 			if (character.NetworkObject.IsSpawned)
@@ -377,68 +423,486 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
-			// Create the db context
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 
-			if (CharacterService.TryGetSelectedCharacterID(dbContext, accountName, out long selectedCharacterID))
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 			{
-				if (mappingData.CharactersByID.ContainsKey(selectedCharacterID))
-				{
-					Log.Debug("CharacterSystem", $"{selectedCharacterID} is already loaded or loading.");
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
 
-					// Character load already started or complete
-					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+			EnqueueAsyncWork(() => LoadCharacterAsync(conn, accountName, characterService));
+		}
+
+		/// <summary>
+		/// Asynchronously fetches the selected character and ALL related sub-entity data
+		/// from the database using a Unit of Work for a consistent snapshot, then queues
+		/// the main-thread instantiation and scene loading.
+		/// </summary>
+		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService)
+		{
+			try
+			{
+				// Fetch all characters for the account and find the selected one
+				DatabaseResult<IReadOnlyList<CharacterData>> listResult = await characterService.FetchManyAsync(accountName);
+				if (!listResult.IsSuccess || listResult.Data == null)
+				{
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Log.Debug("CharacterSystem", "Failed to fetch character list.");
+							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+						}
+					});
 					return;
 				}
 
-				OnBeforeLoadCharacter?.Invoke(conn, selectedCharacterID);
-				if (CharacterService.TryGet(dbContext, selectedCharacterID, Server.NetworkWrapper.NetworkManager, out IPlayerCharacter character))
+				CharacterData? selectedChar = null;
+				foreach (CharacterData cd in listResult.Data)
 				{
-					string sceneName = character.SceneName;
-					int sceneHandle = character.SceneHandle;
-
-					// Check if the character is in an instance or not.
-					if (character.IsInInstance())
+					if (cd.Selected)
 					{
-						// Have the player enter the instance.
-						sceneName = character.InstanceSceneName;
-						sceneHandle = character.InstanceSceneHandle;
+						selectedChar = cd;
+						break;
+					}
+				}
+
+				if (!selectedChar.HasValue)
+				{
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Log.Debug("CharacterSystem", "Failed to fetch character ID.");
+							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+						}
+					});
+					return;
+				}
+
+				CharacterData charData = selectedChar.Value;
+				long characterID = charData.ID;
+				var serviceRegistry = Server.Database.ServiceRegistry;
+
+				if (!serviceRegistry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
+				{
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Log.Debug("CharacterSystem", "Failed to resolve IUnitOfWorkService.");
+							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+						}
+					});
+					return;
+				}
+
+				// --- Fetch all sub-entity data within a single Unit of Work (consistent snapshot) ---
+				IReadOnlyList<CharacterInventoryData> inventoryData = null;
+				IReadOnlyList<CharacterBankData> bankData = null;
+				IReadOnlyList<CharacterEquipmentData> equipmentData = null;
+				IReadOnlyList<CharacterAttributeData> attributeData = null;
+				IReadOnlyList<CharacterAbilityData> abilityData = null;
+				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = null;
+				IReadOnlyList<CharacterAchievementData> achievementData = null;
+				IReadOnlyList<CharacterFriendData> friendData = null;
+				CharacterGuildData? guildData = null;
+				CharacterPartyData? partyData = null;
+				IReadOnlyList<CharacterHotkeyData> hotkeyData = null;
+				IReadOnlyList<CharacterBuffData> buffData = null;
+				IReadOnlyList<CharacterFactionData> factionData = null;
+
+				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
+				if (!uowResult.IsSuccess)
+				{
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Log.Debug("CharacterSystem", "Failed to begin UnitOfWork for character load.");
+							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+						}
+					});
+					return;
+				}
+
+				await using (IUnitOfWork uow = uowResult.Data)
+				{
+					// All fetches share the same ambient DbContext/transaction (sequential, consistent snapshot)
+					if (serviceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService))
+					{
+						var result = await inventoryService.FetchAsync(characterID);
+						if (result.IsSuccess) inventoryData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterBankService>(out var bankService))
+					{
+						var result = await bankService.FetchAsync(characterID);
+						if (result.IsSuccess) bankData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterEquipmentService>(out var equipmentService))
+					{
+						var result = await equipmentService.FetchAsync(characterID);
+						if (result.IsSuccess) equipmentData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterAttributeService>(out var attributeService))
+					{
+						var result = await attributeService.FetchAsync(characterID);
+						if (result.IsSuccess) attributeData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterAbilityService>(out var abilityService))
+					{
+						var result = await abilityService.FetchAsync(characterID);
+						if (result.IsSuccess) abilityData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService))
+					{
+						var result = await knownAbilityService.FetchAsync(characterID);
+						if (result.IsSuccess) knownAbilityData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterAchievementService>(out var achievementService))
+					{
+						var result = await achievementService.FetchAsync(characterID);
+						if (result.IsSuccess) achievementData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterFriendService>(out var friendService))
+					{
+						var result = await friendService.FetchAsync(characterID);
+						if (result.IsSuccess) friendData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterGuildService>(out var guildService))
+					{
+						var result = await guildService.FetchAsync(characterID);
+						if (result.IsSuccess) guildData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterPartyService>(out var partyService))
+					{
+						var result = await partyService.FetchAsync(characterID);
+						if (result.IsSuccess) partyData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterHotkeyService>(out var hotkeyService))
+					{
+						var result = await hotkeyService.FetchAsync(characterID);
+						if (result.IsSuccess) hotkeyData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterBuffService>(out var buffService))
+					{
+						var result = await buffService.FetchAsync(characterID);
+						if (result.IsSuccess) buffData = result.Data;
+					}
+					if (serviceRegistry.TryGet<ICharacterFactionService>(out var factionService))
+					{
+						var result = await factionService.FetchAsync(characterID);
+						if (result.IsSuccess) factionData = result.Data;
 					}
 
-					//Log.Debug("CharacterSystem", "$"Character loaded into {sceneName}:{sceneHandle}.");
+					// Read-only: commit to cleanly close the transaction
+					await uow.CommitAsync();
+				}
 
-					// Check if the scene is valid, loaded, and cached properly
-					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out ISceneInstanceDetails instance) &&
-						sceneServerSystem.TryLoadSceneForConnection(conn, instance))
+				// Marshal back to main thread for Unity object instantiation
+				EnqueueMainThread(() => InstantiateAndLoadCharacter(
+					conn, charData,
+					inventoryData, bankData, equipmentData,
+					attributeData, abilityData, knownAbilityData,
+					achievementData, friendData,
+					guildData, partyData,
+					hotkeyData, buffData, factionData));
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"LoadCharacterAsync failed: {ex.Message}");
+				EnqueueMainThread(() =>
+				{
+					if (conn != null && conn.IsActive)
 					{
-						OnAfterLoadCharacter?.Invoke(conn, character);
+						conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+					}
+				});
+			}
+		}
 
-						mappingData.WaitingSceneLoadCharacters.Add(conn, character);
+		/// <summary>
+		/// Instantiates the player character from CharacterData, populates all controllers
+		/// with pre-fetched sub-entity data, and initiates scene loading.
+		/// Must be called on the main Unity thread.
+		/// </summary>
+		private void InstantiateAndLoadCharacter(
+			NetworkConnection conn, CharacterData charData,
+			IReadOnlyList<CharacterInventoryData> inventoryData,
+			IReadOnlyList<CharacterBankData> bankData,
+			IReadOnlyList<CharacterEquipmentData> equipmentData,
+			IReadOnlyList<CharacterAttributeData> attributeData,
+			IReadOnlyList<CharacterAbilityData> abilityData,
+			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData,
+			IReadOnlyList<CharacterAchievementData> achievementData,
+			IReadOnlyList<CharacterFriendData> friendData,
+			CharacterGuildData? guildData,
+			CharacterPartyData? partyData,
+			IReadOnlyList<CharacterHotkeyData> hotkeyData,
+			IReadOnlyList<CharacterBuffData> buffData,
+			IReadOnlyList<CharacterFactionData> factionData)
+		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
 
-						//Log.Debug("CharacterSystem", $"{character.CharacterName} is loading Scene: {sceneName}:{sceneHandle}");
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			if (mappingData.CharactersByID.ContainsKey(charData.ID))
+			{
+				Log.Debug("CharacterSystem", $"{charData.ID} is already loaded or loading.");
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			OnBeforeLoadCharacter?.Invoke(conn, charData.ID);
+
+			// Look up the race template and instantiate the character prefab
+			RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(charData.RaceID);
+			if (raceTemplate == null || raceTemplate.Prefab == null)
+			{
+				Log.Debug("CharacterSystem", "Failed to fetch character: invalid race template.");
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				return;
+			}
+
+			Vector3 position = new Vector3(charData.X, charData.Y, charData.Z);
+			Quaternion rotation = new Quaternion(charData.RotX, charData.RotY, charData.RotZ, charData.RotW);
+
+			NetworkObject nob = Server.NetworkWrapper.NetworkManager.GetPooledInstantiated(
+				raceTemplate.Prefab, position, rotation, true);
+			if (nob == null)
+			{
+				Log.Debug("CharacterSystem", "Failed to instantiate character prefab.");
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				return;
+			}
+
+			IPlayerCharacter character = nob.GetComponent<IPlayerCharacter>();
+			if (character == null)
+			{
+				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
+				Log.Debug("CharacterSystem", "Failed to get IPlayerCharacter from instantiated prefab.");
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				return;
+			}
+
+			// Populate character fields from CharacterData
+			character.ID = charData.ID;
+			character.CharacterName = charData.Name;
+			character.CharacterNameLower = charData.NameLowercase;
+			character.Account = charData.Account;
+			character.Version = charData.Version;
+			character.WorldServerID = charData.WorldServerID;
+			character.AccessLevel = (AccessLevel)(int)charData.AccessLevel;
+			character.TimeCreated = charData.TimeCreated;
+			character.RaceID = charData.RaceID;
+			character.ModelIndex = charData.ModelIndex;
+			character.SceneName = charData.SceneName;
+			character.SceneHandle = charData.SceneHandle;
+			character.BindScene = charData.BindScene;
+			character.BindPosition = new Vector3(charData.BindX, charData.BindY, charData.BindZ);
+			character.InstanceID = charData.InstanceID;
+			character.Flags = charData.Flags;
+
+			if (character.IsInInstance())
+			{
+				character.InstancePosition = new Vector3(charData.InstanceX, charData.InstanceY, charData.InstanceZ);
+				character.InstanceRotation = new Quaternion(charData.InstanceRotX, charData.InstanceRotY, charData.InstanceRotZ, charData.InstanceRotW);
+			}
+
+			// --- Populate all controllers from pre-fetched DB data ---
+
+			// Attributes
+			if (attributeData != null && attributeData.Count > 0 &&
+				character.TryGet(out ICharacterAttributeController attrController))
+			{
+				foreach (CharacterAttributeData attr in attributeData)
+				{
+					if (attr.CurrentValue > 0)
+					{
+						attrController.SetResourceAttribute(attr.TemplateID, attr.Value, attr.CurrentValue);
 					}
 					else
 					{
-						Log.Debug("CharacterSystem", "Failed to load scene for connection.");
-
-						// Send the character back to the world server.. something went wrong
-						conn.Disconnect(false);
+						attrController.SetAttribute(attr.TemplateID, attr.Value);
 					}
 				}
-				else
-				{
-					Log.Debug("CharacterSystem", "Failed to fetch character.");
+			}
 
-					// Loading the character failed for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
-					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+			// Inventory
+			if (inventoryData != null && inventoryData.Count > 0 &&
+				character.TryGet(out IInventoryController inventoryController))
+			{
+				foreach (CharacterInventoryData inv in inventoryData)
+				{
+					Item item = new Item(inv.ID, inv.Seed, inv.TemplateID, inv.Amount);
+					inventoryController.SetItemSlot(item, inv.Slot);
 				}
+			}
+
+			// Bank
+			if (bankData != null && bankData.Count > 0 &&
+				character.TryGet(out IBankController bankController))
+			{
+				foreach (CharacterBankData bank in bankData)
+				{
+					Item item = new Item(bank.ID, bank.Seed, bank.TemplateID, bank.Amount);
+					bankController.SetItemSlot(item, bank.Slot);
+				}
+			}
+
+			// Equipment
+			if (equipmentData != null && equipmentData.Count > 0 &&
+				character.TryGet(out IEquipmentController equipmentController))
+			{
+				foreach (CharacterEquipmentData equip in equipmentData)
+				{
+					Item item = new Item(equip.ID, equip.Seed, equip.TemplateID, equip.Amount);
+					equipmentController.SetItemSlot(item, equip.Slot);
+				}
+			}
+
+			// Abilities (crafted ability instances)
+			if (abilityData != null && abilityData.Count > 0 &&
+				character.TryGet(out IAbilityController abilityController))
+			{
+				foreach (CharacterAbilityData ability in abilityData)
+				{
+					Ability newAbility = new Ability(ability.ID, ability.TemplateID, ability.AbilityEvents);
+					abilityController.LearnAbility(newAbility, ability.Cooldown);
+				}
+
+				// Known base abilities
+				if (knownAbilityData != null && knownAbilityData.Count > 0)
+				{
+					List<BaseAbilityTemplate> knownTemplates = new List<BaseAbilityTemplate>();
+					foreach (CharacterKnownAbilityData known in knownAbilityData)
+					{
+						BaseAbilityTemplate template = BaseAbilityTemplate.Get<BaseAbilityTemplate>(known.TemplateID);
+						if (template != null)
+						{
+							knownTemplates.Add(template);
+						}
+					}
+					if (knownTemplates.Count > 0)
+					{
+						abilityController.LearnBaseAbilities(knownTemplates);
+					}
+				}
+			}
+
+			// Achievements
+			if (achievementData != null && achievementData.Count > 0 &&
+				character.TryGet(out IAchievementController achievementController))
+			{
+				foreach (CharacterAchievementData achievement in achievementData)
+				{
+					achievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value, true);
+				}
+			}
+
+			// Friends
+			if (friendData != null && friendData.Count > 0 &&
+				character.TryGet(out IFriendController friendController))
+			{
+				foreach (CharacterFriendData friend in friendData)
+				{
+					friendController.AddFriend(friend.FriendCharacterID);
+				}
+			}
+
+			// Guild
+			if (guildData.HasValue &&
+				character.TryGet(out IGuildController guildController))
+			{
+				guildController.ID = guildData.Value.GuildID;
+				guildController.Rank = (GuildRank)guildData.Value.Rank;
+			}
+
+			// Party
+			if (partyData.HasValue &&
+				character.TryGet(out IPartyController partyController))
+			{
+				partyController.ID = partyData.Value.PartyID;
+				partyController.Rank = (PartyRank)partyData.Value.Rank;
+			}
+
+			// Hotkeys
+			if (hotkeyData != null && hotkeyData.Count > 0)
+			{
+				foreach (CharacterHotkeyData hotkey in hotkeyData)
+				{
+					if (hotkey.Slot >= 0 && hotkey.Slot < character.Hotkeys.Count)
+					{
+						character.Hotkeys[hotkey.Slot] = new HotkeyData()
+						{
+							Type = hotkey.Type,
+							Slot = hotkey.Slot,
+							ReferenceID = hotkey.ReferenceID,
+						};
+					}
+				}
+			}
+
+			// Buffs
+			if (buffData != null && buffData.Count > 0 &&
+				character.TryGet(out IBuffController buffController))
+			{
+				foreach (CharacterBuffData buff in buffData)
+				{
+					Buff newBuff = new Buff(buff.TemplateID, buff.RemainingTime, buff.TickTime, buff.Stacks);
+					buffController.Apply(newBuff);
+				}
+			}
+
+			// Factions
+			if (factionData != null && factionData.Count > 0 &&
+				character.TryGet(out IFactionController factionController))
+			{
+				foreach (CharacterFactionData faction in factionData)
+				{
+					factionController.SetFaction(faction.TemplateID, faction.Value, true);
+				}
+			}
+
+			string sceneName = character.SceneName;
+			int sceneHandle = character.SceneHandle;
+
+			// Check if the character is in an instance or not.
+			if (character.IsInInstance())
+			{
+				// Have the player enter the instance.
+				sceneName = character.InstanceSceneName;
+				sceneHandle = character.InstanceSceneHandle;
+			}
+
+			// Check if the scene is valid, loaded, and cached properly
+			if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out ISceneInstanceDetails instance) &&
+				sceneServerSystem.TryLoadSceneForConnection(conn, instance))
+			{
+				OnAfterLoadCharacter?.Invoke(conn, character);
+
+				mappingData.WaitingSceneLoadCharacters.Add(conn, character);
 			}
 			else
 			{
-				Log.Debug("CharacterSystem", "Failed to fetch character ID.");
+				Log.Debug("CharacterSystem", "Failed to load scene for connection.");
 
-				// Loading the character data failed to load for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
+				conn.Disconnect(false);
 			}
 		}
 
@@ -561,16 +1025,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				OnSpawnCharacter?.Invoke(conn, character, scene);
 
 				// Set the character status to online
-				if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
-				{
-					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-					CharacterService.SetOnline(dbContext, accountName, character.CharacterName);
-				}
+				EnqueueAsyncWork(() => ClaimCharacterSessionAsync(character.ID));
 
 				OnConnect?.Invoke(conn, character);
 
 				// Send server character local observer data to the client.
-				SendAllCharacterData(character);
+				EnqueueAsyncWork(() => SendAllCharacterDataAsync(character));
 
 				//Log.Debug("CharacterSystem", character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
@@ -603,19 +1063,153 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			conn.Disconnect(false);
 		}
 		/// <summary>
-		/// Sends all server-side character data to the owner. Expensive operation.
+		/// Sends all server-side character data to the owner. Non-DB data is sent immediately
+		/// on the main thread. Guild, party, and friend data is fetched asynchronously and
+		/// marshalled back to the main thread for broadcast.
 		/// </summary>
 		/// <param name="character">Player character to send data for.</param>
-		public void SendAllCharacterData(IPlayerCharacter character)
+		private async Task SendAllCharacterDataAsync(IPlayerCharacter character)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (character == null)
 			{
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+			// --- Main-thread-only broadcasts (no DB calls needed) ---
+			// These read from in-memory character state and broadcast via FishNet (main thread required)
+			EnqueueMainThread(() => SendNonDbCharacterData(character));
 
-			if (character == null)
+			// --- Async DB-dependent broadcasts ---
+			// Capture IDs on calling context (safe since we're called from main thread callback)
+			long guildID = 0;
+			if (character.TryGet(out IGuildController guildController))
+			{
+				guildID = guildController.ID;
+			}
+
+			long partyID = 0;
+			if (character.TryGet(out IPartyController partyController))
+			{
+				partyID = partyController.ID;
+			}
+
+			List<long> friendIDs = null;
+			if (character.TryGet(out IFriendController friendController) &&
+				friendController.Friends != null &&
+				friendController.Friends.Count > 0)
+			{
+				friendIDs = new List<long>(friendController.Friends);
+			}
+
+			NetworkConnection owner = character.Owner;
+
+			if (Server.Database?.ServiceRegistry == null)
+			{
+				return;
+			}
+
+			try
+			{
+				// Guild members
+				if (guildID > 0 &&
+					Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var guildService))
+				{
+					DatabaseResult<IReadOnlyList<CharacterGuildData>> guildResult = await guildService.FetchManyAsync(guildID);
+					if (guildResult.IsSuccess && guildResult.Data != null && guildResult.Data.Count > 0)
+					{
+						var addBroadcasts = guildResult.Data.Select(x => new GuildAddBroadcast()
+						{
+							GuildID = x.GuildID,
+							CharacterID = x.CharacterID,
+							Rank = (GuildRank)x.Rank,
+							Location = x.Location,
+						}).ToList();
+
+						EnqueueMainThread(() =>
+						{
+							if (owner != null && owner.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(owner, new GuildAddMultipleBroadcast()
+								{
+									Members = addBroadcasts,
+								}, true, Channel.Reliable);
+							}
+						});
+					}
+				}
+
+				// Party members
+				if (partyID > 0 &&
+					Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var partyService))
+				{
+					DatabaseResult<IReadOnlyList<CharacterPartyData>> partyResult = await partyService.FetchManyAsync(partyID);
+					if (partyResult.IsSuccess && partyResult.Data != null && partyResult.Data.Count > 0)
+					{
+						var addBroadcasts = partyResult.Data.Select(x => new PartyAddBroadcast()
+						{
+							PartyID = x.PartyID,
+							CharacterID = x.CharacterID,
+							Rank = (PartyRank)x.Rank,
+							HealthPCT = x.HealthPCT,
+						}).ToList();
+
+						EnqueueMainThread(() =>
+						{
+							if (owner != null && owner.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(owner, new PartyAddMultipleBroadcast()
+								{
+									Members = addBroadcasts,
+								}, true, Channel.Reliable);
+							}
+						});
+					}
+				}
+
+				// Friends online status
+				if (friendIDs != null && friendIDs.Count > 0 &&
+					Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					List<FriendAddBroadcast> friends = new List<FriendAddBroadcast>();
+					foreach (long friendID in friendIDs)
+					{
+						DatabaseResult<CharacterData?> friendResult = await characterService.FetchAsync(friendID);
+						bool online = friendResult.IsSuccess && friendResult.Data.HasValue && friendResult.Data.Value.Online;
+						friends.Add(new FriendAddBroadcast()
+						{
+							CharacterID = friendID,
+							Online = online,
+						});
+					}
+
+					if (friends.Count > 0)
+					{
+						EnqueueMainThread(() =>
+						{
+							if (owner != null && owner.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(owner, new FriendAddMultipleBroadcast()
+								{
+									Friends = friends,
+								}, true, Channel.Reliable);
+							}
+						});
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SendAllCharacterDataAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Sends non-database character data (abilities, achievements, inventory, bank, hotkeys) to the owner.
+		/// Must be called on the main thread.
+		/// </summary>
+		private void SendNonDbCharacterData(IPlayerCharacter character)
+		{
+			if (character == null || character.Owner == null || !character.Owner.IsActive)
 			{
 				return;
 			}
@@ -684,81 +1278,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.NetworkWrapper.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
 					{
 						Achievements = achievements,
-					}, true, Channel.Reliable);
-				}
-			}
-			#endregion
-
-			#region Guild
-			if (character.TryGet(out IGuildController guildController) &&
-				guildController.ID > 0)
-			{
-				// get the current guild members from the database
-				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, guildController.ID);
-
-				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
-				{
-					GuildID = x.GuildID,
-					CharacterID = x.CharacterID,
-					Rank = (GuildRank)x.Rank,
-					Location = x.Location,
-				}).ToList();
-
-				if (addBroadcasts.Count > 0)
-				{
-					GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
-					{
-						Members = addBroadcasts,
-					};
-					Server.NetworkWrapper.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
-				}
-			}
-			#endregion
-
-			#region Party
-			if (character.TryGet(out IPartyController partyController) &&
-				partyController.ID > 0)
-			{
-				// get the current party members from the database
-				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, partyController.ID);
-
-				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
-				{
-					PartyID = x.PartyID,
-					CharacterID = x.CharacterID,
-					Rank = (PartyRank)x.Rank,
-					HealthPCT = x.HealthPCT,
-				}).ToList();
-
-				if (addBroadcasts.Count > 0)
-				{
-					PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
-					{
-						Members = addBroadcasts,
-					};
-					Server.NetworkWrapper.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
-				}
-			}
-			#endregion
-
-			#region Friends
-			if (character.TryGet(out IFriendController friendController))
-			{
-				List<FriendAddBroadcast> friends = new List<FriendAddBroadcast>();
-				foreach (long friendID in friendController.Friends)
-				{
-					bool status = CharacterService.ExistsAndOnline(dbContext, friendID);
-					friends.Add(new FriendAddBroadcast()
-					{
-						CharacterID = friendID,
-						Online = status,
-					});
-				}
-				if (friends.Count > 0)
-				{
-					Server.NetworkWrapper.Broadcast(character.Owner, new FriendAddMultipleBroadcast()
-					{
-						Friends = friends,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -1044,6 +1563,179 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						npc.Despawn();
 					}
 				}
+			}
+		}
+
+		#region Async Helpers
+
+		/// <summary>
+		/// Drains the main-thread queue each frame.
+		/// </summary>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			if (Server.DataContainerRegistry.TryGet<ICharacterSystemMainThreadQueueData>(out var queueData))
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an action to be executed on the main Unity thread.
+		/// </summary>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server.DataContainerRegistry.TryGet<ICharacterSystemMainThreadQueueData>(out var queueData))
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Builds a CharacterData DTO from an IPlayerCharacter, capturing all fields on the main thread.
+		/// Uses DateTimeOffset.UtcNow.Ticks as the version for optimistic concurrency.
+		/// </summary>
+		private CharacterData BuildCharacterData(IPlayerCharacter character)
+		{
+			Vector3 pos = character.Transform.position;
+			Quaternion rot = character.Motor != null ? character.Motor.Transform.rotation : character.Transform.rotation;
+
+			return new CharacterData(
+				id: character.ID,
+				name: character.CharacterName,
+				nameLowercase: character.CharacterNameLower,
+				account: character.Account,
+				selected: true,
+				worldServerID: character.WorldServerID,
+				sceneName: character.SceneName,
+				sceneHandle: character.SceneHandle,
+				bindScene: character.BindScene,
+				bindX: character.BindPosition.x,
+				bindY: character.BindPosition.y,
+				bindZ: character.BindPosition.z,
+				instanceID: character.InstanceID,
+				instanceX: character.InstancePosition.x,
+				instanceY: character.InstancePosition.y,
+				instanceZ: character.InstancePosition.z,
+				instanceRotX: character.InstanceRotation.x,
+				instanceRotY: character.InstanceRotation.y,
+				instanceRotZ: character.InstanceRotation.z,
+				instanceRotW: character.InstanceRotation.w,
+				raceID: character.RaceID,
+				modelIndex: character.ModelIndex,
+				x: pos.x,
+				y: pos.y,
+				z: pos.z,
+				rotX: rot.x,
+				rotY: rot.y,
+				rotZ: rot.z,
+				rotW: rot.w,
+				accessLevel: (byte)(int)character.AccessLevel,
+				online: true,
+				flags: character.Flags,
+				version: DateTimeOffset.UtcNow.Ticks,
+				timeCreated: character.TimeCreated,
+				lastSaved: DateTime.UtcNow
+			);
+		}
+
+		/// <summary>
+		/// Saves a single character asynchronously via the database service.
+		/// </summary>
+		private async Task SaveCharacterAsync(CharacterData charData)
+		{
+			try
+			{
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					return;
+				}
+
+				await characterService.PersistAsync(charData);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SaveCharacterAsync failed for character {charData.ID}: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Saves all characters asynchronously with a processing guard to prevent overlapping saves.
+		/// </summary>
+		private async Task SaveAllCharactersAsync(List<CharacterData> characterDataList)
+		{
+			if (_isProcessing)
+			{
+				return;
+			}
+			_isProcessing = true;
+
+			try
+			{
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					return;
+				}
+
+				foreach (CharacterData charData in characterDataList)
+				{
+					try
+					{
+						await characterService.PersistAsync(charData);
+					}
+					catch (Exception ex)
+					{
+						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for character {charData.ID}: {ex.Message}");
+					}
+				}
+			}
+			finally
+			{
+				_isProcessing = false;
+			}
+		}
+
+		/// <summary>
+		/// Claims the character session asynchronously via TryClaimAsync.
+		/// </summary>
+		private async Task ClaimCharacterSessionAsync(long characterID)
+		{
+			try
+			{
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					return;
+				}
+
+				long serverID = 0;
+				if (Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+				{
+					serverID = runtimeData.ID;
+				}
+
+				await characterService.TryClaimAsync(characterID, serverID);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"ClaimCharacterSessionAsync failed for character {characterID}: {ex.Message}");
+			}
+		}
+
+		#endregion
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

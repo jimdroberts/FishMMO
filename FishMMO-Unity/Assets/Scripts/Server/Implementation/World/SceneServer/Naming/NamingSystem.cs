@@ -1,20 +1,29 @@
 ﻿using UnityEngine;
-using UnityEngine.SceneManagement;
 using FishNet.Connection;
 using FishNet.Transporting;
+using System;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
-using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// Provides name resolution services for game entities, resolving names by ID for characters and guilds.
+	/// Game logic and Broadcasts run synchronously on the main thread.
+	/// Database lookups are async to avoid blocking the main thread.
+	/// Results from async DB queries are marshalled back via INamingSystemMainThreadQueueData.
 	/// </summary>
 	[CreateAssetMenu(fileName = "NamingSystem", menuName = "FishMMO/Server/SceneServer/Naming System", order = 1)]
+	[RequiresDataContainer(typeof(NamingSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class NamingSystem : ServerBehaviour, INamingSystem<NetworkConnection>
 	{
 		/// <summary>
@@ -26,6 +35,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Error("NamingSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<INamingSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("NamingSystem", "Failed to initialize: INamingSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
 			// Network broadcasts
@@ -47,14 +62,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Drain any remaining queued main-thread actions
+			DrainMainThreadQueue();
+
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<NamingBroadcast>(OnServerNamingBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ReverseNamingBroadcast>(OnServerReverseNamingBroadcastReceived);
 		}
 
 		/// <summary>
+		/// Drains queued main-thread actions from the INamingSystemMainThreadQueueData container.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<INamingSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an action to be executed on the main thread.
+		/// </summary>
+		/// <param name="action">The action to enqueue.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<INamingSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread queue each frame.
+		/// </summary>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			DrainMainThreadQueue();
+		}
+
+		/// <summary>
 		/// Handles incoming naming requests from clients, resolves names by ID for characters and guilds.
-		/// Checks local cache first, then falls back to database lookup.
+		/// Checks local cache first, then falls back to async database lookup.
 		/// </summary>
 		/// <param name="conn">Network connection of the requesting client.</param>
 		/// <param name="msg">NamingBroadcast message containing the type and ID to resolve.</param>
@@ -64,42 +113,95 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
-					//Log.Debug("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
 					if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 						mappingData.CharactersByID.TryGetValue(msg.ID, out IPlayerCharacter character))
 					{
-						//Log.Debug("NamingSystem: Character Local Result " + character.CharacterName);
 						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.ID, character.CharacterName);
 					}
-					// then check the database
-					else if (Server.CoreServer.NpgsqlDbContextFactory != null)
+					// then check the database asynchronously
+					else if (Server.Database?.ServiceRegistry != null)
 					{
-						using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-						string name = CharacterService.GetNameByID(dbContext, msg.ID);
-						if (!string.IsNullOrWhiteSpace(name))
-						{
-							//Log.Debug("NamingSystem: Character Database Result " + name);
-							SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.ID, name);
-						}
+						EnqueueAsyncWork(() => FetchCharacterNameAsync(conn, msg.ID));
 					}
 					break;
 				case NamingSystemType.GuildName:
-					//Log.Debug("NamingSystem: Searching by Guild ID: " + msg.id);
-					// get the name from the database
-					if (Server.CoreServer.NpgsqlDbContextFactory != null)
+					// get the name from the database asynchronously
+					if (Server.Database?.ServiceRegistry != null)
 					{
-						using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-						string name = GuildService.GetNameByID(dbContext, msg.ID);
-						if (!string.IsNullOrWhiteSpace(name))
-						{
-							//Log.Debug("NamingSystem: Guild Database Result " + name);
-							SendNamingBroadcast(conn, NamingSystemType.GuildName, msg.ID, name);
-						}
+						EnqueueAsyncWork(() => FetchGuildNameAsync(conn, msg.ID));
 					}
 					break;
 				default:
 					break;
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously fetches a character name by ID and marshals the Broadcast back to the main thread.
+		/// </summary>
+		private async Task FetchCharacterNameAsync(NetworkConnection conn, long characterID)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					return;
+				}
+
+				DatabaseResult<CharacterData?> result = await characterService.FetchAsync(characterID);
+				if (!result.IsSuccess || !result.Data.HasValue)
+				{
+					return;
+				}
+
+				string name = result.Data.Value.Name;
+				if (string.IsNullOrWhiteSpace(name))
+				{
+					return;
+				}
+
+				EnqueueMainThread(() =>
+				{
+					if (conn == null || !conn.IsActive) return;
+					SendNamingBroadcast(conn, NamingSystemType.CharacterName, characterID, name);
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("NamingSystem", $"Error fetching character name (ID={characterID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously fetches a guild name by ID and marshals the Broadcast back to the main thread.
+		/// </summary>
+		private async Task FetchGuildNameAsync(NetworkConnection conn, long guildID)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
+				{
+					return;
+				}
+
+				DatabaseResult<string> result = await guildService.FetchNameAsync(guildID);
+				if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.Data))
+				{
+					return;
+				}
+
+				string name = result.Data;
+
+				EnqueueMainThread(() =>
+				{
+					if (conn == null || !conn.IsActive) return;
+					SendNamingBroadcast(conn, NamingSystemType.GuildName, guildID, name);
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("NamingSystem", $"Error fetching guild name (ID={guildID}): {ex}");
 			}
 		}
 
@@ -127,7 +229,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Handles incoming reverse naming requests from clients, resolves IDs by name for characters.
-		/// Checks local cache first, then falls back to database lookup. Notifies client if not found.
+		/// Checks local cache first, then falls back to async database lookup. Notifies client if not found.
 		/// </summary>
 		/// <param name="conn">Network connection of the requesting client.</param>
 		/// <param name="msg">ReverseNamingBroadcast message containing the type and name to resolve.</param>
@@ -138,35 +240,75 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
-					//Log.Debug("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
 					if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 						mappingData.CharactersByLowerCaseName.TryGetValue(nameLowerCase, out IPlayerCharacter character))
 					{
-						//Log.Debug("NamingSystem: Character Local Result " + character.CharacterName);
 						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, character.ID, character.CharacterName);
 						break;
 					}
-					// then check the database
-					if (Server.CoreServer.NpgsqlDbContextFactory != null)
+					// then check the database asynchronously
+					if (Server.Database?.ServiceRegistry != null)
 					{
-						using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-						CharacterEntity entity = CharacterService.GetByName(dbContext, msg.NameLowerCase);
-						if (entity != null)
-						{
-							//Log.Debug("NamingSystem: Character Database Result " + name);
-							SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, entity.ID, entity.Name);
-							break;
-						}
+						EnqueueAsyncWork(() => FetchCharacterByNameAsync(conn, nameLowerCase));
 					}
-					// let the client know it wasn't found
-					SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, "");
+					else
+					{
+						// let the client know it wasn't found
+						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, "");
+					}
 					break;
 				case NamingSystemType.GuildName:
 					// Currently not supported, implement this if/when needed
 					break;
 				default:
 					break;
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously fetches a character by name and marshals the Broadcast back to the main thread.
+		/// Sends a not-found response if the character does not exist.
+		/// </summary>
+		private async Task FetchCharacterByNameAsync(NetworkConnection conn, string nameLowerCase)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					EnqueueMainThread(() =>
+					{
+						if (conn == null || !conn.IsActive) return;
+						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, "");
+					});
+					return;
+				}
+
+				DatabaseResult<CharacterData?> result = await characterService.FetchAsync(nameLowerCase);
+				if (result.IsSuccess && result.Data.HasValue)
+				{
+					long id = result.Data.Value.ID;
+					string name = result.Data.Value.Name;
+
+					EnqueueMainThread(() =>
+					{
+						if (conn == null || !conn.IsActive) return;
+						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, id, name);
+					});
+				}
+				else
+				{
+					// let the client know it wasn't found
+					EnqueueMainThread(() =>
+					{
+						if (conn == null || !conn.IsActive) return;
+						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, "");
+					});
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("NamingSystem", $"Error fetching character by name '{nameLowerCase}': {ex}");
 			}
 		}
 
@@ -192,6 +334,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			};
 
 			Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
+			}
 		}
 	}
 }

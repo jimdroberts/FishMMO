@@ -1,11 +1,13 @@
 ﻿using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using FishNet.Broadcast;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.DatabaseServices;
-using FishMMO.Database.Npgsql;
 using FishMMO.Shared;
 using UnityEngine;
 using FishMMO.Logging;
@@ -14,8 +16,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// Manages server-side achievement tracking, updates, and completion rewards for player characters.
+	/// Game logic and Broadcasts run synchronously on the main thread.
+	/// Database persistence is fire-and-forget async to avoid blocking the main thread.
 	/// </summary>
 	[CreateAssetMenu(fileName = "AchievementSystem", menuName = "FishMMO/Server/SceneServer/Achievement System", order = 1)]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class AchievementSystem : ServerBehaviour, IAchievementSystem
 	{
 		/// <summary>
@@ -71,12 +76,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
 			playerCharacter.Owner.Broadcast(new AchievementUpdateBroadcast()
 			{
 				TemplateID = achievement.Template.ID,
@@ -87,6 +86,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Handles achievement completion events, validates input, and processes achievement rewards for the player character.
+		/// Game logic and Broadcasts are synchronous on the main thread. DB writes are fire-and-forget async.
 		/// </summary>
 		/// <param name="character">The character who completed the achievement.</param>
 		/// <param name="template">The achievement template.</param>
@@ -104,24 +104,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
+			// Resolve services once for all reward handlers
+			if (Server.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
 
-			HandleAbilityRewards(dbContext, playerCharacter, tier);
-			HandleAbilityEventRewards(dbContext, playerCharacter, tier);
-			HandleItemRewards(dbContext, playerCharacter, tier);
+			Server.Database.ServiceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService);
+			Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService);
+
+			HandleAbilityRewards(knownAbilityService, playerCharacter, tier);
+			HandleAbilityEventRewards(knownAbilityService, playerCharacter, tier);
+			HandleItemRewards(inventoryService, playerCharacter, tier);
 		}
 
 		/// <summary>
 		/// Generic handler for ability rewards, processes learning and broadcasting new abilities to the player character.
+		/// Game logic and Broadcasts are synchronous. DB persistence is fire-and-forget async.
 		/// </summary>
 		/// <typeparam name="TTemplate">Type of ability template.</typeparam>
 		/// <typeparam name="TBroadcast">Type of single ability broadcast.</typeparam>
 		/// <typeparam name="TMultiBroadcast">Type of multiple ability broadcast.</typeparam>
-		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="knownAbilityService">Async service for persisting known abilities, or null if unavailable.</param>
 		/// <param name="character">Player character receiving rewards.</param>
 		/// <param name="rewards">List of ability rewards.</param>
 		/// <param name="knowsFunc">Function to check if ability is already known.</param>
@@ -130,7 +134,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="singleBroadcastFactory">Factory to create single ability broadcast.</param>
 		/// <param name="multiBroadcastFactory">Factory to create multiple ability broadcast.</param>
 		private void HandleAbilityGenericRewards<TTemplate, TBroadcast, TMultiBroadcast>(
-			NpgsqlDbContext dbContext,
+			ICharacterKnownAbilityService knownAbilityService,
 			IPlayerCharacter character,
 			List<TTemplate> rewards,
 			Func<IAbilityController, int, bool> knowsFunc,
@@ -154,7 +158,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (knowsFunc(abilityController, id)) continue;
 
 				learnFunc(abilityController, new List<TTemplate> { reward });
-				CharacterKnownAbilityService.Add(dbContext, character.ID, id);
+
+				// Fire-and-forget async DB persist — game state already updated in-memory
+				if (knownAbilityService != null)
+				{
+					long characterId = character.ID;
+					EnqueueAsyncWork(() => PersistKnownAbilityAsync(knownAbilityService, characterId, id));
+				}
+
 				broadcasts.Add(singleBroadcastFactory(reward));
 			}
 
@@ -165,15 +176,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Asynchronously persists a known ability to the database.
+		/// </summary>
+		/// <param name="service">The known ability service.</param>
+		/// <param name="characterId">The character ID.</param>
+		/// <param name="templateId">The ability template ID.</param>
+		private async Task PersistKnownAbilityAsync(ICharacterKnownAbilityService service, long characterId, int templateId)
+		{
+			try
+			{
+				await service.PersistAsync(characterId, templateId, 0);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("AchievementSystem", $"Error persisting known ability (CharID={characterId}, TemplateID={templateId}): {ex}");
+			}
+		}
+
+		/// <summary>
 		/// Handles ability rewards for achievement tiers, processes learning and broadcasting new base abilities.
 		/// </summary>
-		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="knownAbilityService">Async service for persisting known abilities, or null if unavailable.</param>
 		/// <param name="character">Player character receiving rewards.</param>
 		/// <param name="tier">Achievement tier containing ability rewards.</param>
-		public void HandleAbilityRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)
+		private void HandleAbilityRewards(ICharacterKnownAbilityService knownAbilityService, IPlayerCharacter character, AchievementTier tier)
 		{
 			HandleAbilityGenericRewards<BaseAbilityTemplate, KnownAbilityAddBroadcast, KnownAbilityAddMultipleBroadcast>(
-				dbContext,
+				knownAbilityService,
 				character,
 				tier.AbilityRewards,
 				(abilityController, id) => abilityController.KnowsAbility(id),
@@ -187,13 +216,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Handles ability event rewards for achievement tiers, processes learning and broadcasting new ability events.
 		/// </summary>
-		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="knownAbilityService">Async service for persisting known abilities, or null if unavailable.</param>
 		/// <param name="character">Player character receiving rewards.</param>
 		/// <param name="tier">Achievement tier containing ability event rewards.</param>
-		private void HandleAbilityEventRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)
+		private void HandleAbilityEventRewards(ICharacterKnownAbilityService knownAbilityService, IPlayerCharacter character, AchievementTier tier)
 		{
 			HandleAbilityGenericRewards<AbilityEvent, KnownAbilityEventAddBroadcast, KnownAbilityEventAddMultipleBroadcast>(
-				dbContext,
+				knownAbilityService,
 				character,
 				tier.AbilityEventRewards,
 				(abilityController, id) => abilityController.KnowsAbilityEvent(id),
@@ -206,11 +235,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Handles item rewards for achievement tiers, adds items to inventory or bank and broadcasts updates to the client.
+		/// Game logic and Broadcasts are synchronous. DB persistence is fire-and-forget async.
 		/// </summary>
-		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="inventoryService">Async service for persisting inventory items, or null if unavailable.</param>
 		/// <param name="character">Player character receiving rewards.</param>
 		/// <param name="tier">Achievement tier containing item rewards.</param>
-		private void HandleItemRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)
+		private void HandleItemRewards(ICharacterInventoryService inventoryService, IPlayerCharacter character, AchievementTier tier)
 		{
 			List<BaseItemTemplate> itemRewards = tier.ItemRewards;
 			if (itemRewards == null ||
@@ -236,7 +266,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								continue;
 							}
 
-							CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+							// Fire-and-forget async DB persist — game state already updated in-memory
+							if (inventoryService != null)
+							{
+								EnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, character.ID, item));
+							}
 
 							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
 							{
@@ -275,7 +309,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								continue;
 							}
 
-							CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+							// Fire-and-forget async DB persist — game state already updated in-memory
+							if (inventoryService != null)
+							{
+								EnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, character.ID, item));
+							}
 
 							modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
 							{
@@ -295,6 +333,45 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						Items = modifiedItemBroadcasts,
 					}, true, Channel.Reliable);
 				}
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously persists an inventory item slot to the database.
+		/// </summary>
+		/// <param name="service">The inventory service.</param>
+		/// <param name="characterId">The character ID.</param>
+		/// <param name="item">The item to persist.</param>
+		private async Task PersistInventorySlotAsync(ICharacterInventoryService service, long characterId, Item item)
+		{
+			try
+			{
+				await service.PersistAsync(new CharacterInventoryData(
+					id: 0,
+					characterID: characterId,
+					templateID: item.Template.ID,
+					slot: item.Slot,
+					seed: item.IsGenerated ? item.Generator.Seed : 0,
+					amount: item.IsStackable ? item.Stackable.Amount : 0
+				));
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("AchievementSystem", $"Error persisting inventory slot (CharID={characterId}, Slot={item.Slot}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

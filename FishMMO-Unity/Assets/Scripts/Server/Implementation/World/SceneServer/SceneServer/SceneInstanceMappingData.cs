@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Data;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 
@@ -24,7 +24,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Tracks pending scene load requests by scene ID.
 		/// </summary>
-		public Dictionary<long, SceneEntity> PendingScenes { get; private set; }
+		public Dictionary<long, SceneData> PendingScenes { get; private set; }
 
 		/// <summary>
 		/// Initializes the scene instance mapping data container.
@@ -33,7 +33,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>>();
 			SceneNameByHandle = new Dictionary<int, string>();
-			PendingScenes = new Dictionary<long, SceneEntity>();
+			PendingScenes = new Dictionary<long, SceneData>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 

@@ -46,5 +46,9 @@
 		/// Server is full and cannot accept new connections.
 		/// </summary>
 		ServerFull,
+		/// <summary>
+		/// Server is busy and cannot process the request at this time.
+		/// </summary>
+		ServerBusy,
 	}
 }

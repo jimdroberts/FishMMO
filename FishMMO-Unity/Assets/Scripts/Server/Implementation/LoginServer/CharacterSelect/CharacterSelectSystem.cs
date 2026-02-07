@@ -1,9 +1,15 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
+using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -12,8 +18,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 {
 	/// <summary>
 	/// Manages character selection, deletion, and listing for player accounts on the login server.
+	/// Broadcast replies are marshalled back to the main thread via a thread-safe queue drained in OnLateUpdate.
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterSelectSystem", menuName = "FishMMO/Server/LoginServer/Character Select System", order = 1)]
+	[RequiresDataContainer(typeof(CharacterSelectSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterSelectSystem : ServerBehaviour, ICharacterSelectSystem
 	{
 		/// <summary>
@@ -32,6 +41,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
+			// Verify required data containers
+			if (!Server.DataContainerRegistry.TryGet<ICharacterSelectSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("CharacterSelectSystem", "Failed to initialize: ICharacterSelectSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CharacterRequestListBroadcast>(OnServerCharacterRequestListBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<CharacterDeleteBroadcast>(OnServerCharacterDeleteBroadcastReceived, true);
@@ -43,6 +59,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 		/// <summary>
 		/// Cleans up the character select system, unregistering broadcast handlers for character list, delete, and select requests.
+		/// Drains remaining main-thread responses so clients get their final messages.
 		/// </summary>
 		public override void OnDeinitialize()
 		{
@@ -51,6 +68,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Log.Error("CharacterSelectSystem", "OnDeinitialize: Server is null");
 				return;
 			}
+
+			// Drain remaining responses so clients get their final messages.
+			DrainMainThreadQueue();
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterRequestListBroadcast>(OnServerCharacterRequestListBroadcastReceived);
@@ -73,17 +93,59 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 			else if (conn.IsActive)
 			{
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				// load all character details for the account from database
-				List<CharacterDetails> characterList = CharacterService.GetDetails(dbContext, accountName);
+				EnqueueAsyncWork(() => ProcessCharacterListRequestAsync(conn, accountName));
+			}
+		}
 
-				// append the characters to the broadcast message
-				CharacterListBroadcast characterListMsg = new CharacterListBroadcast()
+		/// <summary>
+		/// Asynchronously fetches the character list from the database and sends it to the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="accountName">Account name to fetch characters for.</param>
+		private async Task ProcessCharacterListRequestAsync(NetworkConnection conn, string accountName)
+		{
+			try
+			{
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
-					Characters = characterList
-				};
+					return;
+				}
 
-				Server.NetworkWrapper.Broadcast(conn, characterListMsg, true, Channel.Reliable);
+				DatabaseResult<IReadOnlyList<CharacterData>> dbResult = await characterService.FetchManyAsync(accountName);
+
+				if (!dbResult.IsSuccess || dbResult.Data == null)
+				{
+					return;
+				}
+
+				// Map database DTOs to network broadcast type
+				var characterList = new List<CharacterDetails>(dbResult.Data.Count);
+				foreach (CharacterData data in dbResult.Data)
+				{
+					characterList.Add(new CharacterDetails()
+					{
+						CharacterName = data.Name,
+						SceneName = data.SceneName,
+						RaceTemplateID = data.RaceID,
+					});
+				}
+
+				// Marshal response back to main thread - FishNet Broadcast is not thread-safe
+				EnqueueMainThread(() =>
+				{
+					if (conn != null && conn.IsActive)
+					{
+						Server.NetworkWrapper.Broadcast(conn, new CharacterListBroadcast()
+						{
+							Characters = characterList,
+						}, true, Channel.Reliable);
+					}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSelectSystem", $"Error processing character list request: {ex}");
 			}
 		}
 
@@ -97,16 +159,122 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			if (conn.IsActive && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				if (CharacterService.TryDelete(dbContext, accountName, msg.CharacterName, KeepDeleteData))
-				{
-					CharacterDeleteBroadcast charDeleteMsg = new CharacterDeleteBroadcast()
-					{
-						CharacterName = msg.CharacterName,
-					};
+				EnqueueAsyncWork(() => ProcessCharacterDeleteAsync(conn, accountName, msg.CharacterName));
+			}
+		}
 
-					Server.NetworkWrapper.Broadcast(conn, charDeleteMsg, true, Channel.Reliable);
+		/// <summary>
+		/// Asynchronously deletes a character and all its sub-entity data from the database within
+		/// a Unit of Work for atomicity, then notifies the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="accountName">Account that owns the character.</param>
+		/// <param name="characterName">Name of the character to delete.</param>
+		private async Task ProcessCharacterDeleteAsync(NetworkConnection conn, string accountName, string characterName)
+		{
+			try
+			{
+				var registry = Server.Database?.ServiceRegistry;
+				if (registry == null ||
+					!registry.TryGet<ICharacterService>(out var characterService) ||
+					!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService) ||
+					!registry.TryGet<ICharacterAbilityService>(out var abilityService) ||
+					!registry.TryGet<ICharacterAchievementService>(out var achievementService) ||
+					!registry.TryGet<ICharacterAttributeService>(out var attributeService) ||
+					!registry.TryGet<ICharacterBankService>(out var bankService) ||
+					!registry.TryGet<ICharacterBuffService>(out var buffService) ||
+					!registry.TryGet<ICharacterEquipmentService>(out var equipmentService) ||
+					!registry.TryGet<ICharacterFactionService>(out var factionService) ||
+					!registry.TryGet<ICharacterFriendService>(out var friendService) ||
+					!registry.TryGet<ICharacterHotkeyService>(out var hotkeyService) ||
+					!registry.TryGet<ICharacterInventoryService>(out var inventoryService) ||
+					!registry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService) ||
+					!registry.TryGet<ICharacterPetService>(out var petService))
+				{
+					return;
 				}
+
+				// --- Begin Unit of Work for atomic fetch + delete ---
+
+				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
+				if (!uowResult.IsSuccess)
+				{
+					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character delete: {uowResult.ErrorMessage}");
+					return;
+				}
+
+				await using (IUnitOfWork uow = uowResult.Data)
+				{
+					// Fetch character to get ID and version for the delete call
+					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchAsync(characterName);
+					if (!fetchResult.IsSuccess || fetchResult.Data == null)
+					{
+						return;
+					}
+
+					CharacterData character = fetchResult.Data.Value;
+
+					// Verify ownership
+					if (!string.Equals(character.Account, accountName, StringComparison.OrdinalIgnoreCase))
+					{
+						return;
+					}
+
+					long characterId = character.ID;
+
+					// Use long.MaxValue to unconditionally pass the version guard on sub-entity deletes.
+					// Sub-entity version streams are independent of the character version,
+					// so we must guarantee all sub-entity rows are cleaned up regardless of their version.
+					long deleteVersion = long.MaxValue;
+
+					// Delete all sub-entity data before deleting the character row.
+					// CharacterService.DeleteAsync already hard-deletes guild and party memberships,
+					// so those are excluded here.
+					await abilityService.DeleteAsync(characterId, deleteVersion);
+					await achievementService.DeleteAsync(characterId, deleteVersion);
+					await attributeService.DeleteAsync(characterId, deleteVersion);
+					await bankService.DeleteAsync(characterId, deleteVersion);
+					await buffService.DeleteAsync(characterId, deleteVersion);
+					await equipmentService.DeleteAsync(characterId, deleteVersion);
+					await factionService.DeleteAsync(characterId, deleteVersion);
+					await friendService.DeleteAsync(characterId, deleteVersion);
+					await hotkeyService.DeleteAsync(characterId, deleteVersion);
+					await inventoryService.DeleteAsync(characterId, deleteVersion);
+					await knownAbilityService.DeleteAsync(characterId, deleteVersion);
+					await petService.DeleteAsync(characterId, deleteVersion);
+
+					// Soft-delete the character row (also hard-deletes guild/party memberships)
+					DatabaseResult deleteResult = await characterService.DeleteAsync(characterId, character.Version + 1);
+					if (!deleteResult.IsSuccess)
+					{
+						await Log.Error("CharacterSelectSystem", $"Failed to delete character '{characterName}': {deleteResult.ErrorMessage}");
+						return;
+					}
+
+					// Commit the transaction — all sub-entity + character deletes are atomic
+					DatabaseResult commitResult = await uow.CommitAsync();
+					if (!commitResult.IsSuccess)
+					{
+						await Log.Error("CharacterSelectSystem", $"Failed to commit character delete: {commitResult.ErrorMessage}");
+						return;
+					}
+				}
+
+				// Marshal response back to main thread - FishNet Broadcast is not thread-safe
+				EnqueueMainThread(() =>
+				{
+					if (conn != null && conn.IsActive)
+					{
+						Server.NetworkWrapper.Broadcast(conn, new CharacterDeleteBroadcast()
+						{
+							CharacterName = characterName,
+						}, true, Channel.Reliable);
+					}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSelectSystem", $"Error processing character delete: {ex}");
 			}
 		}
 
@@ -118,26 +286,170 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCharacterSelectBroadcastReceived(NetworkConnection conn, CharacterSelectBroadcast msg, Channel channel)
 		{
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 			if (conn.IsActive && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				if (!CharacterService.Exists(dbContext, accountName, msg.CharacterName))
+				EnqueueAsyncWork(() => ProcessCharacterSelectAsync(conn, accountName, msg.CharacterName));
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously validates character selection within a Unit of Work for consistency,
+		/// updates the database, and sends the world server list.
+		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="accountName">Account that owns the character.</param>
+		/// <param name="characterName">Name of the character to select.</param>
+		private async Task ProcessCharacterSelectAsync(NetworkConnection conn, string accountName, string characterName)
+		{
+			try
+			{
+				var registry = Server.Database?.ServiceRegistry;
+				if (registry == null ||
+					!registry.TryGet<ICharacterService>(out var characterService) ||
+					!registry.TryGet<IWorldServerService>(out var worldServerService) ||
+					!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
 				{
-					// character doesn't exist for account
-					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+					return;
 				}
-				else
+
+				// --- Begin Unit of Work for atomic fetch + select ---
+
+				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
+				if (!uowResult.IsSuccess)
 				{
-					if (CharacterService.TrySetSelected(dbContext, accountName, msg.CharacterName))
+					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character select: {uowResult.ErrorMessage}");
+					return;
+				}
+
+				await using (IUnitOfWork uow = uowResult.Data)
+				{
+					// Verify character exists and belongs to this account
+					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchAsync(characterName);
+					if (!fetchResult.IsSuccess || fetchResult.Data == null)
 					{
-						// send the client the world server list
-						List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
-						Server.NetworkWrapper.Broadcast(conn, new ServerListBroadcast()
+						EnqueueMainThread(() =>
 						{
-							Servers = worldServerList
-						}, true, Channel.Reliable);
+							if (conn != null && conn.IsActive)
+							{
+								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							}
+						});
+						return;
+					}
+
+					CharacterData character = fetchResult.Data.Value;
+					if (!string.Equals(character.Account, accountName, StringComparison.OrdinalIgnoreCase))
+					{
+						EnqueueMainThread(() =>
+						{
+							if (conn != null && conn.IsActive)
+							{
+								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							}
+						});
+						return;
+					}
+
+					// Set the character as selected
+					DatabaseResult setSelectedResult = await characterService.SetSelectedAsync(accountName, character.ID);
+					if (!setSelectedResult.IsSuccess)
+					{
+						return;
+					}
+
+					// Commit the transaction
+					DatabaseResult commitResult = await uow.CommitAsync();
+					if (!commitResult.IsSuccess)
+					{
+						await Log.Error("CharacterSelectSystem", $"Failed to commit character select: {commitResult.ErrorMessage}");
+						return;
 					}
 				}
+
+				// Fetch active world servers (independent read, outside the UoW)
+				DatabaseResult<List<WorldServerData>> worldResult = await worldServerService.FetchActiveAsync();
+
+				if (worldResult.IsSuccess && worldResult.Data != null)
+				{
+					var worldServerList = new List<WorldServerDetails>(worldResult.Data.Count);
+					foreach (WorldServerData data in worldResult.Data)
+					{
+						worldServerList.Add(new WorldServerDetails()
+						{
+							Name = data.Name,
+							LastPulse = data.LastPulse,
+							Address = data.Address,
+							Port = data.Port,
+							CharacterCount = data.CharacterCount,
+							Locked = data.Locked,
+						});
+					}
+
+					// Marshal response back to main thread - FishNet Broadcast is not thread-safe
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Server.NetworkWrapper.Broadcast(conn, new ServerListBroadcast()
+							{
+								Servers = worldServerList,
+							}, true, Channel.Reliable);
+						}
+					});
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSelectSystem", $"Error processing character select: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread response queue each frame.
+		/// All network operations from async workers are marshalled through this queue
+		/// to ensure they execute on the main Unity thread.
+		/// </summary>
+		/// <param name="deltaTime">Time elapsed since last frame.</param>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			DrainMainThreadQueue();
+		}
+
+		/// <summary>
+		/// Drains the main-thread queue via the RuntimeDataContainer.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<ICharacterSelectSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Thread-safe enqueue of an action to be executed on the main Unity thread
+		/// via the RuntimeDataContainer.
+		/// </summary>
+		/// <param name="action">The action to execute on the main thread.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<ICharacterSelectSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

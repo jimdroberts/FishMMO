@@ -4,6 +4,7 @@ using KinematicCharacterController;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Managing.Predicting;
+using FishMMO.Database.Data.Enums;
 using UnityEngine;
 #if !UNITY_SERVER
 using TMPro;
@@ -50,6 +51,10 @@ namespace FishMMO.Shared
 		/// The account name associated with this character.
 		/// </summary>
 		string Account { get; set; }
+		/// <summary>
+		/// The current Version of the character data, used for optimistic concurrency control.
+		/// </summary>
+		long Version { get; set; }
 		/// <summary>
 		/// The date and time when this character was created.
 		/// </summary>

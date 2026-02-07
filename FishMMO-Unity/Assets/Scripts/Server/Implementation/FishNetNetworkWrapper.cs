@@ -170,15 +170,15 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Attaches a login authenticator using the provided Npgsql factory.
+		/// Attaches a login authenticator, assigns server references, and initializes async workers.
 		/// </summary>
-		/// <param name="dbContextFactory">The Npgsql database context factory.</param>
+		/// <param name="server">The server instance providing infrastructure access.</param>
 		public void AttachLoginAuthenticator(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			if (NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
 			{
 				authenticator.Server = server;
-				authenticator.NpgsqlDbContextFactory = server.CoreServer.NpgsqlDbContextFactory;
+				authenticator.InitializeWorkers();
 			}
 		}
 

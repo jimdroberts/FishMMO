@@ -5,20 +5,29 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
-using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// Manages all chat functionality including public, party, guild, whisper, and system messages with rate limiting and spam protection.
+	/// Game logic and Broadcasts run synchronously on the main thread.
+	/// Database operations are fire-and-forget async to avoid blocking the main thread.
+	/// Results from async DB queries that require main-thread Broadcasts are marshalled via IChatSystemMainThreadQueueData.
 	/// </summary>
 	[CreateAssetMenu(fileName = "ChatSystem", menuName = "FishMMO/Server/SceneServer/Chat System", order = 1)]
 	[RequiresDataContainer(typeof(ChatSystemRuntimeData))]
+	[RequiresDataContainer(typeof(ChatSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class ChatSystem : ServerBehaviour, IChatSystem
 	{
 		/// <summary>
@@ -67,6 +76,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<IChatSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("ChatSystem", "Failed to initialize: IChatSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
 			// Chat helper commands
 			ChatHelper.InitializeOnce(GetChannelCommand);
 
@@ -94,6 +109,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Drain any remaining queued main-thread actions
+			DrainMainThreadQueue();
+
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived);
 
@@ -105,60 +123,122 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Periodic callback that fetches and processes chat messages from the database.
+		/// Drains queued main-thread actions from the IChatSystemMainThreadQueueData container.
+		/// Called from OnLateUpdate and OnDeinitialize.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<IChatSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an action to be executed on the main thread.
+		/// </summary>
+		/// <param name="action">The action to enqueue.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IChatSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread queue each frame.
+		/// </summary>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			DrainMainThreadQueue();
+		}
+
+		/// <summary>
+		/// Periodic callback that fetches and processes chat messages from the database asynchronously.
 		/// </summary>
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicMessagePump(float deltaTime)
 		{
 			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
-				List<ChatEntity> messages = FetchChatMessages();
-				ProcessChatMessages(messages);
+				EnqueueAsyncWork(() => FetchAndProcessChatMessagesAsync());
 			}
 		}
 
 		/// <summary>
-		/// Fetches new chat messages from the database since the last fetch.
+		/// Asynchronously fetches new chat messages from the database and marshals processing to the main thread.
 		/// </summary>
-		/// <returns>List of new chat message entities.</returns>
-		private List<ChatEntity> FetchChatMessages()
+		private async Task FetchAndProcessChatMessagesAsync()
 		{
-			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
+			try
 			{
-				return null;
-			}
-			if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData data))
-			{
-				return null;
-			}
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-
-			// fetch chat messages from the database
-			long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ? runtimeData.ID : 0;
-			List<ChatEntity> messages = ChatService.Fetch(dbContext, data.LastFetchTime, data.LastFetchPosition, MessageFetchCount, sceneServerID);
-			if (messages != null)
-			{
-				ChatEntity latest = messages.LastOrDefault();
-				if (latest != null)
+				if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 				{
-					data.LastFetchPosition = latest.ID;
-					data.LastFetchTime = latest.TimeCreated;
+					return;
 				}
+				if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData data))
+				{
+					return;
+				}
+				if (Server.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IChatService>(out var chatService))
+				{
+					return;
+				}
+
+				long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ? runtimeData.ID : 0;
+
+				// Capture fetch state from main-thread data container
+				DateTime lastFetchTime = data.LastFetchTime;
+				long lastFetchPosition = data.LastFetchPosition;
+				int fetchCount = MessageFetchCount;
+
+				// Async DB fetch on background thread
+				DatabaseResult<List<ChatData>> result = await chatService.FetchAsync(lastFetchTime, lastFetchPosition, fetchCount, sceneServerID);
+
+				if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+				{
+					return;
+				}
+
+				List<ChatData> messages = result.Data;
+				ChatData latest = messages[messages.Count - 1];
+
+				// Marshal processing to main thread — Broadcasts must run on main thread
+				EnqueueMainThread(() =>
+				{
+					// Update fetch state on main thread
+					if (Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData mainData))
+					{
+						mainData.LastFetchPosition = latest.ID;
+						mainData.LastFetchTime = latest.TimeCreated;
+					}
+
+					ProcessChatMessages(messages);
+				});
 			}
-			return messages;
+			catch (Exception ex)
+			{
+				await Log.Error("ChatSystem", $"Error fetching chat messages: {ex}");
+			}
 		}
 
 		/// <summary>
 		/// Processes a list of chat messages, broadcasting them to appropriate channels and clients.
+		/// Must be called on the main thread.
 		/// </summary>
-		/// <param name="messages">List of chat message entities to process.</param>
-		private void ProcessChatMessages(List<ChatEntity> messages)
+		/// <param name="messages">List of chat message data to process.</param>
+		private void ProcessChatMessages(List<ChatData> messages)
 		{
 			if (messages == null || messages.Count < 1)
 			{
 				return;
 			}
-			foreach (ChatEntity message in messages)
+			foreach (ChatData message in messages)
 			{
 				ChatChannel channel = (ChatChannel)message.Channel;
 				if (channel == ChatChannel.Discord)
@@ -308,11 +388,49 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (commandDetails.Func.Invoke(sender, msg))
 				{
-					// write the parsed message to the database
-					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-					long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ? runtimeData.ID : 0;
-					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, sceneServerID, msg.Channel, msg.Text);
+					// write the parsed message to the database (fire-and-forget async)
+					EnqueueAsyncWork(() => PersistChatMessageAsync(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, msg.Channel, msg.Text));
 				}
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously persists a chat message to the database.
+		/// </summary>
+		/// <param name="characterId">The character ID of the sender.</param>
+		/// <param name="characterName">The character name of the sender.</param>
+		/// <param name="accountName">The account name of the sender.</param>
+		/// <param name="worldServerId">The world server ID.</param>
+		/// <param name="channel">The chat channel.</param>
+		/// <param name="message">The message text.</param>
+		private async Task PersistChatMessageAsync(long characterId, string characterName, string accountName, long worldServerId, ChatChannel channel, string message)
+		{
+			try
+			{
+				if (Server.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IChatService>(out var chatService))
+				{
+					return;
+				}
+
+				long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ? runtimeData.ID : 0;
+
+				await chatService.PersistAsync(
+					characterId,
+					characterName ?? string.Empty,
+					accountName ?? string.Empty,
+					worldServerId,
+					sceneServerID,
+					(FishMMO.Database.Data.Enums.ChatChannel)(byte)channel,
+					message,
+					DateTime.UtcNow);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("ChatSystem", $"Error persisting chat message (CharID={characterId}): {ex}");
 			}
 		}
 
@@ -381,14 +499,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Handles party chat messages, broadcasting to all party members.
+		/// Handles party chat messages, querying party members asynchronously from the database
+		/// and marshalling Broadcasts back to the main thread. Returns false to suppress the
+		/// synchronous DB save — the async path handles persistence when broadcast succeeds.
 		/// </summary>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>True if message was broadcast, false otherwise.</returns>
+		/// <returns>False — persistence is handled inside the async path.</returns>
 		public bool OnPartyChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server.Database?.ServiceRegistry == null)
 			{
 				return false;
 			}
@@ -401,41 +521,83 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
-			{
-				// get all the member data so we can broadcast
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, partyID);
+			// Capture immutable data for the async path
+			long senderID = msg.SenderID;
+			ChatChannel channel = msg.Channel;
+			string characterName = sender?.CharacterName ?? string.Empty;
+			string accountName = sender?.Account ?? string.Empty;
+			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-				ChatBroadcast newMsg = new ChatBroadcast()
-				{
-					Channel = msg.Channel,
-					SenderID = msg.SenderID,
-					Text = trimmed,
-				};
-
-				foreach (CharacterPartyEntity member in dbMembers)
-				{
-					if (mappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
-					{
-						// broadcast to party member...
-						Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
-					}
-				}
-				return true;
-			}
-			return false;
+			EnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID));
+			return false; // suppress synchronous save — async path handles it
 		}
 
 		/// <summary>
-		/// Handles guild chat messages, broadcasting to all guild members.
+		/// Asynchronously fetches party members from the database, marshals Broadcasts to the main thread,
+		/// and persists the chat message on success.
+		/// </summary>
+		private async Task OnPartyChatAsync(long partyID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var partyService))
+				{
+					return;
+				}
+
+				DatabaseResult<IReadOnlyList<CharacterPartyData>> result = await partyService.FetchManyAsync(partyID);
+				if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+				{
+					return;
+				}
+
+				IReadOnlyList<CharacterPartyData> members = result.Data;
+
+				// Marshal Broadcasts to main thread
+				EnqueueMainThread(() =>
+				{
+					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+					{
+						return;
+					}
+
+					ChatBroadcast newMsg = new ChatBroadcast()
+					{
+						Channel = channel,
+						SenderID = senderID,
+						Text = trimmed,
+					};
+
+					foreach (CharacterPartyData member in members)
+					{
+						if (mappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
+						{
+							// broadcast to party member...
+							Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
+						}
+					}
+				});
+
+				// Persist the chat message
+				await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, trimmed);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("ChatSystem", $"Error in OnPartyChatAsync: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Handles guild chat messages, querying guild members asynchronously from the database
+		/// and marshalling Broadcasts back to the main thread. Returns false to suppress the
+		/// synchronous DB save — the async path handles persistence when broadcast succeeds.
 		/// </summary>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>True if message was broadcast, false otherwise.</returns>
+		/// <returns>False — persistence is handled inside the async path.</returns>
 		public bool OnGuildChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server.Database?.ServiceRegistry == null)
 			{
 				return false;
 			}
@@ -448,37 +610,80 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
-			{
-				// get all the member data so we can broadcast
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, guildID);
+			// Capture immutable data for the async path
+			long senderID = msg.SenderID;
+			ChatChannel channel = msg.Channel;
+			string characterName = sender?.CharacterName ?? string.Empty;
+			string accountName = sender?.Account ?? string.Empty;
+			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-				ChatBroadcast newMsg = new ChatBroadcast()
-				{
-					Channel = msg.Channel,
-					SenderID = msg.SenderID,
-					Text = trimmed,
-				};
-				foreach (CharacterGuildEntity member in dbMembers)
-				{
-					if (mappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
-					{
-						// broadcast to guild member...
-						Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
-					}
-				}
-				return true;
-			}
-			return false;
+			EnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID));
+			return false; // suppress synchronous save — async path handles it
 		}
 
 		/// <summary>
-		/// Handles tell (private) chat messages, broadcasting to the target character if online.
+		/// Asynchronously fetches guild members from the database, marshals Broadcasts to the main thread,
+		/// and persists the chat message on success.
+		/// </summary>
+		private async Task OnGuildChatAsync(long guildID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var guildService))
+				{
+					return;
+				}
+
+				DatabaseResult<IReadOnlyList<CharacterGuildData>> result = await guildService.FetchManyAsync(guildID);
+				if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+				{
+					return;
+				}
+
+				IReadOnlyList<CharacterGuildData> members = result.Data;
+
+				// Marshal Broadcasts to main thread
+				EnqueueMainThread(() =>
+				{
+					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+					{
+						return;
+					}
+
+					ChatBroadcast newMsg = new ChatBroadcast()
+					{
+						Channel = channel,
+						SenderID = senderID,
+						Text = trimmed,
+					};
+
+					foreach (CharacterGuildData member in members)
+					{
+						if (mappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
+						{
+							// broadcast to guild member...
+							Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
+						}
+					}
+				});
+
+				// Persist the chat message
+				await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, trimmed);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("ChatSystem", $"Error in OnGuildChatAsync: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Handles tell (private) chat messages. Queries the target character asynchronously from the database,
+		/// marshals Broadcasts to the main thread, and persists the message on success.
+		/// Returns false to suppress the synchronous DB save — the async path handles persistence.
 		/// </summary>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>True if message was broadcast, false otherwise.</returns>
+		/// <returns>False — persistence is handled inside the async path.</returns>
 		public bool OnTellChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the target
@@ -489,72 +694,114 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			long targetID = 0;
-			bool online = false;
-			if (Server.CoreServer.NpgsqlDbContextFactory != null)
-			{
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				targetID = CharacterService.GetIdByName(dbContext, targetName);
-				online = CharacterService.ExistsAndOnline(dbContext, targetID);
-			}
-
-			// did we find the ID?
-			if (targetID < 1)
+			if (Server.Database?.ServiceRegistry == null)
 			{
 				return false;
 			}
 
-			// if the sender exists then we can send a return message if the target character is valid
-			if (sender != null)
-			{
-				// are we messaging ourself?
-				if (msg.SenderID == targetID)
-				{
-					Server.NetworkWrapper.Broadcast(sender.Owner, new ChatBroadcast()
-					{
-						Channel = msg.Channel,
-						SenderID = msg.SenderID,
-						Text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
-					}, true, Channel.Reliable);
-					return false;
-				}
-				else if (!online)
-				{
-					// if the target character is not online
-					Server.NetworkWrapper.Broadcast(sender.Owner, new ChatBroadcast()
-					{
-						Channel = msg.Channel,
-						SenderID = msg.SenderID,
-						Text = ChatHelper.TARGET_OFFLINE + " " + targetName,
-					}, true, Channel.Reliable);
-					return false;
-				}
-				else if (targetID > 0)
-				{
-					Server.NetworkWrapper.Broadcast(sender.Owner, new ChatBroadcast()
-					{
-						Channel = msg.Channel,
-						SenderID = targetID,
-						Text = ChatHelper.TELL_RELAYED + " " + trimmed,
-					}, true, Channel.Reliable);
-				}
-			}
+			// Capture immutable data for the async path
+			long senderID = msg.SenderID;
+			ChatChannel channel = msg.Channel;
+			NetworkConnection senderConn = sender?.Owner;
+			string characterName = sender?.CharacterName ?? string.Empty;
+			string accountName = sender?.Account ?? string.Empty;
+			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+			EnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID));
+			return false; // suppress synchronous save — async path handles it
+		}
+
+		/// <summary>
+		/// Asynchronously resolves the target character by name, marshals Broadcasts to the main thread,
+		/// and persists the chat message on success.
+		/// </summary>
+		private async Task OnTellChatAsync(NetworkConnection senderConn, long senderID, ChatChannel channel, string targetName, string trimmed, string characterName, string accountName, long worldServerId)
+		{
+			try
 			{
-				// if the target character is on this server we send them the message
-				if (mappingData.CharactersByID.TryGetValue(targetID, out IPlayerCharacter targetCharacter))
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
-					Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new ChatBroadcast()
-					{
-						Channel = msg.Channel,
-						SenderID = msg.SenderID,
-						Text = trimmed,
-					}, true, Channel.Reliable);
+					return;
 				}
-				return true;
+
+				// Look up target character by name
+				DatabaseResult<CharacterData?> result = await characterService.FetchAsync(targetName);
+				if (!result.IsSuccess || !result.Data.HasValue)
+				{
+					return;
+				}
+
+				CharacterData targetData = result.Data.Value;
+				long targetID = targetData.ID;
+				bool online = targetData.Online;
+
+				// did we find the ID?
+				if (targetID < 1)
+				{
+					return;
+				}
+
+				// Marshal Broadcasts to main thread
+				EnqueueMainThread(() =>
+				{
+					// if the sender exists then we can send a return message if the target character is valid
+					if (senderConn != null)
+					{
+						// are we messaging ourself?
+						if (senderID == targetID)
+						{
+							Server.NetworkWrapper.Broadcast(senderConn, new ChatBroadcast()
+							{
+								Channel = channel,
+								SenderID = senderID,
+								Text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
+							}, true, Channel.Reliable);
+							return;
+						}
+						else if (!online)
+						{
+							// if the target character is not online
+							Server.NetworkWrapper.Broadcast(senderConn, new ChatBroadcast()
+							{
+								Channel = channel,
+								SenderID = senderID,
+								Text = ChatHelper.TARGET_OFFLINE + " " + targetName,
+							}, true, Channel.Reliable);
+							return;
+						}
+						else if (targetID > 0)
+						{
+							Server.NetworkWrapper.Broadcast(senderConn, new ChatBroadcast()
+							{
+								Channel = channel,
+								SenderID = targetID,
+								Text = ChatHelper.TELL_RELAYED + " " + trimmed,
+							}, true, Channel.Reliable);
+						}
+					}
+
+					if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+					{
+						// if the target character is on this server we send them the message
+						if (mappingData.CharactersByID.TryGetValue(targetID, out IPlayerCharacter targetCharacter))
+						{
+							Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new ChatBroadcast()
+							{
+								Channel = channel,
+								SenderID = senderID,
+								Text = trimmed,
+							}, true, Channel.Reliable);
+						}
+					}
+				});
+
+				// Persist the chat message
+				await PersistChatMessageAsync(senderID, characterName, accountName, worldServerId, channel, trimmed);
 			}
-			return false;
+			catch (Exception ex)
+			{
+				await Log.Error("ChatSystem", $"Error in OnTellChatAsync: {ex}");
+			}
 		}
 
 		/// <summary>
@@ -655,6 +902,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
 				}
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

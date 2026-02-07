@@ -1,32 +1,47 @@
 using FishNet.Connection;
 using FishNet.Managing.Server;
 using FishNet.Transporting;
-using FishMMO.Server.Core;
-using FishMMO.Server.Core.World.WorldServer;
-using FishMMO.Server.DatabaseServices;
-using FishMMO.Shared;
-using FishMMO.Logging;
-using FishMMO.Database.Npgsql;
-using FishMMO.Database.Npgsql.Entities;
-using UnityEngine;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.WorldServer;
+using FishMMO.Server.Implementation;
+using FishMMO.Shared;
+using FishMMO.Logging;
+using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.WorldServer
 {
 	/// <summary>
 	/// Manages world scene connections, queues, and scene assignment for players in the MMO server.
 	/// Handles open world and instanced scene logic, connection authentication, and database updates.
+	/// Game logic and Broadcasts run synchronously on the main thread.
+	/// Database operations are async to avoid blocking the main thread.
+	/// Results from async DB queries that require main-thread state changes are marshalled
+	/// via IWorldSceneSystemMainThreadQueueData.
 	/// </summary>
 	[CreateAssetMenu(fileName = "WorldSceneSystem", menuName = "FishMMO/Server/WorldServer/World Scene System", order = 1)]
 	[RequiresDataContainer(typeof(WorldSceneSystemRuntimeData))]
 	[RequiresDataContainer(typeof(WorldSceneMappingData))]
+	[RequiresDataContainer(typeof(WorldSceneSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class WorldSceneSystem : ServerBehaviour, IWorldSceneSystem
 	{
 		/// <summary>
 		/// Maximum number of clients allowed per scene instance.
 		/// </summary>
 		private const int MAX_CLIENTS_PER_INSTANCE = 500;
+
+		/// <summary>
+		/// Prevents overlapping async queue processing cycles.
+		/// </summary>
+		private volatile bool _isProcessing;
 
 		/// <summary>
 		/// Cache of world scene details, including max clients per scene.
@@ -59,6 +74,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				Log.Error("WorldSceneSystem", "InitializeOnce: WorldSceneSystemRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IWorldSceneSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("WorldSceneSystem", "InitializeOnce: IWorldSceneSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
+			if (Server.Database?.ServiceRegistry == null)
+			{
+				Log.Error("WorldSceneSystem", "InitializeOnce: Database ServiceRegistry is null");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
 			runtimeData.LoginAuthenticator = FindFirstObjectByType<WorldServerAuthenticator>();
@@ -101,6 +128,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
+			// Drain any remaining queued main-thread actions
+			DrainMainThreadQueue();
+
 			// Connection state events
 			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
 
@@ -111,15 +141,36 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Delete world scene data from database
-			if (Server.CoreServer.NpgsqlDbContextFactory != null &&
+			if (Server.Database?.ServiceRegistry != null &&
+				Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService) &&
 				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
 			{
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				if (dbContext != null)
-				{
-					Log.Debug("WorldSceneSystem", $"Deinitializing: Deleting world scenes (WorldServerID={worldData.ID})");
-					SceneService.WorldDelete(dbContext, worldData.ID);
-				}
+				Log.Debug("WorldSceneSystem", $"Deinitializing: Deleting world scenes (WorldServerID={worldData.ID})");
+				// Blocking call during shutdown to ensure cleanup completes
+				Task.Run(() => sceneService.DeleteByWorldServerAsync(worldData.ID)).GetAwaiter().GetResult();
+			}
+		}
+
+		/// <summary>
+		/// Drains queued main-thread actions from the IWorldSceneSystemMainThreadQueueData container.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<IWorldSceneSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an action to be executed on the main thread.
+		/// </summary>
+		/// <param name="action">The action to enqueue.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IWorldSceneSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
 			}
 		}
 
@@ -148,6 +199,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
+			// Drain queued main-thread actions from async operations
+			DrainMainThreadQueue();
+
 			if (!Server.DataContainerRegistry.TryGet<IWorldSceneSystemRuntimeData>(out var runtimeData))
 			{
 				return;
@@ -157,201 +211,425 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				runtimeData.NextWaitQueueUpdate = waitQueueRate;
 
-				if (Initialized && Server.CoreServer.NpgsqlDbContextFactory != null &&
+				if (Initialized && !_isProcessing &&
+					Server.Database?.ServiceRegistry != null &&
 					Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 				{
-					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-					foreach (string sceneName in mappingData.WaitingOpenWorldConnections.Keys.ToList())
-					{
-						ProcessOpenWorldQueue(dbContext, sceneName);
-					}
-					foreach (NetworkConnection conn in mappingData.InstanceConnectionScenes.Keys.ToList())
-					{
-						ProcessInstanceConnection(dbContext, conn);
-					}
+					// Snapshot the scene names and connections to process before going async
+					List<string> openWorldSceneNames = mappingData.WaitingOpenWorldConnections.Keys.ToList();
+					List<NetworkConnection> instanceConns = mappingData.InstanceConnectionScenes.Keys.ToList();
 
-					UpdateConnectionCount(dbContext);
+					_isProcessing = true;
+					EnqueueAsyncWork(() => ProcessQueuesAsync(openWorldSceneNames, instanceConns));
 				}
 			}
 			runtimeData.NextWaitQueueUpdate -= deltaTime;
 		}
 
 		/// <summary>
+		/// Asynchronously processes open world and instance queues, then updates connection count.
+		/// All main-thread state changes and Broadcasts are marshalled via EnqueueMainThread.
+		/// </summary>
+		private async Task ProcessQueuesAsync(List<string> openWorldSceneNames, List<NetworkConnection> instanceConns)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+
+				foreach (string sceneName in openWorldSceneNames)
+				{
+					await ProcessOpenWorldQueueAsync(sceneName);
+				}
+				foreach (NetworkConnection conn in instanceConns)
+				{
+					await ProcessInstanceConnectionAsync(conn);
+				}
+
+				await UpdateConnectionCountAsync();
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("WorldSceneSystem", $"Error processing queues: {ex}");
+			}
+			finally
+			{
+				_isProcessing = false;
+			}
+		}
+
+		/// <summary>
 		/// Processes the queue for open world scenes, assigning connections to available scenes or enqueuing new scene requests.
 		/// </summary>
-		/// <param name="dbContext">Database context.</param>
 		/// <param name="sceneName">Name of the scene to process.</param>
-		private void ProcessOpenWorldQueue(NpgsqlDbContext dbContext, string sceneName)
+		private async Task ProcessOpenWorldQueueAsync(string sceneName)
 		{
-			if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
-
-			if (!mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
-				connections == null ||
-				connections.Count == 0)
+			if (!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService) ||
+				!Server.Database.ServiceRegistry.TryGet<ISceneServerService>(out var sceneServerService) ||
+				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var charService))
 			{
-				mappingData.WaitingOpenWorldConnections.Remove(sceneName);
 				return;
 			}
 
 			int maxClientsPerInstance = GetMaxClients(sceneName);
-
-			// Try and get an existing scene
 			long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
-			List<SceneEntity> loadedScenes = SceneService.GetServerList(dbContext, worldServerID, sceneName, maxClientsPerInstance);
-			if (loadedScenes?.Count() > 0)
+
+			var loadedScenesResult = await sceneService.FetchAvailableAsync(worldServerID, sceneName, maxClientsPerInstance);
+			if (loadedScenesResult.IsSuccess && loadedScenesResult.Data != null && loadedScenesResult.Data.Count > 0)
 			{
-				foreach (SceneEntity loadedScene in loadedScenes)
+				foreach (var loadedScene in loadedScenesResult.Data)
 				{
-					SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, loadedScene.SceneServerID);
-					if (sceneServer == null)
+					var sceneServerResult = await sceneServerService.FetchAsync(loadedScene.SceneServerID);
+					if (!sceneServerResult.IsSuccess)
 					{
 						continue;
 					}
+					var sceneServer = sceneServerResult.Data;
 
-					foreach (NetworkConnection connection in connections.ToList())
+					// Snapshot connections on main thread, process assignments
+					List<(NetworkConnection conn, string accountName)> validConnections = new List<(NetworkConnection, string)>();
+					int currentCount = loadedScene.CharacterCount;
+
+					EnqueueMainThread(() =>
 					{
-						// If we are at maximum capacity on this server move to the next one
-						if (loadedScene.CharacterCount >= maxClientsPerInstance)
+						if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 						{
-							break;
+							return;
+						}
+						if (!mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
+							connections == null)
+						{
+							return;
 						}
 
-						// Clear the connection from our wait queues
-						connections.Remove(connection);
-						mappingData.OpenWorldConnectionScenes.Remove(connection);
-
-						if (!IsValidConnection(connection, out string accountName))
+						foreach (NetworkConnection connection in connections.ToList())
 						{
-							continue;
-						}
+							if (currentCount >= maxClientsPerInstance)
+							{
+								break;
+							}
 
-						// Successfully found a scene to connect to
-						CharacterService.SetSceneHandle(dbContext, accountName, loadedScene.SceneHandle);
+							connections.Remove(connection);
+							mappingData.OpenWorldConnectionScenes.Remove(connection);
+
+							if (!IsValidConnection(connection, out string accountName))
+							{
+								continue;
+							}
+
+							validConnections.Add((connection, accountName));
+							currentCount++;
+						}
+					});
+
+					// Wait a frame for the main thread to process
+					await Task.Yield();
+
+					// Now update the DB and broadcast for each valid connection
+					foreach (var (conn, accountName) in validConnections)
+					{
+						// Update the character's scene handle in the database
+						var charsResult = await charService.FetchManyAsync(accountName);
+						if (charsResult.IsSuccess && charsResult.Data != null)
+						{
+							var selectedChar = charsResult.Data.FirstOrDefault(c => c.Selected);
+							if (selectedChar.ID > 0)
+							{
+								await charService.UpdateSceneAsync(selectedChar.ID, sceneName, loadedScene.SceneHandle);
+							}
+						}
 
 						// Tell the client to connect to the scene
-						Server.NetworkWrapper.Broadcast(connection, new WorldSceneConnectBroadcast()
+						EnqueueMainThread(() =>
 						{
-							Address = sceneServer.Address,
-							Port = sceneServer.Port,
+							Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
+							{
+								Address = sceneServer.Address,
+								Port = sceneServer.Port,
+							});
 						});
 					}
 				}
 			}
 
 			// Check if we still have some players that are waiting for a scene
-			if (connections.Count == 0)
+			EnqueueMainThread(() =>
 			{
-				mappingData.WaitingOpenWorldConnections.Remove(sceneName);
-			}
-			else
+				if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+				{
+					return;
+				}
+				if (!mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
+					connections == null ||
+					connections.Count == 0)
+				{
+					mappingData.WaitingOpenWorldConnections.Remove(sceneName);
+				}
+			});
+
+			// Also check if we need to enqueue a new scene load request
+			// We need to check the waiting count on the main thread
+			bool needsNewScene = false;
+			EnqueueMainThread(() =>
 			{
-				// Enqueue a new pending scene load request to the database if one doesn't already exist.
-				SceneService.Enqueue(dbContext, worldServerID, sceneName, SceneType.OpenWorld, out long sceneID);
+				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData) &&
+					mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) &&
+					connections != null &&
+					connections.Count > 0)
+				{
+					needsNewScene = true;
+				}
+			});
+			await Task.Yield();
+
+			if (needsNewScene)
+			{
+				await sceneService.EnqueueAsync(worldServerID, sceneName, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.OpenWorld);
 			}
 		}
 
 		/// <summary>
 		/// Tries to process an Instance scene for the connection character otherwise falls back to the world scene.
 		/// </summary>
-		/// <param name="dbContext">Database context.</param>
 		/// <param name="conn">Network connection to process.</param>
-		private void ProcessInstanceConnection(NpgsqlDbContext dbContext, NetworkConnection conn)
+		private async Task ProcessInstanceConnectionAsync(NetworkConnection conn)
 		{
-			if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+			if (Server?.Database?.ServiceRegistry == null)
+			{
+				return;
+			}
+			if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var charService) ||
+				!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService) ||
+				!Server.Database.ServiceRegistry.TryGet<ISceneServerService>(out var sceneServerService))
 			{
 				return;
 			}
 
-			// Get the scene for the selected character
-			if (!IsValidConnection(conn, out string accountName))
+			// Validate the connection on main thread
+			string accountName = null;
+			EnqueueMainThread(() =>
 			{
-				Kick(conn, "Failed to get account name");
+				if (!IsValidConnection(conn, out string acct))
+				{
+					Kick(conn, "Failed to get account name");
+				}
+				else
+				{
+					accountName = acct;
+				}
+			});
+			await Task.Yield();
+
+			if (string.IsNullOrEmpty(accountName))
+			{
 				return;
 			}
 
-			if (!CharacterService.TryGetSelectedCharacterID(dbContext, accountName, out long characterID))
+			// Get the selected character ID
+			var charsResult = await charService.FetchManyAsync(accountName);
+			if (!charsResult.IsSuccess || charsResult.Data == null)
 			{
-				Kick(conn, "invalid character ID");
+				EnqueueMainThread(() => Kick(conn, "invalid character ID"));
 				return;
 			}
+			var selectedChar = charsResult.Data.FirstOrDefault(c => c.Selected);
+			if (selectedChar.ID <= 0)
+			{
+				EnqueueMainThread(() => Kick(conn, "invalid character ID"));
+				return;
+			}
+			long characterID = selectedChar.ID;
 
-			if (!CharacterService.GetCharacterFlags(dbContext, characterID, out int characterFlags))
+			// Get the character data for flags and instance info
+			var charResult = await charService.FetchAsync(characterID);
+			if (!charResult.IsSuccess || !charResult.Data.HasValue)
 			{
-				Kick(conn, "invalid character flags");
+				EnqueueMainThread(() => Kick(conn, "invalid character flags"));
 				return;
 			}
+			var charData = charResult.Data.Value;
+			int characterFlags = charData.Flags;
 
 			if (!characterFlags.IsFlagged(CharacterFlags.IsInInstance))
 			{
-				FallbackToWorldScene(dbContext, conn, accountName, mappingData);
+				await FallbackToWorldSceneAsync(conn, accountName);
 				return;
 			}
 
-			SceneEntity sceneEntity;
-
-			// Check if the selected character has an instance available.
-			if (CharacterService.GetInstanceID(dbContext, characterID, out long instanceID) &&
-				(sceneEntity = SceneService.GetInstanceByID(dbContext, instanceID)) != null)
+			long instanceID = charData.InstanceID;
+			if (instanceID <= 0)
 			{
-				SceneStatus sceneStatus = (SceneStatus)sceneEntity.SceneStatus;
-				if (sceneStatus == SceneStatus.Ready)
+				// Clear instance flag
+				characterFlags.DisableBit(CharacterFlags.IsInInstance);
+				var updatedChar = new CharacterData(
+					id: charData.ID,
+					name: charData.Name,
+					nameLowercase: charData.NameLowercase,
+					account: charData.Account,
+					selected: charData.Selected,
+					worldServerID: charData.WorldServerID,
+					sceneName: charData.SceneName,
+					sceneHandle: charData.SceneHandle,
+					bindScene: charData.BindScene,
+					bindX: charData.BindX,
+					bindY: charData.BindY,
+					bindZ: charData.BindZ,
+					instanceID: charData.InstanceID,
+					instanceX: charData.InstanceX,
+					instanceY: charData.InstanceY,
+					instanceZ: charData.InstanceZ,
+					instanceRotX: charData.InstanceRotX,
+					instanceRotY: charData.InstanceRotY,
+					instanceRotZ: charData.InstanceRotZ,
+					instanceRotW: charData.InstanceRotW,
+					raceID: charData.RaceID,
+					modelIndex: charData.ModelIndex,
+					x: charData.X,
+					y: charData.Y,
+					z: charData.Z,
+					rotX: charData.RotX,
+					rotY: charData.RotY,
+					rotZ: charData.RotZ,
+					rotW: charData.RotW,
+					accessLevel: charData.AccessLevel,
+					online: charData.Online,
+					flags: characterFlags,
+					version: charData.Version + 1,
+					timeCreated: charData.TimeCreated,
+					lastSaved: charData.LastSaved
+				);
+				await charService.PersistAsync(updatedChar);
+
+				await FallbackToWorldSceneAsync(conn, accountName);
+				return;
+			}
+
+			var sceneResult = await sceneService.FetchAsync(instanceID);
+			if (!sceneResult.IsSuccess)
+			{
+				// Clear instance flag
+				characterFlags.DisableBit(CharacterFlags.IsInInstance);
+				var updatedChar = new CharacterData(
+					id: charData.ID,
+					name: charData.Name,
+					nameLowercase: charData.NameLowercase,
+					account: charData.Account,
+					selected: charData.Selected,
+					worldServerID: charData.WorldServerID,
+					sceneName: charData.SceneName,
+					sceneHandle: charData.SceneHandle,
+					bindScene: charData.BindScene,
+					bindX: charData.BindX,
+					bindY: charData.BindY,
+					bindZ: charData.BindZ,
+					instanceID: charData.InstanceID,
+					instanceX: charData.InstanceX,
+					instanceY: charData.InstanceY,
+					instanceZ: charData.InstanceZ,
+					instanceRotX: charData.InstanceRotX,
+					instanceRotY: charData.InstanceRotY,
+					instanceRotZ: charData.InstanceRotZ,
+					instanceRotW: charData.InstanceRotW,
+					raceID: charData.RaceID,
+					modelIndex: charData.ModelIndex,
+					x: charData.X,
+					y: charData.Y,
+					z: charData.Z,
+					rotX: charData.RotX,
+					rotY: charData.RotY,
+					rotZ: charData.RotZ,
+					rotW: charData.RotW,
+					accessLevel: charData.AccessLevel,
+					online: charData.Online,
+					flags: characterFlags,
+					version: charData.Version + 1,
+					timeCreated: charData.TimeCreated,
+					lastSaved: charData.LastSaved
+				);
+				await charService.PersistAsync(updatedChar);
+
+				await FallbackToWorldSceneAsync(conn, accountName);
+				return;
+			}
+
+			var sceneData = sceneResult.Data;
+			FishMMO.Shared.SceneStatus sceneStatus = (FishMMO.Shared.SceneStatus)sceneData.SceneStatus;
+			if (sceneStatus == FishMMO.Shared.SceneStatus.Ready)
+			{
+				// Ensure the Scene Server is running
+				var sceneServerResult = await sceneServerService.FetchAsync(sceneData.SceneServerID);
+				if (sceneServerResult.IsSuccess)
 				{
-					// Ensure the Scene Server is running, if not the character will be returned to the world scene.
-					SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, sceneEntity.SceneServerID);
-					if (sceneServer != null)
+					var sceneServer = sceneServerResult.Data;
+					EnqueueMainThread(() =>
 					{
-						// Tell the client to connect to the scene
 						Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
 						{
 							Address = sceneServer.Address,
 							Port = sceneServer.Port,
 						});
-					}
-					else
-					{
-						// Delete the Scene entry
-						SceneService.Delete(dbContext, sceneEntity.SceneServerID, sceneEntity.SceneHandle);
-					}
+					});
 				}
-				else if (sceneStatus == SceneStatus.Pending ||
-						 sceneStatus == SceneStatus.Loading)
+				else
 				{
-					AddToQueue(conn, sceneEntity.ID, mappingData.WaitingInstanceConnections, mappingData.InstanceConnectionScenes);
+					// Delete the Scene entry
+					await sceneService.DeleteByHandleAsync(sceneData.SceneServerID, sceneData.SceneHandle);
 				}
 			}
-			else
+			else if (sceneStatus == FishMMO.Shared.SceneStatus.Pending ||
+					 sceneStatus == FishMMO.Shared.SceneStatus.Loading)
 			{
-				// Clear instance flag
-				characterFlags.DisableBit(CharacterFlags.IsInInstance);
-				CharacterService.SetCharacterFlags(dbContext, characterID, characterFlags);
-
-				FallbackToWorldScene(dbContext, conn, accountName, mappingData);
+				EnqueueMainThread(() =>
+				{
+					if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+					{
+						AddToQueue(conn, sceneData.ID, mappingData.WaitingInstanceConnections, mappingData.InstanceConnectionScenes);
+					}
+				});
 			}
 		}
 
 		/// <summary>
 		/// Updates the total connection count by summing waiting and active connections across all scenes.
 		/// </summary>
-		/// <param name="dbContext">Database context.</param>
-		private void UpdateConnectionCount(NpgsqlDbContext dbContext)
+		private async Task UpdateConnectionCountAsync()
 		{
-			if (dbContext == null ||
-				!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+			if (Server?.Database?.ServiceRegistry == null)
+			{
+				return;
+			}
+			if (!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
 			{
 				return;
 			}
 
-			// Get the scene data from each of our worlds scenes
 			long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
-			List<SceneEntity> sceneServerCount = SceneService.GetServerList(dbContext, worldServerID);
-			int waitingOpenWorldCount = mappingData.WaitingOpenWorldConnections?.Sum(kvp => kvp.Value.Count) ?? 0;
-			int waitingInstanceCount = mappingData.WaitingInstanceConnections?.Sum(kvp => kvp.Value.Count) ?? 0;
-			int totalCount = waitingOpenWorldCount + waitingInstanceCount + sceneServerCount.Sum(scene => scene.CharacterCount);
+			var scenesResult = await sceneService.FetchManyAsync(worldServerID);
+			int sceneCharacterCount = 0;
+			if (scenesResult.IsSuccess && scenesResult.Data != null)
+			{
+				sceneCharacterCount = scenesResult.Data.Sum(scene => scene.CharacterCount);
+			}
 
-			mappingData.ConnectionCount = totalCount;
+			EnqueueMainThread(() =>
+			{
+				if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+				{
+					return;
+				}
+
+				int waitingOpenWorldCount = mappingData.WaitingOpenWorldConnections?.Sum(kvp => kvp.Value.Count) ?? 0;
+				int waitingInstanceCount = mappingData.WaitingInstanceConnections?.Sum(kvp => kvp.Value.Count) ?? 0;
+				int totalCount = waitingOpenWorldCount + waitingInstanceCount + sceneCharacterCount;
+
+				mappingData.ConnectionCount = totalCount;
+			});
 		}
 		/// </summary>
 		/// <param name="conn">Network connection.</param>
@@ -370,10 +648,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
-				Kick(conn, "Failed to access database context or world server system");
+				Kick(conn, "Failed to access database or world server system");
 				return;
 			}
 
@@ -383,8 +660,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			// Try to process the Instance otherwise it will fallback to world.
-			ProcessInstanceConnection(dbContext, conn);
+			// Fire-and-forget async instance connection processing
+			EnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn));
 		}
 
 		/// <summary>
@@ -433,20 +710,41 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Fallbacks a connection to the world scene if instance scene assignment fails.
 		/// </summary>
-		/// <param name="dbContext">Database context.</param>
 		/// <param name="conn">Network connection.</param>
 		/// <param name="accountName">Account name for the connection.</param>
-		/// <param name="mappingData">World scene mapping data.</param>
-		private void FallbackToWorldScene(NpgsqlDbContext dbContext, NetworkConnection conn, string accountName, IWorldSceneMappingData<NetworkConnection> mappingData)
+		private async Task FallbackToWorldSceneAsync(NetworkConnection conn, string accountName)
 		{
-			// Fallback to the world scene
-			if (!CharacterService.TryGetSelectedSceneName(dbContext, accountName, out string sceneName))
+			if (Server?.Database?.ServiceRegistry == null)
 			{
-				Kick(conn, "Failed to get selected scene");
 				return;
 			}
-			RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
-			AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
+			if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var charService))
+			{
+				return;
+			}
+
+			var charsResult = await charService.FetchManyAsync(accountName);
+			if (!charsResult.IsSuccess || charsResult.Data == null)
+			{
+				EnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
+				return;
+			}
+			var selectedChar = charsResult.Data.FirstOrDefault(c => c.Selected);
+			if (selectedChar.ID <= 0 || string.IsNullOrEmpty(selectedChar.SceneName))
+			{
+				EnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
+				return;
+			}
+			string sceneName = selectedChar.SceneName;
+
+			EnqueueMainThread(() =>
+			{
+				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+				{
+					RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
+					AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
+				}
+			});
 		}
 
 		/// <summary>
@@ -484,6 +782,20 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return Mathf.Clamp(details.MaxClients, 1, MAX_CLIENTS_PER_INSTANCE);
 			}
 			return MAX_CLIENTS_PER_INSTANCE;
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
+			}
 		}
 	}
 }

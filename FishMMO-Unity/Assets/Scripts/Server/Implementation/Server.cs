@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -6,6 +7,7 @@ using UnityEditor;
 using FishNet.Managing;
 using FishNet.Transporting;
 using KinematicCharacterController;
+using FishMMO.Database;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Shared;
@@ -38,6 +40,12 @@ namespace FishMMO.Server.Implementation
 		/// Gets the core server logic instance.
 		/// </summary>
 		public ICoreServer CoreServer { get; private set; }
+
+		/// <summary>
+		/// Gets the database orchestrator providing centralized access to
+		/// the service registry, health monitoring, metrics, and the context factory.
+		/// </summary>
+		public IDatabase Database { get; private set; }
 
 		/// <summary>
 		/// Gets the network manager wrapper instance.
@@ -144,6 +152,16 @@ namespace FishMMO.Server.Implementation
 				throw new UnityException("Server: Failed to retrieve Remote IP Address.");
 
 			CoreServer.Initialize(remoteAddress, gameObject.scene.name);
+
+			string workingDirectory = Constants.GetWorkingDirectory();
+#if UNITY_EDITOR
+			string dbConfigurationPath = Path.Combine(
+				Path.Combine(workingDirectory, Constants.Configuration.SetupDirectory),
+				"Development");
+			Database = new Database.Database(dbConfigurationPath, false);
+#else
+			Database = new Database.Database(workingDirectory, false);
+#endif
 
 			AddressProvider = new ServerAddressProvider(
 				NetworkWrapper.NetworkManager.TransportManager.Transport,
@@ -303,7 +321,15 @@ namespace FishMMO.Server.Implementation
 			DeinitializeAllDataContainers();
 			UnregisterAllDataContainers();
 
+			// Shutdown authenticator workers before stopping the server.
+			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is ServerAuthenticator authenticator)
+			{
+				authenticator.ShutdownWorkers();
+			}
+
 			NetworkWrapper?.StopServer();
+			Database?.Shutdown();
+			Database = null;
 			CoreServer?.Deinitialize();
 			AccountManager?.Clear();
 

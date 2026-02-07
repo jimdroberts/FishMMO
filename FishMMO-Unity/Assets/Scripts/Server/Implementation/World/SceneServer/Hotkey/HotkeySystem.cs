@@ -59,10 +59,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerHotkeySetBroadcastReceived(NetworkConnection conn, HotkeySetBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
-			{
-				return;
-			}
 			if (conn.FirstObject == null)
 			{
 				return;
@@ -108,10 +104,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerHotkeySetMultipleBroadcastReceived(NetworkConnection conn, HotkeySetMultipleBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
-			{
-				return;
-			}
 			if (conn.FirstObject == null)
 			{
 				return;

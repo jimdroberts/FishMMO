@@ -1,4 +1,3 @@
-using FishMMO.Database.Npgsql;
 using FishMMO.Database.Redis;
 
 namespace FishMMO.Server.Core
@@ -9,11 +8,6 @@ namespace FishMMO.Server.Core
 	/// </summary>
 	public interface ICoreServer
 	{
-		/// <summary>
-		/// Gets the Npgsql database context factory for PostgreSQL operations.
-		/// </summary>
-		NpgsqlDbContextFactory NpgsqlDbContextFactory { get; }
-
 		/// <summary>
 		/// Gets the Redis database context factory for Redis operations.
 		/// </summary>

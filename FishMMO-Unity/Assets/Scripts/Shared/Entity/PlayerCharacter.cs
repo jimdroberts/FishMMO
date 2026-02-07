@@ -3,6 +3,7 @@ using UnityEngine;
 using System;
 using FishNet.Connection;
 using FishNet.Serializing;
+using FishMMO.Database.Data.Enums;
 using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 
@@ -71,6 +72,10 @@ namespace FishMMO.Shared
 		/// The account name associated with this character.
 		/// </summary>
 		public string Account { get; set; }
+		/// <summary>
+		/// The current version of the character data, used for optimistic concurrency control when saving/loading from the database.
+		/// </summary>
+		public long Version { get; set; }
 		/// <summary>
 		/// The access level of the character (e.g., player, admin).
 		/// </summary>

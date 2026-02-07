@@ -4,13 +4,16 @@ using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
-using FishMMO.Server.DatabaseServices;
-using FishMMO.Database.Npgsql;
+using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Server.Implementation;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using FishMMO.Database.Npgsql.Entities;
 using System.Linq;
 using System;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
@@ -19,6 +22,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// Validates and processes client interactions with interactable objects including merchants, crafting, and dungeon finders.
 	/// </summary>
 	[CreateAssetMenu(fileName = "InteractableSystem", menuName = "FishMMO/Server/SceneServer/Interactable System", order = 1)]
+	[RequiresDataContainer(typeof(InteractableSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class InteractableSystem : ServerBehaviour
 	{
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
@@ -37,6 +42,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			if (InteractableHandlerInitializer == null)
 			{
 				Log.Error("InteractableSystem", "InitializeOnce: InteractableHandlerInitializer is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (Server.Database?.ServiceRegistry == null)
+			{
+				Log.Error("InteractableSystem", "InitializeOnce: Database ServiceRegistry is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("InteractableSystem", "InitializeOnce: IInteractableSystemMainThreadQueueData not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
@@ -61,6 +78,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
+			// Drain any remaining queued main-thread actions
+			DrainMainThreadQueue();
+
 			// Interactable handlers
 			ClearAllHandlers();
 
@@ -69,6 +89,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
+		}
+
+		public override void OnLateUpdate(float deltaTime)
+		{
+			DrainMainThreadQueue();
+		}
+
+		private void DrainMainThreadQueue()
+		{
+			if (Server != null &&
+				Server.DataContainerRegistry.TryGet<IInteractableSystemMainThreadQueueData>(out var queueData))
+			{
+				queueData.Drain();
+			}
+		}
+
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server != null &&
+				Server.DataContainerRegistry.TryGet<IInteractableSystemMainThreadQueueData>(out var queueData))
+			{
+				queueData.Enqueue(action);
+			}
 		}
 
 		private static Dictionary<Type, IInteractableHandler> interactableHandlers = new Dictionary<Type, IInteractableHandler>();
@@ -131,10 +174,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		/// <summary>
 		/// Attempts to add items to a characters inventory controller and broadcasts the update to the client.
+		/// DB persistence is fire-and-forget async.
 		/// </summary>
-		public bool SendNewItemBroadcast(NpgsqlDbContext dbContext, NetworkConnection conn, ICharacter character, IInventoryController inventoryController, Item newItem)
+		public bool SendNewItemBroadcast(NetworkConnection conn, ICharacter character, IInventoryController inventoryController, Item newItem)
 		{
 			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
+			List<CharacterInventoryData> itemsToSave = new List<CharacterInventoryData>();
 
 			// see if we have successfully added the item
 			if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems) &&
@@ -150,8 +195,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						continue;
 					}
 
-					// update or add the item to the database and initialize
-					CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+					// collect items for async DB persistence
+					itemsToSave.Add(new CharacterInventoryData(
+						id: item.ID,
+						characterID: character.ID,
+						templateID: item.Template.ID,
+						slot: item.Slot,
+						seed: item.IsGenerated ? item.Generator.Seed : 0,
+						amount: item.IsStackable ? (uint)item.Stackable.Amount : 1
+					));
 
 					// create the new item broadcast
 					modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -173,9 +225,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					Items = modifiedItemBroadcasts,
 				}, true, Channel.Reliable);
 
+				// Fire-and-forget: persist inventory changes to DB
+				if (itemsToSave.Count > 0)
+				{
+					EnqueueAsyncWork(() => PersistInventoryItemsAsync(itemsToSave));
+				}
+
 				return true;
 			}
 			return false;
+		}
+
+		/// <summary>
+		/// Persists inventory items to the database asynchronously.
+		/// </summary>
+		private async Task PersistInventoryItemsAsync(List<CharacterInventoryData> items)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService))
+				{
+					return;
+				}
+
+				await inventoryService.PersistAsync(items);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("InteractableSystem", $"Error persisting inventory items: {ex}");
+			}
 		}
 
 		/// <summary>
@@ -307,12 +389,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
 			switch (msg.Type)
 			{
 				case MerchantTabType.Item:
@@ -344,21 +420,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							return;
 						}
 
-						SendNewItemBroadcast(dbContext, conn, character, inventoryController, newItem);
+						SendNewItemBroadcast(conn, character, inventoryController, newItem);
 					}
 					break;
 				case MerchantTabType.Ability:
 					if (merchantTemplate.Abilities != null &&
 						merchantTemplate.Abilities.Count >= msg.Index)
 					{
-						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.Abilities[msg.Index]);
+						LearnAbilityTemplate(conn, character, merchantTemplate.Abilities[msg.Index]);
 					}
 					break;
 				case MerchantTabType.AbilityEvent:
 					if (merchantTemplate.AbilityEvents != null &&
 						merchantTemplate.AbilityEvents.Count >= msg.Index)
 					{
-						LearnAbilityEvent(dbContext, conn, character, merchantTemplate.AbilityEvents[msg.Index]);
+						LearnAbilityEvent(conn, character, merchantTemplate.AbilityEvents[msg.Index]);
 					}
 					break;
 				default: return;
@@ -366,13 +442,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		private void LearnAbilityGeneric<TTemplate, TBroadcast>(
-			NpgsqlDbContext dbContext,
 			NetworkConnection conn,
 			IPlayerCharacter character,
 			TTemplate template,
 			Func<IAbilityController, int, bool> knowsFunc,
 			Action<IAbilityController, List<TTemplate>> learnFunc,
-			Action<NpgsqlDbContext, long, int> addToDbFunc,
 			Func<TTemplate, int> idSelector,
 			Func<TTemplate, int> priceSelector,
 			Func<TTemplate, TBroadcast> broadcastFactory)
@@ -401,41 +475,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			learnFunc(abilityController, new List<TTemplate> { template });
 
 			// remove the price from the characters currency
-			currency.AddValue(priceSelector(template));
+			currency.AddValue(-priceSelector(template));
 
-			// add the known ability/event to the database
-			addToDbFunc(dbContext, character.ID, idSelector(template));
+			// fire-and-forget: persist the known ability/event to the database
+			long charID = character.ID;
+			int templateID = idSelector(template);
+			EnqueueAsyncWork(() => PersistKnownAbilityAsync(charID, templateID));
 
 			// tell the client about the new ability/event
 			Server.NetworkWrapper.Broadcast(conn, broadcastFactory(template), true, Channel.Reliable);
 		}
 
-		public void LearnAbilityTemplate<T>(NpgsqlDbContext dbContext, NetworkConnection conn, IPlayerCharacter character, T template) where T : BaseAbilityTemplate
+		/// <summary>
+		/// Persists a known ability or event to the database asynchronously.
+		/// </summary>
+		private async Task PersistKnownAbilityAsync(long characterID, int templateID)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService))
+				{
+					return;
+				}
+
+				await knownAbilityService.PersistAsync(characterID, templateID, 1);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("InteractableSystem", $"Error persisting known ability: {ex}");
+			}
+		}
+
+		public void LearnAbilityTemplate<T>(NetworkConnection conn, IPlayerCharacter character, T template) where T : BaseAbilityTemplate
 		{
 			LearnAbilityGeneric<BaseAbilityTemplate, KnownAbilityAddBroadcast>(
-				dbContext,
 				conn,
 				character,
 				template,
 				(abilityController, id) => abilityController.KnowsAbility(id),
 				(abilityController, list) => abilityController.LearnBaseAbilities(list.Cast<BaseAbilityTemplate>().ToList()),
-				(db, charId, tempId) => CharacterKnownAbilityService.Add(db, charId, tempId),
 				t => t.ID,
 				t => t.Price,
 				t => new KnownAbilityAddBroadcast { TemplateID = t.ID }
 			);
 		}
 
-		public void LearnAbilityEvent<T>(NpgsqlDbContext dbContext, NetworkConnection conn, IPlayerCharacter character, T template) where T : AbilityEvent
+		public void LearnAbilityEvent<T>(NetworkConnection conn, IPlayerCharacter character, T template) where T : AbilityEvent
 		{
 			LearnAbilityGeneric<AbilityEvent, KnownAbilityEventAddBroadcast>(
-				dbContext,
 				conn,
 				character,
 				template,
 				(abilityController, id) => abilityController.KnowsAbilityEvent(id),
 				(abilityController, list) => abilityController.LearnAbilityEvents(list.Cast<AbilityEvent>().ToList()),
-				(db, charId, tempId) => CharacterKnownAbilityService.Add(db, charId, tempId),
 				t => t.ID,
 				t => t.Price,
 				t => new KnownAbilityEventAddBroadcast { TemplateID = t.ID }
@@ -555,7 +651,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Ability newAbility = LearnAbility(abilityController, mainAbility, msg.Events);
 			if (newAbility != null)
 			{
-				currency.AddValue(price);
+				currency.AddValue(-price);
 
 				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
 				{
@@ -613,65 +709,128 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
+			// Capture main-thread state before going async
+			long characterID = character.ID;
+			long worldServerID = character.WorldServerID;
+			long partyID = 0;
+			if (character.TryGet(out IPartyController partyController) && partyController.ID != 0)
 			{
-				return;
+				partyID = partyController.ID;
 			}
+			string dungeonName = dungeonEntrance.DungeonName;
+			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
 
-			// Check the status of the characters instance
-			SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, character.ID, SceneType.Group);
-			if (sceneEntity == null)
+			// Fire-and-forget: process dungeon instance assignment asynchronously
+			EnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails));
+		}
+
+		/// <summary>
+		/// Asynchronously processes dungeon finder logic: checks for existing instances, party instances, or enqueues a new one.
+		/// Marshals character state changes and disconnect back to the main thread.
+		/// </summary>
+		private async Task ProcessDungeonFinderAsync(
+			NetworkConnection conn,
+			IPlayerCharacter character,
+			long characterID,
+			long worldServerID,
+			long partyID,
+			string dungeonName,
+			CharacterRespawnPositionDetails respawnDetails)
+		{
+			try
 			{
-				// Check if any party members currently have an instance.
-				if (CheckCharacterPartyInstance(dbContext, character))
+				if (Server?.Database?.ServiceRegistry == null)
 				{
-					// Notify the connection the party member already has an instance.
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
+				{
 					return;
 				}
 
-				if (!SceneService.Enqueue(dbContext, character.WorldServerID, dungeonEntrance.DungeonName, SceneType.Group, out long sceneID, character.ID))
+				// Check the status of the characters instance
+				var instanceResult = await sceneService.FetchCharacterInstanceAsync(characterID, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group);
+				if (!instanceResult.IsSuccess)
 				{
-					Log.Debug("InteractableSystem", "Failed to enqueue new pending scene load request: " + character.WorldServerID + ":" + dungeonEntrance.DungeonName);
+					// No existing instance found
+					// Check if any party members currently have an instance
+					if (partyID > 0 && await CheckCharacterPartyInstanceAsync(partyID))
+					{
+						// Notify the connection the party member already has an instance.
+						return;
+					}
+
+					var enqueueResult = await sceneService.EnqueueAsync(
+						worldServerID,
+						dungeonName,
+						(FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group,
+						characterID);
+
+					if (!enqueueResult.IsSuccess)
+					{
+						await Log.Debug("InteractableSystem", "Failed to enqueue new pending scene load request: " + worldServerID + ":" + dungeonName);
+						return;
+					}
+
+					long sceneID = enqueueResult.Data;
+					EnqueueMainThread(() =>
+					{
+						character.InstanceID = sceneID;
+						character.InstancePosition = respawnDetails.Position;
+						character.InstanceRotation = respawnDetails.Rotation;
+						character.EnableFlags(CharacterFlags.IsInInstance);
+						conn.Disconnect(false);
+					});
 				}
 				else
 				{
-					character.InstanceID = sceneID;
+					long existingInstanceID = instanceResult.Data.ID;
+					EnqueueMainThread(() =>
+					{
+						character.InstanceID = existingInstanceID;
+						character.InstancePosition = respawnDetails.Position;
+						character.InstanceRotation = respawnDetails.Rotation;
+						character.EnableFlags(CharacterFlags.IsInInstance);
+						conn.Disconnect(false);
+					});
 				}
 			}
-			else
+			catch (Exception ex)
 			{
-				character.InstanceID = sceneEntity.ID;
+				await Log.Error("InteractableSystem", $"Error processing dungeon finder: {ex}");
 			}
-
-			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
-			character.InstancePosition = respawnDetails.Position;
-			character.InstanceRotation = respawnDetails.Rotation;
-			character.EnableFlags(CharacterFlags.IsInInstance);
-
-			// Connect to the instance.
-			conn.Disconnect(false);
 		}
 
 		/// <summary>
 		/// Checks if a characters party members have a valid instance.
 		/// </summary>
-		public bool CheckCharacterPartyInstance(NpgsqlDbContext dbContext, IPlayerCharacter character)
+		private async Task<bool> CheckCharacterPartyInstanceAsync(long partyID)
 		{
-			if (character.TryGet(out IPartyController partyController) && partyController.ID != 0)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
-				PartyEntity partyEntity = PartyService.Load(dbContext, partyController.ID);
-				if (partyEntity != null && partyEntity.Characters.Count > 0)
+				return false;
+			}
+			if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService) ||
+				!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
+			{
+				return false;
+			}
+
+			var membersResult = await charPartyService.FetchManyAsync(partyID);
+			if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count == 0)
+			{
+				return false;
+			}
+
+			foreach (var member in membersResult.Data)
+			{
+				var instanceResult = await sceneService.FetchCharacterInstanceAsync(member.CharacterID, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group);
+				if (instanceResult.IsSuccess)
 				{
-					foreach (CharacterPartyEntity characterPartyEntity in partyEntity.Characters)
-					{
-						if (SceneService.GetCharacterInstance(dbContext, characterPartyEntity.ID, SceneType.Group) != null)
-						{
-							return true;
-						}
-					}
+					return true;
 				}
 			}
+
 			return false;
 		}
 
@@ -679,17 +838,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			Ability newAbility = new Ability(abilityTemplate, abilityEvents);
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return null;
-			}
-
-			CharacterAbilityService.UpdateOrAdd(dbContext, abilityController.Character.ID, newAbility);
+			// Fire-and-forget: persist the ability to the database
+			long charID = abilityController.Character.ID;
+			var abilityData = new CharacterAbilityData(
+				id: newAbility.ID,
+				characterID: charID,
+				templateID: newAbility.Template.ID,
+				abilityEvents: abilityEvents,
+				cooldown: 0f
+			);
+			EnqueueAsyncWork(() => PersistAbilityAsync(abilityData));
 
 			abilityController.LearnAbility(newAbility);
 
 			return newAbility;
+		}
+
+		/// <summary>
+		/// Persists an ability to the database asynchronously.
+		/// </summary>
+		private async Task PersistAbilityAsync(CharacterAbilityData abilityData)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterAbilityService>(out var abilityService))
+				{
+					return;
+				}
+
+				await abilityService.PersistAsync(abilityData);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("InteractableSystem", $"Error persisting ability: {ex}");
+			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -713,6 +899,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return false;
 			}
 			return true;
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
+			}
 		}
 	}
 }

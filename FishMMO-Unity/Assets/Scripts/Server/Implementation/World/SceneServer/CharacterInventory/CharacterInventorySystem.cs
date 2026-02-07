@@ -4,11 +4,12 @@ using FishMMO.Shared;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.DatabaseServices;
-using FishMMO.Database.Npgsql;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -17,6 +18,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Manages player character inventory, equipment, and bank operations with validation and database persistence.
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterInventorySystem", menuName = "FishMMO/Server/SceneServer/Character Inventory System", order = 1)]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterInventorySystem : ServerBehaviour, ICharacterInventorySystem
 	{
 		/// <summary>
@@ -27,6 +29,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server == null)
 			{
 				Log.Error("CharacterInventorySystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (Server.Database == null ||
+				Server.Database.ServiceRegistry == null)
+			{
+				Log.Error("CharacterInventorySystem", "InitializeOnce: Database or ServiceRegistry is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			var registry = Server.Database.ServiceRegistry;
+			if (!registry.TryGet<ICharacterInventoryService>(out _) ||
+				!registry.TryGet<ICharacterBankService>(out _) ||
+				!registry.TryGet<ICharacterEquipmentService>(out _) ||
+				!registry.TryGet<ICharacterAttributeService>(out _))
+			{
+				Log.Error("CharacterInventorySystem", "InitializeOnce: One or more required database services could not be resolved");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
@@ -71,79 +90,79 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Swaps two items within the same container and updates the database slots.
+		/// Swaps two items within the same container and collects the affected items.
 		/// </summary>
-		/// <param name="dbContext">Database context for updates.</param>
-		/// <param name="characterID">ID of the character owning the container.</param>
 		/// <param name="container">Item container to swap items in.</param>
 		/// <param name="fromIndex">Source slot index.</param>
 		/// <param name="toIndex">Target slot index.</param>
-		/// <param name="onDatabaseUpdateSlot">Callback to update database slot for each item.</param>
+		/// <param name="affectedItems">Out: list of items whose slots changed.</param>
 		/// <returns>True if swap succeeded, false otherwise.</returns>
-		public bool SwapContainerItems(NpgsqlDbContext dbContext,
-								   long characterID,
-								   IItemContainer container,
-								   int fromIndex, int toIndex,
-								   Action<NpgsqlDbContext, long, Item> onDatabaseUpdateSlot)
+		public bool SwapContainerItems(IItemContainer container, int fromIndex, int toIndex, out List<Item> affectedItems)
 		{
+			affectedItems = null;
 			if (container != null &&
 				container.SwapItemSlots(fromIndex, toIndex, out Item fromItem, out Item toItem))
 			{
-				// we can update the item slots in the database easily
-				onDatabaseUpdateSlot?.Invoke(dbContext, characterID, fromItem);
-				onDatabaseUpdateSlot?.Invoke(dbContext, characterID, toItem);
+				affectedItems = new List<Item>(2);
+				if (fromItem != null) affectedItems.Add(fromItem);
+				if (toItem != null) affectedItems.Add(toItem);
 				return true;
 			}
 			return false;
 		}
 
 		/// <summary>
-		/// Swaps items between two containers and updates the database slots as needed.
+		/// Swaps items between two containers and collects affected items and deleted slots.
 		/// </summary>
-		/// <param name="dbContext">Database context for updates.</param>
-		/// <param name="characterID">ID of the character owning the containers.</param>
 		/// <param name="from">Source item container.</param>
 		/// <param name="to">Target item container.</param>
 		/// <param name="fromIndex">Source slot index.</param>
 		/// <param name="toIndex">Target slot index.</param>
-		/// <param name="onDatabaseSetOldSlot">Callback to set old slot in database.</param>
-		/// <param name="onDatabaseDeleteOldSlot">Callback to delete old slot in database.</param>
-		/// <param name="onDatabaseSetNewSlot">Callback to set new slot in database.</param>
+		/// <param name="affectedFromItems">Out: items placed into the source container.</param>
+		/// <param name="deletedFromSlots">Out: slot indices vacated in the source container.</param>
+		/// <param name="affectedToItems">Out: items placed into the destination container.</param>
 		/// <returns>True if swap succeeded, false otherwise.</returns>
-		public bool SwapContainerItems(NpgsqlDbContext dbContext,
-								   long characterID,
-								   IItemContainer from, IItemContainer to,
-								   int fromIndex, int toIndex,
-								   Action<NpgsqlDbContext, long, Item> onDatabaseSetOldSlot = null,
-								   Action<NpgsqlDbContext, long, long> onDatabaseDeleteOldSlot = null,
-								   Action<NpgsqlDbContext, long, Item> onDatabaseSetNewSlot = null)
+		public bool SwapContainerItems(IItemContainer from, IItemContainer to, int fromIndex, int toIndex,
+			out List<Item> affectedFromItems, out List<long> deletedFromSlots, out List<Item> affectedToItems)
 		{
+			affectedFromItems = null;
+			deletedFromSlots = null;
+			affectedToItems = null;
+
 			// same container... do the quick swap
 			if (from == to)
 			{
-				return SwapContainerItems(dbContext, characterID, from, fromIndex, toIndex, onDatabaseSetOldSlot);
+				if (SwapContainerItems(from, fromIndex, toIndex, out affectedFromItems))
+				{
+					return true;
+				}
+				return false;
 			}
 			if (from != null &&
 				to != null &&
 				from.TryGetItem(fromIndex, out Item fromItem))
 			{
+				affectedFromItems = new List<Item>(1);
+				deletedFromSlots = new List<long>(1);
+				affectedToItems = new List<Item>(1);
+
 				// check if we need to swap items
 				if (to.TryGetItem(toIndex, out Item toItem))
 				{
 					// put the target item in the old container
 					from.SetItemSlot(toItem, fromIndex);
-					onDatabaseSetOldSlot?.Invoke(dbContext, characterID, toItem);
+					affectedFromItems.Add(toItem);
 				}
 				// the slot we want to move the item to is empty
 				else
 				{
 					// remove the item from the old container
 					from.SetItemSlot(null, fromIndex);
-					onDatabaseDeleteOldSlot?.Invoke(dbContext, characterID, fromItem.Slot);
+					deletedFromSlots.Add(fromItem.Slot);
 				}
 				// put the item in the new container
 				to.SetItemSlot(fromItem, toIndex);
-				onDatabaseSetNewSlot?.Invoke(dbContext, characterID, fromItem);
+				affectedToItems.Add(fromItem);
 				return true;
 			}
 			return false;
@@ -163,12 +182,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null &&
 				!character.IsTeleporting &&
@@ -176,8 +189,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Item item = inventoryController.RemoveItem(msg.Slot);
 
-				// remove the item from the database
-				CharacterInventoryService.Delete(dbContext, character.ID, msg.Slot);
+				// fire-and-forget async delete
+				long characterID = character.ID;
+				int slot = msg.Slot;
+				long version = DateTimeOffset.UtcNow.Ticks;
+				EnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, slot, version));
 
 				Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 			}
@@ -197,18 +213,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			using var dbTransaction = dbContext.Database.BeginTransaction();
-			if (dbTransaction == null)
-			{
-				return;
-			}
-
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				character.IsTeleporting ||
@@ -217,17 +221,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			long characterID = character.ID;
+			long version = DateTimeOffset.UtcNow.Ticks;
+
 			switch (msg.FromInventory)
 			{
 				case InventoryType.Inventory:
 					// swap the items in the inventory
 					if (msg.To != msg.From &&
-						SwapContainerItems(dbContext, character.ID, inventoryController, msg.From, msg.To, (db, id, i) =>
+						SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected))
 					{
-						CharacterInventoryService.Update(db, id, i);
-					}))
-					{
-						dbTransaction.Commit();
+						// fire-and-forget async persist for each affected inventory item
+						var invDtos = BuildInventoryItemDataList(characterID, invAffected, version);
+						EnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos));
 
 						// tell the client we succeeded
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -248,21 +254,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							return;
 						}
 
-						if (SwapContainerItems(dbContext, character.ID, bankController, inventoryController, msg.From, msg.To,
-							(db, id, a) =>
-							{
-								CharacterBankService.SetSlot(db, id, a);
-							},
-							(db, id, s) =>
-							{
-								CharacterBankService.Delete(db, id, s);
-							},
-							(db, id, b) =>
-							{
-								CharacterInventoryService.SetSlot(db, id, b);
-							}))
+						if (SwapContainerItems(bankController, inventoryController, msg.From, msg.To,
+							out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
 						{
-							dbTransaction.Commit();
+							// persist bank items that moved to the source (bank) container
+							if (fromItems != null && fromItems.Count > 0)
+							{
+								var bankDtos = BuildBankItemDataList(characterID, fromItems, version);
+								EnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos));
+							}
+							// delete vacated bank slots
+							if (deletedSlots != null && deletedSlots.Count > 0)
+							{
+								foreach (long slot in deletedSlots)
+								{
+									EnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, (int)slot, version));
+								}
+							}
+							// persist inventory items that moved to the destination (inventory) container
+							if (toItems != null && toItems.Count > 0)
+							{
+								var invDtos2 = BuildInventoryItemDataList(characterID, toItems, version);
+								EnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos2));
+							}
 
 							// tell the client
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -287,18 +301,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			using var dbTransaction = dbContext.Database.BeginTransaction();
-			if (dbTransaction == null)
-			{
-				return;
-			}
-
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				character.IsTeleporting ||
@@ -306,6 +308,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			long characterID = character.ID;
+			long version = DateTimeOffset.UtcNow.Ticks;
 
 			switch (msg.FromInventory)
 			{
@@ -321,19 +326,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// did we replace an already equipped item?
 						if (inventoryController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 						{
-							CharacterInventoryService.SetSlot(dbContext, character.ID, prevItem);
+							var dto = BuildInventoryItemData(characterID, prevItem, version);
+							EnqueueAsyncWork(() => PersistInventoryItemAsync(dto));
 						}
 						// remove the inventory item from the database
 						else
 						{
-							CharacterInventoryService.Delete(dbContext, character.ID, msg.InventoryIndex);
+							EnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, version));
 						}
 
 						// set the equipment slot in the database
-						CharacterEquipmentService.SetSlot(dbContext, character.ID, inventoryItem);
-						CharacterAttributeService.Save(dbContext, character);
+						var equipDto = BuildEquipmentItemData(characterID, inventoryItem, version);
+						EnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto));
 
-						dbTransaction.Commit();
+						// save attributes
+						var attrDtos = BuildAttributeDataList(character, version);
+						EnqueueAsyncWork(() => PersistAttributesAsync(attrDtos));
 
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 					}
@@ -363,19 +371,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							// did we replace an already equipped item?
 							if (bankController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 							{
-								CharacterBankService.SetSlot(dbContext, character.ID, prevItem);
+								var dto = BuildBankItemData(characterID, prevItem, version);
+								EnqueueAsyncWork(() => PersistBankItemAsync(dto));
 							}
-							// remove the inventory item from the database
+							// remove the bank item from the database
 							else
 							{
-								CharacterBankService.Delete(dbContext, character.ID, msg.InventoryIndex);
+								EnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, version));
 							}
 
 							// set the equipment slot in the database
-							CharacterEquipmentService.SetSlot(dbContext, character.ID, bankItem);
-							CharacterAttributeService.Save(dbContext, character);
+							var equipDto = BuildEquipmentItemData(characterID, bankItem, version);
+							EnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto));
 
-							dbTransaction.Commit();
+							// save attributes
+							var attrDtos = BuildAttributeDataList(character, version);
+							EnqueueAsyncWork(() => PersistAttributesAsync(attrDtos));
 
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
@@ -399,18 +410,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			using var dbTransaction = dbContext.Database.BeginTransaction();
-			if (dbTransaction == null)
-			{
-				return;
-			}
-
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				character.IsTeleporting ||
@@ -418,6 +417,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			long characterID = character.ID;
+			long version = DateTimeOffset.UtcNow.Ticks;
 
 			switch (msg.ToInventory)
 			{
@@ -441,24 +443,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							return;
 						}
 
-						// update all of the modified slots
-						foreach (Item item in modifiedItems)
-						{
-							// just in case..
-							if (item == null)
-							{
-								continue;
-							}
-
-							// update or add the item to the database and initialize
-							CharacterInventoryService.SetSlot(dbContext, character.ID, item);
-						}
+						// persist all modified inventory slots
+						var invDtos = BuildInventoryItemDataList(characterID, modifiedItems, version);
+						EnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos));
 
 						// delete the item from the equipment table
-						CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
-						CharacterAttributeService.Save(dbContext, character);
+						EnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, version));
 
-						dbTransaction.Commit();
+						// save attributes
+						var attrDtos = BuildAttributeDataList(character, version);
+						EnqueueAsyncWork(() => PersistAttributesAsync(attrDtos));
 
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 					}
@@ -494,24 +488,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								return;
 							}
 
-							// update all of the modified slots
-							foreach (Item item in modifiedItems)
-							{
-								// just in case..
-								if (item == null)
-								{
-									continue;
-								}
-
-								// update or add the item to the database and initialize
-								CharacterBankService.SetSlot(dbContext, character.ID, item);
-							}
+							// persist all modified bank slots
+							var bankDtos = BuildBankItemDataList(characterID, modifiedItems, version);
+							EnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos));
 
 							// delete the item from the equipment table
-							CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
-							CharacterAttributeService.Save(dbContext, character);
+							EnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, version));
 
-							dbTransaction.Commit();
+							// save attributes
+							var attrDtos = BuildAttributeDataList(character, version);
+							EnqueueAsyncWork(() => PersistAttributesAsync(attrDtos));
 
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
@@ -535,12 +521,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null &&
 				!character.IsTeleporting &&
@@ -548,8 +528,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Item item = bankController.RemoveItem(msg.Slot);
 
-				// remove the item from the database
-				CharacterBankService.Delete(dbContext, character.ID, item.Slot);
+				// fire-and-forget async delete
+				long characterID = character.ID;
+				int slot = item.Slot;
+				long version = DateTimeOffset.UtcNow.Ticks;
+				EnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, slot, version));
 
 				Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 			}
@@ -569,17 +552,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-			using var dbTransaction = dbContext.Database.BeginTransaction();
-			if (dbTransaction == null)
-			{
-				return;
-			}
-
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				character.IsTeleporting ||
@@ -594,25 +566,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			long characterID = character.ID;
+			long version = DateTimeOffset.UtcNow.Ticks;
+
 			switch (msg.FromInventory)
 			{
 				case InventoryType.Inventory:
 					if (character.TryGet(out IInventoryController inventoryController) &&
-						SwapContainerItems(dbContext, character.ID, inventoryController, bankController, msg.From, msg.To,
-					(db, id, a) =>
+						SwapContainerItems(inventoryController, bankController, msg.From, msg.To,
+							out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
 					{
-						CharacterInventoryService.SetSlot(db, id, a);
-					},
-					(db, id, s) =>
-					{
-						CharacterInventoryService.Delete(db, id, s);
-					},
-					(db, id, b) =>
-					{
-						CharacterBankService.SetSlot(db, id, b);
-					}))
-					{
-						dbTransaction.Commit();
+						// persist inventory items that went into source (inventory) container
+						if (fromItems != null && fromItems.Count > 0)
+						{
+							var invDtos = BuildInventoryItemDataList(characterID, fromItems, version);
+							EnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos));
+						}
+						// delete vacated inventory slots
+						if (deletedSlots != null && deletedSlots.Count > 0)
+						{
+							foreach (long slot in deletedSlots)
+							{
+								EnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, (int)slot, version));
+							}
+						}
+						// persist bank items that went into destination (bank) container
+						if (toItems != null && toItems.Count > 0)
+						{
+							var bankDtos = BuildBankItemDataList(characterID, toItems, version);
+							EnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos));
+						}
 
 						// tell the client
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -623,12 +606,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				case InventoryType.Bank:
 					// swap the items in the bank
 					if (msg.To != msg.From &&
-						SwapContainerItems(dbContext, character.ID, bankController, msg.From, msg.To, (db, id, i) =>
+						SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected))
 					{
-						CharacterBankService.Update(db, id, i);
-					}))
-					{
-						dbTransaction.Commit();
+						var bankDtos2 = BuildBankItemDataList(characterID, bankAffected, version);
+						EnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos2));
 
 						// tell the client we succeeded
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -678,6 +659,331 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 			return true;
+		}
+
+		#region DTO Builders
+
+		/// <summary>
+		/// Builds a CharacterInventoryData DTO from a live Item instance.
+		/// Must be called on the main thread.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private CharacterInventoryData BuildInventoryItemData(long characterID, Item item, long version)
+		{
+			return new CharacterInventoryData(
+				id: item.ID,
+				version: version,
+				characterID: characterID,
+				templateID: item.Template.ID,
+				slot: item.Slot,
+				seed: item.IsGenerated ? item.Generator.Seed : 0,
+				amount: item.IsStackable ? item.Stackable.Amount : 1
+			);
+		}
+
+		/// <summary>
+		/// Builds a list of CharacterInventoryData DTOs from live Item instances.
+		/// Must be called on the main thread.
+		/// </summary>
+		private List<CharacterInventoryData> BuildInventoryItemDataList(long characterID, List<Item> items, long version)
+		{
+			var dtos = new List<CharacterInventoryData>(items.Count);
+			foreach (Item item in items)
+			{
+				if (item == null) continue;
+				dtos.Add(BuildInventoryItemData(characterID, item, version));
+			}
+			return dtos;
+		}
+
+		/// <summary>
+		/// Builds a CharacterBankData DTO from a live Item instance.
+		/// Must be called on the main thread.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private CharacterBankData BuildBankItemData(long characterID, Item item, long version)
+		{
+			return new CharacterBankData(
+				id: item.ID,
+				version: version,
+				characterID: characterID,
+				templateID: item.Template.ID,
+				slot: item.Slot,
+				seed: item.IsGenerated ? item.Generator.Seed : 0,
+				amount: item.IsStackable ? item.Stackable.Amount : 1
+			);
+		}
+
+		/// <summary>
+		/// Builds a list of CharacterBankData DTOs from live Item instances.
+		/// Must be called on the main thread.
+		/// </summary>
+		private List<CharacterBankData> BuildBankItemDataList(long characterID, List<Item> items, long version)
+		{
+			var dtos = new List<CharacterBankData>(items.Count);
+			foreach (Item item in items)
+			{
+				if (item == null) continue;
+				dtos.Add(BuildBankItemData(characterID, item, version));
+			}
+			return dtos;
+		}
+
+		/// <summary>
+		/// Builds a CharacterEquipmentData DTO from a live Item instance.
+		/// Must be called on the main thread.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private CharacterEquipmentData BuildEquipmentItemData(long characterID, Item item, long version)
+		{
+			return new CharacterEquipmentData(
+				id: item.ID,
+				version: version,
+				characterID: characterID,
+				templateID: item.Template.ID,
+				slot: item.Slot,
+				seed: item.IsGenerated ? item.Generator.Seed : 0,
+				amount: item.IsStackable ? item.Stackable.Amount : 1
+			);
+		}
+
+		/// <summary>
+		/// Builds a list of CharacterAttributeData DTOs from the character's attribute controllers.
+		/// Must be called on the main thread.
+		/// </summary>
+		private List<CharacterAttributeData> BuildAttributeDataList(IPlayerCharacter character, long version)
+		{
+			var dtos = new List<CharacterAttributeData>();
+			if (!character.TryGet(out ICharacterAttributeController attributeController))
+			{
+				return dtos;
+			}
+
+			foreach (var kvp in attributeController.Attributes)
+			{
+				dtos.Add(new CharacterAttributeData(
+					id: 0,
+					version: version,
+					characterID: character.ID,
+					templateID: kvp.Key,
+					value: kvp.Value.Value,
+					currentValue: 0.0f
+				));
+			}
+			foreach (var kvp in attributeController.ResourceAttributes)
+			{
+				dtos.Add(new CharacterAttributeData(
+					id: 0,
+					version: version,
+					characterID: character.ID,
+					templateID: kvp.Key,
+					value: kvp.Value.Value,
+					currentValue: kvp.Value.CurrentValue
+				));
+			}
+			return dtos;
+		}
+
+		#endregion
+
+		#region Async Persistence
+
+		/// <summary>
+		/// Persists a single inventory item asynchronously.
+		/// </summary>
+		private async Task PersistInventoryItemAsync(CharacterInventoryData dto)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "PersistInventoryItemAsync: Failed to resolve ICharacterInventoryService");
+					return;
+				}
+				await service.PersistAsync(dto);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"PersistInventoryItemAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Persists multiple inventory items asynchronously.
+		/// </summary>
+		private async Task PersistInventoryItemsAsync(List<CharacterInventoryData> dtos)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "PersistInventoryItemsAsync: Failed to resolve ICharacterInventoryService");
+					return;
+				}
+				await service.PersistAsync(dtos);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"PersistInventoryItemsAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Deletes a single inventory slot asynchronously.
+		/// </summary>
+		private async Task DeleteInventorySlotAsync(long characterID, int slot, long version)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "DeleteInventorySlotAsync: Failed to resolve ICharacterInventoryService");
+					return;
+				}
+				await service.DeleteAsync(characterID, slot, version);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"DeleteInventorySlotAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Persists a single bank item asynchronously.
+		/// </summary>
+		private async Task PersistBankItemAsync(CharacterBankData dto)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "PersistBankItemAsync: Failed to resolve ICharacterBankService");
+					return;
+				}
+				await service.PersistAsync(dto);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"PersistBankItemAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Persists multiple bank items asynchronously.
+		/// </summary>
+		private async Task PersistBankItemsAsync(List<CharacterBankData> dtos)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "PersistBankItemsAsync: Failed to resolve ICharacterBankService");
+					return;
+				}
+				await service.PersistAsync(dtos);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"PersistBankItemsAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Deletes a single bank slot asynchronously.
+		/// </summary>
+		private async Task DeleteBankSlotAsync(long characterID, int slot, long version)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "DeleteBankSlotAsync: Failed to resolve ICharacterBankService");
+					return;
+				}
+				await service.DeleteAsync(characterID, slot, version);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"DeleteBankSlotAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Persists a single equipment item asynchronously.
+		/// </summary>
+		private async Task PersistEquipmentItemAsync(CharacterEquipmentData dto)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterEquipmentService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "PersistEquipmentItemAsync: Failed to resolve ICharacterEquipmentService");
+					return;
+				}
+				await service.PersistAsync(dto);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"PersistEquipmentItemAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Deletes a single equipment slot asynchronously.
+		/// </summary>
+		private async Task DeleteEquipmentSlotAsync(long characterID, int slot, long version)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterEquipmentService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "DeleteEquipmentSlotAsync: Failed to resolve ICharacterEquipmentService");
+					return;
+				}
+				await service.DeleteAsync(characterID, slot, version);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"DeleteEquipmentSlotAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Persists character attributes asynchronously.
+		/// </summary>
+		private async Task PersistAttributesAsync(List<CharacterAttributeData> dtos)
+		{
+			try
+			{
+				if (dtos == null || dtos.Count < 1) return;
+
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterAttributeService>(out var service))
+				{
+					await Log.Error("CharacterInventorySystem", "PersistAttributesAsync: Failed to resolve ICharacterAttributeService");
+					return;
+				}
+				await service.PersistAsync(dtos);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterInventorySystem", $"PersistAttributesAsync failed: {ex.Message}");
+			}
+		}
+
+		#endregion
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
+			}
 		}
 	}
 }

@@ -1,7 +1,10 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using FishNet.Connection;
-using FishMMO.Database.Npgsql;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core.World.WorldServer;
-using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation.World.WorldServer
@@ -21,11 +24,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Attempts to authenticate a client login and assign the character to the world server.
 		/// Returns a result indicating success, failure, or server full.
 		/// </summary>
-		/// <param name="dbContext">Database context for authentication queries.</param>
 		/// <param name="result">Initial authentication result.</param>
 		/// <param name="username">Username of the client attempting to log in.</param>
 		/// <returns>ClientAuthenticationResult indicating the outcome.</returns>
-		internal override ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, ClientAuthenticationResult result, string username)
+		internal override async Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult result, string username)
 		{
 			// Check if the world server is full.
 			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) &&
@@ -33,21 +35,31 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				return ClientAuthenticationResult.ServerFull;
 			}
-			// Check for valid database context.
-			else if (dbContext == null)
-			{
-				return ClientAuthenticationResult.InvalidUsernameOrPassword;
-			}
-			// If login is successful, assign the character to the world server.
-			else if (result == ClientAuthenticationResult.LoginSuccess &&
-				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) &&
-				CharacterService.GetSelected(dbContext, username))
-			{
-				// Update the character's world assignment in the database.
-				CharacterService.SetWorld(dbContext, username, worldData.ID);
 
-				return ClientAuthenticationResult.WorldLoginSuccess;
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+			{
+				return ClientAuthenticationResult.ServerBusy;
 			}
+
+			// If login is successful, assign the character to the world server.
+			if (result == ClientAuthenticationResult.LoginSuccess &&
+				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
+			{
+				// Verify the account has a selected character
+				DatabaseResult<IReadOnlyList<CharacterData>> fetchResult = await characterService.FetchManyAsync(username);
+				if (fetchResult.IsSuccess && fetchResult.Data != null)
+				{
+					foreach (CharacterData character in fetchResult.Data)
+					{
+						if (character.Selected)
+						{
+							return ClientAuthenticationResult.WorldLoginSuccess;
+						}
+					}
+				}
+			}
+
 			return result;
 		}
 	}

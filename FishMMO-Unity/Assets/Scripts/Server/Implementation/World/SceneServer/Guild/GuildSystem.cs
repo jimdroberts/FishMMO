@@ -3,23 +3,33 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.DatabaseServices;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
-using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// Manages guild creation, membership, ranks, invitations, and updates with database synchronization.
+	/// Game logic and Broadcasts run synchronously on the main thread.
+	/// Database operations are async to avoid blocking the main thread.
+	/// Results from async DB queries that require main-thread state changes or Broadcasts are marshalled
+	/// via IGuildSystemMainThreadQueueData.
 	/// </summary>
 	[CreateAssetMenu(fileName = "GuildSystem", menuName = "FishMMO/Server/SceneServer/Guild System", order = 1)]
 	[RequiresDataContainer(typeof(GuildSystemRuntimeData))]
 	[RequiresDataContainer(typeof(GuildCharacterMappingData))]
+	[RequiresDataContainer(typeof(GuildSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class GuildSystem : ServerBehaviour, IGuildSystem<NetworkConnection>
 	{
 		[SerializeField]
@@ -82,6 +92,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<IGuildSystemMainThreadQueueData>(out _))
+			{
+				Log.Error("GuildSystem", "Failed to initialize: IGuildSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
 			if (!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) ||
 				characterSystem == null)
 			{
@@ -131,6 +147,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Drain any remaining queued main-thread actions
+			DrainMainThreadQueue();
+
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived);
@@ -155,143 +174,209 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Periodic callback that fetches and processes guild updates from the database.
+		/// Drains queued main-thread actions from the IGuildSystemMainThreadQueueData container.
+		/// </summary>
+		private void DrainMainThreadQueue()
+		{
+			if (Server?.DataContainerRegistry.TryGet<IGuildSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Drain();
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an action to be executed on the main thread.
+		/// </summary>
+		/// <param name="action">The action to enqueue.</param>
+		private void EnqueueMainThread(Action action)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IGuildSystemMainThreadQueueData>(out var queueData) == true)
+			{
+				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Drains the main-thread queue each frame.
+		/// </summary>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			DrainMainThreadQueue();
+		}
+
+		/// <summary>
+		/// Periodic callback that fetches and processes guild updates from the database asynchronously.
 		/// </summary>
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicUpdate(float deltaTime)
 		{
 			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
-				List<GuildUpdateEntity> updates = FetchGuildUpdates();
-				ProcessGuildUpdates(updates);
+				EnqueueAsyncWork(() => FetchAndProcessGuildUpdatesAsync());
 			}
 		}
 
 		/// <summary>
-		/// Fetches new guild updates from the database since the last fetch.
+		/// Asynchronously fetches guild updates from the database and marshals the processing back to the main thread.
 		/// </summary>
-		/// <returns>List of new guild update entities.</returns>
-		private List<GuildUpdateEntity> FetchGuildUpdates()
+		private async Task FetchAndProcessGuildUpdatesAsync()
 		{
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-
-			// fetch guild updates from the database
-			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+			try
 			{
-				return new List<GuildUpdateEntity>();
-			}
-
-			if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData))
-			{
-				return new List<GuildUpdateEntity>();
-			}
-
-			List<GuildUpdateEntity> updates = GuildUpdateService.Fetch(dbContext, mappingData.GuildCharacterTracker.Keys.ToList(), runtimeData.LastFetchTime);
-			if (updates != null && updates.Count > 0)
-			{
-				runtimeData.LastFetchTime = DateTime.UtcNow;
-			}
-			return updates;
-		}
-
-		/// <summary>
-		/// Processes a list of guild updates, synchronizing guild membership and broadcasting changes to clients.
-		/// </summary>
-		/// <param name="updates">List of guild update entities to process.</param>
-		private void ProcessGuildUpdates(List<GuildUpdateEntity> updates)
-		{
-			if (Server == null || Server.CoreServer.NpgsqlDbContextFactory == null || updates == null || updates.Count < 1)
-			{
-				return;
-			}
-
-			// Guilds that have previously been updated, we do this so we aren't updating guilds multiple times
-			HashSet<long> updatedGuilds = new HashSet<long>();
-
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			foreach (GuildUpdateEntity update in updates)
-			{
-				// Check if we have already updated this guild
-				if (updatedGuilds.Contains(update.GuildID))
+				if (Server?.Database?.ServiceRegistry == null)
 				{
-					continue;
+					return;
 				}
-				// Otherwise add the guild to our list and continue with the update
-				updatedGuilds.Add(update.GuildID);
-
-				// Get the current guild members from the database
-				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, update.GuildID);
-
-				// Get the current member ids
-				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
-
-				//Log.Debug($"Current Update Guild: {update.GuildID} MemberCount: {currentMemberIDs.Count}");
-
-				if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
 				{
-					continue;
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				{
+					return;
 				}
 
+				// Capture data from main-thread containers
+				List<long> guildIds = null;
+				DateTime lastFetch = DateTime.UtcNow;
+				EnqueueMainThread(() =>
+				{
+					// This runs on main thread to safely read the containers
+				});
+				// We need the guild IDs from the main-thread tracker. Let's capture them synchronously
+				// since this method is fire-and-forget from the periodic callback on main thread.
+				// The periodic callback runs on main thread, so we can read containers here before awaiting.
 				if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData))
 				{
-					continue;
+					return;
+				}
+				if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+				{
+					return;
 				}
 
-				// Check if we have previously cached the guild member list
-				if (mappingData.GuildMemberTracker.TryGetValue(update.GuildID, out var previousMembers))
+				guildIds = mappingData.GuildCharacterTracker.Keys.ToList();
+				lastFetch = runtimeData.LastFetchTime;
+
+				if (guildIds == null || guildIds.Count == 0)
 				{
-					//Log.Debug($"Previously Cached Guild: {update.GuildID} MemberCount: {previousMembers.Count}");
+					return;
+				}
 
-					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
-					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
+				// Async DB fetch
+				DatabaseResult<List<GuildUpdateData>> fetchResult = await guildUpdateService.FetchAsync(guildIds, lastFetch);
+				if (!fetchResult.IsSuccess || fetchResult.Data == null || fetchResult.Data.Count < 1)
+				{
+					return;
+				}
 
-					foreach (long memberID in difference)
+				List<GuildUpdateData> updates = fetchResult.Data;
+
+				// For each unique guild that was updated, fetch the current members
+				HashSet<long> updatedGuilds = new HashSet<long>();
+				// Collect per-guild member data
+				Dictionary<long, IReadOnlyList<CharacterGuildData>> guildMembersMap = new Dictionary<long, IReadOnlyList<CharacterGuildData>>();
+
+				foreach (GuildUpdateData update in updates)
+				{
+					if (updatedGuilds.Contains(update.GuildID))
 					{
-						// Tell the member connection to leave their guild immediately
-						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var guildCharacterMappingData) &&
-							guildCharacterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
-							character != null &&
-							character.TryGet(out IGuildController targetGuildController))
-						{
-							targetGuildController.ID = 0;
-							Server.NetworkWrapper.Broadcast(character.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
-						}
+						continue;
+					}
+					updatedGuilds.Add(update.GuildID);
+
+					DatabaseResult<IReadOnlyList<CharacterGuildData>> membersResult = await charGuildService.FetchManyAsync(update.GuildID);
+					if (membersResult.IsSuccess && membersResult.Data != null)
+					{
+						guildMembersMap[update.GuildID] = membersResult.Data;
 					}
 				}
-				// Cache the guild member IDs
-				mappingData.GuildMemberTracker[update.GuildID] = currentMemberIDs;
 
-				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
+				// Marshal all main-thread state changes + broadcasts
+				EnqueueMainThread(() =>
 				{
-					GuildID = x.GuildID,
-					CharacterID = x.CharacterID,
-					Rank = (GuildRank)x.Rank,
-					Location = x.Location,
-				}).ToList();
-
-				GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
-				{
-					Members = addBroadcasts,
-				};
-
-				if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
-				{
-					// Tell all of the local guild members to update their guild member lists
-					foreach (CharacterGuildEntity entity in dbMembers)
+					if (Server == null)
 					{
-						if (characterMappingData.CharactersByID.TryGetValue(entity.CharacterID, out IPlayerCharacter character))
+						return;
+					}
+
+					// Update last fetch time
+					if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData rtData))
+					{
+						rtData.LastFetchTime = DateTime.UtcNow;
+					}
+
+					if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mapData))
+					{
+						return;
+					}
+
+					foreach (var kvp in guildMembersMap)
+					{
+						long guildID = kvp.Key;
+						IReadOnlyList<CharacterGuildData> dbMembers = kvp.Value;
+
+						var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
+
+						// Check if we have previously cached the guild member list
+						if (mapData.GuildMemberTracker.TryGetValue(guildID, out var previousMembers))
 						{
-							if (!character.TryGet(out IGuildController guildController) ||
-								guildController.ID < 1)
+							// Compute the difference: members that are in previousMembers but not in currentMemberIDs
+							List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
+
+							foreach (long memberID in difference)
 							{
-								continue;
+								// Tell the member connection to leave their guild immediately
+								if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var guildCharacterMappingData) &&
+									guildCharacterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
+									character != null &&
+									character.TryGet(out IGuildController targetGuildController))
+								{
+									targetGuildController.ID = 0;
+									Server.NetworkWrapper.Broadcast(character.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
+								}
 							}
-							// Update server rank in the case of a membership rank change
-							guildController.Rank = (GuildRank)entity.Rank;
-							Server.NetworkWrapper.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
+						}
+						// Cache the guild member IDs
+						mapData.GuildMemberTracker[guildID] = currentMemberIDs;
+
+						var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
+						{
+							GuildID = x.GuildID,
+							CharacterID = x.CharacterID,
+							Rank = (GuildRank)x.Rank,
+							Location = x.Location,
+						}).ToList();
+
+						GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
+						{
+							Members = addBroadcasts,
+						};
+
+						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+						{
+							// Tell all of the local guild members to update their guild member lists
+							foreach (CharacterGuildData member in dbMembers)
+							{
+								if (characterMappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
+								{
+									if (!character.TryGet(out IGuildController guildController) ||
+										guildController.ID < 1)
+									{
+										continue;
+									}
+									// Update server rank in the case of a membership rank change
+									guildController.Rank = (GuildRank)member.Rank;
+									Server.NetworkWrapper.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
+								}
+							}
 						}
 					}
-				}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error fetching/processing guild updates: {ex}");
 			}
 		}
 
@@ -350,7 +435,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Handles character connect event, adding the character to the guild tracker and saving guild update.
+		/// Handles character connect event, adding the character to the guild tracker and persisting guild update.
 		/// </summary>
 		/// <param name="conn">Network connection of the character.</param>
 		/// <param name="character">The character that connected.</param>
@@ -361,7 +446,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -375,13 +460,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			AddGuildCharacterTracker(guildController.ID, character.ID);
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			CharacterGuildService.Save(dbContext, guildController.Character, character.SceneName);
-			GuildUpdateService.Save(dbContext, guildController.ID);
+			// Fire-and-forget async DB persist
+			long characterID = character.ID;
+			long guildID = guildController.ID;
+			byte rank = (byte)guildController.Rank;
+			string sceneName = character.SceneName;
+
+			EnqueueAsyncWork(() => PersistGuildMemberAsync(characterID, guildID, rank, sceneName));
 		}
 
 		/// <summary>
-		/// Handles character disconnect event, removing the character from the guild tracker and saving guild update.
+		/// Handles character disconnect event, removing the character from the guild tracker and persisting guild update.
 		/// </summary>
 		/// <param name="conn">Network connection of the character.</param>
 		/// <param name="character">The character that disconnected.</param>
@@ -397,7 +486,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -411,13 +500,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			RemoveGuildCharacterTracker(guildController.ID, character.ID);
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			CharacterGuildService.Save(dbContext, guildController.Character, "Offline");
-			GuildUpdateService.Save(dbContext, guildController.ID);
+			// Fire-and-forget async DB persist with "Offline" location
+			long characterID = character.ID;
+			long guildID = guildController.ID;
+			byte rank = (byte)guildController.Rank;
+
+			EnqueueAsyncWork(() => PersistGuildMemberAsync(characterID, guildID, rank, "Offline"));
+		}
+
+		/// <summary>
+		/// Asynchronously persists a guild member's data and triggers a guild update notification.
+		/// </summary>
+		private async Task PersistGuildMemberAsync(long characterID, long guildID, byte rank, string location)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				{
+					return;
+				}
+
+				CharacterGuildData guildData = new CharacterGuildData(0, characterID, guildID, rank, location);
+				await charGuildService.PersistAsync(guildData, maxGuildSize);
+				await guildUpdateService.PersistAsync(guildID);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error persisting guild member (CharID={characterID}, GuildID={guildID}): {ex}");
+			}
 		}
 
 		/// <summary>
 		/// Handles guild creation broadcast, validates and creates a new guild for the requesting character.
+		/// Fires an async task that checks name availability, creates the guild, persists membership,
+		/// and marshals the result back to the main thread.
 		/// </summary>
 		/// <param name="conn">Network connection of the requester.</param>
 		/// <param name="msg">GuildCreateBroadcast message containing guild creation details.</param>
@@ -428,7 +552,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -456,44 +580,103 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (GuildService.Exists(dbContext, msg.GuildName))
+			// Capture immutable data for the async path
+			long characterID = guildController.Character.ID;
+			string guildName = msg.GuildName;
+			string sceneName = conn.FirstObject.gameObject.scene.name;
+
+			EnqueueAsyncWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName));
+		}
+
+		/// <summary>
+		/// Asynchronously checks guild name availability, creates the guild, persists membership,
+		/// and marshals in-memory state changes + Broadcasts back to the main thread.
+		/// </summary>
+		private async Task CreateGuildAsync(NetworkConnection conn, long characterID, string guildName, string sceneName)
+		{
+			try
 			{
-				Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
 				{
-					Result = GuildResultType.NameAlreadyExists,
-				}, true, Channel.Reliable);
-				return;
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				{
+					return;
+				}
+
+				// Check if guild name already exists
+				DatabaseResult<bool> existsResult = await guildService.ExistsAsync(guildName);
+				if (!existsResult.IsSuccess)
+				{
+					return;
+				}
+				if (existsResult.Data)
+				{
+					EnqueueMainThread(() =>
+					{
+						if (conn == null || !conn.IsActive) return;
+						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+						{
+							Result = GuildResultType.NameAlreadyExists,
+						}, true, Channel.Reliable);
+					});
+					return;
+				}
+
+				// Create the guild — PersistAsync returns the new guild ID
+				DatabaseResult<long?> createResult = await guildService.PersistAsync(guildName);
+				if (!createResult.IsSuccess || !createResult.Data.HasValue)
+				{
+					return;
+				}
+
+				long newGuildID = createResult.Data.Value;
+
+				// Save the character as guild leader
+				CharacterGuildData memberData = new CharacterGuildData(0, characterID, newGuildID, (byte)GuildRank.Leader, sceneName);
+				await charGuildService.PersistAsync(memberData, maxGuildSize);
+
+				// Marshal in-memory state changes + Broadcast back to main thread
+				EnqueueMainThread(() =>
+				{
+					if (conn == null || !conn.IsActive || conn.FirstObject == null) return;
+
+					IGuildController gc = conn.FirstObject.GetComponent<IGuildController>();
+					if (gc == null || gc.ID > 0) return;
+
+					gc.ID = newGuildID;
+					gc.Rank = GuildRank.Leader;
+
+					AddGuildCharacterTracker(gc.ID, characterID);
+
+					// tell the character we made their guild successfully
+					Server.NetworkWrapper.Broadcast(conn, new GuildAddBroadcast()
+					{
+						GuildID = gc.ID,
+						CharacterID = characterID,
+						Rank = gc.Rank,
+						Location = sceneName,
+					}, true, Channel.Reliable);
+				});
 			}
-			if (GuildService.TryCreate(dbContext, msg.GuildName, out GuildEntity newGuild))
+			catch (Exception ex)
 			{
-				guildController.ID = newGuild.ID;
-				guildController.Rank = GuildRank.Leader;
-				CharacterGuildService.Save(dbContext, guildController.Character);
-
-				AddGuildCharacterTracker(guildController.ID, guildController.Character.ID);
-
-				// tell the character we made their guild successfully
-				Server.NetworkWrapper.Broadcast(conn, new GuildAddBroadcast()
-				{
-					GuildID = guildController.ID,
-					CharacterID = guildController.Character.ID,
-					Rank = guildController.Rank,
-					Location = conn.FirstObject.gameObject.scene.name,
-				}, true, Channel.Reliable);
+				await Log.Error("GuildSystem", $"Error creating guild '{guildName}' for CharID={characterID}: {ex}");
 			}
 		}
 
 		/// <summary>
 		/// Handles guild invitation broadcast, validates inviter and target, and sends invitation to the target character.
 		/// Only guild leaders or officers can invite, and invitations are tracked to prevent duplicates.
+		/// Fires an async task to verify guild capacity before sending the invite.
 		/// </summary>
 		/// <param name="conn">Network connection of the inviter.</param>
 		/// <param name="msg">GuildInviteBroadcast message containing inviter and target IDs.</param>
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildInviteBroadcastReceived(NetworkConnection conn, GuildInviteBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -502,54 +685,92 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 			IGuildController inviter = conn.FirstObject.GetComponent<IGuildController>();
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate guild leader or officer is inviting
 			if (inviter == null ||
 				inviter.ID < 1 ||
 				inviter.Character.ID == msg.TargetCharacterID ||
-				!(inviter.Rank == GuildRank.Leader | inviter.Rank == GuildRank.Officer) ||
-				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID, MaxGuildSize))
+				!(inviter.Rank == GuildRank.Leader | inviter.Rank == GuildRank.Officer))
 			{
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
-			{
-				return;
-			}
+			// Capture immutable data for async path
+			long inviterCharacterID = inviter.Character.ID;
+			long guildID = inviter.ID;
+			long targetCharacterID = msg.TargetCharacterID;
 
-			// if the target doesn't already have a pending invite
-			if (!runtimeData.PendingInvitations.ContainsKey(msg.TargetCharacterID) &&
-				Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
-				characterMappingData.CharactersByID.TryGetValue(msg.TargetCharacterID, out IPlayerCharacter targetCharacter) &&
-				targetCharacter.TryGet(out IGuildController targetGuildController))
+			EnqueueAsyncWork(() => InviteToGuildAsync(conn, inviterCharacterID, guildID, targetCharacterID));
+		}
+
+		/// <summary>
+		/// Asynchronously verifies guild capacity and marshals the invite back to the main thread.
+		/// </summary>
+		private async Task InviteToGuildAsync(NetworkConnection conn, long inviterCharacterID, long guildID, long targetCharacterID)
+		{
+			try
 			{
-				// validate target
-				if (targetGuildController.ID > 0)
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
 				{
-					// we should tell the inviter the target is already in a guild
-					Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
-					{
-						Channel = ChatChannel.Guild,
-						SenderID = msg.TargetCharacterID,
-						Text = ChatHelper.GUILD_ERROR_TARGET_IN_GUILD + " ",
-					}, true, Channel.Reliable);
 					return;
 				}
 
-				// add to our list of pending invitations... used for validation when accepting/declining a guild invite
-				runtimeData.PendingInvitations.Add(targetCharacter.ID, inviter.ID);
-				Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new GuildInviteBroadcast()
+				// Check guild is not full
+				DatabaseResult<int> countResult = await charGuildService.CountAsync(guildID);
+				if (!countResult.IsSuccess || countResult.Data >= maxGuildSize)
 				{
-					InviterCharacterID = inviter.Character.ID,
-					TargetCharacterID = targetCharacter.ID
-				}, true, Channel.Reliable);
+					return;
+				}
+
+				// Marshal invite logic back to main thread
+				EnqueueMainThread(() =>
+				{
+					if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+					{
+						return;
+					}
+
+					// if the target doesn't already have a pending invite
+					if (!runtimeData.PendingInvitations.ContainsKey(targetCharacterID) &&
+						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
+						characterMappingData.CharactersByID.TryGetValue(targetCharacterID, out IPlayerCharacter targetCharacter) &&
+						targetCharacter.TryGet(out IGuildController targetGuildController))
+					{
+						// validate target
+						if (targetGuildController.ID > 0)
+						{
+							// we should tell the inviter the target is already in a guild
+							if (conn != null && conn.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
+								{
+									Channel = ChatChannel.Guild,
+									SenderID = targetCharacterID,
+									Text = ChatHelper.GUILD_ERROR_TARGET_IN_GUILD + " ",
+								}, true, Channel.Reliable);
+							}
+							return;
+						}
+
+						// add to our list of pending invitations
+						runtimeData.PendingInvitations.Add(targetCharacter.ID, inviterCharacterID);
+						Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new GuildInviteBroadcast()
+						{
+							InviterCharacterID = inviterCharacterID,
+							TargetCharacterID = targetCharacter.ID
+						}, true, Channel.Reliable);
+					}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error inviting to guild (GuildID={guildID}, TargetID={targetCharacterID}): {ex}");
 			}
 		}
 
 		/// <summary>
-		/// Handles acceptance of a guild invitation, validates the invite, adds the character to the guild, and broadcasts the update.
+		/// Handles acceptance of a guild invitation, validates the invite, fires an async task to check capacity,
+		/// persist membership, and marshal results back to the main thread.
 		/// </summary>
 		/// <param name="conn">Network connection of the accepting character.</param>
 		/// <param name="msg">GuildAcceptInviteBroadcast message containing acceptance details.</param>
@@ -578,33 +799,80 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				runtimeData.PendingInvitations.Remove(guildController.Character.ID);
 
-				if (Server == null || Server.CoreServer.NpgsqlDbContextFactory == null)
+				if (Server?.Database?.ServiceRegistry == null)
 				{
 					return;
 				}
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				List<CharacterGuildEntity> members = CharacterGuildService.Members(dbContext, pendingGuildID);
-				if (members != null &&
-					members.Count < MaxGuildSize)
+
+				// Capture immutable data for async path
+				long characterID = guildController.Character.ID;
+				string sceneName = conn.FirstObject.gameObject.scene.name;
+
+				EnqueueAsyncWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName));
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously checks guild capacity, persists membership, notifies other servers,
+		/// and marshals state changes + Broadcast back to the main thread.
+		/// </summary>
+		private async Task AcceptGuildInviteAsync(NetworkConnection conn, long characterID, long guildID, string sceneName)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
 				{
-					guildController.ID = pendingGuildID;
-					guildController.Rank = GuildRank.Member;
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				{
+					return;
+				}
 
-					AddGuildCharacterTracker(guildController.ID, guildController.Character.ID);
+				// Check guild capacity
+				DatabaseResult<int> countResult = await charGuildService.CountAsync(guildID);
+				if (!countResult.IsSuccess || countResult.Data >= maxGuildSize)
+				{
+					return;
+				}
 
-					CharacterGuildService.Save(dbContext, guildController.Character);
-					// tell the other servers to update their guild lists
-					GuildUpdateService.Save(dbContext, guildController.ID);
+				// Persist membership
+				CharacterGuildData memberData = new CharacterGuildData(0, characterID, guildID, (byte)GuildRank.Member, sceneName);
+				DatabaseResult saveResult = await charGuildService.PersistAsync(memberData, maxGuildSize);
+				if (!saveResult.IsSuccess)
+				{
+					return;
+				}
+
+				// Tell the other servers to update their guild lists
+				await guildUpdateService.PersistAsync(guildID);
+
+				// Marshal state changes + Broadcast back to main thread
+				EnqueueMainThread(() =>
+				{
+					if (conn == null || !conn.IsActive || conn.FirstObject == null) return;
+
+					IGuildController gc = conn.FirstObject.GetComponent<IGuildController>();
+					if (gc == null || gc.ID > 0) return;
+
+					gc.ID = guildID;
+					gc.Rank = GuildRank.Member;
+
+					AddGuildCharacterTracker(gc.ID, characterID);
 
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
 					Server.NetworkWrapper.Broadcast(conn, new GuildAddBroadcast()
 					{
-						GuildID = guildController.ID,
-						CharacterID = guildController.Character.ID,
+						GuildID = gc.ID,
+						CharacterID = characterID,
 						Rank = GuildRank.Member,
-						Location = conn.FirstObject.gameObject.scene.name,
+						Location = sceneName,
 					}, true, Channel.Reliable);
-				}
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error accepting guild invite (CharID={characterID}, GuildID={guildID}): {ex}");
 			}
 		}
 
@@ -624,14 +892,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Handles guild leave broadcast, validates character, transfers leadership if needed, removes member from guild, and updates or deletes guild as appropriate.
+		/// Handles guild leave broadcast, validates character, captures necessary data,
+		/// and fires an async task that handles leadership transfer, member removal, and guild cleanup.
 		/// </summary>
 		/// <param name="conn">Network connection of the leaving character.</param>
 		/// <param name="msg">GuildLeaveBroadcast message containing leave details.</param>
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildLeaveBroadcastReceived(NetworkConnection conn, GuildLeaveBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -648,25 +917,64 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+			// Capture immutable data for async path
+			long characterID = guildController.Character.ID;
+			long guildID = guildController.ID;
+			GuildRank rank = guildController.Rank;
 
-			// validate guild
-			List<CharacterGuildEntity> members = CharacterGuildService.Members(dbContext, guildController.ID);
-			if (members != null &&
-				members.Count > 0)
+			// Immediately update in-memory state on main thread
+			guildController.ID = 0;
+			guildController.Rank = GuildRank.None;
+
+			RemoveGuildCharacterTracker(guildID, characterID);
+
+			// Tell character that they left the guild immediately
+			Server.NetworkWrapper.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
+
+			// Fire-and-forget async DB operations
+			EnqueueAsyncWork(() => LeaveGuildAsync(characterID, guildID, rank));
+		}
+
+		/// <summary>
+		/// Asynchronously handles guild leave: fetches members for leadership transfer,
+		/// removes the member, and either deletes or updates the guild.
+		/// </summary>
+		private async Task LeaveGuildAsync(long characterID, long guildID, GuildRank rank)
+		{
+			try
 			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				{
+					return;
+				}
+
+				// Fetch current members to determine leadership transfer
+				DatabaseResult<IReadOnlyList<CharacterGuildData>> membersResult = await charGuildService.FetchManyAsync(guildID);
+				if (!membersResult.IsSuccess || membersResult.Data == null)
+				{
+					return;
+				}
+
+				IReadOnlyList<CharacterGuildData> members = membersResult.Data;
 				int remainingCount = members.Count - 1;
 
-				List<CharacterGuildEntity> remainingMembers = new List<CharacterGuildEntity>();
-
-				// are there any other members in the guild? if so we transfer leadership to officers first and then members
-				if (guildController.Rank == GuildRank.Leader && remainingCount > 0)
+				// Handle leadership transfer if the leaving member is the leader
+				if (rank == GuildRank.Leader && remainingCount > 0)
 				{
-					List<CharacterGuildEntity> officers = new List<CharacterGuildEntity>();
+					List<CharacterGuildData> officers = new List<CharacterGuildData>();
+					List<CharacterGuildData> remainingMembers = new List<CharacterGuildData>();
 
-					foreach (CharacterGuildEntity member in members)
+					foreach (CharacterGuildData member in members)
 					{
-						if (member.CharacterID == guildController.Character.ID)
+						if (member.CharacterID == characterID)
 						{
 							continue;
 						}
@@ -678,7 +986,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						remainingMembers.Add(member);
 					}
 
-					CharacterGuildEntity newLeader = null;
+					CharacterGuildData? newLeader = null;
 					if (officers.Count > 0)
 					{
 						// pick a random officer
@@ -691,41 +999,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// update the guild leader status in the database
-					if (newLeader != null)
+					if (newLeader.HasValue)
 					{
-						CharacterGuildService.Save(dbContext, newLeader.CharacterID, newLeader.GuildID, GuildRank.Leader, newLeader.Location);
+						await charGuildService.UpdateRankAsync(newLeader.Value.CharacterID, newLeader.Value.GuildID, (byte)GuildRank.Leader, 0);
 					}
 				}
 
-				long guildID = guildController.ID;
-
-				guildController.ID = 0;
-				guildController.Rank = GuildRank.None;
-
-				RemoveGuildCharacterTracker(guildID, guildController.Character.ID);
-
-				// tell character that they left the guild immediately, other clients will catch up with the GuildUpdate pass
-				Server.NetworkWrapper.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
-
-				// remove the guild member
-				CharacterGuildService.Delete(dbContext, guildController.Character.ID);
+				// Remove the guild member
+				await charGuildService.DeleteAsync(characterID, 0);
 
 				if (remainingCount < 1)
 				{
-					// delete the guild
-					GuildService.Delete(dbContext, guildID);
-					GuildUpdateService.Delete(dbContext, guildID);
+					// Delete the guild entirely
+					await guildService.DeleteAsync(guildID);
+					await guildUpdateService.DeleteAsync(guildID);
 				}
 				else
 				{
-					// tell the other servers to update their guild lists
-					GuildUpdateService.Save(dbContext, guildID);
+					// Tell the other servers to update their guild lists
+					await guildUpdateService.PersistAsync(guildID);
 				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error leaving guild (CharID={characterID}, GuildID={guildID}): {ex}");
 			}
 		}
 
 		/// <summary>
-		/// Handles guild member removal broadcast, validates and removes a member from the guild in the database.
+		/// Handles guild member removal broadcast, validates and removes a member from the guild.
 		/// Only officers and leaders can remove other members.
 		/// </summary>
 		/// <param name="conn">Network connection of the requester.</param>
@@ -733,7 +1035,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildRemoveBroadcastReceived(NetworkConnection conn, GuildRemoveBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -762,20 +1064,78 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// remove the character from the guild in the database
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, msg.GuildMemberID);
-			if (result)
-			{
-				RemoveGuildCharacterTracker(guildController.ID, guildController.Character.ID);
+			// Capture immutable data for async path
+			long guildID = guildController.ID;
+			long memberID = msg.GuildMemberID;
+			long characterID = guildController.Character.ID;
+			GuildRank requesterRank = guildController.Rank;
 
-				// tell the servers to update their guild lists
-				GuildUpdateService.Save(dbContext, guildController.ID);
+			EnqueueAsyncWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank));
+		}
+
+		/// <summary>
+		/// Asynchronously removes a guild member, validates rank permissions, and triggers guild update.
+		/// Marshals tracker cleanup back to the main thread.
+		/// </summary>
+		private async Task RemoveGuildMemberAsync(long guildID, long memberID, long requesterCharacterID, GuildRank requesterRank)
+		{
+			try
+			{
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				{
+					return;
+				}
+
+				// Verify the target member exists and check rank permission
+				DatabaseResult<CharacterGuildData?> memberResult = await charGuildService.FetchAsync(memberID);
+				if (!memberResult.IsSuccess || !memberResult.Data.HasValue)
+				{
+					return;
+				}
+
+				CharacterGuildData targetMember = memberResult.Data.Value;
+
+				// Verify target is in the same guild
+				if (targetMember.GuildID != guildID)
+				{
+					return;
+				}
+
+				// Rank permission check: can't kick someone of equal or higher rank
+				if ((GuildRank)targetMember.Rank >= requesterRank)
+				{
+					return;
+				}
+
+				// Delete the member
+				DatabaseResult deleteResult = await charGuildService.DeleteAsync(memberID, 0);
+				if (!deleteResult.IsSuccess)
+				{
+					return;
+				}
+
+				// Tell the other servers to update their guild lists
+				await guildUpdateService.PersistAsync(guildID);
+
+				// Marshal tracker cleanup to main thread
+				EnqueueMainThread(() =>
+				{
+					RemoveGuildCharacterTracker(guildID, memberID);
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error removing guild member (GuildID={guildID}, MemberID={memberID}): {ex}");
 			}
 		}
 
 		/// <summary>
-		/// Handles guild rank change broadcast, validates leader and target, and updates ranks in the database.
+		/// Handles guild rank change broadcast, validates leader and target, and fires an async task
+		/// to update ranks in the database.
 		/// Only guild leaders can promote another member to a new rank.
 		/// </summary>
 		/// <param name="conn">Network connection of the requester.</param>
@@ -783,7 +1143,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildChangeRankBroadcastReceived(NetworkConnection conn, GuildChangeRankBroadcast msg, Channel channel)
 		{
-			if (Server.CoreServer.NpgsqlDbContextFactory == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -812,12 +1172,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// update the character rank in the guild in the database
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-			if (CharacterGuildService.TrySaveRank(dbContext, msg.GuildMemberID, guildController.ID, msg.Rank))
+			// Capture immutable data for async path
+			long guildID = guildController.ID;
+			long memberID = msg.GuildMemberID;
+			GuildRank newRank = msg.Rank;
+
+			EnqueueAsyncWork(() => ChangeGuildRankAsync(guildID, memberID, newRank));
+		}
+
+		/// <summary>
+		/// Asynchronously updates a guild member's rank and triggers a guild update notification.
+		/// </summary>
+		private async Task ChangeGuildRankAsync(long guildID, long memberID, GuildRank newRank)
+		{
+			try
 			{
-				// tell the servers to update their guild lists
-				GuildUpdateService.Save(dbContext, guildController.ID);
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				{
+					return;
+				}
+				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				{
+					return;
+				}
+
+				DatabaseResult rankResult = await charGuildService.UpdateRankAsync(memberID, guildID, (byte)newRank, 0);
+				if (rankResult.IsSuccess)
+				{
+					// Tell the other servers to update their guild lists
+					await guildUpdateService.PersistAsync(guildID);
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error changing guild rank (GuildID={guildID}, MemberID={memberID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// </summary>
+		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+					asyncWorker.Enqueue(work, entityKey, callerName);
+				else
+					asyncWorker.Enqueue(work, callerName);
 			}
 		}
 	}

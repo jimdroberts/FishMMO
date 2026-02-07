@@ -1,3 +1,4 @@
+using FishMMO.Database;
 using FishMMO.Server.Core.Account;
 
 namespace FishMMO.Server.Core
@@ -8,6 +9,14 @@ namespace FishMMO.Server.Core
 	/// </summary>
 	public interface IServer
 	{
+		/// <summary>
+		/// The database orchestrator providing centralized access to
+		/// the service registry, health monitoring, metrics, and the context factory.
+		/// Prefer using <c>Database.ServiceRegistry.TryGet&lt;TService&gt;</c> to resolve services
+		/// instead of instantiating them directly.
+		/// </summary>
+		IDatabase Database { get; }
+
 		/// <summary>
 		/// The core server logic instance responsible for login, world, and scene servers and for holding address state.
 		/// </summary>
