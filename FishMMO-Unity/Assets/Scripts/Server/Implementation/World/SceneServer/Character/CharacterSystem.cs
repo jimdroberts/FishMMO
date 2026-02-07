@@ -380,12 +380,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				data.WaitingSceneLoadCharacters.Remove(conn);
 
-				// Release the session for the waiting character
-				if (data.SessionTokens.TryGetValue(waitingSceneCharacter.ID, out CharacterSessionInfo waitingSessionInfo))
-				{
-					data.SessionTokens.Remove(waitingSceneCharacter.ID);
-					EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(waitingSceneCharacter.ID, waitingSessionInfo.ServerID, waitingSessionInfo.Token));
-				}
+				TryExtractAndReleaseSession(data, waitingSceneCharacter.ID);
 
 				OnDisconnect?.Invoke(conn, waitingSceneCharacter);
 
@@ -421,6 +416,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				data.SessionTokens.Remove(character.ID);
 				sessionInfo = si;
+				// Note: NOT released here — SaveAndReleaseCharacterAsync handles it after the save
 			}
 
 			SaveAndDespawnCharacter(conn, character, sessionInfo);
@@ -727,11 +723,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (conn == null || !conn.IsActive)
 			{
+				// Connection died between async load and main-thread marshal — release the claimed session
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 				return;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
@@ -739,17 +738,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (mappingData.CharactersByID.ContainsKey(charData.ID))
 			{
 				Log.Debug("CharacterSystem", $"{charData.ID} is already loaded or loading.");
-				// Release the session we just claimed since we won't use it
 				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
 
-			// Store the session token so we can release/transition later
-			mappingData.SessionTokens[charData.ID] = new CharacterSessionInfo(sessionToken, serverID);
-
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
@@ -761,6 +757,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (raceTemplate == null || raceTemplate.Prefab == null)
 			{
 				Log.Debug("CharacterSystem", "Failed to fetch character: invalid race template.");
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				return;
 			}
@@ -773,6 +770,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (nob == null)
 			{
 				Log.Debug("CharacterSystem", "Failed to instantiate character prefab.");
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				return;
 			}
@@ -782,6 +780,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
 				Log.Debug("CharacterSystem", "Failed to get IPlayerCharacter from instantiated prefab.");
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				return;
 			}
@@ -982,14 +981,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				OnAfterLoadCharacter?.Invoke(conn, character);
 
+				// Store the session token now that we've reached the success path.
+				// From here, RemoveCharacterConnectionMapping / SceneManager_OnClientLoadedStartScenes
+				// will handle cleanup via the SessionTokens dictionary.
+				mappingData.SessionTokens[charData.ID] = new CharacterSessionInfo(sessionToken, serverID);
 				mappingData.WaitingSceneLoadCharacters.Add(conn, character);
 			}
 			else
 			{
 				Log.Debug("CharacterSystem", "Failed to load scene for connection.");
 
-				// Clean up session token and release the claimed session
-				mappingData.SessionTokens.Remove(charData.ID);
 				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
@@ -1032,12 +1033,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				mappingData.WaitingSceneLoadCharacters.Remove(conn);
 
-				// Release the session for this character
-				if (mappingData.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo sessionInfo))
-				{
-					mappingData.SessionTokens.Remove(character.ID);
-					EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(character.ID, sessionInfo.ServerID, sessionInfo.Token));
-				}
+				TryExtractAndReleaseSession(mappingData, character.ID);
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
@@ -1111,11 +1107,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// Release the session for this character
-					if (mappingData.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo sessionInfo))
-					{
-						mappingData.SessionTokens.Remove(character.ID);
-						EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(character.ID, sessionInfo.ServerID, sessionInfo.Token));
-					}
+					TryExtractAndReleaseSession(mappingData, character.ID);
 
 					Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
@@ -1840,6 +1832,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				_isProcessing = false;
 			}
+		}
+
+		/// <summary>
+		/// Removes a character's session token from the mapping data and enqueues an async release.
+		/// Returns the extracted CharacterSessionInfo if found, or null if no session was stored.
+		/// </summary>
+		private CharacterSessionInfo? TryExtractAndReleaseSession(ICharacterMappingData<NetworkConnection> mappingData, long characterID)
+		{
+			if (mappingData.SessionTokens.TryGetValue(characterID, out CharacterSessionInfo sessionInfo))
+			{
+				mappingData.SessionTokens.Remove(characterID);
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(characterID, sessionInfo.ServerID, sessionInfo.Token));
+				return sessionInfo;
+			}
+			return null;
 		}
 
 		/// <summary>
