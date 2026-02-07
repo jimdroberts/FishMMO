@@ -14,10 +14,5 @@ namespace FishMMO.Database.Data.Enums
 		/// Character is online and owned by a server.
 		/// </summary>
 		Online = 1,
-
-		/// <summary>
-		/// Character is transitioning between servers.
-		/// </summary>
-		Transitioning = 2,
 	}
 }

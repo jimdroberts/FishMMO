@@ -46,6 +46,39 @@ namespace FishMMO.Database.Npgsql.Services
 #pragma warning restore CS8619
 
 		/// <summary>
+		/// Compiled query for retrieving character by name with a selected filter.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, string, bool, CancellationToken, Task<CharacterEntity?>> fetchByNameSelectedQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string nameLower, bool selected, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.FirstOrDefault(c => c.NameLowercase == nameLower && !c.Deleted && c.Selected == selected));
+#pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for retrieving a single character by account.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<CharacterEntity?>> fetchByAccountQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string account, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.FirstOrDefault(c => c.Account == account && !c.Deleted));
+#pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for retrieving a single character by account with a selected filter.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, string, bool, CancellationToken, Task<CharacterEntity?>> fetchByAccountSelectedQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string account, bool selected, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.FirstOrDefault(c => c.Account == account && !c.Deleted && c.Selected == selected));
+#pragma warning restore CS8619
+
+		/// <summary>
 		/// Compiled query for counting characters by account (hot path for character creation validation).
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<int>> countByAccountQuery =
@@ -505,17 +538,49 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterData?>> FetchAsync(string name, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<CharacterData?>> FetchAsync(string characterName, CancellationToken cancellationToken = default)
 		{
-			if (!Authentication.IsAllowedCharacterName(name))
+			return await FetchAsync(characterName, selected: null, cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterData?>> FetchAsync(string characterName, bool? selected, CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedCharacterName(characterName))
 			{
 				return DatabaseResult<CharacterData?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidCharacterNameError);
 			}
 
 			var result = await ExecuteReadAsync<CharacterData?>(async dbContext =>
 			{
-				var nameLower = name.ToLowerInvariant();
-				var entity = await fetchByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false);
+				var nameLower = characterName.ToLowerInvariant();
+				var entity = selected.HasValue
+					? await fetchByNameSelectedQuery(dbContext, nameLower, selected.Value, cancellationToken).ConfigureAwait(false)
+					: await fetchByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false);
+				return entity == null ? null : MapEntityToData(entity);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterData?>> FetchByAccountAsync(string accountName, CancellationToken cancellationToken = default)
+		{
+			return await FetchByAccountAsync(accountName, selected: null, cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterData?>> FetchByAccountAsync(string accountName, bool? selected, CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<CharacterData?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			var result = await ExecuteReadAsync<CharacterData?>(async dbContext =>
+			{
+				var entity = selected.HasValue
+					? await fetchByAccountSelectedQuery(dbContext, accountName, selected.Value, cancellationToken).ConfigureAwait(false)
+					: await fetchByAccountQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false);
 				return entity == null ? null : MapEntityToData(entity);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
@@ -609,66 +674,13 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				throw new DatabaseException(
-					"Character is already owned or transitioning.",
+					"Character is already owned by another server.",
 					errorCode: DatabaseErrorCodes.InvalidOperation);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> BeginTransitionAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default)
-		{
-			if (characterId <= 0 || ownerServerId <= 0 || ownerToken == Guid.Empty)
-			{
-				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID, owner server ID, or owner token.");
-			}
-
-			var result = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var now = DateTime.UtcNow;
-				var newLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
-				var tableName = dbContext.GetTableName<CharacterEntity>();
-
-				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"UPDATE {tableName}
-					SET
-						session_state = {{0}},
-						session_lease_expires_utc = {{1}},
-						last_saved = {{2}}
-					WHERE id = {{3}} AND deleted = false
-						AND session_state = {{4}}
-						AND session_owner_server_id = {{5}}
-						AND session_owner_token = {{6}}",
-					(short)CharacterSessionState.Transitioning,
-					newLeaseExpiresUtc,
-					now,
-					characterId,
-					(short)CharacterSessionState.Online,
-					ownerServerId,
-					ownerToken
-				).ConfigureAwait(false);
-
-					if (rowsAffected == 1)
-					{
-						return;
-					}
-
-				var exists = await dbContext.Characters
-					.AnyAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
-					.ConfigureAwait(false);
-				if (!exists)
-				{
-					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
-				}
-
-				throw new DatabaseException(
-					"Character is not owned by this server or is not online.",
-					errorCode: DatabaseErrorCodes.InvalidOperation);
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-			return result;
-		}
-
-		/// <inheritdoc/>
-		public async Task<DatabaseResult> ReleaseToOfflineAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> ReleaseAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || ownerServerId <= 0 || ownerToken == Guid.Empty)
 			{
@@ -698,7 +710,7 @@ namespace FishMMO.Database.Npgsql.Services
 					DateTime.UnixEpoch,
 					now,
 					characterId,
-					(short)CharacterSessionState.Transitioning,
+					(short)CharacterSessionState.Online,
 					ownerServerId,
 					ownerToken
 				).ConfigureAwait(false);
@@ -717,7 +729,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				throw new DatabaseException(
-					"Character is not transitioning under this server.",
+					"Character is not online under this server.",
 					errorCode: DatabaseErrorCodes.InvalidOperation);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
@@ -743,13 +755,13 @@ namespace FishMMO.Database.Npgsql.Services
 						session_lease_expires_utc = {{0}},
 						last_saved = {{1}}
 					WHERE id = {{2}} AND deleted = false
-						AND session_state <> {{3}}
+						AND session_state = {{3}}
 						AND session_owner_server_id = {{4}}
 						AND session_owner_token = {{5}}",
 					newLeaseExpiresUtc,
 					now,
 					characterId,
-					(short)CharacterSessionState.Offline,
+					(short)CharacterSessionState.Online,
 					ownerServerId,
 					ownerToken
 				).ConfigureAwait(false);

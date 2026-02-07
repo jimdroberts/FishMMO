@@ -59,7 +59,7 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Performance index for account character queries (FetchManyAsync hot path)
 			builder.HasIndex(e => e.Account);
 
-			// Performance index for session state filtering (online/transitioning queries).
+			// Performance index for session state filtering (online queries).
 			builder.HasIndex(e => e.SessionState)
 				.HasFilter("session_state <> 0");
 		}

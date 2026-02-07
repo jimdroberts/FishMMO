@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishNet.Connection;
 using FishMMO.Database;
@@ -47,16 +46,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
 			{
 				// Verify the account has a selected character
-				DatabaseResult<IReadOnlyList<CharacterData>> fetchResult = await characterService.FetchManyAsync(username);
-				if (fetchResult.IsSuccess && fetchResult.Data != null)
+				DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(username, selected: true);
+				if (fetchResult.IsSuccess && fetchResult.Data.HasValue)
 				{
-					foreach (CharacterData character in fetchResult.Data)
-					{
-						if (character.Selected)
-						{
-							return ClientAuthenticationResult.WorldLoginSuccess;
-						}
-					}
+					return ClientAuthenticationResult.WorldLoginSuccess;
 				}
 			}
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishMMO.Server.Core;
@@ -38,6 +39,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public Dictionary<NetworkConnection, IPlayerCharacter> WaitingSceneLoadCharacters { get; private set; }
 
 		/// <summary>
+		/// Maps character IDs to their session ownership info (token + server ID).
+		/// </summary>
+		public Dictionary<long, CharacterSessionInfo> SessionTokens { get; private set; }
+
+		/// <summary>
 		/// Initializes the character mapping data container.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -47,6 +53,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharactersByWorld = new Dictionary<long, Dictionary<long, IPlayerCharacter>>();
 			ConnectionCharacters = new Dictionary<NetworkConnection, IPlayerCharacter>();
 			WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, IPlayerCharacter>();
+			SessionTokens = new Dictionary<long, CharacterSessionInfo>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -60,6 +67,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharactersByWorld?.Clear();
 			ConnectionCharacters?.Clear();
 			WaitingSceneLoadCharacters?.Clear();
+			SessionTokens?.Clear();
 		}
 
 		/// <summary>

@@ -33,5 +33,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Maps network connections to player characters waiting for scene load completion.
 		/// </summary>
 		Dictionary<TConnection, IPlayerCharacter> WaitingSceneLoadCharacters { get; }
+
+		/// <summary>
+		/// Maps character IDs to their session ownership info (token + server ID).
+		/// Used to release character sessions via ReleaseAsync on disconnect.
+		/// </summary>
+		Dictionary<long, CharacterSessionInfo> SessionTokens { get; }
 	}
 }

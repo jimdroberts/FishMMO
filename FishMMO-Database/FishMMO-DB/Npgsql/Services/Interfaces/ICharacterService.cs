@@ -74,6 +74,38 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// This ensures all characters for the account are updated in one operation without race conditions.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
+		/// <summary>
+		/// Fetches a character by name with an optional selected filter.
+		/// </summary>
+		/// <param name="characterName">The character name.</param>
+		/// <param name="selected">If provided, filters by the selected status.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing the character data, or null if not found.
+		/// </returns>
+		Task<DatabaseResult<CharacterData?>> FetchAsync(string characterName, bool? selected, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches a character by account name. Returns the first matching character.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing the character data, or null if not found.
+		/// </returns>
+		Task<DatabaseResult<CharacterData?>> FetchByAccountAsync(string accountName, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches a character by account name with an optional selected filter.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="selected">If provided, filters by the selected status.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing the character data, or null if not found.
+		/// </returns>
+		Task<DatabaseResult<CharacterData?>> FetchByAccountAsync(string accountName, bool? selected, CancellationToken cancellationToken = default);
+
 		Task<DatabaseResult> SetSelectedAsync(string account, long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
@@ -90,26 +122,21 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 		/// <summary>
-		/// Attempts to claim ownership of a character session.
+		/// Attempts to claim ownership of a character session (Offline → Online).
 		/// </summary>
 		/// <remarks>
 		/// A claim is permitted if the character is offline or the previous owner's lease has expired.
-		/// On success, returns a new session owner token that must be presented for subsequent transitions.
+		/// On success, returns a new session owner token that must be presented for subsequent operations.
 		/// </remarks>
 		Task<DatabaseResult<Guid>> TryClaimAsync(long characterId, long ownerServerId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Marks a character as transitioning, preventing other servers from claiming it.
+		/// Releases an online character back to offline and clears ownership in a single step.
 		/// </summary>
-		Task<DatabaseResult> BeginTransitionAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> ReleaseAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Releases a transitioning character back to offline and clears ownership.
-		/// </summary>
-		Task<DatabaseResult> ReleaseToOfflineAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Refreshes the session lease for an owned (online/transitioning) character.
+		/// Refreshes the session lease for an owned online character.
 		/// </summary>
 		Task<DatabaseResult> RefreshSessionLeaseAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default);
 

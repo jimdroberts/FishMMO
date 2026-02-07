@@ -296,53 +296,57 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					List<(NetworkConnection conn, string accountName)> validConnections = new List<(NetworkConnection, string)>();
 					int currentCount = loadedScene.CharacterCount;
 
+					var snapshotTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 					EnqueueMainThread(() =>
 					{
-						if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+						try
 						{
-							return;
-						}
-						if (!mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
-							connections == null)
-						{
-							return;
-						}
-
-						foreach (NetworkConnection connection in connections.ToList())
-						{
-							if (currentCount >= maxClientsPerInstance)
+							if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 							{
-								break;
+								return;
+							}
+							if (!mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
+								connections == null)
+							{
+								return;
 							}
 
-							connections.Remove(connection);
-							mappingData.OpenWorldConnectionScenes.Remove(connection);
-
-							if (!IsValidConnection(connection, out string accountName))
+							foreach (NetworkConnection connection in connections.ToList())
 							{
-								continue;
-							}
+								if (currentCount >= maxClientsPerInstance)
+								{
+									break;
+								}
 
-							validConnections.Add((connection, accountName));
-							currentCount++;
+								connections.Remove(connection);
+								mappingData.OpenWorldConnectionScenes.Remove(connection);
+
+								if (!IsValidConnection(connection, out string accountName))
+								{
+									continue;
+								}
+
+								validConnections.Add((connection, accountName));
+								currentCount++;
+							}
+						}
+						finally
+						{
+							snapshotTcs.TrySetResult(true);
 						}
 					});
 
-					// Wait a frame for the main thread to process
-					await Task.Yield();
+					// Wait until the main thread has actually processed the snapshot
+					await snapshotTcs.Task;
 
 					// Now update the DB and broadcast for each valid connection
 					foreach (var (conn, accountName) in validConnections)
 					{
 						// Update the character's scene handle in the database
-						var charsResult = await charService.FetchManyAsync(accountName);
-						if (charsResult.IsSuccess && charsResult.Data != null)
+						var fetchResult = await charService.FetchByAccountAsync(accountName, selected: true);
+						if (fetchResult.IsSuccess && fetchResult.Data.HasValue && fetchResult.Data.Value.ID > 0)
 						{
-							var selectedChar = charsResult.Data.FirstOrDefault(c => c.Selected);
-							if (selectedChar.ID > 0)
-							{
-								await charService.UpdateSceneAsync(selectedChar.ID, sceneName, loadedScene.SceneHandle);
-							}
+							await charService.UpdateSceneAsync(fetchResult.Data.Value.ID, sceneName, loadedScene.SceneHandle);
 						}
 
 						// Tell the client to connect to the scene
@@ -376,17 +380,25 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Also check if we need to enqueue a new scene load request
 			// We need to check the waiting count on the main thread
 			bool needsNewScene = false;
+			var checkTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 			EnqueueMainThread(() =>
 			{
-				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData) &&
-					mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) &&
-					connections != null &&
-					connections.Count > 0)
+				try
 				{
-					needsNewScene = true;
+					if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData) &&
+						mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) &&
+						connections != null &&
+						connections.Count > 0)
+					{
+						needsNewScene = true;
+					}
+				}
+				finally
+				{
+					checkTcs.TrySetResult(true);
 				}
 			});
-			await Task.Yield();
+			await checkTcs.Task;
 
 			if (needsNewScene)
 			{
@@ -413,44 +425,37 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Validate the connection on main thread
 			string accountName = null;
+			var validateTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 			EnqueueMainThread(() =>
 			{
-				if (!IsValidConnection(conn, out string acct))
+				try
 				{
-					Kick(conn, "Failed to get account name");
+					if (!IsValidConnection(conn, out string acct))
+					{
+						Kick(conn, "Failed to get account name");
+					}
+					else
+					{
+						accountName = acct;
+					}
 				}
-				else
+				finally
 				{
-					accountName = acct;
+					validateTcs.TrySetResult(true);
 				}
 			});
-			await Task.Yield();
+			await validateTcs.Task;
 
 			if (string.IsNullOrEmpty(accountName))
 			{
 				return;
 			}
 
-			// Get the selected character ID
-			var charsResult = await charService.FetchManyAsync(accountName);
-			if (!charsResult.IsSuccess || charsResult.Data == null)
-			{
-				EnqueueMainThread(() => Kick(conn, "invalid character ID"));
-				return;
-			}
-			var selectedChar = charsResult.Data.FirstOrDefault(c => c.Selected);
-			if (selectedChar.ID <= 0)
-			{
-				EnqueueMainThread(() => Kick(conn, "invalid character ID"));
-				return;
-			}
-			long characterID = selectedChar.ID;
-
-			// Get the character data for flags and instance info
-			var charResult = await charService.FetchAsync(characterID);
+			// Get the selected character data (single-row fetch, includes flags and instance info)
+			var charResult = await charService.FetchByAccountAsync(accountName, selected: true);
 			if (!charResult.IsSuccess || !charResult.Data.HasValue)
 			{
-				EnqueueMainThread(() => Kick(conn, "invalid character flags"));
+				EnqueueMainThread(() => Kick(conn, "invalid character ID"));
 				return;
 			}
 			var charData = charResult.Data.Value;
@@ -500,9 +505,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					accessLevel: charData.AccessLevel,
 					online: charData.Online,
 					flags: characterFlags,
-					version: charData.Version + 1,
+					version: DateTimeOffset.UtcNow.Ticks,
 					timeCreated: charData.TimeCreated,
-					lastSaved: charData.LastSaved
+					lastSaved: DateTime.UtcNow
 				);
 				await charService.PersistAsync(updatedChar);
 
@@ -548,9 +553,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					accessLevel: charData.AccessLevel,
 					online: charData.Online,
 					flags: characterFlags,
-					version: charData.Version + 1,
+					version: DateTimeOffset.UtcNow.Ticks,
 					timeCreated: charData.TimeCreated,
-					lastSaved: charData.LastSaved
+					lastSaved: DateTime.UtcNow
 				);
 				await charService.PersistAsync(updatedChar);
 
@@ -723,13 +728,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			var charsResult = await charService.FetchManyAsync(accountName);
-			if (!charsResult.IsSuccess || charsResult.Data == null)
+			var fetchResult = await charService.FetchByAccountAsync(accountName, selected: true);
+			if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
 			{
 				EnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
 				return;
 			}
-			var selectedChar = charsResult.Data.FirstOrDefault(c => c.Selected);
+			var selectedChar = fetchResult.Data.Value;
 			if (selectedChar.ID <= 0 || string.IsNullOrEmpty(selectedChar.SceneName))
 			{
 				EnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));

@@ -10,7 +10,6 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.Implementation;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
@@ -45,7 +44,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Interval in seconds between periodic character saves.
 		/// </summary>
-		public float SaveRate = 60.0f;
+		public float SaveRate = 30.0f;
 
 		/// <summary>
 		/// Interval in seconds between out-of-bounds checks for characters.
@@ -192,25 +191,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutOfBoundsCheck);
 			}
 
-			// Save all characters before shutdown
+			// Save all characters and release all sessions before shutdown
 			if (Server.Database?.ServiceRegistry != null &&
 				Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 			{
 				if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 				{
-					var characters = new List<IPlayerCharacter>(data.CharactersByID.Values);
+					// Snapshot character data on the main thread (Unity API access required)
+					var characterDataList = new List<CharacterData>();
+					foreach (var character in data.CharactersByID.Values)
+					{
+						try
+						{
+							characterDataList.Add(BuildCharacterData(character));
+						}
+						catch (Exception ex)
+						{
+							Log.Error("CharacterSystem", $"OnDeinitialize: Failed to snapshot character {character.ID}: {ex.Message}");
+						}
+					}
+
+					// Capture all session tokens (spawned + waiting-to-load characters)
+					var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
+
 					Task.Run(async () =>
 					{
-						foreach (var character in characters)
+						// Save all spawned characters
+						foreach (var charData in characterDataList)
 						{
 							try
 							{
-								CharacterData charData = BuildCharacterData(character);
 								await characterService.PersistAsync(charData);
 							}
 							catch (Exception ex)
 							{
-								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {character.ID}: {ex.Message}");
+								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {charData.ID}: {ex.Message}");
+							}
+						}
+
+						// Release all claimed sessions (spawned + waiting-to-load characters)
+						foreach (var kvp in sessionTokens)
+						{
+							try
+							{
+								await ReleaseCharacterSessionAsync(kvp.Key, kvp.Value.ServerID, kvp.Value.Token);
+							}
+							catch (Exception ex)
+							{
+								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to release session for character {kvp.Key}: {ex.Message}");
 							}
 						}
 					}).GetAwaiter().GetResult();
@@ -315,7 +343,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterDataList.Add(BuildCharacterData(character));
 			}
 
-			EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList));
+			// Capture session tokens so we can refresh leases even if individual saves fail
+			var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
+
+			EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList, sessionTokens));
 		}
 
 		/// <summary>
@@ -332,6 +363,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Removes the character connection mapping and saves the character state to the database.
+		/// Always performs a full session release (Online → Offline) because
+		/// the destination Scene Server's TryClaimAsync requires session_state = Offline (or expired lease).
 		/// </summary>
 		/// <param name="conn">Network connection to remove.</param>
 		/// <param name="skipOnDisconnect">If true, skips OnDisconnect event invocation.</param>
@@ -346,6 +379,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (data.WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter waitingSceneCharacter))
 			{
 				data.WaitingSceneLoadCharacters.Remove(conn);
+
+				// Release the session for the waiting character
+				if (data.SessionTokens.TryGetValue(waitingSceneCharacter.ID, out CharacterSessionInfo waitingSessionInfo))
+				{
+					data.SessionTokens.Remove(waitingSceneCharacter.ID);
+					EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(waitingSceneCharacter.ID, waitingSessionInfo.ServerID, waitingSessionInfo.Token));
+				}
 
 				OnDisconnect?.Invoke(conn, waitingSceneCharacter);
 
@@ -375,19 +415,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				OnDisconnect?.Invoke(conn, character);
 			}
 
-			SaveAndDespawnCharacter(conn, character);
+			// Extract session info so SaveAndDespawnCharacter can release AFTER the save completes
+			CharacterSessionInfo? sessionInfo = null;
+			if (data.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo si))
+			{
+				data.SessionTokens.Remove(character.ID);
+				sessionInfo = si;
+			}
+
+			SaveAndDespawnCharacter(conn, character, sessionInfo);
 		}
 
 		/// <summary>
-		/// Saves the character state and despawns the character from the scene.
+		/// Saves the character state, despawns the character from the scene, and fully releases the session.
+		/// Always performs a full release (Online → Offline) because the destination
+		/// Scene Server's TryClaimAsync requires session_state = Offline (or expired lease).
 		/// </summary>
 		/// <param name="conn">Network connection of the character.</param>
 		/// <param name="character">Player character to save and despawn.</param>
-		private void SaveAndDespawnCharacter(NetworkConnection conn, IPlayerCharacter character)
+		/// <param name="sessionInfo">Session ownership info to release after save, or null if no session is claimed.</param>
+		private void SaveAndDespawnCharacter(NetworkConnection conn, IPlayerCharacter character, CharacterSessionInfo? sessionInfo = null)
 		{
-			// Snapshot character data on the main thread and fire-and-forget save
+			// Snapshot character data on the main thread
 			CharacterData charData = BuildCharacterData(character);
-			EnqueueAsyncWork(() => SaveCharacterAsync(charData));
+
+			// Save then fully release session (Online → Offline)
+			EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, sessionInfo));
 
 			// Immediately log out for now.. we could add a timeout later on..?
 			if (character.NetworkObject.IsSpawned)
@@ -431,7 +484,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			EnqueueAsyncWork(() => LoadCharacterAsync(conn, accountName, characterService));
+			// Resolve server ID on the main thread — required for TryClaimAsync.
+			long serverID = 0;
+			if (Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+			{
+				serverID = runtimeData.ID;
+			}
+
+			if (serverID <= 0)
+			{
+				Log.Error("CharacterSystem", "Authenticator_OnClientAuthenticationResult: Server ID is invalid, cannot claim session.");
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			EnqueueAsyncWork(() => LoadCharacterAsync(conn, accountName, characterService, serverID));
 		}
 
 		/// <summary>
@@ -439,50 +506,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// from the database using a Unit of Work for a consistent snapshot, then queues
 		/// the main-thread instantiation and scene loading.
 		/// </summary>
-		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService)
+		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService, long serverID)
 		{
+			CharacterData charData = default;
+			Guid sessionToken = Guid.Empty;
+
 			try
 			{
-				// Fetch all characters for the account and find the selected one
-				DatabaseResult<IReadOnlyList<CharacterData>> listResult = await characterService.FetchManyAsync(accountName);
-				if (!listResult.IsSuccess || listResult.Data == null)
-				{
-					EnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							Log.Debug("CharacterSystem", "Failed to fetch character list.");
-							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
-						}
-					});
-					return;
-				}
-
-				CharacterData? selectedChar = null;
-				foreach (CharacterData cd in listResult.Data)
-				{
-					if (cd.Selected)
-					{
-						selectedChar = cd;
-						break;
-					}
-				}
-
-				if (!selectedChar.HasValue)
-				{
-					EnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							Log.Debug("CharacterSystem", "Failed to fetch character ID.");
-							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
-						}
-					});
-					return;
-				}
-
-				CharacterData charData = selectedChar.Value;
-				long characterID = charData.ID;
 				var serviceRegistry = Server.Database.ServiceRegistry;
 
 				if (!serviceRegistry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
@@ -529,6 +559,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				await using (IUnitOfWork uow = uowResult.Data)
 				{
+					// Fetch only the selected character for the account (single row, no full list)
+					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(accountName, selected: true);
+					if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
+					{
+						EnqueueMainThread(() =>
+						{
+							if (conn != null && conn.IsActive)
+							{
+								Log.Debug("CharacterSystem", "No selected character found for account.");
+								conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+							}
+						});
+						return;
+					}
+
+					charData = fetchResult.Data.Value;
+					long characterID = charData.ID;
+
+					// --- Claim the character session BEFORE loading sub-entity data ---
+					// This is the gate: if another server already owns this character,
+					// we fail fast before spending resources on 13 sub-entity fetches,
+					// prefab instantiation, and scene loading.
+					DatabaseResult<Guid> claimResult = await characterService.TryClaimAsync(characterID, serverID);
+					if (!claimResult.IsSuccess)
+					{
+						await Log.Error("CharacterSystem", $"TryClaimAsync failed for character {characterID}: {claimResult.ErrorCode} - {claimResult.ErrorMessage}");
+						EnqueueMainThread(() =>
+						{
+							if (conn != null && conn.IsActive)
+							{
+								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							}
+						});
+						return;
+					}
+
+					sessionToken = claimResult.Data;
+
 					// All fetches share the same ambient DbContext/transaction (sequential, consistent snapshot)
 					if (serviceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService))
 					{
@@ -602,7 +670,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Marshal back to main thread for Unity object instantiation
 				EnqueueMainThread(() => InstantiateAndLoadCharacter(
-					conn, charData,
+					conn, charData, sessionToken, serverID,
 					inventoryData, bankData, equipmentData,
 					attributeData, abilityData, knownAbilityData,
 					achievementData, friendData,
@@ -612,6 +680,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"LoadCharacterAsync failed: {ex.Message}");
+
+				// If we successfully claimed the session before the failure, release it
+				if (sessionToken != Guid.Empty && charData.ID > 0)
+				{
+					try
+					{
+						await ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken);
+					}
+					catch (Exception releaseEx)
+					{
+						await Log.Error("CharacterSystem", $"LoadCharacterAsync: Failed to release session after error for character {charData.ID}: {releaseEx.Message}");
+					}
+				}
+
 				EnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)
@@ -628,7 +710,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Must be called on the main Unity thread.
 		/// </summary>
 		private void InstantiateAndLoadCharacter(
-			NetworkConnection conn, CharacterData charData,
+			NetworkConnection conn, CharacterData charData, Guid sessionToken, long serverID,
 			IReadOnlyList<CharacterInventoryData> inventoryData,
 			IReadOnlyList<CharacterBankData> bankData,
 			IReadOnlyList<CharacterEquipmentData> equipmentData,
@@ -657,9 +739,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (mappingData.CharactersByID.ContainsKey(charData.ID))
 			{
 				Log.Debug("CharacterSystem", $"{charData.ID} is already loaded or loading.");
+				// Release the session we just claimed since we won't use it
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
+
+			// Store the session token so we can release/transition later
+			mappingData.SessionTokens[charData.ID] = new CharacterSessionInfo(sessionToken, serverID);
 
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
@@ -901,6 +988,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Debug("CharacterSystem", "Failed to load scene for connection.");
 
+				// Clean up session token and release the claimed session
+				mappingData.SessionTokens.Remove(charData.ID);
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
 				conn.Disconnect(false);
 			}
@@ -941,7 +1032,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				mappingData.WaitingSceneLoadCharacters.Remove(conn);
 
-				Destroy(character.GameObject);
+				// Release the session for this character
+				if (mappingData.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo sessionInfo))
+				{
+					mappingData.SessionTokens.Remove(character.ID);
+					EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(character.ID, sessionInfo.ServerID, sessionInfo.Token));
+				}
+
+				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				return;
 			}
@@ -1002,7 +1100,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					!scene.isLoaded)
 				{
 					Log.Debug("CharacterSystem", "Scene is not valid.");
-					Destroy(character.GameObject);
+
+					// Clean up all mappings that were just added
+					mappingData.ConnectionCharacters.Remove(conn);
+					mappingData.CharactersByID.Remove(character.ID);
+					mappingData.CharactersByLowerCaseName.Remove(character.CharacterNameLower);
+					if (mappingData.CharactersByWorld.TryGetValue(character.WorldServerID, out var worldChars))
+					{
+						worldChars.Remove(character.ID);
+					}
+
+					// Release the session for this character
+					if (mappingData.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo sessionInfo))
+					{
+						mappingData.SessionTokens.Remove(character.ID);
+						EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(character.ID, sessionInfo.ServerID, sessionInfo.Token));
+					}
+
+					Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 					return;
 				}
@@ -1024,13 +1139,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				OnSpawnCharacter?.Invoke(conn, character, scene);
 
-				// Set the character status to online
-				EnqueueAsyncWork(() => ClaimCharacterSessionAsync(character.ID));
-
 				OnConnect?.Invoke(conn, character);
 
-				// Send server character local observer data to the client.
-				EnqueueAsyncWork(() => SendAllCharacterDataAsync(character));
+				// Send non-DB data immediately on the main thread
+				SendNonDbCharacterData(character);
+
+				// Capture social IDs on the main thread for async DB fetch
+				long guildID = 0;
+				if (character.TryGet(out IGuildController gc))
+				{
+					guildID = gc.ID;
+				}
+				long partyID = 0;
+				if (character.TryGet(out IPartyController pc))
+				{
+					partyID = pc.ID;
+				}
+				List<long> friendIDs = null;
+				if (character.TryGet(out IFriendController fc) &&
+					fc.Friends != null &&
+					fc.Friends.Count > 0)
+				{
+					friendIDs = new List<long>(fc.Friends);
+				}
+				NetworkConnection owner = character.Owner;
+
+				// Enqueue only the DB-dependent social data fetch
+				EnqueueAsyncWork(() => SendAllCharacterDataAsync(owner, guildID, partyID, friendIDs));
 
 				//Log.Debug("CharacterSystem", character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
@@ -1063,45 +1198,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			conn.Disconnect(false);
 		}
 		/// <summary>
-		/// Sends all server-side character data to the owner. Non-DB data is sent immediately
-		/// on the main thread. Guild, party, and friend data is fetched asynchronously and
-		/// marshalled back to the main thread for broadcast.
+		/// Fetches guild, party, and friend data asynchronously from the database
+		/// and marshals broadcasts back to the main thread.
+		/// All parameters must be captured on the main thread before enqueueing.
 		/// </summary>
-		/// <param name="character">Player character to send data for.</param>
-		private async Task SendAllCharacterDataAsync(IPlayerCharacter character)
+		/// <param name="owner">Network connection of the character owner (captured on main thread).</param>
+		/// <param name="guildID">Guild ID (captured on main thread).</param>
+		/// <param name="partyID">Party ID (captured on main thread).</param>
+		/// <param name="friendIDs">Friend character IDs (captured on main thread), or null if none.</param>
+		private async Task SendAllCharacterDataAsync(NetworkConnection owner, long guildID, long partyID, List<long> friendIDs)
 		{
-			if (character == null)
+			if (owner == null || !owner.IsActive)
 			{
 				return;
 			}
-
-			// --- Main-thread-only broadcasts (no DB calls needed) ---
-			// These read from in-memory character state and broadcast via FishNet (main thread required)
-			EnqueueMainThread(() => SendNonDbCharacterData(character));
-
-			// --- Async DB-dependent broadcasts ---
-			// Capture IDs on calling context (safe since we're called from main thread callback)
-			long guildID = 0;
-			if (character.TryGet(out IGuildController guildController))
-			{
-				guildID = guildController.ID;
-			}
-
-			long partyID = 0;
-			if (character.TryGet(out IPartyController partyController))
-			{
-				partyID = partyController.ID;
-			}
-
-			List<long> friendIDs = null;
-			if (character.TryGet(out IFriendController friendController) &&
-				friendController.Friends != null &&
-				friendController.Friends.Count > 0)
-			{
-				friendIDs = new List<long>(friendController.Friends);
-			}
-
-			NetworkConnection owner = character.Owner;
 
 			if (Server.Database?.ServiceRegistry == null)
 			{
@@ -1490,8 +1600,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Remove the character from an instance if it was in one.
 				character.DisableFlags(CharacterFlags.IsInInstance);
 
-				// Save the character and remove it from the scene
-				RemoveCharacterConnectionMapping(character.Owner, true);
+				// Save the character and fully release the session so the destination scene server can claim it
+				RemoveCharacterConnectionMapping(character.Owner, skipOnDisconnect: true);
 			}
 			else
 			{
@@ -1528,15 +1638,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					damageController.Heal(null, 999999, true);
 				}
 
-				if (playerCharacter.IsInInstance() && playerCharacter.InstanceSceneName != playerCharacter.BindScene ||
-					playerCharacter.SceneName != playerCharacter.BindScene)
+				if ((playerCharacter.IsInInstance() && playerCharacter.InstanceSceneName != playerCharacter.BindScene) ||
+					(!playerCharacter.IsInInstance() && playerCharacter.SceneName != playerCharacter.BindScene))
 				{
+					// Update scene and position to bind point before saving
 					playerCharacter.SceneName = playerCharacter.BindScene;
 					playerCharacter.Motor.SetPositionAndRotationAndVelocity(playerCharacter.BindPosition, playerCharacter.Motor.Transform.rotation, Vector3.zero);
-					playerCharacter.NetworkObject.Owner.Disconnect(false);
 
-					// Remove the character from the instance if it dies.
+					// Remove instance flag before disconnect so the save captures the correct state
 					playerCharacter.DisableFlags(CharacterFlags.IsInInstance);
+
+					// Disconnect to world server — reconnects to bind scene via World Server
+					playerCharacter.NetworkObject.Owner.Disconnect(false);
 				}
 				else
 				{
@@ -1660,9 +1773,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Saves all characters asynchronously with a processing guard to prevent overlapping saves.
+		/// Saves a character and then releases the session in a single sequential async task.
+		/// This ensures the character data is persisted while we still hold the session lock,
+		/// preventing another server from claiming the character before the save completes.
 		/// </summary>
-		private async Task SaveAllCharactersAsync(List<CharacterData> characterDataList)
+		private async Task SaveAndReleaseCharacterAsync(CharacterData charData, CharacterSessionInfo? sessionInfo)
+		{
+			// Save first — we must persist while still holding the session lock
+			await SaveCharacterAsync(charData);
+
+			// Then release the session
+			if (sessionInfo.HasValue)
+			{
+				await ReleaseCharacterSessionAsync(charData.ID, sessionInfo.Value.ServerID, sessionInfo.Value.Token);
+			}
+		}
+
+		/// <summary>
+		/// Saves all characters asynchronously with a processing guard to prevent overlapping saves.
+		/// Refreshes session leases for each character to prevent lease expiry even if a save fails.
+		/// </summary>
+		private async Task SaveAllCharactersAsync(List<CharacterData> characterDataList, Dictionary<long, CharacterSessionInfo> sessionTokens)
 		{
 			if (_isProcessing)
 			{
@@ -1688,6 +1819,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for character {charData.ID}: {ex.Message}");
 					}
+
+					// Refresh session lease regardless of whether the save succeeded.
+					// PersistAsync extends the lease on success, but if it fails we still
+					// need to prevent the lease from expiring on a live character.
+					if (sessionTokens.TryGetValue(charData.ID, out CharacterSessionInfo si))
+					{
+						try
+						{
+							await characterService.RefreshSessionLeaseAsync(charData.ID, si.ServerID, si.Token);
+						}
+						catch (Exception ex)
+						{
+							await Log.Error("CharacterSystem", $"SaveAllCharactersAsync: RefreshSessionLeaseAsync failed for character {charData.ID}: {ex.Message}");
+						}
+					}
 				}
 			}
 			finally
@@ -1697,29 +1843,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Claims the character session asynchronously via TryClaimAsync.
+		/// Releases a character session from Online → Offline in a single step.
 		/// </summary>
-		private async Task ClaimCharacterSessionAsync(long characterID)
+		private async Task ReleaseCharacterSessionAsync(long characterID, long serverID, Guid sessionToken)
 		{
 			try
 			{
 				if (Server.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
+					await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync: ICharacterService not available for character {characterID}.");
 					return;
 				}
 
-				long serverID = 0;
-				if (Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+				if (sessionToken == Guid.Empty || serverID <= 0)
 				{
-					serverID = runtimeData.ID;
+					await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync: Invalid session token or server ID for character {characterID}.");
+					return;
 				}
 
-				await characterService.TryClaimAsync(characterID, serverID);
+				DatabaseResult releaseResult = await characterService.ReleaseAsync(characterID, serverID, sessionToken);
+				if (!releaseResult.IsSuccess)
+				{
+					await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync: ReleaseAsync failed for character {characterID}: {releaseResult.ErrorCode} - {releaseResult.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterSystem", $"ClaimCharacterSessionAsync failed for character {characterID}: {ex.Message}");
+				await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync failed for character {characterID}: {ex.Message}");
 			}
 		}
 

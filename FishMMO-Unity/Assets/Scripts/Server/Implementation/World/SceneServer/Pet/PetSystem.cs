@@ -240,8 +240,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 
-			// Fire-and-forget async DB save with spawned=false
-			EnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, false));
+			// Async DB save with spawned=false, keyed by characterID to serialize with summon ops
+			EnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
 		}
 
 		/// <summary>
@@ -272,7 +272,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Capture immutable data for the async path
 			long characterID = character.ID;
 
-			EnqueueAsyncWork(() => LoadAndSpawnPetAsync(conn, character, scene, characterID));
+			EnqueueAsyncWork(() => LoadAndSpawnPetAsync(conn, character, scene, characterID), characterID);
 		}
 
 		/// <summary>
@@ -298,7 +298,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Marshal pet instantiation back to the main thread
 				EnqueueMainThread(() =>
 				{
-					if (Server == null)
+					// Guard against character being destroyed/despawned before the DB returned
+					if (Server == null ||
+						conn == null || !conn.IsActive ||
+						character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
 					{
 						return;
 					}
@@ -405,8 +408,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
 			}
 
-			// Fire-and-forget async DB save
-			EnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, spawned));
+			// Async DB save, keyed by characterID to serialize with other pet ops for the same character
+			EnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, spawned), characterID);
 		}
 
 		/// <summary>
