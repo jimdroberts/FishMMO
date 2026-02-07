@@ -228,14 +228,22 @@ namespace FishMMO.Database.Npgsql
 		}
 
 		/// <summary>
+		/// Gets the default configuration path using the application base directory parent.
+		/// </summary>
+		/// <returns>The default configuration path.</returns>
+		public static string GetDefaultConfigPath()
+		{
+			return Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.FullName
+				?? AppDomain.CurrentDomain.BaseDirectory;
+		}
+
+		/// <summary>
 		/// Creates a default configuration using the application base directory.
 		/// </summary>
 		/// <returns>A new configuration instance.</returns>
 		public static NpgsqlDbConfiguration CreateDefault()
 		{
-			string basePath = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.FullName
-				?? AppDomain.CurrentDomain.BaseDirectory;
-			return new NpgsqlDbConfiguration(basePath);
+			return new NpgsqlDbConfiguration(GetDefaultConfigPath());
 		}
 	}
 }

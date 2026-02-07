@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -238,13 +239,13 @@ namespace FishMMO.Database.Npgsql
 		{
 			Shutdown();
 
-			var deadline = DateTime.UtcNow + timeout;
+			var elapsed = Stopwatch.StartNew();
 
 			while (Volatile.Read(ref activeContextCount) > 0)
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 
-				if (DateTime.UtcNow >= deadline)
+				if (elapsed.Elapsed >= timeout)
 				{
 					return false;
 				}
@@ -292,9 +293,9 @@ namespace FishMMO.Database.Npgsql
 			Shutdown();
 
 			// Wait briefly for active contexts to complete (consistent with ShutdownGracefullyAsync behavior)
-			var deadline = DateTime.UtcNow.AddMilliseconds(DisposeWaitTimeoutMs);
+			var elapsed = Stopwatch.StartNew();
 
-			while (Volatile.Read(ref activeContextCount) > 0 && DateTime.UtcNow < deadline)
+			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < DisposeWaitTimeoutMs)
 			{
 				Thread.Sleep(ShutdownPollIntervalMs);
 			}
@@ -324,12 +325,27 @@ namespace FishMMO.Database.Npgsql
 
 		/// <summary>
 		/// Asynchronously disposes the factory and releases all resources.
+		/// Calls Shutdown() to reject new context creation, waits briefly for active contexts to complete,
+		/// then disposes monitoring resources.
 		/// </summary>
 		/// <returns>A ValueTask representing the asynchronous dispose operation.</returns>
-		public ValueTask DisposeAsync()
+		public async ValueTask DisposeAsync()
 		{
-			Dispose();
-			return default;
+			if (Interlocked.Exchange(ref disposed, 1) != 0)
+				return;
+
+			GC.SuppressFinalize(this);
+			Shutdown();
+
+			var elapsed = Stopwatch.StartNew();
+
+			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < DisposeWaitTimeoutMs)
+			{
+				await Task.Delay(ShutdownPollIntervalMs).ConfigureAwait(false);
+			}
+
+			performanceTracker.Dispose();
+			poolMetrics.Reset();
 		}
 	}
 }

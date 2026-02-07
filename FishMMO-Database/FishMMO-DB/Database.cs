@@ -53,33 +53,10 @@ namespace FishMMO.Database
 			if (string.IsNullOrWhiteSpace(configPath))
 				throw new ArgumentNullException(nameof(configPath));
 
-			try
-			{
-				// Create the database context factory from appsettings.json
-				DbContextFactory = new NpgsqlDbContextFactory(
-					configPath,
-					enableLogging,
-					commandTimeout);
-
-				// Initialize service registry (composition root)
-				ServiceRegistry = CreateNpgsqlServiceRegistry(DbContextFactory);
-
-				// Initialize health monitoring
-				HealthMonitor = new DatabaseHealthMonitor(
-					DbContextFactory,
-					healthCheckWarningMs,
-					healthCheckCriticalMs);
-
-				// Initialize metrics tracking
-				MetricsTracker = new DatabaseMetricsTracker();
-			}
-			catch (Exception ex)
-			{
-				throw new DatabaseException(
-					"Failed to initialize database orchestrator.",
-					ex,
-					"INVALID_CONFIGURATION");
-			}
+			Initialize(
+				new NpgsqlDbContextFactory(configPath, enableLogging, commandTimeout),
+				healthCheckWarningMs,
+				healthCheckCriticalMs);
 		}
 
 		/// <summary>
@@ -97,21 +74,38 @@ namespace FishMMO.Database
 			int healthCheckWarningMs = 100,
 			int healthCheckCriticalMs = 500)
 		{
+			var configuration = new NpgsqlDbConfiguration(
+				NpgsqlDbConfiguration.GetDefaultConfigPath(),
+				enableLogging,
+				commandTimeout);
+
+			Initialize(
+				new NpgsqlDbContextFactory(configuration),
+				healthCheckWarningMs,
+				healthCheckCriticalMs);
+		}
+
+		/// <summary>
+		/// Shared initialization logic for all constructors.
+		/// Creates the service registry, health monitor, and metrics tracker.
+		/// </summary>
+		/// <param name="dbContextFactory">The pre-configured context factory.</param>
+		/// <param name="healthCheckWarningMs">Health check warning threshold in milliseconds.</param>
+		/// <param name="healthCheckCriticalMs">Health check critical threshold in milliseconds.</param>
+		/// <exception cref="DatabaseException">Thrown when initialization fails.</exception>
+		private void Initialize(
+			NpgsqlDbContextFactory dbContextFactory,
+			int healthCheckWarningMs,
+			int healthCheckCriticalMs)
+		{
 			try
 			{
-				// Create the database context factory with default configuration path
-				DbContextFactory = new NpgsqlDbContextFactory();
-
-				// Initialize service registry (composition root)
+				DbContextFactory = dbContextFactory;
 				ServiceRegistry = CreateNpgsqlServiceRegistry(DbContextFactory);
-
-				// Initialize health monitoring
 				HealthMonitor = new DatabaseHealthMonitor(
 					DbContextFactory,
 					healthCheckWarningMs,
 					healthCheckCriticalMs);
-
-				// Initialize metrics tracking
 				MetricsTracker = new DatabaseMetricsTracker();
 			}
 			catch (Exception ex)

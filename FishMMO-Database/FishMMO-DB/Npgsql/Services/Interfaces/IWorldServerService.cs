@@ -13,7 +13,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <remarks>
 	/// <para><b>Execution Strategy:</b> All write operations (PersistAsync, PulseAsync, DeleteAsync) use execution strategy wrappers to handle transient database failures with automatic retry. FromSqlRaw and ExecuteSqlRawAsync calls do not automatically retry without manual wrapping.</para>
 	/// <para><b>Read Operations:</b> Read operations use LINQ queries and are executed via BaseService execution wrappers for consistent exception mapping. Explicit transactions are used only when a write requires multiple database statements.</para>
-	/// <para><b>Error Handling:</b> All database operations return DatabaseResult or DatabaseResult&lt;T&gt; for comprehensive exception handling with typed database exceptions (DatabaseConnectionException, DatabaseConstraintException, DatabaseQueryException, DatabaseTimeoutException, DatabaseEntityNotFoundException).</para>
+	/// <para><b>Error Handling:</b> All database operations return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> with structured error codes (e.g., STALE_STATE, NOT_FOUND, UNIQUE_VIOLATION, DATABASE_ERROR) for comprehensive, safe error handling.</para>
 	/// </remarks>
 	public interface IWorldServerService : IFetchByKeyAction<long, WorldServerData>
 	{

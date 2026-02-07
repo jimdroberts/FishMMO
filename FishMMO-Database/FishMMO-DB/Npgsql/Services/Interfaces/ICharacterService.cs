@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
-using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Npgsql.Services.Interfaces.Actions;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
@@ -49,15 +48,17 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="characterData">The character data to create.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing a CharacterOperationResult on success,
-		/// or a <see cref="DatabaseException"/> on failure.
+		/// A <see cref="DatabaseResult{T}"/> containing the newly inserted character ID on success,
+		/// or a failure with <see cref="DatabaseErrorCodes.AlreadyExists"/> if the name is taken,
+		/// <see cref="DatabaseErrorCodes.ValidationError"/> for invalid input,
+		/// or <see cref="DatabaseErrorCodes.DatabaseError"/> for unexpected failures.
 		/// </returns>
 		/// <remarks>
 		/// Uses a single-statement SQL insert (CTE-based) with execution strategy wrapping
 		/// to ensure transient database failures are automatically retried.
 		/// Character names are stored with a lowercase version for case-insensitive uniqueness.
 		/// </remarks>
-		Task<DatabaseResult<CharacterOperationResult>> CreateCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<long>> CreateCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Sets the selected character for an account atomically. Deselects all other characters for the account.

@@ -13,15 +13,8 @@ namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
 	/// <remarks>
-	/// <para><b>Exception Handling Order:</b></para>
-	/// <list type="number">
-	/// <item>OperationCanceledException → DatabaseOperationCanceledException</item>
-	/// <item>PostgresException (SqlState "23505") → DatabaseConstraintException (Unique, non-transient conflict)</item>
-	/// <item>PostgresException (SqlState "23503") → DatabaseConstraintException (ForeignKey)</item>
-	/// <item>NpgsqlException → DatabaseConnectionException</item>
-	/// <item>DbUpdateException → DatabaseQueryException</item>
-	/// <item>Exception → DatabaseQueryException</item>
-	/// </list>
+	/// <para><b>Error Handling:</b> All exceptions are classified by <c>BaseService</c> and mapped to <see cref="DatabaseResult"/> error codes
+	/// (e.g., UNIQUE_VIOLATION, FOREIGN_KEY_VIOLATION, STALE_STATE, DATABASE_ERROR). Transient failures are retried automatically.</para>
 	/// <para>Unique constraint violations are treated as failures; this service generally avoids relying on 23505 by using atomic SQL (<c>ON CONFLICT</c>) where applicable.</para>
 	/// </remarks>
 	public sealed class WorldServerService : BaseService<WorldServerEntity>, IWorldServerService

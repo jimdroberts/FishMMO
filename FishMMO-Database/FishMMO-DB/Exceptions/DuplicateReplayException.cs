@@ -8,15 +8,19 @@ namespace FishMMO.Database.Exceptions
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// This is a logical concurrency failure and should not be retried.
+	/// This is a non-transient logical concurrency failure and should not be retried.
+	/// <c>BaseService.ClassifyException</c> maps it to <see cref="DatabaseErrorCodes.DuplicateReplay"/>
+	/// and returns a <see cref="DatabaseResult"/> failure.
 	/// </para>
 	/// </remarks>
-	public sealed class DuplicateReplayException : Exception
+	public sealed class DuplicateReplayException : DatabaseException
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="DuplicateReplayException"/> class.
 		/// </summary>
-		public DuplicateReplayException() : base(string.Empty)
+		public DuplicateReplayException()
+			: base(safeMessage: "Write rejected because the incoming Version equals the persisted Version (duplicate replay).",
+				errorCode: DatabaseErrorCodes.DuplicateReplay)
 		{
 		}
 
@@ -24,7 +28,8 @@ namespace FishMMO.Database.Exceptions
 		/// Initializes a new instance of the <see cref="DuplicateReplayException"/> class.
 		/// </summary>
 		/// <param name="message">Safe error message describing the duplicate replay.</param>
-		public DuplicateReplayException(string message) : base(message)
+		public DuplicateReplayException(string message)
+			: base(safeMessage: message, errorCode: DatabaseErrorCodes.DuplicateReplay)
 		{
 		}
 
@@ -33,7 +38,8 @@ namespace FishMMO.Database.Exceptions
 		/// </summary>
 		/// <param name="message">Safe error message describing the duplicate replay.</param>
 		/// <param name="innerException">The exception that caused this exception.</param>
-		public DuplicateReplayException(string message, Exception innerException) : base(message, innerException)
+		public DuplicateReplayException(string message, Exception innerException)
+			: base(safeMessage: message, innerException: innerException, errorCode: DatabaseErrorCodes.DuplicateReplay)
 		{
 		}
 	}

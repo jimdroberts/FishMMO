@@ -23,13 +23,8 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Friend deletion (individual and bulk)
 	/// - Friend retrieval and count queries
 	/// 
-	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
-	/// - OperationCanceledException → DatabaseOperationCanceledException
-	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
-	/// - NpgsqlException → DatabaseConnectionException
-	/// - DbUpdateException → DatabaseQueryException
-	/// - Exception → DatabaseQueryException
-	/// 
+	/// All exceptions are classified by <c>BaseService</c> and mapped to <see cref="DatabaseResult"/> error codes
+	/// (e.g., UNIQUE_VIOLATION, FOREIGN_KEY_VIOLATION, STALE_STATE, DATABASE_ERROR). Transient failures are retried automatically.
 	/// Methods return DatabaseResult to provide structured error handling
 	/// without throwing exceptions to calling code.
 	/// </remarks>

@@ -172,7 +172,7 @@ namespace FishMMO.Database.Npgsql.Services
 				case 0:
 					return DatabaseResult.Success();
 				case 1:
-					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString(), "Character not found or deleted.");
+					return DatabaseResult.Failure(DatabaseErrorCodes.NotFound, "Character not found or deleted.");
 				case 2:
 					return DatabaseResult.Failure(DatabaseErrorCodes.StaleState, "Pet update rejected due to a stale Version.");
 				case 3:

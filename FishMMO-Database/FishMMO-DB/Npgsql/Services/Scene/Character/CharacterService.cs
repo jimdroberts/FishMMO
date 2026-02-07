@@ -89,20 +89,24 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterOperationResult>> CreateCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> CreateCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedCharacterName(characterData.Name))
 			{
-				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.InvalidName);
+				return DatabaseResult<long>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidCharacterNameError);
 			}
 
 			if (!Authentication.IsAllowedUsername(characterData.Account))
 			{
-				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.DatabaseError);
+				return DatabaseResult<long>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
 			}
 
 			var nameLower = characterData.Name.Trim().ToLowerInvariant();
-			var result = await ExecuteWriteAsync<int>(async dbContext =>
+			var result = await ExecuteWriteAsync<long>(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sceneName = characterData.SceneName ?? string.Empty;
@@ -188,22 +192,11 @@ namespace FishMMO.Database.Npgsql.Services
 						)
 						ON CONFLICT (name_lowercase)
 						DO NOTHING
-						RETURNING 1
-					),
-					existing AS (
-						SELECT account, deleted
-						FROM {TableName}
-						WHERE name_lowercase = {{33}}
-						LIMIT 1
+						RETURNING id
 					)
-					SELECT CASE
-						WHEN EXISTS (SELECT 1 FROM inserted) THEN 0
-						WHEN EXISTS (SELECT 1 FROM existing WHERE deleted = FALSE AND account = {{1}}) THEN 1
-						WHEN EXISTS (SELECT 1 FROM existing WHERE deleted = FALSE AND account <> {{1}}) THEN 2
-						ELSE 3
-					END::integer AS value";
+					SELECT COALESCE((SELECT id FROM inserted LIMIT 1), -1)::bigint AS value";
 
-				var status = await dbContext.Set<SqlIntValue>()
+				var idRow = await dbContext.Set<SqlLongValue>()
 					.FromSqlRaw(
 						sql,
 						characterData.Name,
@@ -238,27 +231,21 @@ namespace FishMMO.Database.Npgsql.Services
 						DateTime.UnixEpoch,
 						characterData.Flags,
 						now,
-						now,
-						nameLower)
+						now)
 					.AsNoTracking()
 					.SingleAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				return status.Value;
+				if (idRow.Value <= 0)
+				{
+					throw new DatabaseException(
+						"Character name already exists.",
+						errorCode: DatabaseErrorCodes.AlreadyExists);
+				}
+
+				return idRow.Value;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			if (!result.IsSuccess)
-			{
-				return DatabaseResult<CharacterOperationResult>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
-			}
-
-			return DatabaseResult<CharacterOperationResult>.Success(result.Data switch
-			{
-				0 => CharacterOperationResult.CharacterCreated,
-				1 => CharacterOperationResult.CharacterCreated,
-				2 => CharacterOperationResult.NameAlreadyExists,
-				_ => CharacterOperationResult.DatabaseError
-			});
+			return result;
 		}
 
 		/// <inheritdoc/>

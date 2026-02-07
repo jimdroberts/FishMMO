@@ -12,15 +12,8 @@ namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
 	/// <remarks>
-	/// <para><b>Exception Handling:</b></para>
-	/// <list type="bullet">
-	/// <item><description><see cref="OperationCanceledException"/> → <see cref="DatabaseOperationCanceledException"/></description></item>
-	/// <item><description><see cref="Npgsql.PostgresException"/> (23505) → <see cref="DatabaseConstraintException"/> (Unique, non-transient conflict)</description></item>
-	/// <item><description><see cref="Npgsql.PostgresException"/> (23503) → <see cref="DatabaseConstraintException"/> (ForeignKey)</description></item>
-	/// <item><description><see cref="Npgsql.NpgsqlException"/> → <see cref="DatabaseConnectionException"/></description></item>
-	/// <item><description><see cref="DbUpdateException"/> → <see cref="DatabaseQueryException"/></description></item>
-	/// <item><description><see cref="Exception"/> → <see cref="DatabaseQueryException"/></description></item>
-	/// </list>
+	/// <para><b>Error Handling:</b> All exceptions are classified by <c>BaseService</c> and mapped to <see cref="DatabaseResult"/> error codes
+	/// (e.g., UNIQUE_VIOLATION, FOREIGN_KEY_VIOLATION, STALE_STATE, DATABASE_ERROR). Transient failures are retried automatically.</para>
 	/// <para>Unique constraint violations are treated as failures; callers should not depend on them for normal control flow.</para>
 	/// </remarks>
 	public sealed class GuildService : BaseService<GuildEntity>, IGuildService

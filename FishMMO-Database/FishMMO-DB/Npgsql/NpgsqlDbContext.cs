@@ -84,19 +84,18 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				Disposed?.Invoke(this, EventArgs.Empty);
 				base.Dispose();
+				Disposed?.Invoke(this, EventArgs.Empty);
 			}
 		}
 
-		public override ValueTask DisposeAsync()
+		public override async ValueTask DisposeAsync()
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
+				await base.DisposeAsync().ConfigureAwait(false);
 				Disposed?.Invoke(this, EventArgs.Empty);
-				return base.DisposeAsync();
 			}
-			return default;
 		}
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
