@@ -7,6 +7,15 @@
 	public class Faction
 	{
 		/// <summary>
+		/// Version number for this faction instance, used for client synchronization and updates.
+		/// Incremented whenever the faction's state changes in a way that requires client updates (
+		/// e.g., value changes that affect the faction's standing).
+		/// Not incremented for changes that do not affect client state (e.g., internal
+		/// tracking of reputation changes that doesn't meet the next update threshold).
+		/// </summary>
+		public long Version;
+
+		/// <summary>
 		/// The current reputation or standing value for this faction.
 		/// Clamped between FactionTemplate.Minimum and FactionTemplate.Maximum.
 		/// </summary>

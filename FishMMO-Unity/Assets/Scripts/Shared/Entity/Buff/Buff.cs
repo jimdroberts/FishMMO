@@ -8,6 +8,14 @@ namespace FishMMO.Shared
 	public class Buff
 	{
 		/// <summary>
+		/// Verson number for this buff instance, used for client synchronization and updates.
+		/// Incremented whenever the buff's state changes in a way that requires client updates (
+		/// e.g., remaining time changes, stacks added/removed).
+		/// Not incremented for changes that do not affect client state (e.g., internal tracking of time that doesn't meet the next tick).
+		/// </summary>
+		public long Version;
+
+		/// <summary>
 		/// The remaining duration of the buff in seconds.
 		/// </summary>
 		public float RemainingTime;

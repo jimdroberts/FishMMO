@@ -11,6 +11,15 @@ namespace FishMMO.Shared
 	public class CharacterAttribute
 	{
 		/// <summary>
+		/// Version number for this attribute instance, used for client synchronization and updates.
+		/// Incremented whenever the attribute's state changes in a way that requires client updates (
+		/// e.g., value or modifier changes that affect the final value).
+		/// Not incremented for changes that do not affect client state (e.g., internal
+		/// tracking of dependencies that doesn't meet the next update threshold).
+		/// </summary>
+		public long Version;
+
+		/// <summary>
 		/// The template that defines this attribute's configuration and formulas.
 		/// </summary>
 		public CharacterAttributeTemplate Template { get; private set; }

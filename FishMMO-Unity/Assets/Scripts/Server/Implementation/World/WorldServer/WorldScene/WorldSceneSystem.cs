@@ -505,7 +505,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					accessLevel: charData.AccessLevel,
 					online: charData.Online,
 					flags: characterFlags,
-					version: DateTimeOffset.UtcNow.Ticks,
+					version: charData.Version + 1,
 					timeCreated: charData.TimeCreated,
 					lastSaved: DateTime.UtcNow
 				);
@@ -553,7 +553,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					accessLevel: charData.AccessLevel,
 					online: charData.Online,
 					flags: characterFlags,
-					version: DateTimeOffset.UtcNow.Ticks,
+					version: charData.Version + 1,
 					timeCreated: charData.TimeCreated,
 					lastSaved: DateTime.UtcNow
 				);

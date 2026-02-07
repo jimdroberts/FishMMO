@@ -14,6 +14,13 @@ namespace FishMMO.Shared
 		public long ID;
 
 		/// <summary>
+		/// Version number for this ability instance, used for client synchronization and updates.
+		/// Incremented whenever the ability's state changes in a way that requires client updates (e.g., adding/removing events, changing modifiers).
+		/// Not incremented for changes that do not affect client state (e.g., internal cooldown tracking).
+		/// </summary>
+		public long Version;
+
+		/// <summary>
 		/// Total activation time for this ability, including all modifiers.
 		/// </summary>
 		public float ActivationTime;

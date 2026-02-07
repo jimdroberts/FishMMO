@@ -196,8 +196,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 
 					// collect items for async DB persistence
+					item.Version++;
 					itemsToSave.Add(new CharacterInventoryData(
 						id: item.ID,
+						version: item.Version,
 						characterID: character.ID,
 						templateID: item.Template.ID,
 						slot: item.Slot,
@@ -840,8 +842,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			// Fire-and-forget: persist the ability to the database
 			long charID = abilityController.Character.ID;
+			newAbility.Version++;
 			var abilityData = new CharacterAbilityData(
 				id: newAbility.ID,
+				version: newAbility.Version,
 				characterID: charID,
 				templateID: newAbility.Template.ID,
 				abilityEvents: abilityEvents,

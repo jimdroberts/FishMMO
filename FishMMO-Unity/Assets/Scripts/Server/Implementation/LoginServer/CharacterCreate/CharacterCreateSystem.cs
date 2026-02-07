@@ -376,6 +376,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							initialAttributes.Add(template.ID, new CharacterAttributeData(
 								id: 0,
+								version: 1,
 								characterID: characterID,
 								templateID: template.ID,
 								value: template.InitialValue,
@@ -487,6 +488,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				factions.Add(new CharacterFactionData(
 					id: 0,
+					version: 1,
 					characterID: characterID,
 					templateID: faction.ID,
 					value: FactionTemplate.Maximum
@@ -496,6 +498,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				factions.Add(new CharacterFactionData(
 					id: 0,
+					version: 1,
 					characterID: characterID,
 					templateID: faction.ID,
 					value: 0
@@ -505,6 +508,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				factions.Add(new CharacterFactionData(
 					id: 0,
+					version: 1,
 					characterID: characterID,
 					templateID: faction.ID,
 					value: FactionTemplate.Minimum
@@ -527,6 +531,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					abilities.Add(new CharacterAbilityData(
 						id: 0,
+						version: 1,
 						characterID: characterID,
 						templateID: startingAbility.ID,
 						abilityEvents: startingAbility.GetAllAbilityEventIDs(),
@@ -552,6 +557,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					BaseItemTemplate itemTemplate = startingItems[i];
 					items.Add(new CharacterInventoryData(
 						id: 0,
+						version: 1,
 						characterID: characterID,
 						templateID: itemTemplate.ID,
 						slot: slotOffset + i,
@@ -588,6 +594,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							initialAttributes[itemAttribute.Template.CharacterAttribute.ID] = new CharacterAttributeData(
 								id: attributeData.ID,
+								version: attributeData.Version,
 								characterID: attributeData.CharacterID,
 								templateID: attributeData.TemplateID,
 								value: attributeData.Value + (int)itemAttribute.value,
@@ -599,6 +606,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					// Add the equipped item data
 					equipment.Add(new CharacterEquipmentData(
 						id: 0,
+						version: 1,
 						characterID: characterID,
 						templateID: itemTemplate.ID,
 						slot: (int)itemTemplate.Slot,

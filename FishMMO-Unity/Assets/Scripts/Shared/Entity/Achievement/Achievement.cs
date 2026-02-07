@@ -9,6 +9,14 @@
 	public class Achievement
 	{
 		/// <summary>
+		/// Version number for this achievement instance, used for client synchronization and updates.
+		/// Incremented whenever the achievement's state changes in a way that requires client updates (e.g., tier or value changes).
+		/// Not incremented for changes that do not affect client state (e.g., internal
+		/// tracking of progress that doesn't meet the next tier requirement).
+		/// </summary>
+		public long Version;
+		
+		/// <summary>
 		/// The current tier of the achievement (0-based index).
 		/// </summary>
 		public byte CurrentTier;

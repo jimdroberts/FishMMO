@@ -37,12 +37,19 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The unique ID for this item instance.
 		/// </summary>
-		public long ID { get; set; }
+		public long ID;
+
+		/// <summary>
+		/// Version number for this item instance, used for client synchronization and updates.
+		/// Incremented whenever the item's state changes in a way that requires client updates (e.g., stack amount changes, equippable state changes, generator attribute changes).
+		/// Not incremented for changes that do not affect client state (e.g., internal tracking of time that doesn't meet the next update threshold).
+		/// </summary>
+		public long Version;
 
 		/// <summary>
 		/// The slot index this item is currently assigned to.
 		/// </summary>
-		public int Slot { get; set; }
+		public int Slot;
 
 		/// <summary>
 		/// Returns true if the item has a generator (is randomly generated).

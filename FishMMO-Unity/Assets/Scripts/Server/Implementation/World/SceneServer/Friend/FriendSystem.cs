@@ -186,7 +186,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				CharacterData friendData = fetchResult.Data.Value;
 
 				// Persist the friendship to the database
-				DatabaseResult saveResult = await friendService.PersistAsync(characterID, friendCharacterID, 0);
+				DatabaseResult saveResult = await friendService.PersistAsync(characterID, friendCharacterID, 1);
 				if (!saveResult.IsSuccess)
 				{
 					return;
@@ -283,7 +283,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await friendService.DeleteAsync(characterID, friendCharacterID, 0);
+				await friendService.DeleteAsync(characterID, friendCharacterID, long.MaxValue);
 			}
 			catch (Exception ex)
 			{

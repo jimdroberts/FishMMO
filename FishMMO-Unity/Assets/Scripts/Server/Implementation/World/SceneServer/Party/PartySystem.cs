@@ -495,7 +495,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				CharacterPartyData partyData = new CharacterPartyData(0, characterID, partyID, rank, healthPCT);
+				// Fetch existing version for sequence-based optimistic concurrency
+				long version = 1;
+				DatabaseResult<CharacterPartyData?> existingResult = await charPartyService.FetchAsync(characterID);
+				if (existingResult.IsSuccess && existingResult.Data.HasValue)
+				{
+					version = existingResult.Data.Value.Version + 1;
+				}
+
+				CharacterPartyData partyData = new CharacterPartyData(0, version, characterID, partyID, rank, healthPCT);
 				await charPartyService.PersistAsync(partyData, MaxPartySize);
 				await partyUpdateService.PersistAsync(partyID);
 			}
@@ -584,7 +592,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				long newPartyID = createResult.Data;
 
-				CharacterPartyData partyData = new CharacterPartyData(0, characterID, newPartyID, (byte)PartyRank.Leader, healthPCT);
+				CharacterPartyData partyData = new CharacterPartyData(0, 1, characterID, newPartyID, (byte)PartyRank.Leader, healthPCT);
 				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
 				if (!persistResult.IsSuccess)
 				{
@@ -793,7 +801,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				CharacterPartyData partyData = new CharacterPartyData(0, characterID, partyID, (byte)PartyRank.Member, healthPCT);
+				CharacterPartyData partyData = new CharacterPartyData(0, 1, characterID, partyID, (byte)PartyRank.Member, healthPCT);
 				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
 				if (!persistResult.IsSuccess)
 				{

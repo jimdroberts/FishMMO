@@ -820,10 +820,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (attr.CurrentValue > 0)
 					{
 						attrController.SetResourceAttribute(attr.TemplateID, attr.Value, attr.CurrentValue);
+						if (attrController.ResourceAttributes.TryGetValue(attr.TemplateID, out var resAttr))
+						{
+							resAttr.Version = attr.Version;
+						}
 					}
 					else
 					{
 						attrController.SetAttribute(attr.TemplateID, attr.Value);
+						if (attrController.Attributes.TryGetValue(attr.TemplateID, out var charAttr))
+						{
+							charAttr.Version = attr.Version;
+						}
 					}
 				}
 			}
@@ -835,6 +843,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foreach (CharacterInventoryData inv in inventoryData)
 				{
 					Item item = new Item(inv.ID, inv.Seed, inv.TemplateID, inv.Amount);
+					item.Version = inv.Version;
 					inventoryController.SetItemSlot(item, inv.Slot);
 				}
 			}
@@ -846,6 +855,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foreach (CharacterBankData bank in bankData)
 				{
 					Item item = new Item(bank.ID, bank.Seed, bank.TemplateID, bank.Amount);
+					item.Version = bank.Version;
 					bankController.SetItemSlot(item, bank.Slot);
 				}
 			}
@@ -857,6 +867,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foreach (CharacterEquipmentData equip in equipmentData)
 				{
 					Item item = new Item(equip.ID, equip.Seed, equip.TemplateID, equip.Amount);
+					item.Version = equip.Version;
 					equipmentController.SetItemSlot(item, equip.Slot);
 				}
 			}
@@ -868,6 +879,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foreach (CharacterAbilityData ability in abilityData)
 				{
 					Ability newAbility = new Ability(ability.ID, ability.TemplateID, ability.AbilityEvents);
+					newAbility.Version = ability.Version;
 					abilityController.LearnAbility(newAbility, ability.Cooldown);
 				}
 
@@ -897,6 +909,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foreach (CharacterAchievementData achievement in achievementData)
 				{
 					achievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value, true);
+					if (achievementController.Achievements.TryGetValue(achievement.TemplateID, out Achievement ach))
+					{
+						ach.Version = achievement.Version;
+					}
 				}
 			}
 
@@ -950,6 +966,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foreach (CharacterBuffData buff in buffData)
 				{
 					Buff newBuff = new Buff(buff.TemplateID, buff.RemainingTime, buff.TickTime, buff.Stacks);
+					newBuff.Version = buff.Version;
 					buffController.Apply(newBuff);
 				}
 			}
@@ -961,6 +978,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foreach (CharacterFactionData faction in factionData)
 				{
 					factionController.SetFaction(faction.TemplateID, faction.Value, true);
+					if (factionController.Factions.TryGetValue(faction.TemplateID, out Faction fac))
+					{
+						fac.Version = faction.Version;
+					}
 				}
 			}
 
@@ -1697,10 +1718,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Builds a CharacterData DTO from an IPlayerCharacter, capturing all fields on the main thread.
-		/// Uses DateTimeOffset.UtcNow.Ticks as the version for optimistic concurrency.
+		/// Increments character.Version for sequence-based optimistic concurrency.
 		/// </summary>
 		private CharacterData BuildCharacterData(IPlayerCharacter character)
 		{
+			character.Version++;
 			Vector3 pos = character.Transform.position;
 			Quaternion rot = character.Motor != null ? character.Motor.Transform.rotation : character.Transform.rotation;
 
@@ -1737,7 +1759,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				accessLevel: (byte)(int)character.AccessLevel,
 				online: true,
 				flags: character.Flags,
-				version: DateTimeOffset.UtcNow.Ticks,
+				version: character.Version,
 				timeCreated: character.TimeCreated,
 				lastSaved: DateTime.UtcNow
 			);

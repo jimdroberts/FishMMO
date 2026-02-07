@@ -528,7 +528,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				CharacterGuildData guildData = new CharacterGuildData(0, characterID, guildID, rank, location);
+				// Fetch existing version for sequence-based optimistic concurrency
+				long version = 1;
+				DatabaseResult<CharacterGuildData?> existingResult = await charGuildService.FetchAsync(characterID);
+				if (existingResult.IsSuccess && existingResult.Data.HasValue)
+				{
+					version = existingResult.Data.Value.Version + 1;
+				}
+
+				CharacterGuildData guildData = new CharacterGuildData(0, version, characterID, guildID, rank, location);
 				await charGuildService.PersistAsync(guildData, maxGuildSize);
 				await guildUpdateService.PersistAsync(guildID);
 			}
@@ -634,7 +642,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long newGuildID = createResult.Data.Value;
 
 				// Save the character as guild leader
-				CharacterGuildData memberData = new CharacterGuildData(0, characterID, newGuildID, (byte)GuildRank.Leader, sceneName);
+				CharacterGuildData memberData = new CharacterGuildData(0, 1, characterID, newGuildID, (byte)GuildRank.Leader, sceneName);
 				await charGuildService.PersistAsync(memberData, maxGuildSize);
 
 				// Marshal in-memory state changes + Broadcast back to main thread
@@ -837,7 +845,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Persist membership
-				CharacterGuildData memberData = new CharacterGuildData(0, characterID, guildID, (byte)GuildRank.Member, sceneName);
+				CharacterGuildData memberData = new CharacterGuildData(0, 1, characterID, guildID, (byte)GuildRank.Member, sceneName);
 				DatabaseResult saveResult = await charGuildService.PersistAsync(memberData, maxGuildSize);
 				if (!saveResult.IsSuccess)
 				{
@@ -1001,12 +1009,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// update the guild leader status in the database
 					if (newLeader.HasValue)
 					{
-						await charGuildService.UpdateRankAsync(newLeader.Value.CharacterID, newLeader.Value.GuildID, (byte)GuildRank.Leader, 0);
+						await charGuildService.UpdateRankAsync(newLeader.Value.CharacterID, newLeader.Value.GuildID, (byte)GuildRank.Leader, newLeader.Value.Version + 1);
 					}
 				}
 
 				// Remove the guild member
-				await charGuildService.DeleteAsync(characterID, 0);
+				await charGuildService.DeleteAsync(characterID, long.MaxValue);
 
 				if (remainingCount < 1)
 				{
@@ -1112,7 +1120,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Delete the member
-				DatabaseResult deleteResult = await charGuildService.DeleteAsync(memberID, 0);
+				DatabaseResult deleteResult = await charGuildService.DeleteAsync(memberID, long.MaxValue);
 				if (!deleteResult.IsSuccess)
 				{
 					return;
@@ -1196,7 +1204,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult rankResult = await charGuildService.UpdateRankAsync(memberID, guildID, (byte)newRank, 0);
+				DatabaseResult rankResult = await charGuildService.UpdateRankAsync(memberID, guildID, (byte)newRank, long.MaxValue);
 				if (rankResult.IsSuccess)
 				{
 					// Tell the other servers to update their guild lists

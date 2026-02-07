@@ -185,7 +185,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				await service.PersistAsync(characterId, templateId, 0);
+				await service.PersistAsync(characterId, templateId, 1);
 			}
 			catch (Exception ex)
 			{
@@ -266,10 +266,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								continue;
 							}
 
-							// Fire-and-forget async DB persist — game state already updated in-memory
+							// Fire-and-forget async DB persist — build DTO on main thread for thread safety
 							if (inventoryService != null)
 							{
-								EnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, character.ID, item));
+								item.Version++;
+								var dto = new CharacterInventoryData(
+									id: item.ID,
+									version: item.Version,
+									characterID: character.ID,
+									templateID: item.Template.ID,
+									slot: item.Slot,
+									seed: item.IsGenerated ? item.Generator.Seed : 0,
+									amount: item.IsStackable ? item.Stackable.Amount : 0
+								);
+								EnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, dto));
 							}
 
 							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -309,10 +319,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								continue;
 							}
 
-							// Fire-and-forget async DB persist — game state already updated in-memory
+							// Fire-and-forget async DB persist — build DTO on main thread for thread safety
 							if (inventoryService != null)
 							{
-								EnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, character.ID, item));
+								item.Version++;
+								var dto = new CharacterInventoryData(
+									id: item.ID,
+									version: item.Version,
+									characterID: character.ID,
+									templateID: item.Template.ID,
+									slot: item.Slot,
+									seed: item.IsGenerated ? item.Generator.Seed : 0,
+									amount: item.IsStackable ? item.Stackable.Amount : 0
+								);
+								EnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, dto));
 							}
 
 							modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
@@ -340,24 +360,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously persists an inventory item slot to the database.
 		/// </summary>
 		/// <param name="service">The inventory service.</param>
-		/// <param name="characterId">The character ID.</param>
-		/// <param name="item">The item to persist.</param>
-		private async Task PersistInventorySlotAsync(ICharacterInventoryService service, long characterId, Item item)
+		/// <param name="dto">Pre-built DTO captured on the main thread.</param>
+		private async Task PersistInventorySlotAsync(ICharacterInventoryService service, CharacterInventoryData dto)
 		{
 			try
 			{
-				await service.PersistAsync(new CharacterInventoryData(
-					id: 0,
-					characterID: characterId,
-					templateID: item.Template.ID,
-					slot: item.Slot,
-					seed: item.IsGenerated ? item.Generator.Seed : 0,
-					amount: item.IsStackable ? item.Stackable.Amount : 0
-				));
+				await service.PersistAsync(dto);
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("AchievementSystem", $"Error persisting inventory slot (CharID={characterId}, Slot={item.Slot}): {ex}");
+				await Log.Error("AchievementSystem", $"Error persisting inventory slot (CharID={dto.CharacterID}, Slot={dto.Slot}): {ex}");
 			}
 		}
 
