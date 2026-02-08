@@ -158,7 +158,7 @@ Installs a specific Unity Editor version with build modules using the Unity Hub 
 
 **Defaults** (press Enter at each prompt to accept):
 - **Version:** `6000.3.2f1`
-- **Modules:** Linux Build Support (IL2CPP), Linux Dedicated Server Build Support, Web Build Support, Windows Build Support (Mono), Windows Dedicated Server Build Support
+- **Modules:** Linux Build Support (IL2CPP), Linux Dedicated Server Build Support, Web Build Support, Windows Build Support (Mono), Windows Build Support (IL2CPP), Windows Dedicated Server Build Support
 
 **Available modules:**
 
@@ -171,7 +171,7 @@ Installs a specific Unity Editor version with build modules using the Unity Hub 
 | 5 | Mac Build Support (IL2CPP) | |
 | 6 | Mac Dedicated Server Build Support | |
 | 7 | Windows Build Support (Mono) | ✔ |
-| 8 | Windows Build Support (IL2CPP) | |
+| 8 | Windows Build Support (IL2CPP) | ✔ |
 | 9 | Windows Dedicated Server Build Support | ✔ |
 | 10 | Web Build Support | ✔ |
 | 11 | Android Build Support | |

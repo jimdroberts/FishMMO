@@ -130,6 +130,7 @@ namespace FishMMO.Installer
 			"linux-dedicated-server",
 			"webgl",
 			"windows-mono",
+			"windows-il2cpp",
 			"windows-dedicated-server",
 		};
 
