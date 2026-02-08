@@ -1,0 +1,266 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
+namespace FishMMO.Installer
+{
+	/// <summary>
+	/// Handles installation and verification of the DotNet SDK and DotNet-EF global tool.
+	/// Supports Windows and Linux (Arch/CachyOS, Ubuntu).
+	/// </summary>
+	public static class DotNetInstaller
+	{
+		/// <summary>
+		/// Flag to ensure the Linux PATH is configured only once per session.
+		/// </summary>
+		private static bool pathSet = false;
+
+		/// <summary>
+		/// Installs DotNet SDK and DotNet-EF tool if not already installed.
+		/// </summary>
+		/// <returns>True if installation succeeded or already installed.</returns>
+		public static async Task<bool> InstallDotNet()
+		{
+			if (!await IsDotNetInstalledAsync())
+			{
+				if (InstallerProcessHelper.PromptForYesNo("DotNet 8 is not installed, would you like to install it?"))
+				{
+					InstallerProcessHelper.Log("Installing DotNet...");
+					await DownloadAndInstallDotNetAsync();
+					InstallerProcessHelper.Log("DotNet has been installed.");
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			else
+			{
+				InstallerProcessHelper.Log("DotNet is already installed.");
+			}
+
+			if (!await IsDotNetEFInstalledAsync())
+			{
+				if (InstallerProcessHelper.PromptForYesNo("DotNet-EF is not installed, would you like to install it?"))
+				{
+					InstallerProcessHelper.Log($"Installing DotNet-EF v{InstallationConstants.DotNetEFVersion}...");
+					await RunDotNetCommandAsync($"tool install --global dotnet-ef --version {InstallationConstants.DotNetEFVersion}");
+
+					InstallerProcessHelper.Log("DotNet-EF has been installed.");
+					return true;
+				}
+				return false;
+			}
+			else
+			{
+				InstallerProcessHelper.Log("DotNet-EF is already installed.");
+				return true;
+			}
+		}
+
+		/// <summary>
+		/// Checks if DotNet SDK is installed and matches the required major version.
+		/// </summary>
+		/// <returns>True if installed, otherwise false.</returns>
+		public static async Task<bool> IsDotNetInstalledAsync()
+		{
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+			string arguments = $"{argPrefix} \"dotnet --version\"";
+
+			return await InstallerProcessHelper.RunProcessAsync(shell, arguments, (e, o, err) =>
+			{
+				return e == 0 &&
+					   o.Contains(InstallationConstants.DotNetSDKMajorVersion, StringComparison.OrdinalIgnoreCase);
+			});
+		}
+
+		/// <summary>
+		/// Downloads and installs DotNet SDK for the current OS.
+		/// On Windows, downloads and runs the official EXE installer.
+		/// On Linux, downloads and runs the dotnet-install.sh script.
+		/// </summary>
+		private static async Task DownloadAndInstallDotNetAsync()
+		{
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				string installerPath = await InstallerProcessHelper.DownloadFileAsync(
+					InstallationConstants.DotNetSDKUrl,
+					InstallationConstants.DotNetSDKFileName);
+
+				try
+				{
+					ProcessStartInfo startInfo = new ProcessStartInfo
+					{
+						FileName = installerPath,
+						Arguments = "/install /quiet /norestart",
+						UseShellExecute = true,
+						Verb = "runas"
+					};
+
+					Process? process = Process.Start(startInfo);
+					if (process == null)
+					{
+						InstallerProcessHelper.Log("Failed to start DotNet installer process.");
+						return;
+					}
+					await process.WaitForExitAsync();
+
+					int exitCode = process.ExitCode;
+					if (exitCode == 0)
+					{
+						InstallerProcessHelper.Log("DotNet installation successful.");
+					}
+					else
+					{
+						InstallerProcessHelper.Log($"DotNet installation failed with exit code {exitCode}.");
+					}
+				}
+				catch (Exception ex)
+				{
+					InstallerProcessHelper.Log($"Error installing DotNet: {ex.Message}");
+				}
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				string shScriptFile = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), InstallationConstants.DotNetInstallScriptFileName);
+
+				var scriptContent = await InstallerProcessHelper.SharedHttpClient.GetStringAsync(InstallationConstants.DotNetInstallScriptUrl);
+				await File.WriteAllTextAsync(shScriptFile, scriptContent);
+
+				await InstallerProcessHelper.RunProcessAsync("chmod", $"+x {shScriptFile}");
+
+				await InstallerProcessHelper.RunProcessAsync("/bin/bash",
+					$"{shScriptFile} --version {InstallationConstants.DotNetSDKVersion}",
+					(e, o, err) =>
+					{
+						if (e != 0)
+						{
+							throw new Exception($"Shell script failed with exit code {e}: {err}");
+						}
+						return true;
+					});
+			}
+			else
+			{
+				throw new PlatformNotSupportedException("Unsupported operating system. Only Windows and Linux are supported.");
+			}
+		}
+
+		/// <summary>
+		/// Checks if DotNet-EF tool is installed globally.
+		/// </summary>
+		/// <returns>True if installed, otherwise false.</returns>
+		public static async Task<bool> IsDotNetEFInstalledAsync()
+		{
+			try
+			{
+				return await RunDotNetCommandAsync(
+					"tool list --global",
+					(e, o, err) => o.Contains("dotnet-ef", StringComparison.OrdinalIgnoreCase));
+			}
+			catch (Exception ex)
+			{
+				InstallerProcessHelper.Log($"Error checking dotnet-ef tool: {ex.Message}");
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Runs a dotnet command asynchronously, handling environment setup for Linux.
+		/// Ensures ~/.dotnet/tools is in PATH and DOTNET_ROOT is set on first invocation.
+		/// </summary>
+		/// <param name="arguments">DotNet command arguments.</param>
+		/// <param name="customProcessResult">Optional custom result handler receiving (exitCode, stdout, stderr).</param>
+		/// <returns>True if command succeeded, otherwise false.</returns>
+		public static async Task<bool> RunDotNetCommandAsync(string arguments, Func<int, string, string, bool>? customProcessResult = null)
+		{
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				if (!pathSet)
+				{
+					string? homePath = Environment.GetEnvironmentVariable("HOME");
+					if (string.IsNullOrEmpty(homePath))
+					{
+						InstallerProcessHelper.Log("Warning: The HOME environment variable is not set. DotNet commands may fail.");
+					}
+					else
+					{
+						string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+						string dotnetToolsPath = Path.Combine(homePath, ".dotnet", "tools");
+
+						if (!currentPath.Split(':').Contains(dotnetToolsPath))
+						{
+							string newPath = $"{currentPath}:{dotnetToolsPath}";
+							Environment.SetEnvironmentVariable("PATH", newPath);
+							InstallerProcessHelper.Log($"Updated PATH to include: {dotnetToolsPath}");
+						}
+					}
+
+					string dotnetRoot = "/usr/share/dotnet";
+					if (Directory.Exists(dotnetRoot))
+					{
+						Environment.SetEnvironmentVariable("DOTNET_ROOT", dotnetRoot);
+						InstallerProcessHelper.Log($"Set DOTNET_ROOT to: {dotnetRoot}");
+					}
+
+					pathSet = true;
+				}
+			}
+
+			Console.WriteLine("Running DotNet Command: \r\n" +
+							  "dotnet " + arguments);
+
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+			string fullArguments = $"{argPrefix} \"dotnet {arguments}\"";
+
+			bool success = await InstallerProcessHelper.RunProcessAsync(shell, fullArguments,
+				(exitCode, output, error) =>
+				{
+					if (!string.IsNullOrWhiteSpace(output))
+					{
+						Console.WriteLine(output);
+					}
+					if (!string.IsNullOrWhiteSpace(error))
+					{
+						InstallerProcessHelper.Log($"Process Error: {error}");
+					}
+
+					if (customProcessResult != null)
+					{
+						return customProcessResult.Invoke(exitCode, output, error);
+					}
+					else
+					{
+						return exitCode == 0;
+					}
+				});
+
+			if (!success)
+			{
+				InstallerProcessHelper.Log($"DotNet command 'dotnet {arguments}' failed.");
+			}
+			return success;
+		}
+
+		/// <summary>
+		/// Runs a dotnet ef migrations add command for the given migration name.
+		/// </summary>
+		/// <param name="migrationName">Name of the migration to create.</param>
+		/// <returns>True if the command succeeded, otherwise false.</returns>
+		public static async Task<bool> RunEFMigrationAsync(string migrationName)
+		{
+			return await RunDotNetCommandAsync(
+				$"ef migrations add {migrationName} -p {InstallationConstants.ProjectPath} -s {InstallationConstants.StartupProject}");
+		}
+
+		/// <summary>
+		/// Runs a dotnet ef database update command to apply pending migrations.
+		/// </summary>
+		/// <returns>True if the command succeeded, otherwise false.</returns>
+		public static async Task<bool> RunEFDatabaseUpdateAsync()
+		{
+			return await RunDotNetCommandAsync(
+				$"ef database update -p {InstallationConstants.ProjectPath} -s {InstallationConstants.StartupProject}");
+		}
+	}
+}

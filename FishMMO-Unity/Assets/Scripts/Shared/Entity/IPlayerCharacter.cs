@@ -4,7 +4,6 @@ using KinematicCharacterController;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Managing.Predicting;
-using FishMMO.Database.Data.Enums;
 using UnityEngine;
 #if !UNITY_SERVER
 using TMPro;

@@ -4,7 +4,6 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database;
 using FishMMO.Database.Data;
-using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
 using System.Collections.Generic;

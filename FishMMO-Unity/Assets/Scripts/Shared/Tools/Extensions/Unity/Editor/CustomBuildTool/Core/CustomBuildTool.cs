@@ -217,43 +217,6 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			Log.Shutdown();
 		}
 
-		/// <summary>
-		/// Builds the Database Installer executable using the current OS Target environment option.
-		/// </summary>
-		[MenuItem("FishMMO/Build/Build Database Installer")]
-		public static void BuildInstallerWithEnvironmentOptions()
-		{
-			// Check if scripts are currently compiling
-			if (BuildEnvironmentOptions.IsCompiling())
-			{
-				UnityEngine.Debug.LogWarning("[CustomBuildTool] Cannot start installer build while scripts are compiling. Please wait for compilation to finish.");
-				EditorUtility.DisplayDialog("Build Blocked", "Scripts are currently compiling.\nPlease wait for compilation to finish before building installer.", "OK");
-				return;
-			}
-
-			// Get OS target from environment options
-			OSTargetEnvironment osTarget = BuildEnvironmentOptions.GetOSTarget();
-			BuildTarget buildTarget = BuildEnvironmentOptions.GetBuildTarget(osTarget);
-
-			// WebGL doesn't support installers
-			if (osTarget == OSTargetEnvironment.WebGL)
-			{
-				UnityEngine.Debug.LogWarning("[CustomBuildTool] Database Installer cannot be built for WebGL. Please select Windows or Linux.");
-				EditorUtility.DisplayDialog("Invalid Target", "Database Installer cannot be built for WebGL.\nPlease select Windows or Linux as the OS Target.", "OK");
-				return;
-			}
-
-			BuildExecutable("Installer",
-							new string[]
-							{
-								Constants.Configuration.InstallerPath,
-							},
-							CustomBuildType.Installer,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							buildTarget);
-		}
-
 		// --- Helper methods and fields (stubs, to be implemented or replaced as needed) ---
 
 		/// <summary>

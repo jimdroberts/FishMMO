@@ -33,22 +33,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Clears all mapping data and releases references.
+		/// Clears all mapping data entries. Does not null references since
+		/// ConcurrentDictionaries may be accessed from other threads during runtime.
 		/// </summary>
 		public override void Clear()
 		{
 			IpRateLimitTracker?.Clear();
-			IpRateLimitTracker = null;
 			IpFailureTracker?.Clear();
-			IpFailureTracker = null;
 		}
 
 		/// <summary>
-		/// Deinitializes the mapping data container.
+		/// Deinitializes the mapping data container and releases references.
 		/// </summary>
 		public override void Deinitialize()
 		{
 			Clear();
+			IpRateLimitTracker = null;
+			IpFailureTracker = null;
 		}
 	}
 }

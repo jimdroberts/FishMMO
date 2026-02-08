@@ -5,7 +5,6 @@ using System.Security.Cryptography;
 using SecureRemotePassword;
 using FishMMO.Server.Core.Account;
 using FishMMO.Server.Core.Account.SRP;
-using FishMMO.Database.Data.Enums;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>FishMMO.Installer</RootNamespace>
+    <AssemblyName>FishMMO-Installer</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
+    <ProjectReference Include="..\..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
+  </ItemGroup>
+
+  <!-- Copy the FishMMO-Database directory into the build output for migration support -->
+  <Target Name="CopyFishMMODatabase" AfterTargets="Build">
+    <PropertyGroup>
+      <FishMMODatabaseSource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\FishMMO-Database'))</FishMMODatabaseSource>
+      <FishMMODatabaseDest>$(OutputPath)FishMMO-Database</FishMMODatabaseDest>
+    </PropertyGroup>
+    <ItemGroup>
+      <FishMMODatabaseFiles Include="$(FishMMODatabaseSource)\**\*.*"
+                            Exclude="$(FishMMODatabaseSource)\**\bin\**;$(FishMMODatabaseSource)\**\obj\**;$(FishMMODatabaseSource)\.vs\**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FishMMODatabaseFiles)"
+          DestinationFiles="@(FishMMODatabaseFiles->'$(FishMMODatabaseDest)\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Text="Copied FishMMO-Database to $(FishMMODatabaseDest)" Importance="high" />
+  </Target>
+
+</Project>

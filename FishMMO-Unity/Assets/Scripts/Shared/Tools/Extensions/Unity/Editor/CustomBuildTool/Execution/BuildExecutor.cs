@@ -41,21 +41,15 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 
 			BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
 
-			// Append world scene paths to bootstrap scene array if needed
-			string[] scenes = (customBuildType == CustomBuildType.Server || customBuildType == CustomBuildType.Client)
-				? AppendWorldScenePaths(bootstrapScenes)
-				: bootstrapScenes;
+			// Append world scene paths to bootstrap scene array
+			string[] scenes = AppendWorldScenePaths(bootstrapScenes);
 
 			string folderName = executableName;
-			if (customBuildType != CustomBuildType.Installer && customBuildType != CustomBuildType.Client)
+			if (customBuildType != CustomBuildType.Client)
 			{
 				folderName = "FishMMO " + folderName;
 			}
-			if (customBuildType == CustomBuildType.Installer)
-			{
-				folderName = "FishMMO" + GetBuildTargetShortName(buildTarget) + " " + folderName;
-			}
-			else if (string.IsNullOrEmpty(tmpPath))
+			if (string.IsNullOrEmpty(tmpPath))
 			{
 				folderName += GetBuildTargetShortName(buildTarget);
 			}
@@ -88,11 +82,6 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 					string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 					string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
 					CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath);
-
-					if (customBuildType == CustomBuildType.Installer)
-					{
-						BuildSetupFolder(root, buildPath);
-					}
 
 					if (buildTarget == BuildTarget.WebGL)
 					{
@@ -191,31 +180,6 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			{
 				FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 			}
-		}
-
-		/// <summary>
-		/// Copies setup and database files to the installer build directory, cleaning up old binaries.
-		/// </summary>
-		private static void BuildSetupFolder(string rootPath, string buildPath)
-		{
-			string setup = Path.Combine(rootPath, Constants.Configuration.SetupDirectory);
-
-			// Copy appsettings to installer directory
-			string envConfigurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(setup);
-			string appsettingsTarget = Path.Combine(buildPath, "appsettings.json");
-			FileUtil.DeleteFileOrDirectory(appsettingsTarget);
-			FileUtil.CopyFileOrDirectory(Path.Combine(envConfigurationPath, "appsettings.json"), appsettingsTarget);
-
-			// Copy database project to installer directory
-			string dbBuildDirectory = Path.Combine(buildPath, Constants.Configuration.DatabaseDirectory);
-			FileUtil.DeleteFileOrDirectory(dbBuildDirectory);
-			FileUtil.CopyFileOrDirectory(Path.Combine(rootPath, Constants.Configuration.DatabaseDirectory), dbBuildDirectory);
-
-			// Delete DB/bin
-			FileUtil.DeleteFileOrDirectory(Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseProjectDirectory), "bin"));
-
-			// Delete Migrator/bin
-			FileUtil.DeleteFileOrDirectory(Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseMigratorProjectDirectory), "bin"));
 		}
 
 		/// <summary>

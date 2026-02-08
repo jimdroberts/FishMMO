@@ -68,13 +68,6 @@ namespace FishMMO.Shared
 			/// </summary>
 			public static readonly string IPFetchHost = "http://127.0.0.1:8080/";
 
-			public static readonly string DatabaseDirectory = "FishMMO-Database";
-			public static readonly string DatabaseProjectDirectory = "FishMMO-DB";
-			public static readonly string DatabaseMigratorProjectDirectory = "FishMMO-DB-Migrator";
-			public static readonly string ProjectPath = "." + Path.DirectorySeparatorChar + "FishMMO-Database" + Path.DirectorySeparatorChar + "FishMMO-DB" + Path.DirectorySeparatorChar + "FishMMO-DB.csproj";
-			public static readonly string StartupProject = "." + Path.DirectorySeparatorChar + "FishMMO-Database" + Path.DirectorySeparatorChar + "FishMMO-DB-Migrator" + Path.DirectorySeparatorChar + "FishMMO-DB-Migrator.csproj";
-
-			public static readonly string InstallerPath = "Assets" + Path.DirectorySeparatorChar + "Scenes" + Path.DirectorySeparatorChar + "Installer.unity";
 			public static readonly string ScenePath = "Assets/Scenes/";
 			public static readonly string BootstrapScenePath = "Assets/Scenes/";
 			public static readonly string ClientBootstrapScenePath = "Assets/Scenes/Client/";

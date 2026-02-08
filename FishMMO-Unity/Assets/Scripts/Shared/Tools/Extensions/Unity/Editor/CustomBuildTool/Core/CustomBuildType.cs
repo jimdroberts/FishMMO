@@ -8,7 +8,6 @@ namespace FishMMO.Shared.CustomBuildTool
 	{
 		Server = 0,
 		Client,
-		Installer,
 	}
 }
 #endif

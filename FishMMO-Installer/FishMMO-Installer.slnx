@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="../FishMMO-Logger/FishMMO-Logger/FishMMO-Logger.csproj" />
+  <Project Path="FishMMO-Installer/FishMMO-Installer.csproj" />
+</Solution>

@@ -3,7 +3,6 @@ using UnityEngine;
 using System;
 using FishNet.Connection;
 using FishNet.Serializing;
-using FishMMO.Database.Data.Enums;
 using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 
