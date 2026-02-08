@@ -59,18 +59,33 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Checks if DotNet SDK is installed and matches the required major version.
+		/// Checks if a compatible DotNet runtime is installed.
+		/// Uses 'dotnet --list-runtimes' to check for the required major version runtime,
+		/// since a newer SDK (e.g. 10.0) can build older target frameworks (e.g. net8.0).
 		/// </summary>
 		/// <returns>True if installed, otherwise false.</returns>
 		public static async Task<bool> IsDotNetInstalledAsync()
 		{
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
-			string arguments = $"{argPrefix} \"dotnet --version\"";
+			string arguments = $"{argPrefix} \"dotnet --list-runtimes\"";
 
 			return await InstallerProcessHelper.RunProcessAsync(shell, arguments, (e, o, err) =>
 			{
-				return e == 0 &&
-					   o.Contains(InstallationConstants.DotNetSDKMajorVersion, StringComparison.OrdinalIgnoreCase);
+				if (e != 0) return false;
+
+				// Check that a Microsoft.NETCore.App runtime matching the required major version is installed.
+				// Each line looks like: "Microsoft.NETCore.App 8.0.22 [/usr/share/dotnet/shared/...]"
+				using var reader = new StringReader(o);
+				string? line;
+				while ((line = reader.ReadLine()) != null)
+				{
+					if (line.StartsWith("Microsoft.NETCore.App") &&
+						line.Contains($" {InstallationConstants.DotNetSDKMajorVersion}"))
+					{
+						return true;
+					}
+				}
+				return false;
 			});
 		}
 
@@ -127,10 +142,10 @@ namespace FishMMO.Installer
 				var scriptContent = await InstallerProcessHelper.SharedHttpClient.GetStringAsync(InstallationConstants.DotNetInstallScriptUrl);
 				await File.WriteAllTextAsync(shScriptFile, scriptContent);
 
-				await InstallerProcessHelper.RunProcessAsync("chmod", $"+x {shScriptFile}");
+				await InstallerProcessHelper.RunProcessAsync("chmod", $"+x \"{shScriptFile}\"");
 
 				await InstallerProcessHelper.RunProcessAsync("/bin/bash",
-					$"{shScriptFile} --version {InstallationConstants.DotNetSDKVersion}",
+					$"\"{shScriptFile}\" --version {InstallationConstants.DotNetSDKVersion}",
 					(e, o, err) =>
 					{
 						if (e != 0)
@@ -250,7 +265,7 @@ namespace FishMMO.Installer
 		public static async Task<bool> RunEFMigrationAsync(string migrationName)
 		{
 			return await RunDotNetCommandAsync(
-				$"ef migrations add {migrationName} -p {InstallationConstants.ProjectPath} -s {InstallationConstants.StartupProject}");
+				$"ef migrations add {migrationName} -p \"{InstallationConstants.ProjectPath}\" -s \"{InstallationConstants.StartupProject}\"");
 		}
 
 		/// <summary>
@@ -260,7 +275,7 @@ namespace FishMMO.Installer
 		public static async Task<bool> RunEFDatabaseUpdateAsync()
 		{
 			return await RunDotNetCommandAsync(
-				$"ef database update -p {InstallationConstants.ProjectPath} -s {InstallationConstants.StartupProject}");
+				$"ef database update -p \"{InstallationConstants.ProjectPath}\" -s \"{InstallationConstants.StartupProject}\"");
 		}
 	}
 }

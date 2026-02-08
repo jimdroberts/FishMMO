@@ -70,6 +70,16 @@ namespace FishMMO.Installer
 
 			InstallerProcessHelper.Log($"Unity version: {version}");
 
+			// Check if this version is already installed
+			if (await IsUnityEditorInstalledAsync(version))
+			{
+				InstallerProcessHelper.Log($"Unity {version} is already installed.");
+				if (!InstallerProcessHelper.PromptForYesNo($"Would you like to reinstall or add modules to Unity {version}?"))
+				{
+					return;
+				}
+			}
+
 			List<string> selectedModules = PromptForModules();
 
 			if (!InstallerProcessHelper.PromptForYesNo($"Install Unity {version} with {selectedModules.Count} module(s)?"))
@@ -82,25 +92,69 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Checks if Unity Hub is installed by attempting to run the Unity Hub CLI.
+		/// Checks if Unity Hub is installed.
+		/// First checks if the binary exists on disk (fast), then falls back to running
+		/// the CLI headless command to verify it's functional.
 		/// </summary>
 		/// <returns>True if Unity Hub is detected, otherwise false.</returns>
 		private static async Task<bool> IsUnityHubInstalledAsync()
 		{
 			string hubPath = GetUnityHubCliPath();
+
+			// Fast check: does the binary exist on disk?
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				// On Linux, also check via 'which' in case it's in a non-standard location
+				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+				bool found = File.Exists(hubPath) ||
+					await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"which unityhub\"", (e, o, err) => e == 0);
+
+				if (found)
+				{
+					InstallerProcessHelper.Log("Unity Hub detected.");
+				}
+				return found;
+			}
+			else
+			{
+				// On Windows, check the expected install path
+				if (File.Exists(hubPath))
+				{
+					InstallerProcessHelper.Log("Unity Hub detected.");
+					return true;
+				}
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Checks if a specific Unity Editor version is already installed via Unity Hub CLI.
+		/// Runs 'unityhub -- --headless editors --installed' and searches for the version string.
+		/// </summary>
+		/// <param name="version">The Unity version to check for (e.g., "6000.3.2f1").</param>
+		/// <returns>True if the specified version is installed, otherwise false.</returns>
+		private static async Task<bool> IsUnityEditorInstalledAsync(string version)
+		{
+			string hubPath = GetUnityHubCliPath();
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 			string arguments = $"{argPrefix} \"\\\"{hubPath}\\\" -- --headless editors --installed\"";
 
-			bool installed = await InstallerProcessHelper.RunProcessAsync(shell, arguments, (exitCode, output, error) =>
+			return await InstallerProcessHelper.RunProcessAsync(shell, arguments, (exitCode, output, error) =>
 			{
-				return exitCode == 0;
-			});
+				if (exitCode != 0) return false;
 
-			if (installed)
-			{
-				InstallerProcessHelper.Log("Unity Hub detected.");
-			}
-			return installed;
+				// Each line of output looks like: "6000.3.2f1 installed at /path/to/Editor/Unity"
+				using var reader = new StringReader(output);
+				string? line;
+				while ((line = reader.ReadLine()) != null)
+				{
+					if (line.TrimStart().StartsWith(version, StringComparison.OrdinalIgnoreCase))
+					{
+						return true;
+					}
+				}
+				return false;
+			});
 		}
 
 		/// <summary>
