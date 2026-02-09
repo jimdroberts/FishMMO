@@ -7,10 +7,11 @@
 ## Features
 
 - Monitors multiple applications as defined in a configuration file
-- Supports start, stop, force-kill, force-restart, and shutdown commands via an interactive console
+- Supports start, stop, force-kill, force-restart, status, and shutdown commands via an interactive console
 - Tracks CPU and memory usage, with configurable thresholds
+- Headless mode for production daemon deployments
 - Graceful and forced shutdown of monitored applications
-- Circuit breaker and restart logic for fault tolerance
+- Circuit breaker and exponential backoff restart logic for fault tolerance
 - Structured logging with configurable output
 
 ## Getting Started
@@ -254,14 +255,20 @@ The main configuration file is `appsettings.json`. It should contain an `Applica
       "MonitoredPort": 12345,
       "PortTypes": ["TCP", "UDP"],
       "LaunchArguments": "--option value",
+      "Headless": false,
       "CheckIntervalSeconds": 10,
       "LaunchDelaySeconds": 2,
       "CpuThresholdPercent": 80,
       "MemoryThresholdMB": 500,
       "GracefulShutdownTimeoutSeconds": 15,
+      "ForceKillTimeoutSeconds": 5,
       "InitialRestartDelaySeconds": 5,
       "MaxRestartDelaySeconds": 60,
       "MaxRestartAttempts": 3,
+      "InitialHealthCheckDelaySeconds": 30,
+      "PostLaunchSettleDelaySeconds": 5,
+      "PortCheckTimeoutMs": 2000,
+      "WebSocketCheckTimeoutMs": 5000,
       "CircuitBreakerFailureThreshold": 5,
       "CircuitBreakerResetTimeoutMinutes": 10
     }
@@ -274,23 +281,29 @@ The main configuration file is `appsettings.json`. It should contain an `Applica
 #### Application Configuration Options
 - **Name**: Display name for the application.
 - **ApplicationExePath**: Full path to the executable to monitor (supports Windows, Linux, and macOS paths).
-- **MonitoredPort**: (Optional) Port number to check for application health.
-- **PortTypes**: (Optional) List of port types to monitor (`TCP`, `UDP`, `WebSocket`, or `None`).
+- **MonitoredPort**: (Optional) Port number to check for application health. Set to `0` or omit for process-only monitoring.
+- **PortTypes**: (Optional) List of port types to monitor (`TCP`, `UDP`, `WebSocket`). Omit or use an empty array `[]` for process-only monitoring.
 - **LaunchArguments**: (Optional) Command-line arguments for the application.
-- **CheckIntervalSeconds**: (Optional) How often to check application health (default: 10).
-- **LaunchDelaySeconds**: (Optional) Delay before launching the next application (default: 0).
-- **CpuThresholdPercent**: (Optional) CPU usage threshold for alerts/restarts.
-- **MemoryThresholdMB**: (Optional) Memory usage threshold for alerts/restarts.
-- **GracefulShutdownTimeoutSeconds**: (Optional) Time to wait for graceful shutdown before force-kill.
-- **InitialRestartDelaySeconds**: (Optional) Delay before first restart attempt.
-- **MaxRestartDelaySeconds**: (Optional) Maximum delay between restart attempts.
-- **MaxRestartAttempts**: (Optional) Maximum restart attempts before circuit breaker trips.
-- **CircuitBreakerFailureThreshold**: (Optional) Number of failures before circuit breaker trips.
-- **CircuitBreakerResetTimeoutMinutes**: (Optional) Time before circuit breaker resets.
+- **Headless**: (Optional) When `true`, launches the process with no visible window and shell execution disabled. Recommended for production daemon deployments (default: `false`).
+- **CheckIntervalSeconds**: (Optional) How often to check application health in seconds (default: `10`).
+- **LaunchDelaySeconds**: (Optional) Delay in seconds before launching the next application (default: `0`).
+- **CpuThresholdPercent**: (Optional) CPU usage threshold percentage for restart, must be between `0` and `100`. Set to `0` for no limit (default: `0`).
+- **MemoryThresholdMB**: (Optional) Memory usage threshold in megabytes for restart. Set to `0` for no limit (default: `0`).
+- **GracefulShutdownTimeoutSeconds**: (Optional) Time in seconds to wait for graceful shutdown before force-kill (default: `10`).
+- **ForceKillTimeoutSeconds**: (Optional) Time in seconds to wait for a force-killed process to exit (default: `5`).
+- **InitialRestartDelaySeconds**: (Optional) Initial delay in seconds before first restart attempt (default: `5`).
+- **MaxRestartDelaySeconds**: (Optional) Maximum delay in seconds between restart attempts using exponential backoff (default: `60`).
+- **MaxRestartAttempts**: (Optional) Maximum restart attempts before the monitor gives up (default: `5`).
+- **InitialHealthCheckDelaySeconds**: (Optional) Delay in seconds before the first full health check after launch, allowing the application time to initialize (default: `30`).
+- **PostLaunchSettleDelaySeconds**: (Optional) Delay in seconds to wait after launching or restarting the application before resuming health checks (default: `5`).
+- **PortCheckTimeoutMs**: (Optional) Timeout in milliseconds for TCP and UDP port health checks (default: `2000`).
+- **WebSocketCheckTimeoutMs**: (Optional) Timeout in milliseconds for WebSocket port health checks (default: `5000`).
+- **CircuitBreakerFailureThreshold**: (Optional) Consecutive port check failures required to trip the circuit breaker (default: `3`).
+- **CircuitBreakerResetTimeoutMinutes**: (Optional) Time in minutes before the circuit breaker attempts to reset (default: `5`).
 
 ### Logging
 
-Logging is configured via `logging.json` (see `loggingConfigName` in code). Adjust this file to control log output, format, and destinations.
+Logging is configured via `logging.json` (see `LoggingConfigName` in `Program.cs`). Adjust this file to control log output, format, and destinations.
 
 ## Console Commands
 
@@ -301,4 +314,9 @@ When running, the daemon accepts the following commands:
 - `stop` — Gracefully stop all monitored applications
 - `force-kill` — Immediately terminate all monitored applications
 - `force-restart` — Immediately terminate and restart all applications
+- `status` — Display the current status of all monitored applications (PID, state, restart count)
 - `shutdown` or `exit` — Gracefully stop the daemon and all applications
+
+## Known Limitations
+
+- **Console input on Linux**: The `shutdown` and `exit` commands signal the daemon to stop, but the console input reader (`Console.In.ReadLineAsync`) blocks until a line is submitted. After issuing `shutdown` or `exit`, you may need to press **Enter** one additional time (or use **Ctrl+C**) for the daemon process to fully exit. This is a .NET runtime limitation on Linux where standard input reads are not cancellable.

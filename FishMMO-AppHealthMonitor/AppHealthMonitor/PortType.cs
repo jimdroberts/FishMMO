@@ -2,14 +2,10 @@ namespace AppHealthMonitor
 {
 	/// <summary>
 	/// Specifies the type of port monitoring to perform for an application.
+	/// An empty list of <see cref="PortType"/> indicates process-only monitoring.
 	/// </summary>
 	public enum PortType
 	{
-		/// <summary>
-		/// No port monitoring. Only process health is checked.
-		/// </summary>
-		None,
-
 		/// <summary>
 		/// TCP port monitoring. Checks if TCP connections can be established.
 		/// </summary>
