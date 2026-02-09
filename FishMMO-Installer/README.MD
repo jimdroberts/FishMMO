@@ -14,7 +14,40 @@ A cross-platform .NET 8.0 console application that automates the installation an
 
 ## Prerequisites
 
-The only prerequisite is [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). If you don't have it, the installer can install it for you (option 1).
+A [.NET SDK](https://dotnet.microsoft.com/download/dotnet) (8.0 or newer) is required to build and run this project. The project targets `net8.0`, but any .NET SDK ≥ 8.0 (e.g., 10.0) can build it — you just need the .NET 8.0 **runtime** installed alongside it.
+
+> **Already have a newer .NET SDK?** If you can build and run the installer but are missing the .NET 8.0 runtime, use **menu option 1 (Install DotNet)** — the installer will detect that .NET 8.0 is missing and offer to install it for you.
+
+### Windows
+
+Download and run the [.NET 8.0 SDK installer](https://dotnet.microsoft.com/download/dotnet/8.0) from Microsoft, or install a newer SDK which includes backward-compatible runtime support.
+
+### Ubuntu / Debian
+
+```bash
+sudo apt-get update
+sudo apt-get install -y dotnet-sdk-8.0
+```
+
+Or install a newer SDK and add the 8.0 runtime:
+
+```bash
+sudo apt-get install -y dotnet-sdk-10.0 dotnet-runtime-8.0
+```
+
+### CachyOS / Arch Linux
+
+```bash
+sudo pacman -S dotnet-sdk-8.0
+```
+
+Or if you have a newer SDK (e.g., `dotnet-sdk`), install the 8.0 runtime alongside it:
+
+```bash
+sudo pacman -S dotnet-runtime-8.0
+```
+
+> **Verify your installation:** Run `dotnet --list-runtimes` and confirm you see a `Microsoft.NETCore.App 8.0.x` entry.
 
 ---
 
@@ -146,7 +179,7 @@ Installs Unity Hub, which is required before installing any Unity Editor version
 | **Ubuntu / Debian** | Adds the official Unity GPG key and apt repository (`hub.unity3d.com`), then runs `sudo apt-get install -y unityhub`. |
 | **CachyOS / Arch** | Detects an AUR helper (`yay` or `paru`) and installs the `unityhub` AUR package. |
 
-The installer detects whether Unity Hub is already present by running `unityhub -- --headless editors --installed`.
+The installer detects whether Unity Hub is already present by checking for the `unityhub` binary on disk.
 
 ### 4 — Install Unity Editor (+Modules)
 
