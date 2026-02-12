@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System.Runtime.InteropServices;
+using Microsoft.Extensions.Configuration;
 using FishMMO.Logging;
 
 namespace AppHealthMonitor
@@ -85,12 +86,35 @@ namespace AppHealthMonitor
 					};
 					Console.CancelKeyPress += cancelHandler;
 
+					// SIGTERM (.NET default: Environment.Exit) does NOT await IAsyncDisposable,
+					// so DisposeAsync would never run and child processes would be orphaned.
+					// Setting Cancel = true suppresses Environment.Exit, allowing the await using
+					// block to unwind naturally through the orchestrator's shutdown path.
+					using var sigTermRegistration = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+					{
+						if (!orchestrator.IsDaemonShutdownRequested)
+						{
+							Log.Info("Daemon", "SIGTERM received. Signalling daemon shutdown...");
+							orchestrator.Shutdown();
+						}
+						context.Cancel = true;
+					});
+
 					try
 					{
 						var commandHandler = new CommandHandler(orchestrator, orchestrator.Headless);
 
 						Log.Info("Daemon", "\nApplication Health Monitor Daemon is ready.");
-						Log.Info("Daemon", "Type 'help' to list available commands.");
+
+						if (orchestrator.Headless)
+						{
+							Log.Info("Daemon", "Headless mode active. Auto-starting monitoring.");
+							orchestrator.TrySignalStart();
+						}
+						else
+						{
+							Log.Info("Daemon", "Type 'help' to list available commands.");
+						}
 
 						var orchestratorTask = orchestrator.RunAsync();
 						var commandTask = commandHandler.RunAsync();
@@ -98,7 +122,16 @@ namespace AppHealthMonitor
 						try
 						{
 							await Task.WhenAll(orchestratorTask, commandTask);
-							Log.Warning("Daemon", "All daemon tasks have concluded. Application Health Monitor Daemon stopped gracefully.");
+
+							if (orchestrator.HeadlessCycleCompleted)
+							{
+								Log.Warning("Daemon", "Headless monitoring cycle ended (all monitors exhausted). Exiting with failure code.");
+								Environment.ExitCode = 1;
+							}
+							else
+							{
+								Log.Info("Daemon", "All daemon tasks have concluded. Application Health Monitor Daemon stopped gracefully.");
+							}
 						}
 						catch (Exception)
 						{

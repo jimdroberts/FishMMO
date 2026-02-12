@@ -77,6 +77,13 @@ namespace AppHealthMonitor
 		public CancellationToken DaemonShutdownToken => daemonCts.Token;
 
 		/// <summary>
+		/// Gets whether the daemon shut down automatically after a headless monitoring cycle completed.
+		/// When true, all monitors exhausted their restart attempts or failed initial launch,
+		/// and the daemon should exit with a non-zero exit code to prevent systemd restart loops.
+		/// </summary>
+		public bool HeadlessCycleCompleted { get; private set; }
+
+		/// <summary>
 		/// Initializes a new instance of the <see cref="DaemonOrchestrator"/> class.
 		/// Applies defaults, validates, detects duplicate names, creates health checkers,
 		/// and logs configuration for each app in a single pass.
@@ -149,8 +156,7 @@ namespace AppHealthMonitor
 				{ "MaxRestartAttempts", appConfig.MaxRestartAttempts },
 				{ "PortCheckTimeout", $"{appConfig.PortCheckTimeoutMs}ms" },
 				{ "WebSocketCheckTimeout", $"{appConfig.WebSocketCheckTimeoutMs}ms" },
-				{ "CircuitBreakerFailureThreshold", appConfig.CircuitBreakerFailureThreshold },
-				{ "CircuitBreakerResetTimeout", $"{appConfig.CircuitBreakerResetTimeoutMinutes}min" }
+				{ "CircuitBreakerFailureThreshold", appConfig.CircuitBreakerFailureThreshold }
 			};
 
 			Log.Info("Orchestration", $"Application Configuration for {appConfig.Name}:", data: appDetails);
@@ -283,6 +289,8 @@ namespace AppHealthMonitor
 		/// <summary>
 		/// Runs the main orchestration loop. Waits for start signals, launches monitors,
 		/// and handles stop/shutdown. Returns when the daemon token is cancelled.
+		/// In headless mode, automatically initiates daemon shutdown after the monitoring cycle
+		/// completes, since no interactive console is available to issue further commands.
 		/// </summary>
 		/// <returns>A task representing the asynchronous orchestration operation.</returns>
 		public async Task RunAsync()
@@ -305,6 +313,16 @@ namespace AppHealthMonitor
 
 					Log.Info("Orchestration", "'start' command received. Launching application monitors.");
 					await RunMonitoringCycleAsync();
+
+					// In headless mode, no interactive console exists to issue further commands.
+					// Without this, the daemon would hang forever on the semaphore wait as a zombie.
+					if (headless && !daemonCts.IsCancellationRequested)
+					{
+						Log.Info("Orchestration", "Headless monitoring cycle completed. Initiating automatic daemon shutdown.");
+						HeadlessCycleCompleted = true;
+						daemonCts.Cancel();
+						break;
+					}
 				}
 				Log.Info("Orchestration", "Monitoring orchestration loop exited.");
 			}
@@ -411,9 +429,9 @@ namespace AppHealthMonitor
 					}
 				}
 
-				Log.Warning("Orchestration", "Current monitoring cycle concluded. Initiating cleanup of applications.");
+				Log.Info("Orchestration", "Current monitoring cycle concluded. Initiating cleanup of applications.");
 				await CleanupAllMonitorsAsync();
-				Log.Warning("Orchestration", "Applications cleaned up for this cycle.");
+				Log.Info("Orchestration", "Applications cleaned up for this cycle.");
 			}
 			finally
 			{

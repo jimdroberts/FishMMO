@@ -160,24 +160,27 @@ namespace AppHealthMonitor
 
 			Register("status", "Displays the current status of all monitored applications.", () =>
 			{
+				string monitoringState = orchestrator.IsMonitoringActive() ? "ACTIVE" : "WAITING";
 				var statuses = orchestrator.GetActiveMonitorStatuses();
+
+				Log.Info("DaemonCommand", $"--- Monitor Status (Monitoring: {monitoringState}) ---");
 				if (statuses.Count == 0)
 				{
-					Log.Info("DaemonCommand", "No active monitors.");
-					return Task.CompletedTask;
+					Log.Info("DaemonCommand", "  No active monitors.");
 				}
-
-				Log.Info("DaemonCommand", "--- Monitor Status ---");
-				foreach (var status in statuses)
+				else
 				{
-					string pid = status.ProcessId.HasValue ? status.ProcessId.Value.ToString() : "N/A";
-					string state = status.MaxRestartsReached ? "EXHAUSTED"
-						: status.IsCircuitOpen ? "CIRCUIT OPEN"
-						: !status.HasCompletedInitialCheck ? "STARTING"
-						: status.IsRunning ? "HEALTHY"
-						: "DOWN";
-					Log.Info("DaemonCommand",
-						$"  {status.Name,-20} PID: {pid,-8} State: {state,-14} Restarts: {status.RestartAttempts}/{status.MaxRestartAttempts}");
+					foreach (var status in statuses)
+					{
+						string pid = status.ProcessId.HasValue ? status.ProcessId.Value.ToString() : "N/A";
+						string state = status.MaxRestartsReached ? "EXHAUSTED"
+
+							: !status.HasCompletedInitialCheck ? "STARTING"
+							: status.IsRunning ? "HEALTHY"
+							: "DOWN";
+						Log.Info("DaemonCommand",
+							$"  {status.Name,-20} PID: {pid,-8} State: {state,-14} Restarts: {status.RestartAttempts}/{status.MaxRestartAttempts} PortFail: {status.ConsecutivePortFailures} ResFail: {status.ConsecutiveResourceFailures}");
+					}
 				}
 				Log.Info("DaemonCommand", "----------------------");
 				return Task.CompletedTask;

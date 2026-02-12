@@ -25,7 +25,8 @@ namespace AppHealthMonitor
 
 			try
 			{
-				var uri = new Uri($"ws://{host}:{port}");
+				string formattedHost = host.Contains(':') ? $"[{host}]" : host;
+				var uri = new Uri($"ws://{formattedHost}:{port}");
 				await ws.ConnectAsync(uri, timeoutCts.Token);
 
 				if (ws.State == WebSocketState.Open)

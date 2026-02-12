@@ -84,11 +84,6 @@ namespace AppHealthMonitor
 		public int CircuitBreakerFailureThreshold { get; set; }
 
 		/// <summary>
-		/// Gets or sets the time before circuit breaker attempts reset in minutes.
-		/// </summary>
-		public int CircuitBreakerResetTimeoutMinutes { get; set; }
-
-		/// <summary>
 		/// Gets or sets the delay in seconds before the first full health check after launch.
 		/// Allows the application time to fully initialize before being evaluated.
 		/// </summary>
@@ -245,9 +240,9 @@ namespace AppHealthMonitor
 				return false;
 			}
 
-			if (CircuitBreakerResetTimeoutMinutes > 1440)
+			if (CircuitBreakerFailureThreshold > 100)
 			{
-				error = $"CircuitBreakerResetTimeoutMinutes ({CircuitBreakerResetTimeoutMinutes}) exceeds 1440 (24h) for '{Name}'.";
+				error = $"CircuitBreakerFailureThreshold ({CircuitBreakerFailureThreshold}) exceeds 100 for '{Name}'.";
 				return false;
 			}
 
@@ -287,9 +282,9 @@ namespace AppHealthMonitor
 				return false;
 			}
 
-			if (CircuitBreakerFailureThreshold > MaxRestartAttempts)
+			if (MemoryThresholdMB > 1048576)
 			{
-				error = $"CircuitBreakerFailureThreshold ({CircuitBreakerFailureThreshold}) exceeds MaxRestartAttempts ({MaxRestartAttempts}) for '{Name}'. The circuit breaker will never trip because restart attempts are exhausted first.";
+				error = $"MemoryThresholdMB ({MemoryThresholdMB}) exceeds 1048576 (1TB) for '{Name}'.";
 				return false;
 			}
 
@@ -309,7 +304,6 @@ namespace AppHealthMonitor
 			MaxRestartDelaySeconds = Math.Max(MaxRestartDelaySeconds, 1);
 			MaxRestartAttempts = Math.Max(MaxRestartAttempts, 1);
 			CircuitBreakerFailureThreshold = Math.Max(CircuitBreakerFailureThreshold, 1);
-			CircuitBreakerResetTimeoutMinutes = Math.Max(CircuitBreakerResetTimeoutMinutes, 1);
 			InitialHealthCheckDelaySeconds = Math.Max(InitialHealthCheckDelaySeconds, 1);
 			PostLaunchSettleDelaySeconds = Math.Max(PostLaunchSettleDelaySeconds, 1);
 			PortCheckTimeoutMs = Math.Max(PortCheckTimeoutMs, 1);
@@ -326,7 +320,7 @@ namespace AppHealthMonitor
 			// Deduplicate PortTypes to prevent redundant health checkers.
 			if (PortTypes.Count > 1)
 			{
-				PortTypes = PortTypes.Distinct().ToList();
+				PortTypes = new List<PortType>(new HashSet<PortType>(PortTypes));
 			}
 		}
 	}

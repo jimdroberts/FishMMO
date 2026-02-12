@@ -8,11 +8,12 @@
 
 - **Multi-application monitoring** with per-app configuration, health checks, and resource tracking
 - **Interactive console** with start, stop, force-kill, force-restart, status, and shutdown commands
-- **Headless mode** for production daemon deployments (suppresses interactive prompt)
-- **Circuit breaker** with half-open probe recovery, exponential backoff with jitter, and configurable failure thresholds
+- **Headless mode** for production daemon deployments (auto-starts monitoring, auto-shuts down after cycle completion, suppresses interactive prompt)
+- **Circuit breaker** with configurable failure thresholds, exponential backoff with jitter, and automatic restart
 - **CPU and memory monitoring** with configurable thresholds and transient failure tolerance
 - **Port health checks** via TCP, UDP, and WebSocket with configurable timeouts and host address
 - **Graceful and forced shutdown** with platform-specific signals (SIGTERM on Linux/macOS, CloseMainWindow on Windows)
+- **SIGTERM signal handling** for clean daemon shutdown in Docker and systemd environments (prevents child process orphaning)
 - **Kill-before-launch lifecycle** preventing port-bind conflicts, with atomic process reference management
 - **Drift-free health check cadence** via `PeriodicTimer`
 - **Comprehensive startup validation** — executable paths, port/PortType consistency, duplicate names, upper-bound limits, and host format
@@ -26,7 +27,7 @@
 
 | File | Responsibility |
 |------|----------------|
-| `Program.cs` | Entry point — config loading, logging init, Ctrl+C lifecycle, exit codes on all error paths |
+| `Program.cs` | Entry point — config loading, logging init, Ctrl+C and SIGTERM lifecycle, exit codes on all error paths |
 | `AppConfig.cs` | Configuration POCO with defaults, validation, path resolution, and deduplication |
 | `DaemonOrchestrator.cs` | Daemon lifecycle, monitor creation/cleanup, start/stop signaling, race-free disposal |
 | `HealthMonitor.cs` | Per-app monitoring loop — process lifecycle, health checks, circuit breaker, restarts |
@@ -93,7 +94,7 @@ Type=simple
 User=your-username
 WorkingDirectory=/home/username/FishMMO-AppHealthMonitor
 ExecStart=/home/username/FishMMO-AppHealthMonitor/AppHealthMonitor/bin/Release/net8.0/AppHealthMonitor
-Restart=always
+Restart=on-failure
 RestartSec=10
 
 [Install]
@@ -142,8 +143,7 @@ Each entry in the `Applications` array defines an application to monitor. Names 
       "PostLaunchSettleDelaySeconds": 5,
       "PortCheckTimeoutMs": 2000,
       "WebSocketCheckTimeoutMs": 5000,
-      "CircuitBreakerFailureThreshold": 5,
-      "CircuitBreakerResetTimeoutMinutes": 10
+      "CircuitBreakerFailureThreshold": 5
     }
   ]
 }
@@ -155,7 +155,7 @@ Each entry in the `Applications` array defines an application to monitor. Names 
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| **Headless** | Launches apps with no window; suppresses console prompt | `false` |
+| **Headless** | Launches apps with no window; auto-starts monitoring; auto-shuts down after cycle completion; suppresses console prompt | `false` |
 
 #### Application Options
 
@@ -169,7 +169,7 @@ Each entry in the `Applications` array defines an application to monitor. Names 
 | **CheckIntervalSeconds** | Health check interval | `5` | 5–3600 |
 | **LaunchDelaySeconds** | Delay before launching the next monitor | `0` | 0–3600 |
 | **CpuThresholdPercent** | CPU threshold for restart (`0` = disabled) | `0` | 0–100 |
-| **MemoryThresholdMB** | Memory threshold in MB (`0` = disabled) | `0` | ≥ 0 |
+| **MemoryThresholdMB** | Memory threshold in MB (`0` = disabled) | `0` | 0–1048576 |
 | **GracefulShutdownTimeoutSeconds** | Graceful shutdown wait | `10` | 1–120 |
 | **ForceKillTimeoutSeconds** | Force-kill wait | `5` | 1–60 |
 | **HealthCheckHost** | Target address for port checks | `127.0.0.1` | Valid host/IP |
@@ -181,8 +181,7 @@ Each entry in the `Applications` array defines an application to monitor. Names 
 | **PostLaunchSettleDelaySeconds** | Settle delay after launch/restart | `5` | 1–300 |
 | **PortCheckTimeoutMs** | TCP/UDP check timeout | `2000` | 1–30000 |
 | **WebSocketCheckTimeoutMs** | WebSocket check timeout | `5000` | 1–60000 |
-| **CircuitBreakerFailureThreshold** | Port failures to trip circuit breaker (must be ≤ MaxRestartAttempts) | `3` | 1–100 |
-| **CircuitBreakerResetTimeoutMinutes** | Time before half-open probe | `5` | 1–1440 |
+| **CircuitBreakerFailureThreshold** | Consecutive port failures to trigger restart | `3` | 1–100 |
 
 > Values below the minimum are clamped automatically. Setting `MonitoredPort` without `PortTypes` (or vice versa) is rejected at startup.
 
@@ -199,7 +198,7 @@ Configured via `logging.json` (FishMMO-Logger). If absent, library defaults appl
 | `stop` | Gracefully stop all monitored applications |
 | `force-kill` | Immediately terminate all applications |
 | `force-restart` | Immediately terminate and restart all applications |
-| `status` | Show PID, state (`STARTING`/`HEALTHY`/`DOWN`/`CIRCUIT OPEN`/`EXHAUSTED`), restart count |
+| `status` | Show monitoring state (`ACTIVE`/`WAITING`), PID, state (`STARTING`/`HEALTHY`/`DOWN`/`EXHAUSTED`), restart count, port/resource failure counts |
 | `shutdown` / `exit` | Gracefully stop the daemon and all applications |
 
 ## Known Limitations

@@ -10,6 +10,15 @@ namespace AppHealthMonitor
 	public static class HealthCheckerFactory
 	{
 		/// <summary>
+		/// Singleton health checker instances. Each checker is fully stateless — connections are
+		/// created and disposed within each <see cref="IHealthChecker.IsResponsiveAsync"/> call —
+		/// so a single instance can be safely shared across all monitors.
+		/// </summary>
+		private static readonly IHealthChecker TcpInstance = new TcpHealthChecker();
+		private static readonly IHealthChecker UdpInstance = new UdpHealthChecker();
+		private static readonly IHealthChecker WebSocketInstance = new WebSocketHealthChecker();
+
+		/// <summary>
 		/// Creates a read-only list of health checkers corresponding to the given port types.
 		/// </summary>
 		/// <param name="portTypes">The port types to create checkers for. An empty list results in process-only monitoring.</param>
@@ -28,9 +37,9 @@ namespace AppHealthMonitor
 			{
 				IHealthChecker checker = portType switch
 				{
-					PortType.TCP => new TcpHealthChecker(),
-					PortType.UDP => new UdpHealthChecker(),
-					PortType.WebSocket => new WebSocketHealthChecker(),
+					PortType.TCP => TcpInstance,
+					PortType.UDP => UdpInstance,
+					PortType.WebSocket => WebSocketInstance,
 					_ => throw new ArgumentOutOfRangeException(nameof(portTypes), portType, $"Unsupported PortType '{portType}'.")
 				};
 

@@ -20,10 +20,17 @@ namespace AppHealthMonitor
 		private readonly TimeSpan checkInterval;
 		private readonly TimeSpan gracefulShutdownTimeout;
 		private readonly TimeSpan forceKillTimeout;
+
+		/// <summary>
+		/// Maximum total time allowed for the entire kill sequence (graceful + force + safety margin).
+		/// Computed per-monitor from configured timeouts to prevent silent truncation.
+		/// Prevents the daemon from hanging indefinitely on zombie processes.
+		/// </summary>
+		private readonly TimeSpan killTimeout;
+
 		private readonly long memoryThresholdBytes;
 		private readonly TimeSpan initialRestartDelay;
 		private readonly TimeSpan maxRestartDelay;
-		private readonly TimeSpan circuitBreakerResetTimeout;
 		private readonly TimeSpan initialHealthCheckDelay;
 		private readonly TimeSpan postLaunchSettleDelay;
 		private readonly int cpuThresholdPercent;
@@ -52,33 +59,16 @@ namespace AppHealthMonitor
 		private int currentRestartAttemptCount;
 
 		/// <summary>
-		/// The current exponential backoff delay before the next restart attempt.
-		/// </summary>
-		private TimeSpan currentCalculatedRestartDelay;
-
-		/// <summary>
 		/// Number of consecutive port check failures in the current monitoring cycle.
-		/// Only mutated from the single monitoring loop task.
+		/// Only mutated from the single monitoring loop task. Cross-thread reads via <see cref="GetStatus"/>.
 		/// </summary>
 		private int consecutivePortCheckFailures;
 
 		/// <summary>
 		/// Number of consecutive CPU/memory check failures in the current monitoring cycle.
-		/// Only mutated from the single monitoring loop task.
+		/// Only mutated from the single monitoring loop task. Cross-thread reads via <see cref="GetStatus"/>.
 		/// </summary>
 		private int consecutiveResourceCheckFailures;
-
-		/// <summary>
-		/// Whether the circuit breaker is currently tripped open.
-		/// Only mutated from the single monitoring loop task.
-		/// </summary>
-		private bool isCircuitOpen;
-
-		/// <summary>
-		/// The UTC timestamp when the circuit breaker was last opened.
-		/// Only mutated from the single monitoring loop task.
-		/// </summary>
-		private DateTime circuitOpenTimestamp;
 
 		/// <summary>
 		/// The currently monitored OS process, or null if none is tracked.
@@ -161,10 +151,10 @@ namespace AppHealthMonitor
 		private const int SigTerm = 15;
 
 		/// <summary>
-		/// Maximum total time allowed for graceful + force kill during shutdown.
-		/// Prevents the daemon from hanging indefinitely on zombie processes.
+		/// Safety margin in seconds added to the combined graceful + force-kill timeout
+		/// to account for process.Refresh() calls, logging, and code between kill phases.
 		/// </summary>
-		private static readonly TimeSpan MaxKillTimeout = TimeSpan.FromSeconds(60);
+		private const int KillTimeoutSafetyMarginSeconds = 5;
 
 		/// <summary>
 		/// Sends a POSIX signal to a process. Used for graceful SIGTERM shutdown on Linux and macOS.
@@ -203,12 +193,12 @@ namespace AppHealthMonitor
 			checkInterval = TimeSpan.FromSeconds(config.CheckIntervalSeconds);
 			gracefulShutdownTimeout = TimeSpan.FromSeconds(config.GracefulShutdownTimeoutSeconds);
 			forceKillTimeout = TimeSpan.FromSeconds(config.ForceKillTimeoutSeconds);
+			killTimeout = gracefulShutdownTimeout + forceKillTimeout + TimeSpan.FromSeconds(KillTimeoutSafetyMarginSeconds);
 			initialHealthCheckDelay = TimeSpan.FromSeconds(config.InitialHealthCheckDelaySeconds);
 			postLaunchSettleDelay = TimeSpan.FromSeconds(config.PostLaunchSettleDelaySeconds);
 			memoryThresholdBytes = (long)config.MemoryThresholdMB * 1024L * 1024L;
 			initialRestartDelay = TimeSpan.FromSeconds(config.InitialRestartDelaySeconds);
 			maxRestartDelay = TimeSpan.FromSeconds(config.MaxRestartDelaySeconds);
-			circuitBreakerResetTimeout = TimeSpan.FromMinutes(config.CircuitBreakerResetTimeoutMinutes);
 			cpuThresholdPercent = config.CpuThresholdPercent;
 			circuitBreakerFailureThreshold = config.CircuitBreakerFailureThreshold;
 			monitoredPort = config.MonitoredPort;
@@ -218,7 +208,6 @@ namespace AppHealthMonitor
 			resourceCheckFailureThreshold = config.ResourceCheckFailureThreshold;
 			healthCheckHost = config.HealthCheckHost;
 
-			currentCalculatedRestartDelay = initialRestartDelay;
 			portCheckTasks = new Task<bool>[this.healthCheckers.Count];
 			isProcessOnlyMonitoring = this.healthCheckers.Count == 0;
 
@@ -279,9 +268,10 @@ namespace AppHealthMonitor
 				running,
 				Volatile.Read(ref currentRestartAttemptCount),
 				maxRestartAttempts,
-				Volatile.Read(ref isCircuitOpen),
 				Volatile.Read(ref maxRestartsReached),
-				Volatile.Read(ref hasCompletedInitialCheck));
+				Volatile.Read(ref hasCompletedInitialCheck),
+				Volatile.Read(ref consecutivePortCheckFailures),
+				Volatile.Read(ref consecutiveResourceCheckFailures));
 		}
 
 		/// <summary>
@@ -348,7 +338,7 @@ namespace AppHealthMonitor
 					{
 						if (isTransientFailure)
 						{
-							consecutiveResourceCheckFailures++;
+							Volatile.Write(ref consecutiveResourceCheckFailures, consecutiveResourceCheckFailures + 1);
 							Log.Warning(logSource, $"Transient resource check failure. Consecutive: {consecutiveResourceCheckFailures}/{resourceCheckFailureThreshold}.");
 							if (consecutiveResourceCheckFailures >= resourceCheckFailureThreshold)
 							{
@@ -359,13 +349,13 @@ namespace AppHealthMonitor
 						else
 						{
 							Log.Error(logSource, "CPU or Memory usage exceeds configured thresholds.");
-							consecutiveResourceCheckFailures = 0;
+							Volatile.Write(ref consecutiveResourceCheckFailures, 0);
 							needsRestart = true;
 						}
 					}
 					else
 					{
-						consecutiveResourceCheckFailures = 0;
+						Volatile.Write(ref consecutiveResourceCheckFailures, 0);
 						if (!isProcessOnlyMonitoring)
 						{
 							try
@@ -393,12 +383,9 @@ namespace AppHealthMonitor
 						break;
 					}
 				}
-				else if (!isCircuitOpen)
+				else
 				{
-					// Only reset restart counters when the app is genuinely healthy and the circuit is closed.
-					// While the circuit is open, preserve the restart budget to prevent unlimited retries.
 					Volatile.Write(ref currentRestartAttemptCount, 0);
-					currentCalculatedRestartDelay = initialRestartDelay;
 					Log.Info(logSource, "Application is healthy.");
 				}
 
@@ -426,50 +413,21 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
-		/// Evaluates the circuit breaker state and performs port health checks.
-		/// When the circuit is open and the reset timeout expires (half-open state),
-		/// a single probe check is performed. Failure keeps the circuit open without triggering
-		/// a restart, preventing a kill-restart-fail-open loop.
+		/// Performs port health checks and tracks consecutive failures against the circuit breaker threshold.
+		/// When the threshold is reached, triggers a restart and resets the failure counter.
 		/// </summary>
 		/// <returns>True if a restart is needed; otherwise, false.</returns>
 		private async Task<bool> EvaluateCircuitBreakerAndPortHealth()
 		{
-			if (isCircuitOpen)
-			{
-				var elapsed = DateTime.UtcNow - circuitOpenTimestamp;
-				if (elapsed < circuitBreakerResetTimeout)
-				{
-					var remaining = Math.Ceiling((circuitBreakerResetTimeout - elapsed).TotalSeconds);
-					Log.Warning(logSource, $"Circuit Breaker is OPEN. Skipping port checks. Resets in {remaining}s.");
-					return false;
-				}
-
-				Log.Warning(logSource, "Circuit Breaker reset timeout reached. Attempting half-open probe check.");
-				if (await CheckApplicationPortsResponsiveness())
-				{
-					Log.Info(logSource, "Circuit Breaker closed successfully. Ports are healthy.");
-					Volatile.Write(ref isCircuitOpen, false);
-					consecutivePortCheckFailures = 0;
-					return false;
-				}
-
-				// Half-open probe failed: keep the circuit open and reset the timer.
-				// Do NOT trigger a restart here — the app was already restarted when the circuit first opened.
-				Log.Error(logSource, "Circuit Breaker remains OPEN. Half-open probe failed. Resetting timeout.");
-				circuitOpenTimestamp = DateTime.UtcNow;
-				return false;
-			}
-
 			if (!await CheckApplicationPortsResponsiveness())
 			{
-				consecutivePortCheckFailures++;
+				Volatile.Write(ref consecutivePortCheckFailures, consecutivePortCheckFailures + 1);
 				Log.Warning(logSource, $"Port check failed. Consecutive failures: {consecutivePortCheckFailures}/{circuitBreakerFailureThreshold}.");
 
 				if (consecutivePortCheckFailures >= circuitBreakerFailureThreshold)
 				{
-					Log.Error(logSource, "Circuit Breaker OPEN! Too many consecutive port failures.");
-					Volatile.Write(ref isCircuitOpen, true);
-					circuitOpenTimestamp = DateTime.UtcNow;
+					Log.Error(logSource, "Circuit breaker threshold reached. Too many consecutive port failures. Triggering restart.");
+					Volatile.Write(ref consecutivePortCheckFailures, 0);
 					return true;
 				}
 				return false;
@@ -477,7 +435,7 @@ namespace AppHealthMonitor
 
 			if (consecutivePortCheckFailures > 0)
 			{
-				consecutivePortCheckFailures = 0;
+				Volatile.Write(ref consecutivePortCheckFailures, 0);
 				Log.Info(logSource, "Port check successful. Consecutive failures reset.");
 			}
 			return false;
@@ -493,8 +451,7 @@ namespace AppHealthMonitor
 		/// <returns>A task that represents the asynchronous restart operation.</returns>
 		private async Task HandleApplicationRestart()
 		{
-			Volatile.Write(ref currentRestartAttemptCount, currentRestartAttemptCount + 1);
-			int attempt = currentRestartAttemptCount;
+			int attempt = Interlocked.Increment(ref currentRestartAttemptCount);
 
 			if (attempt > maxRestartAttempts)
 			{
@@ -502,12 +459,12 @@ namespace AppHealthMonitor
 				return;
 			}
 
-			// Compute the backoff delay BEFORE using it so the ramp applies from the first retry.
-			currentCalculatedRestartDelay = TimeSpan.FromSeconds(
+			// Compute the backoff delay with exponential growth, capped at the configured maximum.
+			var backoffDelay = TimeSpan.FromSeconds(
 				Math.Min(maxRestartDelay.TotalSeconds, initialRestartDelay.TotalSeconds * Math.Pow(2, attempt - 1))
 			);
 
-			TimeSpan delayToUse = ApplyJitter(currentCalculatedRestartDelay);
+			TimeSpan delayToUse = ApplyJitter(backoffDelay);
 
 			Log.Warning(logSource, $"Application unhealthy. Attempting restart (Attempt {attempt}/{maxRestartAttempts}).");
 			Log.Warning(logSource, $"Next restart in {delayToUse.TotalSeconds:F1} seconds...");
@@ -525,10 +482,11 @@ namespace AppHealthMonitor
 			await KillApplicationAsync();
 			await LaunchApplicationAsync();
 
-			// Reset consecutive failure counters so the freshly restarted application
-			// gets a clean evaluation window instead of immediately hitting thresholds.
-			consecutivePortCheckFailures = 0;
-			consecutiveResourceCheckFailures = 0;
+			// Reset consecutive failure counters so the freshly restarted application gets
+			// a clean evaluation window. Exponential backoff and MaxRestartAttempts already
+			// prevent rapid-fire restart loops.
+			Volatile.Write(ref consecutivePortCheckFailures, 0);
+			Volatile.Write(ref consecutiveResourceCheckFailures, 0);
 
 			// Only wait for the settle delay if the launch actually succeeded.
 			// If the process failed to start, skip the delay so the next health check cycle
@@ -677,15 +635,15 @@ namespace AppHealthMonitor
 
 			try
 			{
-				await Task.WhenAll(portCheckTasks);
-			}
-			catch (Exception ex) when (ex is not OperationCanceledException)
-			{
-				Log.Error(logSource, $"Port check encountered an unexpected error: {ex.Message}", ex);
-			}
+				try
+				{
+					await Task.WhenAll(portCheckTasks);
+				}
+				catch (Exception ex) when (ex is not OperationCanceledException)
+				{
+					Log.Error(logSource, $"Port check encountered an unexpected error: {ex.Message}", ex);
+				}
 
-			try
-			{
 				bool allResponsive = true;
 				for (int i = 0; i < portCheckTasks.Length; i++)
 				{
@@ -827,7 +785,8 @@ namespace AppHealthMonitor
 		/// Asynchronously terminates the monitored application process.
 		/// Attempts graceful shutdown first (SIGTERM on Linux/macOS, CloseMainWindow on Windows),
 		/// then force-kills if the process does not exit within the configured timeout.
-		/// Uses a bounded overall timeout to prevent the daemon from hanging on zombie processes.
+		/// Uses a standalone bounded timeout (not linked to the monitoring lifecycle token) to ensure
+		/// graceful shutdown is always honored, even during stop/shutdown disposal.
 		/// </summary>
 		/// <returns>A task representing the asynchronous kill operation.</returns>
 		public async Task KillApplicationAsync()
@@ -839,10 +798,13 @@ namespace AppHealthMonitor
 				return;
 			}
 
-			// Use a bounded CTS linked with the daemon cancellation token to prevent hanging
-			// indefinitely on zombie processes and to allow immediate exit during force-shutdown.
-			using var killTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-			killTimeoutCts.CancelAfter(MaxKillTimeout);
+			// Use a standalone bounded CTS to prevent hanging indefinitely on zombie processes.
+			// This is intentionally NOT linked to cancellationToken — the monitoring lifecycle
+			// token is already cancelled during stop/shutdown, which would pre-cancel the CTS
+			// and bypass all graceful shutdown waits.
+			// The timeout is computed per-monitor from configured graceful + force-kill timeouts
+			// plus a safety margin, ensuring user-configured timeouts are fully honored.
+			using var killTimeoutCts = new CancellationTokenSource(killTimeout);
 
 			try
 			{
