@@ -14,8 +14,14 @@ namespace AppHealthMonitor
 		/// created and disposed within each <see cref="IHealthChecker.IsResponsiveAsync"/> call —
 		/// so a single instance can be safely shared across all monitors.
 		/// </summary>
+
+		/// <summary>Singleton TCP health checker instance.</summary>
 		private static readonly IHealthChecker TcpInstance = new TcpHealthChecker();
+
+		/// <summary>Singleton UDP health checker instance.</summary>
 		private static readonly IHealthChecker UdpInstance = new UdpHealthChecker();
+
+		/// <summary>Singleton WebSocket health checker instance.</summary>
 		private static readonly IHealthChecker WebSocketInstance = new WebSocketHealthChecker();
 
 		/// <summary>
@@ -23,8 +29,11 @@ namespace AppHealthMonitor
 		/// </summary>
 		/// <param name="portTypes">The port types to create checkers for. An empty list results in process-only monitoring.</param>
 		/// <returns>A read-only list of health checker instances.</returns>
+		/// <exception cref="ArgumentNullException">Thrown when <paramref name="portTypes"/> is null.</exception>
 		public static IReadOnlyList<IHealthChecker> Create(IReadOnlyList<PortType> portTypes)
 		{
+			ArgumentNullException.ThrowIfNull(portTypes);
+
 			if (portTypes.Count == 0)
 			{
 				return Array.Empty<IHealthChecker>();

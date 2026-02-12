@@ -27,7 +27,7 @@ namespace AppHealthMonitor
 		/// <summary>
 		/// Pre-built help text string, cached after all commands are registered.
 		/// </summary>
-		private string cachedHelpText = string.Empty;
+		private readonly string cachedHelpText;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CommandHandler"/> class.
@@ -42,13 +42,14 @@ namespace AppHealthMonitor
 			this.headless = headless;
 
 			RegisterCommands();
-			BuildHelpText();
+			cachedHelpText = BuildHelpText();
 		}
 
 		/// <summary>
-		/// Builds and caches the sorted help text string. Called once after all commands are registered.
+		/// Builds and returns the sorted help text string. Called once after all commands are registered.
 		/// </summary>
-		private void BuildHelpText()
+		/// <returns>The formatted help text string.</returns>
+		private string BuildHelpText()
 		{
 			var sortedCommands = new List<ConsoleCommand>(commands.Values);
 			sortedCommands.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name));
@@ -60,7 +61,7 @@ namespace AppHealthMonitor
 				builder.AppendLine($"  {cmd.Name,-15} - {cmd.Description}");
 			}
 			builder.Append("--------------------------");
-			cachedHelpText = builder.ToString();
+			return builder.ToString();
 		}
 
 		/// <summary>
@@ -132,7 +133,7 @@ namespace AppHealthMonitor
 			{
 				if (orchestrator.IsMonitoringActive())
 				{
-					Log.Error("DaemonCommand", "'force-kill' command received. Immediately terminating all monitored processes...");
+					Log.Warning("DaemonCommand", "'force-kill' command received. Immediately terminating all monitored processes...");
 					await ForceKillAndWaitAsync();
 					Log.Info("DaemonCommand", "All processes terminated and cycle cleanup complete.");
 				}
@@ -146,7 +147,7 @@ namespace AppHealthMonitor
 			{
 				if (orchestrator.IsMonitoringActive())
 				{
-					Log.Error("DaemonCommand", "'force-restart' command received. Immediately terminating and restarting all monitored processes...");
+					Log.Warning("DaemonCommand", "'force-restart' command received. Immediately terminating and restarting all monitored processes...");
 					await ForceKillAndWaitAsync();
 					orchestrator.TrySignalStart();
 					Log.Info("DaemonCommand", "Restart sequence initiated. Applications will re-launch shortly.");
@@ -173,13 +174,8 @@ namespace AppHealthMonitor
 					foreach (var status in statuses)
 					{
 						string pid = status.ProcessId.HasValue ? status.ProcessId.Value.ToString() : "N/A";
-						string state = status.MaxRestartsReached ? "EXHAUSTED"
-
-							: !status.HasCompletedInitialCheck ? "STARTING"
-							: status.IsRunning ? "HEALTHY"
-							: "DOWN";
 						Log.Info("DaemonCommand",
-							$"  {status.Name,-20} PID: {pid,-8} State: {state,-14} Restarts: {status.RestartAttempts}/{status.MaxRestartAttempts} PortFail: {status.ConsecutivePortFailures} ResFail: {status.ConsecutiveResourceFailures}");
+							$"  {status.Name,-20} PID: {pid,-8} State: {status.StateLabel,-14} Restarts: {status.RestartAttempts}/{status.MaxRestartAttempts} PortFail: {status.ConsecutivePortFailures} ResFail: {status.ConsecutiveResourceFailures}");
 					}
 				}
 				Log.Info("DaemonCommand", "----------------------");
@@ -219,11 +215,27 @@ namespace AppHealthMonitor
 				{
 					break;
 				}
+				catch (IOException)
+				{
+					if (!headless)
+					{
+						Log.Info("DaemonCommand", "stdin stream closed. Initiating daemon shutdown.");
+						orchestrator.Shutdown();
+					}
+					break;
+				}
 
-				// null means EOF (stdin closed/piped). Break to avoid an infinite busy-loop.
+				// null means EOF (stdin closed/piped).
+				// In headless mode stdin is typically /dev/null or a closed pipe, so EOF is expected
+				// and the orchestrator manages its own lifecycle. Only trigger shutdown in interactive mode
+				// to prevent an uncontrollable orphaned daemon.
 				if (input == null)
 				{
-					Log.Info("DaemonCommand", "EOF detected on stdin. Command reader stopping.");
+					if (!headless)
+					{
+						Log.Info("DaemonCommand", "EOF detected on stdin. Initiating daemon shutdown.");
+						orchestrator.Shutdown();
+					}
 					break;
 				}
 

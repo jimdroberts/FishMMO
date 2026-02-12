@@ -17,12 +17,12 @@ namespace AppHealthMonitor
 		/// <summary>
 		/// Lock protecting concurrent access to the <see cref="activeMonitors"/> list.
 		/// </summary>
-		private readonly object activeMonitorsLock = new object();
+		private readonly object activeMonitorsLock = new();
 
 		/// <summary>
 		/// The currently active health monitors for the current monitoring cycle.
 		/// </summary>
-		private readonly List<HealthMonitor> activeMonitors = new List<HealthMonitor>();
+		private readonly List<HealthMonitor> activeMonitors = [];
 
 		/// <summary>
 		/// Whether all monitored applications should be launched in headless mode.
@@ -37,7 +37,7 @@ namespace AppHealthMonitor
 		/// <summary>
 		/// Cancellation token source for daemon-wide shutdown.
 		/// </summary>
-		private readonly CancellationTokenSource daemonCts = new CancellationTokenSource();
+		private readonly CancellationTokenSource daemonCts = new();
 		/// <summary>
 		/// Signals when the current monitoring cycle has fully completed cleanup.
 		/// </summary>
@@ -57,7 +57,7 @@ namespace AppHealthMonitor
 		/// Maximum time to wait for the active monitoring cycle to complete during disposal.
 		/// Prevents the daemon from hanging indefinitely if the monitoring cycle is stuck.
 		/// </summary>
-		private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(30);
+		private static readonly TimeSpan disposeTimeout = TimeSpan.FromSeconds(30);
 
 		/// <summary>
 		/// Gets whether the daemon has been signalled to shut down.
@@ -80,8 +80,12 @@ namespace AppHealthMonitor
 		/// Gets whether the daemon shut down automatically after a headless monitoring cycle completed.
 		/// When true, all monitors exhausted their restart attempts or failed initial launch,
 		/// and the daemon should exit with a non-zero exit code to prevent systemd restart loops.
+		/// Backed by an int field for thread-safe reads via <see cref="Volatile"/>.
 		/// </summary>
-		public bool HeadlessCycleCompleted { get; private set; }
+		private int headlessCycleCompleted;
+
+		/// <inheritdoc cref="headlessCycleCompleted"/>
+		public bool HeadlessCycleCompleted => Volatile.Read(ref headlessCycleCompleted) != 0;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="DaemonOrchestrator"/> class.
@@ -263,8 +267,8 @@ namespace AppHealthMonitor
 		/// Takes a snapshot of the monitors list under lock, then queries status outside the lock
 		/// to avoid holding the lock during process I/O (e.g., /proc reads on Linux).
 		/// </summary>
-		/// <returns>A list of <see cref="HealthMonitorStatus"/> snapshots.</returns>
-		public List<HealthMonitorStatus> GetActiveMonitorStatuses()
+		/// <returns>A read-only list of <see cref="HealthMonitorStatus"/> snapshots.</returns>
+		public IReadOnlyList<HealthMonitorStatus> GetActiveMonitorStatuses()
 		{
 			var snapshot = TakeMonitorSnapshot();
 			var statuses = new List<HealthMonitorStatus>(snapshot.Count);
@@ -319,7 +323,7 @@ namespace AppHealthMonitor
 					if (headless && !daemonCts.IsCancellationRequested)
 					{
 						Log.Info("Orchestration", "Headless monitoring cycle completed. Initiating automatic daemon shutdown.");
-						HeadlessCycleCompleted = true;
+						Volatile.Write(ref headlessCycleCompleted, 1);
 						daemonCts.Cancel();
 						break;
 					}
@@ -410,9 +414,11 @@ namespace AppHealthMonitor
 					await Task.WhenAll(currentMonitoringTasks);
 					Log.Debug("Orchestration", "All current monitoring tasks completed normally.");
 				}
-				catch (Exception)
+				catch (Exception ex)
 				{
 					// Inspect every task individually — Task.WhenAll only throws the first exception.
+					// Log the aggregate exception as a fallback in case individual inspection misses anything.
+					Log.Debug("Orchestration", $"Task.WhenAll threw: {ex.Message}", ex);
 					foreach (var task in currentMonitoringTasks)
 					{
 						if (task.IsCanceled)
@@ -499,6 +505,7 @@ namespace AppHealthMonitor
 			{
 				return;
 			}
+			GC.SuppressFinalize(this);
 
 			// Capture the TCS BEFORE cancelling so we have a stable reference.
 			// The cycle's finally block nulls cycleCompletionSource after completion,
@@ -518,7 +525,7 @@ namespace AppHealthMonitor
 			if (tcs != null)
 			{
 				using var delayCts = new CancellationTokenSource();
-				var delayTask = Task.Delay(DisposeTimeout, delayCts.Token);
+				var delayTask = Task.Delay(disposeTimeout, delayCts.Token);
 				var completed = await Task.WhenAny(tcs.Task, delayTask);
 				if (completed == tcs.Task)
 				{
@@ -526,7 +533,7 @@ namespace AppHealthMonitor
 				}
 				else
 				{
-					Log.Warning("Orchestration", $"Monitoring cycle did not complete within {DisposeTimeout.TotalSeconds}s during disposal. Proceeding with cleanup.");
+					Log.Warning("Orchestration", $"Monitoring cycle did not complete within {disposeTimeout.TotalSeconds}s during disposal. Proceeding with cleanup.");
 				}
 			}
 

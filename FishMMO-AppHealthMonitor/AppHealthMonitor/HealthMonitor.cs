@@ -338,9 +338,9 @@ namespace AppHealthMonitor
 					{
 						if (isTransientFailure)
 						{
-							Volatile.Write(ref consecutiveResourceCheckFailures, consecutiveResourceCheckFailures + 1);
-							Log.Warning(logSource, $"Transient resource check failure. Consecutive: {consecutiveResourceCheckFailures}/{resourceCheckFailureThreshold}.");
-							if (consecutiveResourceCheckFailures >= resourceCheckFailureThreshold)
+							int failures = Interlocked.Increment(ref consecutiveResourceCheckFailures);
+							Log.Warning(logSource, $"Transient resource check failure. Consecutive: {failures}/{resourceCheckFailureThreshold}.");
+							if (failures >= resourceCheckFailureThreshold)
 							{
 								Log.Error(logSource, "Resource check failures exceeded threshold. Triggering restart.");
 								needsRestart = true;
@@ -421,10 +421,10 @@ namespace AppHealthMonitor
 		{
 			if (!await CheckApplicationPortsResponsiveness())
 			{
-				Volatile.Write(ref consecutivePortCheckFailures, consecutivePortCheckFailures + 1);
-				Log.Warning(logSource, $"Port check failed. Consecutive failures: {consecutivePortCheckFailures}/{circuitBreakerFailureThreshold}.");
+				int failures = Interlocked.Increment(ref consecutivePortCheckFailures);
+				Log.Warning(logSource, $"Port check failed. Consecutive failures: {failures}/{circuitBreakerFailureThreshold}.");
 
-				if (consecutivePortCheckFailures >= circuitBreakerFailureThreshold)
+				if (failures >= circuitBreakerFailureThreshold)
 				{
 					Log.Error(logSource, "Circuit breaker threshold reached. Too many consecutive port failures. Triggering restart.");
 					Volatile.Write(ref consecutivePortCheckFailures, 0);
@@ -433,7 +433,7 @@ namespace AppHealthMonitor
 				return false;
 			}
 
-			if (consecutivePortCheckFailures > 0)
+			if (Volatile.Read(ref consecutivePortCheckFailures) > 0)
 			{
 				Volatile.Write(ref consecutivePortCheckFailures, 0);
 				Log.Info(logSource, "Port check successful. Consecutive failures reset.");
@@ -507,8 +507,8 @@ namespace AppHealthMonitor
 
 		/// <summary>
 		/// Applies ±20% random jitter to a delay to prevent synchronized restart storms.
-		/// The jitter factor is 0.8–1.2 and the base delay is always positive (clamped ≥ 1s),
-		/// so the result is guaranteed non-negative.
+		/// The jitter factor is 0.8–1.2. The caller is responsible for ensuring the base delay
+		/// is positive; a zero base delay produces a zero result.
 		/// </summary>
 		/// <param name="delay">The base delay to apply jitter to.</param>
 		/// <returns>The jittered delay.</returns>
@@ -625,16 +625,16 @@ namespace AppHealthMonitor
 		/// <returns>True if all configured ports are responsive; otherwise, false.</returns>
 		private async Task<bool> CheckApplicationPortsResponsiveness()
 		{
-			for (int i = 0; i < healthCheckers.Count; i++)
-			{
-				var checker = healthCheckers[i];
-				int timeout = checker.PortType == PortType.WebSocket ? webSocketCheckTimeoutMs : portCheckTimeoutMs;
-				Log.Debug(logSource, $"Port Check: Checking port {monitoredPort} (Type: {checker.PortType})...");
-				portCheckTasks[i] = checker.IsResponsiveAsync(healthCheckHost, monitoredPort, timeout, cancellationToken);
-			}
-
 			try
 			{
+				for (int i = 0; i < healthCheckers.Count; i++)
+				{
+					var checker = healthCheckers[i];
+					int timeout = checker.PortType == PortType.WebSocket ? webSocketCheckTimeoutMs : portCheckTimeoutMs;
+					Log.Debug(logSource, $"Port Check: Checking port {monitoredPort} (Type: {checker.PortType})...");
+					portCheckTasks[i] = checker.IsResponsiveAsync(healthCheckHost, monitoredPort, timeout, cancellationToken);
+				}
+
 				try
 				{
 					await Task.WhenAll(portCheckTasks);
@@ -961,6 +961,7 @@ namespace AppHealthMonitor
 			{
 				return;
 			}
+			GC.SuppressFinalize(this);
 			Log.Info(logSource, "Disposing health monitor.");
 			await KillApplicationAsync();
 		}

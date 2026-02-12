@@ -15,6 +15,8 @@ namespace AppHealthMonitor
 		/// <inheritdoc />
 		public async Task<bool> IsResponsiveAsync(string host, int port, int timeoutMilliseconds, CancellationToken cancellationToken)
 		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(host);
+
 			using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 			timeoutCts.CancelAfter(timeoutMilliseconds);
 

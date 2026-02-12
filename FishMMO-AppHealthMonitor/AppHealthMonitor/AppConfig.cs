@@ -1,3 +1,5 @@
+using System.Security;
+
 namespace AppHealthMonitor
 {
 	/// <summary>
@@ -31,11 +33,12 @@ namespace AppHealthMonitor
 		/// Gets or sets the types of ports to monitor (e.g., TCP, UDP, WebSocket).
 		/// An empty list indicates process-only monitoring with no port checks.
 		/// </summary>
-		public List<PortType> PortTypes { get; set; } = new List<PortType>();
+		public List<PortType> PortTypes { get; set; } = [];
 
 		/// <summary>
 		/// Gets or sets how often to perform health checks in seconds.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 5.</remarks>
 		public int CheckIntervalSeconds { get; set; }
 
 		/// <summary>
@@ -61,49 +64,58 @@ namespace AppHealthMonitor
 		/// <summary>
 		/// Gets or sets the timeout for graceful shutdown in seconds.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int GracefulShutdownTimeoutSeconds { get; set; }
 
 		/// <summary>
 		/// Gets or sets the initial delay for backoff restart in seconds.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int InitialRestartDelaySeconds { get; set; }
 
 		/// <summary>
 		/// Gets or sets the maximum delay for backoff restart in seconds.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int MaxRestartDelaySeconds { get; set; }
 
 		/// <summary>
 		/// Gets or sets the maximum attempts for backoff restart before giving up.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int MaxRestartAttempts { get; set; }
 
 		/// <summary>
 		/// Gets or sets the consecutive failures required to trip the circuit breaker.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int CircuitBreakerFailureThreshold { get; set; }
 
 		/// <summary>
 		/// Gets or sets the delay in seconds before the first full health check after launch.
 		/// Allows the application time to fully initialize before being evaluated.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int InitialHealthCheckDelaySeconds { get; set; }
 
 		/// <summary>
 		/// Gets or sets the delay in seconds to wait after launching or restarting the application
 		/// before resuming health checks. Allows the process to settle.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int PostLaunchSettleDelaySeconds { get; set; }
 
 		/// <summary>
 		/// Gets or sets the timeout in milliseconds for TCP and UDP port health checks.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int PortCheckTimeoutMs { get; set; }
 
 		/// <summary>
 		/// Gets or sets the timeout in milliseconds for WebSocket port health checks.
 		/// WebSocket connections typically require more time due to the upgrade handshake.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int WebSocketCheckTimeoutMs { get; set; }
 
 		/// <summary>
@@ -118,11 +130,13 @@ namespace AppHealthMonitor
 		/// Prevents transient access errors (e.g., brief /proc access denial) from causing unnecessary restarts.
 		/// Set to 1 for immediate restart on the first failure.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int ResourceCheckFailureThreshold { get; set; }
 
 		/// <summary>
 		/// Gets or sets the timeout in seconds to wait for a force-killed process to exit.
 		/// </summary>
+		/// <remarks>Minimum enforced value: 1.</remarks>
 		public int ForceKillTimeoutSeconds { get; set; }
 
 		/// <summary>
@@ -152,9 +166,9 @@ namespace AppHealthMonitor
 			{
 				resolvedPath = Path.GetFullPath(ApplicationExePath);
 			}
-			catch (Exception)
+			catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException or SecurityException)
 			{
-				error = $"ApplicationExePath '{ApplicationExePath}' is not a valid file path for '{Name}'.";
+				error = $"ApplicationExePath '{ApplicationExePath}' is not a valid file path for '{Name}': {ex.Message}";
 				return false;
 			}
 
@@ -297,7 +311,8 @@ namespace AppHealthMonitor
 		/// </summary>
 		private void ApplyDefaults()
 		{
-			PortTypes ??= new List<PortType>();
+			// JSON deserialization may set this to null.
+			PortTypes ??= [];
 			CheckIntervalSeconds = Math.Max(CheckIntervalSeconds, 5);
 			GracefulShutdownTimeoutSeconds = Math.Max(GracefulShutdownTimeoutSeconds, 1);
 			InitialRestartDelaySeconds = Math.Max(InitialRestartDelaySeconds, 1);
@@ -317,10 +332,10 @@ namespace AppHealthMonitor
 				HealthCheckHost = "127.0.0.1";
 			}
 
-			// Deduplicate PortTypes to prevent redundant health checkers.
+			// Deduplicate PortTypes preserving insertion order.
 			if (PortTypes.Count > 1)
 			{
-				PortTypes = new List<PortType>(new HashSet<PortType>(PortTypes));
+				PortTypes = PortTypes.Distinct().ToList();
 			}
 		}
 	}

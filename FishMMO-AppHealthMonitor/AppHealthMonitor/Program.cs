@@ -43,12 +43,34 @@ namespace AppHealthMonitor
 			}
 
 			string configFilePath = Path.Combine(workingDirectory, LoggingConfigName);
-			Log.Initialize(configFilePath, new ConsoleFormatter());
+			try
+			{
+				Log.Initialize(configFilePath, new ConsoleFormatter());
+			}
+			catch (Exception ex)
+			{
+				Console.Error.WriteLine($"Failed to initialize logging from '{LoggingConfigName}': {ex.Message}");
+				Console.Error.WriteLine("Ensure logging.json exists in the working directory and contains valid JSON.");
+				Environment.ExitCode = 1;
+				return;
+			}
 
 			Log.Info("Daemon", "Starting Application Health Monitor Daemon...");
 
-			var appConfigs = configuration.GetSection("Applications").Get<List<AppConfig>>();
-			bool headless = configuration.GetValue<bool>("Headless");
+			List<AppConfig>? appConfigs;
+			bool headless;
+			try
+			{
+				appConfigs = configuration.GetSection("Applications").Get<List<AppConfig>>();
+				headless = configuration.GetValue<bool>("Headless");
+			}
+			catch (Exception ex)
+			{
+				Log.Critical("Daemon", $"Failed to deserialize configuration from appsettings.json: {ex.Message}", ex);
+				Environment.ExitCode = 1;
+				await Log.Shutdown();
+				return;
+			}
 
 			if (appConfigs == null || appConfigs.Count == 0)
 			{
@@ -81,8 +103,10 @@ namespace AppHealthMonitor
 						{
 							Log.Info("Daemon", "\nCtrl+C pressed. Signalling daemon shutdown...");
 							orchestrator.Shutdown();
-							eventArgs.Cancel = true;
 						}
+						// Always suppress default termination to ensure DisposeAsync runs
+						// and child processes are cleaned up, matching SIGTERM behavior.
+						eventArgs.Cancel = true;
 					};
 					Console.CancelKeyPress += cancelHandler;
 

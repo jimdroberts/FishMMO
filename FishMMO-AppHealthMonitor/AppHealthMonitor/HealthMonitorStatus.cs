@@ -21,5 +21,19 @@ namespace AppHealthMonitor
 		bool MaxRestartsReached,
 		bool HasCompletedInitialCheck,
 		int ConsecutivePortFailures,
-		int ConsecutiveResourceFailures);
+		int ConsecutiveResourceFailures)
+	{
+		/// <summary>
+		/// Gets a human-readable state label derived from the current monitor status.
+		/// Returns "EXHAUSTED" when all restart attempts are used, "STARTING" during the initial
+		/// health check delay, "HEALTHY" when the process is running, or "DOWN" otherwise.
+		/// </summary>
+		public string StateLabel => this switch
+		{
+			{ MaxRestartsReached: true } => "EXHAUSTED",
+			{ HasCompletedInitialCheck: false } => "STARTING",
+			{ IsRunning: true } => "HEALTHY",
+			_ => "DOWN",
+		};
+	}
 }

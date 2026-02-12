@@ -17,6 +17,8 @@ namespace AppHealthMonitor
 		/// <inheritdoc />
 		public async Task<bool> IsResponsiveAsync(string host, int port, int timeoutMilliseconds, CancellationToken cancellationToken)
 		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(host);
+
 			using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 			timeoutCts.CancelAfter(timeoutMilliseconds);
 
@@ -25,17 +27,13 @@ namespace AppHealthMonitor
 
 			try
 			{
-				string formattedHost = host.Contains(':') ? $"[{host}]" : host;
+				string formattedHost = host.Contains(':') && !host.StartsWith('[') ? $"[{host}]" : host;
 				var uri = new Uri($"ws://{formattedHost}:{port}");
 				await ws.ConnectAsync(uri, timeoutCts.Token);
 
-				if (ws.State == WebSocketState.Open)
-				{
-					return true;
-				}
-
-				Log.Warning("WebSocketHealthCheck", $"WebSocket Port Check: Connection failed. State: {ws.State}.");
-				return false;
+				// ConnectAsync either succeeds (state becomes Open) or throws.
+				// If it returns without throwing, the connection is established.
+				return true;
 			}
 			catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
 			{

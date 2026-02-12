@@ -13,13 +13,14 @@
 - **CPU and memory monitoring** with configurable thresholds and transient failure tolerance
 - **Port health checks** via TCP, UDP, and WebSocket with configurable timeouts and host address
 - **Graceful and forced shutdown** with platform-specific signals (SIGTERM on Linux/macOS, CloseMainWindow on Windows)
-- **SIGTERM signal handling** for clean daemon shutdown in Docker and systemd environments (prevents child process orphaning)
+- **Signal handling** — Ctrl+C and SIGTERM both suppress default termination to ensure `DisposeAsync` runs and child processes are cleaned up
 - **Kill-before-launch lifecycle** preventing port-bind conflicts, with atomic process reference management
 - **Drift-free health check cadence** via `PeriodicTimer`
-- **Comprehensive startup validation** — executable paths, port/PortType consistency, duplicate names, upper-bound limits, and host format
-- **Thread-safe status queries** with lock-free snapshots and `Volatile`/`Interlocked` synchronization
+- **Comprehensive startup validation** — executable paths, port/PortType consistency, duplicate names, upper-bound limits, host format, and config deserialization errors
+- **Thread-safe counters** using `Interlocked.Increment` for failure tracking with `Volatile`/`Interlocked` synchronization throughout
 - **Race-free disposal** — cycle completion is captured before cancellation with bounded timeout awaiting
-- **Cancellable console input** via .NET 8's native `ReadLineAsync(CancellationToken)` with EOF detection
+- **Cancellable console input** via .NET 8's native `ReadLineAsync(CancellationToken)` with EOF detection triggering automatic daemon shutdown
+- **IPv6-safe WebSocket probing** with double-bracket prevention for pre-bracketed addresses
 - **Structured logging** with configurable output via FishMMO-Logger
 - **Cross-platform** — Windows, Linux, macOS
 
@@ -31,14 +32,14 @@
 | `AppConfig.cs` | Configuration POCO with defaults, validation, path resolution, and deduplication |
 | `DaemonOrchestrator.cs` | Daemon lifecycle, monitor creation/cleanup, start/stop signaling, race-free disposal |
 | `HealthMonitor.cs` | Per-app monitoring loop — process lifecycle, health checks, circuit breaker, restarts |
-| `CommandHandler.cs` | Console command registration, dispatch, headless mode, EOF-safe stdin |
-| `HealthCheckerFactory.cs` | Creates `IHealthChecker` instances from `PortType` enums |
-| `TcpHealthChecker.cs` | TCP connect probe with timeout |
-| `UdpHealthChecker.cs` | UDP send probe (fire-and-forget) |
-| `WebSocketHealthChecker.cs` | WebSocket connect-only probe |
+| `CommandHandler.cs` | Console command registration, dispatch, headless mode, EOF-safe stdin with auto-shutdown |
+| `HealthCheckerFactory.cs` | Creates `IHealthChecker` instances from `PortType` enums with null-guard and dedup safety |
+| `TcpHealthChecker.cs` | TCP connect probe with timeout and input validation |
+| `UdpHealthChecker.cs` | UDP send probe (fire-and-forget) with input validation |
+| `WebSocketHealthChecker.cs` | WebSocket connect-only probe with IPv6 safety |
 | `IHealthChecker.cs` | Health checker interface contract |
-| `ConsoleCommand.cs` | Immutable command record |
-| `HealthMonitorStatus.cs` | Immutable status snapshot record |
+| `ConsoleCommand.cs` | Immutable command record with constructor validation |
+| `HealthMonitorStatus.cs` | Immutable status snapshot record with computed `StateLabel` property |
 | `PortType.cs` | Enum: TCP, UDP, WebSocket |
 
 ## Getting Started
@@ -205,4 +206,4 @@ Configured via `logging.json` (FishMMO-Logger). If absent, library defaults appl
 
 - **UDP health checks** can only confirm the OS accepted a datagram, not that the application received it. Use TCP or WebSocket for reliable checks. A warning is logged when UDP is the only configured port type.
 - **WebSocket TLS** is not supported — the checker connects via `ws://` only.
-- **Health check host** defaults to `127.0.0.1`. IPv6-only applications should set `HealthCheckHost` to `"::1"`.
+- **Health check host** defaults to `127.0.0.1`. IPv6-only applications should set `HealthCheckHost` to `"::1"`. Pre-bracketed IPv6 addresses (e.g., `[::1]`) are handled correctly.
