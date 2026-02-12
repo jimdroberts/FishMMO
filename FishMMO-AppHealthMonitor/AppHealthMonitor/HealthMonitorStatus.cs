@@ -10,6 +10,7 @@ namespace AppHealthMonitor
 	/// <param name="MaxRestartAttempts">The configured maximum restart attempts before giving up.</param>
 	/// <param name="IsCircuitOpen">Whether the circuit breaker is currently tripped.</param>
 	/// <param name="MaxRestartsReached">Whether the monitor has exhausted all restart attempts.</param>
+	/// <param name="HasCompletedInitialCheck">Whether the monitor has completed its initial health check delay.</param>
 	public sealed record HealthMonitorStatus(
 		string Name,
 		int? ProcessId,
@@ -17,5 +18,6 @@ namespace AppHealthMonitor
 		int RestartAttempts,
 		int MaxRestartAttempts,
 		bool IsCircuitOpen,
-		bool MaxRestartsReached);
+		bool MaxRestartsReached,
+		bool HasCompletedInitialCheck);
 }

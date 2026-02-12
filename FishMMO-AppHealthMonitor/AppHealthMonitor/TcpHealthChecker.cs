@@ -22,7 +22,7 @@ namespace AppHealthMonitor
 			try
 			{
 				await client.ConnectAsync(host, port, timeoutCts.Token);
-				return client.Connected;
+				return true;
 			}
 			catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
 			{

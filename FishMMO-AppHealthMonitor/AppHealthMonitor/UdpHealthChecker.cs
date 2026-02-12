@@ -6,8 +6,13 @@ namespace AppHealthMonitor
 {
 	/// <summary>
 	/// Checks port health by attempting to send a UDP datagram.
-	/// Note: UDP is connectionless, so a successful send only confirms the socket is functional,
-	/// not that the remote endpoint is listening.
+	/// <para>
+	/// <strong>Limitation:</strong> UDP is connectionless. A successful send only confirms the local
+	/// OS accepted the datagram into the send buffer, not that the remote endpoint received it or is
+	/// alive. This checker will report success even if the target application is down. For reliable
+	/// health checking, prefer TCP or WebSocket. Use UDP checks only as a supplementary probe alongside
+	/// other port types.
+	/// </para>
 	/// </summary>
 	public sealed class UdpHealthChecker : IHealthChecker
 	{

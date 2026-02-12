@@ -5,7 +5,9 @@ namespace AppHealthMonitor
 {
 	/// <summary>
 	/// Checks port health by attempting to establish a WebSocket connection.
-	/// Performs a full connect/close handshake to verify the endpoint is functional.
+	/// Verifies the endpoint is functional by confirming the connection reaches <see cref="WebSocketState.Open"/>.
+	/// The close handshake is intentionally skipped; the <c>using</c> block disposes the socket,
+	/// which is faster and equally valid for health probing.
 	/// </summary>
 	public sealed class WebSocketHealthChecker : IHealthChecker
 	{
@@ -28,14 +30,6 @@ namespace AppHealthMonitor
 
 				if (ws.State == WebSocketState.Open)
 				{
-					// Best-effort close: connection was established so the port is healthy.
-					// If the close handshake times out or fails, we still report success.
-					try
-					{
-						await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Health check complete", timeoutCts.Token);
-					}
-					catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
-					catch (WebSocketException) { }
 					return true;
 				}
 

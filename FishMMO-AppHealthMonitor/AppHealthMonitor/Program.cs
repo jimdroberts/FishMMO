@@ -8,7 +8,7 @@ namespace AppHealthMonitor
 	/// Responsible only for configuration loading, logging initialization,
 	/// and delegating orchestration to <see cref="DaemonOrchestrator"/>.
 	/// </summary>
-	class Program
+	internal static class Program
 	{
 		/// <summary>
 		/// Name of the logging configuration file.
@@ -19,17 +19,27 @@ namespace AppHealthMonitor
 		/// Main entry point for the Application Health Monitor daemon.
 		/// Initializes configuration, logging, and starts the orchestration loop.
 		/// </summary>
-		/// <param name="args">Command-line arguments (currently unused).</param>
 		/// <returns>A task representing the asynchronous operation.</returns>
-		static async Task Main(string[] args)
+		static async Task Main()
 		{
 			string workingDirectory = Directory.GetCurrentDirectory();
 
-			var builder = new ConfigurationBuilder()
-				.SetBasePath(workingDirectory)
-				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+			IConfigurationRoot configuration;
+			try
+			{
+				var builder = new ConfigurationBuilder()
+					.SetBasePath(workingDirectory)
+					.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
 
-			IConfiguration configuration = builder.Build();
+				configuration = builder.Build();
+			}
+			catch (Exception ex)
+			{
+				Console.Error.WriteLine($"Failed to load appsettings.json: {ex.Message}");
+				Console.Error.WriteLine("Ensure appsettings.json exists in the working directory and contains valid JSON.");
+				Environment.ExitCode = 1;
+				return;
+			}
 
 			string configFilePath = Path.Combine(workingDirectory, LoggingConfigName);
 			Log.Initialize(configFilePath, new ConsoleFormatter());
@@ -37,11 +47,12 @@ namespace AppHealthMonitor
 			Log.Info("Daemon", "Starting Application Health Monitor Daemon...");
 
 			var appConfigs = configuration.GetSection("Applications").Get<List<AppConfig>>();
+			bool headless = configuration.GetValue<bool>("Headless");
 
 			if (appConfigs == null || appConfigs.Count == 0)
 			{
 				Log.Critical("Daemon", "Error: No application configurations found in 'Applications' section of appsettings.json. Please configure at least one application.");
-				await Task.Delay(1000);
+				Environment.ExitCode = 1;
 				await Log.Shutdown();
 				return;
 			}
@@ -49,12 +60,12 @@ namespace AppHealthMonitor
 			DaemonOrchestrator orchestrator;
 			try
 			{
-				orchestrator = new DaemonOrchestrator(appConfigs);
+				orchestrator = new DaemonOrchestrator(appConfigs, headless);
 			}
 			catch (InvalidOperationException ex)
 			{
 				Log.Critical("Daemon", ex.Message);
-				await Task.Delay(1000);
+				Environment.ExitCode = 1;
 				await Log.Shutdown();
 				return;
 			}
@@ -63,7 +74,7 @@ namespace AppHealthMonitor
 			{
 				await using (orchestrator)
 				{
-					Console.CancelKeyPress += (sender, eventArgs) =>
+					ConsoleCancelEventHandler cancelHandler = (sender, eventArgs) =>
 					{
 						if (!orchestrator.IsDaemonShutdownRequested)
 						{
@@ -72,22 +83,48 @@ namespace AppHealthMonitor
 							eventArgs.Cancel = true;
 						}
 					};
-
-					var commandHandler = new CommandHandler(orchestrator);
-
-					Log.Info("Daemon", "\nApplication Health Monitor Daemon is ready.");
-					Log.Info("Daemon", "Type 'help' to list available commands.");
+					Console.CancelKeyPress += cancelHandler;
 
 					try
 					{
-						await Task.WhenAll(orchestrator.RunAsync(), commandHandler.RunAsync());
-					}
-					catch (Exception ex)
-					{
-						Log.Critical("Daemon", $"Unhandled exception in daemon tasks: {ex.Message}", ex);
-					}
+						var commandHandler = new CommandHandler(orchestrator, orchestrator.Headless);
 
-					Log.Warning("Daemon", "All daemon tasks have concluded. Application Health Monitor Daemon stopped gracefully.");
+						Log.Info("Daemon", "\nApplication Health Monitor Daemon is ready.");
+						Log.Info("Daemon", "Type 'help' to list available commands.");
+
+						var orchestratorTask = orchestrator.RunAsync();
+						var commandTask = commandHandler.RunAsync();
+
+						try
+						{
+							await Task.WhenAll(orchestratorTask, commandTask);
+							Log.Warning("Daemon", "All daemon tasks have concluded. Application Health Monitor Daemon stopped gracefully.");
+						}
+						catch (Exception)
+						{
+							Environment.ExitCode = 1;
+
+							// Task.WhenAll only throws the first exception. Inspect both tasks individually.
+							if (orchestratorTask.IsFaulted && orchestratorTask.Exception != null)
+							{
+								foreach (var ex in orchestratorTask.Exception.InnerExceptions)
+								{
+									Log.Critical("Daemon", $"Unhandled exception in orchestrator: {ex.Message}", ex);
+								}
+							}
+							if (commandTask.IsFaulted && commandTask.Exception != null)
+							{
+								foreach (var ex in commandTask.Exception.InnerExceptions)
+								{
+									Log.Critical("Daemon", $"Unhandled exception in command handler: {ex.Message}", ex);
+								}
+							}
+						}
+					}
+					finally
+					{
+						Console.CancelKeyPress -= cancelHandler;
+					}
 				}
 			}
 			finally

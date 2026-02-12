@@ -5,6 +5,7 @@ namespace AppHealthMonitor
 	/// <summary>
 	/// Creates <see cref="IHealthChecker"/> instances for the specified port types.
 	/// Returns an empty list when no port types are configured (process-only monitoring).
+	/// Logs a warning when UDP is the only configured port type, as it provides no real health signal.
 	/// </summary>
 	public static class HealthCheckerFactory
 	{
@@ -21,24 +22,30 @@ namespace AppHealthMonitor
 			}
 
 			var checkers = new List<IHealthChecker>(portTypes.Count);
+			bool hasNonUdp = false;
 
 			foreach (var portType in portTypes)
 			{
-				switch (portType)
+				IHealthChecker checker = portType switch
 				{
-					case PortType.TCP:
-						checkers.Add(new TcpHealthChecker());
-						break;
-					case PortType.UDP:
-						checkers.Add(new UdpHealthChecker());
-						break;
-					case PortType.WebSocket:
-						checkers.Add(new WebSocketHealthChecker());
-						break;
-					default:
-						Log.Warning("HealthCheckerFactory", $"Unsupported PortType '{portType}'. No health checker created.");
-						break;
+					PortType.TCP => new TcpHealthChecker(),
+					PortType.UDP => new UdpHealthChecker(),
+					PortType.WebSocket => new WebSocketHealthChecker(),
+					_ => throw new ArgumentOutOfRangeException(nameof(portTypes), portType, $"Unsupported PortType '{portType}'.")
+				};
+
+				if (portType != PortType.UDP)
+				{
+					hasNonUdp = true;
 				}
+
+				checkers.Add(checker);
+			}
+
+			// Warn if UDP is the only port type — it provides no real health signal.
+			if (!hasNonUdp)
+			{
+				Log.Warning("HealthCheckerFactory", "UDP is the only configured port type. UDP checks cannot verify the remote application is alive. Consider adding TCP or WebSocket for reliable health monitoring.");
 			}
 
 			return checkers;

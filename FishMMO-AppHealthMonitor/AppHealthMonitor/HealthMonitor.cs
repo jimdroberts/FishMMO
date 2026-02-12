@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using FishMMO.Logging;
 
 namespace AppHealthMonitor
@@ -15,7 +17,6 @@ namespace AppHealthMonitor
 
 		private readonly string logSource;
 		private readonly string resolvedExePath;
-		private readonly string launchArguments;
 		private readonly TimeSpan checkInterval;
 		private readonly TimeSpan gracefulShutdownTimeout;
 		private readonly TimeSpan forceKillTimeout;
@@ -23,58 +24,172 @@ namespace AppHealthMonitor
 		private readonly TimeSpan initialRestartDelay;
 		private readonly TimeSpan maxRestartDelay;
 		private readonly TimeSpan circuitBreakerResetTimeout;
+		private readonly TimeSpan initialHealthCheckDelay;
+		private readonly TimeSpan postLaunchSettleDelay;
 		private readonly int cpuThresholdPercent;
 		private readonly int circuitBreakerFailureThreshold;
 		private readonly int monitoredPort;
 		private readonly int webSocketCheckTimeoutMs;
 		private readonly int portCheckTimeoutMs;
 		private readonly int maxRestartAttempts;
-		private readonly bool headless;
+		private readonly int resourceCheckFailureThreshold;
+		private readonly string healthCheckHost;
 
+		/// <summary>
+		/// Cached <see cref="ProcessStartInfo"/> built once in the constructor.
+		/// Reused for every launch to avoid repeated allocations.
+		/// </summary>
+		private readonly ProcessStartInfo cachedStartInfo;
+
+		/// <summary>
+		/// Whether this monitor is configured for process-only monitoring without port checks.
+		/// </summary>
+		private readonly bool isProcessOnlyMonitoring;
+
+		/// <summary>
+		/// The number of consecutive restart attempts in the current failure cycle.
+		/// </summary>
 		private int currentRestartAttemptCount;
+
+		/// <summary>
+		/// The current exponential backoff delay before the next restart attempt.
+		/// </summary>
 		private TimeSpan currentCalculatedRestartDelay;
 
+		/// <summary>
+		/// Number of consecutive port check failures in the current monitoring cycle.
+		/// Only mutated from the single monitoring loop task.
+		/// </summary>
 		private int consecutivePortCheckFailures;
+
+		/// <summary>
+		/// Number of consecutive CPU/memory check failures in the current monitoring cycle.
+		/// Only mutated from the single monitoring loop task.
+		/// </summary>
+		private int consecutiveResourceCheckFailures;
+
+		/// <summary>
+		/// Whether the circuit breaker is currently tripped open.
+		/// Only mutated from the single monitoring loop task.
+		/// </summary>
 		private bool isCircuitOpen;
+
+		/// <summary>
+		/// The UTC timestamp when the circuit breaker was last opened.
+		/// Only mutated from the single monitoring loop task.
+		/// </summary>
 		private DateTime circuitOpenTimestamp;
 
+		/// <summary>
+		/// The currently monitored OS process, or null if none is tracked.
+		/// Accessed atomically via <see cref="Volatile"/> and <see cref="Interlocked"/> operations.
+		/// </summary>
 		private Process? monitoredProcess;
-		private bool cpuTrackingInitialized;
-		private DateTime lastCpuCheckTime;
-		private TimeSpan lastCpuTotalProcessorTime;
 
+		/// <summary>
+		/// Tracks CPU usage measurement state for the monitored process.
+		/// </summary>
+		private CpuTracker cpuTracker;
+
+		/// <summary>
+		/// Whether the monitor has exhausted all configured restart attempts.
+		/// </summary>
 		private bool maxRestartsReached;
-		private int disposed;
+
+		/// <summary>
+		/// Whether the monitor has completed its initial health check delay and begun checking.
+		/// False during the startup settle period, preventing premature "HEALTHY" status display.
+		/// </summary>
+		private bool hasCompletedInitialCheck;
+
+		/// <summary>
+		/// Guard flag to prevent double disposal. Set atomically via <see cref="Interlocked.CompareExchange"/>.
+		/// </summary>
+		private int isDisposed;
+
+		/// <summary>
+		/// Gets the display name of the monitored application, used for diagnostics and logging.
+		/// </summary>
+		public string Name => logSource;
+
+		/// <summary>
+		/// Groups CPU usage tracking state for clarity.
+		/// Only accessed from the single monitoring loop task.
+		/// </summary>
+		private struct CpuTracker
+		{
+			/// <summary>
+			/// Whether the tracker has captured an initial CPU baseline.
+			/// </summary>
+			public bool Initialized;
+
+			/// <summary>
+			/// The timestamp of the last CPU usage measurement.
+			/// </summary>
+			public DateTime LastCheckTime;
+
+			/// <summary>
+			/// The cumulative processor time at the last measurement.
+			/// </summary>
+			public TimeSpan LastTotalProcessorTime;
+
+			/// <summary>
+			/// Resets the tracker so the next check re-initializes the baseline.
+			/// After a reset, the first CPU check captures a new baseline and returns healthy,
+			/// giving the freshly launched process one free health cycle to settle.
+			/// This is an intentional trade-off: accurate delta-based CPU measurement requires
+			/// two samples, so the first sample establishes the reference point.
+			/// </summary>
+			public void Reset() => Initialized = false;
+		}
 
 		/// <summary>
 		/// Reusable array for parallel port check tasks, sized to the number of health checkers.
 		/// Avoids allocating a new list on every health check cycle.
+		/// Elements are populated before each WhenAll call and cleared after result inspection.
 		/// </summary>
 		private readonly Task<bool>[] portCheckTasks;
 
 		/// <summary>
-		/// Number of bytes in one megabyte, used for memory threshold conversions.
+		/// Number of bytes per megabyte, used for memory threshold display conversions.
 		/// </summary>
 		private const double BytesPerMB = 1_048_576.0;
 
-		private readonly TimeSpan initialHealthCheckDelay;
-		private readonly TimeSpan postLaunchSettleDelay;
+		/// <summary>
+		/// POSIX signal number for SIGTERM (graceful termination request).
+		/// </summary>
+		private const int SigTerm = 15;
 
 		/// <summary>
-		/// Gets a value indicating whether this monitor is configured for process-only monitoring without port checks.
+		/// Maximum total time allowed for graceful + force kill during shutdown.
+		/// Prevents the daemon from hanging indefinitely on zombie processes.
 		/// </summary>
-		private bool IsProcessOnlyMonitoring => healthCheckers.Count == 0;
+		private static readonly TimeSpan MaxKillTimeout = TimeSpan.FromSeconds(60);
+
+		/// <summary>
+		/// Sends a POSIX signal to a process. Used for graceful SIGTERM shutdown on Linux and macOS.
+		/// The method name must match the native function name via <see cref="DllImportAttribute.EntryPoint"/>.
+		/// </summary>
+		/// <param name="pid">The process ID to signal.</param>
+		/// <param name="sig">The signal number to send.</param>
+		/// <returns>0 on success; -1 on failure (check errno via <see cref="Marshal.GetLastWin32Error"/>).</returns>
+		[DllImport("libc", EntryPoint = "kill", SetLastError = true)]
+		[SupportedOSPlatform("linux")]
+		[SupportedOSPlatform("macos")]
+		private static extern int PosixKill(int pid, int sig);
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="HealthMonitor"/> class.
 		/// </summary>
 		/// <param name="config">The application configuration. Must have <see cref="AppConfig.TryApplyDefaultsAndValidate"/> called first.</param>
 		/// <param name="healthCheckers">The health checkers to use for port monitoring. Empty list for process-only monitoring.</param>
+		/// <param name="headless">Whether to launch the process in headless mode (no window, shell execution disabled).</param>
 		/// <param name="cancellationToken">Token to signal cancellation of monitoring operations.</param>
 		/// <exception cref="ArgumentNullException">Thrown when config is null.</exception>
 		public HealthMonitor(
 			AppConfig config,
 			IReadOnlyList<IHealthChecker> healthCheckers,
+			bool headless,
 			CancellationToken cancellationToken)
 		{
 			ArgumentNullException.ThrowIfNull(config);
@@ -83,15 +198,14 @@ namespace AppHealthMonitor
 			this.cancellationToken = cancellationToken;
 
 			logSource = config.Name;
-			resolvedExePath = Path.GetFullPath(config.ApplicationExePath);
-			launchArguments = config.LaunchArguments;
+			resolvedExePath = config.ApplicationExePath;
 
 			checkInterval = TimeSpan.FromSeconds(config.CheckIntervalSeconds);
 			gracefulShutdownTimeout = TimeSpan.FromSeconds(config.GracefulShutdownTimeoutSeconds);
 			forceKillTimeout = TimeSpan.FromSeconds(config.ForceKillTimeoutSeconds);
 			initialHealthCheckDelay = TimeSpan.FromSeconds(config.InitialHealthCheckDelaySeconds);
 			postLaunchSettleDelay = TimeSpan.FromSeconds(config.PostLaunchSettleDelaySeconds);
-			memoryThresholdBytes = (long)config.MemoryThresholdMB * 1024 * 1024;
+			memoryThresholdBytes = (long)config.MemoryThresholdMB * 1024L * 1024L;
 			initialRestartDelay = TimeSpan.FromSeconds(config.InitialRestartDelaySeconds);
 			maxRestartDelay = TimeSpan.FromSeconds(config.MaxRestartDelaySeconds);
 			circuitBreakerResetTimeout = TimeSpan.FromMinutes(config.CircuitBreakerResetTimeoutMinutes);
@@ -101,10 +215,22 @@ namespace AppHealthMonitor
 			webSocketCheckTimeoutMs = config.WebSocketCheckTimeoutMs;
 			portCheckTimeoutMs = config.PortCheckTimeoutMs;
 			maxRestartAttempts = config.MaxRestartAttempts;
-			headless = config.Headless;
+			resourceCheckFailureThreshold = config.ResourceCheckFailureThreshold;
+			healthCheckHost = config.HealthCheckHost;
 
 			currentCalculatedRestartDelay = initialRestartDelay;
 			portCheckTasks = new Task<bool>[this.healthCheckers.Count];
+			isProcessOnlyMonitoring = this.healthCheckers.Count == 0;
+
+			cachedStartInfo = new ProcessStartInfo
+			{
+				FileName = resolvedExePath,
+				Arguments = config.LaunchArguments ?? string.Empty,
+				UseShellExecute = !headless,
+				RedirectStandardOutput = false,
+				RedirectStandardError = false,
+				CreateNoWindow = headless,
+			};
 		}
 
 		/// <summary>
@@ -121,7 +247,8 @@ namespace AppHealthMonitor
 			{
 				try
 				{
-					process.Refresh();
+					// Do NOT call process.Refresh() here — it is not thread-safe.
+					// The monitoring loop refreshes on its own thread; we read cached state only.
 					if (!process.HasExited)
 					{
 						pid = process.Id;
@@ -136,37 +263,46 @@ namespace AppHealthMonitor
 				{
 					// Process exited concurrently — treat as not running.
 				}
+				catch (NotSupportedException)
+				{
+					// Process not started by this instance — treat as not running.
+				}
+				catch (Win32Exception)
+				{
+					// Permission denied accessing /proc/{pid} on Linux — treat as not running.
+				}
 			}
 
 			return new HealthMonitorStatus(
 				logSource,
 				pid,
 				running,
-				currentRestartAttemptCount,
+				Volatile.Read(ref currentRestartAttemptCount),
 				maxRestartAttempts,
-				isCircuitOpen,
-				maxRestartsReached);
+				Volatile.Read(ref isCircuitOpen),
+				Volatile.Read(ref maxRestartsReached),
+				Volatile.Read(ref hasCompletedInitialCheck));
 		}
 
 		/// <summary>
 		/// Starts the monitoring loop for the application.
 		/// Continuously checks application health and performs restarts as needed.
-		/// Exits when cancelled or when maximum restart attempts are exhausted.
+		/// Exits when cancelled, when maximum restart attempts are exhausted, or when the initial launch fails.
 		/// </summary>
 		/// <returns>A task that represents the asynchronous monitoring operation.</returns>
-		public async Task StartMonitoring()
+		public async Task StartMonitoringAsync()
 		{
 			Log.Info(logSource, "Starting monitoring loop.");
 
 			if (!IsApplicationProcessRunning())
 			{
 				Log.Info(logSource, "Application process not found at startup. Attempting initial launch.");
-				LaunchApplication();
+				await LaunchApplicationAsync();
 
 				if (Volatile.Read(ref monitoredProcess) == null)
 				{
 					Log.Critical(logSource, "Initial launch failed. The executable path may be invalid. Monitoring will not start.");
-					maxRestartsReached = true;
+					Volatile.Write(ref maxRestartsReached, true);
 					return;
 				}
 
@@ -192,7 +328,10 @@ namespace AppHealthMonitor
 				return;
 			}
 
-			while (!cancellationToken.IsCancellationRequested && !maxRestartsReached)
+			Volatile.Write(ref hasCompletedInitialCheck, true);
+
+			using var periodicTimer = new PeriodicTimer(checkInterval);
+			while (!cancellationToken.IsCancellationRequested && !Volatile.Read(ref maxRestartsReached))
 			{
 				Log.Debug(logSource, "Performing health check cycle.");
 
@@ -205,14 +344,40 @@ namespace AppHealthMonitor
 				}
 				else
 				{
-					if ((cpuThresholdPercent > 0 || memoryThresholdBytes > 0) && !CheckMemoryAndCpuUsage())
+					if ((cpuThresholdPercent > 0 || memoryThresholdBytes > 0) && !CheckMemoryAndCpuUsage(out bool isTransientFailure))
 					{
-						Log.Error(logSource, "CPU or Memory usage exceeds configured thresholds.");
-						needsRestart = true;
+						if (isTransientFailure)
+						{
+							consecutiveResourceCheckFailures++;
+							Log.Warning(logSource, $"Transient resource check failure. Consecutive: {consecutiveResourceCheckFailures}/{resourceCheckFailureThreshold}.");
+							if (consecutiveResourceCheckFailures >= resourceCheckFailureThreshold)
+							{
+								Log.Error(logSource, "Resource check failures exceeded threshold. Triggering restart.");
+								needsRestart = true;
+							}
+						}
+						else
+						{
+							Log.Error(logSource, "CPU or Memory usage exceeds configured thresholds.");
+							consecutiveResourceCheckFailures = 0;
+							needsRestart = true;
+						}
 					}
-					else if (!IsProcessOnlyMonitoring)
+					else
 					{
-						needsRestart = await EvaluateCircuitBreakerAndPortHealth();
+						consecutiveResourceCheckFailures = 0;
+						if (!isProcessOnlyMonitoring)
+						{
+							try
+							{
+								needsRestart = await EvaluateCircuitBreakerAndPortHealth();
+							}
+							catch (OperationCanceledException)
+							{
+								Log.Info(logSource, "Port health check cancelled. Exiting monitoring loop.");
+								break;
+							}
+						}
 					}
 				}
 
@@ -228,17 +393,22 @@ namespace AppHealthMonitor
 						break;
 					}
 				}
-				else
+				else if (!isCircuitOpen)
 				{
-					currentRestartAttemptCount = 0;
+					// Only reset restart counters when the app is genuinely healthy and the circuit is closed.
+					// While the circuit is open, preserve the restart budget to prevent unlimited retries.
+					Volatile.Write(ref currentRestartAttemptCount, 0);
 					currentCalculatedRestartDelay = initialRestartDelay;
 					Log.Info(logSource, "Application is healthy.");
 				}
 
 				try
 				{
-					Log.Debug(logSource, $"Waiting {checkInterval.TotalSeconds} seconds for next health check cycle...");
-					await Task.Delay(checkInterval, cancellationToken);
+					Log.Debug(logSource, $"Waiting for next health check tick ({checkInterval.TotalSeconds}s interval)...");
+					if (!await periodicTimer.WaitForNextTickAsync(cancellationToken))
+					{
+						break;
+					}
 				}
 				catch (OperationCanceledException)
 				{
@@ -247,7 +417,7 @@ namespace AppHealthMonitor
 				}
 			}
 
-			if (maxRestartsReached)
+			if (Volatile.Read(ref maxRestartsReached))
 			{
 				Log.Critical(logSource, $"Monitoring stopped: maximum restart attempts ({maxRestartAttempts}) exhausted.");
 			}
@@ -257,6 +427,9 @@ namespace AppHealthMonitor
 
 		/// <summary>
 		/// Evaluates the circuit breaker state and performs port health checks.
+		/// When the circuit is open and the reset timeout expires (half-open state),
+		/// a single probe check is performed. Failure keeps the circuit open without triggering
+		/// a restart, preventing a kill-restart-fail-open loop.
 		/// </summary>
 		/// <returns>True if a restart is needed; otherwise, false.</returns>
 		private async Task<bool> EvaluateCircuitBreakerAndPortHealth()
@@ -271,18 +444,20 @@ namespace AppHealthMonitor
 					return false;
 				}
 
-				Log.Warning(logSource, "Circuit Breaker reset timeout reached. Attempting to CLOSE circuit with one port check.");
+				Log.Warning(logSource, "Circuit Breaker reset timeout reached. Attempting half-open probe check.");
 				if (await CheckApplicationPortsResponsiveness())
 				{
 					Log.Info(logSource, "Circuit Breaker closed successfully. Ports are healthy.");
-					isCircuitOpen = false;
+					Volatile.Write(ref isCircuitOpen, false);
 					consecutivePortCheckFailures = 0;
 					return false;
 				}
 
-				Log.Error(logSource, "Circuit Breaker remains OPEN. Port check failed again.");
+				// Half-open probe failed: keep the circuit open and reset the timer.
+				// Do NOT trigger a restart here — the app was already restarted when the circuit first opened.
+				Log.Error(logSource, "Circuit Breaker remains OPEN. Half-open probe failed. Resetting timeout.");
 				circuitOpenTimestamp = DateTime.UtcNow;
-				return true;
+				return false;
 			}
 
 			if (!await CheckApplicationPortsResponsiveness())
@@ -293,10 +468,11 @@ namespace AppHealthMonitor
 				if (consecutivePortCheckFailures >= circuitBreakerFailureThreshold)
 				{
 					Log.Error(logSource, "Circuit Breaker OPEN! Too many consecutive port failures.");
-					isCircuitOpen = true;
+					Volatile.Write(ref isCircuitOpen, true);
 					circuitOpenTimestamp = DateTime.UtcNow;
+					return true;
 				}
-				return true;
+				return false;
 			}
 
 			if (consecutivePortCheckFailures > 0)
@@ -309,22 +485,31 @@ namespace AppHealthMonitor
 
 		/// <summary>
 		/// Handles the restart logic for an unhealthy application.
-		/// Implements exponential backoff and sets <see cref="maxRestartsReached"/> when the limit is hit.
+		/// Implements exponential backoff with random jitter (±20%) to prevent thundering herd
+		/// effects when multiple applications restart simultaneously.
+		/// Resets consecutive failure counters after restart to give the application a clean evaluation window.
+		/// Sets <see cref="maxRestartsReached"/> when the limit is hit.
 		/// </summary>
 		/// <returns>A task that represents the asynchronous restart operation.</returns>
 		private async Task HandleApplicationRestart()
 		{
-			currentRestartAttemptCount++;
+			Volatile.Write(ref currentRestartAttemptCount, currentRestartAttemptCount + 1);
+			int attempt = currentRestartAttemptCount;
 
-			if (currentRestartAttemptCount > maxRestartAttempts)
+			if (attempt > maxRestartAttempts)
 			{
-				maxRestartsReached = true;
+				Volatile.Write(ref maxRestartsReached, true);
 				return;
 			}
 
-			TimeSpan delayToUse = currentCalculatedRestartDelay;
+			// Compute the backoff delay BEFORE using it so the ramp applies from the first retry.
+			currentCalculatedRestartDelay = TimeSpan.FromSeconds(
+				Math.Min(maxRestartDelay.TotalSeconds, initialRestartDelay.TotalSeconds * Math.Pow(2, attempt - 1))
+			);
 
-			Log.Warning(logSource, $"Application unhealthy. Attempting restart (Attempt {currentRestartAttemptCount}/{maxRestartAttempts}).");
+			TimeSpan delayToUse = ApplyJitter(currentCalculatedRestartDelay);
+
+			Log.Warning(logSource, $"Application unhealthy. Attempting restart (Attempt {attempt}/{maxRestartAttempts}).");
 			Log.Warning(logSource, $"Next restart in {delayToUse.TotalSeconds:F1} seconds...");
 
 			try
@@ -338,42 +523,70 @@ namespace AppHealthMonitor
 			}
 
 			await KillApplicationAsync();
-			LaunchApplication();
+			await LaunchApplicationAsync();
 
-			currentCalculatedRestartDelay = TimeSpan.FromSeconds(
-				Math.Min(maxRestartDelay.TotalSeconds, initialRestartDelay.TotalSeconds * Math.Pow(2, currentRestartAttemptCount - 1))
-			);
+			// Reset consecutive failure counters so the freshly restarted application
+			// gets a clean evaluation window instead of immediately hitting thresholds.
+			consecutivePortCheckFailures = 0;
+			consecutiveResourceCheckFailures = 0;
 
-			try
+			// Only wait for the settle delay if the launch actually succeeded.
+			// If the process failed to start, skip the delay so the next health check cycle
+			// detects the failure sooner.
+			if (Volatile.Read(ref monitoredProcess) != null)
 			{
-				await Task.Delay(postLaunchSettleDelay, cancellationToken);
-			}
-			catch (OperationCanceledException)
-			{
-				Log.Info(logSource, "Post-launch settle delay cancelled.");
-				throw;
+				try
+				{
+					await Task.Delay(postLaunchSettleDelay, cancellationToken);
+				}
+				catch (OperationCanceledException)
+				{
+					Log.Info(logSource, "Post-launch settle delay cancelled.");
+					throw;
+				}
 			}
 		}
 
 		/// <summary>
-		/// Checks if the monitored application's CPU and memory usage are within configured thresholds.
+		/// Applies ±20% random jitter to a delay to prevent synchronized restart storms.
+		/// The jitter factor is 0.8–1.2 and the base delay is always positive (clamped ≥ 1s),
+		/// so the result is guaranteed non-negative.
 		/// </summary>
-		/// <returns>True if usage is within thresholds or thresholds are disabled; otherwise, false.</returns>
-		private bool CheckMemoryAndCpuUsage()
+		/// <param name="delay">The base delay to apply jitter to.</param>
+		/// <returns>The jittered delay.</returns>
+		private static TimeSpan ApplyJitter(TimeSpan delay)
 		{
+			double jitterFactor = 0.8 + (Random.Shared.NextDouble() * 0.4); // 0.8 to 1.2
+			return TimeSpan.FromSeconds(delay.TotalSeconds * jitterFactor);
+		}
+
+		/// <summary>
+		/// Checks if the monitored application's CPU and memory usage are within configured thresholds.
+		/// Distinguishes between genuine threshold violations and transient access errors.
+		/// </summary>
+		/// <param name="isTransientFailure">
+		/// Set to true when the check failed due to a transient error (e.g., process disposed concurrently,
+		/// brief /proc access denial) rather than a genuine threshold violation.
+		/// </param>
+		/// <returns>True if usage is within thresholds or thresholds are disabled; otherwise, false.</returns>
+		private bool CheckMemoryAndCpuUsage(out bool isTransientFailure)
+		{
+			isTransientFailure = false;
 			var process = Volatile.Read(ref monitoredProcess);
 			if (process == null)
 			{
 				Log.Debug(logSource, "Process not available for CPU/Memory check.");
+				isTransientFailure = true;
 				return false;
 			}
 
 			try
 			{
-				process.Refresh();
+				// No Refresh() needed — IsApplicationProcessRunning() already refreshed the process state this cycle.
 				if (process.HasExited)
 				{
 					Log.Debug(logSource, "Process not available for CPU/Memory check.");
+					isTransientFailure = true;
 					return false;
 				}
 
@@ -389,11 +602,11 @@ namespace AppHealthMonitor
 
 				if (cpuThresholdPercent > 0)
 				{
-					if (!cpuTrackingInitialized)
+					if (!cpuTracker.Initialized)
 					{
-						lastCpuCheckTime = DateTime.UtcNow;
-						lastCpuTotalProcessorTime = process.TotalProcessorTime;
-						cpuTrackingInitialized = true;
+						cpuTracker.LastCheckTime = DateTime.UtcNow;
+						cpuTracker.LastTotalProcessorTime = process.TotalProcessorTime;
+						cpuTracker.Initialized = true;
 						Log.Debug(logSource, "Initializing CPU usage tracking.");
 						return true;
 					}
@@ -401,8 +614,13 @@ namespace AppHealthMonitor
 					TimeSpan currentTotalProcessorTime = process.TotalProcessorTime;
 					DateTime currentCheckTime = DateTime.UtcNow;
 
-					double cpuTimeUsed = (currentTotalProcessorTime - lastCpuTotalProcessorTime).TotalMilliseconds;
-					double timeElapsed = (currentCheckTime - lastCpuCheckTime).TotalMilliseconds;
+					double cpuTimeUsed = (currentTotalProcessorTime - cpuTracker.LastTotalProcessorTime).TotalMilliseconds;
+					double timeElapsed = (currentCheckTime - cpuTracker.LastCheckTime).TotalMilliseconds;
+
+					// Always update the tracker so subsequent checks use accurate deltas,
+					// even when the current reading exceeds the threshold.
+					cpuTracker.LastCheckTime = currentCheckTime;
+					cpuTracker.LastTotalProcessorTime = currentTotalProcessorTime;
 
 					if (timeElapsed > 0)
 					{
@@ -416,9 +634,6 @@ namespace AppHealthMonitor
 							return false;
 						}
 					}
-
-					lastCpuCheckTime = currentCheckTime;
-					lastCpuTotalProcessorTime = currentTotalProcessorTime;
 				}
 
 				Log.Debug(logSource, "CPU/Memory checks passed (if configured).");
@@ -427,18 +642,20 @@ namespace AppHealthMonitor
 			catch (ObjectDisposedException)
 			{
 				// Process was disposed by a concurrent KillApplicationAsync call.
-				// Treat as intentionally gone — do not flag as unhealthy.
 				Log.Debug(logSource, "Process was disposed during CPU/Memory check (concurrent kill).");
-				return true;
+				isTransientFailure = true;
+				return false;
 			}
 			catch (InvalidOperationException ex)
 			{
 				Log.Error(logSource, "Process exited during CPU/Memory check.", ex);
+				isTransientFailure = true;
 				return false;
 			}
 			catch (Exception ex)
 			{
 				Log.Error(logSource, $"Error during CPU/Memory check: {ex.Message}", ex);
+				isTransientFailure = true;
 				return false;
 			}
 		}
@@ -450,37 +667,70 @@ namespace AppHealthMonitor
 		/// <returns>True if all configured ports are responsive; otherwise, false.</returns>
 		private async Task<bool> CheckApplicationPortsResponsiveness()
 		{
-			if (IsProcessOnlyMonitoring)
-			{
-				Log.Debug(logSource, "Skipping port checks (Process-Only Monitoring).");
-				return true;
-			}
-
 			for (int i = 0; i < healthCheckers.Count; i++)
 			{
 				var checker = healthCheckers[i];
 				int timeout = checker.PortType == PortType.WebSocket ? webSocketCheckTimeoutMs : portCheckTimeoutMs;
 				Log.Debug(logSource, $"Port Check: Checking port {monitoredPort} (Type: {checker.PortType})...");
-				portCheckTasks[i] = checker.IsResponsiveAsync("127.0.0.1", monitoredPort, timeout, cancellationToken);
+				portCheckTasks[i] = checker.IsResponsiveAsync(healthCheckHost, monitoredPort, timeout, cancellationToken);
 			}
 
-			bool[] results = await Task.WhenAll(portCheckTasks);
-
-			bool allResponsive = true;
-			for (int i = 0; i < results.Length; i++)
+			try
 			{
-				if (!results[i])
+				await Task.WhenAll(portCheckTasks);
+			}
+			catch (Exception ex) when (ex is not OperationCanceledException)
+			{
+				Log.Error(logSource, $"Port check encountered an unexpected error: {ex.Message}", ex);
+			}
+
+			try
+			{
+				bool allResponsive = true;
+				for (int i = 0; i < portCheckTasks.Length; i++)
 				{
-					Log.Warning(logSource, $"Port Check: Port {monitoredPort} (Type: {healthCheckers[i].PortType}) is NOT responsive.");
-					allResponsive = false;
+					if (portCheckTasks[i].IsFaulted)
+					{
+						var taskEx = portCheckTasks[i].Exception;
+						if (taskEx != null)
+						{
+							foreach (var innerEx in taskEx.InnerExceptions)
+							{
+								Log.Error(logSource, $"Port Check: Port {monitoredPort} (Type: {healthCheckers[i].PortType}) checker faulted: {innerEx.Message}", innerEx);
+							}
+						}
+						allResponsive = false;
+					}
+					else if (!portCheckTasks[i].IsCompletedSuccessfully || !portCheckTasks[i].Result)
+					{
+						Log.Warning(logSource, $"Port Check: Port {monitoredPort} (Type: {healthCheckers[i].PortType}) is NOT responsive.");
+						allResponsive = false;
+					}
 				}
-			}
 
-			if (allResponsive)
-			{
-				Log.Debug(logSource, "All configured ports are responsive.");
+				if (allResponsive)
+				{
+					Log.Debug(logSource, "All configured ports are responsive.");
+				}
+				return allResponsive;
 			}
-			return allResponsive;
+			finally
+			{
+				Array.Clear(portCheckTasks);
+			}
+		}
+
+		/// <summary>
+		/// Atomically releases the monitored process reference and disposes it.
+		/// No-ops if a concurrent caller already exchanged the reference.
+		/// </summary>
+		/// <param name="process">The process reference to release. Must not be null.</param>
+		private void TryReleaseProcess(Process process)
+		{
+			if (Interlocked.CompareExchange(ref monitoredProcess, null, process) == process)
+			{
+				process.Dispose();
+			}
 		}
 
 		/// <summary>
@@ -502,10 +752,7 @@ namespace AppHealthMonitor
 				if (process.HasExited)
 				{
 					Log.Info(logSource, $"Monitored process (ID: {process.Id}) has exited after refresh.");
-					if (Interlocked.CompareExchange(ref monitoredProcess, null, process) == process)
-					{
-						process.Dispose();
-					}
+					TryReleaseProcess(process);
 					return false;
 				}
 				Log.Debug(logSource, $"Monitored process (ID: {process.Id}) is running.");
@@ -520,27 +767,67 @@ namespace AppHealthMonitor
 			catch (InvalidOperationException ex)
 			{
 				Log.Error(logSource, "Monitored process seems to have exited unexpectedly (InvalidOperationException).", ex);
-				if (Interlocked.CompareExchange(ref monitoredProcess, null, process) == process)
-				{
-					process.Dispose();
-				}
+				TryReleaseProcess(process);
 				return false;
 			}
 			catch (Exception ex)
 			{
 				Log.Error(logSource, $"Error refreshing process state. Error: {ex.Message}", ex);
-				if (Interlocked.CompareExchange(ref monitoredProcess, null, process) == process)
-				{
-					process.Dispose();
-				}
+				TryReleaseProcess(process);
 				return false;
 			}
+		}
+
+		/// <summary>
+		/// Attempts to send a platform-appropriate graceful shutdown signal to the process.
+		/// On Windows, sends <see cref="Process.CloseMainWindow"/> if a main window exists.
+		/// On Linux/macOS, sends SIGTERM via P/Invoke.
+		/// </summary>
+		/// <param name="process">The process to signal.</param>
+		/// <param name="processId">The process ID for logging.</param>
+		/// <returns>True if a graceful shutdown signal was sent; false if no signal could be sent.</returns>
+		private bool TrySendGracefulShutdownSignal(Process process, int processId)
+		{
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				if (process.MainWindowHandle != IntPtr.Zero)
+				{
+					process.CloseMainWindow();
+					Log.Info(logSource, "KillApplication: Sent CloseMainWindow signal (Windows).");
+					return true;
+				}
+
+				Log.Info(logSource, "KillApplication: No main window detected for graceful shutdown on Windows.");
+				return false;
+			}
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+			{
+				try
+				{
+					int result = PosixKill(processId, SigTerm);
+					if (result == 0)
+					{
+						Log.Info(logSource, $"KillApplication: Sent SIGTERM to process ID: {processId} (Unix).");
+						return true;
+					}
+
+					Log.Warning(logSource, $"KillApplication: Failed to send SIGTERM to process ID: {processId}. errno: {Marshal.GetLastWin32Error()}");
+				}
+				catch (Exception ex)
+				{
+					Log.Warning(logSource, $"KillApplication: Failed to send SIGTERM: {ex.Message}");
+				}
+			}
+
+			return false;
 		}
 
 		/// <summary>
 		/// Asynchronously terminates the monitored application process.
 		/// Attempts graceful shutdown first (SIGTERM on Linux/macOS, CloseMainWindow on Windows),
 		/// then force-kills if the process does not exit within the configured timeout.
+		/// Uses a bounded overall timeout to prevent the daemon from hanging on zombie processes.
 		/// </summary>
 		/// <returns>A task representing the asynchronous kill operation.</returns>
 		public async Task KillApplicationAsync()
@@ -552,63 +839,43 @@ namespace AppHealthMonitor
 				return;
 			}
 
-			int processId = process.Id;
+			// Use a bounded CTS linked with the daemon cancellation token to prevent hanging
+			// indefinitely on zombie processes and to allow immediate exit during force-shutdown.
+			using var killTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+			killTimeoutCts.CancelAfter(MaxKillTimeout);
 
 			try
 			{
 				process.Refresh();
 				if (process.HasExited)
 				{
-					Log.Info(logSource, $"KillApplication: Process ID: {processId} has already exited.");
+					Log.Info(logSource, $"KillApplication: Process ID: {process.Id} has already exited.");
 					return;
 				}
 
+				int processId = process.Id;
+
 				Log.Warning(logSource, $"KillApplication: Attempting graceful shutdown for process ID: {processId}...");
 
-				bool gracefulShutdownAttempted = false;
-
-				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-				{
-					if (process.MainWindowHandle != IntPtr.Zero)
-					{
-						process.CloseMainWindow();
-						Log.Info(logSource, "KillApplication: Sent CloseMainWindow signal (Windows).");
-						gracefulShutdownAttempted = true;
-					}
-					else
-					{
-						Log.Info(logSource, "KillApplication: No main window detected for graceful shutdown on Windows.");
-					}
-				}
-				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-				{
-					try
-					{
-						// Kill(false) sends SIGTERM on .NET 8+ Linux/macOS via the internal process handle,
-						// which is immune to PID recycling unlike shelling out to 'kill -15'.
-						process.Kill(false);
-						Log.Info(logSource, $"KillApplication: Sent SIGTERM to process ID: {processId} (Unix).");
-						gracefulShutdownAttempted = true;
-					}
-					catch (Exception ex)
-					{
-						Log.Warning(logSource, $"KillApplication: Failed to send SIGTERM: {ex.Message}");
-					}
-				}
+				bool gracefulShutdownAttempted = TrySendGracefulShutdownSignal(process, processId);
 
 				if (gracefulShutdownAttempted)
 				{
 					Log.Debug(logSource, $"KillApplication: Waiting for process ID: {processId} to exit gracefully ({gracefulShutdownTimeout.TotalSeconds}s timeout).");
 					try
 					{
-						await process.WaitForExitAsync(CancellationToken.None)
-							.WaitAsync(gracefulShutdownTimeout, CancellationToken.None);
+						await process.WaitForExitAsync(killTimeoutCts.Token)
+							.WaitAsync(gracefulShutdownTimeout, killTimeoutCts.Token);
 						Log.Info(logSource, $"KillApplication: Process ID: {processId} exited gracefully.");
 						return;
 					}
 					catch (TimeoutException)
 					{
 						Log.Warning(logSource, $"KillApplication: Process ID: {processId} did not exit gracefully within {gracefulShutdownTimeout.TotalSeconds}s. Proceeding with force kill.");
+					}
+					catch (OperationCanceledException)
+					{
+						Log.Warning(logSource, $"KillApplication: Kill timeout exceeded while waiting for graceful shutdown of process ID: {processId}.");
 					}
 				}
 
@@ -632,22 +899,26 @@ namespace AppHealthMonitor
 
 				try
 				{
-					await process.WaitForExitAsync(CancellationToken.None)
-						.WaitAsync(forceKillTimeout, CancellationToken.None);
+					await process.WaitForExitAsync(killTimeoutCts.Token)
+						.WaitAsync(forceKillTimeout, killTimeoutCts.Token);
 					Log.Info(logSource, $"KillApplication: Process ID: {processId} and its children killed successfully.");
 				}
 				catch (TimeoutException)
 				{
 					Log.Critical(logSource, $"KillApplication: Critical Warning: Process ID: {processId} did not exit even after force kill ({forceKillTimeout.TotalSeconds}s). It might be stuck!");
 				}
+				catch (OperationCanceledException)
+				{
+					Log.Critical(logSource, $"KillApplication: Kill timeout exceeded for process ID: {processId}. Abandoning wait.");
+				}
 			}
 			catch (InvalidOperationException ex)
 			{
-				Log.Error(logSource, $"KillApplication: Process ID: {processId} already exited or invalid handle.", ex);
+				Log.Error(logSource, $"KillApplication: Process already exited or invalid handle.", ex);
 			}
 			catch (Exception ex)
 			{
-				Log.Critical(logSource, $"KillApplication: Error during application kill for process ID: {processId}. Error: {ex.Message}", ex);
+				Log.Critical(logSource, $"KillApplication: Error during application kill. Error: {ex.Message}", ex);
 			}
 			finally
 			{
@@ -656,60 +927,79 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
-		/// Launches the monitored application process with configured arguments.
+		/// Launches the monitored application process using the cached <see cref="ProcessStartInfo"/>.
+		/// Awaits termination of any stale process via <see cref="KillApplicationAsync"/> BEFORE starting
+		/// the new process to prevent port-bind conflicts from two processes running simultaneously.
 		/// </summary>
-		private void LaunchApplication()
+		/// <returns>A task representing the asynchronous launch operation.</returns>
+		private async Task LaunchApplicationAsync()
 		{
-			Log.Info(logSource, $"Launching application '{resolvedExePath}' with arguments: '{launchArguments}' (Headless: {headless})...");
+			if (!File.Exists(resolvedExePath))
+			{
+				Log.Critical(logSource, $"Executable not found at '{resolvedExePath}'. Cannot launch application.");
+				ClearMonitoredProcess();
+				return;
+			}
+
+			// Kill any stale process and await its exit BEFORE starting the new one to prevent port conflicts.
+			await KillApplicationAsync();
+
+			// Reset CPU tracker before the launch attempt so stale data is never used,
+			// regardless of whether the launch succeeds or fails.
+			cpuTracker.Reset();
+
+			Log.Info(logSource, $"Launching application '{resolvedExePath}' with arguments: '{cachedStartInfo.Arguments}' (Headless: {cachedStartInfo.CreateNoWindow})...");
 			try
 			{
-				var old = Interlocked.Exchange(ref monitoredProcess, null);
-				old?.Dispose();
+				var launched = Process.Start(cachedStartInfo);
 
-				var startInfo = new ProcessStartInfo
-				{
-					FileName = resolvedExePath,
-					Arguments = launchArguments,
-					UseShellExecute = !headless,
-					RedirectStandardOutput = false,
-					RedirectStandardError = false,
-					CreateNoWindow = headless,
-				};
-
-				var launched = Process.Start(startInfo);
-				Volatile.Write(ref monitoredProcess, launched);
 				if (launched != null)
 				{
+					var stale = Interlocked.Exchange(ref monitoredProcess, launched);
+					stale?.Dispose();
 					Log.Info(logSource, $"Application launched successfully. Process ID: {launched.Id}");
-					cpuTrackingInitialized = false;
 				}
 				else
 				{
+					ClearMonitoredProcess();
 					Log.Warning(logSource, $"Warning: Process.Start returned null for '{resolvedExePath}'. This might indicate a problem.");
 				}
 			}
-			catch (System.ComponentModel.Win32Exception ex)
+			catch (Win32Exception ex)
 			{
 				Log.Critical(logSource, $"Error launching application '{resolvedExePath}'. Check if the path is correct and the executable exists. Error: {ex.Message}", ex);
-				Volatile.Write(ref monitoredProcess, null);
+				ClearMonitoredProcess();
 			}
 			catch (Exception ex)
 			{
 				Log.Critical(logSource, $"Unexpected error launching application '{resolvedExePath}'. Error: {ex.Message}", ex);
-				Volatile.Write(ref monitoredProcess, null);
+				ClearMonitoredProcess();
 			}
 		}
 
 		/// <summary>
+		/// Atomically clears the monitored process reference and disposes the stale process.
+		/// Used on error paths in <see cref="LaunchApplicationAsync"/> to avoid duplicated cleanup logic.
+		/// </summary>
+		private void ClearMonitoredProcess()
+		{
+			var stale = Interlocked.Exchange(ref monitoredProcess, null);
+			stale?.Dispose();
+		}
+
+		/// <summary>
 		/// Disposes of the monitor by killing any active process.
+		/// Health checkers are NOT disposed here — they are shared across monitoring cycles
+		/// and owned by <see cref="DaemonOrchestrator"/>.
 		/// </summary>
 		/// <returns>A <see cref="ValueTask"/> representing the asynchronous dispose operation.</returns>
 		public async ValueTask DisposeAsync()
 		{
-			if (Interlocked.CompareExchange(ref disposed, 1, 0) != 0)
+			if (Interlocked.CompareExchange(ref isDisposed, 1, 0) != 0)
 			{
 				return;
 			}
+			Log.Info(logSource, "Disposing health monitor.");
 			await KillApplicationAsync();
 		}
 	}
