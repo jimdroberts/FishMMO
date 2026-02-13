@@ -59,21 +59,24 @@ CharacterBehaviour
 
 ## Value Calculation
 
-Each `CharacterAttribute` has three value layers:
+Each `CharacterAttribute` has four value layers:
 
-| Layer        | Description                                                        |
-|--------------|--------------------------------------------------------------------|
-| `Value`      | Base value, set from template or database.                         |
-| `Modifier`   | Sum of all formula results from child attributes.                  |
-| `FinalValue` | `Value + Modifier`, optionally clamped to `[MinValue, MaxValue]`.  |
+| Layer              | Description                                                                                  |
+|--------------------|----------------------------------------------------------------------------------------------|
+| `Value`            | Base value, set from template or database.                                                   |
+| `FormulaModifier`  | Derived from child attribute formulas. Reset and recalculated each `ApplyChildren()`.        |
+| `ExternalModifier` | Accumulated from external sources (items, buffs, regions). Persistent across recalculations. |
+| `FinalValue`       | `Value + FormulaModifier + ExternalModifier`, optionally clamped to `[MinValue, MaxValue]`.  |
 
 ```
-FinalValue = Clamp(Value + Modifier, MinValue, MaxValue)
+FinalValue = Clamp(Value + FormulaModifier + ExternalModifier, MinValue, MaxValue)
 ```
 
 Clamping is only applied when `CharacterAttributeTemplate.ClampFinalValue` is `true`.
 
-`CharacterResourceAttribute` adds a fourth layer:
+The `Modifier` property returns the total: `FormulaModifier + ExternalModifier`.
+
+`CharacterResourceAttribute` adds a fifth layer:
 
 | Layer          | Description                                                    |
 |----------------|----------------------------------------------------------------|
@@ -83,21 +86,28 @@ Clamping is only applied when `CharacterAttributeTemplate.ClampFinalValue` is `t
 
 Templates declare three types of relationships, resolved at runtime into bidirectional links between `CharacterAttribute` instances:
 
-| Relationship | Purpose                                                                 | Propagation      |
-|--------------|-------------------------------------------------------------------------|-------------------|
-| **Child**    | Provides formula-driven modifier bonuses to the owning attribute.       | Automatic upward  |
-| **Parent**   | Receives recalculation when a child changes.                            | Automatic upward  |
-| **Dependency** | Soft reference for lookups (e.g., regen rate). No formula involvement. | None              |
+| Relationship   | Purpose                                                                 | Propagation       |
+|----------------|-------------------------------------------------------------------------|-------------------|
+| **Parent**     | This attribute feeds into the parent's formulas as a child input.       | Automatic upward  |
+| **Child**      | The child feeds into this attribute's formulas as a formula input.      | Automatic upward  |
+| **Dependency** | Soft reference for lookups (e.g., regen rate). No formula involvement.  | None              |
+
+During `AddDependents()`, the wiring works as follows:
+- **ParentTypes**: The parent attribute calls `AddChild(instance)` — this attribute becomes a formula input for the parent.
+- **ChildTypes**: This attribute calls `AddChild(childInstance)` — the child becomes a formula input for this attribute.
+- **DependantTypes**: This attribute calls `AddDependant(dependantInstance)` — a soft reference for lookups.
 
 ### Propagation Flow
 
-1. An attribute's base `Value` changes.
-2. `UpdateValues()` calls `ApplyChildren()` which resets `Modifier` to `0`.
+1. An attribute's base `Value` or `ExternalModifier` changes.
+2. `UpdateValues()` calls `ApplyChildren()` which resets `FormulaModifier` to `0`.
 3. For each entry in `Template.Formulas`, the matching child attribute is found and `CalculateBonus()` is called.
-4. All formula results are summed into `Modifier`.
-5. `FinalValue` is recalculated.
+4. All formula results are summed into `FormulaModifier`.
+5. `FinalValue` is recalculated as `Value + FormulaModifier + ExternalModifier`.
 6. If `FinalValue` changed, propagation continues upward to all parent attributes.
 7. `OnAttributeUpdated` fires after each recalculation.
+
+**Key design**: `ApplyChildren()` only resets `FormulaModifier`. The `ExternalModifier` (from items, buffs, regions) is preserved across recalculations, ensuring equipment and buff bonuses are never lost during formula propagation.
 
 ## Formula System
 
@@ -166,14 +176,16 @@ Regeneration attributes (HealthRegeneration, ManaRegeneration, StaminaRegenerati
 The attribute system is consumed by many other systems:
 
 - **Ability System** — Checks/consumes mana, applies damage via attributes.
-- **Buff System** — Applies/removes modifiers via `AddModifier()` / `AddModifier(-amount)`.
-- **Item System** — Applies item attribute bonuses.
+- **Buff System** — Applies/removes external modifiers via `AddModifier()` / `AddModifier(-amount)`.
+- **Item System** — Applies item attribute bonuses via `AddModifier()` on equip, reversed on unequip.
 - **Quest System** — Checks attribute prerequisites.
 - **KCC (Movement)** — Reads stamina for sprint/jump.
-- **Party System** — Gets health percentages.
+- **Party System** — Gets health percentages (`CurrentValue / FinalValue`).
 - **UI** — Resource bars, target frames, pet controls.
-- **Region Effects** — Zone-based attribute modification.
+- **Region Effects** — Zone-based attribute modification via `AddModifier()`.
 - **Pet System** — Manages pet attributes.
 - **Achievement System** — Tracks damage/heal/kill milestones.
 - **Faction System** — Adjusted on kill events.
 - **Database Layer** — Persists/loads via `CharacterAttributeData` DTO and `ICharacterAttributeService`.
+
+All external systems use `AddModifier()` / `SetModifier()` which operate on `ExternalModifier`, ensuring their contributions are never overwritten by the formula recalculation system.
