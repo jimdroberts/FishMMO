@@ -43,7 +43,6 @@ ExportedObj/
 *.booproj
 *.svd
 *.pdb
-*.md
 *.mdb
 *.yml
 *.opendb
