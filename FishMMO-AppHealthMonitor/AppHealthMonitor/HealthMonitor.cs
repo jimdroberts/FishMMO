@@ -114,9 +114,10 @@ namespace AppHealthMonitor
 			public bool Initialized;
 
 			/// <summary>
-			/// The timestamp of the last CPU usage measurement.
+			/// The monotonic timestamp (from <see cref="Stopwatch.GetTimestamp"/>)
+			/// of the last CPU usage measurement.
 			/// </summary>
-			public DateTime LastCheckTime;
+			public long LastCheckTimestamp;
 
 			/// <summary>
 			/// The cumulative processor time at the last measurement.
@@ -282,6 +283,12 @@ namespace AppHealthMonitor
 		/// <returns>A task that represents the asynchronous monitoring operation.</returns>
 		public async Task StartMonitoringAsync()
 		{
+			if (cancellationToken.IsCancellationRequested)
+			{
+				Log.Info(logSource, "Monitoring start skipped because cancellation was already requested.");
+				return;
+			}
+
 			Log.Info(logSource, "Starting monitoring loop.");
 
 			if (!IsApplicationProcessRunning())
@@ -386,7 +393,7 @@ namespace AppHealthMonitor
 				else
 				{
 					Volatile.Write(ref currentRestartAttemptCount, 0);
-					Log.Info(logSource, "Application is healthy.");
+					Log.Debug(logSource, "Application is healthy.");
 				}
 
 				try
@@ -562,7 +569,7 @@ namespace AppHealthMonitor
 				{
 					if (!cpuTracker.Initialized)
 					{
-						cpuTracker.LastCheckTime = DateTime.UtcNow;
+						cpuTracker.LastCheckTimestamp = Stopwatch.GetTimestamp();
 						cpuTracker.LastTotalProcessorTime = process.TotalProcessorTime;
 						cpuTracker.Initialized = true;
 						Log.Debug(logSource, "Initializing CPU usage tracking.");
@@ -570,14 +577,14 @@ namespace AppHealthMonitor
 					}
 
 					TimeSpan currentTotalProcessorTime = process.TotalProcessorTime;
-					DateTime currentCheckTime = DateTime.UtcNow;
+					long currentCheckTimestamp = Stopwatch.GetTimestamp();
 
 					double cpuTimeUsed = (currentTotalProcessorTime - cpuTracker.LastTotalProcessorTime).TotalMilliseconds;
-					double timeElapsed = (currentCheckTime - cpuTracker.LastCheckTime).TotalMilliseconds;
+					double timeElapsed = (currentCheckTimestamp - cpuTracker.LastCheckTimestamp) * 1000.0 / Stopwatch.Frequency;
 
 					// Always update the tracker so subsequent checks use accurate deltas,
 					// even when the current reading exceeds the threshold.
-					cpuTracker.LastCheckTime = currentCheckTime;
+					cpuTracker.LastCheckTimestamp = currentCheckTimestamp;
 					cpuTracker.LastTotalProcessorTime = currentTotalProcessorTime;
 
 					if (timeElapsed > 0)

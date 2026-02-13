@@ -4,9 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- CS4014: All 133 unawaited Task-returning calls in this project are FishMMO-Logger's
-         fire-and-forget async log methods (Log.Info, Log.Warning, Log.Error, Log.Critical, Log.Debug).
-         These are intentionally unawaited by design across all 8 source files. -->
+        <!-- CS4014: FishMMO-Logger methods are intentionally fire-and-forget in this daemon. -->
     <NoWarn>$(NoWarn);CS4014</NoWarn>
   </PropertyGroup>
   <ItemGroup>

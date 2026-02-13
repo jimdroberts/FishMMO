@@ -181,14 +181,30 @@ namespace AppHealthMonitor
 			// Store the resolved path to avoid redundant re-resolution in HealthMonitor.
 			ApplicationExePath = resolvedPath;
 
+			string normalizedHealthCheckHost = NormalizeHealthCheckHost(HealthCheckHost);
+			if (string.IsNullOrWhiteSpace(normalizedHealthCheckHost))
+			{
+				error = $"HealthCheckHost '{HealthCheckHost}' is empty or invalid for '{Name}'.";
+				return false;
+			}
+
 			// HealthCheckHost is guaranteed non-empty by ApplyDefaults — only validate format.
-			if (Uri.CheckHostName(HealthCheckHost) == UriHostNameType.Unknown)
+			if (Uri.CheckHostName(normalizedHealthCheckHost) == UriHostNameType.Unknown)
 			{
 				error = $"HealthCheckHost '{HealthCheckHost}' is not a valid hostname or IP address for '{Name}'.";
 				return false;
 			}
 
-			if (PortTypes.Count > 0 && (MonitoredPort < 1 || MonitoredPort > 65535))
+			// Store normalized host to keep probe behavior consistent across checkers.
+			HealthCheckHost = normalizedHealthCheckHost;
+
+			if (MonitoredPort < 0 || MonitoredPort > 65535)
+			{
+				error = $"MonitoredPort must be between 0 and 65535 for '{Name}'. Got: {MonitoredPort}.";
+				return false;
+			}
+
+			if (PortTypes.Count > 0 && MonitoredPort == 0)
 			{
 				error = $"MonitoredPort must be between 1 and 65535 when PortTypes are configured for '{Name}'.";
 				return false;
@@ -337,6 +353,28 @@ namespace AppHealthMonitor
 			{
 				PortTypes = PortTypes.Distinct().ToList();
 			}
+		}
+
+		/// <summary>
+		/// Normalizes a configured host value for consistent health checker usage.
+		/// Accepts bracketed IPv6 input (for example, <c>[::1]</c>) and stores it unbracketed.
+		/// </summary>
+		/// <param name="host">The raw configured host value.</param>
+		/// <returns>The normalized host string, or empty string when input is blank.</returns>
+		private static string NormalizeHealthCheckHost(string host)
+		{
+			if (string.IsNullOrWhiteSpace(host))
+			{
+				return string.Empty;
+			}
+
+			host = host.Trim();
+			if (host.StartsWith('[') && host.EndsWith(']') && host.Length > 2)
+			{
+				host = host[1..^1];
+			}
+
+			return host;
 		}
 	}
 }

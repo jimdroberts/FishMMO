@@ -25,15 +25,13 @@ namespace AppHealthMonitor
 	{
 		/// <summary>
 		/// Gets a human-readable state label derived from the current monitor status.
-		/// Returns "EXHAUSTED" when all restart attempts are used, "STARTING" during the initial
-		/// health check delay, "HEALTHY" when the process is running, or "DOWN" otherwise.
+		/// Returns "EXHAUSTED" when all restart attempts are used, "DOWN" when the process is not running,
+		/// "STARTING" while the process is running but still in initial delay, and "HEALTHY" otherwise.
 		/// </summary>
-		public string StateLabel => this switch
-		{
-			{ MaxRestartsReached: true } => "EXHAUSTED",
-			{ HasCompletedInitialCheck: false } => "STARTING",
-			{ IsRunning: true } => "HEALTHY",
-			_ => "DOWN",
-		};
+		public string StateLabel =>
+			MaxRestartsReached ? "EXHAUSTED" :
+			!IsRunning ? "DOWN" :
+			!HasCompletedInitialCheck ? "STARTING" :
+			"HEALTHY";
 	}
 }

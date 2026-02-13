@@ -13,13 +13,14 @@
 - **CPU and memory monitoring** with configurable thresholds and transient failure tolerance
 - **Port health checks** via TCP, UDP, and WebSocket with configurable timeouts and host address
 - **Graceful and forced shutdown** with platform-specific signals (SIGTERM on Linux/macOS, CloseMainWindow on Windows)
-- **Signal handling** — Ctrl+C and SIGTERM both suppress default termination to ensure `DisposeAsync` runs and child processes are cleaned up
+- **Signal handling** — Ctrl+C always suppresses default termination; SIGTERM interception is enabled on supported Unix platforms to ensure `DisposeAsync` runs and child processes are cleaned up
 - **Kill-before-launch lifecycle** preventing port-bind conflicts, with atomic process reference management
 - **Drift-free health check cadence** via `PeriodicTimer`
-- **Comprehensive startup validation** — executable paths, port/PortType consistency, duplicate names, upper-bound limits, host format, and config deserialization errors
+- **Comprehensive startup validation** — executable paths, strict port/PortType consistency, duplicate names, upper-bound limits, host format, and config deserialization errors
+- **Fail-fast startup policy** — any invalid application configuration aborts daemon startup
 - **Thread-safe counters** using `Interlocked.Increment` for failure tracking with `Volatile`/`Interlocked` synchronization throughout
 - **Race-free disposal** — cycle completion is captured before cancellation with bounded timeout awaiting
-- **Cancellable console input** via .NET 8's native `ReadLineAsync(CancellationToken)` with EOF detection triggering automatic daemon shutdown
+- **Cancellable console input** via .NET 8's native `ReadLineAsync(CancellationToken)` with EOF-triggered shutdown in interactive mode
 - **IPv6-safe WebSocket probing** with double-bracket prevention for pre-bracketed addresses
 - **Structured logging** with configurable output via FishMMO-Logger
 - **Cross-platform** — Windows, Linux, macOS
@@ -32,8 +33,8 @@
 | `AppConfig.cs` | Configuration POCO with defaults, validation, path resolution, and deduplication |
 | `DaemonOrchestrator.cs` | Daemon lifecycle, monitor creation/cleanup, start/stop signaling, race-free disposal |
 | `HealthMonitor.cs` | Per-app monitoring loop — process lifecycle, health checks, circuit breaker, restarts |
-| `CommandHandler.cs` | Console command registration, dispatch, headless mode, EOF-safe stdin with auto-shutdown |
-| `HealthCheckerFactory.cs` | Creates `IHealthChecker` instances from `PortType` enums with null-guard and dedup safety |
+| `CommandHandler.cs` | Console command registration, dispatch, headless mode, EOF-safe stdin behavior, bounded force-kill cleanup waiting |
+| `HealthCheckerFactory.cs` | Creates `IHealthChecker` instances from `PortType` enums with null-guard and UDP-only warning |
 | `TcpHealthChecker.cs` | TCP connect probe with timeout and input validation |
 | `UdpHealthChecker.cs` | UDP send probe (fire-and-forget) with input validation |
 | `WebSocketHealthChecker.cs` | WebSocket connect-only probe with IPv6 safety |
@@ -119,6 +120,8 @@ sudo systemctl status apphealthmonitor
 
 Each entry in the `Applications` array defines an application to monitor. Names must be unique.
 
+> Replace all sample `ApplicationExePath` values with real executable paths before running. Placeholder paths will fail startup validation.
+
 ```json
 {
   "Headless": false,
@@ -171,24 +174,24 @@ Each entry in the `Applications` array defines an application to monitor. Names 
 | **LaunchDelaySeconds** | Delay before launching the next monitor | `0` | 0–3600 |
 | **CpuThresholdPercent** | CPU threshold for restart (`0` = disabled) | `0` | 0–100 |
 | **MemoryThresholdMB** | Memory threshold in MB (`0` = disabled) | `0` | 0–1048576 |
-| **GracefulShutdownTimeoutSeconds** | Graceful shutdown wait | `10` | 1–120 |
-| **ForceKillTimeoutSeconds** | Force-kill wait | `5` | 1–60 |
+| **GracefulShutdownTimeoutSeconds** | Graceful shutdown wait | `1` | 1–120 |
+| **ForceKillTimeoutSeconds** | Force-kill wait | `1` | 1–60 |
 | **HealthCheckHost** | Target address for port checks | `127.0.0.1` | Valid host/IP |
-| **ResourceCheckFailureThreshold** | Consecutive resource failures before restart | `2` | 1–100 |
-| **InitialRestartDelaySeconds** | Initial backoff delay | `5` | 1–600 |
-| **MaxRestartDelaySeconds** | Maximum backoff delay (with ±20% jitter) | `60` | 1–3600 |
-| **MaxRestartAttempts** | Max consecutive restarts before giving up | `5` | 1–100 |
-| **InitialHealthCheckDelaySeconds** | Delay before first health check after launch | `30` | 1–600 |
-| **PostLaunchSettleDelaySeconds** | Settle delay after launch/restart | `5` | 1–300 |
-| **PortCheckTimeoutMs** | TCP/UDP check timeout | `2000` | 1–30000 |
-| **WebSocketCheckTimeoutMs** | WebSocket check timeout | `5000` | 1–60000 |
-| **CircuitBreakerFailureThreshold** | Consecutive port failures to trigger restart | `3` | 1–100 |
+| **ResourceCheckFailureThreshold** | Consecutive resource failures before restart | `1` | 1–100 |
+| **InitialRestartDelaySeconds** | Initial backoff delay | `1` | 1–600 |
+| **MaxRestartDelaySeconds** | Maximum backoff delay (with ±20% jitter) | `1` | 1–3600 |
+| **MaxRestartAttempts** | Max consecutive restarts before giving up | `1` | 1–100 |
+| **InitialHealthCheckDelaySeconds** | Delay before first health check after launch | `1` | 1–600 |
+| **PostLaunchSettleDelaySeconds** | Settle delay after launch/restart | `1` | 1–300 |
+| **PortCheckTimeoutMs** | TCP/UDP check timeout | `1` | 1–30000 |
+| **WebSocketCheckTimeoutMs** | WebSocket check timeout | `1` | 1–60000 |
+| **CircuitBreakerFailureThreshold** | Consecutive port failures to trigger restart | `1` | 1–100 |
 
-> Values below the minimum are clamped automatically. Setting `MonitoredPort` without `PortTypes` (or vice versa) is rejected at startup.
+> Values below the minimum are clamped automatically. Any invalid application entry causes startup to fail fast. `MonitoredPort` must always be in the range `0..65535`; when `PortTypes` is configured, `MonitoredPort` must be `1..65535`.
 
 ### Logging
 
-Configured via `logging.json` (FishMMO-Logger). If absent, library defaults apply.
+Configured via `logging.json` (FishMMO-Logger). The daemon starts in fail-fast mode: if `logging.json` is missing or invalid, startup aborts with a non-zero exit code.
 
 ## Console Commands
 

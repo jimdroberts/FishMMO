@@ -17,19 +17,51 @@ namespace AppHealthMonitor
 		private const string LoggingConfigName = "logging.json";
 
 		/// <summary>
+		/// Attempts to register a SIGTERM handler on supported Unix platforms.
+		/// Returns null on unsupported platforms so daemon startup is never blocked.
+		/// </summary>
+		/// <param name="orchestrator">The orchestrator to signal for daemon shutdown.</param>
+		/// <returns>A signal registration when supported; otherwise, null.</returns>
+		private static PosixSignalRegistration? TryRegisterSigTermHandler(DaemonOrchestrator orchestrator)
+		{
+			if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+			{
+				return null;
+			}
+
+			try
+			{
+				return PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+				{
+					if (!orchestrator.IsDaemonShutdownRequested)
+					{
+						Log.Info("Daemon", "SIGTERM received. Signalling daemon shutdown...");
+						orchestrator.Shutdown();
+					}
+					context.Cancel = true;
+				});
+			}
+			catch (PlatformNotSupportedException)
+			{
+				Log.Warning("Daemon", "SIGTERM handler is not supported on this platform/runtime. Continuing without SIGTERM interception.");
+				return null;
+			}
+		}
+
+		/// <summary>
 		/// Main entry point for the Application Health Monitor daemon.
 		/// Initializes configuration, logging, and starts the orchestration loop.
 		/// </summary>
 		/// <returns>A task representing the asynchronous operation.</returns>
 		static async Task Main()
 		{
-			string workingDirectory = Directory.GetCurrentDirectory();
+			string applicationBaseDirectory = AppContext.BaseDirectory;
 
 			IConfigurationRoot configuration;
 			try
 			{
 				var builder = new ConfigurationBuilder()
-					.SetBasePath(workingDirectory)
+					.SetBasePath(applicationBaseDirectory)
 					.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
 
 				configuration = builder.Build();
@@ -37,12 +69,12 @@ namespace AppHealthMonitor
 			catch (Exception ex)
 			{
 				Console.Error.WriteLine($"Failed to load appsettings.json: {ex.Message}");
-				Console.Error.WriteLine("Ensure appsettings.json exists in the working directory and contains valid JSON.");
+				Console.Error.WriteLine($"Ensure appsettings.json exists in '{applicationBaseDirectory}' and contains valid JSON.");
 				Environment.ExitCode = 1;
 				return;
 			}
 
-			string configFilePath = Path.Combine(workingDirectory, LoggingConfigName);
+			string configFilePath = Path.Combine(applicationBaseDirectory, LoggingConfigName);
 			try
 			{
 				Log.Initialize(configFilePath, new ConsoleFormatter());
@@ -50,7 +82,7 @@ namespace AppHealthMonitor
 			catch (Exception ex)
 			{
 				Console.Error.WriteLine($"Failed to initialize logging from '{LoggingConfigName}': {ex.Message}");
-				Console.Error.WriteLine("Ensure logging.json exists in the working directory and contains valid JSON.");
+				Console.Error.WriteLine($"Ensure {LoggingConfigName} exists in '{applicationBaseDirectory}' and contains valid JSON.");
 				Environment.ExitCode = 1;
 				return;
 			}
@@ -110,19 +142,9 @@ namespace AppHealthMonitor
 					};
 					Console.CancelKeyPress += cancelHandler;
 
-					// SIGTERM (.NET default: Environment.Exit) does NOT await IAsyncDisposable,
-					// so DisposeAsync would never run and child processes would be orphaned.
-					// Setting Cancel = true suppresses Environment.Exit, allowing the await using
-					// block to unwind naturally through the orchestrator's shutdown path.
-					using var sigTermRegistration = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
-					{
-						if (!orchestrator.IsDaemonShutdownRequested)
-						{
-							Log.Info("Daemon", "SIGTERM received. Signalling daemon shutdown...");
-							orchestrator.Shutdown();
-						}
-						context.Cancel = true;
-					});
+					// SIGTERM interception is registered only on supported Unix platforms.
+					// On those platforms, Cancel=true suppresses Environment.Exit so await using can unwind.
+					using var sigTermRegistration = TryRegisterSigTermHandler(orchestrator);
 
 					try
 					{

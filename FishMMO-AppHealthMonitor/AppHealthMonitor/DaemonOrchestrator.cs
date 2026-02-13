@@ -60,6 +60,12 @@ namespace AppHealthMonitor
 		private static readonly TimeSpan disposeTimeout = TimeSpan.FromSeconds(30);
 
 		/// <summary>
+		/// Maximum time to wait for a force-kill request to observe cycle cleanup completion.
+		/// Prevents command handlers from blocking indefinitely on stuck monitoring cycles.
+		/// </summary>
+		private static readonly TimeSpan forceKillWaitTimeout = TimeSpan.FromSeconds(30);
+
+		/// <summary>
 		/// Gets whether the daemon has been signalled to shut down.
 		/// </summary>
 		public bool IsDaemonShutdownRequested => daemonCts.IsCancellationRequested;
@@ -94,10 +100,15 @@ namespace AppHealthMonitor
 		/// </summary>
 		/// <param name="appConfigs">The raw application configurations from settings.</param>
 		/// <param name="headless">Whether all monitored applications should be launched in headless mode.</param>
-		/// <exception cref="InvalidOperationException">Thrown when no valid configurations remain after validation, or when duplicate application names are detected.</exception>
+		/// <exception cref="InvalidOperationException">Thrown when no application configurations are provided, a configuration entry is invalid, or duplicate application names are detected.</exception>
 		public DaemonOrchestrator(IReadOnlyList<AppConfig> appConfigs, bool headless)
 		{
 			ArgumentNullException.ThrowIfNull(appConfigs);
+
+			if (appConfigs.Count == 0)
+			{
+				throw new InvalidOperationException("No application configurations were provided.");
+			}
 
 			var apps = new List<(AppConfig, IReadOnlyList<IHealthChecker>)>(appConfigs.Count);
 			var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -106,8 +117,7 @@ namespace AppHealthMonitor
 			{
 				if (!appConfig.TryApplyDefaultsAndValidate(out string error))
 				{
-					Log.Warning("Orchestration", $"Skipping invalid configuration: {error}");
-					continue;
+					throw new InvalidOperationException($"Invalid configuration for application '{appConfig.Name}': {error}");
 				}
 
 				if (!seenNames.Add(appConfig.Name))
@@ -119,11 +129,6 @@ namespace AppHealthMonitor
 				apps.Add((appConfig, healthCheckers));
 
 				LogAppConfiguration(appConfig);
-			}
-
-			if (apps.Count == 0)
-			{
-				throw new InvalidOperationException("No valid application configurations found after validation.");
 			}
 
 			validatedApps = apps;
@@ -256,10 +261,48 @@ namespace AppHealthMonitor
 				{
 					tasks[i] = snapshot[i].KillApplicationAsync();
 				}
-				await Task.WhenAll(tasks);
+
+				try
+				{
+					await Task.WhenAll(tasks).WaitAsync(forceKillWaitTimeout, daemonCts.Token);
+				}
+				catch (TimeoutException)
+				{
+					Log.Warning("Orchestration", $"Force-kill monitor termination did not complete within {forceKillWaitTimeout.TotalSeconds}s.");
+				}
+				catch (OperationCanceledException)
+				{
+					// Daemon is shutting down; caller will continue cleanup through cycle completion.
+				}
 			}
 
 			return capturedCycleCompletion;
+		}
+
+		/// <summary>
+		/// Waits for monitoring cycle cleanup to finish with a bounded timeout.
+		/// </summary>
+		/// <param name="cycleCompletion">The cycle completion task captured from <see cref="ForceKillAllAsync"/>.</param>
+		/// <returns>A task representing the wait operation.</returns>
+		public async Task WaitForCycleCompletionAsync(Task? cycleCompletion)
+		{
+			if (cycleCompletion == null)
+			{
+				return;
+			}
+
+			try
+			{
+				await cycleCompletion.WaitAsync(forceKillWaitTimeout, daemonCts.Token);
+			}
+			catch (TimeoutException)
+			{
+				Log.Warning("Orchestration", $"Force-kill cleanup did not complete within {forceKillWaitTimeout.TotalSeconds}s.");
+			}
+			catch (OperationCanceledException)
+			{
+				// Daemon is shutting down; no further waiting is required.
+			}
 		}
 
 		/// <summary>
@@ -337,6 +380,8 @@ namespace AppHealthMonitor
 			catch (Exception ex)
 			{
 				Log.Critical("Orchestration", $"An unhandled error occurred in the monitoring orchestration loop: {ex.Message}", ex);
+				Shutdown();
+				throw;
 			}
 		}
 
@@ -376,9 +421,22 @@ namespace AppHealthMonitor
 
 					var (appConfig, healthCheckers) = validatedApps[i];
 
+					if (linkedCts.Token.IsCancellationRequested)
+					{
+						Log.Warning("Orchestration", "Monitoring launch cancelled before monitor creation.");
+						break;
+					}
+
 					Log.Info("Orchestration", $"--- Launching Monitor for: [{appConfig.Name}] ---");
 
 					var monitor = new HealthMonitor(appConfig, healthCheckers, headless, linkedCts.Token);
+
+					if (linkedCts.Token.IsCancellationRequested)
+					{
+						Log.Warning("Orchestration", "Monitoring launch cancelled after monitor creation.");
+						await monitor.DisposeAsync();
+						break;
+					}
 
 					lock (activeMonitorsLock)
 					{

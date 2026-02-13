@@ -83,11 +83,8 @@ namespace AppHealthMonitor
 		private async Task ForceKillAndWaitAsync()
 		{
 			var cycleCompletion = await orchestrator.ForceKillAllAsync();
-			if (cycleCompletion != null)
-			{
-				Log.Info("DaemonCommand", "Waiting for monitoring cycle cleanup to complete...");
-				await cycleCompletion;
-			}
+			Log.Info("DaemonCommand", "Waiting for monitoring cycle cleanup to complete...");
+			await orchestrator.WaitForCycleCompletionAsync(cycleCompletion);
 		}
 
 		/// <summary>
