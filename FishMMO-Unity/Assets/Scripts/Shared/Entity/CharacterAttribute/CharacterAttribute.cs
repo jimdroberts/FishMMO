@@ -30,12 +30,20 @@ namespace FishMMO.Shared
 		private int value;
 
 		/// <summary>
-		/// The sum of all modifiers applied to the attribute (e.g., from buffs, equipment, or formulas).
+		/// The modifier derived from child attribute formulas. Reset and recalculated each time
+		/// <see cref="ApplyChildren"/> runs. This value is entirely managed by the formula system.
 		/// </summary>
-		private int modifier;
+		private int formulaModifier;
 
 		/// <summary>
-		/// The final value of the attribute after applying modifiers and clamping (if enabled by the template).
+		/// The modifier accumulated from external sources such as equipped items, buffs, and region effects.
+		/// Persistent across formula recalculations. Managed via <see cref="AddModifier"/> and <see cref="SetModifier"/>.
+		/// </summary>
+		private int externalModifier;
+
+		/// <summary>
+		/// The final value of the attribute after applying all modifiers and clamping (if enabled by the template).
+		/// Calculated as <c>value + formulaModifier + externalModifier</c>.
 		/// </summary>
 		private int finalValue;
 
@@ -105,29 +113,31 @@ namespace FishMMO.Shared
 			}
 		}
 		/// <summary>
-		/// Sets the modifier value and recalculates the final value if changed.
+		/// Sets the external modifier value and propagates changes through the attribute hierarchy.
+		/// Used by systems such as NPC initialization and network synchronization.
 		/// </summary>
-		/// <param name="newValue">The new modifier value.</param>
+		/// <param name="newValue">The new external modifier value.</param>
 		public void SetModifier(int newValue)
 		{
-			if (modifier != newValue)
+			if (externalModifier != newValue)
 			{
-				modifier = newValue;
-				finalValue = CalculateFinalValue();
+				externalModifier = newValue;
+				UpdateValues();
 			}
 		}
 
 		/// <summary>
-		/// Adds or subtracts an amount from the modifier and recalculates the final value if changed.
+		/// Adds or subtracts an amount from the external modifier and propagates changes through the attribute hierarchy.
+		/// Used by items, buffs, and region effects. Addition: AddModifier(10) | Subtraction: AddModifier(-10)
 		/// </summary>
 		/// <param name="amount">The amount to add (can be negative).</param>
 		public void AddModifier(int amount)
 		{
-			int tmp = modifier + amount;
-			if (modifier != tmp)
+			int tmp = externalModifier + amount;
+			if (externalModifier != tmp)
 			{
-				modifier = tmp;
-				finalValue = CalculateFinalValue();
+				externalModifier = tmp;
+				UpdateValues();
 			}
 		}
 		/// <summary>
@@ -141,9 +151,19 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Gets the current modifier value.
+		/// Gets the total modifier value (formula-derived + external).
 		/// </summary>
-		public int Modifier { get { return modifier; } }
+		public int Modifier { get { return formulaModifier + externalModifier; } }
+
+		/// <summary>
+		/// Gets the modifier derived from child attribute formulas.
+		/// </summary>
+		public int FormulaModifier { get { return formulaModifier; } }
+
+		/// <summary>
+		/// Gets the modifier accumulated from external sources (items, buffs, regions).
+		/// </summary>
+		public int ExternalModifier { get { return externalModifier; } }
 
 		/// <summary>
 		/// Gets the final value of the attribute after applying modifiers and clamping.
@@ -193,7 +213,8 @@ namespace FishMMO.Shared
 		{
 			Template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(templateID);
 			value = initialValue;
-			modifier = initialModifier;
+			externalModifier = initialModifier;
+			formulaModifier = 0;
 			finalValue = CalculateFinalValue();
 		}
 
@@ -366,20 +387,20 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Applies all child attribute formulas to calculate the modifier, then updates the final value.
-		/// Invokes the OnAttributeUpdated event after recalculation.
+		/// Recalculates the formula modifier from child attribute formulas, then updates the final value.
+		/// Only resets <see cref="formulaModifier"/>; <see cref="externalModifier"/> is preserved.
+		/// Invokes the <see cref="OnAttributeUpdated"/> event after recalculation.
 		/// </summary>
 		private void ApplyChildren()
 		{
-			modifier = 0;
+			formulaModifier = 0;
 			if (Template.Formulas != null)
 			{
 				foreach (KeyValuePair<CharacterAttributeTemplate, CharacterAttributeFormulaTemplate> pair in Template.Formulas)
 				{
 					if (children.TryGetValue(pair.Key.Name, out CharacterAttribute child))
 					{
-						// Calculate the bonus from the child attribute using the formula
-						modifier += pair.Value.CalculateBonus(this, child);
+						formulaModifier += pair.Value.CalculateBonus(this, child);
 					}
 				}
 			}
@@ -394,12 +415,12 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private int CalculateFinalValue()
 		{
+			int total = value + formulaModifier + externalModifier;
 			if (Template.ClampFinalValue)
 			{
-				// Clamp the value to the template's min and max if clamping is enabled
-				return (value + modifier).Clamp(Template.MinValue, Template.MaxValue);
+				return total.Clamp(Template.MinValue, Template.MaxValue);
 			}
-			return value + modifier;
+			return total;
 		}
 	}
 }
