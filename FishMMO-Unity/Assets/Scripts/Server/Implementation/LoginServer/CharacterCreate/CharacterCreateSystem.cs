@@ -395,8 +395,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 					BuildStartingItems(characterID, raceTemplate.StartingInventoryItems, inventoryItems);
 
 					List<CharacterEquipmentData> equipment = new List<CharacterEquipmentData>();
-					BuildStartingEquipment(characterID, StartingEquipment, equipment, initialAttributes);
-					BuildStartingEquipment(characterID, raceTemplate.StartingEquipment, equipment, initialAttributes);
+					BuildStartingEquipment(characterID, StartingEquipment, equipment);
+					BuildStartingEquipment(characterID, raceTemplate.StartingEquipment, equipment);
 
 					// --- Persist all sub-entities within the same transaction ---
 
@@ -568,13 +568,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Builds starting equipment data for a newly created character and updates initial attribute values.
+		/// Builds starting equipment data for a newly created character.
+		/// Equipment attribute bonuses are not baked into base attribute values;
+		/// they are applied at runtime via Equip() on character load.
 		/// </summary>
 		/// <param name="characterID">ID of the character to add equipment to.</param>
 		/// <param name="startingEquipment">List of equipment templates to add.</param>
 		/// <param name="equipment">Target list to append equipment data to.</param>
-		/// <param name="initialAttributes">Dictionary of initial character attributes to update with equipment bonuses.</param>
-		private void BuildStartingEquipment(long characterID, List<EquippableItemTemplate> startingEquipment, List<CharacterEquipmentData> equipment, Dictionary<int, CharacterAttributeData> initialAttributes)
+		private void BuildStartingEquipment(long characterID, List<EquippableItemTemplate> startingEquipment, List<CharacterEquipmentData> equipment)
 		{
 			if (startingEquipment != null)
 			{
@@ -582,25 +583,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					EquippableItemTemplate itemTemplate = startingEquipment[i];
 
-					// Generate the item attributes so we can add them to the initial character attributes
+					// Generate the item seed for deterministic attribute generation on load
 					ItemGenerator itemGenerator = new ItemGenerator();
 					itemGenerator.Generate(1, itemTemplate);
-
-					// Update our initial attribute values to include equipped item attributes
-					foreach (ItemAttribute itemAttribute in itemGenerator.Attributes.Values)
-					{
-						if (initialAttributes.TryGetValue(itemAttribute.Template.CharacterAttribute.ID, out CharacterAttributeData attributeData))
-						{
-							initialAttributes[itemAttribute.Template.CharacterAttribute.ID] = new CharacterAttributeData(
-								id: attributeData.ID,
-								version: attributeData.Version,
-								characterID: attributeData.CharacterID,
-								templateID: attributeData.TemplateID,
-								value: attributeData.Value + (int)itemAttribute.value,
-								currentValue: attributeData.CurrentValue
-							);
-						}
-					}
 
 					// Add the equipped item data
 					equipment.Add(new CharacterEquipmentData(

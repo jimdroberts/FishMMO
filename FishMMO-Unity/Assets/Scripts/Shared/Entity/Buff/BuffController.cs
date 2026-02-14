@@ -58,7 +58,7 @@ namespace FishMMO.Shared
 			if (Buffs == null ||
 				Buffs.Count < 1)
 			{
-				writer.WriteUInt32(0);
+				writer.WriteInt32(0);
 				return;
 			}
 
@@ -156,15 +156,25 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Applies a buff instance to the character if not already present, invoking appropriate events.
+		/// Applies a pre-constructed buff instance to the character if not already present.
+		/// Calls OnApply for the base application and OnApplyStack for each existing stack
+		/// so that attribute modifiers are correctly restored (e.g., from DB or network payload).
+		/// Stacks are not incremented because they are already set on the buff instance.
 		/// </summary>
 		/// <param name="buff">The buff instance to apply.</param>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Apply(Buff buff)
 		{
 			if (!buffs.ContainsKey(buff.Template.ID))
 			{
+				// Apply the base buff effect (e.g., AddModifier for AttributeBuffTemplate)
+				buff.Apply(Character);
 				buffs.Add(buff.Template.ID, buff);
+
+				// Re-apply stack effects without incrementing Stacks (already set from source)
+				for (int i = 0; i < buff.Stacks; ++i)
+				{
+					buff.Template.OnApplyStack(buff, Character);
+				}
 
 				if (buff.Template.IsDebuff)
 				{

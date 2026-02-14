@@ -868,6 +868,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Item item = new Item(equip.ID, equip.Seed, equip.TemplateID, equip.Amount);
 					item.Version = equip.Version;
 					equipmentController.SetItemSlot(item, equip.Slot);
+
+					// Apply equipment attribute modifiers via externalModifier
+					if (item.IsEquippable)
+					{
+						item.Equippable.Equip(character);
+					}
 				}
 			}
 
