@@ -5,6 +5,10 @@ using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// ScriptableObject template containing a matrix of alliance levels between all factions.
+	/// Provides editor tools for rebuilding the matrix and propagating relationships to individual faction templates.
+	/// </summary>
 	[CreateAssetMenu(fileName = "New Faction Matrix", menuName = "FishMMO/Character/Faction/Faction Matrix", order = 1)]
 	public class FactionMatrixTemplate : CachedScriptableObject<FactionMatrixTemplate>, ICachedObject
 	{
@@ -98,16 +102,19 @@ namespace FishMMO.Shared
 					else
 					{
 						FactionAllianceLevel allianceLevel = Matrix.Factions[index];
-						if (allianceLevel == FactionAllianceLevel.Neutral)
+						switch (allianceLevel)
 						{
-							Factions[x].DefaultNeutral.Add(Factions[y]);
-							UnityEditor.EditorUtility.SetDirty(Factions[x]);
+							case FactionAllianceLevel.Ally:
+								Factions[x].DefaultAllied.Add(Factions[y]);
+								break;
+							case FactionAllianceLevel.Neutral:
+								Factions[x].DefaultNeutral.Add(Factions[y]);
+								break;
+							case FactionAllianceLevel.Enemy:
+								Factions[x].DefaultHostile.Add(Factions[y]);
+								break;
 						}
-						else
-						{
-							Factions[x].DefaultHostile.Add(Factions[y]);
-							UnityEditor.EditorUtility.SetDirty(Factions[x]);
-						}
+						UnityEditor.EditorUtility.SetDirty(Factions[x]);
 					}
 				}
 			}

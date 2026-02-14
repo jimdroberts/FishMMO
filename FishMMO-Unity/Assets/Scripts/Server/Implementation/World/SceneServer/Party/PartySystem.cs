@@ -854,6 +854,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyDeclineInviteBroadcastReceived(NetworkConnection conn, PartyDeclineInviteBroadcast msg, Channel channel)
 		{
+			if (conn.FirstObject == null)
+			{
+				return;
+			}
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 			{
@@ -951,7 +955,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Transfer leadership if the leaving character was leader and others remain
 				if (rank == PartyRank.Leader && remainingCount > 0)
 				{
-					CharacterPartyData newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];
+					System.Random rng = new System.Random();
+					CharacterPartyData newLeader = remainingMembers[rng.Next(0, remainingMembers.Count)];
 					await charPartyService.UpdateRankAsync(newLeader.CharacterID, partyID, (byte)PartyRank.Leader, newLeader.Version + 1);
 				}
 

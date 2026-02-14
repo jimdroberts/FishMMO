@@ -397,7 +397,7 @@ namespace FishMMO.Shared
 
 			if (CurrentState != null)
 			{
-				CurrentState?.Exit(this);
+				CurrentState.Exit(this);
 			}
 
 			//Log.Debug($"{this.gameObject.name} Transitioning to: {newState.GetType().Name}");
@@ -523,7 +523,7 @@ namespace FishMMO.Shared
 					}
 				}
 				Agent.SetDestination(Waypoints[closestIndex]);
-				CurrentWaypointIndex = 0;
+				CurrentWaypointIndex = closestIndex;
 			}
 		}
 

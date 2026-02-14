@@ -1,9 +1,6 @@
 ﻿namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Represents a player's progress toward a specific achievement, including tier and value.
-	/// </summary>
-	/// <summary>
 	/// Represents a player's progress toward a specific achievement, including current tier, value, and template reference.
 	/// </summary>
 	public class Achievement

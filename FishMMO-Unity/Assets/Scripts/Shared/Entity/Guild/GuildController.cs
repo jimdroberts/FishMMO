@@ -73,6 +73,9 @@ namespace FishMMO.Shared
 			GID.OnChange += OnGuildIDChanged;
 		}
 
+		/// <summary>
+		/// Called when the object is being destroyed. Unsubscribes from guild ID changes.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			base.OnDestroying();
@@ -80,6 +83,12 @@ namespace FishMMO.Shared
 			GID.OnChange -= OnGuildIDChanged;
 		}
 
+		/// <summary>
+		/// Callback invoked when the guild ID SyncVar changes. Resets rank if the character leaves a guild.
+		/// </summary>
+		/// <param name="prev">The previous guild ID.</param>
+		/// <param name="next">The new guild ID.</param>
+		/// <param name="asServer">Whether this callback is executing on the server.</param>
 		private void OnGuildIDChanged(long prev, long next, bool asServer)
 		{
 			if (next == 0)
@@ -89,6 +98,9 @@ namespace FishMMO.Shared
 			IGuildController.OnReadID?.Invoke(next, PlayerCharacter);
 		}
 
+		/// <summary>
+		/// Called when the character starts. Registers guild broadcast handlers on the owning client.
+		/// </summary>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -109,6 +121,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Called when the character stops. Unregisters guild broadcast handlers on the owning client.
+		/// </summary>
 		public override void OnStopCharacter()
 		{
 			base.OnStopCharacter();
@@ -187,6 +202,11 @@ namespace FishMMO.Shared
 			OnRemoveGuildMember?.Invoke(msg.GuildMemberID);
 		}
 
+		/// <summary>
+		/// Handles a guild result broadcast from the server (e.g., creation success, name taken).
+		/// </summary>
+		/// <param name="msg">The guild result broadcast message.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
 		public void OnClientGuildResultBroadcastReceived(GuildResultBroadcast msg, Channel channel)
 		{
 			OnReceiveGuildResult?.Invoke(msg.Result);

@@ -135,7 +135,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Validate character
 			if (friendController == null ||
-				friendController.Friends.Count > maxFriends)
+				friendController.Friends.Count >= maxFriends)
 			{
 				return;
 			}

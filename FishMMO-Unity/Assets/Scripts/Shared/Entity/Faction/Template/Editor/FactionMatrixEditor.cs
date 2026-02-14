@@ -42,10 +42,10 @@ namespace FishMMO.Shared
 				GUILayout.EndHorizontal();
 
 				// Draw each row of the matrix
-				for (int i = 0, y = 0; i < script.Matrix.Factions.Length && y < script.Factions.Count; ++i, ++y)
+				for (int y = 0; y < script.Factions.Count; ++y)
 				{
 					GUILayout.BeginHorizontal();
-					GUILayout.Label(script.Factions[i % script.Factions.Count].Name, GUILayout.Height(18), GUILayout.Width(96));
+					GUILayout.Label(script.Factions[y].Name, GUILayout.Height(18), GUILayout.Width(96));
 					for (int x = 0; x < script.Factions.Count; ++x)
 					{
 						int index = x + y * script.Factions.Count;
@@ -66,8 +66,6 @@ namespace FishMMO.Shared
 						}
 					}
 					GUILayout.EndHorizontal();
-
-					y %= script.Factions.Count;
 				}
 				GUILayout.EndVertical();
 			}

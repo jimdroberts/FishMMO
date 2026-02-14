@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// ScriptableObject template defining a faction's properties, reputation bounds, and default relationships.
+	/// </summary>
 	[CreateAssetMenu(fileName = "New Faction", menuName = "FishMMO/Character/Faction/Faction", order = 1)]
 	public class FactionTemplate : CachedScriptableObject<FactionTemplate>, ICachedObject
 	{

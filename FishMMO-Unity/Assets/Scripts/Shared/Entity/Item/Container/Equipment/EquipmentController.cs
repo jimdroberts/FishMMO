@@ -126,9 +126,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Server sent a set item broadcast. Item slot is set to the received item details.
-		/// </summary>
-		/// <summary>
 		/// Handles a broadcast from the server to set a single equipment item.
 		/// Equips the received item in the specified slot.
 		/// </summary>
@@ -140,9 +137,6 @@ namespace FishMMO.Shared
 			Equip(newItem, -1, null, (ItemSlot)msg.Slot);
 		}
 
-		/// <summary>
-		/// Server sent a multiple set item broadcast. Item slot is set to the received item details.
-		/// </summary>
 		/// <summary>
 		/// Handles a broadcast from the server to set multiple equipment items.
 		/// Equips each received item in the specified slot.
@@ -158,9 +152,6 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Server sent an equip item broadcast.
-		/// </summary>
 		/// <summary>
 		/// Handles a broadcast from the server to equip an item from another inventory.
 		/// Performs the equip operation based on the source inventory type.
@@ -192,9 +183,6 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Server sent an unequip item broadcast.
-		/// </summary>
 		/// <summary>
 		/// Handles a broadcast from the server to unequip an item to another inventory.
 		/// Performs the unequip operation based on the destination inventory type.

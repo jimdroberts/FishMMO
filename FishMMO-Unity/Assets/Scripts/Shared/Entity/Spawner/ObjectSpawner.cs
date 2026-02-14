@@ -244,8 +244,6 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			bool shouldRespawn = true;
-
 			// Check if any respawn time has elapsed.
 			for (int i = 0; i < SpawnableRespawnTimers.Count; ++i)
 			{
@@ -253,26 +251,29 @@ namespace FishMMO.Shared
 
 				if (DateTime.UtcNow >= respawnTime)
 				{
-					// Check OR respawn conditions (any must be true).
+					bool shouldRespawn = true;
+
+					// Check OR respawn conditions (any one must be true to allow respawn).
 					if (OrConditions != null &&
 						OrConditions.Count >= 1)
 					{
+						shouldRespawn = false;
 						foreach (BaseRespawnCondition condition in OrConditions)
 						{
 							if (condition == null)
 							{
 								continue;
 							}
-							if (!condition.OnCheckCondition(this))
+							if (condition.OnCheckCondition(this))
 							{
-								shouldRespawn = false;
+								shouldRespawn = true;
 								break;
 							}
 						}
 					}
 
-					// Check AND respawn conditions (all must be true).
-					if (!shouldRespawn &&
+					// Check AND respawn conditions (all must be true to allow respawn).
+					if (shouldRespawn &&
 						TrueConditions != null &&
 						TrueConditions.Count >= 1)
 					{

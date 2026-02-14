@@ -6,10 +6,7 @@ using FishNet.Serializing;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Assigns a generated name to a scene object using prefix and suffix caches.
-	/// </summary>
-	/// <summary>
-	/// Assigns a generated name to a scene object using prefix and suffix caches.
+	/// Assigns a generated name to a scene object using prefix and suffix name caches.
 	/// Handles network payloads for name synchronization.
 	/// </summary>
 	public class SceneObjectNamer : NetworkBehaviour
@@ -58,7 +55,8 @@ namespace FishMMO.Shared
 			if (prefixID < 0 ||
 				Prefix == null ||
 				Prefix.Names == null ||
-				Prefix.Names.Count < 1)
+				Prefix.Names.Count < 1 ||
+				prefixID >= Prefix.Names.Count)
 			{
 				return;
 			}
@@ -68,7 +66,8 @@ namespace FishMMO.Shared
 			if (suffixID < 0 ||
 				Suffix == null ||
 				Suffix.Names == null ||
-				Suffix.Names.Count < 1)
+				Suffix.Names.Count < 1 ||
+				suffixID >= Suffix.Names.Count)
 			{
 				return;
 			}

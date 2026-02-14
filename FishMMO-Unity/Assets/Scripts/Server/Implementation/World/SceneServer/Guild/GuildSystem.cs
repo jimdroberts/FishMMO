@@ -32,6 +32,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class GuildSystem : ServerBehaviour, IGuildSystem<NetworkConnection>
 	{
+		/// <summary>
+		/// Thread-safe random instance for use in async methods where UnityEngine.Random is not available.
+		/// </summary>
+		private static readonly System.Random asyncRandom = new System.Random();
+
 		[SerializeField]
 		private int maxGuildSize = 100;
 		[SerializeField]
@@ -698,7 +703,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (inviter == null ||
 				inviter.ID < 1 ||
 				inviter.Character.ID == msg.TargetCharacterID ||
-				!(inviter.Rank == GuildRank.Leader | inviter.Rank == GuildRank.Officer))
+				!(inviter.Rank == GuildRank.Leader || inviter.Rank == GuildRank.Officer))
 			{
 				return;
 			}
@@ -892,6 +897,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildDeclineInviteBroadcastReceived(NetworkConnection conn, GuildDeclineInviteBroadcast msg, Channel channel)
 		{
+			if (conn.FirstObject == null)
+			{
+				return;
+			}
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
@@ -998,12 +1007,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (officers.Count > 0)
 					{
 						// pick a random officer
-						newLeader = officers[UnityEngine.Random.Range(0, officers.Count)];
+						newLeader = officers[asyncRandom.Next(0, officers.Count)];
 					}
 					else if (remainingMembers.Count > 0)
 					{
 						// pick a random member
-						newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];
+						newLeader = remainingMembers[asyncRandom.Next(0, remainingMembers.Count)];
 					}
 
 					// update the guild leader status in the database

@@ -67,7 +67,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnStopCharacter()
 		{
-			base.OnStopClient();
+			base.OnStopCharacter();
 
 			if (base.IsOwner)
 			{

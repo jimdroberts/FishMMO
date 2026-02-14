@@ -375,8 +375,8 @@ namespace FishMMO.Shared
 			if (!CanManipulate() ||
 				from < 0 ||
 				to < 0 ||
-				from > Items.Count ||
-				to > Items.Count)
+				from >= Items.Count ||
+				to >= Items.Count)
 			{
 				fromItem = null;
 				toItem = null;
@@ -419,6 +419,10 @@ namespace FishMMO.Shared
 			}
 
 			Item item = Items[slot];
+			if (item == null)
+			{
+				return null;
+			}
 			item.Slot = -1;
 			SetItemSlot(null, slot);
 			return item;

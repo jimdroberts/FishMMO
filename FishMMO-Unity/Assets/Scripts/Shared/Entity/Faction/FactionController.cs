@@ -8,6 +8,10 @@ using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Controls faction reputation, alliance grouping, and relationship queries for a character.
+	/// Handles network synchronization of faction standings via FishNet broadcasts and payload serialization.
+	/// </summary>
 	public class FactionController : CharacterBehaviour, IFactionController
 	{
 		/// <summary>
@@ -73,6 +77,9 @@ namespace FishMMO.Shared
 		public RaceTemplate RaceTemplate { get { return this.raceTemplate; } }
 
 #if !UNITY_SERVER
+		/// <summary>
+		/// Called when the character is started on the client. Registers broadcast listeners for faction updates.
+		/// </summary>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -87,6 +94,9 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<FactionUpdateMultipleBroadcast>(OnClientFactionUpdateMultipleBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the character is stopped on the client. Unregisters faction update listeners.
+		/// </summary>
 		public override void OnStopCharacter()
 		{
 			base.OnStopCharacter();
@@ -126,6 +136,10 @@ namespace FishMMO.Shared
 		}
 #endif
 
+		/// <summary>
+		/// Resets the faction state for this character, clearing all standing data.
+		/// </summary>
+		/// <param name="asServer">Whether the reset is being performed on the server.</param>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
@@ -136,6 +150,11 @@ namespace FishMMO.Shared
 			Hostile.Clear();
 		}
 
+		/// <summary>
+		/// Reads the faction state from the network payload and applies each faction standing.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="reader">The network reader to read from.</param>
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			Factions.Clear();
@@ -158,6 +177,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Writes the current faction state to the network payload for synchronization.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="writer">The network writer to write to.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
 			// Write the factions for the clients
@@ -169,6 +193,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Copies all faction data from another faction controller, replacing current state.
+		/// </summary>
+		/// <param name="factionController">The source faction controller to copy from.</param>
 		public void CopyFrom(IFactionController factionController)
 		{
 			Factions.Clear();
@@ -259,6 +287,12 @@ namespace FishMMO.Shared
 			IFactionController.OnUpdateFaction?.Invoke(Character, faction);
 		}
 
+		/// <summary>
+		/// Adjusts a faction's value by a percentage of a given amount.
+		/// </summary>
+		/// <param name="template">The faction template to adjust.</param>
+		/// <param name="value">The base value to calculate the adjustment from.</param>
+		/// <param name="percentageToAdjust">The percentage of the value to apply as adjustment.</param>
 		private void AdjustFactionValue(FactionTemplate template, float value, float percentageToAdjust)
 		{
 			if (template == null)
@@ -311,6 +345,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Removes a faction from its current alliance group (Allied, Hostile, or Neutral).
+		/// </summary>
+		/// <param name="faction">The faction to remove from its alliance group.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void RemoveFromAllianceGroup(Faction faction)
 		{
@@ -333,6 +371,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Inserts a faction into the appropriate alliance group (Allied, Hostile, or Neutral) based on its value.
+		/// </summary>
+		/// <param name="faction">The faction to insert into an alliance group.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void InsertToAllianceGroup(Faction faction)
 		{
@@ -355,6 +397,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Gets the alliance level between this character and another faction controller.
+		/// Checks party, guild, aggression, and faction standings to determine the relationship.
+		/// </summary>
+		/// <param name="otherFactionController">The other faction controller to evaluate against.</param>
+		/// <returns>The <see cref="FactionAllianceLevel"/> between the two characters.</returns>
 		public FactionAllianceLevel GetAllianceLevel(IFactionController otherFactionController)
 		{
 			if (otherFactionController == null)
@@ -415,6 +463,12 @@ namespace FishMMO.Shared
 			return FactionAllianceLevel.Neutral;
 		}
 
+		/// <summary>
+		/// Gets the color representing the alliance level between this character and another faction controller.
+		/// Green for Ally, Sky Blue for Neutral, Red for Enemy or Aggressive.
+		/// </summary>
+		/// <param name="otherFactionController">The other faction controller to evaluate against.</param>
+		/// <returns>A <see cref="Color"/> representing the alliance level.</returns>
 		public Color GetAllianceLevelColor(IFactionController otherFactionController)
 		{
 			if (IsAggressive || otherFactionController.IsAggressive)

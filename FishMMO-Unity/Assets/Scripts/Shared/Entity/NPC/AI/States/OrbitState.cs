@@ -25,6 +25,9 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Current angle in the orbit (radians).
+		/// WARNING: This field is stored on a ScriptableObject, which is shared across all NPCs using the same asset.
+		/// If multiple NPCs use the same OrbitState asset simultaneously, they will interfere with each other's orbit angle.
+		/// Consider moving per-NPC state data into the AIController or a runtime dictionary keyed by controller instance.
 		/// </summary>
 		private float currentAngle;
 

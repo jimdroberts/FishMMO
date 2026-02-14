@@ -55,6 +55,9 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
+		/// <summary>
+		/// Called when the character is started on the client. Registers broadcast listeners for friend add/remove updates.
+		/// </summary>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -70,6 +73,9 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<FriendRemoveBroadcast>(OnClientFriendRemoveBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the character is stopped on the client. Unregisters friend update listeners.
+		/// </summary>
 		public override void OnStopCharacter()
 		{
 			base.OnStopCharacter();
@@ -83,8 +89,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// When we need to add a single friend.
+		/// Handles a broadcast from the server to add a single friend to the list.
 		/// </summary>
+		/// <param name="msg">The friend add message containing character ID and online status.</param>
+		/// <param name="channel">The network channel.</param>
 		public void OnClientFriendAddBroadcastReceived(FriendAddBroadcast msg, Channel channel)
 		{
 			if (!Friends.Contains(msg.CharacterID))
@@ -96,8 +104,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// When we need to add multiple friends.
+		/// Handles a broadcast from the server to add multiple friends to the list.
 		/// </summary>
+		/// <param name="msg">The multiple friend add message containing a list of friends.</param>
+		/// <param name="channel">The network channel.</param>
 		public void OnClientFriendAddMultipleBroadcastReceived(FriendAddMultipleBroadcast msg, Channel channel)
 		{
 			foreach (FriendAddBroadcast friend in msg.Friends)
@@ -112,8 +122,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// When we need to remove a friend.
+		/// Handles a broadcast from the server to remove a friend from the list.
 		/// </summary>
+		/// <param name="msg">The friend remove message containing the character ID to remove.</param>
+		/// <param name="channel">The network channel.</param>
 		public void OnClientFriendRemoveBroadcastReceived(FriendRemoveBroadcast msg, Channel channel)
 		{
 			Friends.Remove(msg.CharacterID);

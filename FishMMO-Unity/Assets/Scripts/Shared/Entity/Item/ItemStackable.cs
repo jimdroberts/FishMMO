@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 			}
 
 			// If either stack is full, we can't add any more.
-			if (IsStackFull || other.Stackable != null || other.Stackable.IsStackFull) return false;
+			if (IsStackFull || other.Stackable == null || other.Stackable.IsStackFull) return false;
 
 			uint remainingCapacity = item.Template.MaxStackSize - Amount;
 
@@ -99,7 +99,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			if (IsStackFull || other.Stackable != null || other.Stackable.IsStackFull) return false;
+			if (IsStackFull || other.Stackable == null || other.Stackable.IsStackFull) return false;
 
 			uint remainingCapacity = item.Template.MaxStackSize - Amount;
 			uint remainingAmount = remainingCapacity.AbsoluteSubtract(other.Stackable.Amount);

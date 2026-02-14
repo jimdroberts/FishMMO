@@ -33,7 +33,7 @@
 			return character != null &&
 				   item != null &&
 				   item.IsStackable &&
-				   item.Stackable.Amount > 1 &&
+				   item.Stackable.Amount >= ChargeCost &&
 				   character.TryGet(out ICooldownController cooldownController) &&
 				   !cooldownController.IsOnCooldown(ID);
 		}

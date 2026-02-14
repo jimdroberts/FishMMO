@@ -112,10 +112,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Server.Database.ServiceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService);
 			Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService);
+			Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var bankService);
 
 			HandleAbilityRewards(knownAbilityService, playerCharacter, tier);
 			HandleAbilityEventRewards(knownAbilityService, playerCharacter, tier);
-			HandleItemRewards(inventoryService, playerCharacter, tier);
+			HandleItemRewards(inventoryService, bankService, playerCharacter, tier);
 		}
 
 		/// <summary>
@@ -238,9 +239,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Game logic and Broadcasts are synchronous. DB persistence is fire-and-forget async.
 		/// </summary>
 		/// <param name="inventoryService">Async service for persisting inventory items, or null if unavailable.</param>
+		/// <param name="bankService">Async service for persisting bank items, or null if unavailable.</param>
 		/// <param name="character">Player character receiving rewards.</param>
 		/// <param name="tier">Achievement tier containing item rewards.</param>
-		private void HandleItemRewards(ICharacterInventoryService inventoryService, IPlayerCharacter character, AchievementTier tier)
+		private void HandleItemRewards(ICharacterInventoryService inventoryService, ICharacterBankService bankService, IPlayerCharacter character, AchievementTier tier)
 		{
 			List<BaseItemTemplate> itemRewards = tier.ItemRewards;
 			if (itemRewards == null ||
@@ -310,7 +312,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Item newItem = new Item(itemRewards[i], 1);
 
-					if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
+					if (bankController.TryAddItem(newItem, out List<Item> modifiedItems))
 					{
 						foreach (Item item in modifiedItems)
 						{
@@ -320,10 +322,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							}
 
 							// Fire-and-forget async DB persist — build DTO on main thread for thread safety
-							if (inventoryService != null)
+							if (bankService != null)
 							{
 								item.Version++;
-								var dto = new CharacterInventoryData(
+								var dto = new CharacterBankData(
 									id: item.ID,
 									version: item.Version,
 									characterID: character.ID,
@@ -332,7 +334,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									seed: item.IsGenerated ? item.Generator.Seed : 0,
 									amount: item.IsStackable ? item.Stackable.Amount : 0
 								);
-								EnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, dto));
+								EnqueueAsyncWork(() => PersistBankSlotAsync(bankService, dto));
 							}
 
 							modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
@@ -370,6 +372,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("AchievementSystem", $"Error persisting inventory slot (CharID={dto.CharacterID}, Slot={dto.Slot}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously persists a bank item slot to the database.
+		/// </summary>
+		/// <param name="service">The bank service.</param>
+		/// <param name="dto">Pre-built DTO captured on the main thread.</param>
+		private async Task PersistBankSlotAsync(ICharacterBankService service, CharacterBankData dto)
+		{
+			try
+			{
+				await service.PersistAsync(dto);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("AchievementSystem", $"Error persisting bank slot (CharID={dto.CharacterID}, Slot={dto.Slot}): {ex}");
 			}
 		}
 
