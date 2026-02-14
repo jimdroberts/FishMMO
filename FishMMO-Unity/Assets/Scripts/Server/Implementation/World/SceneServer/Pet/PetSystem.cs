@@ -138,7 +138,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetFollowBroadcastReceived(NetworkConnection conn, PetFollowBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -162,7 +162,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetStayBroadcastReceived(NetworkConnection conn, PetStayBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -186,7 +186,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetSummonBroadcastReceived(NetworkConnection conn, PetSummonBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -209,7 +209,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void OnPetReleaseBroadcastReceived(NetworkConnection conn, PetReleaseBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -241,7 +241,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 
 			// Async DB save with spawned=false, keyed by characterID to serialize with summon ops
-			EnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
+			TryEnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
 		}
 
 		/// <summary>
@@ -272,12 +272,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Capture immutable data for the async path
 			long characterID = character.ID;
 
-			EnqueueAsyncWork(() => LoadAndSpawnPetAsync(conn, character, scene, characterID), characterID);
+			TryEnqueueAsyncWork(() => LoadAndSpawnPetAsync(conn, character, scene, characterID), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously fetches the spawned pet from the database and marshals pet instantiation back to the main thread.
 		/// </summary>
+		/// <param name="conn">Owning connection for pet broadcasts.</param>
+		/// <param name="character">Owning character for pet spawn context.</param>
+		/// <param name="scene">Scene where the character currently exists.</param>
+		/// <param name="characterID">Character identifier used for persistence lookup.</param>
+		/// <returns>Asynchronous load-and-spawn task.</returns>
 		private async Task LoadAndSpawnPetAsync(NetworkConnection conn, IPlayerCharacter character, Scene scene, long characterID)
 		{
 			try
@@ -409,13 +414,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Async DB save, keyed by characterID to serialize with other pet ops for the same character
-			EnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, spawned), characterID);
+			TryEnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, spawned), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously persists pet state to the database.
 		/// Fetches the existing pet record to obtain the version, then persists with version+1.
 		/// </summary>
+		/// <param name="characterID">Character identifier that owns the pet.</param>
+		/// <param name="templateID">Pet template identifier.</param>
+		/// <param name="abilities">Pet ability template identifiers.</param>
+		/// <param name="spawned">Whether the pet should be marked as spawned.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task SavePetAsync(long characterID, int templateID, List<int> abilities, bool spawned)
 		{
 			try
@@ -460,7 +470,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			CharacterSystem_OnDespawnCharacter(conn, character);
 
-			Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
+			if (conn != null)
+			{
+				Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
+			}
 		}
 
 		/// <summary>
@@ -468,7 +481,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void AbilityObject_OnPetSummon(PetAbilityTemplate petAbilityTemplate, IPlayerCharacter caster)
 		{
-			if (petAbilityTemplate == null)
+			if (petAbilityTemplate == null || caster == null)
 			{
 				return;
 			}
@@ -542,16 +555,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected due to backpressure.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to queue.</param>
+		/// <param name="entityKey">Optional entity key for ordered execution.</param>
+		/// <param name="callerName">Optional caller name used for diagnostics.</param>
+		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("PetSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("PetSystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("PetSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }

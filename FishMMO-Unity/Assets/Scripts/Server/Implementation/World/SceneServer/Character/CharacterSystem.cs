@@ -167,7 +167,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Authentication events
-			loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+			if (loginAuthenticator != null)
+			{
+				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+			}
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
@@ -345,7 +348,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Capture session tokens so we can refresh leases even if individual saves fail
 			var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
 
-			EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList, sessionTokens));
+			if (!EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList, sessionTokens)))
+			{
+				Log.Warning("CharacterSystem", "OnPeriodicSave: Failed to enqueue SaveAllCharactersAsync work item.");
+			}
 		}
 
 		/// <summary>
@@ -435,7 +441,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterData charData = BuildCharacterData(character);
 
 			// Save then fully release session (Online → Offline)
-			EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, sessionInfo));
+			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, sessionInfo)))
+			{
+				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID}.");
+			}
 
 			// Immediately log out for now.. we could add a timeout later on..?
 			if (character.NetworkObject.IsSpawned)
@@ -493,7 +502,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			EnqueueAsyncWork(() => LoadCharacterAsync(conn, accountName, characterService, serverID));
+			if (!EnqueueAsyncWork(() => LoadCharacterAsync(conn, accountName, characterService, serverID)))
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+			}
 		}
 
 		/// <summary>
@@ -1183,7 +1195,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				NetworkConnection owner = character.Owner;
 
 				// Enqueue only the DB-dependent social data fetch
-				EnqueueAsyncWork(() => SendAllCharacterDataAsync(owner, guildID, partyID, friendIDs));
+				if (!EnqueueAsyncWork(() => SendAllCharacterDataAsync(owner, guildID, partyID, friendIDs)))
+				{
+					Log.Warning("CharacterSystem", $"Failed to enqueue social data broadcast fetch for character {character.ID}.");
+				}
 
 				//Log.Debug("CharacterSystem", character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
@@ -1379,7 +1394,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						Abilities = knownAbilityBroadcasts,
 					}, true, Channel.Reliable);
+				}
 
+				if (knownAbilityEventBroadcasts.Count > 0)
+				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new KnownAbilityEventAddMultipleBroadcast()
 					{
 						AbilityEvents = knownAbilityEventBroadcasts,
@@ -1870,7 +1888,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (mappingData.SessionTokens.TryGetValue(characterID, out CharacterSessionInfo sessionInfo))
 			{
 				mappingData.SessionTokens.Remove(characterID);
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(characterID, sessionInfo.ServerID, sessionInfo.Token));
+				if (!EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(characterID, sessionInfo.ServerID, sessionInfo.Token)))
+				{
+					Log.Warning("CharacterSystem", $"Failed to enqueue session release for character {characterID}.");
+				}
 				return sessionInfo;
 			}
 			return null;
@@ -1913,15 +1934,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">The async work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
+		private bool EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+					return asyncWorker.Enqueue(work, entityKey, callerName);
 				else
-					asyncWorker.Enqueue(work, callerName);
+					return asyncWorker.Enqueue(work, callerName);
 			}
+
+			return false;
 		}
 	}
 }

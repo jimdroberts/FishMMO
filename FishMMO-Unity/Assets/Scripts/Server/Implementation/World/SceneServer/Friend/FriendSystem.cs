@@ -27,6 +27,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class FriendSystem : ServerBehaviour, IFriendSystem
 	{
+		/// <summary>
+		/// Maximum number of friends allowed per character.
+		/// </summary>
 		[SerializeField]
 		private int maxFriends = 100;
 
@@ -127,7 +130,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerFriendAddNewBroadcastReceived(NetworkConnection conn, FriendAddNewBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -156,13 +159,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Capture immutable data for the async path
 			long friendCharacterID = msg.CharacterID;
 
-			EnqueueAsyncWork(() => AddFriendAsync(conn, characterID, friendCharacterID));
+			TryEnqueueAsyncWork(() => AddFriendAsync(conn, characterID, friendCharacterID), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously verifies the friend character exists, persists the friendship to the database,
 		/// and marshals the in-memory update + Broadcast back to the main thread.
 		/// </summary>
+		/// <param name="conn">Requesting client connection.</param>
+		/// <param name="characterID">Requesting character identifier.</param>
+		/// <param name="friendCharacterID">Target friend character identifier.</param>
+		/// <returns>Asynchronous add-friend processing task.</returns>
 		private async Task AddFriendAsync(NetworkConnection conn, long characterID, long friendCharacterID)
 		{
 			try
@@ -207,6 +214,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						return;
 					}
+					if (friendController.Friends.Count >= maxFriends)
+					{
+						return;
+					}
+					if (friendController.Friends.Contains(friendCharacterID))
+					{
+						return;
+					}
 
 					// Add the friend to the characters friend controller
 					friendController.AddFriend(friendCharacterID);
@@ -235,7 +250,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerFriendRemoveBroadcastReceived(NetworkConnection conn, FriendRemoveBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -263,13 +278,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}, true, Channel.Reliable);
 
 				// Fire-and-forget async DB delete
-				EnqueueAsyncWork(() => DeleteFriendAsync(characterID, friendCharacterID));
+				TryEnqueueAsyncWork(() => DeleteFriendAsync(characterID, friendCharacterID), characterID);
 			}
 		}
 
 		/// <summary>
 		/// Asynchronously deletes a friend relationship from the database.
 		/// </summary>
+		/// <param name="characterID">Requesting character identifier.</param>
+		/// <param name="friendCharacterID">Target friend character identifier.</param>
+		/// <returns>Asynchronous remove-friend processing task.</returns>
 		private async Task DeleteFriendAsync(long characterID, long friendCharacterID)
 		{
 			try
@@ -293,16 +311,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected due to backpressure.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to queue.</param>
+		/// <param name="entityKey">Optional entity key for ordered execution.</param>
+		/// <param name="callerName">Optional caller name used for diagnostics.</param>
+		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("FriendSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("FriendSystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("FriendSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }

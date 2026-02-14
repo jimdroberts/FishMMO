@@ -11,7 +11,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 	{
 		/// <summary>
 		/// Tracks pending guild invitations.
-		/// Key: TargetCharacterID (the character being invited), Value: InviterCharacterID (the character who sent the invite).
+		/// Key: TargetCharacterID (the character being invited), Value: GuildID (the guild being invited to).
 		/// </summary>
 		Dictionary<long, long> PendingInvitations { get; }
 

@@ -14,6 +14,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>
 		/// Registers all interactable handlers with the InteractableSystem.
 		/// </summary>
+		/// <param name="server">Server context passed to handler instances.</param>
 		public void RegisterHandlers(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			// Registers handler classes for each interactable type, passing the Server instance.

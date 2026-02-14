@@ -16,6 +16,53 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	public class HotkeySystem : ServerBehaviour, IHotkeySystem
 	{
 		/// <summary>
+		/// Ensures the character hotkey list exists and is initialized to the configured maximum size.
+		/// </summary>
+		/// <param name="playerCharacter">Character whose hotkeys should be initialized.</param>
+		private static void EnsureHotkeysInitialized(IPlayerCharacter playerCharacter)
+		{
+			if (playerCharacter.Hotkeys != null)
+			{
+				return;
+			}
+
+			playerCharacter.Hotkeys = new List<HotkeyData>(Constants.Configuration.MaximumPlayerHotkeys);
+			for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
+			{
+				playerCharacter.Hotkeys.Add(new HotkeyData()
+				{
+					Slot = i,
+				});
+			}
+		}
+
+		/// <summary>
+		/// Tries to apply a hotkey binding to the character hotkey list.
+		/// </summary>
+		/// <param name="playerCharacter">Character receiving the hotkey binding.</param>
+		/// <param name="incomingData">Incoming hotkey data from client message.</param>
+		/// <returns>True if the hotkey was applied; otherwise false.</returns>
+		private static bool TryApplyHotkey(IPlayerCharacter playerCharacter, HotkeyData incomingData)
+		{
+			EnsureHotkeysInitialized(playerCharacter);
+
+			int slot = incomingData.Slot;
+			if (slot < 0 || slot >= playerCharacter.Hotkeys.Count)
+			{
+				return false;
+			}
+
+			playerCharacter.Hotkeys[slot] = new HotkeyData()
+			{
+				Type = incomingData.Type,
+				Slot = slot,
+				ReferenceID = incomingData.ReferenceID,
+			};
+
+			return true;
+		}
+
+		/// <summary>
 		/// Initializes the hotkey system, registering broadcast handlers for hotkey set and hotkey set multiple requests.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -59,40 +106,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerHotkeySetBroadcastReceived(NetworkConnection conn, HotkeySetBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (playerCharacter == null)
+			if (playerCharacter == null || msg.HotkeyData == null)
 			{
 				return;
 			}
-			// Validate the hotkey list exists
-			if (playerCharacter.Hotkeys == null)
-			{
-				playerCharacter.Hotkeys = new List<HotkeyData>();
-				for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
-				{
-					playerCharacter.Hotkeys.Add(new HotkeyData()
-					{
-						Slot = i,
-					});
-				}
-			}
-			// Validate the hotkey slot
-			if (playerCharacter.Hotkeys.Count < msg.HotkeyData.Slot ||
-				msg.HotkeyData.Slot < 0)
-			{
-				return;
-			}
-			HotkeyData hotkeyData = new HotkeyData()
-			{
-				Type = msg.HotkeyData.Type,
-				Slot = msg.HotkeyData.Slot,
-				ReferenceID = msg.HotkeyData.ReferenceID,
-			};
-			playerCharacter.Hotkeys[msg.HotkeyData.Slot] = hotkeyData;
+
+			TryApplyHotkey(playerCharacter, msg.HotkeyData);
 		}
 
 		/// <summary>
@@ -104,42 +128,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerHotkeySetMultipleBroadcastReceived(NetworkConnection conn, HotkeySetMultipleBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (playerCharacter == null)
+			if (playerCharacter == null || msg.Hotkeys == null || msg.Hotkeys.Count < 1)
 			{
 				return;
 			}
+
 			foreach (HotkeySetBroadcast subMsg in msg.Hotkeys)
 			{
-				// Validate the hotkey list exists
-				if (playerCharacter.Hotkeys == null)
+				if (subMsg.HotkeyData == null)
 				{
-					playerCharacter.Hotkeys = new List<HotkeyData>();
-					for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
-					{
-						playerCharacter.Hotkeys.Add(new HotkeyData()
-						{
-							Slot = i,
-						});
-					}
+					continue;
 				}
-				// Validate the hotkey slot
-				if (playerCharacter.Hotkeys.Count < subMsg.HotkeyData.Slot ||
-					subMsg.HotkeyData.Slot < 0)
-				{
-					return;
-				}
-				HotkeyData hotkeyData = new HotkeyData()
-				{
-					Type = subMsg.HotkeyData.Type,
-					Slot = subMsg.HotkeyData.Slot,
-					ReferenceID = subMsg.HotkeyData.ReferenceID,
-				};
-				playerCharacter.Hotkeys[subMsg.HotkeyData.Slot] = hotkeyData;
+
+				TryApplyHotkey(playerCharacter, subMsg.HotkeyData);
 			}
 		}
 	}

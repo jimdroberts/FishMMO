@@ -110,6 +110,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerNamingBroadcastReceived(NetworkConnection conn, NamingBroadcast msg, Channel channel)
 		{
+			if (conn == null)
+			{
+				return;
+			}
+
 			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
@@ -122,14 +127,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// then check the database asynchronously
 					else if (Server.Database?.ServiceRegistry != null)
 					{
-						EnqueueAsyncWork(() => FetchCharacterNameAsync(conn, msg.ID));
+						TryEnqueueAsyncWork(() => FetchCharacterNameAsync(conn, msg.ID), msg.ID);
 					}
 					break;
 				case NamingSystemType.GuildName:
 					// get the name from the database asynchronously
 					if (Server.Database?.ServiceRegistry != null)
 					{
-						EnqueueAsyncWork(() => FetchGuildNameAsync(conn, msg.ID));
+						TryEnqueueAsyncWork(() => FetchGuildNameAsync(conn, msg.ID), msg.ID);
 					}
 					break;
 				default:
@@ -140,6 +145,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Asynchronously fetches a character name by ID and marshals the Broadcast back to the main thread.
 		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <param name="characterID">Character identifier to resolve.</param>
+		/// <returns>Asynchronous fetch task.</returns>
 		private async Task FetchCharacterNameAsync(NetworkConnection conn, long characterID)
 		{
 			try
@@ -176,6 +184,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Asynchronously fetches a guild name by ID and marshals the Broadcast back to the main thread.
 		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <param name="guildID">Guild identifier to resolve.</param>
+		/// <returns>Asynchronous fetch task.</returns>
 		private async Task FetchGuildNameAsync(NetworkConnection conn, long guildID)
 		{
 			try
@@ -236,7 +247,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerReverseNamingBroadcastReceived(NetworkConnection conn, ReverseNamingBroadcast msg, Channel channel)
 		{
-			var nameLowerCase = msg.NameLowerCase.ToLower();
+			if (conn == null)
+			{
+				return;
+			}
+
+			if (string.IsNullOrWhiteSpace(msg.NameLowerCase))
+			{
+				SendReverseNamingBroadcast(conn, msg.Type, string.Empty, 0, string.Empty);
+				return;
+			}
+
+			var nameLowerCase = msg.NameLowerCase.ToLowerInvariant();
 			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
@@ -250,7 +272,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// then check the database asynchronously
 					if (Server.Database?.ServiceRegistry != null)
 					{
-						EnqueueAsyncWork(() => FetchCharacterByNameAsync(conn, nameLowerCase));
+						TryEnqueueAsyncWork(() => FetchCharacterByNameAsync(conn, nameLowerCase));
 					}
 					else
 					{
@@ -270,6 +292,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously fetches a character by name and marshals the Broadcast back to the main thread.
 		/// Sends a not-found response if the character does not exist.
 		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <param name="nameLowerCase">Lowercase character name to resolve.</param>
+		/// <returns>Asynchronous fetch task.</returns>
 		private async Task FetchCharacterByNameAsync(NetworkConnection conn, string nameLowerCase)
 		{
 			try
@@ -338,16 +363,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected due to backpressure.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to queue.</param>
+		/// <param name="entityKey">Optional entity key for ordered execution.</param>
+		/// <param name="callerName">Optional caller name used for diagnostics.</param>
+		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("NamingSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("NamingSystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("NamingSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }

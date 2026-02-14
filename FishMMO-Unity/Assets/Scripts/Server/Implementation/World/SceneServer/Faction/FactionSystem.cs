@@ -38,7 +38,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server == null)
 			{
 				Log.Error("FactionSystem", "OnDeinitialize: Server is null");
-				return;
 			}
 
 			// Faction events
@@ -52,13 +51,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="faction">The updated faction data.</param>
 		private void IFactionController_OnUpdateFaction(ICharacter character, Faction faction)
 		{
-			if (character == null || faction == null)
+			if (character == null || faction == null || faction.Template == null)
 			{
 				return;
 			}
 
 			IPlayerCharacter playerCharacter = character as IPlayerCharacter;
 			if (playerCharacter == null)
+			{
+				return;
+			}
+			if (playerCharacter.Owner == null)
 			{
 				return;
 			}

@@ -245,6 +245,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">Player character that disconnected.</param>
 		private void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
+			if (character == null)
+			{
+				return;
+			}
+
 			if (character.IsInInstance())
 			{
 				AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, -1);
@@ -262,6 +267,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">Player character that loaded.</param>
 		private void CharacterSystem_OnAfterLoadCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
+			if (character == null)
+			{
+				return;
+			}
+
 			if (character.IsInInstance())
 			{
 				AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, 1);
@@ -351,7 +361,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// Fire-and-forget async DB operations
-					EnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, runtimeData.IsLocked, scenePulseData));
+					TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, runtimeData.IsLocked, scenePulseData), runtimeData.ID);
 				}
 			}
 		}
@@ -360,6 +370,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously sends heartbeat pulses to the database and processes pending scene requests.
 		/// Scene pulse data and dequeued scene requests are processed on the main thread via EnqueueMainThread.
 		/// </summary>
+		/// <param name="serverID">Scene server identifier.</param>
+		/// <param name="characterCount">Current connected character count.</param>
+		/// <param name="isLocked">Whether the server is currently locked.</param>
+		/// <param name="scenePulseData">Collected pulse payload for tracked scenes.</param>
+		/// <returns>Asynchronous pulse processing task.</returns>
 		private async Task PeriodicPulseAsync(long serverID, int characterCount, bool isLocked,
 			List<(int Handle, int CharacterCount, bool StalePulse, double TimeSinceLastExit)> scenePulseData)
 		{
@@ -492,7 +507,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (args.LoadedScenes == null || args.LoadedScenes.Length < 1)
 			{
 				Log.Debug("SceneServerSystem", $"Failed to load Database Scene[{sceneData.ID}].");
-				EnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed));
+				TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID);
 			}
 			else
 			{
@@ -507,13 +522,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
-				EnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle));
+				TryEnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle), runtimeData.ID);
 			}
 		}
 
 		/// <summary>
 		/// Asynchronously updates a scene's status in the database.
 		/// </summary>
+		/// <param name="sceneId">Database scene identifier.</param>
+		/// <param name="status">Status value to apply.</param>
+		/// <returns>Asynchronous update task.</returns>
 		private async Task UpdateSceneStatusAsync(long sceneId, SceneStatus status)
 		{
 			try
@@ -538,6 +556,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Asynchronously sets a scene to ready status in the database.
 		/// </summary>
+		/// <param name="sceneServerId">Owning scene server identifier.</param>
+		/// <param name="worldServerId">Owning world server identifier.</param>
+		/// <param name="sceneName">Scene name to mark ready.</param>
+		/// <param name="sceneHandle">Scene handle to mark ready.</param>
+		/// <returns>Asynchronous update task.</returns>
 		private async Task SetSceneReadyAsync(long sceneServerId, long worldServerId, string sceneName, int sceneHandle)
 		{
 			try
@@ -765,7 +788,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Remove the scene details from the database immediately upon an Unload request
 			// to prevent new clients from connecting to it.
 			long serverId = runtimeData.ID;
-			EnqueueAsyncWork(() => DeleteSceneByHandleAsync(serverId, handle));
+			TryEnqueueAsyncWork(() => DeleteSceneByHandleAsync(serverId, handle), serverId);
 
 			SceneUnloadData sud = new SceneUnloadData()
 			{
@@ -780,6 +803,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Asynchronously deletes a specific scene by server ID and handle from the database.
 		/// </summary>
+		/// <param name="sceneServerId">Owning scene server identifier.</param>
+		/// <param name="sceneHandle">Scene handle to delete.</param>
+		/// <returns>Asynchronous delete task.</returns>
 		private async Task DeleteSceneByHandleAsync(long sceneServerId, int sceneHandle)
 		{
 			try
@@ -802,16 +828,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected due to backpressure.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to queue.</param>
+		/// <param name="entityKey">Optional entity key for ordered execution.</param>
+		/// <param name="callerName">Optional caller name used for diagnostics.</param>
+		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("SceneServerSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("SceneServerSystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("SceneServerSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }

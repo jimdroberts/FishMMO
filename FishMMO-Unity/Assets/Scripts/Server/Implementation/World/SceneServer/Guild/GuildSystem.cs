@@ -37,10 +37,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private static readonly System.Random asyncRandom = new System.Random();
 
+		/// <summary>
+		/// Maximum number of members allowed per guild.
+		/// </summary>
 		[SerializeField]
 		private int maxGuildSize = 100;
+		/// <summary>
+		/// Maximum allowed guild name length.
+		/// </summary>
 		[SerializeField]
 		private int maxGuildNameLength = 64;
+		/// <summary>
+		/// Periodic guild update polling interval in seconds.
+		/// </summary>
 		[Tooltip("The server guild update pump rate limit in seconds.")]
 		[SerializeField]
 		private float updatePumpRate = 1.0f;
@@ -72,6 +81,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>True if invite was sent, false otherwise.</returns>
 		public bool OnGuildInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
+			if (sender == null || string.IsNullOrWhiteSpace(msg.Text))
+			{
+				return false;
+			}
+
 			string characterName = msg.Text.Trim().ToLower();
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 				mappingData.CharactersByLowerCaseName.TryGetValue(characterName, out IPlayerCharacter character))
@@ -217,13 +231,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
-				EnqueueAsyncWork(() => FetchAndProcessGuildUpdatesAsync());
+				TryEnqueueAsyncWork(() => FetchAndProcessGuildUpdatesAsync());
 			}
 		}
 
 		/// <summary>
 		/// Asynchronously fetches guild updates from the database and marshals the processing back to the main thread.
 		/// </summary>
+		/// <returns>Asynchronous fetch-and-process task.</returns>
 		private async Task FetchAndProcessGuildUpdatesAsync()
 		{
 			try
@@ -244,13 +259,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Capture data from main-thread containers
 				List<long> guildIds = null;
 				DateTime lastFetch = DateTime.UtcNow;
-				EnqueueMainThread(() =>
-				{
-					// This runs on main thread to safely read the containers
-				});
-				// We need the guild IDs from the main-thread tracker. Let's capture them synchronously
-				// since this method is fire-and-forget from the periodic callback on main thread.
-				// The periodic callback runs on main thread, so we can read containers here before awaiting.
+				// This method is queued from the periodic callback path, so we can capture
+				// tracker state synchronously before the first await.
 				if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData))
 				{
 					return;
@@ -471,7 +481,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			byte rank = (byte)guildController.Rank;
 			string sceneName = character.SceneName;
 
-			EnqueueAsyncWork(() => PersistGuildMemberAsync(characterID, guildID, rank, sceneName));
+			TryEnqueueAsyncWork(() => PersistGuildMemberAsync(characterID, guildID, rank, sceneName), characterID);
 		}
 
 		/// <summary>
@@ -510,12 +520,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long guildID = guildController.ID;
 			byte rank = (byte)guildController.Rank;
 
-			EnqueueAsyncWork(() => PersistGuildMemberAsync(characterID, guildID, rank, "Offline"));
+			TryEnqueueAsyncWork(() => PersistGuildMemberAsync(characterID, guildID, rank, "Offline"), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously persists a guild member's data and triggers a guild update notification.
 		/// </summary>
+		/// <param name="characterID">Character identifier to persist.</param>
+		/// <param name="guildID">Guild identifier associated with the character.</param>
+		/// <param name="rank">Guild rank value to persist.</param>
+		/// <param name="location">Current member location label.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistGuildMemberAsync(long characterID, long guildID, byte rank, string location)
 		{
 			try
@@ -561,7 +576,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildCreateBroadcastReceived(NetworkConnection conn, GuildCreateBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -598,13 +613,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string guildName = msg.GuildName;
 			string sceneName = conn.FirstObject.gameObject.scene.name;
 
-			EnqueueAsyncWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName));
+			TryEnqueueAsyncWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously checks guild name availability, creates the guild, persists membership,
 		/// and marshals in-memory state changes + Broadcasts back to the main thread.
 		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <param name="characterID">Requesting character identifier.</param>
+		/// <param name="guildName">Requested guild name.</param>
+		/// <param name="sceneName">Requester scene name.</param>
+		/// <returns>Asynchronous guild creation task.</returns>
 		private async Task CreateGuildAsync(NetworkConnection conn, long characterID, string guildName, string sceneName)
 		{
 			try
@@ -693,7 +713,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -713,12 +733,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long guildID = inviter.ID;
 			long targetCharacterID = msg.TargetCharacterID;
 
-			EnqueueAsyncWork(() => InviteToGuildAsync(conn, inviterCharacterID, guildID, targetCharacterID));
+			TryEnqueueAsyncWork(() => InviteToGuildAsync(conn, inviterCharacterID, guildID, targetCharacterID), inviterCharacterID);
 		}
 
 		/// <summary>
 		/// Asynchronously verifies guild capacity and marshals the invite back to the main thread.
 		/// </summary>
+		/// <param name="conn">Inviter connection for error feedback.</param>
+		/// <param name="inviterCharacterID">Inviter character identifier.</param>
+		/// <param name="guildID">Inviter guild identifier.</param>
+		/// <param name="targetCharacterID">Target character identifier.</param>
+		/// <returns>Asynchronous invite task.</returns>
 		private async Task InviteToGuildAsync(NetworkConnection conn, long inviterCharacterID, long guildID, long targetCharacterID)
 		{
 			try
@@ -765,8 +790,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							return;
 						}
 
-						// add to our list of pending invitations
-						runtimeData.PendingInvitations.Add(targetCharacter.ID, inviterCharacterID);
+						// add to our list of pending invitations (value stores GuildID)
+						runtimeData.PendingInvitations.Add(targetCharacter.ID, guildID);
 						Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new GuildInviteBroadcast()
 						{
 							InviterCharacterID = inviterCharacterID,
@@ -790,7 +815,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildAcceptInviteBroadcastReceived(NetworkConnection conn, GuildAcceptInviteBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -821,7 +846,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long characterID = guildController.Character.ID;
 				string sceneName = conn.FirstObject.gameObject.scene.name;
 
-				EnqueueAsyncWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName));
+				TryEnqueueAsyncWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName), characterID);
 			}
 		}
 
@@ -829,6 +854,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously checks guild capacity, persists membership, notifies other servers,
 		/// and marshals state changes + Broadcast back to the main thread.
 		/// </summary>
+		/// <param name="conn">Accepting connection.</param>
+		/// <param name="characterID">Accepting character identifier.</param>
+		/// <param name="guildID">Guild identifier from pending invitation.</param>
+		/// <param name="sceneName">Current scene name.</param>
+		/// <returns>Asynchronous accept-invite task.</returns>
 		private async Task AcceptGuildInviteAsync(NetworkConnection conn, long characterID, long guildID, string sceneName)
 		{
 			try
@@ -897,7 +927,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildDeclineInviteBroadcastReceived(NetworkConnection conn, GuildDeclineInviteBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -921,7 +951,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -949,13 +979,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
 
 			// Fire-and-forget async DB operations
-			EnqueueAsyncWork(() => LeaveGuildAsync(characterID, guildID, rank));
+			TryEnqueueAsyncWork(() => LeaveGuildAsync(characterID, guildID, rank), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously handles guild leave: fetches members for leadership transfer,
 		/// removes the member, and either deletes or updates the guild.
 		/// </summary>
+		/// <param name="characterID">Leaving character identifier.</param>
+		/// <param name="guildID">Guild identifier being left.</param>
+		/// <param name="rank">Leaving character rank.</param>
+		/// <returns>Asynchronous leave-guild task.</returns>
 		private async Task LeaveGuildAsync(long characterID, long guildID, GuildRank rank)
 		{
 			try
@@ -1056,7 +1090,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -1087,13 +1121,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long characterID = guildController.Character.ID;
 			GuildRank requesterRank = guildController.Rank;
 
-			EnqueueAsyncWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank));
+			TryEnqueueAsyncWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously removes a guild member, validates rank permissions, and triggers guild update.
 		/// Marshals tracker cleanup back to the main thread.
 		/// </summary>
+		/// <param name="guildID">Guild identifier containing the target member.</param>
+		/// <param name="memberID">Target member character identifier.</param>
+		/// <param name="requesterCharacterID">Requester character identifier.</param>
+		/// <param name="requesterRank">Requester rank for permission checks.</param>
+		/// <returns>Asynchronous remove-member task.</returns>
 		private async Task RemoveGuildMemberAsync(long guildID, long memberID, long requesterCharacterID, GuildRank requesterRank)
 		{
 			try
@@ -1164,7 +1203,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -1194,12 +1233,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long memberID = msg.GuildMemberID;
 			GuildRank newRank = msg.Rank;
 
-			EnqueueAsyncWork(() => ChangeGuildRankAsync(guildID, memberID, newRank));
+			TryEnqueueAsyncWork(() => ChangeGuildRankAsync(guildID, memberID, newRank), guildID);
 		}
 
 		/// <summary>
 		/// Asynchronously updates a guild member's rank and triggers a guild update notification.
 		/// </summary>
+		/// <param name="guildID">Guild identifier containing the member.</param>
+		/// <param name="memberID">Member character identifier.</param>
+		/// <param name="newRank">New rank to apply.</param>
+		/// <returns>Asynchronous rank-change task.</returns>
 		private async Task ChangeGuildRankAsync(long guildID, long memberID, GuildRank newRank)
 		{
 			try
@@ -1228,16 +1271,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected due to backpressure.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to queue.</param>
+		/// <param name="entityKey">Optional entity key for ordered execution.</param>
+		/// <param name="callerName">Optional caller name used for diagnostics.</param>
+		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("GuildSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("GuildSystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("GuildSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }

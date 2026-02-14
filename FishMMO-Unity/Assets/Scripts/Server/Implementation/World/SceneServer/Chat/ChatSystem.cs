@@ -162,18 +162,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
-				EnqueueAsyncWork(() => FetchAndProcessChatMessagesAsync());
+				TryEnqueueAsyncWork(() => FetchAndProcessChatMessagesAsync());
 			}
 		}
 
 		/// <summary>
 		/// Asynchronously fetches new chat messages from the database and marshals processing to the main thread.
 		/// </summary>
+		/// <returns>Asynchronous fetch-and-process task.</returns>
 		private async Task FetchAndProcessChatMessagesAsync()
 		{
 			try
 			{
-				if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
+				if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> _))
 				{
 					return;
 				}
@@ -285,6 +286,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerChatBroadcastReceived(NetworkConnection conn, ChatBroadcast msg, Channel channel)
 		{
+			if (conn == null)
+			{
+				return;
+			}
+
 			if (conn.FirstObject != null)
 			{
 				IPlayerCharacter sender = conn.FirstObject.GetComponent<IPlayerCharacter>();
@@ -389,7 +395,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (commandDetails.Func.Invoke(sender, msg))
 				{
 					// write the parsed message to the database (fire-and-forget async)
-					EnqueueAsyncWork(() => PersistChatMessageAsync(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, msg.Channel, msg.Text));
+					TryEnqueueAsyncWork(() => PersistChatMessageAsync(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, msg.Channel, msg.Text), sender.ID);
 				}
 			}
 		}
@@ -483,7 +489,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			// get the senders observed scene
 			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName);
-			if (scene != null &&
+			if (scene.IsValid() &&
 				Server.NetworkWrapper.NetworkManager != null &&
 				Server.NetworkWrapper.NetworkManager.SceneManager != null)
 			{
@@ -528,7 +534,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-			EnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID));
+			TryEnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
@@ -536,6 +542,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously fetches party members from the database, marshals Broadcasts to the main thread,
 		/// and persists the chat message on success.
 		/// </summary>
+		/// <param name="partyID">Party identifier used to resolve recipients.</param>
+		/// <param name="senderID">Sender character identifier.</param>
+		/// <param name="channel">Chat channel to broadcast.</param>
+		/// <param name="trimmed">Message body without command prefix/party token.</param>
+		/// <param name="characterId">Sender character identifier used for persistence.</param>
+		/// <param name="characterName">Sender character name used for persistence.</param>
+		/// <param name="accountName">Sender account name used for persistence.</param>
+		/// <param name="worldServerId">Sender world server identifier.</param>
+		/// <returns>Asynchronous party chat processing task.</returns>
 		private async Task OnPartyChatAsync(long partyID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId)
 		{
 			try
@@ -617,7 +632,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-			EnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID));
+			TryEnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
@@ -625,6 +640,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously fetches guild members from the database, marshals Broadcasts to the main thread,
 		/// and persists the chat message on success.
 		/// </summary>
+		/// <param name="guildID">Guild identifier used to resolve recipients.</param>
+		/// <param name="senderID">Sender character identifier.</param>
+		/// <param name="channel">Chat channel to broadcast.</param>
+		/// <param name="trimmed">Message body without command prefix/guild token.</param>
+		/// <param name="characterId">Sender character identifier used for persistence.</param>
+		/// <param name="characterName">Sender character name used for persistence.</param>
+		/// <param name="accountName">Sender account name used for persistence.</param>
+		/// <param name="worldServerId">Sender world server identifier.</param>
+		/// <returns>Asynchronous guild chat processing task.</returns>
 		private async Task OnGuildChatAsync(long guildID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId)
 		{
 			try
@@ -707,7 +731,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-			EnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID));
+			TryEnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
@@ -715,6 +739,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously resolves the target character by name, marshals Broadcasts to the main thread,
 		/// and persists the chat message on success.
 		/// </summary>
+		/// <param name="senderConn">Sender connection for relay/status responses.</param>
+		/// <param name="senderID">Sender character identifier.</param>
+		/// <param name="channel">Chat channel to broadcast.</param>
+		/// <param name="targetName">Target character name.</param>
+		/// <param name="trimmed">Message body without tell target prefix.</param>
+		/// <param name="characterName">Sender character name used for persistence.</param>
+		/// <param name="accountName">Sender account name used for persistence.</param>
+		/// <param name="worldServerId">Sender world server identifier.</param>
+		/// <returns>Asynchronous tell chat processing task.</returns>
 		private async Task OnTellChatAsync(NetworkConnection senderConn, long senderID, ChatChannel channel, string targetName, string trimmed, string characterName, string accountName, long worldServerId)
 		{
 			try
@@ -907,16 +940,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected due to backpressure.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to queue.</param>
+		/// <param name="entityKey">Optional entity key for ordered execution.</param>
+		/// <param name="callerName">Optional caller name used for diagnostics.</param>
+		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("ChatSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("ChatSystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("ChatSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }

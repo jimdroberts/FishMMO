@@ -188,13 +188,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				character.TryGet(out IInventoryController inventoryController))
 			{
 				Item item = inventoryController.RemoveItem(msg.Slot);
+				if (item == null)
+				{
+					return;
+				}
 
 				// fire-and-forget async delete
 				long characterID = character.ID;
 				int slot = msg.Slot;
 				item.Version++;
 				long version = item.Version;
-				EnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, slot, version));
+				TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, slot, version), characterID);
 
 				Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 			}
@@ -233,7 +237,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						// fire-and-forget async persist for each affected inventory item
 						var invDtos = BuildInventoryItemDataList(characterID, invAffected);
-						EnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos));
+						TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
 
 						// tell the client we succeeded
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -261,7 +265,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (fromItems != null && fromItems.Count > 0)
 							{
 								var bankDtos = BuildBankItemDataList(characterID, fromItems);
-								EnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos));
+								TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
 							}
 							// delete vacated bank slots
 							if (deletedSlots != null && deletedSlots.Count > 0)
@@ -270,14 +274,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								{
 									// Deleted slots no longer have an item reference;
 									// use long.MaxValue to ensure the delete succeeds.
-									EnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue));
+									TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue), characterID);
 								}
 							}
 							// persist inventory items that moved to the destination (inventory) container
 							if (toItems != null && toItems.Count > 0)
 							{
 								var invDtos2 = BuildInventoryItemDataList(characterID, toItems);
-								EnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos2));
+								TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos2), characterID);
 							}
 
 							// tell the client
@@ -328,22 +332,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						if (inventoryController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 						{
 							var dto = BuildInventoryItemData(characterID, prevItem);
-							EnqueueAsyncWork(() => PersistInventoryItemAsync(dto));
+							TryEnqueueAsyncWork(() => PersistInventoryItemAsync(dto), characterID);
 						}
 						// remove the inventory item from the database
 						else
 						{
 							// Item moved out of inventory — use long.MaxValue to ensure delete succeeds
-							EnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, long.MaxValue));
+							TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
 						}
 
 						// set the equipment slot in the database
 						var equipDto = BuildEquipmentItemData(characterID, inventoryItem);
-						EnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto));
+						TryEnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto), characterID);
 
 						// save attributes
 						var attrDtos = BuildAttributeDataList(character);
-						EnqueueAsyncWork(() => PersistAttributesAsync(attrDtos));
+						TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
 
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 					}
@@ -374,22 +378,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (bankController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 							{
 								var dto = BuildBankItemData(characterID, prevItem);
-								EnqueueAsyncWork(() => PersistBankItemAsync(dto));
+								TryEnqueueAsyncWork(() => PersistBankItemAsync(dto), characterID);
 							}
 							// remove the bank item from the database
 							else
 							{
 								// Item moved out of bank — use long.MaxValue to ensure delete succeeds
-								EnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, long.MaxValue));
+								TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
 							}
 
 							// set the equipment slot in the database
 							var equipDto = BuildEquipmentItemData(characterID, bankItem);
-							EnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto));
+							TryEnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto), characterID);
 
 							// save attributes
 							var attrDtos = BuildAttributeDataList(character);
-							EnqueueAsyncWork(() => PersistAttributesAsync(attrDtos));
+							TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
 
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
@@ -447,15 +451,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 						// persist all modified inventory slots
 						var invDtos = BuildInventoryItemDataList(characterID, modifiedItems);
-						EnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos));
+						TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
 
 						// delete the item from the equipment table
 						// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
-						EnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue));
+						TryEnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
 
 						// save attributes
 						var attrDtos = BuildAttributeDataList(character);
-						EnqueueAsyncWork(() => PersistAttributesAsync(attrDtos));
+						TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
 
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 					}
@@ -493,15 +497,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 							// persist all modified bank slots
 							var bankDtos = BuildBankItemDataList(characterID, modifiedItems);
-							EnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos));
+							TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
 
 							// delete the item from the equipment table
 							// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
-							EnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue));
+							TryEnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
 
 							// save attributes
 							var attrDtos = BuildAttributeDataList(character);
-							EnqueueAsyncWork(() => PersistAttributesAsync(attrDtos));
+							TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
 
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
@@ -531,13 +535,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				character.TryGet(out IBankController bankController))
 			{
 				Item item = bankController.RemoveItem(msg.Slot);
+				if (item == null)
+				{
+					return;
+				}
 
 				// fire-and-forget async delete
 				long characterID = character.ID;
-				int slot = item.Slot;
+				int slot = msg.Slot;
 				item.Version++;
 				long version = item.Version;
-				EnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, slot, version));
+				TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, slot, version), characterID);
 
 				Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 			}
@@ -584,7 +592,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						if (fromItems != null && fromItems.Count > 0)
 						{
 							var invDtos = BuildInventoryItemDataList(characterID, fromItems);
-							EnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos));
+							TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
 						}
 						// delete vacated inventory slots
 						if (deletedSlots != null && deletedSlots.Count > 0)
@@ -593,14 +601,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							{
 								// Deleted slots no longer have an item reference;
 								// use long.MaxValue to ensure the delete succeeds.
-								EnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, (int)slot, long.MaxValue));
+								TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, (int)slot, long.MaxValue), characterID);
 							}
 						}
 						// persist bank items that went into destination (bank) container
 						if (toItems != null && toItems.Count > 0)
 						{
 							var bankDtos = BuildBankItemDataList(characterID, toItems);
-							EnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos));
+							TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
 						}
 
 						// tell the client
@@ -615,7 +623,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected))
 					{
 						var bankDtos2 = BuildBankItemDataList(characterID, bankAffected);
-						EnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos2));
+						TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos2), characterID);
 
 						// tell the client we succeeded
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -674,6 +682,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Increments item.Version for sequence-based optimistic concurrency.
 		/// Must be called on the main thread.
 		/// </summary>
+		/// <param name="characterID">Owning character identifier.</param>
+		/// <param name="item">Runtime item instance to serialize.</param>
+		/// <returns>Inventory DTO ready for persistence.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private CharacterInventoryData BuildInventoryItemData(long characterID, Item item)
 		{
@@ -694,6 +705,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Increments each item.Version for sequence-based optimistic concurrency.
 		/// Must be called on the main thread.
 		/// </summary>
+		/// <param name="characterID">Owning character identifier.</param>
+		/// <param name="items">Runtime item instances to serialize.</param>
+		/// <returns>List of inventory DTOs ready for persistence.</returns>
 		private List<CharacterInventoryData> BuildInventoryItemDataList(long characterID, List<Item> items)
 		{
 			var dtos = new List<CharacterInventoryData>(items.Count);
@@ -710,6 +724,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Increments item.Version for sequence-based optimistic concurrency.
 		/// Must be called on the main thread.
 		/// </summary>
+		/// <param name="characterID">Owning character identifier.</param>
+		/// <param name="item">Runtime item instance to serialize.</param>
+		/// <returns>Bank DTO ready for persistence.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private CharacterBankData BuildBankItemData(long characterID, Item item)
 		{
@@ -730,6 +747,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Increments each item.Version for sequence-based optimistic concurrency.
 		/// Must be called on the main thread.
 		/// </summary>
+		/// <param name="characterID">Owning character identifier.</param>
+		/// <param name="items">Runtime item instances to serialize.</param>
+		/// <returns>List of bank DTOs ready for persistence.</returns>
 		private List<CharacterBankData> BuildBankItemDataList(long characterID, List<Item> items)
 		{
 			var dtos = new List<CharacterBankData>(items.Count);
@@ -746,6 +766,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Increments item.Version for sequence-based optimistic concurrency.
 		/// Must be called on the main thread.
 		/// </summary>
+		/// <param name="characterID">Owning character identifier.</param>
+		/// <param name="item">Runtime item instance to serialize.</param>
+		/// <returns>Equipment DTO ready for persistence.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private CharacterEquipmentData BuildEquipmentItemData(long characterID, Item item)
 		{
@@ -766,6 +789,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Increments each attribute's Version for sequence-based optimistic concurrency.
 		/// Must be called on the main thread.
 		/// </summary>
+		/// <param name="character">Character providing attribute controller data.</param>
+		/// <returns>List of attribute DTOs ready for persistence.</returns>
 		private List<CharacterAttributeData> BuildAttributeDataList(IPlayerCharacter character)
 		{
 			var dtos = new List<CharacterAttributeData>();
@@ -808,6 +833,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a single inventory item asynchronously.
 		/// </summary>
+		/// <param name="dto">Inventory DTO to persist.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistInventoryItemAsync(CharacterInventoryData dto)
 		{
 			try
@@ -828,6 +855,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists multiple inventory items asynchronously.
 		/// </summary>
+		/// <param name="dtos">Inventory DTO batch to persist.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistInventoryItemsAsync(List<CharacterInventoryData> dtos)
 		{
 			try
@@ -848,6 +877,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Deletes a single inventory slot asynchronously.
 		/// </summary>
+		/// <param name="characterID">Owning character identifier.</param>
+		/// <param name="slot">Inventory slot to delete.</param>
+		/// <param name="version">Optimistic concurrency token.</param>
+		/// <returns>Asynchronous delete task.</returns>
 		private async Task DeleteInventorySlotAsync(long characterID, int slot, long version)
 		{
 			try
@@ -868,6 +901,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a single bank item asynchronously.
 		/// </summary>
+		/// <param name="dto">Bank DTO to persist.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistBankItemAsync(CharacterBankData dto)
 		{
 			try
@@ -888,6 +923,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists multiple bank items asynchronously.
 		/// </summary>
+		/// <param name="dtos">Bank DTO batch to persist.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistBankItemsAsync(List<CharacterBankData> dtos)
 		{
 			try
@@ -908,6 +945,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Deletes a single bank slot asynchronously.
 		/// </summary>
+		/// <param name="characterID">Owning character identifier.</param>
+		/// <param name="slot">Bank slot to delete.</param>
+		/// <param name="version">Optimistic concurrency token.</param>
+		/// <returns>Asynchronous delete task.</returns>
 		private async Task DeleteBankSlotAsync(long characterID, int slot, long version)
 		{
 			try
@@ -928,6 +969,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a single equipment item asynchronously.
 		/// </summary>
+		/// <param name="dto">Equipment DTO to persist.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistEquipmentItemAsync(CharacterEquipmentData dto)
 		{
 			try
@@ -948,6 +991,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Deletes a single equipment slot asynchronously.
 		/// </summary>
+		/// <param name="characterID">Owning character identifier.</param>
+		/// <param name="slot">Equipment slot to delete.</param>
+		/// <param name="version">Optimistic concurrency token.</param>
+		/// <returns>Asynchronous delete task.</returns>
 		private async Task DeleteEquipmentSlotAsync(long characterID, int slot, long version)
 		{
 			try
@@ -968,6 +1015,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists character attributes asynchronously.
 		/// </summary>
+		/// <param name="dtos">Attribute DTO batch to persist.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistAttributesAsync(List<CharacterAttributeData> dtos)
 		{
 			try
@@ -991,16 +1040,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected due to backpressure.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to queue.</param>
+		/// <param name="entityKey">Optional entity key for ordered execution.</param>
+		/// <param name="callerName">Optional caller name used for diagnostics.</param>
+		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("CharacterInventorySystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("CharacterInventorySystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("CharacterInventorySystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }

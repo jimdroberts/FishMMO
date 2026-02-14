@@ -93,7 +93,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="tier">The achievement tier completed.</param>
 		private void IAchievementController_HandleAchievementRewards(ICharacter character, AchievementTemplate template, AchievementTier tier)
 		{
-			if (character == null || tier == null)
+			if (character == null || template == null || tier == null)
 			{
 				return;
 			}
@@ -164,7 +164,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (knownAbilityService != null)
 				{
 					long characterId = character.ID;
-					EnqueueAsyncWork(() => PersistKnownAbilityAsync(knownAbilityService, characterId, id));
+					if (!TryEnqueueAsyncWork(() => PersistKnownAbilityAsync(knownAbilityService, characterId, id)))
+					{
+						Log.Warning("AchievementSystem", $"Failed to enqueue known-ability persistence (CharID={characterId}, TemplateID={id}).");
+					}
 				}
 
 				broadcasts.Add(singleBroadcastFactory(reward));
@@ -281,16 +284,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									seed: item.IsGenerated ? item.Generator.Seed : 0,
 									amount: item.IsStackable ? item.Stackable.Amount : 0
 								);
-								EnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, dto));
+								if (!TryEnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, dto)))
+								{
+									Log.Warning("AchievementSystem", $"Failed to enqueue inventory persistence (CharID={dto.CharacterID}, Slot={dto.Slot}).");
+								}
 							}
 
 							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
 							{
-								InstanceID = newItem.ID,
-								TemplateID = newItem.Template.ID,
-								Slot = newItem.Slot,
-								Seed = newItem.IsGenerated ? newItem.Generator.Seed : 0,
-								StackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,
+								InstanceID = item.ID,
+								TemplateID = item.Template.ID,
+								Slot = item.Slot,
+								Seed = item.IsGenerated ? item.Generator.Seed : 0,
+								StackSize = item.IsStackable ? item.Stackable.Amount : 0,
 							});
 						}
 					}
@@ -334,16 +340,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									seed: item.IsGenerated ? item.Generator.Seed : 0,
 									amount: item.IsStackable ? item.Stackable.Amount : 0
 								);
-								EnqueueAsyncWork(() => PersistBankSlotAsync(bankService, dto));
+								if (!TryEnqueueAsyncWork(() => PersistBankSlotAsync(bankService, dto)))
+								{
+									Log.Warning("AchievementSystem", $"Failed to enqueue bank persistence (CharID={dto.CharacterID}, Slot={dto.Slot}).");
+								}
 							}
 
 							modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
 							{
-								InstanceID = newItem.ID,
-								TemplateID = newItem.Template.ID,
-								Slot = newItem.Slot,
-								Seed = newItem.IsGenerated ? newItem.Generator.Seed : 0,
-								StackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,
+								InstanceID = item.ID,
+								TemplateID = item.Template.ID,
+								Slot = item.Slot,
+								Seed = item.IsGenerated ? item.Generator.Seed : 0,
+								StackSize = item.IsStackable ? item.Stackable.Amount : 0,
 							});
 						}
 					}
@@ -395,15 +404,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">The async work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+					return asyncWorker.Enqueue(work, entityKey, callerName);
 				else
-					asyncWorker.Enqueue(work, callerName);
+					return asyncWorker.Enqueue(work, callerName);
 			}
+
+			return false;
 		}
 	}
 }

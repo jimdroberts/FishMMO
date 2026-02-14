@@ -54,6 +54,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public bool OnPartyInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
+			if (sender == null || string.IsNullOrWhiteSpace(msg.Text))
+			{
+				return false;
+			}
+
 			string targetName = msg.Text.Trim().ToLower();
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 				mappingData.CharactersByLowerCaseName.TryGetValue(targetName, out IPlayerCharacter character))
@@ -199,13 +204,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
-				EnqueueAsyncWork(() => FetchAndProcessPartyUpdatesAsync());
+				TryEnqueueAsyncWork(() => FetchAndProcessPartyUpdatesAsync());
 			}
 		}
 
 		/// <summary>
 		/// Asynchronously fetches party updates from the database and marshals the processing back to the main thread.
 		/// </summary>
+		/// <returns>Asynchronous fetch-and-process task.</returns>
 		private async Task FetchAndProcessPartyUpdatesAsync()
 		{
 			try
@@ -438,7 +444,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				? attrController.GetHealthResourceAttributeCurrentPercentage()
 				: 0.0f;
 
-			EnqueueAsyncWork(() => PersistPartyMemberAndNotifyAsync(characterID, partyID, rank, healthPCT));
+			TryEnqueueAsyncWork(() => PersistPartyMemberAndNotifyAsync(characterID, partyID, rank, healthPCT), characterID);
 		}
 
 		/// <summary>
@@ -472,12 +478,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Fire-and-forget async DB persist
 			long partyID = partyController.ID;
-			EnqueueAsyncWork(() => PersistPartyUpdateAsync(partyID));
+			TryEnqueueAsyncWork(() => PersistPartyUpdateAsync(partyID), character.ID);
 		}
 
 		/// <summary>
 		/// Asynchronously persists a party member's data and triggers a party update notification.
 		/// </summary>
+		/// <param name="characterID">Character identifier to persist.</param>
+		/// <param name="partyID">Party identifier associated with the character.</param>
+		/// <param name="rank">Party rank value to persist.</param>
+		/// <param name="healthPCT">Current health percentage snapshot.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistPartyMemberAndNotifyAsync(long characterID, long partyID, byte rank, float healthPCT)
 		{
 			try
@@ -516,6 +527,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Asynchronously persists a party update notification.
 		/// </summary>
+		/// <param name="partyID">Party identifier to mark as updated.</param>
+		/// <returns>Asynchronous persistence task.</returns>
 		private async Task PersistPartyUpdateAsync(long partyID)
 		{
 			try
@@ -542,7 +555,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public void OnServerPartyCreateBroadcastReceived(NetworkConnection conn, PartyCreateBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -565,12 +578,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				? attributeController.GetHealthResourceAttributeCurrentPercentage()
 				: 0.0f;
 
-			EnqueueAsyncWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT));
+			TryEnqueueAsyncWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously creates a new party, persists membership, and marshals state changes back to the main thread.
 		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <param name="characterID">Requesting character identifier.</param>
+		/// <param name="sceneName">Current scene name for broadcast context.</param>
+		/// <param name="healthPCT">Current requester health percentage.</param>
+		/// <returns>Asynchronous party-creation task.</returns>
 		private async Task CreatePartyAsync(NetworkConnection conn, long characterID, string sceneName, float healthPCT)
 		{
 			try
@@ -645,7 +663,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -664,12 +682,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long inviterCharacterID = inviter.Character.ID;
 			long targetCharacterID = msg.TargetCharacterID;
 
-			EnqueueAsyncWork(() => ValidateAndSendPartyInviteAsync(conn, inviterPartyID, inviterCharacterID, targetCharacterID));
+			TryEnqueueAsyncWork(() => ValidateAndSendPartyInviteAsync(conn, inviterPartyID, inviterCharacterID, targetCharacterID), inviterCharacterID);
 		}
 
 		/// <summary>
 		/// Asynchronously validates party capacity and marshals the invitation back to the main thread.
 		/// </summary>
+		/// <param name="conn">Inviter connection for feedback sends.</param>
+		/// <param name="inviterPartyID">Inviter party identifier.</param>
+		/// <param name="inviterCharacterID">Inviter character identifier.</param>
+		/// <param name="targetCharacterID">Target character identifier.</param>
+		/// <returns>Asynchronous invite-validation task.</returns>
 		private async Task ValidateAndSendPartyInviteAsync(NetworkConnection conn, long inviterPartyID, long inviterCharacterID, long targetCharacterID)
 		{
 			try
@@ -718,8 +741,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							return;
 						}
 
-						// add to our list of pending invitations... used for validation when accepting/declining a party invite
-						runtimeData.PendingInvitations.Add(targetCharacter.ID, inviterCharacterID);
+						// add to our list of pending invitations... value stores PartyID for accept flow
+						runtimeData.PendingInvitations.Add(targetCharacter.ID, inviterPartyID);
 						Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new PartyInviteBroadcast()
 						{
 							InviterCharacterID = inviterCharacterID,
@@ -742,7 +765,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyAcceptInviteBroadcastReceived(NetworkConnection conn, PartyAcceptInviteBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -774,13 +797,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
 				float healthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f;
 
-				EnqueueAsyncWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT));
+				TryEnqueueAsyncWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT), characterID);
 			}
 		}
 
 		/// <summary>
 		/// Asynchronously validates party capacity, persists membership, and marshals state changes back to the main thread.
 		/// </summary>
+		/// <param name="conn">Accepting connection.</param>
+		/// <param name="characterID">Accepting character identifier.</param>
+		/// <param name="partyID">Party identifier from pending invitation.</param>
+		/// <param name="healthPCT">Current accepter health percentage.</param>
+		/// <returns>Asynchronous accept-invite task.</returns>
 		private async Task AcceptPartyInviteAsync(NetworkConnection conn, long characterID, long partyID, float healthPCT)
 		{
 			try
@@ -854,7 +882,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyDeclineInviteBroadcastReceived(NetworkConnection conn, PartyDeclineInviteBroadcast msg, Channel channel)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -877,7 +905,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -904,13 +932,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.Broadcast(conn, new PartyLeaveBroadcast(), true, Channel.Reliable);
 
 			// Fire-and-forget async DB cleanup
-			EnqueueAsyncWork(() => LeavePartyAsync(characterID, partyID, rank));
+			TryEnqueueAsyncWork(() => LeavePartyAsync(characterID, partyID, rank), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously handles party leave DB operations: fetches members, transfers leadership if needed,
 		/// deletes the leaving member, and cleans up or notifies other servers.
 		/// </summary>
+		/// <param name="characterID">Leaving character identifier.</param>
+		/// <param name="partyID">Party identifier being left.</param>
+		/// <param name="rank">Leaving character rank.</param>
+		/// <returns>Asynchronous leave-party task.</returns>
 		private async Task LeavePartyAsync(long characterID, long partyID, PartyRank rank)
 		{
 			try
@@ -994,7 +1026,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -1024,12 +1056,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long memberID = msg.MemberID;
 			long characterID = partyController.Character.ID;
 
-			EnqueueAsyncWork(() => RemovePartyMemberAsync(partyID, memberID, characterID));
+			TryEnqueueAsyncWork(() => RemovePartyMemberAsync(partyID, memberID, characterID), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously removes a member from the party, verifying rank permission and notifying other servers.
 		/// </summary>
+		/// <param name="partyID">Party identifier containing the member.</param>
+		/// <param name="memberID">Target member character identifier.</param>
+		/// <param name="requesterCharacterID">Requester character identifier.</param>
+		/// <returns>Asynchronous remove-member task.</returns>
 		private async Task RemovePartyMemberAsync(long partyID, long memberID, long requesterCharacterID)
 		{
 			try
@@ -1090,7 +1126,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (conn.FirstObject == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -1120,12 +1156,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long leaderCharacterID = partyController.Character.ID;
 			long targetMemberID = msg.MemberID;
 
-			EnqueueAsyncWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID));
+			TryEnqueueAsyncWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID), leaderCharacterID);
 		}
 
 		/// <summary>
 		/// Asynchronously swaps ranks between the current leader and the target member.
 		/// </summary>
+		/// <param name="partyID">Party identifier containing both members.</param>
+		/// <param name="leaderCharacterID">Current leader character identifier.</param>
+		/// <param name="targetMemberID">Target member character identifier.</param>
+		/// <returns>Asynchronous rank-change task.</returns>
 		private async Task ChangePartyRankAsync(long partyID, long leaderCharacterID, long targetMemberID)
 		{
 			try
@@ -1184,16 +1224,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected due to backpressure.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to queue.</param>
+		/// <param name="entityKey">Optional entity key for ordered execution.</param>
+		/// <param name="callerName">Optional caller name used for diagnostics.</param>
+		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("PartySystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("PartySystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("PartySystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }

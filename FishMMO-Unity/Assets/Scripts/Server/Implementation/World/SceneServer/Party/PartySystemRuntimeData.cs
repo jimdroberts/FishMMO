@@ -13,7 +13,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	{
 		/// <summary>
 		/// Tracks pending party invitations.
-		/// Key: FromCharacterID, Value: ToCharacterID.
+		/// Key: TargetCharacterID (invited character), Value: PartyID (party being invited to).
 		/// </summary>
 		public Dictionary<long, long> PendingInvitations { get; private set; }
 

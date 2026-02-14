@@ -26,9 +26,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class InteractableSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Cache of world scene details used for scene validation and respawn lookup.
+		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
+		/// <summary>
+		/// Registers and clears interactable handlers for this system.
+		/// </summary>
 		public InteractableHandlerInitializer InteractableHandlerInitializer;
+		/// <summary>
+		/// Maximum number of crafted abilities a character may learn.
+		/// </summary>
 		public int MaxAbilityCount = 25;
+		/// <summary>
+		/// Currency attribute required to buy merchant items and abilities.
+		/// </summary>
 		public CharacterAttributeTemplate CurrencyTemplate;
 
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -166,6 +178,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			return handler;
 		}
 
+		/// <summary>
+		/// Removes all registered interactable handlers.
+		/// </summary>
 		public static void ClearAllHandlers()
 		{
 			interactableHandlers.Clear();
@@ -230,7 +245,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				// Fire-and-forget: persist inventory changes to DB
 				if (itemsToSave.Count > 0)
 				{
-					EnqueueAsyncWork(() => PersistInventoryItemsAsync(itemsToSave));
+					TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(itemsToSave), character.ID);
 				}
 
 				return true;
@@ -287,7 +302,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails _))
+			if (WorldSceneDetailsCache == null ||
+				!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails _))
 			{
 				Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 				return;
@@ -316,6 +332,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
+		/// <summary>
+		/// Updates an NPC to face the interacting character and enter idle state.
+		/// </summary>
+		/// <param name="character">Interacting player character.</param>
+		/// <param name="interactable">Interacted NPC object.</param>
 		public void OnInteractNPC(IPlayerCharacter character, IInteractable interactable)
 		{
 			if (character == null)
@@ -365,7 +386,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
+			if (WorldSceneDetailsCache == null ||
+				!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
 			{
 				Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 				return;
@@ -414,7 +436,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 
 					if (merchantTemplate.Items != null &&
-						merchantTemplate.Items.Count >= msg.Index)
+						msg.Index >= 0 &&
+						msg.Index < merchantTemplate.Items.Count)
 					{
 						Item newItem = new Item(itemTemplate, 1);
 						if (newItem == null)
@@ -427,14 +450,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					break;
 				case MerchantTabType.Ability:
 					if (merchantTemplate.Abilities != null &&
-						merchantTemplate.Abilities.Count >= msg.Index)
+						msg.Index >= 0 &&
+						msg.Index < merchantTemplate.Abilities.Count)
 					{
 						LearnAbilityTemplate(conn, character, merchantTemplate.Abilities[msg.Index]);
 					}
 					break;
 				case MerchantTabType.AbilityEvent:
 					if (merchantTemplate.AbilityEvents != null &&
-						merchantTemplate.AbilityEvents.Count >= msg.Index)
+						msg.Index >= 0 &&
+						msg.Index < merchantTemplate.AbilityEvents.Count)
 					{
 						LearnAbilityEvent(conn, character, merchantTemplate.AbilityEvents[msg.Index]);
 					}
@@ -482,7 +507,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// fire-and-forget: persist the known ability/event to the database
 			long charID = character.ID;
 			int templateID = idSelector(template);
-			EnqueueAsyncWork(() => PersistKnownAbilityAsync(charID, templateID));
+			TryEnqueueAsyncWork(() => PersistKnownAbilityAsync(charID, templateID), charID);
 
 			// tell the client about the new ability/event
 			Server.NetworkWrapper.Broadcast(conn, broadcastFactory(template), true, Channel.Reliable);
@@ -512,6 +537,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
+		/// <summary>
+		/// Learns a base ability template and synchronizes the result to the client.
+		/// </summary>
+		/// <typeparam name="T">Concrete base ability template type.</typeparam>
+		/// <param name="conn">Client connection to notify.</param>
+		/// <param name="character">Character learning the ability.</param>
+		/// <param name="template">Ability template to learn.</param>
 		public void LearnAbilityTemplate<T>(NetworkConnection conn, IPlayerCharacter character, T template) where T : BaseAbilityTemplate
 		{
 			LearnAbilityGeneric<BaseAbilityTemplate, KnownAbilityAddBroadcast>(
@@ -526,6 +558,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			);
 		}
 
+		/// <summary>
+		/// Learns an ability event template and synchronizes the result to the client.
+		/// </summary>
+		/// <typeparam name="T">Concrete ability event type.</typeparam>
+		/// <param name="conn">Client connection to notify.</param>
+		/// <param name="character">Character learning the ability event.</param>
+		/// <param name="template">Ability event template to learn.</param>
 		public void LearnAbilityEvent<T>(NetworkConnection conn, IPlayerCharacter character, T template) where T : AbilityEvent
 		{
 			LearnAbilityGeneric<AbilityEvent, KnownAbilityEventAddBroadcast>(
@@ -540,6 +579,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			);
 		}
 
+		/// <summary>
+		/// Handles an incoming ability crafting request and validates cost, ownership, and selected events.
+		/// </summary>
+		/// <param name="conn">Requesting client connection.</param>
+		/// <param name="msg">Ability crafting request payload.</param>
+		/// <param name="channel">Transport channel used by FishNet.</param>
 		public void OnServerAbilityCraftBroadcastReceived(NetworkConnection conn, AbilityCraftBroadcast msg, Channel channel)
 		{
 			if (conn == null)
@@ -567,7 +612,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
+			if (WorldSceneDetailsCache == null ||
+				!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
 			{
 				Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 				return;
@@ -600,7 +646,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// validate eventIds if there are any...
 			if (msg.Events != null)
 			{
-				bool hasTypeOverride = false;
+				//bool hasTypeOverride = false;
 				HashSet<int> validatedEvents = new HashSet<int>();
 				for (int i = 0; i < msg.Events.Count; ++i)
 				{
@@ -610,6 +656,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						// duplicate events
 						return;
 					}
+					validatedEvents.Add(id);
 					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(id);
 					if (abilityEvent == null)
 					{
@@ -666,6 +713,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
+		/// <summary>
+		/// Handles a dungeon finder request from a dungeon entrance interactable.
+		/// </summary>
+		/// <param name="conn">Requesting client connection.</param>
+		/// <param name="msg">Dungeon finder payload containing interactable id.</param>
+		/// <param name="channel">Transport channel used by FishNet.</param>
 		public void OnServerDungeonFinderBroadcastReceived(NetworkConnection conn, DungeonFinderBroadcast msg, Channel channel)
 		{
 			if (conn == null)
@@ -699,7 +752,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// Validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
+			if (WorldSceneDetailsCache == null ||
+				!WorldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
 			{
 				Log.Debug("InteractableSystem", "Missing Scene:" + dungeonEntrance.DungeonName);
 				return;
@@ -723,13 +777,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
 
 			// Fire-and-forget: process dungeon instance assignment asynchronously
-			EnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails));
+			TryEnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails), characterID);
 		}
 
 		/// <summary>
 		/// Asynchronously processes dungeon finder logic: checks for existing instances, party instances, or enqueues a new one.
 		/// Marshals character state changes and disconnect back to the main thread.
 		/// </summary>
+		/// <param name="conn">Owning connection used for disconnecting after assignment.</param>
+		/// <param name="character">Character requesting dungeon finder processing.</param>
+		/// <param name="characterID">Unique identifier of the requesting character.</param>
+		/// <param name="worldServerID">World server identifier where the request originated.</param>
+		/// <param name="partyID">Party identifier if the character is grouped; otherwise 0.</param>
+		/// <param name="dungeonName">Target dungeon scene name.</param>
+		/// <param name="respawnDetails">Respawn position and rotation to apply on entry.</param>
+		/// <returns>A task representing asynchronous dungeon finder processing.</returns>
 		private async Task ProcessDungeonFinderAsync(
 			NetworkConnection conn,
 			IPlayerCharacter character,
@@ -806,6 +868,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>
 		/// Checks if a characters party members have a valid instance.
 		/// </summary>
+		/// <param name="partyID">Party identifier to check for existing instances.</param>
+		/// <returns>True if any member has an existing group instance; otherwise false.</returns>
 		private async Task<bool> CheckCharacterPartyInstanceAsync(long partyID)
 		{
 			if (Server?.Database?.ServiceRegistry == null)
@@ -836,6 +900,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			return false;
 		}
 
+		/// <summary>
+		/// Creates and learns a new crafted ability, then schedules asynchronous persistence.
+		/// </summary>
+		/// <param name="abilityController">Ability controller receiving the new ability.</param>
+		/// <param name="abilityTemplate">Base ability template used for creation.</param>
+		/// <param name="abilityEvents">Selected ability event identifiers to attach.</param>
+		/// <returns>The created ability instance.</returns>
 		public Ability LearnAbility(IAbilityController abilityController, AbilityTemplate abilityTemplate, List<int> abilityEvents)
 		{
 			Ability newAbility = new Ability(abilityTemplate, abilityEvents);
@@ -851,7 +922,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				abilityEvents: abilityEvents,
 				cooldown: 0f
 			);
-			EnqueueAsyncWork(() => PersistAbilityAsync(abilityData));
+			TryEnqueueAsyncWork(() => PersistAbilityAsync(abilityData), charID);
 
 			abilityController.LearnAbility(newAbility);
 
@@ -907,16 +978,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
+		/// Returns false when the queue is unavailable or rejected.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">Asynchronous work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for ordered queue partitioning.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns>True if enqueue succeeded; otherwise false.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("InteractableSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
 				else
-					asyncWorker.Enqueue(work, callerName);
+				{
+					if (asyncWorker.Enqueue(work, callerName))
+					{
+						return true;
+					}
+
+					Log.Warning("InteractableSystem", $"{callerName}: Async worker queue rejected work.");
+					return false;
+				}
 			}
+
+			Log.Warning("InteractableSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
 		}
 	}
 }
