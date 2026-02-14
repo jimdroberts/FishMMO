@@ -30,6 +30,7 @@ namespace FishMMO.Server.Implementation.World
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			IsProcessing = false;
 			LastFetchTime = DateTime.UtcNow;
 			LastPosition = 0;
 			return ServerComponentInitializationStatus.Initialized;
@@ -40,6 +41,7 @@ namespace FishMMO.Server.Implementation.World
 		/// </summary>
 		public override void Clear()
 		{
+			IsProcessing = false;
 			LastFetchTime = DateTime.UtcNow;
 			LastPosition = 0;
 		}

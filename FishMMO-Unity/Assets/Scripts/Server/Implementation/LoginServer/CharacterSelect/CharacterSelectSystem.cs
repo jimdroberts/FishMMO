@@ -93,7 +93,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 			else if (conn.IsActive)
 			{
-				EnqueueAsyncWork(() => ProcessCharacterListRequestAsync(conn, accountName));
+				if (!TryEnqueueAsyncWork(() => ProcessCharacterListRequestAsync(conn, accountName)))
+				{
+					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character list request for account '{accountName}'.");
+				}
 			}
 		}
 
@@ -159,7 +162,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			if (conn.IsActive && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				EnqueueAsyncWork(() => ProcessCharacterDeleteAsync(conn, accountName, msg.CharacterName));
+				if (!TryEnqueueAsyncWork(() => ProcessCharacterDeleteAsync(conn, accountName, msg.CharacterName)))
+				{
+					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character delete request for account '{accountName}'.");
+				}
 			}
 		}
 
@@ -222,26 +228,29 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 					long characterId = character.ID;
 
-					// Use long.MaxValue to unconditionally pass the version guard on sub-entity deletes.
-					// Sub-entity version streams are independent of the character version,
-					// so we must guarantee all sub-entity rows are cleaned up regardless of their version.
-					long deleteVersion = long.MaxValue;
+					if (!KeepDeleteData)
+					{
+						// Use long.MaxValue to unconditionally pass the version guard on sub-entity deletes.
+						// Sub-entity version streams are independent of the character version,
+						// so we must guarantee all sub-entity rows are cleaned up regardless of their version.
+						long deleteVersion = long.MaxValue;
 
-					// Delete all sub-entity data before deleting the character row.
-					// CharacterService.DeleteAsync already hard-deletes guild and party memberships,
-					// so those are excluded here.
-					await abilityService.DeleteAsync(characterId, deleteVersion);
-					await achievementService.DeleteAsync(characterId, deleteVersion);
-					await attributeService.DeleteAsync(characterId, deleteVersion);
-					await bankService.DeleteAsync(characterId, deleteVersion);
-					await buffService.DeleteAsync(characterId, deleteVersion);
-					await equipmentService.DeleteAsync(characterId, deleteVersion);
-					await factionService.DeleteAsync(characterId, deleteVersion);
-					await friendService.DeleteAsync(characterId, deleteVersion);
-					await hotkeyService.DeleteAsync(characterId, deleteVersion);
-					await inventoryService.DeleteAsync(characterId, deleteVersion);
-					await knownAbilityService.DeleteAsync(characterId, deleteVersion);
-					await petService.DeleteAsync(characterId, deleteVersion);
+						// Delete all sub-entity data before deleting the character row.
+						// CharacterService.DeleteAsync already hard-deletes guild and party memberships,
+						// so those are excluded here.
+						await abilityService.DeleteAsync(characterId, deleteVersion);
+						await achievementService.DeleteAsync(characterId, deleteVersion);
+						await attributeService.DeleteAsync(characterId, deleteVersion);
+						await bankService.DeleteAsync(characterId, deleteVersion);
+						await buffService.DeleteAsync(characterId, deleteVersion);
+						await equipmentService.DeleteAsync(characterId, deleteVersion);
+						await factionService.DeleteAsync(characterId, deleteVersion);
+						await friendService.DeleteAsync(characterId, deleteVersion);
+						await hotkeyService.DeleteAsync(characterId, deleteVersion);
+						await inventoryService.DeleteAsync(characterId, deleteVersion);
+						await knownAbilityService.DeleteAsync(characterId, deleteVersion);
+						await petService.DeleteAsync(characterId, deleteVersion);
+					}
 
 					// Soft-delete the character row (also hard-deletes guild/party memberships)
 					DatabaseResult deleteResult = await characterService.DeleteAsync(characterId, character.Version + 1);
@@ -288,7 +297,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			if (conn.IsActive && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				EnqueueAsyncWork(() => ProcessCharacterSelectAsync(conn, accountName, msg.CharacterName));
+				if (!TryEnqueueAsyncWork(() => ProcessCharacterSelectAsync(conn, accountName, msg.CharacterName)))
+				{
+					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character select request for account '{accountName}'.");
+				}
 			}
 		}
 
@@ -442,15 +454,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">The async work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+					return asyncWorker.Enqueue(work, entityKey, callerName);
 				else
-					asyncWorker.Enqueue(work, callerName);
+					return asyncWorker.Enqueue(work, callerName);
 			}
+
+			return false;
 		}
 	}
 }

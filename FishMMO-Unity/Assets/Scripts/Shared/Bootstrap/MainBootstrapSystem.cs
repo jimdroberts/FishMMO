@@ -58,7 +58,7 @@ namespace FishMMO.Shared
 		/// and this instance is passed as a delegate to Log.Initialize.
 		/// </summary>
 		/// <param name="message">The log message.</param>
-		private new void OnInternalLogCallback(string message)
+		private void OnInternalLogCallback(string message)
 		{
 			UnityLoggerBridge.IsLoggingInternally = true;
 			Debug.Log($"{message}");

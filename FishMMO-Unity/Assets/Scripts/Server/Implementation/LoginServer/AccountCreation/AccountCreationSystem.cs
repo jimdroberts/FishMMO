@@ -27,21 +27,35 @@ namespace FishMMO.Server.Implementation.LoginServer
 	[RequiresDataContainer(typeof(AccountCreationSystemMainThreadQueueData))]
 	public class AccountCreationSystem : ServerBehaviour, IAccountCreationSystem<NetworkConnection>
 	{
+		/// <summary>
+		/// Minimum seconds between account creation attempts from the same IP address.
+		/// </summary>
 		[Header("Rate Limiting")]
 		[Tooltip("Minimum seconds between account creation attempts from the same IP")]
 		[SerializeField] private float ipRateLimitSeconds = 5.0f;
 
+		/// <summary>
+		/// Maximum failed attempts allowed before an IP is temporarily blocked.
+		/// </summary>
 		[Tooltip("Maximum failed attempts before IP is temporarily blocked")]
 		[SerializeField] private int maxFailedAttempts = 5;
 
+		/// <summary>
+		/// Duration in seconds that an IP remains blocked after exceeding failed-attempt threshold.
+		/// </summary>
 		[Tooltip("Duration in seconds to block an IP after max failed attempts")]
 		[SerializeField] private float ipBlockDurationSeconds = 300.0f; // 5 minutes
 
+		/// <summary>
+		/// Number of concurrent background workers processing queued account creation requests.
+		/// </summary>
 		[Header("Queue Configuration")]
 		[Tooltip("Number of concurrent workers processing account creations")]
 		[SerializeField] private int workerCount = 2;
 
-		// Public API - accessed via data containers (no mutable state in ServerBehaviour)
+		/// <summary>
+		/// Gets the current number of pending account creation requests in the async queue.
+		/// </summary>
 		public int PendingRequestCount
 		{
 			get
@@ -54,6 +68,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 		}
 
+		/// <summary>
+		/// Gets the total number of successfully processed account creation requests.
+		/// </summary>
 		public long TotalProcessed
 		{
 			get
@@ -66,6 +83,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 		}
 
+		/// <summary>
+		/// Gets the total number of rejected account creation requests.
+		/// </summary>
 		public long TotalRejected
 		{
 			get

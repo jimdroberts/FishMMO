@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -41,7 +42,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Prevents overlapping async queue processing cycles.
 		/// </summary>
-		private volatile bool _isProcessing;
+		private int _isProcessing;
 
 		/// <summary>
 		/// Cache of world scene details, including max clients per scene.
@@ -211,7 +212,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				runtimeData.NextWaitQueueUpdate = waitQueueRate;
 
-				if (Initialized && !_isProcessing &&
+				if (Initialized &&
 					Server.Database?.ServiceRegistry != null &&
 					Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 				{
@@ -219,8 +220,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					List<string> openWorldSceneNames = mappingData.WaitingOpenWorldConnections.Keys.ToList();
 					List<NetworkConnection> instanceConns = mappingData.InstanceConnectionScenes.Keys.ToList();
 
-					_isProcessing = true;
-					EnqueueAsyncWork(() => ProcessQueuesAsync(openWorldSceneNames, instanceConns));
+					if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0)
+					{
+						if (!TryEnqueueAsyncWork(() => ProcessQueuesAsync(openWorldSceneNames, instanceConns)))
+						{
+							Interlocked.Exchange(ref _isProcessing, 0);
+							Log.Warning("WorldSceneSystem", "Failed to enqueue world scene queue processing work item.");
+						}
+					}
 				}
 			}
 			runtimeData.NextWaitQueueUpdate -= deltaTime;
@@ -256,7 +263,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 			finally
 			{
-				_isProcessing = false;
+				Interlocked.Exchange(ref _isProcessing, 0);
 			}
 		}
 
@@ -636,6 +643,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				mappingData.ConnectionCount = totalCount;
 			});
 		}
+		/// <summary>
+		/// Handles authentication success callbacks and begins scene routing for authenticated clients.
 		/// </summary>
 		/// <param name="conn">Network connection.</param>
 		/// <param name="authenticated">True if client authenticated successfully.</param>
@@ -665,8 +674,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			// Fire-and-forget async instance connection processing
-			EnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn));
+			// Queue async instance connection processing
+			if (!TryEnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn)))
+			{
+				Kick(conn, "Failed to enqueue instance connection processing");
+			}
 		}
 
 		/// <summary>
@@ -792,15 +804,21 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">The async work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+					return asyncWorker.Enqueue(work, entityKey, callerName);
 				else
-					asyncWorker.Enqueue(work, callerName);
+					return asyncWorker.Enqueue(work, callerName);
 			}
+
+			return false;
 		}
 	}
 }

@@ -28,6 +28,16 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <returns>ClientAuthenticationResult indicating the outcome.</returns>
 		internal override async Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult result, string username)
 		{
+			if (result != ClientAuthenticationResult.LoginSuccess)
+			{
+				return result;
+			}
+
+			if (Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) && worldData.IsLocked)
+			{
+				return ClientAuthenticationResult.ServerFull;
+			}
+
 			// Check if the world server is full.
 			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) &&
 				sceneData.ConnectionCount >= MaxPlayers)
@@ -41,19 +51,19 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ClientAuthenticationResult.ServerBusy;
 			}
 
-			// If login is successful, assign the character to the world server.
-			if (result == ClientAuthenticationResult.LoginSuccess &&
-				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
+			// If login is successful, verify the account has a selected character before world entry.
+			DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(username, selected: true);
+			if (!fetchResult.IsSuccess)
 			{
-				// Verify the account has a selected character
-				DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(username, selected: true);
-				if (fetchResult.IsSuccess && fetchResult.Data.HasValue)
-				{
-					return ClientAuthenticationResult.WorldLoginSuccess;
-				}
+				return ClientAuthenticationResult.ServerBusy;
 			}
 
-			return result;
+			if (fetchResult.Data.HasValue)
+			{
+				return ClientAuthenticationResult.WorldLoginSuccess;
+			}
+
+			return ClientAuthenticationResult.InvalidUsernameOrPassword;
 		}
 	}
 }

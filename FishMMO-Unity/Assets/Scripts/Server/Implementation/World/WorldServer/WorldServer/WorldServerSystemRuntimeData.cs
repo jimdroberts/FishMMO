@@ -24,6 +24,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			ID = 0;
+			IsLocked = false;
 			return ServerComponentInitializationStatus.Initialized;
 		}
 

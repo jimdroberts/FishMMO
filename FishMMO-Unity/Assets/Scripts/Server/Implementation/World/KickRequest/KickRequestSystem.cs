@@ -132,7 +132,10 @@ namespace FishMMO.Server.Implementation.World
 				Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
 				long entityKey = (long)accountName.GetHashCode();
-				EnqueueAsyncWork(() => DeleteKickRequestAsync(accountName), entityKey);
+				if (!TryEnqueueAsyncWork(() => DeleteKickRequestAsync(accountName), entityKey))
+				{
+					Log.Warning("KickRequestSystem", $"Failed to enqueue kick-request cleanup for account '{accountName}'.");
+				}
 			}
 		}
 
@@ -177,7 +180,10 @@ namespace FishMMO.Server.Implementation.World
 		{
 			if (Server.ServerState == ConnectionState.Started)
 			{
-				EnqueueAsyncWork(() => ProcessKickRequestsAsync());
+				if (!TryEnqueueAsyncWork(() => ProcessKickRequestsAsync()))
+				{
+					Log.Warning("KickRequestSystem", "Failed to enqueue periodic kick-request processing work item.");
+				}
 			}
 		}
 
@@ -193,9 +199,15 @@ namespace FishMMO.Server.Implementation.World
 				return;
 			}
 
-			if (data.IsProcessing) return;
+			lock (data)
+			{
+				if (data.IsProcessing)
+				{
+					return;
+				}
 
-			data.IsProcessing = true;
+				data.IsProcessing = true;
+			}
 
 			try
 			{
@@ -258,7 +270,10 @@ namespace FishMMO.Server.Implementation.World
 			}
 			finally
 			{
-				data.IsProcessing = false;
+				lock (data)
+				{
+					data.IsProcessing = false;
+				}
 			}
 		}
 
@@ -289,15 +304,21 @@ namespace FishMMO.Server.Implementation.World
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">The async work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+					return asyncWorker.Enqueue(work, entityKey, callerName);
 				else
-					asyncWorker.Enqueue(work, callerName);
+					return asyncWorker.Enqueue(work, callerName);
 			}
+
+			return false;
 		}
 	}
 }

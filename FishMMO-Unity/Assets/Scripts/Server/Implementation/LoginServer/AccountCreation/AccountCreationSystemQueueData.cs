@@ -14,7 +14,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	{
 		/// <summary>
 		/// Bounded channel for queuing account creation requests.
-		/// Capacity: 1000, FullMode: DropOldest to prevent memory exhaustion.
+		/// Capacity: 1000, FullMode: DropWrite so callers can reject immediately under pressure.
 		/// </summary>
 		public Channel<AccountCreationRequest<NetworkConnection>> RequestChannel { get; private set; }
 
@@ -33,10 +33,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			// Create bounded channel with capacity 1000, drops oldest on overflow
+			// Create bounded channel with capacity 1000, drops incoming writes on overflow
 			RequestChannel = Channel.CreateBounded<AccountCreationRequest<NetworkConnection>>(new BoundedChannelOptions(1000)
 			{
-				FullMode = BoundedChannelFullMode.DropOldest,
+				FullMode = BoundedChannelFullMode.DropWrite,
 				SingleReader = false,  // Multiple workers can read
 				SingleWriter = false   // Multiple network threads can write
 			});

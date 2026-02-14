@@ -87,7 +87,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			EnqueueAsyncWork(() => ProcessServerListRequestAsync(conn));
+			if (!TryEnqueueAsyncWork(() => ProcessServerListRequestAsync(conn)))
+			{
+				Log.Warning("ServerSelectSystem", "Failed to enqueue server list request.");
+			}
 		}
 
 		/// <summary>
@@ -183,15 +186,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">The async work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+					return asyncWorker.Enqueue(work, entityKey, callerName);
 				else
-					asyncWorker.Enqueue(work, callerName);
+					return asyncWorker.Enqueue(work, callerName);
 			}
+
+			return false;
 		}
 	}
 }

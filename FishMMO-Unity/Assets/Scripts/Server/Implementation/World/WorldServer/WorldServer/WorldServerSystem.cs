@@ -30,6 +30,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public float PulseRate = 5.0f;
 
+		/// <summary>
+		/// Initializes the world server system, validates dependencies, registers
+		/// this world server in the database, and starts periodic pulse callbacks.
+		/// </summary>
+		/// <returns>The initialization status.</returns>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			if (Server == null)
@@ -48,6 +53,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				Log.Error("WorldServerSystem", "InitializeOnce: IWorldServerService not found");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
+			}
+
+			if (!Server.Configuration.TryGetString("ServerName", out _))
+			{
+				Log.Error("WorldServerSystem", "InitializeOnce: ServerName not configured");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			// Register the world server in the database if all required systems are available.
@@ -133,13 +144,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			// Fire-and-forget async DB pulse
-			EnqueueAsyncWork(() => PulseAsync(data.ID, characterCount));
+			// Queue async DB pulse
+			if (!TryEnqueueAsyncWork(() => PulseAsync(data.ID, characterCount)))
+			{
+				Log.Warning("WorldServerSystem", "Failed to enqueue world server pulse work item.");
+			}
 		}
 
 		/// <summary>
 		/// Asynchronously sends a heartbeat pulse to the database.
 		/// </summary>
+		/// <param name="serverId">Database ID of this world server.</param>
+		/// <param name="characterCount">Current number of connected characters.</param>
 		private async Task PulseAsync(long serverId, int characterCount)
 		{
 			try
@@ -179,15 +195,21 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">The async work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+					return asyncWorker.Enqueue(work, entityKey, callerName);
 				else
-					asyncWorker.Enqueue(work, callerName);
+					return asyncWorker.Enqueue(work, callerName);
 			}
+
+			return false;
 		}
 	}
 }

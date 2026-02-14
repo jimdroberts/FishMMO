@@ -31,6 +31,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField]
 		private int maxCharacters = 8;
 
+		/// <summary>
+		/// Gets the maximum number of characters allowed per account.
+		/// </summary>
 		public int MaxCharacters => maxCharacters;
 		/// <summary>
 		/// Cached world scene details used for validating spawn positions and initial character creation.
@@ -169,11 +172,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// --- Dispatch DTO construction + DB work to async (all template data is immutable) ---
-			EnqueueAsyncWork(() => ProcessCharacterCreateAsync(
+			if (!TryEnqueueAsyncWork(() => ProcessCharacterCreateAsync(
 				conn, msg, accountName, raceTemplate,
 				characterService, factionService, abilityService,
 				inventoryService, equipmentService, attributeService,
-				unitOfWorkService));
+				unitOfWorkService)))
+			{
+				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+				{
+					Result = CharacterCreateResult.Error,
+				}, true, Channel.Reliable);
+			}
 		}
 
 		/// <summary>
@@ -231,12 +240,32 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!WorldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails details))
 				{
 					await Log.Debug("CharacterCreateSystem", "Unable to get World Scene Details.");
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+							{
+								Result = CharacterCreateResult.InvalidSpawn,
+							}, true, Channel.Reliable);
+						}
+					});
 					return;
 				}
 
 				if (!details.InitialSpawnPositions.TryGetValue(msg.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
 				{
 					await Log.Debug("CharacterCreateSystem", "Unable to find initial spawn position for Spawner.");
+					EnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+							{
+								Result = CharacterCreateResult.InvalidSpawn,
+							}, true, Channel.Reliable);
+						}
+					});
 					return;
 				}
 
@@ -639,15 +668,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Enqueues an async work item to the centralized async worker for controlled execution.
 		/// </summary>
-		private void EnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		/// <param name="work">The async work delegate to enqueue.</param>
+		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
+		/// <param name="callerName">Caller member name used for diagnostics.</param>
+		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 			{
 				if (entityKey != 0)
-					asyncWorker.Enqueue(work, entityKey, callerName);
+					return asyncWorker.Enqueue(work, entityKey, callerName);
 				else
-					asyncWorker.Enqueue(work, callerName);
+					return asyncWorker.Enqueue(work, callerName);
 			}
+
+			return false;
 		}
 	}
 }

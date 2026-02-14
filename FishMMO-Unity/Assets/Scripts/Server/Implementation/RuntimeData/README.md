@@ -15,12 +15,14 @@ Server/
 │   └── RequiresDataContainerAttribute.cs     # Attribute for declaring container dependencies
 │
 └── Implementation/RuntimeData/
+    ├── AsyncWorkerData.cs                  # Shared bounded async work queue container
+    ├── MainThreadQueueData.cs              # Shared base container for main-thread action marshalling
     ├── RuntimeDataContainer.cs               # Abstract base class for all containers
     ├── RuntimeDataContainerFactory.cs        # Reflection-based container factory
     └── RuntimeDataContainerRegistry.cs       # Concrete registry with lifecycle management
 ```
 
-Concrete per-system containers (e.g., `PartyRuntimeData`, `CharacterMappingData`) live alongside their respective system implementations under `Server/Implementation/World/` and `Server/Implementation/LoginServer/`.
+Concrete per-system containers (e.g., `PartyRuntimeData`, `CharacterMappingData`) still live alongside their respective system implementations under `Server/Implementation/World/` and `Server/Implementation/LoginServer/`, while shared cross-system containers (e.g., `AsyncWorkerData`, `MainThreadQueueData`) are centralized in `Server/Implementation/RuntimeData/`.
 
 ## Separation of Concerns
 
@@ -76,6 +78,8 @@ IRuntimeDataContainerFactory
 RuntimeDataContainer (abstract)
     : IRuntimeDataContainer<INetworkManagerWrapper, ServerManager, NetworkConnection, IRuntimeDataContainer>
     │
+    ├── AsyncWorkerData
+    ├── MainThreadQueueData (abstract)
     ├── PartyRuntimeData
     ├── GuildRuntimeData
     ├── ChatRuntimeData
@@ -91,6 +95,36 @@ ServerComponentRegistry<...>
 RuntimeDataContainerFactory
     : IRuntimeDataContainerFactory
 ```
+
+## Shared Containers in RuntimeData
+
+### AsyncWorkerData
+
+`AsyncWorkerData` is a centralized bounded async work queue used to replace fire-and-forget patterns (`_ = SomeAsync(...)`) with backpressure-aware scheduling.
+
+- Uses multiple bounded channels (`DropWrite`) and fixed worker loops.
+- Supports round-robin enqueue and entity-keyed consistent hashing enqueue.
+- Exposes queue health via `PendingCount` and `CompletedCount`.
+- Performs graceful shutdown with worker cancellation and channel drain.
+
+Typical usage:
+
+```csharp
+// Any worker
+asyncWorkerData.Enqueue(() => PersistInventoryAsync(dto));
+
+// Keyed ordering (same entity always on same worker)
+asyncWorkerData.Enqueue(() => SaveCharacterAsync(characterData), characterID);
+```
+
+### MainThreadQueueData
+
+`MainThreadQueueData` is an abstract base container for thread-safe main-thread marshalling.
+
+- Worker/background threads call `Enqueue(Action)`.
+- Main thread calls `Drain()` (typically each frame) to execute queued actions.
+- Uses copy-then-invoke to minimize lock hold time.
+- Intended to be subclassed per system so each system gets an isolated queue instance.
 
 ## Automatic Container Discovery
 
