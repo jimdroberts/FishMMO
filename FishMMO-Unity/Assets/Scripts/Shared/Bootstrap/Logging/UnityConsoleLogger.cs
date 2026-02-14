@@ -68,14 +68,13 @@ namespace FishMMO.Shared
 		/// Logs a structured entry to the Unity console, formatted similarly to ConsoleFormatter.
 		/// </summary>
 		/// <param name="entry">The log entry to send.</param>
-		/// <returns>A Task representing the async log operation.</returns>
-		public async Task Log(LogEntry entry)
+		/// <returns>A completed Task.</returns>
+		public Task Log(LogEntry entry)
 		{
 			// Check if logger is enabled and if the log level is allowed
 			if (!IsEnabled || !AllowedLevels.Contains(entry.Level))
 			{
-				await Task.CompletedTask; // Ensure async signature is respected
-				return;
+				return Task.CompletedTask;
 			}
 
 			// Get the color for the log level, default to white if not found
@@ -140,7 +139,7 @@ namespace FishMMO.Shared
 				UnityLoggerBridge.IsLoggingInternally = false;
 			}
 
-			await Task.CompletedTask;
+			return Task.CompletedTask;
 		}
 
 		/// <summary>
