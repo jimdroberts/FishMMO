@@ -61,6 +61,7 @@ namespace FishMMO.Shared
 		{
 			OnChangeTarget = null;
 			OnUpdateTarget = null;
+			OnClearTarget = null;
 			Last = default;
 			Current = default;
 		}
@@ -143,8 +144,8 @@ namespace FishMMO.Shared
 					ray = new Ray(newRayOrigin, direction);
 					Physics.Raycast(ray, out hit, (distance - hit.distance).Min(0.0f), LayerMask);
 #else
-					if (PlayerCharacter != null &&
-						PlayerCharacter.Motor.PhysicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Min(0.0f), LayerMask));
+					if (PlayerCharacter != null)
+						PlayerCharacter.Motor.PhysicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Min(0.0f), LayerMask);
 #endif
 				}
 				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);

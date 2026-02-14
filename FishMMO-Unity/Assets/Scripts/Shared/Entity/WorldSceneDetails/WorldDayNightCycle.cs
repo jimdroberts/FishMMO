@@ -5,6 +5,9 @@ using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// MonoBehaviour for managing the day/night cycle in a scene. Handles skybox transitions, object rotations, object activations/deactivations, and material alpha fading based on the current game time of day.
+	/// </summary>
 	public class WorldDayNightCycle : MonoBehaviour
 	{
 		/// <summary>

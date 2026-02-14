@@ -282,14 +282,14 @@ namespace FishMMO.Shared
 				alpha = (fadeTime / FadeThreshold).Clamp(0.0f, 1.0f);
 			}
 
-			if (dayFadeObjects == null ||
-				dayFadeObjects.Count < 1)
+			if (dayFadeObjects != null &&
+				dayFadeObjects.Count > 0)
 			{
 				SetAlpha(dayFadeObjects, isDaytime ? 1 - alpha : alpha);
 			}
 
-			if (nightFadeObjects == null ||
-				nightFadeObjects.Count < 1)
+			if (nightFadeObjects != null &&
+				nightFadeObjects.Count > 0)
 			{
 				SetAlpha(nightFadeObjects, isDaytime ? alpha : 1 - alpha);
 			}

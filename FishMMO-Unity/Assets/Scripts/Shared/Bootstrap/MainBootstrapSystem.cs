@@ -54,9 +54,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Callback for internal logging messages from FishMMO.Logging.Log.
 		/// Ensures UnityLoggerBridge does not re-capture internal log calls.
+		/// This is a local copy required because the base class method is private
+		/// and this instance is passed as a delegate to Log.Initialize.
 		/// </summary>
 		/// <param name="message">The log message.</param>
-		private void OnInternalLogCallback(string message)
+		private new void OnInternalLogCallback(string message)
 		{
 			UnityLoggerBridge.IsLoggingInternally = true;
 			Debug.Log($"{message}");
@@ -196,11 +198,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Placeholder for actual graphics cleanup logic. Typically does nothing for dedicated server builds.
 		/// </summary>
-		/// <returns>A Task representing the graphics cleanup process.</returns>
-		private async Task GraphicsCleanup()
+		/// <returns>A completed Task.</returns>
+		private Task GraphicsCleanup()
 		{
 			AddressableLoadProcessor.ReleaseAllAssets();
-			//await Task.Yield(); // Simulate asynchronous work if needed.
+			return Task.CompletedTask;
 		}
 
 		/// <summary>
