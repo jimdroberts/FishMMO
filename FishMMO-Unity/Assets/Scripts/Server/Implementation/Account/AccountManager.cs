@@ -21,9 +21,24 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private readonly object syncRoot = new object();
 
+		/// <summary>
+		/// Maps each connection to its encryption data (public key, symmetric key, IV).
+		/// </summary>
 		private readonly Dictionary<NetworkConnection, ConnectionEncryptionData> connectionEncryptionDatas = new Dictionary<NetworkConnection, ConnectionEncryptionData>();
+
+		/// <summary>
+		/// Maps each connection to its associated account name.
+		/// </summary>
 		private readonly Dictionary<NetworkConnection, string> connectionAccounts = new Dictionary<NetworkConnection, string>();
+
+		/// <summary>
+		/// Reverse lookup: maps each account name back to its connection.
+		/// </summary>
 		private readonly Dictionary<string, NetworkConnection> accountConnections = new Dictionary<string, NetworkConnection>();
+
+		/// <summary>
+		/// Maps each connection to its full account data (access level and SRP state).
+		/// </summary>
 		private readonly Dictionary<NetworkConnection, AccountData> connectionAccountData = new Dictionary<NetworkConnection, AccountData>();
 
 		/// <summary>

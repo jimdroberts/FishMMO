@@ -48,8 +48,19 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private const int ProofChannelCapacity = 500;
 
+		/// <summary>
+		/// Bounded channel for queuing SRP verify requests for async worker processing.
+		/// </summary>
 		private System.Threading.Channels.Channel<SrpVerifyRequest<NetworkConnection>> verifyChannel;
+
+		/// <summary>
+		/// Bounded channel for queuing SRP proof requests for async worker processing.
+		/// </summary>
 		private System.Threading.Channels.Channel<SrpProofRequest<NetworkConnection>> proofChannel;
+
+		/// <summary>
+		/// Cancellation token source for signalling graceful shutdown of all async workers.
+		/// </summary>
 		private CancellationTokenSource workerCts;
 
 		/// <summary>
