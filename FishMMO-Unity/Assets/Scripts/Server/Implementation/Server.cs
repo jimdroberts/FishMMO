@@ -109,6 +109,21 @@ namespace FishMMO.Server.Implementation
 		private Dictionary<Action<float>, PeriodicCallbackData> periodicCallbacks = new Dictionary<Action<float>, PeriodicCallbackData>();
 
 		/// <summary>
+		/// Cached server-initialized log callback for login server initialization.
+		/// </summary>
+		private static readonly Action loginServerInitializedLogHandler = () => Log.Debug("Server", "LoginServer initialized.");
+
+		/// <summary>
+		/// Cached server-initialized log callback for world server initialization.
+		/// </summary>
+		private static readonly Action worldServerInitializedLogHandler = () => Log.Debug("Server", "WorldServer initialized.");
+
+		/// <summary>
+		/// Cached server-initialized log callback for scene server initialization.
+		/// </summary>
+		private static readonly Action sceneServerInitializedLogHandler = () => Log.Debug("Server", "SceneServer initialized.");
+
+		/// <summary>
 		/// Flag indicating whether the server has already performed shutdown.
 		/// </summary>
 		private bool hasShutdown = false;
@@ -131,13 +146,13 @@ namespace FishMMO.Server.Implementation
 			CoreServer = new CoreServer(Configuration, ServerEvents);
 			NetworkWrapper = new FishNetNetworkWrapper(networkManager, Configuration, this);
 
-			ServerEvents.OnLoginServerInitialized -= () => Log.Debug("Server", "LoginServer initialized.");
-			ServerEvents.OnWorldServerInitialized -= () => Log.Debug("Server", "WorldServer initialized.");
-			ServerEvents.OnSceneServerInitialized -= () => Log.Debug("Server", "SceneServer initialized.");
+			ServerEvents.OnLoginServerInitialized -= loginServerInitializedLogHandler;
+			ServerEvents.OnWorldServerInitialized -= worldServerInitializedLogHandler;
+			ServerEvents.OnSceneServerInitialized -= sceneServerInitializedLogHandler;
 
-			ServerEvents.OnLoginServerInitialized += () => Log.Debug("Server", "LoginServer initialized.");
-			ServerEvents.OnWorldServerInitialized += () => Log.Debug("Server", "WorldServer initialized.");
-			ServerEvents.OnSceneServerInitialized += () => Log.Debug("Server", "SceneServer initialized.");
+			ServerEvents.OnLoginServerInitialized += loginServerInitializedLogHandler;
+			ServerEvents.OnWorldServerInitialized += worldServerInitializedLogHandler;
+			ServerEvents.OnSceneServerInitialized += sceneServerInitializedLogHandler;
 
 			StartCoroutine(NetHelper.FetchExternalIPAddress(OnFinalizeSetup));
 		}
@@ -213,6 +228,8 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Maps FishNet's LocalConnectionState to the server's ConnectionState enum.
 		/// </summary>
+		/// <param name="fishNetState">FishNet local connection state.</param>
+		/// <returns>Mapped internal server connection state.</returns>
 		private ConnectionState MapConnectionState(LocalConnectionState fishNetState)
 		{
 			return fishNetState switch
@@ -308,6 +325,9 @@ namespace FishMMO.Server.Implementation
 			PerformShutdown();
 		}
 
+		/// <summary>
+		/// Performs one-time shutdown of server subsystems, workers, network, and persistence resources.
+		/// </summary>
 		private void PerformShutdown()
 		{
 			if (hasShutdown) return;
@@ -333,11 +353,14 @@ namespace FishMMO.Server.Implementation
 			CoreServer?.Deinitialize();
 			AccountManager?.Clear();
 
-			ServerEvents.OnLoginServerInitialized -= () => Log.Debug("Server", "LoginServer initialized.");
-			ServerEvents.OnWorldServerInitialized -= () => Log.Debug("Server", "WorldServer initialized.");
-			ServerEvents.OnSceneServerInitialized -= () => Log.Debug("Server", "SceneServer initialized.");
+			if (ServerEvents != null)
+			{
+				ServerEvents.OnLoginServerInitialized -= loginServerInitializedLogHandler;
+				ServerEvents.OnWorldServerInitialized -= worldServerInitializedLogHandler;
+				ServerEvents.OnSceneServerInitialized -= sceneServerInitializedLogHandler;
+			}
 
-			NetworkWrapper.UnregisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
+			NetworkWrapper?.UnregisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 		}
 
 		/// <summary>
@@ -465,7 +488,7 @@ namespace FishMMO.Server.Implementation
 				for (int i = ServerBehaviours.Count - 1; i >= 0; i--)
 				{
 					var behaviour = ServerBehaviours[i];
-					if (behaviour != null && behaviour.Initialized)
+					if (behaviour != null)
 					{
 						// Unregister from registry before deinitializing
 						BehaviourRegistry.Unregister(behaviour);
@@ -496,7 +519,7 @@ namespace FishMMO.Server.Implementation
 				for (int i = DataContainers.Count - 1; i >= 0; i--)
 				{
 					var container = DataContainers[i];
-					if (container != null && container.Initialized)
+					if (container != null)
 					{
 						// Unregister from registry
 						DataContainerRegistry.Unregister(container);
