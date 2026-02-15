@@ -1,4 +1,7 @@
 ﻿using FishNet.Connection;
+#if UNITY_SERVER
+using FishNet.Broadcast;
+#endif
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System.Collections.Generic;
@@ -14,6 +17,18 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class FactionController : CharacterBehaviour, IFactionController
 	{
+#if UNITY_SERVER
+		/// <summary>
+		/// Dirty faction template IDs pending a network flush.
+		/// </summary>
+		private readonly HashSet<int> dirtyFactionTemplateIDs = new HashSet<int>();
+
+		/// <summary>
+		/// Last faction values sent to interested connections.
+		/// </summary>
+		private readonly Dictionary<int, int> lastSentFactionValues = new Dictionary<int, int>();
+#endif
+
 		/// <summary>
 		/// Dictionary of all factions for this character, keyed by template ID.
 		/// Holds reputation/standing values for each faction.
@@ -75,6 +90,191 @@ namespace FishMMO.Shared
 		/// Gets the race template for this character.
 		/// </summary>
 		public RaceTemplate RaceTemplate { get { return this.raceTemplate; } }
+
+#if UNITY_SERVER
+		/// <summary>
+		/// Subscribes to network tick updates used to batch and flush dirty faction state.
+		/// </summary>
+		public override void OnStartNetwork()
+		{
+			base.OnStartNetwork();
+
+			MarkAllFactionsDirty();
+
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick += TimeManager_OnTick;
+			}
+		}
+
+		/// <summary>
+		/// Unsubscribes from network tick updates.
+		/// </summary>
+		public override void OnStopNetwork()
+		{
+			base.OnStopNetwork();
+
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+		}
+
+		/// <summary>
+		/// Called on network tick to flush dirty faction updates.
+		/// </summary>
+		private void TimeManager_OnTick()
+		{
+			FlushDirtyFactionUpdates();
+		}
+
+		/// <summary>
+		/// Marks all known faction entries as dirty for next flush.
+		/// </summary>
+		private void MarkAllFactionsDirty()
+		{
+			foreach (Faction faction in Factions.Values)
+			{
+				if (faction?.Template != null)
+				{
+					dirtyFactionTemplateIDs.Add(faction.Template.ID);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Marks a faction template ID as dirty for the next server flush.
+		/// </summary>
+		private void MarkFactionDirty(int templateID)
+		{
+			if (templateID > 0)
+			{
+				dirtyFactionTemplateIDs.Add(templateID);
+			}
+		}
+
+		/// <summary>
+		/// Flushes dirty faction updates to owner and observers.
+		/// </summary>
+		private void FlushDirtyFactionUpdates()
+		{
+			if (!base.IsServerStarted || dirtyFactionTemplateIDs.Count == 0)
+			{
+				return;
+			}
+
+			List<FactionUpdateBroadcast> updates = new List<FactionUpdateBroadcast>(dirtyFactionTemplateIDs.Count);
+			foreach (int templateID in dirtyFactionTemplateIDs)
+			{
+				if (!factions.TryGetValue(templateID, out Faction faction) || faction?.Template == null)
+				{
+					continue;
+				}
+
+				int current = faction.Value;
+				if (lastSentFactionValues.TryGetValue(templateID, out int last) && last == current)
+				{
+					continue;
+				}
+
+				updates.Add(new FactionUpdateBroadcast()
+				{
+					TemplateID = templateID,
+					NewValue = current,
+				});
+
+				lastSentFactionValues[templateID] = current;
+			}
+
+			dirtyFactionTemplateIDs.Clear();
+			SendFactionUpdates(updates);
+		}
+
+		/// <summary>
+		/// Sends faction updates to owner and observers using separate payload types.
+		/// </summary>
+		private void SendFactionUpdates(List<FactionUpdateBroadcast> updates)
+		{
+			if (updates == null || updates.Count == 0)
+			{
+				return;
+			}
+
+			SendOwnerFactionUpdates(updates);
+			SendObserverFactionUpdates(updates);
+		}
+
+		/// <summary>
+		/// Sends faction updates to owner connection.
+		/// </summary>
+		private void SendOwnerFactionUpdates(List<FactionUpdateBroadcast> updates)
+		{
+			if (updates.Count == 1)
+			{
+				BroadcastToOwnerOnly(Character, updates[0], Channel.Reliable);
+			}
+			else
+			{
+				BroadcastToOwnerOnly(Character, new FactionUpdateMultipleBroadcast()
+				{
+					Factions = updates,
+				}, Channel.Reliable);
+			}
+		}
+
+		/// <summary>
+		/// Sends faction updates to observers with character routing context.
+		/// </summary>
+		private void SendObserverFactionUpdates(List<FactionUpdateBroadcast> updates)
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			CharacterObserverFactionUpdateBroadcast observerBroadcast = new CharacterObserverFactionUpdateBroadcast()
+			{
+				CharacterID = Character.ID,
+				Factions = updates,
+			};
+			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Broadcasts payload to owner only.
+		/// </summary>
+		private static void BroadcastToOwnerOnly<T>(ICharacter character, T broadcast, Channel channel)
+			where T : struct, IBroadcast
+		{
+			if (character?.Owner != null)
+			{
+				character.Owner.Broadcast(broadcast, true, channel);
+			}
+		}
+
+		/// <summary>
+		/// Broadcasts payload to observers only (excluding owner).
+		/// </summary>
+		private static void BroadcastToObserversOnly<T>(ICharacter character, T broadcast, Channel channel)
+			where T : struct, IBroadcast
+		{
+			if (character == null || character.Observers == null)
+			{
+				return;
+			}
+
+			NetworkConnection owner = character.Owner;
+			foreach (NetworkConnection observer in character.Observers)
+			{
+				if (observer == null || observer == owner)
+				{
+					continue;
+				}
+
+				observer.Broadcast(broadcast, true, channel);
+			}
+		}
+#endif
 
 #if !UNITY_SERVER
 		/// <summary>
@@ -187,6 +387,11 @@ namespace FishMMO.Shared
 			Allied.Clear();
 			Neutral.Clear();
 			Hostile.Clear();
+
+#if UNITY_SERVER
+			dirtyFactionTemplateIDs.Clear();
+			lastSentFactionValues.Clear();
+#endif
 		}
 
 		/// <summary>
@@ -284,6 +489,10 @@ namespace FishMMO.Shared
 			}
 			InsertToAllianceGroup(faction);
 
+#if UNITY_SERVER
+			MarkFactionDirty(templateID);
+#endif
+
 			//Log.Debug($"Set Faction: {templateID}:{value}");
 
 			if (!skipEvent)
@@ -320,6 +529,10 @@ namespace FishMMO.Shared
 				factions.Add(template.ID, faction = new Faction(template.ID, amount));
 			}
 			InsertToAllianceGroup(faction);
+
+#if UNITY_SERVER
+			MarkFactionDirty(template.ID);
+#endif
 
 			//Log.Debug($"Update Faction: {template.ID}:{amount}");
 
