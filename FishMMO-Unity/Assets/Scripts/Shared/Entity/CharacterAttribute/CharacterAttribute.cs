@@ -367,7 +367,8 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Updates the attribute's values and propagates changes to parent attributes if needed.
+		/// Updates the attribute's values, propagates changes to parent attributes if needed,
+		/// and notifies listeners after propagation completes.
 		/// </summary>
 		/// <param name="forceUpdate">If true, forces update even if value is unchanged.</param>
 		public void UpdateValues(bool forceUpdate)
@@ -384,12 +385,14 @@ namespace FishMMO.Shared
 					parent.UpdateValues();
 				}
 			}
+
+			Internal_OnAttributeChanged(this);
 		}
 
 		/// <summary>
 		/// Recalculates the formula modifier from child attribute formulas, then updates the final value.
 		/// Only resets <see cref="formulaModifier"/>; <see cref="externalModifier"/> is preserved.
-		/// Invokes the <see cref="OnAttributeUpdated"/> event after recalculation.
+		/// Event notification is performed by <see cref="UpdateValues(bool)"/> after parent propagation.
 		/// </summary>
 		private void ApplyChildren()
 		{
@@ -405,7 +408,6 @@ namespace FishMMO.Shared
 				}
 			}
 			finalValue = CalculateFinalValue();
-			Internal_OnAttributeChanged(this);
 		}
 
 		/// <summary>
