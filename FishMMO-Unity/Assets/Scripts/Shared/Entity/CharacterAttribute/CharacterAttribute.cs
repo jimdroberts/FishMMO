@@ -91,7 +91,7 @@ namespace FishMMO.Shared
 		/// <param name="forceUpdate">If true, forces update even if value is unchanged.</param>
 		public void SetValue(int newValue, bool forceUpdate = false)
 		{
-			if (value != newValue)
+			if (forceUpdate || value != newValue)
 			{
 				value = newValue;
 				UpdateValues(forceUpdate);
@@ -106,7 +106,7 @@ namespace FishMMO.Shared
 		public void AddValue(int amount, bool forceUpdate = false)
 		{
 			int tmp = value + amount;
-			if (value != tmp)
+			if (forceUpdate || value != tmp)
 			{
 				value = tmp;
 				UpdateValues(forceUpdate);
@@ -405,7 +405,7 @@ namespace FishMMO.Shared
 				}
 			}
 			finalValue = CalculateFinalValue();
-			OnAttributeUpdated?.Invoke(this);
+			Internal_OnAttributeChanged(this);
 		}
 
 		/// <summary>

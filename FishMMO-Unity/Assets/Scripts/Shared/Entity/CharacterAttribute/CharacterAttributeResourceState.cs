@@ -18,13 +18,28 @@
 		public float Health;
 
 		/// <summary>
+		/// The current maximum health cap (final value) of the character.
+		/// </summary>
+		public int MaxHealth;
+
+		/// <summary>
 		/// The current mana value of the character.
 		/// </summary>
 		public float Mana;
 
 		/// <summary>
+		/// The current maximum mana cap (final value) of the character.
+		/// </summary>
+		public int MaxMana;
+
+		/// <summary>
 		/// The current stamina value of the character.
 		/// </summary>
 		public float Stamina;
+
+		/// <summary>
+		/// The current maximum stamina cap (final value) of the character.
+		/// </summary>
+		public int MaxStamina;
 	}
 }

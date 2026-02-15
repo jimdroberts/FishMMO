@@ -92,6 +92,7 @@ namespace FishMMO.Shared
 
 			ClientManager.RegisterBroadcast<FactionUpdateBroadcast>(OnClientFactionUpdateBroadcastReceived);
 			ClientManager.RegisterBroadcast<FactionUpdateMultipleBroadcast>(OnClientFactionUpdateMultipleBroadcastReceived);
+			ClientManager.RegisterBroadcast<CharacterObserverFactionUpdateBroadcast>(OnClientCharacterObserverFactionUpdateBroadcastReceived);
 		}
 
 		/// <summary>
@@ -105,7 +106,28 @@ namespace FishMMO.Shared
 			{
 				ClientManager.UnregisterBroadcast<FactionUpdateBroadcast>(OnClientFactionUpdateBroadcastReceived);
 				ClientManager.UnregisterBroadcast<FactionUpdateMultipleBroadcast>(OnClientFactionUpdateMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<CharacterObserverFactionUpdateBroadcast>(OnClientCharacterObserverFactionUpdateBroadcastReceived);
 			}
+		}
+
+		/// <summary>
+		/// Resolves a target faction controller from the client character cache.
+		/// </summary>
+		private static bool TryGetCachedFactionController(long characterID, out IFactionController factionController)
+		{
+			factionController = null;
+			if (characterID <= 0)
+			{
+				return false;
+			}
+
+			if (!BaseCharacter.ClientCharacters.TryGetValue(characterID, out ICharacter character) ||
+				character == null)
+			{
+				return false;
+			}
+
+			return character.TryGet(out factionController);
 		}
 
 		/// <summary>
@@ -132,6 +154,23 @@ namespace FishMMO.Shared
 			foreach (FactionUpdateBroadcast subMsg in msg.Factions)
 			{
 				OnClientFactionUpdateBroadcastReceived(subMsg, channel);
+			}
+		}
+
+		/// <summary>
+		/// Server sent observer-targeted faction updates for a specific character.
+		/// </summary>
+		private void OnClientCharacterObserverFactionUpdateBroadcastReceived(CharacterObserverFactionUpdateBroadcast msg, Channel channel)
+		{
+			if (!TryGetCachedFactionController(msg.CharacterID, out IFactionController factionController) ||
+				msg.Factions == null)
+			{
+				return;
+			}
+
+			foreach (FactionUpdateBroadcast subMsg in msg.Factions)
+			{
+				factionController.SetFaction(subMsg.TemplateID, subMsg.NewValue, true);
 			}
 		}
 #endif

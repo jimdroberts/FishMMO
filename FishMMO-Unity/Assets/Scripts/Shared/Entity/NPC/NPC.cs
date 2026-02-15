@@ -1,5 +1,4 @@
-﻿using FishNet.Object;
-using UnityEngine;
+﻿using UnityEngine;
 using FishNet.Component.Transforming;
 using FishNet.Observing;
 using FishNet.Connection;
@@ -15,7 +14,6 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(CharacterDamageController))]
 	[RequireComponent(typeof(FactionController))]
-	[RequireComponent(typeof(NetworkObject))]
 	[RequireComponent(typeof(NetworkTransform))]
 	[RequireComponent(typeof(NetworkObserver))]
 	public class NPC : BaseCharacter, ISceneObject, ISpawnable
@@ -94,7 +92,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called when the NPC is destroyed. Unregisters from the scene object registry.
 		/// </summary>
-		void OnDestroy()
+		public override void OnDestroying()
 		{
 			SceneObject.Unregister(this);
 		}
@@ -121,6 +119,8 @@ namespace FishMMO.Shared
 			AddNPCAttributes(false);
 
 #if !UNITY_SERVER
+			ClientCharacters[ID] = this;
+
 			// FactionController stores a reference to the RaceTemplate.
 			if (this.TryGet(out IFactionController factionController))
 			{

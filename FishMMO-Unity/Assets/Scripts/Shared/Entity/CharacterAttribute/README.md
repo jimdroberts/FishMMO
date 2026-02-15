@@ -154,14 +154,18 @@ Regeneration attributes (HealthRegeneration, ManaRegeneration, StaminaRegenerati
 
 | Broadcast                                         | Purpose                          |
 |---------------------------------------------------|----------------------------------|
-| `CharacterAttributeUpdateBroadcast`               | Single attribute update          |
-| `CharacterAttributeUpdateMultipleBroadcast`       | Batch attribute update           |
-| `CharacterResourceAttributeUpdateBroadcast`       | Single resource attribute update |
-| `CharacterResourceAttributeUpdateMultipleBroadcast` | Batch resource attribute update |
+| `CharacterAttributeUpdateBroadcast`               | Owner-targeted single attribute update |
+| `CharacterAttributeUpdateMultipleBroadcast`       | Owner-targeted batch attribute update |
+| `CharacterResourceAttributeUpdateBroadcast`       | Legacy owner resource update path (owner currently reconcile-driven) |
+| `CharacterResourceAttributeUpdateMultipleBroadcast` | Legacy owner resource batch path |
+| `CharacterObserverAttributeUpdateBroadcast`       | Observer-targeted attribute updates with `CharacterID` routing |
+| `CharacterObserverResourceAttributeUpdateBroadcast` | Observer-targeted resource updates with `CharacterID` routing |
+
+Observer-targeted updates are routed through the client character cache (`BaseCharacter.ClientCharacters`) to resolve the target `ICharacterAttributeController` by `CharacterID`.
 
 ### Reconciliation
 
-`CharacterAttributeResourceState` is a snapshot struct containing `RegenDelta`, `Health`, `Mana`, and `Stamina`. Used by FishNet's Replicate/Reconcile prediction system via `GetResourceState()` / `ApplyResourceState()`.
+`CharacterAttributeResourceState` is a snapshot struct containing `RegenDelta`, `Health`, `Mana`, `Stamina`, and max/final caps (`MaxHealth`, `MaxMana`, `MaxStamina`). Used by FishNet's Replicate/Reconcile prediction system via `GetResourceState()` / `ApplyResourceState()`.
 
 ## Static Events
 

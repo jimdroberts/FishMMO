@@ -3,6 +3,8 @@ using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
+using FishNet.Connection;
+using FishNet.Transporting;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -56,21 +58,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter playerCharacter = character as IPlayerCharacter;
-			if (playerCharacter == null)
+			if (character.Owner != null)
 			{
-				return;
-			}
-			if (playerCharacter.Owner == null)
-			{
-				return;
+				character.Owner.Broadcast(new FactionUpdateBroadcast()
+				{
+					TemplateID = faction.Template.ID,
+					NewValue = faction.Value,
+				});
 			}
 
-			playerCharacter.Owner.Broadcast(new FactionUpdateBroadcast()
+			if (character.Observers != null && character.Observers.Count > 0)
 			{
-				TemplateID = faction.Template.ID,
-				NewValue = faction.Value,
-			});
+				CharacterObserverFactionUpdateBroadcast observerBroadcast = new CharacterObserverFactionUpdateBroadcast()
+				{
+					CharacterID = character.ID,
+					Factions = new System.Collections.Generic.List<FactionUpdateBroadcast>(1)
+					{
+						new FactionUpdateBroadcast()
+						{
+							TemplateID = faction.Template.ID,
+							NewValue = faction.Value,
+						},
+					},
+				};
+
+				NetworkConnection owner = character.Owner;
+				foreach (NetworkConnection observer in character.Observers)
+				{
+					if (observer == null || observer == owner)
+					{
+						continue;
+					}
+
+					observer.Broadcast(observerBroadcast, true, Channel.Reliable);
+				}
+			}
 		}
 	}
 }

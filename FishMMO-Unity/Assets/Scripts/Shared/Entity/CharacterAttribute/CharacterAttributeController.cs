@@ -1,5 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+#if UNITY_SERVER
+using System;
+using FishNet.Broadcast;
+#endif
 using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -15,6 +19,38 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class CharacterAttributeController : CharacterBehaviour, ICharacterAttributeController
 	{
+#if UNITY_SERVER
+		/// <summary>
+		/// Dirty non-resource attribute template ids pending a network flush.
+		/// </summary>
+		private readonly HashSet<int> dirtyAttributeTemplateIDs = new HashSet<int>();
+
+		/// <summary>
+		/// Dirty resource attribute template ids pending a network flush.
+		/// </summary>
+		private readonly HashSet<int> dirtyResourceTemplateIDs = new HashSet<int>();
+
+		/// <summary>
+		/// Last base values sent to interested connections for non-resource attributes.
+		/// </summary>
+		private readonly Dictionary<int, int> lastSentAttributeValues = new Dictionary<int, int>();
+
+		/// <summary>
+		/// Last base values sent to interested connections for resource attributes.
+		/// </summary>
+		private readonly Dictionary<int, int> lastSentResourceValues = new Dictionary<int, int>();
+
+		/// <summary>
+		/// Last current values sent to interested connections for resource attributes.
+		/// </summary>
+		private readonly Dictionary<int, float> lastSentResourceCurrentValues = new Dictionary<int, float>();
+
+		/// <summary>
+		/// Epsilon used when comparing resource current values for network-dirty suppression.
+		/// </summary>
+		private const float ResourceCurrentValueEpsilon = 0.0001f;
+#endif
+
 		/// <summary>
 		/// Reference to the ScriptableObject database containing all character attribute templates.
 		/// Used to initialize and manage available attributes for this character.
@@ -96,6 +132,10 @@ namespace FishMMO.Shared
 			{
 				Log.Error("CharacterAttributeController", "Character Attribute Database is missing!");
 			}
+
+#if UNITY_SERVER
+			MarkAllAttributesDirty();
+#endif
 		}
 
 		/// <summary>
@@ -164,6 +204,14 @@ namespace FishMMO.Shared
 			{
 				characterResourceAttribute.SetCurrentValue(characterResourceAttribute.FinalValue);
 			}
+
+#if UNITY_SERVER
+			dirtyAttributeTemplateIDs.Clear();
+			dirtyResourceTemplateIDs.Clear();
+			lastSentAttributeValues.Clear();
+			lastSentResourceValues.Clear();
+			lastSentResourceCurrentValues.Clear();
+#endif
 		}
 
 		/// <summary>
@@ -345,6 +393,10 @@ namespace FishMMO.Shared
 			if (!Attributes.ContainsKey(instance.Template.ID))
 			{
 				Attributes.Add(instance.Template.ID, instance);
+#if UNITY_SERVER
+				instance.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
+				instance.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
+#endif
 			}
 		}
 
@@ -425,8 +477,302 @@ namespace FishMMO.Shared
 			if (!ResourceAttributes.ContainsKey(instance.Template.ID))
 			{
 				ResourceAttributes.Add(instance.Template.ID, instance);
+#if UNITY_SERVER
+				instance.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
+				instance.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
+#endif
 			}
 		}
+
+#if UNITY_SERVER
+		/// <summary>
+		/// Subscribes to network tick updates used to batch and flush dirty attribute state.
+		/// </summary>
+		public override void OnStartNetwork()
+		{
+			base.OnStartNetwork();
+
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick += TimeManager_OnTick;
+			}
+		}
+
+		/// <summary>
+		/// Unsubscribes from network tick updates.
+		/// </summary>
+		public override void OnStopNetwork()
+		{
+			base.OnStopNetwork();
+
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+		}
+
+		/// <summary>
+		/// Called on network tick to flush dirty attribute updates in batches.
+		/// </summary>
+		private void TimeManager_OnTick()
+		{
+			FlushDirtyAttributeUpdates();
+		}
+
+		/// <summary>
+		/// Marks all known attributes and resources as dirty so they are included in the next flush.
+		/// </summary>
+		private void MarkAllAttributesDirty()
+		{
+			foreach (CharacterAttribute attribute in Attributes.Values)
+			{
+				dirtyAttributeTemplateIDs.Add(attribute.Template.ID);
+			}
+
+			foreach (CharacterResourceAttribute resource in ResourceAttributes.Values)
+			{
+				dirtyResourceTemplateIDs.Add(resource.Template.ID);
+			}
+		}
+
+		/// <summary>
+		/// Handles local attribute update notifications and marks corresponding ids as dirty.
+		/// </summary>
+		/// <param name="attribute">The updated attribute.</param>
+		private void CharacterAttribute_OnAttributeUpdated(CharacterAttribute attribute)
+		{
+			if (attribute == null || attribute.Template == null)
+			{
+				return;
+			}
+
+			if (attribute is CharacterResourceAttribute)
+			{
+				dirtyResourceTemplateIDs.Add(attribute.Template.ID);
+			}
+			else
+			{
+				dirtyAttributeTemplateIDs.Add(attribute.Template.ID);
+			}
+		}
+
+		/// <summary>
+		/// Flushes dirty non-resource and resource attributes to the owning client and observers using single or batch broadcasts.
+		/// </summary>
+		private void FlushDirtyAttributeUpdates()
+		{
+			if (!base.IsServerStarted)
+			{
+				return;
+			}
+
+			FlushDirtyAttributes();
+			FlushDirtyResourceAttributes();
+		}
+
+		/// <summary>
+		/// Flushes dirty non-resource attributes and broadcasts either a single update or a packed batch.
+		/// </summary>
+		private void FlushDirtyAttributes()
+		{
+			if (dirtyAttributeTemplateIDs.Count == 0)
+			{
+				return;
+			}
+
+			List<CharacterAttributeUpdateBroadcast> updates = new List<CharacterAttributeUpdateBroadcast>(dirtyAttributeTemplateIDs.Count);
+			foreach (int templateID in dirtyAttributeTemplateIDs)
+			{
+				if (!attributes.TryGetValue(templateID, out CharacterAttribute attribute) || attribute?.Template == null)
+				{
+					continue;
+				}
+
+				int current = attribute.Value;
+				if (lastSentAttributeValues.TryGetValue(templateID, out int last) && last == current)
+				{
+					continue;
+				}
+
+				updates.Add(new CharacterAttributeUpdateBroadcast()
+				{
+					TemplateID = templateID,
+					Value = current,
+				});
+				lastSentAttributeValues[templateID] = current;
+			}
+
+			dirtyAttributeTemplateIDs.Clear();
+			SendAttributeUpdates(updates);
+		}
+
+		/// <summary>
+		/// Flushes dirty resource attributes and broadcasts either a single update or a packed batch.
+		/// </summary>
+		private void FlushDirtyResourceAttributes()
+		{
+			if (dirtyResourceTemplateIDs.Count == 0)
+			{
+				return;
+			}
+
+			List<CharacterResourceAttributeUpdateBroadcast> updates = new List<CharacterResourceAttributeUpdateBroadcast>(dirtyResourceTemplateIDs.Count);
+			foreach (int templateID in dirtyResourceTemplateIDs)
+			{
+				if (!resourceAttributes.TryGetValue(templateID, out CharacterResourceAttribute resource) || resource?.Template == null)
+				{
+					continue;
+				}
+
+				float currentValue = resource.CurrentValue;
+				int value = resource.Value;
+
+				bool currentUnchanged = lastSentResourceCurrentValues.TryGetValue(templateID, out float lastCurrent) && Math.Abs(lastCurrent - currentValue) <= ResourceCurrentValueEpsilon;
+				bool valueUnchanged = lastSentResourceValues.TryGetValue(templateID, out int lastValue) && lastValue == value;
+				if (currentUnchanged && valueUnchanged)
+				{
+					continue;
+				}
+
+				updates.Add(new CharacterResourceAttributeUpdateBroadcast()
+				{
+					TemplateID = templateID,
+					CurrentValue = currentValue,
+					Value = value,
+				});
+
+				lastSentResourceCurrentValues[templateID] = currentValue;
+				lastSentResourceValues[templateID] = value;
+			}
+
+			dirtyResourceTemplateIDs.Clear();
+			SendResourceUpdates(updates);
+		}
+
+		/// <summary>
+		/// Sends non-resource attribute updates to owner and observers using separate payload types.
+		/// </summary>
+		/// <param name="updates">Collected updates to send.</param>
+		private void SendAttributeUpdates(List<CharacterAttributeUpdateBroadcast> updates)
+		{
+			if (updates == null || updates.Count == 0)
+			{
+				return;
+			}
+
+			SendOwnerAttributeUpdates(updates);
+			SendObserverAttributeUpdates(updates);
+		}
+
+		/// <summary>
+		/// Sends non-resource attribute updates to the owning connection.
+		/// </summary>
+		/// <param name="updates">Collected updates to send.</param>
+		private void SendOwnerAttributeUpdates(List<CharacterAttributeUpdateBroadcast> updates)
+		{
+			if (updates.Count == 1)
+			{
+				BroadcastToOwnerOnly(Character, updates[0], Channel.Reliable);
+			}
+			else
+			{
+				CharacterAttributeUpdateMultipleBroadcast batchBroadcast = new CharacterAttributeUpdateMultipleBroadcast
+				{
+					Attributes = updates,
+				};
+				BroadcastToOwnerOnly(Character, batchBroadcast, Channel.Reliable);
+			}
+		}
+
+		/// <summary>
+		/// Sends non-resource attribute updates to observer connections with character routing context.
+		/// </summary>
+		/// <param name="updates">Collected updates to send.</param>
+		private void SendObserverAttributeUpdates(List<CharacterAttributeUpdateBroadcast> updates)
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			CharacterObserverAttributeUpdateBroadcast observerBroadcast = new CharacterObserverAttributeUpdateBroadcast
+			{
+				CharacterID = Character.ID,
+				Attributes = updates,
+			};
+			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Sends resource attribute updates as either a single broadcast or a packed batch.
+		/// Owner is excluded because owner resources are reconciled through prediction state.
+		/// </summary>
+		/// <param name="updates">Collected updates to send.</param>
+		private void SendResourceUpdates(List<CharacterResourceAttributeUpdateBroadcast> updates)
+		{
+			if (updates == null || updates.Count == 0 || Character == null)
+			{
+				return;
+			}
+
+			CharacterObserverResourceAttributeUpdateBroadcast observerBroadcast = new CharacterObserverResourceAttributeUpdateBroadcast
+			{
+				CharacterID = Character.ID,
+				Attributes = updates,
+			};
+			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Broadcasts the payload to only the owner of the character.
+		/// </summary>
+		/// <typeparam name="T">Broadcast payload type.</typeparam>
+		/// <param name="character">Character whose owner should receive the payload.</param>
+		/// <param name="broadcast">Broadcast payload.</param>
+		/// <param name="channel">Transport channel.</param>
+		private static void BroadcastToOwnerOnly<T>(ICharacter character, T broadcast, Channel channel)
+			where T : struct, IBroadcast
+		{
+			if (character == null)
+			{
+				return;
+			}
+
+			NetworkConnection owner = character.Owner;
+			if (owner != null)
+			{
+				owner.Broadcast(broadcast, true, channel);
+			}
+		}
+
+		/// <summary>
+		/// Broadcasts the payload to all current observers of the character, excluding the owner.
+		/// </summary>
+		/// <typeparam name="T">Broadcast payload type.</typeparam>
+		/// <param name="character">Character whose observer connections should receive the payload.</param>
+		/// <param name="broadcast">Broadcast payload.</param>
+		/// <param name="channel">Transport channel.</param>
+		private static void BroadcastToObserversOnly<T>(ICharacter character, T broadcast, Channel channel)
+			where T : struct, IBroadcast
+		{
+			if (character == null || character.Observers == null)
+			{
+				return;
+			}
+
+			NetworkConnection owner = character.Owner;
+			foreach (NetworkConnection observer in character.Observers)
+			{
+				if (observer == null || observer == owner)
+				{
+					continue;
+				}
+
+				observer.Broadcast(broadcast, true, channel);
+			}
+		}
+
+#endif
 
 		/// <summary>
 		/// Initializes parent/child/dependency relationships for all resource attributes.
@@ -502,6 +848,9 @@ namespace FishMMO.Shared
 				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))
 			{
 				accumulatedRegenDelta = resourceState.RegenDelta;
+				health.SetFinal(resourceState.MaxHealth);
+				mana.SetFinal(resourceState.MaxMana);
+				stamina.SetFinal(resourceState.MaxStamina);
 				health.SetCurrentValue(resourceState.Health);
 				// Skipping internal UI update here fixes an issue with Replicate/Reconcile fighting over UI updates.
 				mana.SetCurrentValue(resourceState.Mana, false);
@@ -523,8 +872,11 @@ namespace FishMMO.Shared
 				{
 					RegenDelta = accumulatedRegenDelta,
 					Health = health.CurrentValue,
+					MaxHealth = health.FinalValue,
 					Mana = mana.CurrentValue,
+					MaxMana = mana.FinalValue,
 					Stamina = stamina.CurrentValue,
+					MaxStamina = stamina.FinalValue,
 				};
 			}
 			return default;
@@ -550,6 +902,9 @@ namespace FishMMO.Shared
 
 			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
 			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
+
+			ClientManager.RegisterBroadcast<CharacterObserverAttributeUpdateBroadcast>(OnClientCharacterObserverAttributeUpdateBroadcastReceived);
+			ClientManager.RegisterBroadcast<CharacterObserverResourceAttributeUpdateBroadcast>(OnClientCharacterObserverResourceAttributeUpdateBroadcastReceived);
 		}
 
 		/// <summary>
@@ -566,7 +921,33 @@ namespace FishMMO.Shared
 
 				ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
 				ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
+
+				ClientManager.UnregisterBroadcast<CharacterObserverAttributeUpdateBroadcast>(OnClientCharacterObserverAttributeUpdateBroadcastReceived);
+				ClientManager.UnregisterBroadcast<CharacterObserverResourceAttributeUpdateBroadcast>(OnClientCharacterObserverResourceAttributeUpdateBroadcastReceived);
 			}
+		}
+
+		/// <summary>
+		/// Resolves a target character attribute controller from the client character cache.
+		/// </summary>
+		/// <param name="characterID">Target character ID.</param>
+		/// <param name="attributeController">Resolved attribute controller if available.</param>
+		/// <returns>True if a target controller was resolved.</returns>
+		private static bool TryGetCachedCharacterAttributeController(long characterID, out ICharacterAttributeController attributeController)
+		{
+			attributeController = null;
+			if (characterID <= 0)
+			{
+				return false;
+			}
+
+			if (!BaseCharacter.ClientCharacters.TryGetValue(characterID, out ICharacter character) ||
+				character == null)
+			{
+				return false;
+			}
+
+			return character.TryGet(out attributeController);
 		}
 
 		/// <summary>
@@ -574,12 +955,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientCharacterAttributeUpdateBroadcastReceived(CharacterAttributeUpdateBroadcast msg, Channel channel)
 		{
-			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.TemplateID);
-			if (template != null &&
-				Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
-			{
-				attribute.SetValue(msg.Value);
-			}
+			SetAttribute(msg.TemplateID, msg.Value);
 		}
 
 		/// <summary>
@@ -589,12 +965,7 @@ namespace FishMMO.Shared
 		{
 			foreach (CharacterAttributeUpdateBroadcast subMsg in msg.Attributes)
 			{
-				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.TemplateID);
-				if (template != null &&
-					Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
-				{
-					attribute.SetValue(subMsg.Value);
-				}
+				SetAttribute(subMsg.TemplateID, subMsg.Value);
 			}
 		}
 
@@ -603,13 +974,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientCharacterResourceAttributeUpdateBroadcastReceived(CharacterResourceAttributeUpdateBroadcast msg, Channel channel)
 		{
-			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.TemplateID);
-			if (template != null &&
-				ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
+			if (base.IsOwner)
 			{
-				attribute.SetCurrentValue(msg.CurrentValue);
-				attribute.SetValue(msg.Value);
+				return;
 			}
+
+			SetResourceAttribute(msg.TemplateID, msg.Value, msg.CurrentValue);
 		}
 
 		/// <summary>
@@ -617,15 +987,46 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived(CharacterResourceAttributeUpdateMultipleBroadcast msg, Channel channel)
 		{
+			if (base.IsOwner)
+			{
+				return;
+			}
+
 			foreach (CharacterResourceAttributeUpdateBroadcast subMsg in msg.Attributes)
 			{
-				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.TemplateID);
-				if (template != null &&
-					ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
-				{
-					attribute.SetCurrentValue(subMsg.CurrentValue);
-					attribute.SetValue(subMsg.Value);
-				}
+				SetResourceAttribute(subMsg.TemplateID, subMsg.Value, subMsg.CurrentValue);
+			}
+		}
+
+		/// <summary>
+		/// Server sent observer-targeted non-resource attribute updates for a specific character.
+		/// </summary>
+		private void OnClientCharacterObserverAttributeUpdateBroadcastReceived(CharacterObserverAttributeUpdateBroadcast msg, Channel channel)
+		{
+			if (!TryGetCachedCharacterAttributeController(msg.CharacterID, out ICharacterAttributeController attributeController))
+			{
+				return;
+			}
+
+			foreach (CharacterAttributeUpdateBroadcast subMsg in msg.Attributes)
+			{
+				attributeController.SetAttribute(subMsg.TemplateID, subMsg.Value);
+			}
+		}
+
+		/// <summary>
+		/// Server sent observer-targeted resource attribute updates for a specific character.
+		/// </summary>
+		private void OnClientCharacterObserverResourceAttributeUpdateBroadcastReceived(CharacterObserverResourceAttributeUpdateBroadcast msg, Channel channel)
+		{
+			if (!TryGetCachedCharacterAttributeController(msg.CharacterID, out ICharacterAttributeController attributeController))
+			{
+				return;
+			}
+
+			foreach (CharacterResourceAttributeUpdateBroadcast subMsg in msg.Attributes)
+			{
+				attributeController.SetResourceAttribute(subMsg.TemplateID, subMsg.Value, subMsg.CurrentValue);
 			}
 		}
 #endif

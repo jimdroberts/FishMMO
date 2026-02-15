@@ -1,5 +1,6 @@
 using FishNet.Connection;
 using FishNet.Serializing;
+using FishNet.Transporting;
 using System;
 using FishMMO.Logging;
 
@@ -98,7 +99,149 @@ namespace FishMMO.Shared
 			ArchetypeTemplate oldTemplate = Template;
 			Template = template;
 
+#if UNITY_SERVER
+			if (base.IsServerStarted)
+			{
+				SendArchetypeUpdate(template.ID);
+			}
+#endif
+
 			OnArchetypeChanged?.Invoke(oldTemplate, Template);
 		}
+
+#if UNITY_SERVER
+		/// <summary>
+		/// Sends archetype updates to owner and observers.
+		/// </summary>
+		/// <param name="templateID">The archetype template ID to send.</param>
+		private void SendArchetypeUpdate(int templateID)
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			BroadcastToOwnerOnly(Character, new ArchetypeUpdateBroadcast()
+			{
+				TemplateID = templateID,
+			}, Channel.Reliable);
+
+			BroadcastToObserversOnly(Character, new CharacterObserverArchetypeUpdateBroadcast()
+			{
+				CharacterID = Character.ID,
+				TemplateID = templateID,
+			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Broadcasts the payload to only the owner of the character.
+		/// </summary>
+		private static void BroadcastToOwnerOnly<T>(ICharacter character, T broadcast, Channel channel)
+			where T : struct, IBroadcast
+		{
+			if (character?.Owner != null)
+			{
+				character.Owner.Broadcast(broadcast, true, channel);
+			}
+		}
+
+		/// <summary>
+		/// Broadcasts the payload to all current observers of the character, excluding the owner.
+		/// </summary>
+		private static void BroadcastToObserversOnly<T>(ICharacter character, T broadcast, Channel channel)
+			where T : struct, IBroadcast
+		{
+			if (character == null || character.Observers == null)
+			{
+				return;
+			}
+
+			NetworkConnection owner = character.Owner;
+			foreach (NetworkConnection observer in character.Observers)
+			{
+				if (observer == null || observer == owner)
+				{
+					continue;
+				}
+
+				observer.Broadcast(broadcast, true, channel);
+			}
+		}
+#endif
+
+#if !UNITY_SERVER
+		/// <summary>
+		/// Called when the character starts on the client. Registers archetype broadcast listeners.
+		/// Non-owner character instances are disabled and updated through owner-routed observer broadcasts.
+		/// </summary>
+		public override void OnStartCharacter()
+		{
+			base.OnStartCharacter();
+
+			if (!base.IsOwner)
+			{
+				enabled = false;
+				return;
+			}
+
+			ClientManager.RegisterBroadcast<ArchetypeUpdateBroadcast>(OnClientArchetypeUpdateBroadcastReceived);
+			ClientManager.RegisterBroadcast<CharacterObserverArchetypeUpdateBroadcast>(OnClientCharacterObserverArchetypeUpdateBroadcastReceived);
+		}
+
+		/// <summary>
+		/// Called when the character stops on the client. Unregisters archetype broadcast listeners.
+		/// </summary>
+		public override void OnStopCharacter()
+		{
+			base.OnStopCharacter();
+
+			if (base.IsOwner)
+			{
+				ClientManager.UnregisterBroadcast<ArchetypeUpdateBroadcast>(OnClientArchetypeUpdateBroadcastReceived);
+				ClientManager.UnregisterBroadcast<CharacterObserverArchetypeUpdateBroadcast>(OnClientCharacterObserverArchetypeUpdateBroadcastReceived);
+			}
+		}
+
+		/// <summary>
+		/// Resolves a target archetype controller from the client character cache.
+		/// </summary>
+		private static bool TryGetCachedArchetypeController(long characterID, out IArchetypeController archetypeController)
+		{
+			archetypeController = null;
+			if (characterID <= 0)
+			{
+				return false;
+			}
+
+			if (!BaseCharacter.ClientCharacters.TryGetValue(characterID, out ICharacter character) ||
+				character == null)
+			{
+				return false;
+			}
+
+			return character.TryGet(out archetypeController);
+		}
+
+		/// <summary>
+		/// Handles owner-targeted archetype updates from the server.
+		/// </summary>
+		private void OnClientArchetypeUpdateBroadcastReceived(ArchetypeUpdateBroadcast msg, Channel channel)
+		{
+			SetArchetype(msg.TemplateID);
+		}
+
+		/// <summary>
+		/// Handles observer-targeted archetype updates from the server.
+		/// </summary>
+		private void OnClientCharacterObserverArchetypeUpdateBroadcastReceived(CharacterObserverArchetypeUpdateBroadcast msg, Channel channel)
+		{
+			if (!TryGetCachedArchetypeController(msg.CharacterID, out IArchetypeController archetypeController))
+			{
+				return;
+			}
+
+			archetypeController.SetArchetype(msg.TemplateID);
+		}
+#endif
 	}
 }

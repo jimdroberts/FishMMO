@@ -1,4 +1,8 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
+using FishNet.Connection;
+using FishNet.Object;
+using FishNet.Managing.Predicting;
 #if !UNITY_SERVER
 using TMPro;
 #endif
@@ -31,6 +35,22 @@ namespace FishMMO.Shared
 		/// The collider for the character.
 		/// </summary>
 		Collider Collider { get; set; }
+		/// <summary>
+		/// The network connection that owns this character.
+		/// </summary>
+		NetworkConnection Owner { get; }
+		/// <summary>
+		/// The network object representing this character in FishNet networking.
+		/// </summary>
+		NetworkObject NetworkObject { get; }
+		/// <summary>
+		/// The prediction manager for client-side prediction and reconciliation.
+		/// </summary>
+		PredictionManager PredictionManager { get; }
+		/// <summary>
+		/// The set of network connections observing this character.
+		/// </summary>
+		HashSet<NetworkConnection> Observers { get; }
 		/// <summary>
 		/// Whether the character is currently teleporting.
 		/// </summary>

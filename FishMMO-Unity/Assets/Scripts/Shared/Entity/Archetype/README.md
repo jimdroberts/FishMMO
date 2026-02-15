@@ -14,6 +14,13 @@ Archetype/
     └── ArchetypeTemplate.cs   # ScriptableObject blueprint for archetypes
 ```
 
+### Related Files (Outside This Directory)
+
+```
+Shared/Network/Character/ArchetypeBroadcasts.cs   # FishNet broadcast structs for owner + observer archetype updates
+Shared/Entity/BaseCharacter.cs                     # Client-side character cache (ClientCharacters) used for observer routing
+```
+
 ## Inheritance Hierarchies
 
 ### Templates (ScriptableObjects)
@@ -116,6 +123,19 @@ SetArchetype(templateID)
 | Read      | `int` (template ID)   | Reads the ID and calls `SetArchetype(id)` if >= 0     |
 
 The archetype is synchronized as part of the character's initial payload when a client receives the character's networked state. FishNet calls `WritePayload` on the server and `ReadPayload` on the client automatically for each `NetworkBehaviour` on the character.
+
+### Runtime Broadcast Synchronization
+
+At runtime, archetype changes are synchronized with two broadcast paths:
+
+| Broadcast                                  | Target            | Description |
+|--------------------------------------------|-------------------|-------------|
+| `ArchetypeUpdateBroadcast`                  | Owner connection  | Updates the local owner's archetype controller directly. |
+| `CharacterObserverArchetypeUpdateBroadcast` | Observer clients  | Includes `CharacterID` so observers can route updates through `BaseCharacter.ClientCharacters` to the correct remote character controller. |
+
+Observer routing avoids per-controller global fan-out by using the client-side character cache keyed by `ICharacter.ID`.
+
+> If your local project uses manually-maintained project files, ensure [Assets/Scripts/Shared/Network/Character/ArchetypeBroadcasts.cs](Assets/Scripts/Shared/Network/Character/ArchetypeBroadcasts.cs) is included so `ArchetypeUpdateBroadcast` and `CharacterObserverArchetypeUpdateBroadcast` compile correctly.
 
 ## Static Events
 

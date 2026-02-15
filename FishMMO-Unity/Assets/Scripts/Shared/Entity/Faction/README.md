@@ -26,6 +26,7 @@ Faction/
 Shared/Network/Character/FactionBroadcasts.cs                            # FishNet broadcast structs for faction updates
 Server/Implementation/World/SceneServer/Faction/FactionSystem.cs         # Server-side faction update handling + DB persistence
 Shared/Entity/CharacterAttribute/CharacterDamageController.cs            # Calls AdjustFaction() on kill events
+Shared/Entity/BaseCharacter.cs                                           # Client-side character cache used for observer routing
 Client/UI/Controls/World/Faction/UIFactions.cs                           # Faction UI panel
 ```
 
@@ -180,8 +181,11 @@ The `FactionMatrixTemplate` provides an editor tool for configuring default inte
 
 | Broadcast | Purpose |
 |-----------|---------|
-| `FactionUpdateBroadcast` | Server tells client to update a single faction (templateID, newValue) |
-| `FactionUpdateMultipleBroadcast` | Server tells client to update multiple factions at once |
+| `FactionUpdateBroadcast` | Owner-targeted single faction update |
+| `FactionUpdateMultipleBroadcast` | Owner-targeted bulk faction update |
+| `CharacterObserverFactionUpdateBroadcast` | Observer-targeted faction updates with `CharacterID` routing |
+
+Observer-targeted updates resolve the destination controller through `BaseCharacter.ClientCharacters` and apply updates on the resolved `IFactionController` instance.
 
 ## Static Events
 

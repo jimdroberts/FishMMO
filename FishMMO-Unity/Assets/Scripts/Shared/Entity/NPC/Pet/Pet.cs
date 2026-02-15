@@ -46,6 +46,11 @@ namespace FishMMO.Shared
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
+
+#if !UNITY_SERVER
+			ClientCharacters.Remove(ID);
+#endif
+
 			PetOwner = null;
 			Abilities.Clear();
 		}

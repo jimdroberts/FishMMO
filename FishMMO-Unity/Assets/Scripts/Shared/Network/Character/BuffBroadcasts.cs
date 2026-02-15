@@ -42,4 +42,26 @@ namespace FishMMO.Shared
 		/// <summary>List of buffs to remove.</summary>
 		public List<BuffRemoveBroadcast> Buffs;
 	}
+
+	/// <summary>
+	/// Observer-targeted broadcast for adding buffs to a specific character.
+	/// </summary>
+	public struct CharacterObserverBuffAddBroadcast : IBroadcast
+	{
+		/// <summary>Target character ID to apply updates to.</summary>
+		public long CharacterID;
+		/// <summary>Buffs to add to the target character.</summary>
+		public List<BuffAddBroadcast> Buffs;
+	}
+
+	/// <summary>
+	/// Observer-targeted broadcast for removing buffs from a specific character.
+	/// </summary>
+	public struct CharacterObserverBuffRemoveBroadcast : IBroadcast
+	{
+		/// <summary>Target character ID to apply updates to.</summary>
+		public long CharacterID;
+		/// <summary>Buffs to remove from the target character.</summary>
+		public List<BuffRemoveBroadcast> Buffs;
+	}
 }

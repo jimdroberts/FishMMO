@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 		/// <param name="modifier">The initial modifier value.</param>
 		public CharacterResourceAttribute(int templateID, int initialValue, float currentValue, int modifier) : base(templateID, initialValue, modifier)
 		{
-			this.currentValue = currentValue;
+			this.currentValue = ClampCurrentValue(currentValue);
 		}
 
 		/// <summary>
@@ -46,14 +46,10 @@ namespace FishMMO.Shared
 		public void AddToCurrentValue(float value)
 		{
 			float tmp = currentValue;
-			currentValue += value;
+			currentValue = ClampCurrentValue(currentValue + value);
 			if (currentValue == tmp)
 			{
 				return;
-			}
-			if (currentValue > this.FinalValue)
-			{
-				currentValue = this.FinalValue;
 			}
 			Internal_OnAttributeChanged(this);
 		}
@@ -66,7 +62,13 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetCurrentValue(float value, bool updateInternal = true)
 		{
-			currentValue = value;
+			float clamped = ClampCurrentValue(value);
+			if (currentValue == clamped)
+			{
+				return;
+			}
+
+			currentValue = clamped;
 			if (updateInternal)
 			{
 				Internal_OnAttributeChanged(this);
@@ -81,11 +83,13 @@ namespace FishMMO.Shared
 		/// <param name="amount">Amount to consume.</param>
 		public void Consume(float amount)
 		{
-			currentValue -= amount;
-			if (currentValue <= 0.001f)
+			float clamped = ClampCurrentValue(currentValue - amount);
+			if (currentValue == clamped)
 			{
-				currentValue = 0.0f;
+				return;
 			}
+
+			currentValue = clamped;
 			//UnityEngine.Log.Debug($"Consumed {amount} {Template.Name} - [{currentValue}/{FinalValue}]");
 			Internal_OnAttributeChanged(this);
 		}
@@ -97,12 +101,35 @@ namespace FishMMO.Shared
 		/// <param name="amount">Amount to gain.</param>
 		public void Gain(float amount)
 		{
-			currentValue += amount;
-			if (currentValue >= FinalValue)
+			float clamped = ClampCurrentValue(currentValue + amount);
+			if (currentValue == clamped)
 			{
-				currentValue = FinalValue;
+				return;
 			}
+
+			currentValue = clamped;
 			Internal_OnAttributeChanged(this);
+		}
+
+		/// <summary>
+		/// Clamps a resource value to the valid range of [0, FinalValue].
+		/// </summary>
+		/// <param name="value">The resource value to clamp.</param>
+		/// <returns>The clamped resource value.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private float ClampCurrentValue(float value)
+		{
+			if (value <= 0.001f)
+			{
+				return 0.0f;
+			}
+
+			if (value >= FinalValue)
+			{
+				return FinalValue;
+			}
+
+			return value;
 		}
 
 		/// <summary>
@@ -111,6 +138,7 @@ namespace FishMMO.Shared
 		/// <param name="attribute">The attribute that was changed.</param>
 		protected override void Internal_OnAttributeChanged(CharacterAttribute attribute)
 		{
+			currentValue = ClampCurrentValue(currentValue);
 			base.Internal_OnAttributeChanged(attribute);
 		}
 	}

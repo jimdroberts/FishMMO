@@ -17,15 +17,15 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// Broadcast for updating a character's resource attribute (e.g., health, mana).
-	/// Contains the template ID, current value, and maximum value.
+	/// Contains the template ID, current value, and base attribute value.
 	/// </summary>
 	public struct CharacterResourceAttributeUpdateBroadcast : IBroadcast
 	{
 		/// <summary>Template ID of the resource attribute to update.</summary>
 		public int TemplateID;
 		/// <summary>Current value of the resource (e.g., current health).</summary>
-		public int CurrentValue;
-		/// <summary>Maximum value of the resource (e.g., max health).</summary>
+		public float CurrentValue;
+		/// <summary>Base value of the resource attribute used for local final-value recalculation.</summary>
 		public int Value;
 	}
 
@@ -46,6 +46,30 @@ namespace FishMMO.Shared
 	public struct CharacterResourceAttributeUpdateMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of resource attribute updates to apply.</summary>
+		public List<CharacterResourceAttributeUpdateBroadcast> Attributes;
+	}
+
+	/// <summary>
+	/// Observer-targeted broadcast for updating attributes of a specific character.
+	/// Contains the target character ID and all attribute updates for that character.
+	/// </summary>
+	public struct CharacterObserverAttributeUpdateBroadcast : IBroadcast
+	{
+		/// <summary>Target character ID to apply updates to.</summary>
+		public long CharacterID;
+		/// <summary>List of attribute updates to apply to the target character.</summary>
+		public List<CharacterAttributeUpdateBroadcast> Attributes;
+	}
+
+	/// <summary>
+	/// Observer-targeted broadcast for updating resource attributes of a specific character.
+	/// Contains the target character ID and all resource updates for that character.
+	/// </summary>
+	public struct CharacterObserverResourceAttributeUpdateBroadcast : IBroadcast
+	{
+		/// <summary>Target character ID to apply updates to.</summary>
+		public long CharacterID;
+		/// <summary>List of resource attribute updates to apply to the target character.</summary>
 		public List<CharacterResourceAttributeUpdateBroadcast> Attributes;
 	}
 }

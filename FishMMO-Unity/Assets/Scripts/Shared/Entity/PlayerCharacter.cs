@@ -219,6 +219,8 @@ namespace FishMMO.Shared
 			SceneName = reader.ReadStringAllocated();
 
 #if !UNITY_SERVER
+			ClientCharacters[ID] = this;
+
 			IPlayerCharacter.OnReadPayload?.Invoke(this);
 
 			RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(RaceID);
@@ -283,11 +285,16 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Resets the character's state, including teleportation, chat/interact timers, instance data, and hotkeys.
+		/// This is called when the character is despawned or removed from the world.
 		/// </summary>
 		/// <param name="asServer">True if called on the server, false if on the client.</param>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
+
+#if !UNITY_SERVER
+			ClientCharacters.Remove(ID);
+#endif
 
 			TeleporterName = "";
 			LastChatMessage = "";

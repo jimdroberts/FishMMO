@@ -4,6 +4,9 @@ using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+#if UNITY_SERVER
+using FishNet.Broadcast;
+#endif
 
 namespace FishMMO.Shared
 {
@@ -153,6 +156,13 @@ namespace FishMMO.Shared
 			}
 
 			template.OnApplyFX(buffInstance, Character);
+
+#if UNITY_SERVER
+			if (base.IsServerStarted)
+			{
+				SendBuffAddUpdate(template.ID);
+			}
+#endif
 		}
 
 		/// <summary>
@@ -206,6 +216,13 @@ namespace FishMMO.Shared
 				{
 					IBuffController.OnRemoveBuff?.Invoke(buffInstance);
 				}
+
+#if UNITY_SERVER
+				if (base.IsServerStarted)
+				{
+					SendBuffRemoveUpdate(buffID);
+				}
+#endif
 			}
 		}
 
@@ -312,6 +329,8 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<BuffAddMultipleBroadcast>(OnClientBuffAddMultipleBroadcastReceived);
 			ClientManager.RegisterBroadcast<BuffRemoveBroadcast>(OnClientBuffRemoveBroadcastReceived);
 			ClientManager.RegisterBroadcast<BuffRemoveMultipleBroadcast>(OnClientBuffRemoveMultipleBroadcastReceived);
+			ClientManager.RegisterBroadcast<CharacterObserverBuffAddBroadcast>(OnClientCharacterObserverBuffAddBroadcastReceived);
+			ClientManager.RegisterBroadcast<CharacterObserverBuffRemoveBroadcast>(OnClientCharacterObserverBuffRemoveBroadcastReceived);
 		}
 
 		/// <summary>
@@ -327,7 +346,29 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<BuffAddMultipleBroadcast>(OnClientBuffAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<BuffRemoveBroadcast>(OnClientBuffRemoveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<BuffRemoveMultipleBroadcast>(OnClientBuffRemoveMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<CharacterObserverBuffAddBroadcast>(OnClientCharacterObserverBuffAddBroadcastReceived);
+				ClientManager.UnregisterBroadcast<CharacterObserverBuffRemoveBroadcast>(OnClientCharacterObserverBuffRemoveBroadcastReceived);
 			}
+		}
+
+		/// <summary>
+		/// Resolves a target buff controller from the client character cache.
+		/// </summary>
+		private static bool TryGetCachedBuffController(long characterID, out IBuffController buffController)
+		{
+			buffController = null;
+			if (characterID <= 0)
+			{
+				return false;
+			}
+
+			if (!BaseCharacter.ClientCharacters.TryGetValue(characterID, out ICharacter character) ||
+				character == null)
+			{
+				return false;
+			}
+
+			return character.TryGet(out buffController);
 		}
 
 		/// <summary>
@@ -389,6 +430,133 @@ namespace FishMMO.Shared
 				{
 					Remove(template.ID);
 				}
+			}
+		}
+
+		/// <summary>
+		/// Handles observer-targeted add buff updates for a specific character.
+		/// </summary>
+		private void OnClientCharacterObserverBuffAddBroadcastReceived(CharacterObserverBuffAddBroadcast msg, Channel channel)
+		{
+			if (!TryGetCachedBuffController(msg.CharacterID, out IBuffController buffController) ||
+				msg.Buffs == null)
+			{
+				return;
+			}
+
+			foreach (BuffAddBroadcast subMsg in msg.Buffs)
+			{
+				BaseBuffTemplate template = BaseBuffTemplate.Get<BaseBuffTemplate>(subMsg.TemplateID);
+				if (template != null)
+				{
+					buffController.Apply(template);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Handles observer-targeted remove buff updates for a specific character.
+		/// </summary>
+		private void OnClientCharacterObserverBuffRemoveBroadcastReceived(CharacterObserverBuffRemoveBroadcast msg, Channel channel)
+		{
+			if (!TryGetCachedBuffController(msg.CharacterID, out IBuffController buffController) ||
+				msg.Buffs == null)
+			{
+				return;
+			}
+
+			foreach (BuffRemoveBroadcast subMsg in msg.Buffs)
+			{
+				buffController.Remove(subMsg.TemplateID);
+			}
+		}
+#endif
+
+#if UNITY_SERVER
+		/// <summary>
+		/// Sends an add-buff update to owner and observers.
+		/// </summary>
+		private void SendBuffAddUpdate(int templateID)
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			BroadcastToOwnerOnly(Character, new BuffAddBroadcast()
+			{
+				TemplateID = templateID,
+			}, Channel.Reliable);
+
+			CharacterObserverBuffAddBroadcast observerBroadcast = new CharacterObserverBuffAddBroadcast()
+			{
+				CharacterID = Character.ID,
+				Buffs = new List<BuffAddBroadcast>(1)
+				{
+					new BuffAddBroadcast() { TemplateID = templateID },
+				},
+			};
+			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Sends a remove-buff update to owner and observers.
+		/// </summary>
+		private void SendBuffRemoveUpdate(int templateID)
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			BroadcastToOwnerOnly(Character, new BuffRemoveBroadcast()
+			{
+				TemplateID = templateID,
+			}, Channel.Reliable);
+
+			CharacterObserverBuffRemoveBroadcast observerBroadcast = new CharacterObserverBuffRemoveBroadcast()
+			{
+				CharacterID = Character.ID,
+				Buffs = new List<BuffRemoveBroadcast>(1)
+				{
+					new BuffRemoveBroadcast() { TemplateID = templateID },
+				},
+			};
+			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Broadcasts the payload to only the owner of the character.
+		/// </summary>
+		private static void BroadcastToOwnerOnly<T>(ICharacter character, T broadcast, Channel channel)
+			where T : struct, IBroadcast
+		{
+			if (character?.Owner != null)
+			{
+				character.Owner.Broadcast(broadcast, true, channel);
+			}
+		}
+
+		/// <summary>
+		/// Broadcasts the payload to all current observers of the character, excluding the owner.
+		/// </summary>
+		private static void BroadcastToObserversOnly<T>(ICharacter character, T broadcast, Channel channel)
+			where T : struct, IBroadcast
+		{
+			if (character == null || character.Observers == null)
+			{
+				return;
+			}
+
+			NetworkConnection owner = character.Owner;
+			foreach (NetworkConnection observer in character.Observers)
+			{
+				if (observer == null || observer == owner)
+				{
+					continue;
+				}
+
+				observer.Broadcast(broadcast, true, channel);
 			}
 		}
 #endif

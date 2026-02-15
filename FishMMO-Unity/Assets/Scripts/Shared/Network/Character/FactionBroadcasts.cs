@@ -24,4 +24,15 @@ namespace FishMMO.Shared
 		/// <summary>List of faction updates to apply.</summary>
 		public List<FactionUpdateBroadcast> Factions;
 	}
+
+	/// <summary>
+	/// Observer-targeted broadcast for updating faction values of a specific character.
+	/// </summary>
+	public struct CharacterObserverFactionUpdateBroadcast : IBroadcast
+	{
+		/// <summary>Target character ID to apply updates to.</summary>
+		public long CharacterID;
+		/// <summary>List of faction updates to apply to the target character.</summary>
+		public List<FactionUpdateBroadcast> Factions;
+	}
 }

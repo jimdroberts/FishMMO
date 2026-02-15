@@ -3,7 +3,6 @@ using FishNet.Utility.Extension;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 #if !UNITY_SERVER
 using TMPro;
@@ -16,8 +15,17 @@ namespace FishMMO.Shared
 	/// Abstract base class for all networked character entities in the game.
 	/// Provides core properties, behaviour registration, flag management, and prefab/model instantiation.
 	/// </summary>
+	[RequireComponent(typeof(NetworkObject))]
 	public abstract class BaseCharacter : NetworkBehaviour, ICharacter
 	{
+#if !UNITY_SERVER
+		/// <summary>
+		/// Client-side dictionary mapping character IDs to their instances for quick lookup.
+		/// This is populated when characters are read from the network payload and cleared when they are destroyed.
+		/// Characters are also removed from this dictionary when their state is reset, such as during despawning or scene transitions.
+		/// </summary>
+		public static Dictionary<long, ICharacter> ClientCharacters = new Dictionary<long, ICharacter>();
+#endif
 		/// <summary>
 		/// Dictionary mapping behaviour interface types to their implementations for this character.
 		/// </summary>
@@ -168,6 +176,20 @@ namespace FishMMO.Shared
 		/// Called after all CharacterBehaviours have called InitializeOnce. Override for custom initialization logic.
 		/// </summary>
 		public virtual void OnAwake() { }
+
+		void OnDestroy()
+		{
+			OnDestroying();
+
+#if !UNITY_SERVER
+			ClientCharacters.Remove(ID);
+#endif
+		}
+
+		/// <summary>
+		/// Called when the object is being destroyed. Override for custom cleanup logic.
+		/// </summary>
+		public virtual void OnDestroying() { }
 
 		/// <summary>
 		/// Registers a character behaviour implementation for all supported interfaces.

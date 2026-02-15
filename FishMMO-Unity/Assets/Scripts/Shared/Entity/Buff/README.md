@@ -23,6 +23,7 @@ Buff/
 
 ```
 Shared/Network/Character/BuffBroadcasts.cs   # FishNet broadcast structs for buff add/remove
+Shared/Entity/BaseCharacter.cs               # Client-side character cache used for observer routing
 ```
 
 ## Inheritance Hierarchies
@@ -190,12 +191,16 @@ All modifications go through `CharacterAttribute.AddModifier()`, which operates 
 
 | Broadcast | Purpose |
 |-----------|---------|
-| `BuffAddBroadcast` | Server tells client to apply a single buff by template ID |
-| `BuffAddMultipleBroadcast` | Server tells client to apply multiple buffs at once |
-| `BuffRemoveBroadcast` | Server tells client to remove a single buff by template ID |
-| `BuffRemoveMultipleBroadcast` | Server tells client to remove multiple buffs at once |
+| `BuffAddBroadcast` | Owner-targeted add buff update |
+| `BuffAddMultipleBroadcast` | Owner-targeted bulk add buff update |
+| `BuffRemoveBroadcast` | Owner-targeted remove buff update |
+| `BuffRemoveMultipleBroadcast` | Owner-targeted bulk remove buff update |
+| `CharacterObserverBuffAddBroadcast` | Observer-targeted add buff updates with `CharacterID` routing |
+| `CharacterObserverBuffRemoveBroadcast` | Observer-targeted remove buff updates with `CharacterID` routing |
 
 Client broadcasts use `Apply(BaseBuffTemplate)` (the gameplay path), not `Apply(Buff buff)`, because they represent new game events rather than state restoration.
+
+Observer-targeted messages resolve the destination character via `BaseCharacter.ClientCharacters[msg.CharacterID]`, then apply changes through the resolved `IBuffController`.
 
 ## Static Events
 
