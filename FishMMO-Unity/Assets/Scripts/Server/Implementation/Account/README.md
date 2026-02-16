@@ -16,6 +16,9 @@ Server/
 │       ├── ServerSrpData.cs                   # Server-side SRP session (ephemeral, proof, session)
 │       └── SrpState.cs                        # Authentication state enum (Verify → Proof → Success)
 │
+├── Core/Collections/
+│   └── ArrivalOrderTracker.cs                 # Shared oldest-first tracking utility for TTL sweeps
+│
 └── Implementation/Account/                    # FishNet-specific implementation
     └── AccountManager.cs                      # Thread-safe IAccountManager<NetworkConnection>
 ```
@@ -36,7 +39,7 @@ The `IAccountManager<TConnection>` interface defines all account operations gene
 
 ### Internal Data Stores
 
-`AccountManager` maintains four synchronized dictionaries:
+`AccountManager` maintains synchronized connection/account dictionaries and an oldest-first unauthenticated tracker:
 
 | Dictionary | Key → Value | Purpose |
 |------------|-------------|---------|
@@ -44,8 +47,11 @@ The `IAccountManager<TConnection>` interface defines all account operations gene
 | `connectionAccounts` | `NetworkConnection → string` | Connection → account name lookup |
 | `accountConnections` | `string → NetworkConnection` | Account name → connection reverse lookup |
 | `connectionAccountData` | `NetworkConnection → AccountData` | Connection → full account data (access level + SRP) |
+| `unauthenticatedTracker` | `NetworkConnection` (arrival-ordered) | Oldest-first SRP/encryption stale-state sweep support |
 
 The `connectionAccounts` and `accountConnections` dictionaries form a **bidirectional map**, kept in sync by all add/remove operations.
+
+`unauthenticatedTracker` is backed by shared `ArrivalOrderTracker<NetworkConnection>` to provide O(1) track/untrack and low-GC oldest-first sweeps.
 
 ### Thread Safety
 
@@ -86,6 +92,8 @@ Client                          Server (AccountManager)
 | `SrpSuccess` | Client proof verified — session is authenticated |
 
 State transitions are atomic via `TryUpdateSrpState`, which validates the current state matches `requiredState` before advancing to `nextState`.
+
+On transition to `SrpSuccess`, unauthenticated tracking is removed immediately.
 
 ## Data Types
 
@@ -144,7 +152,13 @@ The `GetProof(clientProof, out serverProof)` method verifies the client's proof 
 
 4. Client disconnects
    └── RemoveConnectionAccount(connection)  OR  RemoveAccountConnection(accountName)
-       └── Removes all four dictionary entries atomically
+    └── Removes connection encryption/account state first, then bidirectional account maps when available
+
+5. Periodic stale unauthenticated sweep
+    └── `SweepUnauthenticatedConnections(maxAge, isAuthenticated, maxScan, maxRemovals)`
+         ├── processes oldest tracked entries first
+         ├── drops authenticated entries from tracking
+         └── purges stale unauthenticated SRP/encryption/account rows
 ```
 
 ## External Dependencies
@@ -164,3 +178,4 @@ The `GetProof(clientProof, out serverProof)` method verifies the client's proof 
 - **Scene/World Servers** — Query `GetAccountNameByConnection` and `GetConnectionAccountData` to validate permissions.
 - **Disconnect Handling** — Calls `RemoveConnectionAccount` to clean up all mappings on client disconnect.
 - **Server Shutdown** — Calls `Clear()` to release all tracked connections and account data.
+- **Authentication Backstop Cleanup** — `ServerAuthenticator.Update()` invokes `SweepUnauthenticatedConnections(...)` to bound stale SRP/encryption memory under delayed-disconnect or attack conditions.

@@ -1,4 +1,5 @@
 ﻿using FishNet.Connection;
+using FishNet.Managing.Server;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -63,6 +64,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived, true);
+			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
 			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
 
@@ -88,6 +90,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived);
+			if (ServerManager != null)
+			{
+				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+			}
 		}
 
 		/// <summary>
@@ -237,6 +243,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return false;
 		}
 
+		/// <summary>
+		/// Attempts to acquire a per-connection in-flight server-list slot.
+		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <returns><c>true</c> if the slot was acquired; otherwise <c>false</c>.</returns>
 		private bool TryBeginServerListRequest(NetworkConnection conn)
 		{
 			if (conn == null)
@@ -247,9 +258,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return inFlightServerListRequests.TryAdd(conn.ClientId, 0);
 		}
 
+		/// <summary>
+		/// Releases the per-connection in-flight server-list slot.
+		/// </summary>
+		/// <param name="conn">Connection to release.</param>
 		private void EndServerListRequest(NetworkConnection conn)
 		{
 			if (conn != null)
+			{
+				inFlightServerListRequests.TryRemove(conn.ClientId, out _);
+			}
+		}
+
+		/// <summary>
+		/// Releases per-connection in-flight server-list state when a client disconnects.
+		/// </summary>
+		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		{
+			if (args.ConnectionState == RemoteConnectionState.Stopped && conn != null)
 			{
 				inFlightServerListRequests.TryRemove(conn.ClientId, out _);
 			}

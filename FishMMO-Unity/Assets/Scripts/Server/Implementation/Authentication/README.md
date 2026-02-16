@@ -13,6 +13,11 @@ Server/
 │   ├── SrpVerifyRequest.cs                    # Immutable request struct (encrypted credentials)
 │   └── SrpProofRequest.cs                     # Immutable request struct (encrypted proof)
 │
+├── Core/Collections/                          # Reusable queue/index trackers for bounded TTL sweeps
+│   ├── ExpiringKeyTracker.cs                  # Keyed debounce/rate-limit tracker (head-first expiry)
+│   ├── LastSeenCacheTracker.cs                # Key/value cache tracker with TTL by last-seen
+│   └── ArrivalOrderTracker.cs                 # Oldest-first tracker for stale-connection sweeps
+│
 └── Implementation/Authentication/             # FishNet-specific authenticator
     └── ServerAuthenticator.cs                 # Authenticator with bounded channels and async workers
 
@@ -49,7 +54,41 @@ Network Thread (UDP Gates)              Worker Threads (Async)              Main
 | **Worker Threads** | AES decryption, database I/O, SRP math | **Yes** (async/await) |
 | **Main Thread** | `Broadcast()`, `Disconnect()`, `OnAuthenticationResult` | N/A (Unity main loop) |
 
-Workers enqueue `Action` delegates into `mainThreadQueue`, which is drained each frame by `Update()` → `DrainMainThreadQueue()`. The queue is protected by `_queueLock` and drained using a copy-then-invoke pattern to minimize lock hold time.
+Workers enqueue `Action` delegates into `mainThreadQueue`, which is drained each frame by `Update()` → `DrainMainThreadQueue()`. The queue uses `ConcurrentQueue<Action>` and lock-free enqueue/dequeue to reduce contention under load.
+
+## Security and DoS Hardening
+
+### Connection-level in-flight gating
+
+- `verifyInFlightByClientId` allows only one in-flight SRP verify request per connection.
+- `proofInFlightByClientId` allows only one in-flight SRP proof request per connection.
+- Duplicate verify/proof packets from the same `ClientId` are ignored while work is in progress.
+- Repeated handshake packets are ignored while verify/proof is active.
+
+### Stale authentication TTL (half-open protection)
+
+- `authStartTimeByClientId` tracks when auth started for each connection.
+- A periodic sweep disconnects and purges connections that have not completed SRP within 15 seconds.
+- Purge clears transient gate state and removes account/SRP data from `AccountManager`.
+
+### Kick-request write debounce
+
+- Kick requests for already-online accounts are rate-limited per account name.
+- At most one `IKickRequestService.PersistAsync(accountName)` is emitted per 10 seconds per account.
+- Debounce windows are tracked by shared `ExpiringKeyTracker<string>` for low-GC, head-first cleanup.
+
+### Upstream verify rate limiting (retry-storm mitigation)
+
+- SRP verify ingress applies lightweight debounce by **IP address** before entering the verify channel.
+- Decrypted username path applies lightweight debounce by **account name** before DB lookup.
+- This reduces worker/DB pressure during reconnect storms where channel `DropWrite` alone is insufficient.
+- Debounce maps use shared `ExpiringKeyTracker<string>` instances to avoid large dictionary enumeration during sweeps.
+
+### Connection IP cache TTL tracking
+
+- Per-connection auth IP cache entries use shared `LastSeenCacheTracker<int, string>`.
+- Cache entries are touched on read and swept with bounded scan/remove limits.
+- This keeps IP-based rate limiting effective without unbounded memory growth under connection churn.
 
 ## Authentication Flow
 
@@ -112,6 +151,8 @@ Client                              Server
 
 Both channels use `SingleReader = false, SingleWriter = false` to support multiple concurrent workers and broadcast handlers.
 
+In-flight gate maps are separate from channel capacity and provide per-connection deduplication before requests enter workers.
+
 ## Broadcast Types
 
 | Broadcast | Direction | Contents |
@@ -144,8 +185,10 @@ Both channels use `SingleReader = false, SingleWriter = false` to support multip
 
 ## Cleanup
 
-- **Client Disconnect**: `ServerManager_OnRemoteConnectionState` fires when a connection stops, calling `AccountManager.RemoveConnectionAccount(conn)` to clean up all four dictionary entries atomically.
+- **Client Disconnect**: `ServerManager_OnRemoteConnectionState` fires when a connection stops, purging transient auth state and account data.
 - **Worker Shutdown**: `ShutdownWorkers()` cancels the `CancellationTokenSource`, drains remaining main-thread actions, and nulls channel references.
+- **Stale Auth Sweep**: periodic TTL sweep disconnects and purges half-open sessions that never reach SRP success.
+- **AccountManager Backstop Sweep**: `Update()` also invokes `AccountManager.SweepUnauthenticatedConnections(...)`, which uses oldest-first tracking to purge stale SRP/encryption state that may outlive delayed disconnect events.
 
 ## External Dependencies
 

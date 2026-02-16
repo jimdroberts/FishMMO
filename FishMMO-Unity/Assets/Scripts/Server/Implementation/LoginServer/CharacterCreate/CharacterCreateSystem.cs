@@ -1,4 +1,5 @@
 ﻿using FishNet.Connection;
+using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
@@ -87,6 +88,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived, true);
+			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
 			maxCharacters = Mathf.Max(1, maxCharacters);
 			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
@@ -113,6 +115,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived);
+			if (ServerManager != null)
+			{
+				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+			}
 		}
 
 		/// <summary>
@@ -837,6 +843,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return false;
 		}
 
+		/// <summary>
+		/// Attempts to mark a create request as in-flight for the connection.
+		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <returns><c>true</c> if the in-flight slot was acquired; otherwise <c>false</c>.</returns>
 		private bool TryBeginCreateRequest(NetworkConnection conn)
 		{
 			if (conn == null)
@@ -847,6 +858,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return inFlightCreateRequests.TryAdd(conn.ClientId, 0);
 		}
 
+		/// <summary>
+		/// Releases the in-flight create request slot for a connection.
+		/// </summary>
+		/// <param name="conn">Connection to release.</param>
 		private void EndCreateRequest(NetworkConnection conn)
 		{
 			if (conn != null)
@@ -855,6 +870,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 		}
 
+		/// <summary>
+		/// Releases per-connection in-flight create state when a client disconnects.
+		/// </summary>
+		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		{
+			if (args.ConnectionState == RemoteConnectionState.Stopped && conn != null)
+			{
+				inFlightCreateRequests.TryRemove(conn.ClientId, out _);
+			}
+		}
+
+		/// <summary>
+		/// Prepared immutable attribute payload row for deferred persistence.
+		/// </summary>
 		private readonly struct PreparedAttributeEntry
 		{
 			public readonly int TemplateID;
@@ -869,6 +898,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 		}
 
+		/// <summary>
+		/// Prepared immutable faction payload row for deferred persistence.
+		/// </summary>
 		private readonly struct PreparedFactionEntry
 		{
 			public readonly int TemplateID;
@@ -881,6 +913,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 		}
 
+		/// <summary>
+		/// Prepared immutable ability payload row for deferred persistence.
+		/// </summary>
 		private readonly struct PreparedAbilityEntry
 		{
 			public readonly int TemplateID;
@@ -893,6 +928,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 		}
 
+		/// <summary>
+		/// Prepared immutable inventory payload row for deferred persistence.
+		/// </summary>
 		private readonly struct PreparedInventoryEntry
 		{
 			public readonly int TemplateID;
@@ -905,6 +943,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 		}
 
+		/// <summary>
+		/// Prepared immutable equipment payload row for deferred persistence.
+		/// </summary>
 		private readonly struct PreparedEquipmentEntry
 		{
 			public readonly int TemplateID;

@@ -16,8 +16,10 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.Account;
 using FishMMO.Server.Core.Account.SRP;
 using FishMMO.Server.Core.Authentication;
+using FishMMO.Server.Core.Collections;
 using FishMMO.Shared;
 using FishMMO.Logging;
+using UnityEngine;
 
 namespace FishMMO.Server.Implementation
 {
@@ -56,6 +58,67 @@ namespace FishMMO.Server.Implementation
 		private const int ProofChannelCapacity = 500;
 
 		/// <summary>
+		/// Authentication TTL in seconds. Connections that do not complete SRP within this window are purged.
+		/// </summary>
+		private const float AuthStaleTtlSeconds = 15f;
+
+		/// <summary>
+		/// Sweep interval in seconds for stale authentication cleanup.
+		/// </summary>
+		private const float AuthSweepIntervalSeconds = 1f;
+
+		/// <summary>
+		/// Maximum AccountManager unauthenticated entries evaluated per sweep.
+		/// </summary>
+		private const int AccountManagerSweepMaxScan = 256;
+
+		/// <summary>
+		/// Maximum stale AccountManager unauthenticated entries purged per sweep.
+		/// </summary>
+		private const int AccountManagerSweepMaxRemovals = 64;
+
+		/// <summary>
+		/// Minimum seconds between persisted kick requests for the same account.
+		/// </summary>
+		private const float KickRequestDebounceSeconds = 10f;
+
+		/// <summary>
+		/// Sweep interval in seconds for stale kick-request debounce entries.
+		/// </summary>
+		private const float KickDebounceSweepIntervalSeconds = 60f;
+
+		/// <summary>
+		/// Minimum seconds between SRP verify attempts from the same IP.
+		/// </summary>
+		private const float IpAuthAttemptDebounceSeconds = 1f;
+
+		/// <summary>
+		/// Minimum seconds between SRP verify attempts for the same account name.
+		/// </summary>
+		private const float AccountVerifyDebounceSeconds = 2f;
+
+		/// <summary>
+		/// Sweep interval in seconds for expired auth rate-limit entries.
+		/// </summary>
+		private const float AuthRateLimitSweepIntervalSeconds = 60f;
+
+		/// <summary>
+		/// Maximum entries scanned per dictionary during a single auth cleanup sweep.
+		/// Bounds main-thread cleanup cost during large attacks.
+		/// </summary>
+		private const int AuthRateLimitCleanupMaxScanPerMap = 256;
+
+		/// <summary>
+		/// Maximum removals per dictionary during a single auth cleanup sweep.
+		/// </summary>
+		private const int AuthRateLimitCleanupMaxRemovePerMap = 128;
+
+		/// <summary>
+		/// TTL in seconds for per-connection IP cache entries.
+		/// </summary>
+		private const float ConnectionIpCacheTtlSeconds = 120f;
+
+		/// <summary>
 		/// Bounded channel for queuing SRP verify requests for async worker processing.
 		/// </summary>
 		private System.Threading.Channels.Channel<SrpVerifyRequest<NetworkConnection>> verifyChannel;
@@ -76,6 +139,67 @@ namespace FishMMO.Server.Implementation
 		/// ConcurrentQueue avoids lock contention between network thread and worker threads.
 		/// </summary>
 		private readonly ConcurrentQueue<Action> mainThreadQueue = new ConcurrentQueue<Action>();
+
+		/// <summary>
+		/// Verify-stage in-flight gate keyed by ClientId.
+		/// Prevents duplicate SRP verify processing for the same connection.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, byte> verifyInFlightByClientId = new ConcurrentDictionary<int, byte>();
+
+		/// <summary>
+		/// Proof-stage in-flight gate keyed by ClientId.
+		/// Prevents duplicate SRP proof processing for the same connection.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, byte> proofInFlightByClientId = new ConcurrentDictionary<int, byte>();
+
+		/// <summary>
+		/// Tracks authentication start times for stale-auth TTL enforcement.
+		/// Key: ClientId, Value: UTC start timestamp.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, DateTime> authStartTimeByClientId = new ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>
+		/// Reverse map from ClientId to active connection for stale-auth cleanup.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, NetworkConnection> authConnectionByClientId = new ConcurrentDictionary<int, NetworkConnection>();
+
+		/// <summary>
+		/// Per-account kick-request debounce map. Value is next UTC time at which a kick request may be persisted.
+		/// </summary>
+		private readonly ExpiringKeyTracker<string> kickRequestNextAllowedUtcByAccount =
+			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Per-IP auth attempt debounce map. Value is next UTC time a verify attempt is allowed.
+		/// </summary>
+		private readonly ExpiringKeyTracker<string> ipAuthNextAllowedUtc =
+			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Per-account verify debounce map. Value is next UTC time a verify attempt is allowed.
+		/// </summary>
+		private readonly ExpiringKeyTracker<string> accountVerifyNextAllowedUtc =
+			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Per-connection IP cache to avoid repeated address allocation/parsing on hot paths.
+		/// </summary>
+		private readonly LastSeenCacheTracker<int, string> connectionIpCache = new LastSeenCacheTracker<int, string>();
+
+		/// <summary>
+		/// Countdown timer (seconds) until the next stale-authentication sweep.
+		/// </summary>
+		private float nextAuthSweepSeconds = AuthSweepIntervalSeconds;
+
+		/// <summary>
+		/// Countdown timer (seconds) until the next kick-request debounce cleanup sweep.
+		/// </summary>
+		private float nextKickDebounceSweepSeconds = KickDebounceSweepIntervalSeconds;
+
+		/// <summary>
+		/// Countdown timer (seconds) until the next auth rate-limit cleanup sweep.
+		/// </summary>
+		private float nextAuthRateLimitSweepSeconds = AuthRateLimitSweepIntervalSeconds;
 
 		/// <summary>
 		/// The server instance providing access to AccountManager and other infrastructure.
@@ -164,6 +288,15 @@ namespace FishMMO.Server.Implementation
 			verifyChannel = null;
 			proofChannel = null;
 
+			verifyInFlightByClientId.Clear();
+			proofInFlightByClientId.Clear();
+			authStartTimeByClientId.Clear();
+			authConnectionByClientId.Clear();
+			kickRequestNextAllowedUtcByAccount.Clear();
+			ipAuthNextAllowedUtc.Clear();
+			accountVerifyNextAllowedUtc.Clear();
+			connectionIpCache.Clear();
+
 			// Drain remaining responses so clients get their final messages.
 			DrainMainThreadQueue(drainAll: true);
 		}
@@ -176,6 +309,28 @@ namespace FishMMO.Server.Implementation
 		private void Update()
 		{
 			DrainMainThreadQueue(drainAll: false);
+
+			nextAuthSweepSeconds -= Time.deltaTime;
+			if (nextAuthSweepSeconds <= 0f)
+			{
+				nextAuthSweepSeconds = AuthSweepIntervalSeconds;
+				SweepStaleAuthentication();
+				SweepStaleUnauthenticatedAccountState();
+			}
+
+			nextKickDebounceSweepSeconds -= Time.deltaTime;
+			if (nextKickDebounceSweepSeconds <= 0f)
+			{
+				nextKickDebounceSweepSeconds = KickDebounceSweepIntervalSeconds;
+				CleanupKickRequestDebounceEntries();
+			}
+
+			nextAuthRateLimitSweepSeconds -= Time.deltaTime;
+			if (nextAuthRateLimitSweepSeconds <= 0f)
+			{
+				nextAuthRateLimitSweepSeconds = AuthRateLimitSweepIntervalSeconds;
+				CleanupAuthRateLimitEntries();
+			}
 		}
 
 		/// <summary>
@@ -227,6 +382,14 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
+			// Ignore repeated handshake attempts while verify/proof is already in progress.
+			if (verifyInFlightByClientId.ContainsKey(conn.ClientId) || proofInFlightByClientId.ContainsKey(conn.ClientId))
+			{
+				return;
+			}
+
+			TrackAuthStart(conn);
+
 			// Generate encryption keys for the connection and store them in AccountManager.
 			Server.AccountManager.AddConnectionEncryptionData(conn, msg.PublicKey);
 
@@ -273,8 +436,27 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
+			string ipAddress = ResolveIpAddress(conn);
+			if (!TryBeginIpAuthAttempt(ipAddress))
+			{
+				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
+				{
+					Result = ClientAuthenticationResult.ServerBusy,
+				}, false, Channel.Unreliable);
+				return;
+			}
+
+			// Connection-level in-flight lock: only one verify request at a time per connection.
+			if (!verifyInFlightByClientId.TryAdd(conn.ClientId, 0))
+			{
+				return;
+			}
+
+			TrackAuthStart(conn);
+
 			if (!Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
+				PurgeConnectionAuthState(conn, disconnect: false);
 				conn.Disconnect(true);
 				return;
 			}
@@ -290,6 +472,7 @@ namespace FishMMO.Server.Implementation
 
 			if (verifyChannel == null || !verifyChannel.Writer.TryWrite(request))
 			{
+				verifyInFlightByClientId.TryRemove(conn.ClientId, out _);
 				// Channel full or not initialized — reject immediately
 				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 				{
@@ -313,8 +496,22 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
+			// Proof is only valid after verify has started.
+			if (!verifyInFlightByClientId.ContainsKey(conn.ClientId))
+			{
+				return;
+			}
+
+			// Only one proof in-flight per connection.
+			if (!proofInFlightByClientId.TryAdd(conn.ClientId, 0))
+			{
+				return;
+			}
+
 			if (!Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
+				proofInFlightByClientId.TryRemove(conn.ClientId, out _);
+				PurgeConnectionAuthState(conn, disconnect: false);
 				conn.Disconnect(true);
 				return;
 			}
@@ -329,6 +526,7 @@ namespace FishMMO.Server.Implementation
 
 			if (proofChannel == null || !proofChannel.Writer.TryWrite(request))
 			{
+				proofInFlightByClientId.TryRemove(conn.ClientId, out _);
 				// Channel full or not initialized — reject immediately
 				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 				{
@@ -414,10 +612,29 @@ namespace FishMMO.Server.Implementation
 		{
 			NetworkConnection conn = request.Connection;
 			ClientAuthenticationResult result;
+			bool waitingForProof = false;
 
 			// Decrypt the username on worker thread (not network thread).
 			byte[] decryptedRawUsername = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedUsername);
 			string username = Encoding.UTF8.GetString(decryptedRawUsername);
+
+			if (!TryBeginAccountVerifyAttempt(username))
+			{
+				result = ClientAuthenticationResult.ServerBusy;
+				EnqueueMainThread(() =>
+				{
+					if (conn.IsActive)
+					{
+						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
+						{
+							Result = result,
+						}, false, Channel.Unreliable);
+					}
+				});
+
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
 
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService) ||
@@ -448,8 +665,11 @@ namespace FishMMO.Server.Implementation
 
 					if (isOnline)
 					{
-						// Add a kick request for the online character.
-						await kickRequestService.PersistAsync(username);
+						// Add a kick request for the online character (rate-limited per account).
+						if (TryBeginKickRequest(username))
+						{
+							await kickRequestService.PersistAsync(username);
+						}
 						result = ClientAuthenticationResult.AlreadyOnline;
 					}
 					else
@@ -491,6 +711,7 @@ namespace FishMMO.Server.Implementation
 									return true;
 								}))
 							{
+								waitingForProof = true;
 								// Marshal SRP verify response to main thread.
 								EnqueueMainThread(() =>
 								{
@@ -526,6 +747,11 @@ namespace FishMMO.Server.Implementation
 					}, false, Channel.Reliable);
 				}
 			});
+
+			if (!waitingForProof)
+			{
+				PurgeConnectionAuthState(conn, disconnect: false);
+			}
 		}
 
 		/// <summary>
@@ -537,6 +763,8 @@ namespace FishMMO.Server.Implementation
 		private async Task ProcessSrpProofAsync(SrpProofRequest<NetworkConnection> request)
 		{
 			NetworkConnection conn = request.Connection;
+			int clientId = conn.ClientId;
+			bool authenticationSucceeded = false;
 
 			// Decrypt client proof on worker thread.
 			byte[] decryptedClientProof = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedClientProof);
@@ -570,6 +798,7 @@ namespace FishMMO.Server.Implementation
 						conn.Disconnect(false);
 					}
 				});
+				PurgeConnectionAuthState(conn, disconnect: false);
 				return;
 			}
 
@@ -587,6 +816,7 @@ namespace FishMMO.Server.Implementation
 						conn.Disconnect(false);
 					}
 				});
+				PurgeConnectionAuthState(conn, disconnect: false);
 				return;
 			}
 
@@ -597,6 +827,7 @@ namespace FishMMO.Server.Implementation
 
 				bool authenticated = result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
 								 result != ClientAuthenticationResult.ServerBusy;
+				authenticationSucceeded = authenticated;
 
 				// Encrypt server proof on worker thread.
 				byte[] encryptedServerProof = CryptoHelper.EncryptAES(request.SymmetricKey, request.IV, Encoding.UTF8.GetBytes(serverProof));
@@ -619,6 +850,13 @@ namespace FishMMO.Server.Implementation
 					 * makes it out to the client before the kick. */
 					OnAuthentication(conn, authenticated);
 					OnClientAuthenticationResult?.Invoke(conn, authenticated);
+
+					if (!authenticated)
+					{
+						Server.AccountManager.RemoveConnectionAccount(conn);
+					}
+
+					ClearTransientAuthState(clientId);
 				});
 			}
 			catch (Exception ex)
@@ -628,6 +866,16 @@ namespace FishMMO.Server.Implementation
 				{
 					conn.Disconnect(false);
 				});
+				PurgeConnectionAuthState(conn, disconnect: false);
+			}
+			finally
+			{
+				proofInFlightByClientId.TryRemove(clientId, out _);
+
+				if (!authenticationSucceeded)
+				{
+					verifyInFlightByClientId.TryRemove(clientId, out _);
+				}
 			}
 		}
 
@@ -664,8 +912,226 @@ namespace FishMMO.Server.Implementation
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped)
 			{
-				Server.AccountManager.RemoveConnectionAccount(conn);
+				if (conn != null)
+				{
+					connectionIpCache.Remove(conn.ClientId);
+				}
+
+				PurgeConnectionAuthState(conn, disconnect: false);
 			}
+		}
+
+		/// <summary>
+		/// Resolves and caches a connection IP for auth rate limiting.
+		/// </summary>
+		/// <param name="conn">Connection to resolve.</param>
+		/// <returns>Canonical IP key or empty string when unavailable.</returns>
+		private string ResolveIpAddress(NetworkConnection conn)
+		{
+			if (conn == null)
+			{
+				return string.Empty;
+			}
+
+			if (connectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string cachedIp) && !string.IsNullOrWhiteSpace(cachedIp))
+			{
+				return cachedIp;
+			}
+
+			string ip = conn.GetAddress();
+			if (string.IsNullOrWhiteSpace(ip))
+			{
+				return string.Empty;
+			}
+
+			connectionIpCache.Upsert(conn.ClientId, ip, DateTime.UtcNow);
+			return ip;
+		}
+
+		/// <summary>
+		/// Starts auth TTL tracking for a connection if not already tracked.
+		/// </summary>
+		/// <param name="conn">Connection entering the authentication flow.</param>
+		private void TrackAuthStart(NetworkConnection conn)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			authStartTimeByClientId.TryAdd(conn.ClientId, DateTime.UtcNow);
+			authConnectionByClientId[conn.ClientId] = conn;
+		}
+
+		/// <summary>
+		/// Clears transient per-connection authenticator gate and TTL tracking state.
+		/// </summary>
+		/// <param name="clientId">FishNet client ID.</param>
+		private void ClearTransientAuthState(int clientId)
+		{
+			verifyInFlightByClientId.TryRemove(clientId, out _);
+			proofInFlightByClientId.TryRemove(clientId, out _);
+			authStartTimeByClientId.TryRemove(clientId, out _);
+			authConnectionByClientId.TryRemove(clientId, out _);
+		}
+
+		/// <summary>
+		/// Purges all authenticator state for a connection and optionally disconnects it.
+		/// </summary>
+		/// <param name="conn">Connection to purge.</param>
+		/// <param name="disconnect">If true and active, disconnect the client after purge.</param>
+		private void PurgeConnectionAuthState(NetworkConnection conn, bool disconnect)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			ClearTransientAuthState(conn.ClientId);
+			connectionIpCache.Remove(conn.ClientId);
+			Server.AccountManager.RemoveConnectionAccount(conn);
+
+			if (disconnect && conn.IsActive)
+			{
+				conn.Disconnect(false);
+			}
+		}
+
+		/// <summary>
+		/// Disconnects and purges connections that exceeded the authentication TTL window
+		/// without completing SRP success.
+		/// </summary>
+		private void SweepStaleAuthentication()
+		{
+			if (authStartTimeByClientId.Count == 0)
+			{
+				return;
+			}
+
+			DateTime now = DateTime.UtcNow;
+			foreach (KeyValuePair<int, DateTime> kvp in authStartTimeByClientId)
+			{
+				if ((now - kvp.Value).TotalSeconds < AuthStaleTtlSeconds)
+				{
+					continue;
+				}
+
+				if (authConnectionByClientId.TryGetValue(kvp.Key, out NetworkConnection conn) && conn != null)
+				{
+					PurgeConnectionAuthState(conn, disconnect: true);
+				}
+				else
+				{
+					ClearTransientAuthState(kvp.Key);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Sweeps stale unauthenticated account/encryption state held by AccountManager.
+		/// This is a backstop for SRP memory cleanup in case network disconnect events are delayed.
+		/// </summary>
+		private void SweepStaleUnauthenticatedAccountState()
+		{
+			if (Server?.AccountManager == null)
+			{
+				return;
+			}
+
+			Server.AccountManager.SweepUnauthenticatedConnections(
+				TimeSpan.FromSeconds(AuthStaleTtlSeconds),
+				connection => connection != null && connection.IsAuthenticated,
+				AccountManagerSweepMaxScan,
+				AccountManagerSweepMaxRemovals);
+		}
+
+		/// <summary>
+		/// Attempts to begin a per-account kick request within debounce limits.
+		/// </summary>
+		/// <param name="accountName">Account name to debounce.</param>
+		/// <returns><c>true</c> if a kick request may be persisted; otherwise <c>false</c>.</returns>
+		private bool TryBeginKickRequest(string accountName)
+		{
+			if (string.IsNullOrWhiteSpace(accountName))
+			{
+				return false;
+			}
+
+			return kickRequestNextAllowedUtcByAccount.TryBegin(
+				accountName,
+				DateTime.UtcNow,
+				TimeSpan.FromSeconds(KickRequestDebounceSeconds));
+		}
+
+		/// <summary>
+		/// Attempts to begin an IP-scoped authentication attempt within debounce limits.
+		/// </summary>
+		/// <param name="ipAddress">IP address key.</param>
+		/// <returns><c>true</c> if allowed now; otherwise <c>false</c>.</returns>
+		private bool TryBeginIpAuthAttempt(string ipAddress)
+		{
+			if (string.IsNullOrWhiteSpace(ipAddress))
+			{
+				return true;
+			}
+
+			return ipAuthNextAllowedUtc.TryBegin(
+				ipAddress,
+				DateTime.UtcNow,
+				TimeSpan.FromSeconds(IpAuthAttemptDebounceSeconds));
+		}
+
+		/// <summary>
+		/// Attempts to begin an account-scoped SRP verify attempt within debounce limits.
+		/// </summary>
+		/// <param name="accountName">Account name key.</param>
+		/// <returns><c>true</c> if allowed now; otherwise <c>false</c>.</returns>
+		private bool TryBeginAccountVerifyAttempt(string accountName)
+		{
+			if (string.IsNullOrWhiteSpace(accountName))
+			{
+				return false;
+			}
+
+			return accountVerifyNextAllowedUtc.TryBegin(
+				accountName,
+				DateTime.UtcNow,
+				TimeSpan.FromSeconds(AccountVerifyDebounceSeconds));
+		}
+
+		/// <summary>
+		/// Removes expired auth rate-limit entries for IP and account debounce maps.
+		/// </summary>
+		private void CleanupAuthRateLimitEntries()
+		{
+			DateTime now = DateTime.UtcNow;
+
+			ipAuthNextAllowedUtc.SweepExpired(
+				now,
+				AuthRateLimitCleanupMaxScanPerMap,
+				AuthRateLimitCleanupMaxRemovePerMap);
+
+			accountVerifyNextAllowedUtc.SweepExpired(
+				now,
+				AuthRateLimitCleanupMaxScanPerMap,
+				AuthRateLimitCleanupMaxRemovePerMap);
+
+			connectionIpCache.SweepExpired(
+				now,
+				TimeSpan.FromSeconds(ConnectionIpCacheTtlSeconds),
+				AuthRateLimitCleanupMaxScanPerMap,
+				AuthRateLimitCleanupMaxRemovePerMap);
+		}
+
+		/// <summary>
+		/// Removes expired per-account kick-request debounce entries.
+		/// </summary>
+		private void CleanupKickRequestDebounceEntries()
+		{
+			kickRequestNextAllowedUtcByAccount.SweepExpired(
+				DateTime.UtcNow,
+				AuthRateLimitCleanupMaxScanPerMap,
+				AuthRateLimitCleanupMaxRemovePerMap);
 		}
 	}
 }

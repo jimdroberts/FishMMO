@@ -11,7 +11,6 @@ Main-thread response dispatch is time-sliced by `maxMainThreadResponsesPerFrame`
 ```
 AccountCreation/
 ├── AccountCreationSystem.cs                     # Stateless ServerBehaviour logic and worker orchestration
-├── AccountCreationSystemQueueData.cs            # Bounded request channel + cancellation token container
 ├── AccountCreationSystemRuntimeData.cs          # Metrics, worker task references, cleanup timer
 ├── AccountCreationSystemMappingData.cs          # Per-IP rate/failure trackers (DoS/rate-limiting)
 ├── AccountCreationSystemMainThreadQueueData.cs  # Per-system main-thread action queue container
@@ -21,7 +20,6 @@ AccountCreation/
 Related core contracts live in `Server/Core/LoginServer/AccountCreation/`:
 
 - `IAccountCreationSystem<TConnection>`
-- `IAccountCreationSystemQueueData<TConnection>`
 - `IAccountCreationSystemRuntimeData`
 - `IAccountCreationSystemMappingData`
 - `IAccountCreationSystemMainThreadQueueData`
@@ -40,7 +38,6 @@ ServerBehaviour
 
 ```
 RuntimeDataContainer
-├── AccountCreationSystemQueueData           : IAccountCreationSystemQueueData<NetworkConnection>
 ├── AccountCreationSystemRuntimeData         : IAccountCreationSystemRuntimeData
 ├── AccountCreationSystemMappingData         : IAccountCreationSystemMappingData
 └── MainThreadQueueData (abstract)
@@ -63,18 +60,15 @@ No decryption or DB I/O occurs on the network thread.
 
 ### 2) Queue + Backpressure
 
-`AccountCreationSystemQueueData` uses a bounded channel:
+Requests are dispatched through centralized `AsyncWorkerData`:
 
-- Capacity: `1000`
-- Full mode: `DropWrite`
-- `SingleReader = false` (multi-worker)
-- `SingleWriter = false` (multi-producer)
-
-This enables immediate rejection under load and prevents unbounded memory growth.
+- Bounded channels with drop-on-full backpressure.
+- Optional entity-key routing (`ClientId`) for consistent worker affinity.
+- Immediate enqueue failure path returns server-busy response.
 
 ### 3) Worker Threads
 
-`ProcessAccountCreationRequestsAsync` workers consume queued requests and call `ProcessAccountCreationAsync`:
+`AsyncWorkerData` workers execute `ProcessAccountCreationAsync`:
 
 1. AES-decrypt username, salt, verifier.
 2. Resolve `IAccountService` from database service registry.
@@ -110,20 +104,9 @@ Every 60 seconds, stale entries older than `ipBlockDurationSeconds` are evicted 
 
 ## Worker Lifecycle and Health
 
-On initialize:
-
-- Creates `workerCount` worker tasks.
-- Stores worker tasks and shared cancellation token in runtime data.
-- Registers `CreateAccountBroadcast`.
-
-On deinitialize:
-
-- Cancels worker token source.
-- Waits briefly for workers (`Task.WaitAll(..., 5s)`).
-- Drains main-thread queue.
-- Unregisters broadcast.
-
-Runtime monitoring (`MonitorWorkerHealth`) restarts workers that unexpectedly complete/fault/cancel.
+- Worker lifecycle is managed by shared `AsyncWorkerData` runtime container.
+- `AccountCreationSystem` only enqueues work and handles accept/reject behavior.
+- On deinitialize it unsubscribes connection events, clears local caches, drains main-thread responses, and unregisters broadcasts.
 
 ## Runtime Metrics
 
@@ -132,8 +115,6 @@ Runtime monitoring (`MonitorWorkerHealth`) restarts workers that unexpectedly co
 - `TotalProcessed`
 - `TotalRejected`
 - `TotalFailed`
-- `WorkerTasks`
-- `WorkerCancellationToken`
 - `CleanupTimer`
 
 Public behaviour properties expose key counters:

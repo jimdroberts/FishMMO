@@ -4,6 +4,8 @@
 
 The WorldScene system routes authenticated world-server players into the correct scene endpoint. It supports both open-world and instance scene flows, maintains waiting queues while scenes are loading, coordinates scene-server assignment, and keeps a live connection-count metric used by world admission logic. Database work is asynchronous; all FishNet/Unity state mutations are marshalled onto the main thread through a dedicated queue container.
 
+It also includes request-debounce and queue-TTL hardening to reduce database flood risk and prevent stale queue memory growth.
+
 ## Directory Structure
 
 ```
@@ -23,6 +25,7 @@ Related core contracts:
 - `Server/Core/World/WorldServer/WorldScene/IWorldSceneSystemMainThreadQueueData.cs`
 - `Server/Core/RuntimeData/IAsyncWorkerData.cs`
 - `Server/Core/RuntimeData/IMainThreadQueueData.cs`
+- `Server/Core/Collections/ExpiringKeyTracker.cs`
 
 ## Inheritance Hierarchies
 
@@ -67,16 +70,36 @@ RuntimeDataContainer
 
 This bidirectional model enables fast add/remove and cleanup on disconnect.
 
+Queue membership timestamps are tracked by `ClientId` to enforce stale-wait TTL cleanup.
+
 ## Processing Loop
 
 `OnLateUpdate` performs:
 
 1. Drain main-thread action queue.
-2. Tick wait-queue timer (`waitQueueRate`, default 2s).
-3. Snapshot current open-world scene keys + pending instance connections.
-4. Enqueue async queue-processing worker task.
+2. Sweep stale waiting queue entries (TTL purge).
+3. Sweep expired instance-lookup debounce entries.
+4. Tick wait-queue timer (`waitQueueRate`, default 2s).
+5. Snapshot current open-world scene keys + pending instance connections.
+6. Enqueue async queue-processing worker task.
 
 An atomic processing gate prevents overlapping queue cycles.
+
+## Security and DoS Hardening
+
+### Instance-routing debounce (DB flood protection)
+
+- Instance routing lookups are debounced per account name.
+- Rapid reconnect attempts for the same account within the debounce window are dropped.
+- This reduces repeated `FetchByAccountAsync`/instance lookups and protects DB pool capacity.
+- Debounce TTL entries are managed by shared `ExpiringKeyTracker<string>` with bounded head-first expiry sweeps.
+
+### Waiting queue TTL purge (ghost queue protection)
+
+- Connections in waiting maps are timestamped when queued.
+- Connections that remain queued beyond TTL are purged from forward/reverse maps.
+- Active stale waiters are kicked; inactive entries are cleaned silently.
+- Periodic sweeps prevent unbounded growth of waiting `Dictionary<..., HashSet<NetworkConnection>>` structures.
 
 ## Open-World Routing Flow
 

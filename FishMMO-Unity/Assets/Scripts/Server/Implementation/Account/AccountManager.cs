@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using SecureRemotePassword;
 using FishMMO.Server.Core.Account;
 using FishMMO.Server.Core.Account.SRP;
+using FishMMO.Server.Core.Collections;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation
@@ -42,6 +43,12 @@ namespace FishMMO.Server.Implementation
 		private readonly Dictionary<NetworkConnection, AccountData> connectionAccountData = new Dictionary<NetworkConnection, AccountData>();
 
 		/// <summary>
+		/// Tracks unauthenticated connections in arrival order for efficient TTL sweeps.
+		/// Oldest entries are at the head.
+		/// </summary>
+		private readonly ArrivalOrderTracker<NetworkConnection> unauthenticatedTracker = new ArrivalOrderTracker<NetworkConnection>();
+
+		/// <summary>
 		/// Adds encryption data for a connection.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
@@ -54,6 +61,7 @@ namespace FishMMO.Server.Implementation
 			lock (syncRoot)
 			{
 				connectionEncryptionDatas[connection] = data;
+				TrackUnauthenticatedConnection_NoLock(connection);
 			}
 		}
 
@@ -98,6 +106,8 @@ namespace FishMMO.Server.Implementation
 
 				accountConnections.Remove(accountName);
 				accountConnections.Add(accountName, connection);
+
+				TrackUnauthenticatedConnection_NoLock(connection);
 			}
 		}
 
@@ -109,10 +119,12 @@ namespace FishMMO.Server.Implementation
 		{
 			lock (syncRoot)
 			{
+				connectionEncryptionDatas.Remove(connection);
+				connectionAccountData.Remove(connection);
+				UntrackUnauthenticatedConnection_NoLock(connection);
+
 				if (connectionAccounts.TryGetValue(connection, out string accountName))
 				{
-					connectionEncryptionDatas.Remove(connection);
-					connectionAccountData.Remove(connection);
 					connectionAccounts.Remove(connection);
 					accountConnections.Remove(accountName);
 				}
@@ -133,6 +145,7 @@ namespace FishMMO.Server.Implementation
 					connectionAccountData.Remove(connection);
 					connectionAccounts.Remove(connection);
 					accountConnections.Remove(accountName);
+					UntrackUnauthenticatedConnection_NoLock(connection);
 				}
 			}
 		}
@@ -217,8 +230,115 @@ namespace FishMMO.Server.Implementation
 				{
 					return false;
 				}
+
+				if (nextState == SrpState.SrpSuccess)
+				{
+					UntrackUnauthenticatedConnection_NoLock(connection);
+				}
+
 				return true;
 			}
+		}
+
+		/// <summary>
+		/// Sweeps and removes stale unauthenticated connection state to bound SRP/encryption memory growth.
+		/// Authenticated connections are only untracked from the unauthenticated timer map.
+		/// </summary>
+		/// <param name="maxUnauthenticatedAge">Maximum allowed age for unauthenticated state.</param>
+		/// <param name="isAuthenticated">Connection authentication predicate.</param>
+		/// <param name="maxScan">Maximum tracked entries to evaluate this sweep.</param>
+		/// <param name="maxRemovals">Maximum stale entries to purge this sweep.</param>
+		/// <returns>Number of stale unauthenticated entries purged.</returns>
+		public int SweepUnauthenticatedConnections(TimeSpan maxUnauthenticatedAge, Func<NetworkConnection, bool> isAuthenticated, int maxScan, int maxRemovals)
+		{
+			if (maxUnauthenticatedAge <= TimeSpan.Zero || maxScan <= 0 || maxRemovals <= 0)
+			{
+				return 0;
+			}
+
+			lock (syncRoot)
+			{
+				if (unauthenticatedTracker.Count == 0)
+				{
+					return 0;
+				}
+
+				DateTime now = DateTime.UtcNow;
+				int scanned = 0;
+				int removed = 0;
+
+				while (scanned < maxScan && removed < maxRemovals)
+				{
+					if (!unauthenticatedTracker.TryPeekOldest(out NetworkConnection connection, out DateTime firstSeenUtc))
+					{
+						break;
+					}
+
+					if (connection == null)
+					{
+						unauthenticatedTracker.PopOldest(out _, out _);
+						scanned++;
+						continue;
+					}
+
+					bool authenticated = isAuthenticated != null && isAuthenticated(connection);
+					if (authenticated)
+					{
+						UntrackUnauthenticatedConnection_NoLock(connection);
+						scanned++;
+						continue;
+					}
+
+					if ((now - firstSeenUtc) < maxUnauthenticatedAge)
+					{
+						// Queue is ordered oldest->newest. If head is fresh, the rest are fresh.
+						break;
+					}
+
+					// Purge stale unauthenticated connection state.
+					connectionEncryptionDatas.Remove(connection);
+					connectionAccountData.Remove(connection);
+					if (connectionAccounts.TryGetValue(connection, out string accountName))
+					{
+						connectionAccounts.Remove(connection);
+						accountConnections.Remove(accountName);
+					}
+
+					UntrackUnauthenticatedConnection_NoLock(connection);
+					scanned++;
+					removed++;
+				}
+
+				return removed;
+			}
+		}
+
+		/// <summary>
+		/// Ensures a connection is tracked in unauthenticated-state timing map.
+		/// Must be called inside <see cref="syncRoot"/> lock.
+		/// </summary>
+		private void TrackUnauthenticatedConnection_NoLock(NetworkConnection connection)
+		{
+			if (connection == null)
+			{
+				return;
+			}
+
+			unauthenticatedTracker.TrackIfMissing(connection, DateTime.UtcNow);
+		}
+
+		/// <summary>
+		/// Removes a connection from unauthenticated tracking structures.
+		/// Must be called inside <see cref="syncRoot"/> lock.
+		/// </summary>
+		private void UntrackUnauthenticatedConnection_NoLock(NetworkConnection connection)
+		{
+			if (connection == null)
+			{
+				return;
+			}
+
+			unauthenticatedTracker.Remove(connection);
 		}
 
 		/// <summary>
@@ -232,6 +352,7 @@ namespace FishMMO.Server.Implementation
 				connectionAccounts.Clear();
 				accountConnections.Clear();
 				connectionAccountData.Clear();
+				unauthenticatedTracker.Clear();
 			}
 		}
 	}

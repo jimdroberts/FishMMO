@@ -2,17 +2,17 @@ using FishNet.Connection;
 using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.WorldServer;
-using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -42,6 +42,28 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		[Tooltip("Max world-scene actions drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
 
+		[Header("Connection Routing Hardening")]
+		[Tooltip("Minimum seconds between instance DB routing lookups for the same account")]
+		[SerializeField] private float instanceLookupDebounceSeconds = 3.0f;
+
+		[Tooltip("Maximum seconds a connection may remain in waiting queues before being purged")]
+		[SerializeField] private float waitingQueueTtlSeconds = 45.0f;
+
+		[Tooltip("Seconds between stale waiting-queue purge sweeps")]
+		[SerializeField] private float waitingQueueSweepIntervalSeconds = 5.0f;
+
+		[Tooltip("Seconds between stale debounce-entry cleanup sweeps")]
+		[SerializeField] private float debounceCleanupIntervalSeconds = 60.0f;
+
+		[Tooltip("Max account debounce entries scanned per cleanup sweep")]
+		[SerializeField] private int debounceCleanupMaxScanPerSweep = 256;
+
+		[Tooltip("Max account debounce entries removed per cleanup sweep")]
+		[SerializeField] private int debounceCleanupMaxRemovalsPerSweep = 128;
+
+		[Tooltip("Max stale queued connections purged per waiting-queue sweep")]
+		[SerializeField] private int waitingQueuePurgeMaxPerSweep = 128;
+
 		/// <summary>
 		/// Maximum number of clients allowed per scene instance.
 		/// </summary>
@@ -61,6 +83,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Interval (in seconds) between wait queue updates.
 		/// </summary>
 		private float waitQueueRate = 2.0f;
+
+		/// <summary>
+		/// Per-account debounce tracker for instance-routing DB lookups.
+		/// Key: normalized account name, Value: next UTC time when lookup is allowed.
+		/// </summary>
+		private readonly ExpiringKeyTracker<string> accountInstanceLookupNextAllowedUtc =
+			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Tracks when a connection was added to any waiting queue.
+		/// Key: ClientId, Value: UTC time queued.
+		/// </summary>
+		private readonly Dictionary<int, DateTime> waitingQueueEnteredUtcByClientId = new Dictionary<int, DateTime>();
+
+		private float nextWaitingQueueSweep;
+		private float nextDebounceCleanup;
 
 		/// <summary>
 		/// Called once to initialize the world scene system. Subscribes to authentication and connection events.
@@ -111,6 +149,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			runtimeData.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			instanceLookupDebounceSeconds = Mathf.Max(0.1f, instanceLookupDebounceSeconds);
+			waitingQueueTtlSeconds = Mathf.Max(5.0f, waitingQueueTtlSeconds);
+			waitingQueueSweepIntervalSeconds = Mathf.Max(1.0f, waitingQueueSweepIntervalSeconds);
+			debounceCleanupIntervalSeconds = Mathf.Max(5.0f, debounceCleanupIntervalSeconds);
+			debounceCleanupMaxScanPerSweep = Mathf.Max(1, debounceCleanupMaxScanPerSweep);
+			debounceCleanupMaxRemovalsPerSweep = Mathf.Max(1, debounceCleanupMaxRemovalsPerSweep);
+			waitingQueuePurgeMaxPerSweep = Mathf.Max(1, waitingQueuePurgeMaxPerSweep);
+			nextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
+			nextDebounceCleanup = debounceCleanupIntervalSeconds;
 
 			Log.Debug("WorldSceneSystem", $"Initialized (WaitQueueRate={waitQueueRate}s, MaxClientsPerInstance={MAX_CLIENTS_PER_INSTANCE})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -141,6 +188,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Drain any remaining queued main-thread actions
 			DrainMainThreadQueue(drainAll: true);
+			accountInstanceLookupNextAllowedUtc.Clear();
+			waitingQueueEnteredUtcByClientId.Clear();
 
 			// Connection state events
 			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
@@ -219,6 +268,20 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			// Drain queued main-thread actions from async operations
 			DrainMainThreadQueue(drainAll: false);
+
+			nextWaitingQueueSweep -= deltaTime;
+			if (nextWaitingQueueSweep <= 0f)
+			{
+				nextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
+				PurgeExpiredWaitingConnections();
+			}
+
+			nextDebounceCleanup -= deltaTime;
+			if (nextDebounceCleanup <= 0f)
+			{
+				nextDebounceCleanup = debounceCleanupIntervalSeconds;
+				CleanupExpiredDebounceEntries();
+			}
 
 			if (!Server.DataContainerRegistry.TryGet<IWorldSceneSystemRuntimeData>(out var runtimeData))
 			{
@@ -434,7 +497,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Tries to process an Instance scene for the connection character otherwise falls back to the world scene.
 		/// </summary>
 		/// <param name="conn">Network connection to process.</param>
-		private async Task ProcessInstanceConnectionAsync(NetworkConnection conn)
+		/// <param name="skipDebounce">When true, skips per-account debounce check because the caller already reserved the lookup window.</param>
+		private async Task ProcessInstanceConnectionAsync(NetworkConnection conn, bool skipDebounce = false)
 		{
 			if (Server?.Database?.ServiceRegistry == null)
 			{
@@ -471,6 +535,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			await validateTcs.Task;
 
 			if (string.IsNullOrEmpty(accountName))
+			{
+				return;
+			}
+
+			if (!skipDebounce && !TryBeginInstanceLookup(accountName))
 			{
 				return;
 			}
@@ -692,7 +761,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Queue async instance connection processing
-			if (!TryEnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn)))
+			if (!TryBeginInstanceLookup(accountName))
+			{
+				Kick(conn, "Instance routing rate limited");
+				return;
+			}
+
+			if (!TryEnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn, skipDebounce: true), conn.ClientId))
 			{
 				Kick(conn, "Failed to enqueue instance connection processing");
 			}
@@ -716,6 +791,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				queue[key] = set = new HashSet<NetworkConnection>();
 			}
 			set.Add(conn);
+			if (conn != null)
+			{
+				waitingQueueEnteredUtcByClientId[conn.ClientId] = DateTime.UtcNow;
+			}
 		}
 
 		/// <summary>
@@ -739,6 +818,140 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 			}
 			reverseMap.Remove(conn);
+			if (conn != null)
+			{
+				waitingQueueEnteredUtcByClientId.Remove(conn.ClientId);
+			}
+		}
+
+		/// <summary>
+		/// Starts a debounced instance-lookup window for an account.
+		/// </summary>
+		/// <param name="accountName">Normalized account name key.</param>
+		/// <returns><c>true</c> if lookup is allowed now; otherwise <c>false</c>.</returns>
+		private bool TryBeginInstanceLookup(string accountName)
+		{
+			if (string.IsNullOrWhiteSpace(accountName))
+			{
+				return false;
+			}
+
+			return accountInstanceLookupNextAllowedUtc.TryBegin(
+				accountName,
+				DateTime.UtcNow,
+				TimeSpan.FromSeconds(instanceLookupDebounceSeconds));
+		}
+
+		/// <summary>
+		/// Removes expired account debounce entries to bound dictionary growth.
+		/// </summary>
+		private void CleanupExpiredDebounceEntries()
+		{
+			accountInstanceLookupNextAllowedUtc.SweepExpired(
+				DateTime.UtcNow,
+				debounceCleanupMaxScanPerSweep,
+				debounceCleanupMaxRemovalsPerSweep);
+		}
+
+		/// <summary>
+		/// Purges stale waiting-queue connections by TTL and removes inactive entries.
+		/// Active connections that exceed TTL are kicked after queue removal.
+		/// </summary>
+		private void PurgeExpiredWaitingConnections()
+		{
+			if (waitingQueuePurgeMaxPerSweep <= 0)
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+			{
+				return;
+			}
+
+			DateTime now = DateTime.UtcNow;
+			var staleConnections = new List<NetworkConnection>(waitingQueuePurgeMaxPerSweep);
+
+			CollectStaleQueuedConnections(mappingData.OpenWorldConnectionScenes.Keys, staleConnections, now, waitingQueuePurgeMaxPerSweep);
+			if (staleConnections.Count < waitingQueuePurgeMaxPerSweep)
+			{
+				CollectStaleQueuedConnections(mappingData.InstanceConnectionScenes.Keys, staleConnections, now, waitingQueuePurgeMaxPerSweep - staleConnections.Count);
+			}
+
+			if (staleConnections.Count == 0)
+			{
+				return;
+			}
+
+			foreach (NetworkConnection conn in staleConnections.Distinct())
+			{
+				if (conn == null)
+				{
+					continue;
+				}
+
+				bool shouldKick = false;
+				if (conn != null && conn.IsActive &&
+					waitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt))
+				{
+					shouldKick = (now - queuedAt).TotalSeconds >= waitingQueueTtlSeconds;
+				}
+
+				RemoveFromQueue(conn, mappingData.OpenWorldConnectionScenes, mappingData.WaitingOpenWorldConnections);
+				RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
+
+				if (conn != null && conn.IsActive && shouldKick)
+				{
+					Kick(conn, "Waiting queue TTL exceeded");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Collects stale queued connections from a source set based on activity and queue age.
+		/// </summary>
+		/// <param name="source">Source connection set snapshot input.</param>
+		/// <param name="staleConnections">Output list to append stale connections into.</param>
+		/// <param name="now">Current UTC timestamp used for TTL comparisons.</param>
+		private void CollectStaleQueuedConnections(IEnumerable<NetworkConnection> source,
+			List<NetworkConnection> staleConnections,
+			DateTime now,
+			int maxToCollect)
+		{
+			if (source == null || staleConnections == null || maxToCollect <= 0)
+			{
+				return;
+			}
+
+			foreach (NetworkConnection conn in source)
+			{
+				if (staleConnections.Count >= maxToCollect)
+				{
+					break;
+				}
+
+				if (conn == null)
+				{
+					continue;
+				}
+
+				if (!conn.IsActive)
+				{
+					staleConnections.Add(conn);
+					continue;
+				}
+
+				if (!waitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt))
+				{
+					waitingQueueEnteredUtcByClientId[conn.ClientId] = now;
+					continue;
+				}
+
+				if ((now - queuedAt).TotalSeconds >= waitingQueueTtlSeconds)
+				{
+					staleConnections.Add(conn);
+				}
+			}
 		}
 
 		/// <summary>

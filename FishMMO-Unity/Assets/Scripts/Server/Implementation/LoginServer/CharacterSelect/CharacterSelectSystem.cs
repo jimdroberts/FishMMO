@@ -1,4 +1,5 @@
 ﻿using FishNet.Connection;
+using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
@@ -66,6 +67,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Server.NetworkWrapper.RegisterBroadcast<CharacterRequestListBroadcast>(OnServerCharacterRequestListBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<CharacterDeleteBroadcast>(OnServerCharacterDeleteBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<CharacterSelectBroadcast>(OnServerCharacterSelectBroadcastReceived, true);
+			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
 			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
 
@@ -93,6 +95,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterRequestListBroadcast>(OnServerCharacterRequestListBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterDeleteBroadcast>(OnServerCharacterDeleteBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterSelectBroadcast>(OnServerCharacterSelectBroadcastReceived);
+			if (ServerManager != null)
+			{
+				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+			}
 		}
 
 		/// <summary>
@@ -525,6 +531,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return false;
 		}
 
+		/// <summary>
+		/// Attempts to acquire a per-connection in-flight request slot.
+		/// </summary>
+		/// <param name="conn">Requesting connection.</param>
+		/// <returns><c>true</c> if the slot was acquired; otherwise <c>false</c>.</returns>
 		private bool TryBeginInFlightRequest(NetworkConnection conn)
 		{
 			if (conn == null)
@@ -535,9 +546,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return inFlightRequests.TryAdd(conn.ClientId, 0);
 		}
 
+		/// <summary>
+		/// Releases the per-connection in-flight request slot.
+		/// </summary>
+		/// <param name="conn">Connection to release.</param>
 		private void EndInFlightRequest(NetworkConnection conn)
 		{
 			if (conn != null)
+			{
+				inFlightRequests.TryRemove(conn.ClientId, out _);
+			}
+		}
+
+		/// <summary>
+		/// Releases per-connection in-flight request state when a client disconnects.
+		/// </summary>
+		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		{
+			if (args.ConnectionState == RemoteConnectionState.Stopped && conn != null)
 			{
 				inFlightRequests.TryRemove(conn.ClientId, out _);
 			}

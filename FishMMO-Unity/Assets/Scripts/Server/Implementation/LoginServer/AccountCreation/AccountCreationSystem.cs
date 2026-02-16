@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -63,6 +64,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[Header("Main Thread Dispatch")]
 		[Tooltip("Max account-creation responses drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
+
+		/// <summary>
+		/// Maximum entries scanned per map during one maintenance sweep.
+		/// </summary>
+		[Header("Cleanup Bounds")]
+		[Tooltip("Max entries scanned per map each cleanup sweep")]
+		[SerializeField] private int cleanupMaxScanPerMap = 256;
+
+		/// <summary>
+		/// Maximum entries removed per map during one maintenance sweep.
+		/// </summary>
+		[Tooltip("Max entries removed per map each cleanup sweep")]
+		[SerializeField] private int cleanupMaxRemovalsPerMap = 128;
 
 		/// <summary>
 		/// Per-connection cache for canonical IP string to avoid repeated address string allocations.
@@ -171,6 +185,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			maxFailedAttempts = Mathf.Max(1, maxFailedAttempts);
 			ipBlockDurationSeconds = Mathf.Max(1f, ipBlockDurationSeconds);
 			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
+			cleanupMaxScanPerMap = Mathf.Max(1, cleanupMaxScanPerMap);
+			cleanupMaxRemovalsPerMap = Mathf.Max(1, cleanupMaxRemovalsPerMap);
 
 			// Register network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived, false);
@@ -456,40 +472,71 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			DateTime cutoff = DateTime.UtcNow.AddSeconds(-ipBlockDurationSeconds);
 
-			// Evict rate-limit entries older than the block duration
-			foreach (var entry in mappingData.IpRateLimitTracker)
-			{
-				if (entry.Value < cutoff)
-				{
-					mappingData.IpRateLimitTracker.TryRemove(entry.Key, out _);
-				}
-			}
+			// Evict rate-limit entries older than the block duration.
+			CleanupExpiredEntries(mappingData.IpRateLimitTracker,
+				entry => entry.Value < cutoff,
+				cleanupMaxScanPerMap,
+				cleanupMaxRemovalsPerMap);
 
 			// Evict failure-tracking entries for IPs whose block period has expired.
 			// Once the rate-limit entry is gone (expired above), the failure count serves no purpose.
+			int scannedFailures = 0;
+			int removedFailures = 0;
 			foreach (var entry in mappingData.IpFailureTracker)
 			{
-				if (!mappingData.IpRateLimitTracker.ContainsKey(entry.Key))
+				scannedFailures++;
+				if (!mappingData.IpRateLimitTracker.ContainsKey(entry.Key) &&
+					mappingData.IpFailureTracker.TryRemove(entry.Key, out _))
 				{
-					mappingData.IpFailureTracker.TryRemove(entry.Key, out _);
+					removedFailures++;
+				}
+
+				if (scannedFailures >= cleanupMaxScanPerMap || removedFailures >= cleanupMaxRemovalsPerMap)
+				{
+					break;
 				}
 			}
 
 			// Evict stale per-connection IP cache entries as a backstop against delayed disconnect events.
-			foreach (var entry in connectionIpCache)
-			{
-				if (entry.Value.LastSeenUtc < cutoff)
-				{
-					connectionIpCache.TryRemove(entry.Key, out _);
-				}
-			}
+			CleanupExpiredEntries(connectionIpCache,
+				entry => entry.Value.LastSeenUtc < cutoff,
+				cleanupMaxScanPerMap,
+				cleanupMaxRemovalsPerMap);
 
 			// Evict stale per-connection encryption cache entries as a backstop against delayed disconnect events.
-			foreach (var entry in connectionEncryptionCache)
+			CleanupExpiredEntries(connectionEncryptionCache,
+				entry => entry.Value.LastSeenUtc < cutoff,
+				cleanupMaxScanPerMap,
+				cleanupMaxRemovalsPerMap);
+		}
+
+		/// <summary>
+		/// Performs bounded, lock-free cleanup over a concurrent dictionary using <see cref="ConcurrentDictionary{TKey,TValue}.TryRemove(TKey, out TValue)"/>.
+		/// </summary>
+		private static void CleanupExpiredEntries<TKey, TValue>(
+			ConcurrentDictionary<TKey, TValue> map,
+			Func<KeyValuePair<TKey, TValue>, bool> isExpired,
+			int maxScan,
+			int maxRemove)
+		{
+			if (map == null || map.Count == 0 || maxScan <= 0 || maxRemove <= 0)
 			{
-				if (entry.Value.LastSeenUtc < cutoff)
+				return;
+			}
+
+			int scanned = 0;
+			int removed = 0;
+			foreach (KeyValuePair<TKey, TValue> entry in map)
+			{
+				scanned++;
+				if (isExpired(entry) && map.TryRemove(entry.Key, out _))
 				{
-					connectionEncryptionCache.TryRemove(entry.Key, out _);
+					removed++;
+				}
+
+				if (scanned >= maxScan || removed >= maxRemove)
+				{
+					break;
 				}
 			}
 		}
@@ -597,6 +644,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Enqueues async work to centralized AsyncWorkerData for consistency with other server systems.
 		/// </summary>
+		/// <param name="work">Async work delegate.</param>
+		/// <param name="entityKey">Optional key for worker affinity routing.</param>
+		/// <param name="callerName">Caller member name for diagnostics.</param>
+		/// <returns><c>true</c> if enqueued; otherwise <c>false</c>.</returns>
 		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
@@ -612,6 +663,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return false;
 		}
 
+		/// <summary>
+		/// Cached immutable IP mapping entry for a connection.
+		/// </summary>
 		private readonly struct ConnectionIpCacheEntry
 		{
 			public readonly string IpAddress;
@@ -624,6 +678,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 		}
 
+		/// <summary>
+		/// Cached immutable encryption-data entry for a connection.
+		/// </summary>
 		private readonly struct ConnectionEncryptionCacheEntry
 		{
 			public readonly ConnectionEncryptionData Data;

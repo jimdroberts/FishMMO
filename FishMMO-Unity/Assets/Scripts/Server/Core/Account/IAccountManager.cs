@@ -93,6 +93,17 @@ namespace FishMMO.Server.Core.Account
 		bool TryUpdateSrpState(TConnection connection, SrpState requiredState, SrpState nextState, Func<AccountData, bool> onSuccess);
 
 		/// <summary>
+		/// Sweeps and removes stale unauthenticated connection state to bound SRP/encryption memory growth.
+		/// Authenticated connections are only untracked from the unauthenticated timer map.
+		/// </summary>
+		/// <param name="maxUnauthenticatedAge">Maximum allowed age for unauthenticated state.</param>
+		/// <param name="isAuthenticated">Connection authentication predicate.</param>
+		/// <param name="maxScan">Maximum tracked entries to evaluate this sweep.</param>
+		/// <param name="maxRemovals">Maximum stale entries to purge this sweep.</param>
+		/// <returns>Number of stale unauthenticated entries purged.</returns>
+		int SweepUnauthenticatedConnections(TimeSpan maxUnauthenticatedAge, Func<TConnection, bool> isAuthenticated, int maxScan, int maxRemovals);
+
+		/// <summary>
 		/// Clears all stored account and connection data.
 		/// </summary>
 		void Clear();
