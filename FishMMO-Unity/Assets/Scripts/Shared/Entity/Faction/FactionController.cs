@@ -158,7 +158,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void FlushDirtyFactionUpdates()
 		{
-			if (!base.IsServerStarted || dirtyFactionTemplateIDs.Count == 0)
+			if (!base.IsServerStarted || !base.IsSpawned || dirtyFactionTemplateIDs.Count == 0)
 			{
 				return;
 			}
@@ -246,9 +246,15 @@ namespace FishMMO.Shared
 		private static void BroadcastToOwnerOnly<T>(ICharacter character, T broadcast, Channel channel)
 			where T : struct, IBroadcast
 		{
-			if (character?.Owner != null)
+			if (character == null)
 			{
-				character.Owner.Broadcast(broadcast, true, channel);
+				return;
+			}
+
+			NetworkConnection owner = character.Owner;
+			if (owner != null && owner.IsActive)
+			{
+				owner.Broadcast(broadcast, true, channel);
 			}
 		}
 
@@ -266,7 +272,7 @@ namespace FishMMO.Shared
 			NetworkConnection owner = character.Owner;
 			foreach (NetworkConnection observer in character.Observers)
 			{
-				if (observer == null || observer == owner)
+				if (observer == null || observer == owner || !observer.IsActive)
 				{
 					continue;
 				}

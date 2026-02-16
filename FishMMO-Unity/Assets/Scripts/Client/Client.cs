@@ -918,7 +918,7 @@ namespace FishMMO.Client
 			{
 				character.GameObject.name = name;
 				character.CharacterName = name;
-				character.CharacterNameLower = name.ToLower();
+				character.CharacterNameLower = name.ToLowerInvariant();
 
 				if (character.CharacterNameLabel != null)
 					character.CharacterNameLabel.text = name;

@@ -4,6 +4,8 @@
 
 The ServerSelect system serves the login-phase world server list to clients. It accepts `RequestServerListBroadcast` requests, queries active world servers from the database with an idle-timeout filter, maps database rows into network payloads, and sends responses on the main thread. Database work is offloaded to `AsyncWorkerData` to keep request handlers non-blocking.
 
+The system additionally applies per-connection in-flight request gating and bounded main-thread response draining to reduce request spam impact and frame spikes.
+
 ## Directory Structure
 
 ```
@@ -56,8 +58,10 @@ RuntimeDataContainer
 `OnServerRequestServerListBroadcastReceived`:
 
 1. Verifies connection is active.
-2. Enqueues async processing via `TryEnqueueAsyncWork(...)`.
-3. Logs warning if queueing fails (backpressure/missing dependency).
+2. Attempts to acquire per-connection in-flight gate.
+3. Enqueues async processing via `TryEnqueueAsyncWork(...)`.
+4. Logs warning if queueing fails (backpressure/missing dependency).
+5. Releases gate if enqueue fails.
 
 ### 2) Async Processing
 
@@ -67,12 +71,23 @@ RuntimeDataContainer
 2. Queries active servers using `FetchActiveAsync(IdleTimeout)`.
 3. Maps `WorldServerData` rows to `WorldServerDetails` DTOs.
 4. Enqueues a main-thread response action.
+5. Releases in-flight gate in `finally`.
 
 ### 3) Main-Thread Dispatch
 
 `OnLateUpdate` drains the queue each frame through `DrainMainThreadQueue()`, then sends:
 
 - `ServerListBroadcast` containing `List<WorldServerDetails>`.
+
+`DrainMainThreadQueue()` is bounded by `maxMainThreadResponsesPerFrame` during normal updates and drains all during deinitialize.
+
+## Operational Safeguards
+
+- **Per-connection in-flight gate (`inFlightServerListRequests`)**
+    - Prevents one connection from stacking multiple concurrent server-list tasks.
+    - Gate is released on both enqueue failure and async completion (`finally`).
+- **Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`)**
+    - Time-slices queued responses to avoid frame-time spikes.
 
 ## Filtering Behavior
 

@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -9,7 +10,6 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
-using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -25,6 +25,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterSelectSystem : ServerBehaviour, ICharacterSelectSystem
 	{
+		/// <summary>
+		/// Maximum number of queued main-thread response actions processed per frame.
+		/// This time-slices response dispatch to avoid frame spikes.
+		/// </summary>
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max character-select responses drained from main-thread queue per frame")]
+		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
+
+		/// <summary>
+		/// Per-connection in-flight gate for select/delete requests.
+		/// Prevents request spam from creating concurrent expensive tasks for the same connection.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, byte> inFlightRequests = new ConcurrentDictionary<int, byte>();
+
 		/// <summary>
 		/// If true, keeps deleted character data in the database for recovery or auditing.
 		/// </summary>
@@ -53,6 +67,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Server.NetworkWrapper.RegisterBroadcast<CharacterDeleteBroadcast>(OnServerCharacterDeleteBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<CharacterSelectBroadcast>(OnServerCharacterSelectBroadcastReceived, true);
 
+			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
+
 			Log.Debug("CharacterSelectSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -70,7 +86,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Drain remaining responses so clients get their final messages.
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
+			inFlightRequests.Clear();
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterRequestListBroadcast>(OnServerCharacterRequestListBroadcastReceived);
@@ -162,8 +179,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			if (conn.IsActive && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				if (!TryEnqueueAsyncWork(() => ProcessCharacterDeleteAsync(conn, accountName, msg.CharacterName)))
+				if (!TryBeginInFlightRequest(conn))
 				{
+					return;
+				}
+
+				if (!TryEnqueueAsyncWork(() => ProcessCharacterDeleteAsync(conn, accountName, msg.CharacterName), conn.ClientId))
+				{
+					EndInFlightRequest(conn);
 					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character delete request for account '{accountName}'.");
 				}
 			}
@@ -285,6 +308,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				await Log.Error("CharacterSelectSystem", $"Error processing character delete: {ex}");
 			}
+			finally
+			{
+				EndInFlightRequest(conn);
+			}
 		}
 
 		/// <summary>
@@ -297,8 +324,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			if (conn.IsActive && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				if (!TryEnqueueAsyncWork(() => ProcessCharacterSelectAsync(conn, accountName, msg.CharacterName)))
+				if (!TryBeginInFlightRequest(conn))
 				{
+					return;
+				}
+
+				if (!TryEnqueueAsyncWork(() => ProcessCharacterSelectAsync(conn, accountName, msg.CharacterName), conn.ClientId))
+				{
+					EndInFlightRequest(conn);
 					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character select request for account '{accountName}'.");
 				}
 			}
@@ -369,6 +402,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 						return;
 					}
 
+					// Defense-in-depth validation: after selection, confirm this account resolves to the expected selected character.
+					// SetSelectedAsync must remain account-scoped at the SQL layer (e.g., WHERE id = @id AND account = @account).
+					DatabaseResult<CharacterData?> selectedResult = await characterService.FetchByAccountAsync(accountName, selected: true);
+					if (!selectedResult.IsSuccess || selectedResult.Data == null ||
+						!string.Equals(selectedResult.Data.Value.Name, characterName, StringComparison.OrdinalIgnoreCase))
+					{
+						await Log.Warning("CharacterSelectSystem", $"Character select ownership verification failed for account '{accountName}' and character '{characterName}'.");
+						return;
+					}
+
 					// Commit the transaction
 					DatabaseResult commitResult = await uow.CommitAsync();
 					if (!commitResult.IsSuccess)
@@ -414,6 +457,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				await Log.Error("CharacterSelectSystem", $"Error processing character select: {ex}");
 			}
+			finally
+			{
+				EndInFlightRequest(conn);
+			}
 		}
 
 		/// <summary>
@@ -424,17 +471,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: false);
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue via the RuntimeDataContainer.
 		/// </summary>
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
 			if (Server?.DataContainerRegistry.TryGet<ICharacterSelectSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Drain();
+				if (drainAll)
+				{
+					queueData.Drain();
+				}
+				else
+				{
+					queueData.Drain(maxMainThreadResponsesPerFrame);
+				}
 			}
 		}
 
@@ -469,6 +523,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			return false;
+		}
+
+		private bool TryBeginInFlightRequest(NetworkConnection conn)
+		{
+			if (conn == null)
+			{
+				return false;
+			}
+
+			return inFlightRequests.TryAdd(conn.ClientId, 0);
+		}
+
+		private void EndInFlightRequest(NetworkConnection conn)
+		{
+			if (conn != null)
+			{
+				inFlightRequests.TryRemove(conn.ClientId, out _);
+			}
 		}
 	}
 }

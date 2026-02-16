@@ -135,8 +135,6 @@ At runtime, archetype changes are synchronized with two broadcast paths:
 
 Observer routing avoids per-controller global fan-out by using the client-side character cache keyed by `ICharacter.ID`.
 
-> If your local project uses manually-maintained project files, ensure [Assets/Scripts/Shared/Network/Character/ArchetypeBroadcasts.cs](Assets/Scripts/Shared/Network/Character/ArchetypeBroadcasts.cs) is included so `ArchetypeUpdateBroadcast` and `CharacterObserverArchetypeUpdateBroadcast` compile correctly.
-
 ## Static Events
 
 | Event (on `IArchetypeController`)  | Signature                                          | Description                                      |

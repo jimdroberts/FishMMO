@@ -33,6 +33,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	public class PetSystem : ServerBehaviour, IPetSystem
 	{
 		/// <summary>
+		/// Maximum number of queued main-thread actions processed per frame.
+		/// This time-slices queue draining to avoid frame spikes.
+		/// </summary>
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max pet-system actions drained from main-thread queue per frame")]
+		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
 		/// Called once to initialize the pet system. Registers broadcast handlers and subscribes to character and ability events.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -66,6 +74,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterSystem.OnPetKilled += CharacterSystem_OnPetKilled;
 			}
 
+			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+
 			Log.Debug("PetSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -82,7 +92,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Drain any remaining queued main-thread actions
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<PetFollowBroadcast>(OnPetFollowBroadcastReceived);
@@ -105,11 +115,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Drains queued main-thread actions from the IPetSystemMainThreadQueueData container.
 		/// </summary>
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IPetSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Drain();
+				if (drainAll)
+				{
+					queueData.Drain();
+				}
+				else
+				{
+					queueData.Drain(maxMainThreadActionsPerFrame);
+				}
 			}
 		}
 
@@ -130,7 +147,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnLateUpdate(float deltaTime)
 		{
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: false);
 		}
 
 		/// <summary>

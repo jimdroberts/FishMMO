@@ -26,6 +26,15 @@ namespace FishMMO.Server.Implementation.World
 	public class KickRequestSystem : ServerBehaviour, IKickRequestSystem
 	{
 		/// <summary>
+		/// Maximum number of queued main-thread actions processed per frame.
+		/// This time-slices queue draining to avoid frame spikes.
+		/// </summary>
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max kick-request actions drained from main-thread queue per frame")]
+		[SerializeField]
+		private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
 		/// The server kick request update pump rate limit in seconds.
 		/// </summary>
 		[Tooltip("The server kick request update pump rate limit in seconds.")]
@@ -85,6 +94,8 @@ namespace FishMMO.Server.Implementation.World
 				periodicSystem.RegisterPeriodicCallback(updatePumpRate, OnPeriodicUpdate);
 			}
 
+			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+
 			Log.Debug("KickRequestSystem", $"Initialized (UpdatePumpRate={updatePumpRate}s, FetchCount={updateFetchCount})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -108,7 +119,7 @@ namespace FishMMO.Server.Implementation.World
 			}
 
 			// Drain remaining responses
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
 
 			// Connection state events
 			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
@@ -169,7 +180,7 @@ namespace FishMMO.Server.Implementation.World
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: false);
 		}
 
 		/// <summary>
@@ -280,11 +291,18 @@ namespace FishMMO.Server.Implementation.World
 		/// <summary>
 		/// Drains the main-thread queue via the RuntimeDataContainer.
 		/// </summary>
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IKickRequestSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Drain();
+				if (drainAll)
+				{
+					queueData.Drain();
+				}
+				else
+				{
+					queueData.Drain(maxMainThreadActionsPerFrame);
+				}
 			}
 		}
 

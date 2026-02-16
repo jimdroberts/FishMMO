@@ -6,6 +6,7 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
@@ -28,6 +29,12 @@ namespace FishMMO.Server.Implementation
 	/// </summary>
 	public class ServerAuthenticator : Authenticator
 	{
+		/// <summary>
+		/// Maximum number of queued main-thread actions processed per Update tick.
+		/// This time-slices queue draining to avoid frame spikes.
+		/// </summary>
+		private const int MaxMainThreadActionsPerUpdate = 100;
+
 		/// <summary>
 		/// Number of concurrent workers processing SRP verify requests.
 		/// </summary>
@@ -66,10 +73,9 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Thread-safe queue for marshalling network operations from async worker threads
 		/// back to the main Unity thread. Workers enqueue Actions, Update() drains them.
-		/// Protected by _queueLock for thread safety.
+		/// ConcurrentQueue avoids lock contention between network thread and worker threads.
 		/// </summary>
-		private readonly Queue<Action> mainThreadQueue = new Queue<Action>();
-		private readonly object _queueLock = new object();
+		private readonly ConcurrentQueue<Action> mainThreadQueue = new ConcurrentQueue<Action>();
 
 		/// <summary>
 		/// The server instance providing access to AccountManager and other infrastructure.
@@ -159,7 +165,7 @@ namespace FishMMO.Server.Implementation
 			proofChannel = null;
 
 			// Drain remaining responses so clients get their final messages.
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
 		}
 
 		/// <summary>
@@ -169,29 +175,24 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void Update()
 		{
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: false);
 		}
 
 		/// <summary>
-		/// Copies all queued actions under lock, then invokes them outside the lock.
-		/// This minimizes lock hold time and avoids potential re-entrancy issues.
+		/// Drains queued actions without locks using ConcurrentQueue.
+		/// This reduces contention when many workers and the network thread enqueue simultaneously.
 		/// </summary>
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
-			Action[] actions;
-			lock (_queueLock)
+			int maxActions = drainAll ? int.MaxValue : MaxMainThreadActionsPerUpdate;
+			for (int i = 0; i < maxActions; i++)
 			{
-				if (mainThreadQueue.Count == 0)
+				if (!mainThreadQueue.TryDequeue(out Action action))
 				{
 					return;
 				}
-				actions = mainThreadQueue.ToArray();
-				mainThreadQueue.Clear();
-			}
 
-			for (int i = 0; i < actions.Length; i++)
-			{
-				actions[i].Invoke();
+				action.Invoke();
 			}
 		}
 
@@ -201,10 +202,7 @@ namespace FishMMO.Server.Implementation
 		/// <param name="action">The action to execute on the main thread.</param>
 		private void EnqueueMainThread(Action action)
 		{
-			lock (_queueLock)
-			{
-				mainThreadQueue.Enqueue(action);
-			}
+			mainThreadQueue.Enqueue(action);
 		}
 
 		#region UDP Receiver Gates

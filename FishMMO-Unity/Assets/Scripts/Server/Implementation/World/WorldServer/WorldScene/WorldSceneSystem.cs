@@ -35,6 +35,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	public class WorldSceneSystem : ServerBehaviour, IWorldSceneSystem
 	{
 		/// <summary>
+		/// Maximum number of queued main-thread actions processed per frame.
+		/// This time-slices queue draining to avoid frame spikes.
+		/// </summary>
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max world-scene actions drained from main-thread queue per frame")]
+		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
 		/// Maximum number of clients allowed per scene instance.
 		/// </summary>
 		private const int MAX_CLIENTS_PER_INSTANCE = 500;
@@ -102,6 +110,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Authentication events
 			runtimeData.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
+			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+
 			Log.Debug("WorldSceneSystem", $"Initialized (WaitQueueRate={waitQueueRate}s, MaxClientsPerInstance={MAX_CLIENTS_PER_INSTANCE})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -130,7 +140,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Drain any remaining queued main-thread actions
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
 
 			// Connection state events
 			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
@@ -155,11 +165,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Drains queued main-thread actions from the IWorldSceneSystemMainThreadQueueData container.
 		/// </summary>
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IWorldSceneSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Drain();
+				if (drainAll)
+				{
+					queueData.Drain();
+				}
+				else
+				{
+					queueData.Drain(maxMainThreadActionsPerFrame);
+				}
 			}
 		}
 
@@ -201,7 +218,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		public override void OnLateUpdate(float deltaTime)
 		{
 			// Drain queued main-thread actions from async operations
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: false);
 
 			if (!Server.DataContainerRegistry.TryGet<IWorldSceneSystemRuntimeData>(out var runtimeData))
 			{

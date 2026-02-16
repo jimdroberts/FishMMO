@@ -27,6 +27,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	public class InteractableSystem : ServerBehaviour
 	{
 		/// <summary>
+		/// Maximum number of queued main-thread actions processed per frame.
+		/// This time-slices queue draining to avoid frame spikes.
+		/// </summary>
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max interactable-system actions drained from main-thread queue per frame")]
+		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
 		/// Cache of world scene details used for scene validation and respawn lookup.
 		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
@@ -78,6 +86,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
 
+			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+
 			Log.Debug("InteractableSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -91,7 +101,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// Drain any remaining queued main-thread actions
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
 
 			// Interactable handlers
 			ClearAllHandlers();
@@ -105,15 +115,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		public override void OnLateUpdate(float deltaTime)
 		{
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: false);
 		}
 
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
 			if (Server != null &&
 				Server.DataContainerRegistry.TryGet<IInteractableSystemMainThreadQueueData>(out var queueData))
 			{
-				queueData.Drain();
+				if (drainAll)
+				{
+					queueData.Drain();
+				}
+				else
+				{
+					queueData.Drain(maxMainThreadActionsPerFrame);
+				}
 			}
 		}
 

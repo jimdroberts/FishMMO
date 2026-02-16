@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -25,6 +26,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterCreateSystem : ServerBehaviour, ICharacterCreateSystem
 	{
+		/// <summary>
+		/// Maximum number of queued main-thread response actions processed per frame.
+		/// This time-slices response dispatch to avoid frame spikes during heavy login waves.
+		/// </summary>
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max character-create responses drained from main-thread queue per frame")]
+		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
+
 		/// <summary>
 		/// Maximum number of characters allowed per account.
 		/// </summary>
@@ -53,6 +62,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public List<EquippableItemTemplate> StartingEquipment = new List<EquippableItemTemplate>();
 
 		/// <summary>
+		/// Per-connection in-flight character-create gate.
+		/// Prevents a single connection from enqueueing an unbounded number of concurrent create tasks.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, byte> inFlightCreateRequests = new ConcurrentDictionary<int, byte>();
+
+		/// <summary>
 		/// Initializes the character creation system, registering broadcast handlers for character creation requests.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -73,6 +88,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived, true);
 
+			maxCharacters = Mathf.Max(1, maxCharacters);
+			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
+
 			Log.Debug("CharacterCreateSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -90,7 +108,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Drain remaining responses so clients get their final messages.
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
+			inFlightCreateRequests.Clear();
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived);
@@ -172,12 +191,22 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// --- Dispatch DTO construction + DB work to async (all template data is immutable) ---
+			if (!TryBeginCreateRequest(conn))
+			{
+				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+				{
+					Result = CharacterCreateResult.Error,
+				}, true, Channel.Reliable);
+				return;
+			}
+
 			if (!TryEnqueueAsyncWork(() => ProcessCharacterCreateAsync(
 				conn, msg, accountName, raceTemplate,
 				characterService, factionService, abilityService,
 				inventoryService, equipmentService, attributeService,
-				unitOfWorkService)))
+				unitOfWorkService), conn.ClientId))
 			{
+				EndCreateRequest(conn);
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
 					Result = CharacterCreateResult.Error,
@@ -314,7 +343,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				var characterData = new CharacterData(
 					id: 0,
 					name: msg.CharacterName,
-					nameLowercase: msg.CharacterName?.ToLower(),
+					nameLowercase: msg.CharacterName?.ToLowerInvariant(),
 					account: accountName,
 					selected: false,
 					worldServerID: 0,
@@ -348,6 +377,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 					timeCreated: DateTime.UtcNow,
 					lastSaved: DateTime.UtcNow
 				);
+
+				// --- Precompute CPU-only payloads before opening DB transaction ---
+
+				List<PreparedAttributeEntry> preparedAttributes = BuildStartingAttributeEntries(raceTemplate);
+				List<PreparedFactionEntry> preparedFactions = BuildStartingFactionEntries(raceTemplate);
+
+				List<PreparedAbilityEntry> preparedAbilities = new List<PreparedAbilityEntry>();
+				BuildStartingAbilityEntries(StartingAbilities, preparedAbilities);
+				BuildStartingAbilityEntries(raceTemplate.StartingAbilities, preparedAbilities);
+
+				List<PreparedInventoryEntry> preparedInventoryItems = new List<PreparedInventoryEntry>();
+				BuildStartingInventoryEntries(StartingInventoryItems, preparedInventoryItems);
+				BuildStartingInventoryEntries(raceTemplate.StartingInventoryItems, preparedInventoryItems);
+
+				List<PreparedEquipmentEntry> preparedEquipment = new List<PreparedEquipmentEntry>();
+				BuildStartingEquipmentEntries(StartingEquipment, preparedEquipment);
+				BuildStartingEquipmentEntries(raceTemplate.StartingEquipment, preparedEquipment);
 
 				// --- Begin Unit of Work for atomic character creation ---
 
@@ -395,37 +441,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 					long characterID = createResult.Data;
 
-					// Build sub-entity DTOs with the real character ID (immutable templates)
-					Dictionary<int, CharacterAttributeData> initialAttributes = new Dictionary<int, CharacterAttributeData>();
-					if (raceTemplate.InitialAttributes != null &&
-						raceTemplate.InitialAttributes.Attributes.Count > 0)
-					{
-						foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes)
-						{
-							initialAttributes.Add(template.ID, new CharacterAttributeData(
-								id: 0,
-								version: 1,
-								characterID: characterID,
-								templateID: template.ID,
-								value: template.InitialValue,
-								currentValue: template.IsResourceAttribute ? template.InitialValue : 0.0f
-							));
-						}
-					}
-
-					List<CharacterFactionData> factions = BuildStartingFactions(characterID, raceTemplate);
-
-					List<CharacterAbilityData> abilities = new List<CharacterAbilityData>();
-					BuildStartingAbilities(characterID, StartingAbilities, abilities);
-					BuildStartingAbilities(characterID, raceTemplate.StartingAbilities, abilities);
-
-					List<CharacterInventoryData> inventoryItems = new List<CharacterInventoryData>();
-					BuildStartingItems(characterID, StartingInventoryItems, inventoryItems);
-					BuildStartingItems(characterID, raceTemplate.StartingInventoryItems, inventoryItems);
-
-					List<CharacterEquipmentData> equipment = new List<CharacterEquipmentData>();
-					BuildStartingEquipment(characterID, StartingEquipment, equipment);
-					BuildStartingEquipment(characterID, raceTemplate.StartingEquipment, equipment);
+					// Build sub-entity DTOs with the real character ID from precomputed payloads.
+					Dictionary<int, CharacterAttributeData> initialAttributes = BuildStartingAttributes(characterID, preparedAttributes);
+					List<CharacterFactionData> factions = BuildStartingFactions(characterID, preparedFactions);
+					List<CharacterAbilityData> abilities = BuildStartingAbilities(characterID, preparedAbilities);
+					List<CharacterInventoryData> inventoryItems = BuildStartingItems(characterID, preparedInventoryItems);
+					List<CharacterEquipmentData> equipment = BuildStartingEquipment(characterID, preparedEquipment);
 
 					// --- Persist all sub-entities within the same transaction ---
 
@@ -497,137 +518,261 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 				});
 			}
+			finally
+			{
+				EndCreateRequest(conn);
+			}
 		}
 
 		/// <summary>
-		/// Builds starting faction data for a newly created character based on race template.
+		/// Builds CPU-only prepared attribute entries from immutable templates.
 		/// </summary>
-		/// <param name="characterID">ID of the newly created character.</param>
-		/// <param name="raceTemplate">Race template containing initial faction definitions.</param>
-		/// <returns>List of faction data objects to persist.</returns>
-		private List<CharacterFactionData> BuildStartingFactions(long characterID, RaceTemplate raceTemplate)
+		private List<PreparedAttributeEntry> BuildStartingAttributeEntries(RaceTemplate raceTemplate)
 		{
-			var factions = new List<CharacterFactionData>();
-			if (raceTemplate.InitialFaction == null)
+			var attributes = new List<PreparedAttributeEntry>();
+			if (raceTemplate?.InitialAttributes?.Attributes == null)
+			{
+				return attributes;
+			}
+
+			foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes)
+			{
+				attributes.Add(new PreparedAttributeEntry(template.ID, template.InitialValue, template.IsResourceAttribute));
+			}
+
+			return attributes;
+		}
+
+		/// <summary>
+		/// Builds CPU-only prepared faction entries from immutable templates.
+		/// </summary>
+		private List<PreparedFactionEntry> BuildStartingFactionEntries(RaceTemplate raceTemplate)
+		{
+			var factions = new List<PreparedFactionEntry>();
+			if (raceTemplate?.InitialFaction == null)
 			{
 				return factions;
 			}
+
 			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultAllied)
 			{
-				factions.Add(new CharacterFactionData(
-					id: 0,
-					version: 1,
-					characterID: characterID,
-					templateID: faction.ID,
-					value: FactionTemplate.Maximum
-				));
+				factions.Add(new PreparedFactionEntry(faction.ID, FactionTemplate.Maximum));
 			}
+
 			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultNeutral)
 			{
-				factions.Add(new CharacterFactionData(
-					id: 0,
-					version: 1,
-					characterID: characterID,
-					templateID: faction.ID,
-					value: 0
-				));
+				factions.Add(new PreparedFactionEntry(faction.ID, 0));
 			}
+
 			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultHostile)
 			{
-				factions.Add(new CharacterFactionData(
-					id: 0,
-					version: 1,
-					characterID: characterID,
-					templateID: faction.ID,
-					value: FactionTemplate.Minimum
-				));
+				factions.Add(new PreparedFactionEntry(faction.ID, FactionTemplate.Minimum));
 			}
+
 			return factions;
 		}
 
 		/// <summary>
-		/// Builds starting ability data for a newly created character.
+		/// Builds CPU-only prepared ability entries from immutable templates.
+		/// </summary>
+		private void BuildStartingAbilityEntries(List<AbilityTemplate> startingAbilities, List<PreparedAbilityEntry> abilities)
+		{
+			if (startingAbilities == null)
+			{
+				return;
+			}
+
+			foreach (AbilityTemplate startingAbility in startingAbilities)
+			{
+				abilities.Add(new PreparedAbilityEntry(startingAbility.ID, startingAbility.GetAllAbilityEventIDs()));
+			}
+		}
+
+		/// <summary>
+		/// Builds CPU-only prepared inventory entries from immutable templates.
+		/// </summary>
+		private void BuildStartingInventoryEntries(List<BaseItemTemplate> startingItems, List<PreparedInventoryEntry> items)
+		{
+			if (startingItems == null)
+			{
+				return;
+			}
+
+			int slotOffset = items.Count;
+			for (int i = 0; i < startingItems.Count; ++i)
+			{
+				BaseItemTemplate itemTemplate = startingItems[i];
+				items.Add(new PreparedInventoryEntry(itemTemplate.ID, slotOffset + i));
+			}
+		}
+
+		/// <summary>
+		/// Builds CPU-only prepared equipment entries from immutable templates.
+		/// Item seed generation occurs before opening the DB transaction.
+		/// </summary>
+		private void BuildStartingEquipmentEntries(List<EquippableItemTemplate> startingEquipment, List<PreparedEquipmentEntry> equipment)
+		{
+			if (startingEquipment == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < startingEquipment.Count; ++i)
+			{
+				EquippableItemTemplate itemTemplate = startingEquipment[i];
+
+				ItemGenerator itemGenerator = new ItemGenerator();
+				itemGenerator.Generate(1, itemTemplate);
+
+				equipment.Add(new PreparedEquipmentEntry(itemTemplate.ID, (int)itemTemplate.Slot, itemGenerator.Seed));
+			}
+		}
+
+		/// <summary>
+		/// Builds starting attribute DTOs using prepared template data and a concrete character ID.
+		/// </summary>
+		private Dictionary<int, CharacterAttributeData> BuildStartingAttributes(long characterID, List<PreparedAttributeEntry> preparedAttributes)
+		{
+			Dictionary<int, CharacterAttributeData> attributes = new Dictionary<int, CharacterAttributeData>(preparedAttributes?.Count ?? 0);
+			if (preparedAttributes == null)
+			{
+				return attributes;
+			}
+
+			for (int i = 0; i < preparedAttributes.Count; ++i)
+			{
+				PreparedAttributeEntry prepared = preparedAttributes[i];
+				attributes[prepared.TemplateID] = new CharacterAttributeData(
+					id: 0,
+					version: 1,
+					characterID: characterID,
+					templateID: prepared.TemplateID,
+					value: prepared.Value,
+					currentValue: prepared.IsResourceAttribute ? prepared.Value : 0.0f
+				);
+			}
+
+			return attributes;
+		}
+
+		/// <summary>
+		/// Builds starting faction data for a newly created character from prepared entries.
+		/// </summary>
+		/// <param name="characterID">ID of the newly created character.</param>
+		/// <param name="preparedFactions">Prepared faction entries.</param>
+		/// <returns>List of faction data objects to persist.</returns>
+		private List<CharacterFactionData> BuildStartingFactions(long characterID, List<PreparedFactionEntry> preparedFactions)
+		{
+			var factions = new List<CharacterFactionData>(preparedFactions?.Count ?? 0);
+			if (preparedFactions == null)
+			{
+				return factions;
+			}
+
+			for (int i = 0; i < preparedFactions.Count; ++i)
+			{
+				PreparedFactionEntry faction = preparedFactions[i];
+				factions.Add(new CharacterFactionData(
+					id: 0,
+					version: 1,
+					characterID: characterID,
+					templateID: faction.TemplateID,
+					value: faction.Value
+				));
+			}
+
+			return factions;
+		}
+
+		/// <summary>
+		/// Builds starting ability data for a newly created character from prepared entries.
 		/// </summary>
 		/// <param name="characterID">ID of the character to add abilities to.</param>
-		/// <param name="startingAbilities">List of ability templates to add.</param>
-		/// <param name="abilities">Target list to append ability data to.</param>
-		private void BuildStartingAbilities(long characterID, List<AbilityTemplate> startingAbilities, List<CharacterAbilityData> abilities)
+		/// <param name="preparedAbilities">Prepared ability entries.</param>
+		private List<CharacterAbilityData> BuildStartingAbilities(long characterID, List<PreparedAbilityEntry> preparedAbilities)
 		{
-			if (startingAbilities != null)
+			var abilities = new List<CharacterAbilityData>(preparedAbilities?.Count ?? 0);
+			if (preparedAbilities == null)
 			{
-				foreach (AbilityTemplate startingAbility in startingAbilities)
-				{
-					abilities.Add(new CharacterAbilityData(
-						id: 0,
-						version: 1,
-						characterID: characterID,
-						templateID: startingAbility.ID,
-						abilityEvents: startingAbility.GetAllAbilityEventIDs(),
-						cooldown: 0f
-					));
-				}
+				return abilities;
 			}
+
+			for (int i = 0; i < preparedAbilities.Count; ++i)
+			{
+				PreparedAbilityEntry startingAbility = preparedAbilities[i];
+				abilities.Add(new CharacterAbilityData(
+					id: 0,
+					version: 1,
+					characterID: characterID,
+					templateID: startingAbility.TemplateID,
+					abilityEvents: startingAbility.AbilityEvents,
+					cooldown: 0f
+				));
+			}
+
+			return abilities;
 		}
 
 		/// <summary>
-		/// Builds starting inventory item data for a newly created character.
+		/// Builds starting inventory item data for a newly created character from prepared entries.
 		/// </summary>
 		/// <param name="characterID">ID of the character to add items to.</param>
-		/// <param name="startingItems">List of item templates to add.</param>
-		/// <param name="items">Target list to append inventory data to.</param>
-		private void BuildStartingItems(long characterID, List<BaseItemTemplate> startingItems, List<CharacterInventoryData> items)
+		/// <param name="preparedItems">Prepared inventory entries.</param>
+		private List<CharacterInventoryData> BuildStartingItems(long characterID, List<PreparedInventoryEntry> preparedItems)
 		{
-			if (startingItems != null)
+			var items = new List<CharacterInventoryData>(preparedItems?.Count ?? 0);
+			if (preparedItems == null)
 			{
-				int slotOffset = items.Count;
-				for (int i = 0; i < startingItems.Count; ++i)
-				{
-					BaseItemTemplate itemTemplate = startingItems[i];
-					items.Add(new CharacterInventoryData(
-						id: 0,
-						version: 1,
-						characterID: characterID,
-						templateID: itemTemplate.ID,
-						slot: slotOffset + i,
-						seed: 0,
-						amount: 1
-					));
-				}
+				return items;
 			}
+
+			for (int i = 0; i < preparedItems.Count; ++i)
+			{
+				PreparedInventoryEntry itemTemplate = preparedItems[i];
+				items.Add(new CharacterInventoryData(
+					id: 0,
+					version: 1,
+					characterID: characterID,
+					templateID: itemTemplate.TemplateID,
+					slot: itemTemplate.Slot,
+					seed: 0,
+					amount: 1
+				));
+			}
+
+			return items;
 		}
 
 		/// <summary>
-		/// Builds starting equipment data for a newly created character.
+		/// Builds starting equipment data for a newly created character from prepared entries.
 		/// Equipment attribute bonuses are not baked into base attribute values;
 		/// they are applied at runtime via Equip() on character load.
 		/// </summary>
 		/// <param name="characterID">ID of the character to add equipment to.</param>
-		/// <param name="startingEquipment">List of equipment templates to add.</param>
-		/// <param name="equipment">Target list to append equipment data to.</param>
-		private void BuildStartingEquipment(long characterID, List<EquippableItemTemplate> startingEquipment, List<CharacterEquipmentData> equipment)
+		/// <param name="preparedEquipment">Prepared equipment entries.</param>
+		private List<CharacterEquipmentData> BuildStartingEquipment(long characterID, List<PreparedEquipmentEntry> preparedEquipment)
 		{
-			if (startingEquipment != null)
+			var equipment = new List<CharacterEquipmentData>(preparedEquipment?.Count ?? 0);
+			if (preparedEquipment == null)
 			{
-				for (int i = 0; i < startingEquipment.Count; ++i)
-				{
-					EquippableItemTemplate itemTemplate = startingEquipment[i];
-
-					// Generate the item seed for deterministic attribute generation on load
-					ItemGenerator itemGenerator = new ItemGenerator();
-					itemGenerator.Generate(1, itemTemplate);
-
-					// Add the equipped item data
-					equipment.Add(new CharacterEquipmentData(
-						id: 0,
-						version: 1,
-						characterID: characterID,
-						templateID: itemTemplate.ID,
-						slot: (int)itemTemplate.Slot,
-						seed: itemGenerator.Seed,
-						amount: 0
-					));
-				}
+				return equipment;
 			}
+
+			for (int i = 0; i < preparedEquipment.Count; ++i)
+			{
+				PreparedEquipmentEntry itemTemplate = preparedEquipment[i];
+				equipment.Add(new CharacterEquipmentData(
+					id: 0,
+					version: 1,
+					characterID: characterID,
+					templateID: itemTemplate.TemplateID,
+					slot: itemTemplate.Slot,
+					seed: itemTemplate.Seed,
+					amount: 0
+				));
+			}
+
+			return equipment;
 		}
 
 		/// <summary>
@@ -638,17 +783,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: false);
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue via the RuntimeDataContainer.
 		/// </summary>
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
 			if (Server?.DataContainerRegistry.TryGet<ICharacterCreateSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Drain();
+				if (drainAll)
+				{
+					queueData.Drain();
+				}
+				else
+				{
+					queueData.Drain(maxMainThreadResponsesPerFrame);
+				}
 			}
 		}
 
@@ -683,6 +835,88 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			return false;
+		}
+
+		private bool TryBeginCreateRequest(NetworkConnection conn)
+		{
+			if (conn == null)
+			{
+				return false;
+			}
+
+			return inFlightCreateRequests.TryAdd(conn.ClientId, 0);
+		}
+
+		private void EndCreateRequest(NetworkConnection conn)
+		{
+			if (conn != null)
+			{
+				inFlightCreateRequests.TryRemove(conn.ClientId, out _);
+			}
+		}
+
+		private readonly struct PreparedAttributeEntry
+		{
+			public readonly int TemplateID;
+			public readonly int Value;
+			public readonly bool IsResourceAttribute;
+
+			public PreparedAttributeEntry(int templateID, int value, bool isResourceAttribute)
+			{
+				TemplateID = templateID;
+				Value = value;
+				IsResourceAttribute = isResourceAttribute;
+			}
+		}
+
+		private readonly struct PreparedFactionEntry
+		{
+			public readonly int TemplateID;
+			public readonly int Value;
+
+			public PreparedFactionEntry(int templateID, int value)
+			{
+				TemplateID = templateID;
+				Value = value;
+			}
+		}
+
+		private readonly struct PreparedAbilityEntry
+		{
+			public readonly int TemplateID;
+			public readonly List<int> AbilityEvents;
+
+			public PreparedAbilityEntry(int templateID, List<int> abilityEvents)
+			{
+				TemplateID = templateID;
+				AbilityEvents = abilityEvents;
+			}
+		}
+
+		private readonly struct PreparedInventoryEntry
+		{
+			public readonly int TemplateID;
+			public readonly int Slot;
+
+			public PreparedInventoryEntry(int templateID, int slot)
+			{
+				TemplateID = templateID;
+				Slot = slot;
+			}
+		}
+
+		private readonly struct PreparedEquipmentEntry
+		{
+			public readonly int TemplateID;
+			public readonly int Slot;
+			public readonly int Seed;
+
+			public PreparedEquipmentEntry(int templateID, int slot, int seed)
+			{
+				TemplateID = templateID;
+				Slot = slot;
+				Seed = seed;
+			}
 		}
 	}
 }

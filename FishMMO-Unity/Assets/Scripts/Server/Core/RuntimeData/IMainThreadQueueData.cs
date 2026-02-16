@@ -23,5 +23,13 @@ namespace FishMMO.Server.Core
 		/// to minimize lock hold time and avoid re-entrancy issues.
 		/// </summary>
 		void Drain();
+
+		/// <summary>
+		/// Drains up to <paramref name="maxActions"/> queued actions, executing them on the calling thread.
+		/// Must be called from the main Unity thread (e.g., in OnLateUpdate).
+		/// </summary>
+		/// <param name="maxActions">Maximum number of actions to execute in this call. Values &lt;= 0 execute none.</param>
+		/// <returns>Number of actions executed.</returns>
+		int Drain(int maxActions);
 	}
 }

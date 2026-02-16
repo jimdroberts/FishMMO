@@ -152,7 +152,7 @@ namespace FishMMO.Client
 			}
 			else if (Client != null)
 			{
-				var nameLowerCase = name.ToLower().Trim();
+				var nameLowerCase = name.ToLowerInvariant().Trim();
 
 				// Send request to server to get the ID for this name.
 				if (!pendingIdRequests.TryGetValue(NamingSystemType.CharacterName, out Dictionary<string, Action<long>> pendingActions))

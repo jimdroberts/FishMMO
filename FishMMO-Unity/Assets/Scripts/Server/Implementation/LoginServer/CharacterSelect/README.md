@@ -4,6 +4,8 @@
 
 The CharacterSelect system handles character listing, deletion, and selection on the login server. It keeps the network handler path lightweight by queuing database-heavy work onto `AsyncWorkerData`, then marshals all FishNet responses back onto the Unity main thread through a dedicated main-thread queue container.
 
+It also applies per-connection in-flight gating for select/delete requests and bounded main-thread response draining to reduce DoS pressure and frame spikes.
+
 ## Directory Structure
 
 ```
@@ -49,6 +51,16 @@ RuntimeDataContainer
 | `AsyncWorkerData` | Executes database operations in background worker threads |
 | `CharacterSelectSystemMainThreadQueueData` | Marshals network-safe response actions to main thread |
 
+## Operational Safeguards
+
+- **Per-connection in-flight gate (`inFlightRequests`)**
+    - Applied to `CharacterDeleteBroadcast` and `CharacterSelectBroadcast`.
+    - Prevents a single connection from queueing multiple concurrent select/delete operations.
+    - Gate is always released in `finally` after async processing.
+- **Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`)**
+    - `OnLateUpdate` drains up to `maxMainThreadResponsesPerFrame` actions each frame.
+    - `OnDeinitialize` drains all remaining actions.
+
 ## Request Flows
 
 ### Character List (`CharacterRequestListBroadcast`)
@@ -62,7 +74,8 @@ RuntimeDataContainer
 ### Character Delete (`CharacterDeleteBroadcast`)
 
 1. Validate connection + account binding.
-2. Queue async deletion pipeline.
+2. Acquire per-connection in-flight gate.
+3. Queue async deletion pipeline.
 3. Open Unit of Work transaction.
 4. Fetch character and verify account ownership.
 5. If `KeepDeleteData == false`, delete all sub-entity tables (abilities, achievements, attributes, bank, buffs, equipment, factions, friends, hotkeys, inventory, known abilities, pets).
@@ -70,19 +83,23 @@ RuntimeDataContainer
 7. Commit transaction.
 8. Enqueue main-thread response action.
 9. Send `CharacterDeleteBroadcast`.
+10. Release in-flight gate in `finally`.
 
 ### Character Select (`CharacterSelectBroadcast`)
 
 1. Validate connection + account binding.
-2. Queue async select pipeline.
+2. Acquire per-connection in-flight gate.
+3. Queue async select pipeline.
 3. Open Unit of Work transaction.
 4. Fetch character and verify ownership.
 5. Set selected character (`SetSelectedAsync(accountName, characterId)`).
-6. Commit transaction.
-7. Fetch active world servers.
-8. Map rows to `WorldServerDetails`.
-9. Enqueue main-thread response action.
-10. Send `ServerListBroadcast`.
+6. Verify selected ownership state for defense-in-depth (`FetchByAccountAsync(accountName, selected: true)`).
+7. Commit transaction.
+8. Fetch active world servers.
+9. Map rows to `WorldServerDetails`.
+10. Enqueue main-thread response action.
+11. Send `ServerListBroadcast`.
+12. Release in-flight gate in `finally`.
 
 ## Transaction Boundaries
 
@@ -111,7 +128,7 @@ Rejected enqueue attempts are logged with account context to aid operational mon
 | Async Workers | Database fetch/delete/select operations |
 | Main Thread | FishNet `Broadcast` and `Kick` operations via queued actions |
 
-`OnLateUpdate` drains queued main-thread actions every frame.
+`OnLateUpdate` drains queued main-thread actions every frame, capped by `maxMainThreadResponsesPerFrame`.
 
 ## Deletion Retention Policy
 

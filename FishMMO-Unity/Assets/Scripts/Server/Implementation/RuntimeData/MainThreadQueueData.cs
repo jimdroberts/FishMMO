@@ -57,21 +57,39 @@ namespace FishMMO.Server.Implementation
 		/// <inheritdoc/>
 		public void Drain()
 		{
-			Action[] actions;
+			Drain(int.MaxValue);
+		}
+
+		/// <inheritdoc/>
+		public int Drain(int maxActions)
+		{
+			if (maxActions <= 0)
+			{
+				return 0;
+			}
+
+			List<Action> actions;
 			lock (_lock)
 			{
 				if (_queue.Count == 0)
 				{
-					return;
+					return 0;
 				}
-				actions = _queue.ToArray();
-				_queue.Clear();
+
+				int count = Math.Min(maxActions, _queue.Count);
+				actions = new List<Action>(count);
+				for (int i = 0; i < count; ++i)
+				{
+					actions.Add(_queue.Dequeue());
+				}
 			}
 
-			for (int i = 0; i < actions.Length; i++)
+			for (int i = 0; i < actions.Count; i++)
 			{
 				actions[i].Invoke();
 			}
+
+			return actions.Count;
 		}
 	}
 }

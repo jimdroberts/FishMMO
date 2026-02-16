@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
 
@@ -27,16 +25,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public long TotalFailed { get; set; }
 
 		/// <summary>
-		/// Tracked worker tasks for health monitoring and respawning.
-		/// </summary>
-		public Task[] WorkerTasks { get; set; }
-
-		/// <summary>
-		/// Cancellation token used by all workers. Cached from QueueData on startup.
-		/// </summary>
-		public CancellationToken WorkerCancellationToken { get; set; }
-
-		/// <summary>
 		/// Timer accumulator for periodic mapping data cleanup.
 		/// </summary>
 		public float CleanupTimer { get; set; }
@@ -49,8 +37,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 			TotalProcessed = 0;
 			TotalRejected = 0;
 			TotalFailed = 0;
-			WorkerTasks = null;
-			WorkerCancellationToken = default;
 			CleanupTimer = 0f;
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -63,8 +49,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 			TotalProcessed = 0;
 			TotalRejected = 0;
 			TotalFailed = 0;
-			WorkerTasks = null;
-			WorkerCancellationToken = default;
 			CleanupTimer = 0f;
 		}
 

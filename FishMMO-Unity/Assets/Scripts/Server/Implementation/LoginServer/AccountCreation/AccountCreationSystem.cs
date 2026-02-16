@@ -1,8 +1,9 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System;
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -21,12 +22,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// Network thread acts as ultra-fast reactive UDP gate with zero blocking operations.
 	/// </summary>
 	[CreateAssetMenu(fileName = "AccountCreationSystem", menuName = "FishMMO/Server/LoginServer/Account Creation System", order = 1)]
-	[RequiresDataContainer(typeof(AccountCreationSystemQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	[RequiresDataContainer(typeof(AccountCreationSystemRuntimeData))]
 	[RequiresDataContainer(typeof(AccountCreationSystemMappingData))]
 	[RequiresDataContainer(typeof(AccountCreationSystemMainThreadQueueData))]
 	public class AccountCreationSystem : ServerBehaviour, IAccountCreationSystem<NetworkConnection>
 	{
+		private enum EnqueueResult : byte
+		{
+			Accepted = 0,
+			RateLimited = 1,
+			Blocked = 2,
+			QueueFull = 3,
+			Unavailable = 4,
+		}
+
 		/// <summary>
 		/// Minimum seconds between account creation attempts from the same IP address.
 		/// </summary>
@@ -47,11 +57,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private float ipBlockDurationSeconds = 300.0f; // 5 minutes
 
 		/// <summary>
-		/// Number of concurrent background workers processing queued account creation requests.
+		/// Maximum number of queued main-thread response actions processed per frame.
+		/// This time-slices response dispatch to avoid frame spikes during heavy login waves.
 		/// </summary>
-		[Header("Queue Configuration")]
-		[Tooltip("Number of concurrent workers processing account creations")]
-		[SerializeField] private int workerCount = 2;
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max account-creation responses drained from main-thread queue per frame")]
+		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
+
+		/// <summary>
+		/// Per-connection cache for canonical IP string to avoid repeated address string allocations.
+		/// Key: ClientId, Value: connection IP and last-seen timestamp.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, ConnectionIpCacheEntry> connectionIpCache = new ConcurrentDictionary<int, ConnectionIpCacheEntry>();
+
+		/// <summary>
+		/// Per-connection cache for encryption data to avoid repeated AccountManager lock contention
+		/// on hot paths from the network thread.
+		/// Key: ClientId, Value: encryption payload and last-seen timestamp.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, ConnectionEncryptionCacheEntry> connectionEncryptionCache = new ConcurrentDictionary<int, ConnectionEncryptionCacheEntry>();
 
 		/// <summary>
 		/// Gets the current number of pending account creation requests in the async queue.
@@ -60,9 +84,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			get
 			{
-				if (Server?.DataContainerRegistry.TryGet<IAccountCreationSystemQueueData<NetworkConnection>>(out var queueData) == true)
+				if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
 				{
-					return queueData.PendingCount;
+					return asyncWorker.PendingCount;
 				}
 				return 0;
 			}
@@ -99,7 +123,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Initializes the account creation system, starts async workers, and registers broadcast handlers.
+		/// Initializes the account creation system and registers network/connection handlers.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
@@ -110,13 +134,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Verify all required data containers are available
-			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemQueueData<NetworkConnection>>(out var queueData))
+			if (!Server.DataContainerRegistry.TryGet<IAsyncWorkerData>(out _))
 			{
-				Log.Error("AccountCreationSystem", "Failed to initialize: IAccountCreationSystemQueueData not found");
+				Log.Error("AccountCreationSystem", "Failed to initialize: IAsyncWorkerData not found");
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
+			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
 			{
 				Log.Error("AccountCreationSystem", "Failed to initialize: IAccountCreationSystemRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
@@ -134,24 +158,29 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
-			// Start async workers and track their tasks in the runtime data container
-			runtimeData.WorkerCancellationToken = queueData.CancellationTokenSource.Token;
-			runtimeData.WorkerTasks = new Task[workerCount];
-			for (int i = 0; i < workerCount; i++)
+			if (ServerManager == null)
 			{
-				int workerId = i + 1;
-				runtimeData.WorkerTasks[i] = ProcessAccountCreationRequestsAsync(runtimeData.WorkerCancellationToken, workerId);
+				Log.Error("AccountCreationSystem", "InitializeOnce: ServerManager is null");
+				return ServerComponentInitializationStatus.FailedToFindServerManager;
 			}
+
+			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+
+			// Clamp tunables to safe values.
+			ipRateLimitSeconds = Mathf.Max(0f, ipRateLimitSeconds);
+			maxFailedAttempts = Mathf.Max(1, maxFailedAttempts);
+			ipBlockDurationSeconds = Mathf.Max(1f, ipBlockDurationSeconds);
+			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
 
 			// Register network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived, false);
 
-			Log.Debug("AccountCreationSystem", $"Initialized (Workers={workerCount}, RateLimit={ipRateLimitSeconds}s, MaxFailures={maxFailedAttempts}, BlockDuration={ipBlockDurationSeconds}s)");
+			Log.Debug("AccountCreationSystem", $"Initialized (RateLimit={ipRateLimitSeconds}s, MaxFailures={maxFailedAttempts}, BlockDuration={ipBlockDurationSeconds}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		/// <summary>
-		/// Cleans up the account creation system, cancels async workers, and unregisters broadcast handlers.
+		/// Cleans up the account creation system and unregisters handlers.
 		/// </summary>
 		public override void OnDeinitialize()
 		{
@@ -161,26 +190,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			// Cancel async processing via data container
-			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemQueueData<NetworkConnection>>(out var queueData))
+			if (ServerManager != null)
 			{
-				queueData.CancellationTokenSource?.Cancel();
+				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
 			}
 
-			// Wait for workers to finish gracefully
-			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData) &&
-				runtimeData.WorkerTasks != null)
-			{
-				try
-				{
-					Task.WaitAll(runtimeData.WorkerTasks, TimeSpan.FromSeconds(5));
-				}
-				catch (AggregateException) { /* workers may have faulted or been cancelled */ }
-				runtimeData.WorkerTasks = null;
-			}
+			connectionIpCache.Clear();
+			connectionEncryptionCache.Clear();
 
 			// Drain remaining responses so clients get their final messages.
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
 
 			// Unregister broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived);
@@ -198,14 +217,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private void OnServerCreateAccountBroadcastReceived(NetworkConnection conn, CreateAccountBroadcast msg, Channel channel)
 		{
 			// Fast validation - don't block network thread
-			if (!Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
+			if (!ResolveEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
 				conn.Disconnect(true);
 				return;
 			}
 
-			// Get IP address for rate limiting
-			string ipAddress = conn.GetAddress();
+			// Get a cached IP key for rate limiting.
+			string ipAddress = ResolveIpAddress(conn);
 
 			// Create request with ENCRYPTED data (no decryption on network thread!)
 			var request = new AccountCreationRequest<NetworkConnection>(
@@ -219,26 +238,41 @@ namespace FishMMO.Server.Implementation.LoginServer
 			);
 
 			// Try to enqueue request for async processing
-			if (!TryEnqueueAccountCreation(request))
+			EnqueueResult enqueueResult = TryEnqueueAccountCreationInternal(request);
+			switch (enqueueResult)
 			{
-				// Queue full or rate limited - send immediate rejection
-				SendServerBusyResponse(conn);
+				case EnqueueResult.Accepted:
+					return;
+				case EnqueueResult.Blocked:
+					// Blocked IP is disconnected immediately; do not spend time sending a response.
+					return;
+				default:
+					// Queue full/rate limited/unavailable - send immediate rejection.
+					SendServerBusyResponse(conn);
+					return;
 			}
 		}
 
 		/// <summary>
-		/// Public API: Attempts to enqueue an account creation request with rate limiting checks.
-		/// Returns false immediately if rate limited or queue full.
+		/// Public API expected by <see cref="IAccountCreationSystem{TConnection}"/>.
+		/// Returns <c>true</c> only when the request is accepted.
 		/// </summary>
 		/// <param name="request">Account creation request containing encrypted credentials.</param>
-		/// <returns>True if queued successfully; false if rejected.</returns>
 		public bool TryEnqueueAccountCreation(AccountCreationRequest<NetworkConnection> request)
 		{
-			// Access data containers for this operation
-			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemQueueData<NetworkConnection>>(out var queueData) ||
-				!Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData))
+			return TryEnqueueAccountCreationInternal(request) == EnqueueResult.Accepted;
+		}
+
+		/// <summary>
+		/// Internal enqueue path returning a detailed result used by the network ingress handler.
+		/// </summary>
+		private EnqueueResult TryEnqueueAccountCreationInternal(AccountCreationRequest<NetworkConnection> request)
+		{
+			// Access data containers for this operation.
+			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData) ||
+				!Server.DataContainerRegistry.TryGet<IAsyncWorkerData>(out _))
 			{
-				return false;
+				return EnqueueResult.Unavailable;
 			}
 
 			// Check IP rate limit
@@ -247,7 +281,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				double secondsSinceLastAttempt = (DateTime.UtcNow - lastAttempt).TotalSeconds;
 				if (secondsSinceLastAttempt < ipRateLimitSeconds)
 				{
-					return false; // Rate limited
+					return EnqueueResult.RateLimited;
 				}
 			}
 
@@ -256,15 +290,26 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				if (failureCount >= maxFailedAttempts)
 				{
-					return false; // IP blocked
+					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
+					{
+						runtimeData.TotalRejected++;
+					}
+
+					request.Connection.Disconnect(true); // Disconnect immediately to mitigate DoS
+					return EnqueueResult.Blocked;
 				}
 			}
 
 			// Update rate limit tracker
 			mappingData.IpRateLimitTracker[request.IpAddress] = DateTime.UtcNow;
 
-			// Try to enqueue
-			return queueData.RequestChannel.Writer.TryWrite(request);
+			// Try to enqueue to centralized async worker.
+			if (TryEnqueueAsyncWork(() => ProcessAccountCreationAsync(request), request.Connection.ClientId))
+			{
+				return EnqueueResult.Accepted;
+			}
+
+			return EnqueueResult.QueueFull;
 		}
 
 		/// <summary>
@@ -280,62 +325,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 				runtimeData.TotalRejected++;
 			}
 
-			// Send immediate response
+			// Send immediate response as unreliable as we don't want to risk blocking the network thread during a DoS attack
+			// Note: Client should handle potential loss of this message gracefully since it's a reactive UDP response to a failed request
 			Server.NetworkWrapper.Broadcast(conn, new ClientAuthResultBroadcast()
 			{
 				Result = ClientAuthenticationResult.ServerBusy
-			}, false, Channel.Reliable);
+			}, false, Channel.Unreliable);
 
 			// Optional: Log for monitoring
 			if (conn != null)
 			{
-				Log.Warning("AccountCreationSystem", $"Rejected request from {conn.GetAddress()} - Rate limited or queue full");
+				Log.Warning("AccountCreationSystem", $"Rejected request from {ResolveIpAddress(conn)} - Rate limited or queue full");
 			}
-		}
-
-		/// <summary>
-		/// Async worker that processes account creation requests from the channel.
-		/// Runs on background thread, performing decryption and database operations.
-		/// </summary>
-		/// <param name="cancellationToken">Cancellation token for graceful shutdown.</param>
-		/// <param name="workerId">Worker ID for logging/debugging.</param>
-		private async Task ProcessAccountCreationRequestsAsync(CancellationToken cancellationToken, int workerId)
-		{
-			// Get queue data once at start of worker
-			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemQueueData<NetworkConnection>>(out var queueData))
-			{
-				await Log.Error("AccountCreationSystem", $"Worker {workerId} failed to get queue data");
-				return;
-			}
-
-			await Log.Debug("AccountCreationSystem", $"Worker {workerId} started");
-			try
-			{
-				await foreach (var request in queueData.RequestChannel.Reader.ReadAllAsync(cancellationToken))
-				{
-					try
-					{
-						await ProcessAccountCreationAsync(request);
-					}
-					catch (Exception ex)
-					{
-						await Log.Error("AccountCreationSystem", $"Worker {workerId} error processing account creation: {ex}");
-
-						// Increment failure counter
-						if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
-						{
-							runtimeData.TotalFailed++;
-						}
-					}
-				}
-			}
-			catch (OperationCanceledException)
-			{
-				// Expected during shutdown
-				await Log.Debug("AccountCreationSystem", $"Worker {workerId} cancelled");
-			}
-
-			await Log.Debug("AccountCreationSystem", $"Worker {workerId} stopped");
 		}
 
 		/// <summary>
@@ -425,40 +426,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
-			DrainMainThreadQueue();
-			MonitorWorkerHealth();
+			DrainMainThreadQueue(drainAll: false);
 			CleanUpMappingData(deltaTime);
-		}
-
-		/// <summary>
-		/// Checks worker tasks for unexpected completion and respawns any that have died.
-		/// Handles Faulted, Canceled, and silent RanToCompletion exits.
-		/// Runs on the main thread each frame via OnLateUpdate.
-		/// </summary>
-		private void MonitorWorkerHealth()
-		{
-			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData) ||
-				runtimeData.WorkerTasks == null ||
-				runtimeData.WorkerCancellationToken.IsCancellationRequested)
-			{
-				return;
-			}
-
-			for (int i = 0; i < runtimeData.WorkerTasks.Length; i++)
-			{
-				Task task = runtimeData.WorkerTasks[i];
-				if (task == null || !task.IsCompleted)
-				{
-					continue;
-				}
-
-				int workerId = i + 1;
-				string reason = task.Status.ToString();
-				string detail = task.Exception?.Flatten().Message;
-				_ = Log.Error("AccountCreationSystem",
-					$"Worker {workerId} died unexpectedly (Status={reason}{(detail != null ? $", Error={detail}" : "")}). Respawning...");
-				runtimeData.WorkerTasks[i] = ProcessAccountCreationRequestsAsync(runtimeData.WorkerCancellationToken, workerId);
-			}
 		}
 
 		/// <summary>
@@ -505,16 +474,42 @@ namespace FishMMO.Server.Implementation.LoginServer
 					mappingData.IpFailureTracker.TryRemove(entry.Key, out _);
 				}
 			}
+
+			// Evict stale per-connection IP cache entries as a backstop against delayed disconnect events.
+			foreach (var entry in connectionIpCache)
+			{
+				if (entry.Value.LastSeenUtc < cutoff)
+				{
+					connectionIpCache.TryRemove(entry.Key, out _);
+				}
+			}
+
+			// Evict stale per-connection encryption cache entries as a backstop against delayed disconnect events.
+			foreach (var entry in connectionEncryptionCache)
+			{
+				if (entry.Value.LastSeenUtc < cutoff)
+				{
+					connectionEncryptionCache.TryRemove(entry.Key, out _);
+				}
+			}
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue via the RuntimeDataContainer.
+		/// Uses time-slicing during normal updates and full drain during shutdown.
 		/// </summary>
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAccountCreationSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Drain();
+				if (drainAll)
+				{
+					queueData.Drain();
+				}
+				else
+				{
+					queueData.Drain(maxMainThreadResponsesPerFrame);
+				}
 			}
 		}
 
@@ -528,6 +523,116 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server?.DataContainerRegistry.TryGet<IAccountCreationSystemMainThreadQueueData>(out var queueData) == true)
 			{
 				queueData.Enqueue(action);
+			}
+		}
+
+		/// <summary>
+		/// Removes cached connection-IP mapping when a connection closes.
+		/// </summary>
+		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		{
+			if (conn != null && args.ConnectionState == RemoteConnectionState.Stopped)
+			{
+				connectionIpCache.TryRemove(conn.ClientId, out _);
+				connectionEncryptionCache.TryRemove(conn.ClientId, out _);
+			}
+		}
+
+		/// <summary>
+		/// Resolves a stable IP key for rate-limiting while avoiding repeated address string allocations.
+		/// </summary>
+		private string ResolveIpAddress(NetworkConnection conn)
+		{
+			if (conn == null)
+			{
+				return string.Empty;
+			}
+
+			DateTime now = DateTime.UtcNow;
+
+			if (connectionIpCache.TryGetValue(conn.ClientId, out ConnectionIpCacheEntry cachedEntry) && !string.IsNullOrEmpty(cachedEntry.IpAddress))
+			{
+				connectionIpCache[conn.ClientId] = new ConnectionIpCacheEntry(cachedEntry.IpAddress, now);
+				return cachedEntry.IpAddress;
+			}
+
+			string ipAddress = conn.GetAddress();
+			if (string.IsNullOrEmpty(ipAddress))
+			{
+				ipAddress = "unknown";
+			}
+
+			connectionIpCache[conn.ClientId] = new ConnectionIpCacheEntry(ipAddress, now);
+			return ipAddress;
+		}
+
+		/// <summary>
+		/// Resolves encryption data with a per-connection cache to reduce lock pressure on AccountManager.
+		/// </summary>
+		private bool ResolveEncryptionData(NetworkConnection conn, out ConnectionEncryptionData encryptionData)
+		{
+			encryptionData = null;
+			if (conn == null)
+			{
+				return false;
+			}
+
+			DateTime now = DateTime.UtcNow;
+			if (connectionEncryptionCache.TryGetValue(conn.ClientId, out ConnectionEncryptionCacheEntry cached) && cached.Data != null)
+			{
+				connectionEncryptionCache[conn.ClientId] = new ConnectionEncryptionCacheEntry(cached.Data, now);
+				encryptionData = cached.Data;
+				return true;
+			}
+
+			if (!Server.AccountManager.GetConnectionEncryptionData(conn, out encryptionData) || encryptionData == null)
+			{
+				return false;
+			}
+
+			connectionEncryptionCache[conn.ClientId] = new ConnectionEncryptionCacheEntry(encryptionData, now);
+			return true;
+		}
+
+		/// <summary>
+		/// Enqueues async work to centralized AsyncWorkerData for consistency with other server systems.
+		/// </summary>
+		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+				{
+					return asyncWorker.Enqueue(work, entityKey, callerName);
+				}
+
+				return asyncWorker.Enqueue(work, callerName);
+			}
+
+			return false;
+		}
+
+		private readonly struct ConnectionIpCacheEntry
+		{
+			public readonly string IpAddress;
+			public readonly DateTime LastSeenUtc;
+
+			public ConnectionIpCacheEntry(string ipAddress, DateTime lastSeenUtc)
+			{
+				IpAddress = ipAddress;
+				LastSeenUtc = lastSeenUtc;
+			}
+		}
+
+		private readonly struct ConnectionEncryptionCacheEntry
+		{
+			public readonly ConnectionEncryptionData Data;
+			public readonly DateTime LastSeenUtc;
+
+			public ConnectionEncryptionCacheEntry(ConnectionEncryptionData data, DateTime lastSeenUtc)
+			{
+				Data = data;
+				LastSeenUtc = lastSeenUtc;
 			}
 		}
 	}

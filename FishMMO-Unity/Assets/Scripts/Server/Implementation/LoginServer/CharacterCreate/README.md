@@ -4,6 +4,8 @@
 
 The CharacterCreate system handles login-server character creation with strict main-thread safety for Unity API access and asynchronous persistence for database work. It validates requests (name, account, race, spawn), builds initial character state (attributes, factions, abilities, inventory, equipment), writes everything transactionally via Unit of Work, and marshals all network responses back to the main thread.
 
+To mitigate task spam and frame spikes, it uses a per-connection in-flight create gate and bounded main-thread response draining (`maxMainThreadResponsesPerFrame`).
+
 ## Directory Structure
 
 ```
@@ -65,7 +67,8 @@ Fast validation only:
    - `RaceTemplate.Get(...)`
    - prefab/component validation
    - spawnable prefab validation
-6. Enqueue async worker task through `IAsyncWorkerData`.
+6. Acquire per-connection in-flight gate (`inFlightCreateRequests`).
+7. Enqueue async worker task through `IAsyncWorkerData`.
 
 If enqueue fails (queue pressure), request is rejected immediately with `CharacterCreateResult.Error`.
 
@@ -91,10 +94,23 @@ Background thread work:
 
 All client responses are queued via `EnqueueMainThread(...)` and executed in `OnLateUpdate` via `DrainMainThreadQueue()`.
 
+- Per-frame drain is capped by `maxMainThreadResponsesPerFrame`.
+- Deinitialize drains all remaining actions.
+
 This guarantees thread-safe calls to:
 
 - `Server.NetworkWrapper.Broadcast(...)`
 - `conn.Kick(...)`
+
+The in-flight create gate is released in `finally` to prevent stale lockout on exceptions.
+
+## Operational Safeguards
+
+- **In-flight create gate (`inFlightCreateRequests`)**
+   - One concurrent create operation per connection.
+   - Protects async worker queue and allocations from repeated create-button spam.
+- **Bounded main-thread drain (`maxMainThreadResponsesPerFrame`)**
+   - Limits per-frame response dispatch cost.
 
 ## Transactional Consistency
 

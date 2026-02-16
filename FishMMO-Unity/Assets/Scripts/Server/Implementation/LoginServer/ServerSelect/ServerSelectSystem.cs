@@ -1,5 +1,6 @@
 ﻿using FishNet.Connection;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -9,7 +10,6 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
-using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -24,6 +24,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class ServerSelectSystem : ServerBehaviour, IServerSelectSystem
 	{
+		/// <summary>
+		/// Maximum number of queued main-thread response actions processed per frame.
+		/// This time-slices response dispatch to avoid frame spikes.
+		/// </summary>
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max server-select responses drained from main-thread queue per frame")]
+		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
+
+		/// <summary>
+		/// Per-connection in-flight gate for server-list requests.
+		/// Prevents request spam from creating many concurrent async tasks per connection.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, byte> inFlightServerListRequests = new ConcurrentDictionary<int, byte>();
+
 		/// <summary>
 		/// Idle timeout in seconds for world servers to be considered active.
 		/// </summary>
@@ -50,6 +64,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived, true);
 
+			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
+
 			Log.Debug("ServerSelectSystem", $"Initialized (IdleTimeout={IdleTimeout}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -67,7 +83,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Drain remaining responses so clients get their final messages.
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: true);
+			inFlightServerListRequests.Clear();
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived);
@@ -87,8 +104,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
+			if (!TryBeginServerListRequest(conn))
+			{
+				return;
+			}
+
 			if (!TryEnqueueAsyncWork(() => ProcessServerListRequestAsync(conn)))
 			{
+				EndServerListRequest(conn);
 				Log.Warning("ServerSelectSystem", "Failed to enqueue server list request.");
 			}
 		}
@@ -146,6 +169,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				await Log.Error("ServerSelectSystem", $"Error processing server list request: {ex}");
 			}
+			finally
+			{
+				EndServerListRequest(conn);
+			}
 		}
 
 		/// <summary>
@@ -156,17 +183,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
-			DrainMainThreadQueue();
+			DrainMainThreadQueue(drainAll: false);
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue via the RuntimeDataContainer.
 		/// </summary>
-		private void DrainMainThreadQueue()
+		private void DrainMainThreadQueue(bool drainAll)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IServerSelectSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Drain();
+				if (drainAll)
+				{
+					queueData.Drain();
+				}
+				else
+				{
+					queueData.Drain(maxMainThreadResponsesPerFrame);
+				}
 			}
 		}
 
@@ -201,6 +235,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			return false;
+		}
+
+		private bool TryBeginServerListRequest(NetworkConnection conn)
+		{
+			if (conn == null)
+			{
+				return false;
+			}
+
+			return inFlightServerListRequests.TryAdd(conn.ClientId, 0);
+		}
+
+		private void EndServerListRequest(NetworkConnection conn)
+		{
+			if (conn != null)
+			{
+				inFlightServerListRequests.TryRemove(conn.ClientId, out _);
+			}
 		}
 	}
 }

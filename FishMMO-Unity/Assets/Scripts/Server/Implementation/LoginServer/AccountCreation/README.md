@@ -4,6 +4,8 @@
 
 The AccountCreation system is an asynchronous, rate-limited login-server pipeline for creating new accounts without blocking the network thread. Incoming account-creation broadcasts are treated as ultra-fast UDP gate events: encrypted payloads are validated and queued immediately, while decryption and database persistence are executed by background workers. Responses are marshalled back to the main thread through a dedicated queue container to preserve FishNet thread-safety.
 
+Main-thread response dispatch is time-sliced by `maxMainThreadResponsesPerFrame` to avoid frame spikes under heavy ingress.
+
 ## Directory Structure
 
 ```
@@ -82,7 +84,9 @@ This enables immediate rejection under load and prevents unbounded memory growth
 
 ### 4) Main Thread Response
 
-`OnLateUpdate` drains queued actions through `IAccountCreationSystemMainThreadQueueData.Drain()` and sends FishNet broadcasts on the main thread.
+`OnLateUpdate` drains queued actions through `IAccountCreationSystemMainThreadQueueData.Drain(maxMainThreadResponsesPerFrame)` and sends FishNet broadcasts on the main thread.
+
+On shutdown, remaining queued responses are fully drained.
 
 ## Rate Limiting and DoS Protection
 
@@ -97,6 +101,8 @@ Per-IP protection is stored in `AccountCreationSystemMappingData`:
 - Reject if failures for IP are `>= maxFailedAttempts`.
 - On success, remove IP failure entry.
 - On failed persistence, increment IP failure count.
+
+> Note: Account creation does not use a per-connection in-flight gate. Its anti-spam controls are IP-based throttling, temporary blocking, and async-worker backpressure.
 
 ### Periodic Cleanup
 

@@ -1543,7 +1543,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public bool SendBroadcastToCharacter<T>(string characterName, T msg) where T : struct, IBroadcast
 		{
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
-				mappingData.CharactersByLowerCaseName.TryGetValue(characterName.ToLower(), out var character))
+				mappingData.CharactersByLowerCaseName.TryGetValue(characterName.ToLowerInvariant(), out var character))
 			{
 				character.Owner.Broadcast(msg);
 				return true;

@@ -561,7 +561,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void FlushDirtyAttributeUpdates()
 		{
-			if (!base.IsServerStarted)
+			if (!base.IsServerStarted || !base.IsSpawned)
 			{
 				return;
 			}
@@ -739,7 +739,7 @@ namespace FishMMO.Shared
 			}
 
 			NetworkConnection owner = character.Owner;
-			if (owner != null)
+			if (owner != null && owner.IsActive)
 			{
 				owner.Broadcast(broadcast, true, channel);
 			}
@@ -763,7 +763,7 @@ namespace FishMMO.Shared
 			NetworkConnection owner = character.Owner;
 			foreach (NetworkConnection observer in character.Observers)
 			{
-				if (observer == null || observer == owner)
+				if (observer == null || observer == owner || !observer.IsActive)
 				{
 					continue;
 				}
