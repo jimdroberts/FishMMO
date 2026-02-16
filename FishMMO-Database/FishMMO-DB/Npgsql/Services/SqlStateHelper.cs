@@ -38,6 +38,9 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (exception is OperationCanceledException) return false;
 
+			// PgBouncer auth/config mismatch should never be retried.
+			if (IsPgBouncerConfigurationSqlState(sqlState)) return false;
+
 			for (var current = exception; current != null; current = current.InnerException)
 			{
 				if (current is NpgsqlException npgsqlEx && npgsqlEx.IsTransient) return true;
@@ -47,7 +50,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (!string.IsNullOrWhiteSpace(sqlState))
 			{
-				return IsTimeoutSqlState(sqlState) || IsConnectionSqlState(sqlState) || IsTransientSqlState(sqlState);
+				return IsTimeoutSqlState(sqlState)
+					|| IsConnectionSqlState(sqlState)
+					|| IsTransientSqlState(sqlState)
+					|| IsPgBouncerTransientSqlState(sqlState);
 			}
 
 			return false;
@@ -75,6 +81,27 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
+		/// Determines whether a SQLSTATE is a PgBouncer-related transient failure.
+		/// Includes protocol violation (08P01), admin shutdown (57P01), and internal error (XX000).
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool IsPgBouncerTransientSqlState(string? sqlState)
+		{
+			if (string.IsNullOrWhiteSpace(sqlState)) return false;
+			return sqlState == PostgresSqlState.ProtocolViolation
+				|| sqlState == PostgresSqlState.AdminShutdown
+				|| sqlState == PostgresSqlState.InternalError;
+		}
+
+		/// <summary>
+		/// Determines whether a SQLSTATE is a PgBouncer configuration/authentication error that should not be retried.
+		/// Includes invalid authorization specification (28000).
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool IsPgBouncerConfigurationSqlState(string? sqlState) =>
+			string.Equals(sqlState, PostgresSqlState.InvalidAuthorizationSpecification, StringComparison.Ordinal);
+
+		/// <summary>
 		/// Determines whether a SQLSTATE represents a transient, retryable server-side failure.
 		/// Includes deadlock (40P01), serialization failure (40001), lock timeout (55P03), 
 		/// and too many connections (53300).
@@ -86,7 +113,8 @@ namespace FishMMO.Database.Npgsql.Services
 			return sqlState == PostgresSqlState.DeadlockDetected
 				|| sqlState == PostgresSqlState.SerializationFailure
 				|| sqlState == PostgresSqlState.LockNotAvailable
-				|| sqlState == PostgresSqlState.TooManyConnections;
+				|| sqlState == PostgresSqlState.TooManyConnections
+				|| sqlState == PostgresSqlState.InternalError;
 		}
 	}
 }

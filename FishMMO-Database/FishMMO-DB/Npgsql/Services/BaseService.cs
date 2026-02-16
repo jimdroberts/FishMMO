@@ -868,6 +868,11 @@ namespace FishMMO.Database.Npgsql.Services
 					dbEx.IsTransient);
 			}
 
+			if (IsPgBouncerConfigurationSqlState(sqlState))
+			{
+				return (DatabaseErrorCodes.InvalidConfiguration, "Database authentication configuration is invalid.", false);
+			}
+
 			if (sqlState == PostgresSqlState.UniqueViolation)
 			{
 				return (DatabaseErrorCodes.UniqueViolation, "The record already exists.", false);
@@ -921,6 +926,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		private static bool IsConnectionSqlState(string? sqlState) =>
 			SqlStateHelper.IsConnectionSqlState(sqlState);
+
+		/// <summary>
+		/// Determines whether a SQLSTATE is a PgBouncer configuration/authentication error.
+		/// </summary>
+		private static bool IsPgBouncerConfigurationSqlState(string? sqlState) =>
+			SqlStateHelper.IsPgBouncerConfigurationSqlState(sqlState);
 
 		/// <summary>
 		/// Executes a bulk UPSERT statement and enforces version/authority semantics by validating the affected row count.

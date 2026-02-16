@@ -35,6 +35,16 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>Cannot connect now (57P03).</summary>
 		public const string CannotConnectNow = "57P03";
 
+		/// <summary>Protocol violation (08P01), often seen with PgBouncer reload/reset mismatches.</summary>
+		public const string ProtocolViolation = "08P01";
+
+		#endregion
+
+		#region Authentication / Authorization
+
+		/// <summary>Invalid authorization specification (28000), commonly PgBouncer auth mismatch.</summary>
+		public const string InvalidAuthorizationSpecification = "28000";
+
 		#endregion
 
 		#region Transient Failures
@@ -53,6 +63,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <summary>Too many connections (53300).</summary>
 		public const string TooManyConnections = "53300";
+
+		/// <summary>Internal error (XX000), can occur transiently when backend drops behind PgBouncer.</summary>
+		public const string InternalError = "XX000";
 
 		#endregion
 	}

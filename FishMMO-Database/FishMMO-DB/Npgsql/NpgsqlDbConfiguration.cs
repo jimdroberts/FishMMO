@@ -160,6 +160,10 @@ namespace FishMMO.Database.Npgsql
 				MaxPoolSize = MaxPoolSize,
 				Timeout = ConnectionTimeout,
 				CommandTimeout = CommandTimeout,
+
+				// Required for PgBouncer
+				NoResetOnClose = true, // Prevents connection reset on close to allow reuse in pooled environments
+				MaxAutoPrepare = 0 // Disable auto-prepare to avoid issues with prepared statement caching in pooled environments
 			};
 
 			return builder.ConnectionString;
