@@ -23,6 +23,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterSelectSystem", menuName = "FishMMO/Server/LoginServer/Character Select System", order = 1)]
 	[RequiresDataContainer(typeof(CharacterSelectSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(CharacterSelectSystemRuntimeData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterSelectSystem : ServerBehaviour, ICharacterSelectSystem
 	{
@@ -33,12 +34,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[Header("Main Thread Dispatch")]
 		[Tooltip("Max character-select responses drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
-
-		/// <summary>
-		/// Per-connection in-flight gate for select/delete requests.
-		/// Prevents request spam from creating concurrent expensive tasks for the same connection.
-		/// </summary>
-		private readonly ConcurrentDictionary<int, byte> inFlightRequests = new ConcurrentDictionary<int, byte>();
 
 		/// <summary>
 		/// If true, keeps deleted character data in the database for recovery or auditing.
@@ -60,6 +55,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (!Server.DataContainerRegistry.TryGet<ICharacterSelectSystemMainThreadQueueData>(out _))
 			{
 				Log.Error("CharacterSelectSystem", "Failed to initialize: ICharacterSelectSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out _))
+			{
+				Log.Error("CharacterSelectSystem", "Failed to initialize: CharacterSelectSystemRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
@@ -89,7 +90,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Drain remaining responses so clients get their final messages.
 			DrainMainThreadQueue(drainAll: true);
-			inFlightRequests.Clear();
+			if (Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.InFlightRequests.Clear();
+			}
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterRequestListBroadcast>(OnServerCharacterRequestListBroadcastReceived);
@@ -543,7 +547,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return false;
 			}
 
-			return inFlightRequests.TryAdd(conn.ClientId, 0);
+			return Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData) &&
+				runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
 		}
 
 		/// <summary>
@@ -552,9 +557,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="conn">Connection to release.</param>
 		private void EndInFlightRequest(NetworkConnection conn)
 		{
-			if (conn != null)
+			if (conn != null &&
+				Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
 			{
-				inFlightRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 			}
 		}
 
@@ -563,9 +569,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped && conn != null)
+			if (args.ConnectionState == RemoteConnectionState.Stopped &&
+				conn != null &&
+				Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
 			{
-				inFlightRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 			}
 		}
 	}

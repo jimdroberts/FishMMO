@@ -84,19 +84,6 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		private float waitQueueRate = 2.0f;
 
-		/// <summary>
-		/// Per-account debounce tracker for instance-routing DB lookups.
-		/// Key: normalized account name, Value: next UTC time when lookup is allowed.
-		/// </summary>
-		private readonly ExpiringKeyTracker<string> accountInstanceLookupNextAllowedUtc =
-			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
-
-		/// <summary>
-		/// Tracks when a connection was added to any waiting queue.
-		/// Key: ClientId, Value: UTC time queued.
-		/// </summary>
-		private readonly Dictionary<int, DateTime> waitingQueueEnteredUtcByClientId = new Dictionary<int, DateTime>();
-
 		private float nextWaitingQueueSweep;
 		private float nextDebounceCleanup;
 
@@ -188,8 +175,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Drain any remaining queued main-thread actions
 			DrainMainThreadQueue(drainAll: true);
-			accountInstanceLookupNextAllowedUtc.Clear();
-			waitingQueueEnteredUtcByClientId.Clear();
+			runtimeData.InstanceLookupDebounce?.Clear();
+			runtimeData.WaitingQueueEnteredUtcByClientId?.Clear();
 
 			// Connection state events
 			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
@@ -791,9 +778,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				queue[key] = set = new HashSet<NetworkConnection>();
 			}
 			set.Add(conn);
-			if (conn != null)
+			if (conn != null && Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
 			{
-				waitingQueueEnteredUtcByClientId[conn.ClientId] = DateTime.UtcNow;
+				runtimeData.WaitingQueueEnteredUtcByClientId[conn.ClientId] = DateTime.UtcNow;
 			}
 		}
 
@@ -818,9 +805,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 			}
 			reverseMap.Remove(conn);
-			if (conn != null)
+			if (conn != null && Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
 			{
-				waitingQueueEnteredUtcByClientId.Remove(conn.ClientId);
+				runtimeData.WaitingQueueEnteredUtcByClientId.Remove(conn.ClientId);
 			}
 		}
 
@@ -836,7 +823,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return false;
 			}
 
-			return accountInstanceLookupNextAllowedUtc.TryBegin(
+			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
+			{
+				return false;
+			}
+
+			return runtimeData.InstanceLookupDebounce.TryBegin(
 				accountName,
 				DateTime.UtcNow,
 				TimeSpan.FromSeconds(instanceLookupDebounceSeconds));
@@ -847,7 +839,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		private void CleanupExpiredDebounceEntries()
 		{
-			accountInstanceLookupNextAllowedUtc.SweepExpired(
+			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			runtimeData.InstanceLookupDebounce.SweepExpired(
 				DateTime.UtcNow,
 				debounceCleanupMaxScanPerSweep,
 				debounceCleanupMaxRemovalsPerSweep);
@@ -865,6 +862,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
 			{
 				return;
 			}
@@ -892,7 +894,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 				bool shouldKick = false;
 				if (conn != null && conn.IsActive &&
-					waitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt))
+					runtimeData.WaitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt))
 				{
 					shouldKick = (now - queuedAt).TotalSeconds >= waitingQueueTtlSeconds;
 				}
@@ -923,6 +925,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
 			foreach (NetworkConnection conn in source)
 			{
 				if (staleConnections.Count >= maxToCollect)
@@ -941,9 +948,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					continue;
 				}
 
-				if (!waitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt))
+				if (!runtimeData.WaitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt))
 				{
-					waitingQueueEnteredUtcByClientId[conn.ClientId] = now;
+					runtimeData.WaitingQueueEnteredUtcByClientId[conn.ClientId] = now;
 					continue;
 				}
 

@@ -79,19 +79,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private int cleanupMaxRemovalsPerMap = 128;
 
 		/// <summary>
-		/// Per-connection cache for canonical IP string to avoid repeated address string allocations.
-		/// Key: ClientId, Value: connection IP and last-seen timestamp.
-		/// </summary>
-		private readonly ConcurrentDictionary<int, ConnectionIpCacheEntry> connectionIpCache = new ConcurrentDictionary<int, ConnectionIpCacheEntry>();
-
-		/// <summary>
-		/// Per-connection cache for encryption data to avoid repeated AccountManager lock contention
-		/// on hot paths from the network thread.
-		/// Key: ClientId, Value: encryption payload and last-seen timestamp.
-		/// </summary>
-		private readonly ConcurrentDictionary<int, ConnectionEncryptionCacheEntry> connectionEncryptionCache = new ConcurrentDictionary<int, ConnectionEncryptionCacheEntry>();
-
-		/// <summary>
 		/// Gets the current number of pending account creation requests in the async queue.
 		/// </summary>
 		public int PendingRequestCount
@@ -211,8 +198,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
 			}
 
-			connectionIpCache.Clear();
-			connectionEncryptionCache.Clear();
+			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.ConnectionIpCache.Clear();
+				runtimeData.ConnectionEncryptionCache.Clear();
+			}
 
 			// Drain remaining responses so clients get their final messages.
 			DrainMainThreadQueue(drainAll: true);
@@ -497,17 +487,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 			}
 
-			// Evict stale per-connection IP cache entries as a backstop against delayed disconnect events.
-			CleanupExpiredEntries(connectionIpCache,
-				entry => entry.Value.LastSeenUtc < cutoff,
-				cleanupMaxScanPerMap,
-				cleanupMaxRemovalsPerMap);
-
-			// Evict stale per-connection encryption cache entries as a backstop against delayed disconnect events.
-			CleanupExpiredEntries(connectionEncryptionCache,
-				entry => entry.Value.LastSeenUtc < cutoff,
-				cleanupMaxScanPerMap,
-				cleanupMaxRemovalsPerMap);
+			// Evict stale per-connection caches as a backstop against delayed disconnect events.
+			TimeSpan cacheTtl = TimeSpan.FromSeconds(Math.Max(1f, ipBlockDurationSeconds));
+			runtimeData.ConnectionIpCache.SweepExpired(DateTime.UtcNow, cacheTtl, cleanupMaxScanPerMap, cleanupMaxRemovalsPerMap);
+			runtimeData.ConnectionEncryptionCache.SweepExpired(DateTime.UtcNow, cacheTtl, cleanupMaxScanPerMap, cleanupMaxRemovalsPerMap);
 		}
 
 		/// <summary>
@@ -578,10 +561,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
-			if (conn != null && args.ConnectionState == RemoteConnectionState.Stopped)
+			if (conn != null &&
+				args.ConnectionState == RemoteConnectionState.Stopped &&
+				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
-				connectionIpCache.TryRemove(conn.ClientId, out _);
-				connectionEncryptionCache.TryRemove(conn.ClientId, out _);
+				runtimeData.ConnectionIpCache.Remove(conn.ClientId);
+				runtimeData.ConnectionEncryptionCache.Remove(conn.ClientId);
 			}
 		}
 
@@ -595,12 +580,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return string.Empty;
 			}
 
-			DateTime now = DateTime.UtcNow;
-
-			if (connectionIpCache.TryGetValue(conn.ClientId, out ConnectionIpCacheEntry cachedEntry) && !string.IsNullOrEmpty(cachedEntry.IpAddress))
+			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
-				connectionIpCache[conn.ClientId] = new ConnectionIpCacheEntry(cachedEntry.IpAddress, now);
-				return cachedEntry.IpAddress;
+				return conn.GetAddress() ?? "unknown";
+			}
+
+			DateTime now = DateTime.UtcNow;
+			if (runtimeData.ConnectionIpCache.TryGetAndTouch(conn.ClientId, now, out string cachedIp) &&
+				!string.IsNullOrEmpty(cachedIp))
+			{
+				return cachedIp;
 			}
 
 			string ipAddress = conn.GetAddress();
@@ -609,7 +598,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				ipAddress = "unknown";
 			}
 
-			connectionIpCache[conn.ClientId] = new ConnectionIpCacheEntry(ipAddress, now);
+			runtimeData.ConnectionIpCache.Upsert(conn.ClientId, ipAddress, now);
 			return ipAddress;
 		}
 
@@ -624,11 +613,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return false;
 			}
 
-			DateTime now = DateTime.UtcNow;
-			if (connectionEncryptionCache.TryGetValue(conn.ClientId, out ConnectionEncryptionCacheEntry cached) && cached.Data != null)
+			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
-				connectionEncryptionCache[conn.ClientId] = new ConnectionEncryptionCacheEntry(cached.Data, now);
-				encryptionData = cached.Data;
+				return Server.AccountManager.GetConnectionEncryptionData(conn, out encryptionData) && encryptionData != null;
+			}
+
+			DateTime now = DateTime.UtcNow;
+			if (runtimeData.ConnectionEncryptionCache.TryGetAndTouch(conn.ClientId, now, out ConnectionEncryptionData cached) &&
+				cached != null)
+			{
+				encryptionData = cached;
 				return true;
 			}
 
@@ -637,7 +631,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return false;
 			}
 
-			connectionEncryptionCache[conn.ClientId] = new ConnectionEncryptionCacheEntry(encryptionData, now);
+			runtimeData.ConnectionEncryptionCache.Upsert(conn.ClientId, encryptionData, now);
 			return true;
 		}
 
@@ -663,34 +657,5 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return false;
 		}
 
-		/// <summary>
-		/// Cached immutable IP mapping entry for a connection.
-		/// </summary>
-		private readonly struct ConnectionIpCacheEntry
-		{
-			public readonly string IpAddress;
-			public readonly DateTime LastSeenUtc;
-
-			public ConnectionIpCacheEntry(string ipAddress, DateTime lastSeenUtc)
-			{
-				IpAddress = ipAddress;
-				LastSeenUtc = lastSeenUtc;
-			}
-		}
-
-		/// <summary>
-		/// Cached immutable encryption-data entry for a connection.
-		/// </summary>
-		private readonly struct ConnectionEncryptionCacheEntry
-		{
-			public readonly ConnectionEncryptionData Data;
-			public readonly DateTime LastSeenUtc;
-
-			public ConnectionEncryptionCacheEntry(ConnectionEncryptionData data, DateTime lastSeenUtc)
-			{
-				Data = data;
-				LastSeenUtc = lastSeenUtc;
-			}
-		}
 	}
 }

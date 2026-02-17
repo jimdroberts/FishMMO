@@ -24,6 +24,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterCreateSystem", menuName = "FishMMO/Server/LoginServer/Character Create System", order = 1)]
 	[RequiresDataContainer(typeof(CharacterCreateSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(CharacterCreateSystemRuntimeData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterCreateSystem : ServerBehaviour, ICharacterCreateSystem
 	{
@@ -63,12 +64,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public List<EquippableItemTemplate> StartingEquipment = new List<EquippableItemTemplate>();
 
 		/// <summary>
-		/// Per-connection in-flight character-create gate.
-		/// Prevents a single connection from enqueueing an unbounded number of concurrent create tasks.
-		/// </summary>
-		private readonly ConcurrentDictionary<int, byte> inFlightCreateRequests = new ConcurrentDictionary<int, byte>();
-
-		/// <summary>
 		/// Initializes the character creation system, registering broadcast handlers for character creation requests.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -83,6 +78,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (!Server.DataContainerRegistry.TryGet<ICharacterCreateSystemMainThreadQueueData>(out _))
 			{
 				Log.Error("CharacterCreateSystem", "Failed to initialize: ICharacterCreateSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out _))
+			{
+				Log.Error("CharacterCreateSystem", "Failed to initialize: CharacterCreateSystemRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
@@ -111,7 +112,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Drain remaining responses so clients get their final messages.
 			DrainMainThreadQueue(drainAll: true);
-			inFlightCreateRequests.Clear();
+			if (Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.InFlightRequests.Clear();
+			}
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived);
@@ -855,7 +859,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return false;
 			}
 
-			return inFlightCreateRequests.TryAdd(conn.ClientId, 0);
+			return Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData) &&
+				runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
 		}
 
 		/// <summary>
@@ -864,9 +869,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="conn">Connection to release.</param>
 		private void EndCreateRequest(NetworkConnection conn)
 		{
-			if (conn != null)
+			if (conn != null &&
+				Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
 			{
-				inFlightCreateRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 			}
 		}
 
@@ -875,9 +881,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped && conn != null)
+			if (args.ConnectionState == RemoteConnectionState.Stopped &&
+				conn != null &&
+				Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
 			{
-				inFlightCreateRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 			}
 		}
 

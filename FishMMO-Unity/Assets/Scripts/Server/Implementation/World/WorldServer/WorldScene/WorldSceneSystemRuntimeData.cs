@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.WorldServer;
 
 namespace FishMMO.Server.Implementation.World.WorldServer
@@ -9,6 +12,16 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	/// </summary>
 	public class WorldSceneSystemRuntimeData : RuntimeDataContainer, IWorldSceneSystemRuntimeData
 	{
+		/// <summary>
+		/// Per-account debounce tracker for world-scene instance lookups.
+		/// </summary>
+		public ExpiringKeyTracker<string> InstanceLookupDebounce { get; set; }
+
+		/// <summary>
+		/// Tracks when each client entered a world-scene waiting queue.
+		/// </summary>
+		public Dictionary<int, DateTime> WaitingQueueEnteredUtcByClientId { get; set; }
+
 		/// <summary>
 		/// Reference to the world server authenticator for login/authentication events.
 		/// </summary>
@@ -26,6 +39,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			LoginAuthenticator = null;
 			NextWaitQueueUpdate = 0.0f;
+			InstanceLookupDebounce = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+			WaitingQueueEnteredUtcByClientId = new Dictionary<int, DateTime>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -36,6 +51,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			LoginAuthenticator = null;
 			NextWaitQueueUpdate = 0.0f;
+			InstanceLookupDebounce?.Clear();
+			WaitingQueueEnteredUtcByClientId?.Clear();
 		}
 
 		/// <summary>
@@ -43,8 +60,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override void Deinitialize()
 		{
-			LoginAuthenticator = null;
-			NextWaitQueueUpdate = 0.0f;
+			Clear();
+			InstanceLookupDebounce = null;
+			WaitingQueueEnteredUtcByClientId = null;
 		}
 	}
 }

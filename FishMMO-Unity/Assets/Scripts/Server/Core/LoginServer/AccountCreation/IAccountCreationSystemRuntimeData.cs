@@ -1,3 +1,6 @@
+using FishMMO.Server.Core.Account;
+using FishMMO.Server.Core.Collections;
+
 namespace FishMMO.Server.Core.LoginServer
 {
 	/// <summary>
@@ -25,5 +28,15 @@ namespace FishMMO.Server.Core.LoginServer
 		/// Timer accumulator for periodic mapping data cleanup.
 		/// </summary>
 		float CleanupTimer { get; set; }
+
+		/// <summary>
+		/// Per-connection IP cache used by account-creation ingress validation.
+		/// </summary>
+		LastSeenCacheTracker<int, string> ConnectionIpCache { get; }
+
+		/// <summary>
+		/// Per-connection encryption-data cache used by account-creation ingress validation.
+		/// </summary>
+		LastSeenCacheTracker<int, ConnectionEncryptionData> ConnectionEncryptionCache { get; }
 	}
 }

@@ -7,7 +7,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// Separate concrete type ensures the DataContainerRegistry creates
 	/// an independent instance for this system.
 	/// </summary>
-	public class CharacterSelectSystemMainThreadQueueData : MainThreadQueueData, ICharacterSelectSystemMainThreadQueueData
+	public class CharacterSelectSystemMainThreadQueueData : SystemMainThreadQueueData, ICharacterSelectSystemMainThreadQueueData
 	{
 	}
 }
