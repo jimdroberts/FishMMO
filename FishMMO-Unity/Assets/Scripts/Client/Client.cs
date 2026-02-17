@@ -568,12 +568,21 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Connects to a server at the specified address and port. Optionally marks as world server.
+		/// On WebGL (Bayou), rewrites the address for NGINX routing: game.fishmmo.com/ws/{port}:443.
 		/// </summary>
 		/// <param name="address">Server address.</param>
 		/// <param name="port">Server port.</param>
 		/// <param name="isWorldServer">True if connecting to a world server.</param>
 		public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
 		{
+#if UNITY_WEBGL && !UNITY_EDITOR
+			// WebGL clients connect through NGINX, which terminates SSL and
+			// routes wss://game.fishmmo.com/ws/{port} to the correct backend.
+			// Rewrite the raw IP:port from the server into the NGINX path format.
+			address = Constants.Configuration.GameHost + "/ws/" + port;
+			port = 443;
+#endif
+
 			if (isWorldServer)
 			{
 				currentConnectionType = ServerConnectionType.ConnectingToWorld;
@@ -709,16 +718,16 @@ namespace FishMMO.Client
 			{
 				onFetchComplete?.Invoke(LoginServerAddresses);
 			}
-			else if (Configuration.GlobalSettings.TryGetString("IPFetchHost", out string ipFetchHost))
+			else if (Configuration.GlobalSettings.TryGetString("APIHost", out string apiHost))
 			{
-				// Pick a random IPFetch Host address if available.
-				string[] ipFetchServers = ipFetchHost.Split(",");
-				if (ipFetchServers != null && ipFetchServers.Length > 1)
+				// Pick a random API Host address if available.
+				string[] apiServers = apiHost.Split(",");
+				if (apiServers != null && apiServers.Length > 1)
 				{
-					ipFetchHost = ipFetchServers.GetRandom();
+					apiHost = apiServers.GetRandom();
 				}
 
-				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost + "loginserver"))
+				using (UnityWebRequest request = UnityWebRequest.Get(apiHost + "loginserver"))
 				{
 					request.SetRequestHeader("X-FishMMO", "Client");
 					request.certificateHandler = new ClientSSLCertificateHandler();
@@ -764,7 +773,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				onFetchFail?.Invoke("Failed to configure IPFetchHost.");
+				onFetchFail?.Invoke("Failed to configure APIHost.");
 			}
 		}
 

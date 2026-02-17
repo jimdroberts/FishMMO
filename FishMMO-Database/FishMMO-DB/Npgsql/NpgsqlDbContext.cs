@@ -45,7 +45,6 @@ namespace FishMMO.Database.Npgsql
 			Schema = schema;
 		}
 
-		public DbSet<PatchServerEntity> PatchServers { get; set; }
 		public DbSet<LoginServerEntity> LoginServers { get; set; }
 		public DbSet<WorldServerEntity> WorldServers { get; set; }
 		public DbSet<SceneServerEntity> SceneServers { get; set; }

@@ -24,7 +24,7 @@ namespace FishMMO.Client
 				if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME))
 				{
 					// If we failed to load the file, save a new one with default settings.
-					Configuration.GlobalSettings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
+					Configuration.GlobalSettings.Set("APIHost", Constants.Configuration.APIHost);
 #if !UNITY_EDITOR && !UNITY_WEBGL
 				   Configuration.GlobalSettings.Save();
 #endif

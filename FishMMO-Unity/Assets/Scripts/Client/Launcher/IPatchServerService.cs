@@ -4,25 +4,20 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Contract for version lookups and patch binary downloads.
+	/// All methods use a single API host URL (NGINX routes by path to the correct backend).
+	/// </summary>
 	public interface IPatchServerService
 	{
 		/// <summary>
-		/// Asynchronously retrieves the main patch server address (IP and Port).
+		/// Asynchronously retrieves the latest client version from the API gateway.
 		/// </summary>
-		/// <param name="ipFetchHost">The host URL to query for the patch server address.</param>
-		/// <param name="onComplete">Callback invoked with the ServerAddress upon success.</param>
-		/// <param name="onError">Callback invoked with an error message upon failure.</param>
-		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
-		public abstract IEnumerator GetPatchServerAddress(string ipFetchHost, Action<ServerAddress> onComplete, Action<string> onError);
-
-		/// <summary>
-		/// Asynchronously retrieves the latest client version from the patch server.
-		/// </summary>
-		/// <param name="patcherHost">The base URL of the patch server.</param>
+		/// <param name="apiHost">The unified API host URL.</param>
 		/// <param name="onComplete">Callback invoked with the latest VersionConfig upon success.</param>
 		/// <param name="onError">Callback invoked with an error message upon failure.</param>
 		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
-		public abstract IEnumerator GetLatestVersion(string patcherHost, Action<VersionConfig> onComplete, Action<string> onError);
+		public abstract IEnumerator GetLatestVersion(string apiHost, Action<VersionConfig> onComplete, Action<string> onError);
 
 		/// <summary>
 		/// Asynchronously downloads a patch file from the server.

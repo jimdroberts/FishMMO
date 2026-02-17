@@ -108,10 +108,6 @@ namespace FishMMO.Client
 
 		#region INTERNAL STATE
 		/// <summary>
-		/// The patch server host URL.
-		/// </summary>
-		private string patcherHost;
-		/// <summary>
 		/// Stores the latest client version string fetched from the patch server.
 		/// </summary>
 		private string latestVersionString;
@@ -154,7 +150,6 @@ namespace FishMMO.Client
 
 			public const string LogErrorFetchHtml = "Error fetching HTML from {0}: {1}";
 			public const string LogErrorExtractHtml = "Failed to extract text from div '{0}' in HTML from {1}.";
-			public const string LogErrorPatchServerList = "Error fetching patch server list: {0}";
 			public const string LogErrorLatestVersion = "Error fetching latest version: {0}";
 			public const string LogErrorDownloadingPatch = "Error downloading patch: {0}";
 			public const string LogErrorUpdaterStart = "Failed to start the updater process.";
@@ -162,7 +157,6 @@ namespace FishMMO.Client
 
 			public const string LogDebugPatchDownloaded = "Patch downloaded and saved to {0}";
 			public const string LogDebugPatchNotRequired = "Patch not required. Server reports client is already updated to {0}.";
-			public const string LogDebugNewPatchServer = "New Patch Server Address: {0}, Port: {1}";
 			public const string LogDebugLatestServerVersion = "Latest server version: {0}";
 			public const string LogDebugClientVersionAhead = "Client version {0} is ahead of server version {1}.";
 		}
@@ -181,8 +175,14 @@ namespace FishMMO.Client
 			if (UnityWebRequestService == null || HtmlContentFetcher == null || PatchServerService == null || updaterLauncher == null)
 			{
 				Log.Error("ClientLauncher", "One or more required service dependencies are not assigned in the Inspector or are missing!");
-				PlayButtonText.text = "Fatal Error";
-				PlayButton.interactable = false;
+				if (PlayButtonText != null)
+				{
+					PlayButtonText.text = "Fatal Error";
+				}
+				if (PlayButton != null)
+				{
+					PlayButton.interactable = false;
+				}
 				enabled = false; // Disable this script if dependencies aren't met
 				return;
 			}
@@ -204,7 +204,7 @@ namespace FishMMO.Client
 				{
 					HtmlText.text = htmlContent;
 #if !UNITY_EDITOR
-					SetLauncherState(LauncherState.Connecting);
+					PlayButton_Connect();
 #else
 					SetLauncherState(LauncherState.ReadyToPlay);
 #endif
@@ -350,27 +350,13 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Initiates the connection process to fetch patch server list and check for game updates.
-		/// This is the primary action when the launcher starts or after an error.
+		/// Initiates the connection process to check for game updates.
+		/// All requests go through the unified API gateway (Constants.Configuration.APIHost).
 		/// </summary>
 		public void PlayButton_Connect()
 		{
 			SetLauncherState(LauncherState.Connecting);
-
-			// Delegate to patch server service
-			StartCoroutine(PatchServerService.GetPatchServerAddress(
-				Constants.Configuration.IPFetchHost,
-				onComplete: (serverAddress) =>
-				{
-					patcherHost = $"http://{serverAddress.Address}:{serverAddress.Port}/"; // Use HTTPS if possible
-					Log.Debug("ClientLauncher", string.Format(UIText.LogDebugNewPatchServer, serverAddress.Address, serverAddress.Port));
-					StartCoroutine(GetLatestVersion()); // Proceed to get the latest version from this server.
-				},
-				onError: (error) =>
-				{
-					Log.Error("ClientLauncher", error);
-					SetLauncherState(LauncherState.ConnectionFailed);
-				}));
+			StartCoroutine(GetLatestVersion());
 		}
 
 		/// <summary>
@@ -378,7 +364,12 @@ namespace FishMMO.Client
 		/// </summary>
 		public void PlayButton_Launch()
 		{
-			SetLauncherState(LauncherState.ReadyToPlay); // Set state, button will be disabled by this call.
+			SetLauncherState(LauncherState.ReadyToPlay);
+			if (PlayButton != null)
+			{
+				PlayButton.interactable = false;
+			}
+
 			AddressableLoadProcessor.EnqueueLoad(new AddressableSceneLoadData("ClientPostboot", OnPostbootSceneLoaded));
 			try
 			{
@@ -414,15 +405,17 @@ namespace FishMMO.Client
 		{
 			SetLauncherState(LauncherState.DownloadingPatch);
 
+			string tempFilePath = Constants.GetTemporaryPath();
+
 			// Delegate patch download to patch server service
 			StartCoroutine(PatchServerService.DownloadPatch(
-				$"{patcherHost}{MainBootstrapSystem.GameVersion}",
-				Constants.GetTemporaryPath(),
+				$"{Constants.Configuration.APIHost}{MainBootstrapSystem.GameVersion}",
+				tempFilePath,
 				onComplete: () =>
 				{
 					SetLauncherState(LauncherState.ApplyingPatch);
 					// Delegate updater launch to updater launcher service
-					updaterLauncher.LaunchUpdater(
+					StartCoroutine(updaterLauncher.LaunchUpdater(
 						updaterPath,
 						MainBootstrapSystem.GameVersion,
 						latestVersionString,
@@ -431,7 +424,7 @@ namespace FishMMO.Client
 						{
 							Log.Error("ClientLauncher", error);
 							SetLauncherState(LauncherState.UpdaterFailed);
-						});
+						}));
 				},
 				onError: (error) =>
 				{
@@ -439,7 +432,6 @@ namespace FishMMO.Client
 					SetLauncherState(LauncherState.PatchDownloadFailed);
 
 					// Attempt to clean up any partially downloaded file if an error occurs.
-					string tempFilePath = Constants.GetTemporaryPath();
 					if (File.Exists(tempFilePath))
 					{
 						try { File.Delete(tempFilePath); }
@@ -463,7 +455,7 @@ namespace FishMMO.Client
 
 			// Delegate to patch server service
 			yield return StartCoroutine(PatchServerService.GetLatestVersion(
-				patcherHost,
+				Constants.Configuration.APIHost,
 				onComplete: (serverVersion) =>
 				{
 					latestVersionString = serverVersion.ToString(); // Store for updater launch
@@ -484,7 +476,7 @@ namespace FishMMO.Client
 					// Compare client and server versions to determine the appropriate action.
 					if (clientVersion < serverVersion)
 					{
-						SetLauncherState(LauncherState.DownloadingPatch);
+						PlayButton_Update();
 					}
 					else if (clientVersion > serverVersion)
 					{

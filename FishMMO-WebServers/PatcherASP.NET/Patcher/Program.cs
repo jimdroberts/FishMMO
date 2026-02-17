@@ -1,6 +1,4 @@
-using FishMMO.Database.Npgsql;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using FishMMO.Logging;
 
@@ -32,27 +30,17 @@ namespace FishMMO.WebServer
 					{
 						// Get port from configuration
 						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8090"; // Default to 8090 if not found
-						options.ListenAnyIP(int.Parse(httpPort));
-						Log.Info("Kestrel", $"Kestrel configured to listen on any IP on port {httpPort}.");
+						options.ListenLocalhost(int.Parse(httpPort));
+						Log.Info("Kestrel", $"Kestrel configured to listen on localhost on port {httpPort}.");
 					})
 					.ConfigureServices((context, services) =>
 					{
 						Log.Info("Services", "Registering services...");
 
-						// Register NpgsqlDbContextFactory
-						services.AddSingleton<NpgsqlDbContextFactory>();
-						Log.Info("Services", "Registered NpgsqlDbContextFactory.");
-
 						// Register HttpClientFactory
-						services.AddHttpClient();
-						Log.Info("Services", "Registered HttpClientFactory.");
-
-						// Register patch version tracking and background heartbeat service
+						// Register patch version tracking
 						services.AddSingleton<PatchVersionService>();
 						Log.Info("Services", "Registered PatchVersionService.");
-						services.AddHostedService<PatchServerHeartbeatService>();
-						Log.Info("Services", "Registered PatchServerHeartbeatService.");
-
 						// Controllers
 						services.AddControllers();
 						Log.Info("Services", "Registered Controllers.");

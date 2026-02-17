@@ -6,6 +6,9 @@ using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Provides shared UnityWebRequest execution with retry, timeout, and progress callbacks.
+	/// </summary>
 	public class UnityWebRequestService : MonoBehaviour
 	{
 		/// <summary>
@@ -13,16 +16,53 @@ namespace FishMMO.Client
 		/// </summary>
 		public class WebRequestConfig
 		{
+			/// <summary>
+			/// Request URL.
+			/// </summary>
 			public string URL;
+			/// <summary>
+			/// HTTP method (for example GET, POST).
+			/// </summary>
 			public string Method;
+			/// <summary>
+			/// Optional request headers.
+			/// </summary>
 			public Dictionary<string, string> Headers = new Dictionary<string, string>();
-			public CertificateHandler CertificateHandler;
-			public DownloadHandler DownloadHandler;
+			/// <summary>
+			/// Optional factory for creating a certificate handler per attempt.
+			/// A new instance is needed for each retry because the handler is
+			/// disposed together with the UnityWebRequest.
+			/// </summary>
+			public System.Func<CertificateHandler> CertificateHandlerFactory;
+			/// <summary>
+			/// Optional factory for creating a download handler per attempt.
+			/// A new instance is needed for each retry because DownloadHandlerFile
+			/// (and other handlers) are disposed together with the UnityWebRequest.
+			/// </summary>
+			public System.Func<DownloadHandler> DownloadHandlerFactory;
+			/// <summary>
+			/// Maximum retry attempts after the initial request fails.
+			/// </summary>
 			public int MaxRetries = 3;
+			/// <summary>
+			/// Delay in seconds between retries.
+			/// </summary>
 			public float RetryDelay = 2.0f;
+			/// <summary>
+			/// Per-request timeout in seconds.
+			/// </summary>
 			public int Timeout = 10;
+			/// <summary>
+			/// Optional progress callback.
+			/// </summary>
 			public System.Action<UnityWebRequest, float> OnProgress;
+			/// <summary>
+			/// Completion callback when request succeeds.
+			/// </summary>
 			public System.Action<UnityWebRequest> OnComplete;
+			/// <summary>
+			/// Failure callback when all retries are exhausted.
+			/// </summary>
 			public System.Action<UnityWebRequest> OnFailure;
 		}
 
@@ -30,7 +70,7 @@ namespace FishMMO.Client
 		/// Sends a web request with configurable retries and timeout.
 		/// </summary>
 		/// <param name="config">The configuration for the web request.</param>
-		/// <returns>The completed UnityWebRequest if successful, otherwise the last failed request.</returns>
+		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator SendWebRequestWithRetries(WebRequestConfig config)
 		{
 			for (int i = 0; i < config.MaxRetries + 1; i++)
@@ -45,14 +85,14 @@ namespace FishMMO.Client
 						request.SetRequestHeader(header.Key, header.Value);
 					}
 
-					// Set custom handlers
-					if (config.CertificateHandler != null)
+					// Create fresh handlers per attempt to avoid reusing disposed instances.
+					if (config.CertificateHandlerFactory != null)
 					{
-						request.certificateHandler = config.CertificateHandler;
+						request.certificateHandler = config.CertificateHandlerFactory();
 					}
-					if (config.DownloadHandler != null)
+					if (config.DownloadHandlerFactory != null)
 					{
-						request.downloadHandler = config.DownloadHandler;
+						request.downloadHandler = config.DownloadHandlerFactory();
 					}
 					else
 					{
@@ -99,7 +139,7 @@ namespace FishMMO.Client
 		{
 			if (bytes < 1024) return $"{bytes} B";
 			if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
-			if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024.0 * 1024.0):F1} MB";
+			if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024.0):F1} MB";
 			return $"{bytes / (1024.0 * 1024.0 * 1024.0):F1} GB";
 		}
 	}

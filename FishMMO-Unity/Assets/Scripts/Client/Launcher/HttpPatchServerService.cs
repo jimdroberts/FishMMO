@@ -10,8 +10,7 @@ using FishMMO.Shared;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Concrete implementation of DefaultPatchServerService using UnityWebRequestService.
-	/// This class inherits from DefaultPatchServerService, making it assignable in the Inspector.
+	/// Unity-backed patch service implementation for endpoint discovery, version checks, and patch downloads.
 	/// </summary>
 	public class HttpPatchServerService : MonoBehaviour, IPatchServerService
 	{
@@ -51,62 +50,13 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Fetches the patch server address from the given host and returns it via callback.
+		/// Fetches the latest version from the API gateway and returns it via callback.
 		/// </summary>
-		/// <param name="ipFetchHost">The host URL to fetch the patch server address from.</param>
-		/// <param name="onComplete">Callback for successful address fetch.</param>
-		/// <param name="onError">Callback for error handling.</param>
-		/// <returns>Coroutine enumerator.</returns>
-		public IEnumerator GetPatchServerAddress(string ipFetchHost, Action<ServerAddress> onComplete, Action<string> onError)
-		{
-			if (WebRequestService == null)
-			{
-				onError?.Invoke("PatchServerService not initialized due to missing WebRequestService.");
-				yield break;
-			}
-
-			UnityWebRequestService.WebRequestConfig config = new UnityWebRequestService.WebRequestConfig
-			{
-				URL = ipFetchHost,
-				Method = UnityWebRequest.kHttpVerbGET,
-				Headers = new Dictionary<string, string>
-				{
-					{ "X-FishMMO", "Client" }
-				},
-				MaxRetries = MaxRetries,
-				RetryDelay = RetryDelay,
-				Timeout = WebRequestTimeout,
-				OnProgress = null,
-				OnComplete = (request) =>
-				{
-					try
-					{
-						ServerAddress server = JsonUtility.FromJson<ServerAddress>(request.downloadHandler.text);
-						if (string.IsNullOrEmpty(server.Address) || server.Port == 0)
-						{
-							throw new Exception("Invalid or empty patch server address found in response.");
-						}
-						onComplete?.Invoke(server);
-					}
-					catch (Exception ex)
-					{
-						onError?.Invoke($"Error parsing patch server address JSON: {ex.Message}");
-					}
-				},
-				OnFailure = (result) => onError?.Invoke($"Error fetching patch server list: {result}")
-			};
-
-			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
-		}
-
-		/// <summary>
-		/// Fetches the latest version from the patcher host and returns it via callback.
-		/// </summary>
-		/// <param name="patcherHost">The patcher host URL.</param>
+		/// <param name="apiHost">The unified API host URL.</param>
 		/// <param name="onComplete">Callback for successful version fetch.</param>
 		/// <param name="onError">Callback for error handling.</param>
 		/// <returns>Coroutine enumerator.</returns>
-		public IEnumerator GetLatestVersion(string patcherHost, Action<VersionConfig> onComplete, Action<string> onError)
+		public IEnumerator GetLatestVersion(string apiHost, Action<VersionConfig> onComplete, Action<string> onError)
 		{
 			if (WebRequestService == null)
 			{
@@ -116,12 +66,13 @@ namespace FishMMO.Client
 
 			UnityWebRequestService.WebRequestConfig config = new UnityWebRequestService.WebRequestConfig
 			{
-				URL = patcherHost + "latest_version",
+				URL = apiHost + "latest_version",
 				Method = UnityWebRequest.kHttpVerbGET,
 				Headers = new Dictionary<string, string>
 				{
 					{ "X-FishMMO", "Client" }
 				},
+				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
 				MaxRetries = MaxRetries,
 				RetryDelay = RetryDelay,
 				Timeout = WebRequestTimeout,
@@ -143,7 +94,7 @@ namespace FishMMO.Client
 						onError?.Invoke($"Error parsing latest version JSON: {ex.Message}");
 					}
 				},
-				OnFailure = (result) => onError?.Invoke($"Error fetching latest version: {result}")
+				OnFailure = (request) => onError?.Invoke($"Error fetching latest version: {request.error}")
 			};
 
 			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
@@ -174,7 +125,8 @@ namespace FishMMO.Client
 				{
 					{ "X-FishMMO", "Client" }
 				},
-				DownloadHandler = new DownloadHandlerFile(tempFilePath),
+				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
+				DownloadHandlerFactory = () => new DownloadHandlerFile(tempFilePath),
 				MaxRetries = MaxRetries,
 				RetryDelay = RetryDelay,
 				Timeout = WebRequestTimeout,
@@ -185,13 +137,19 @@ namespace FishMMO.Client
 				},
 				OnComplete = (request) =>
 				{
-					if (request.responseCode == (long)HttpStatusCode.OK || request.downloadHandler.text.Contains("AlreadyUpdated"))
+					// DownloadHandlerFile does not support .text; check response code only.
+					if (request.responseCode == (long)HttpStatusCode.OK)
 					{
+						onProgress?.Invoke(1f, "100%");
+					}
+					else if (request.responseCode == (long)HttpStatusCode.NoContent)
+					{
+						// Server indicates client is already up to date.
 						onProgress?.Invoke(1f, "100% (Already Updated)");
 					}
 					onComplete?.Invoke();
 				},
-				OnFailure = (result) => onError?.Invoke($"Error downloading patch: {result}")
+				OnFailure = (request) => onError?.Invoke($"Error downloading patch: {request.error}")
 			};
 
 			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));

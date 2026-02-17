@@ -64,12 +64,33 @@ namespace FishNet.Transporting.Bayou.Client
             _client.onError += _client_onError;
 
             string scheme = (useWss) ? "wss" : "ws";
-            UriBuilder builder = new UriBuilder
+            UriBuilder builder;
+
+            // Support path-based NGINX routing (e.g., "game.fishmmo.com/ws/7770").
+            // When the address contains a '/', split into host and path components
+            // so UriBuilder produces a valid URI like wss://game.fishmmo.com/ws/7770.
+            int slashIndex = _address.IndexOf('/');
+            if (slashIndex >= 0)
             {
-                Scheme = scheme,
-                Host = _address,
-                Port = _port
-            };
+                string host = _address.Substring(0, slashIndex);
+                string path = _address.Substring(slashIndex);
+                builder = new UriBuilder
+                {
+                    Scheme = scheme,
+                    Host = host,
+                    Port = _port,
+                    Path = path
+                };
+            }
+            else
+            {
+                builder = new UriBuilder
+                {
+                    Scheme = scheme,
+                    Host = _address,
+                    Port = _port
+                };
+            }
             base.SetConnectionState(LocalConnectionState.Starting, false);
             _client.Connect(builder.Uri);
         }

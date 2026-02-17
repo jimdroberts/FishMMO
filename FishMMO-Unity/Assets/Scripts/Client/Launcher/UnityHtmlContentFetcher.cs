@@ -12,6 +12,9 @@ using UnityEngine.Networking;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Fetches launcher news HTML and converts selected content into TextMeshPro-compatible rich text.
+	/// </summary>
 	public class UnityHtmlContentFetcher : MonoBehaviour, IHtmlContentFetcher
 	{
 		[Header("Dependencies")]
@@ -78,7 +81,7 @@ namespace FishMMO.Client
 				{
 					{ "X-FishMMO", "Client" }
 				},
-				CertificateHandler = new ClientSSLCertificateHandler(),
+				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
 				Timeout = WebRequestTimeout,
 				MaxRetries = MaxRetries,
 				RetryDelay = RetryDelay,
@@ -222,8 +225,8 @@ namespace FishMMO.Client
 				case "i": tmpTagOpen += "<I>"; tmpTagClose = "</I>" + tmpTagClose; break;
 				case "u": tmpTagOpen += "<U>"; tmpTagClose = "</U>" + tmpTagClose; break;
 				case "li": sb.Append("• "); break;
-				case "br": sb.AppendLine(); return "";
-				case "hr": sb.AppendLine("----------------------------------------"); sb.AppendLine(); return "";
+				case "br": sb.AppendLine(); return sb.ToString();
+				case "hr": sb.AppendLine("----------------------------------------"); sb.AppendLine(); return sb.ToString();
 				case "a":
 					string href = node.GetAttributeValue("href", "");
 					if (!string.IsNullOrEmpty(href))
@@ -240,7 +243,7 @@ namespace FishMMO.Client
 					break;
 			}
 
-			if (isBlockElement && sb.Length > 0 && !(sb.ToString().EndsWith("\n") || sb.ToString().EndsWith("\r\n")))
+			if (isBlockElement && sb.Length > 0 && sb[sb.Length - 1] != '\n')
 			{
 				sb.AppendLine();
 			}
@@ -257,7 +260,7 @@ namespace FishMMO.Client
 
 			sb.Append(tmpTagClose);
 
-			if (isBlockElement && sb.Length > 0 && !(sb.ToString().EndsWith("\n\n") || sb.ToString().EndsWith("\r\n\r\n")))
+			if (isBlockElement && sb.Length > 0 && sb[sb.Length - 1] != '\n')
 			{
 				sb.AppendLine();
 			}

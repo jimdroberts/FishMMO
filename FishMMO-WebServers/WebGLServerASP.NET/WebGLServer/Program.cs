@@ -28,8 +28,8 @@ namespace FishMMO.WebServer
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
 						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8000"; // Default to 8000 if not found
-						options.ListenAnyIP(int.Parse(httpPort));
-						Log.Info("Kestrel", $"Kestrel configured to listen on any IP on port {httpPort}.");
+						options.ListenLocalhost(int.Parse(httpPort));
+						Log.Info("Kestrel", $"Kestrel configured to listen on localhost on port {httpPort}.");
 					})
 					.ConfigureServices((context, services) =>
 					{

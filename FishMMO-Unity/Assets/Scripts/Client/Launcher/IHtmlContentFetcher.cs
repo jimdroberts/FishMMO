@@ -3,6 +3,9 @@ using System.Collections;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Contract for fetching and transforming remote HTML content into launcher-ready rich text.
+	/// </summary>
 	public interface IHtmlContentFetcher
 	{
 		/// <summary>
