@@ -63,6 +63,16 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
+		/// Escapes a SQL string literal value for safe interpolation into SQL text.
+		/// </summary>
+		/// <param name="value">Raw value.</param>
+		/// <returns>Escaped SQL literal content.</returns>
+		private static string EscapeSqlLiteral(string value)
+		{
+			return value.Replace("'", "''");
+		}
+
+		/// <summary>
 		/// Installs PostgreSQL on Windows using the official EXE installer.
 		/// </summary>
 		/// <param name="appSettings">Application settings for database configuration.</param>
@@ -200,8 +210,8 @@ namespace FishMMO.Installer
 				{
 					string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
 					string superPassword = InstallerProcessHelper.PromptForPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
-
-					string updateUserCommand = $"sudo -u postgres psql -c \"ALTER USER {superUsername} WITH PASSWORD '{superPassword}';\"";
+					string escapedPassword = EscapeSqlLiteral(superPassword);
+					string updateUserCommand = $"sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c \"ALTER USER \\\"{superUsername}\\\" WITH PASSWORD '{escapedPassword}';\"";
 					if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateUserCommand, "Failed to update PostgreSQL superuser password."))
 						return false;
 				}
@@ -227,6 +237,9 @@ namespace FishMMO.Installer
 		{
 			try
 			{
+				ValidateIdentifier(appSettings.Npgsql.Database, nameof(appSettings.Npgsql.Database), "database name");
+				ValidateIdentifier(appSettings.Npgsql.Username, nameof(appSettings.Npgsql.Username), "username");
+
 				InstallerProcessHelper.Log($"Attempting to connect to PostgreSQL at {appSettings.Npgsql.Host}:{appSettings.Npgsql.Port}");
 				string connectionString = BuildConnectionString(appSettings.Npgsql.Host, appSettings.Npgsql.Port, superUsername, superPassword, InstallationConstants.PostgreSQLDefaultAdminDb);
 
@@ -282,10 +295,20 @@ namespace FishMMO.Installer
 				if (InstallerProcessHelper.PromptForYesNo("Create Initial Migration and apply to database?"))
 				{
 					Console.WriteLine("Creating Initial database migration...");
-					await DotNetInstaller.RunEFMigrationAsync("Initial");
+					bool initialMigrationCreated = await DotNetInstaller.RunEFMigrationAsync("Initial");
+					if (!initialMigrationCreated)
+					{
+						InstallerProcessHelper.Log("Failed to create the initial migration.");
+						return;
+					}
 
 					Console.WriteLine("Updating database...");
-					await DotNetInstaller.RunEFDatabaseUpdateAsync();
+					bool initialMigrationApplied = await DotNetInstaller.RunEFDatabaseUpdateAsync();
+					if (!initialMigrationApplied)
+					{
+						InstallerProcessHelper.Log("Initial migration was created but database update failed.");
+						return;
+					}
 
 					InstallerProcessHelper.Log("Initial Migration completed and applied.");
 				}
@@ -311,6 +334,12 @@ namespace FishMMO.Installer
 			if (string.IsNullOrWhiteSpace(migrationName))
 			{
 				InstallerProcessHelper.Log("Migration name cannot be empty. Aborting migration creation.");
+				return;
+			}
+
+			if (!Regex.IsMatch(migrationName, "^[A-Za-z][A-Za-z0-9]*$"))
+			{
+				InstallerProcessHelper.Log("Invalid migration name. Use alphanumeric characters only and start with a letter.");
 				return;
 			}
 
@@ -348,6 +377,7 @@ namespace FishMMO.Installer
 		public static async Task DeleteFishMMODatabase(string superUsername, string superPassword, AppSettings appSettings)
 		{
 			string databaseToDelete = appSettings.Npgsql.Database;
+			ValidateIdentifier(databaseToDelete, nameof(databaseToDelete), "database name");
 
 			Console.WriteLine($"\n!!! DANGER ZONE: YOU ARE ABOUT TO DELETE THE DATABASE !!!");
 			Console.WriteLine($"This action is irreversible and will permanently delete all data in '{databaseToDelete}'.");
@@ -379,7 +409,14 @@ namespace FishMMO.Installer
 					}
 
 					InstallerProcessHelper.Log($"Attempting to drop database '{databaseToDelete}'...");
-					using (var dropCommand = new NpgsqlCommand($"DROP DATABASE \"{databaseToDelete}\";", connection))
+					string dropSql;
+					using (var dropSqlCommand = new NpgsqlCommand("SELECT format('DROP DATABASE %I', @dbName)", connection))
+					{
+						dropSqlCommand.Parameters.AddWithValue("dbName", databaseToDelete);
+						dropSql = (string)(await dropSqlCommand.ExecuteScalarAsync())!;
+					}
+
+					using (var dropCommand = new NpgsqlCommand(dropSql, connection))
 					{
 						await dropCommand.ExecuteNonQueryAsync();
 						InstallerProcessHelper.Log($"Database '{databaseToDelete}' deleted successfully.");
@@ -411,10 +448,12 @@ namespace FishMMO.Installer
 			string defaultDbName = appSettings.Npgsql.Database ?? "fishmmo_database";
 			string? dbName = InstallerProcessHelper.PromptForInput($"Enter database name to grant permissions on (default: {defaultDbName}): ");
 			if (string.IsNullOrWhiteSpace(dbName)) dbName = defaultDbName;
+			ValidateIdentifier(dbName, nameof(dbName), "database name");
 
 			string defaultUsername = appSettings.Npgsql.Username ?? "fishmmo_user";
 			string? usernameToGrant = InstallerProcessHelper.PromptForInput($"Enter username to grant permissions to (default: {defaultUsername}): ");
 			if (string.IsNullOrWhiteSpace(usernameToGrant)) usernameToGrant = defaultUsername;
+			ValidateIdentifier(usernameToGrant, nameof(usernameToGrant), "username");
 
 			Console.WriteLine($"Attempting to grant permissions for user '{usernameToGrant}' on database '{dbName}'.");
 
@@ -429,14 +468,24 @@ namespace FishMMO.Installer
 
 					InstallerProcessHelper.Log($"Granting comprehensive permissions to '{usernameToGrant}' on '{dbName}'...");
 
-					string batchSql =
-						$"GRANT ALL PRIVILEGES ON DATABASE \"{dbName}\" TO \"{usernameToGrant}\";" +
-						$"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"{usernameToGrant}\";" +
-						$"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"{usernameToGrant}\";" +
-						$"GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO \"{usernameToGrant}\";" +
-						$"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO \"{usernameToGrant}\";" +
-						$"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO \"{usernameToGrant}\";" +
-						$"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO \"{usernameToGrant}\";";
+					string formatSql =
+						"SELECT format('" +
+						"GRANT ALL PRIVILEGES ON DATABASE %I TO %I; " +
+						"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %I; " +
+						"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %I; " +
+						"GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO %I; " +
+						"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO %I; " +
+						"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO %I; " +
+						"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO %I', " +
+						"@dbName, @username, @username, @username, @username, @username, @username, @username)";
+
+					string batchSql;
+					using (var formatCommand = new NpgsqlCommand(formatSql, connection))
+					{
+						formatCommand.Parameters.AddWithValue("dbName", dbName);
+						formatCommand.Parameters.AddWithValue("username", usernameToGrant);
+						batchSql = (string)(await formatCommand.ExecuteScalarAsync())!;
+					}
 
 					using (var cmd = new NpgsqlCommand(batchSql, connection))
 					{

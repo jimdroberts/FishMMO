@@ -18,6 +18,12 @@ namespace FishMMO.Installer
 			Console.Clear();
 			InstallerProcessHelper.Log("--- Install / Renew Let's Encrypt Certificate ---");
 
+			if (!await NGINXInstaller.IsNGINXInstalledAsync())
+			{
+				InstallerProcessHelper.Log("NGINX was not detected. Install and configure NGINX before requesting certificates.");
+				return;
+			}
+
 			string domainInput = (InstallerProcessHelper.PromptForInput("Enter domains (comma-separated, e.g. fishmmo.com,play.fishmmo.com): ") ?? string.Empty).Trim();
 			string[] domains = ParseDomains(domainInput);
 			if (domains.Length == 0)
@@ -125,6 +131,7 @@ namespace FishMMO.Installer
 				return;
 			}
 
+			ValidateLinuxNginxAcmeConfiguration(nginxConfPath, webRootPath);
 			ApplyCertificatePathsToNginxConfig(nginxConfPath, domains[0], isLinux: true);
 
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo nginx -t", "NGINX config test failed after certificate updates."))
@@ -190,7 +197,7 @@ namespace FishMMO.Installer
 				"--installation none " +
 				"--accepttos " +
 				$"--emailaddress \"{email}\" " +
-				"--notaskscheduler";
+				"--usedefaulttaskuser";
 
 			bool certificateInstalled = await InstallerProcessHelper.RunProcessAsync(
 				winAcmeExecutablePath,
@@ -203,7 +210,14 @@ namespace FishMMO.Installer
 				return;
 			}
 
-			ApplyCertificatePathsToNginxConfig(nginxConfPath, domains[0], isLinux: false);
+			(string certificatePath, string privateKeyPath) = ResolveWindowsCertificatePaths(certificateOutputDirectory);
+			if (string.IsNullOrWhiteSpace(certificatePath) || string.IsNullOrWhiteSpace(privateKeyPath))
+			{
+				InstallerProcessHelper.Log("Could not locate generated PEM certificate files from win-acme output.");
+				return;
+			}
+
+			ApplyCertificatePathsToNginxConfig(nginxConfPath, certificatePath, privateKeyPath);
 
 			string nginxExecutablePath = Path.Combine(NGINXInstaller.GetExpectedWindowsNginxHomePath(), "nginx.exe");
 			if (!File.Exists(nginxExecutablePath))
@@ -229,7 +243,7 @@ namespace FishMMO.Installer
 		/// </summary>
 		/// <param name="nginxConfPath">Target nginx.conf path.</param>
 		/// <param name="certificateDomain">Primary certificate domain used in path construction.</param>
-		/// <param name="isLinux">True for Linux path layout, false for Windows pemfiles path layout.</param>
+		/// <param name="isLinux">True for Linux path layout, false for Windows path resolution from generated certificate files.</param>
 		private static void ApplyCertificatePathsToNginxConfig(string nginxConfPath, string certificateDomain, bool isLinux)
 		{
 			if (!File.Exists(nginxConfPath))
@@ -247,22 +261,49 @@ namespace FishMMO.Installer
 			}
 			else
 			{
-				string certificateDirectory = Path.Combine(NGINXInstaller.GetExpectedWindowsNginxHomePath(), "certificates", certificateDomain).Replace("\\", "/");
-				certificatePath = $"{certificateDirectory}/fullchain.pem";
-				privateKeyPath = $"{certificateDirectory}/privkey.pem";
+				string certificateDirectory = Path.Combine(NGINXInstaller.GetExpectedWindowsNginxHomePath(), "certificates", certificateDomain);
+				(string resolvedCertificatePath, string resolvedPrivateKeyPath) = ResolveWindowsCertificatePaths(certificateDirectory);
+				certificatePath = resolvedCertificatePath;
+				privateKeyPath = resolvedPrivateKeyPath;
+
+				if (string.IsNullOrWhiteSpace(certificatePath) || string.IsNullOrWhiteSpace(privateKeyPath))
+				{
+					InstallerProcessHelper.Log("Skipping nginx.conf update because generated Windows PEM files were not found.");
+					return;
+				}
 			}
+
+			ApplyCertificatePathsToNginxConfig(nginxConfPath, certificatePath, privateKeyPath);
+		}
+
+		/// <summary>
+		/// Applies certificate and key path replacements to nginx.conf for all SSL server blocks.
+		/// </summary>
+		/// <param name="nginxConfPath">Target nginx.conf path.</param>
+		/// <param name="certificatePath">Certificate file path for ssl_certificate.</param>
+		/// <param name="privateKeyPath">Private key file path for ssl_certificate_key.</param>
+		private static void ApplyCertificatePathsToNginxConfig(string nginxConfPath, string certificatePath, string privateKeyPath)
+		{
+			if (!File.Exists(nginxConfPath))
+			{
+				InstallerProcessHelper.Log($"Skipping nginx.conf update because file '{nginxConfPath}' does not exist.");
+				return;
+			}
+
+			string normalizedCertificatePath = certificatePath.Replace("\\", "/");
+			string normalizedPrivateKeyPath = privateKeyPath.Replace("\\", "/");
 
 			string nginxConfigContent = File.ReadAllText(nginxConfPath);
 			string updatedContent = Regex.Replace(
 				nginxConfigContent,
 				@"ssl_certificate\s+[^;]+;",
-				$"ssl_certificate     {certificatePath};",
+				$"ssl_certificate     {normalizedCertificatePath};",
 				RegexOptions.IgnoreCase);
 
 			updatedContent = Regex.Replace(
 				updatedContent,
 				@"ssl_certificate_key\s+[^;]+;",
-				$"ssl_certificate_key {privateKeyPath};",
+				$"ssl_certificate_key {normalizedPrivateKeyPath};",
 				RegexOptions.IgnoreCase);
 
 			if (updatedContent != nginxConfigContent)
@@ -273,6 +314,77 @@ namespace FishMMO.Installer
 			else
 			{
 				InstallerProcessHelper.Log("No SSL directives were updated in nginx.conf (directives not found or already up to date).");
+			}
+		}
+
+		/// <summary>
+		/// Locates generated Windows PEM certificate files in the target win-acme output folder.
+		/// </summary>
+		/// <param name="certificateDirectory">Directory where win-acme writes PEM files.</param>
+		/// <returns>Tuple of (certificatePath, privateKeyPath). Empty values indicate unresolved paths.</returns>
+		private static (string certificatePath, string privateKeyPath) ResolveWindowsCertificatePaths(string certificateDirectory)
+		{
+			if (!Directory.Exists(certificateDirectory))
+			{
+				return (string.Empty, string.Empty);
+			}
+
+			string[] candidateCertificateFiles =
+			[
+				"fullchain.pem",
+				"chain.pem",
+				"cert.pem"
+			];
+
+			string[] candidateKeyFiles =
+			[
+				"privkey.pem",
+				"key.pem"
+			];
+
+			string? certificatePath = candidateCertificateFiles
+				.Select(fileName => Path.Combine(certificateDirectory, fileName))
+				.FirstOrDefault(File.Exists);
+
+			string? privateKeyPath = candidateKeyFiles
+				.Select(fileName => Path.Combine(certificateDirectory, fileName))
+				.FirstOrDefault(File.Exists);
+
+			if (string.IsNullOrWhiteSpace(certificatePath))
+			{
+				certificatePath = Directory.GetFiles(certificateDirectory, "*.pem", SearchOption.TopDirectoryOnly)
+					.FirstOrDefault(path => !Path.GetFileName(path).Contains("key", StringComparison.OrdinalIgnoreCase));
+			}
+
+			if (string.IsNullOrWhiteSpace(privateKeyPath))
+			{
+				privateKeyPath = Directory.GetFiles(certificateDirectory, "*.pem", SearchOption.TopDirectoryOnly)
+					.FirstOrDefault(path => Path.GetFileName(path).Contains("key", StringComparison.OrdinalIgnoreCase));
+			}
+
+			return (certificatePath ?? string.Empty, privateKeyPath ?? string.Empty);
+		}
+
+		/// <summary>
+		/// Verifies that nginx.conf contains an ACME challenge location and expected web root.
+		/// </summary>
+		/// <param name="nginxConfPath">Path to nginx.conf.</param>
+		/// <param name="webRootPath">Configured certbot web root path.</param>
+		private static void ValidateLinuxNginxAcmeConfiguration(string nginxConfPath, string webRootPath)
+		{
+			if (!File.Exists(nginxConfPath))
+			{
+				InstallerProcessHelper.Log($"Warning: nginx.conf was not found at '{nginxConfPath}'. Skipping ACME location validation.");
+				return;
+			}
+
+			string configContent = File.ReadAllText(nginxConfPath);
+			bool hasAcmeLocation = configContent.Contains("/.well-known/acme-challenge/", StringComparison.OrdinalIgnoreCase);
+			bool hasExpectedRoot = configContent.Contains($"root {webRootPath};", StringComparison.OrdinalIgnoreCase);
+
+			if (!hasAcmeLocation || !hasExpectedRoot)
+			{
+				InstallerProcessHelper.Log("Warning: nginx.conf ACME challenge location/root does not match provided web root. Cert issuance/renewal may fail.");
 			}
 		}
 
@@ -308,6 +420,7 @@ namespace FishMMO.Installer
 			Regex hostnameRegex = new Regex(@"^(?:\*\.)?(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$", RegexOptions.Compiled);
 			return domainInput
 				.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+				.Where(domain => !domain.StartsWith("*.", StringComparison.Ordinal))
 				.Where(domain => hostnameRegex.IsMatch(domain))
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToArray();

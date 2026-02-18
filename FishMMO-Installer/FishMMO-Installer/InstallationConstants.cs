@@ -92,9 +92,19 @@ namespace FishMMO.Installer
 		public const string WinAcmeFileName = "win-acme.v2.2.9.1701.x64.trimmed.zip";
 
 		/// <summary>
+		/// Download URL for the NSSM zip archive used to run NGINX as a proper Windows service.
+		/// </summary>
+		public const string NssmDownloadUrl = "https://nssm.cc/release/nssm-2.24.zip";
+
+		/// <summary>
+		/// Filename for the downloaded NSSM zip archive.
+		/// </summary>
+		public const string NssmFileName = "nssm-2.24.zip";
+
+		/// <summary>
 		/// Default nginx.conf path used in Linux setup automation.
 		/// </summary>
-		public const string LinuxNginxConfigurationPath = "/home/Dev/FishMMO Dev/FishMMO-Setup/nginx.conf";
+		public static readonly string LinuxNginxConfigurationPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO Dev", "FishMMO-Setup", "nginx.conf");
 
 		/// <summary>
 		/// Default web root for ACME HTTP-01 challenges in Linux deployments.
@@ -104,7 +114,7 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default FishMMO web servers directory path used for operational context prompts.
 		/// </summary>
-		public const string LinuxFishMMOWebServersPath = "/home/Dev/FishMMO Dev/FishMMO-WebServers";
+		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO Dev", "FishMMO-WebServers");
 
 		/// <summary>
 		/// Download URL for the Visual Studio Build Tools bootstrapper.

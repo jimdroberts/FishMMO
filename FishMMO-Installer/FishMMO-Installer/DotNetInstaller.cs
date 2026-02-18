@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace FishMMO.Installer
 {
@@ -20,6 +21,8 @@ namespace FishMMO.Installer
 		/// <returns>True if installation succeeded or already installed.</returns>
 		public static async Task<bool> InstallDotNet()
 		{
+			bool sdkJustInstalled = false;
+
 			if (!await IsDotNetInstalledAsync())
 			{
 				if (InstallerProcessHelper.PromptForYesNo("DotNet 8 is not installed, would you like to install it?"))
@@ -27,7 +30,7 @@ namespace FishMMO.Installer
 					InstallerProcessHelper.Log("Installing DotNet...");
 					await DownloadAndInstallDotNetAsync();
 					InstallerProcessHelper.Log("DotNet has been installed.");
-					return true;
+					sdkJustInstalled = true;
 				}
 				else
 				{
@@ -44,12 +47,18 @@ namespace FishMMO.Installer
 				if (InstallerProcessHelper.PromptForYesNo("DotNet-EF is not installed, would you like to install it?"))
 				{
 					InstallerProcessHelper.Log($"Installing DotNet-EF v{InstallationConstants.DotNetEFVersion}...");
-					await RunDotNetCommandAsync($"tool install --global dotnet-ef --version {InstallationConstants.DotNetEFVersion}");
+					bool efInstalled = await RunDotNetCommandAsync($"tool install --global dotnet-ef --version {InstallationConstants.DotNetEFVersion}");
+					if (!efInstalled)
+					{
+						InstallerProcessHelper.Log("DotNet-EF installation failed.");
+						return false;
+					}
 
 					InstallerProcessHelper.Log("DotNet-EF has been installed.");
 					return true;
 				}
-				return false;
+
+				return sdkJustInstalled;
 			}
 			else
 			{
@@ -59,34 +68,66 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Checks if a compatible DotNet runtime is installed.
-		/// Uses 'dotnet --list-runtimes' to check for the required major version runtime,
-		/// since a newer SDK (e.g. 10.0) can build older target frameworks (e.g. net8.0).
+		/// Checks if a compatible DotNet SDK is installed.
+		/// Uses 'dotnet --list-sdks' to verify SDK availability for build/migration tasks.
 		/// </summary>
 		/// <returns>True if installed, otherwise false.</returns>
 		public static async Task<bool> IsDotNetInstalledAsync()
 		{
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
-			string arguments = $"{argPrefix} \"dotnet --list-runtimes\"";
+			string arguments = $"{argPrefix} \"dotnet --list-sdks\"";
 
-			return await InstallerProcessHelper.RunProcessAsync(shell, arguments, (e, o, err) =>
+			bool installedViaPath = await InstallerProcessHelper.RunProcessAsync(shell, arguments, (e, o, err) =>
 			{
 				if (e != 0) return false;
 
-				// Check that a Microsoft.NETCore.App runtime matching the required major version is installed.
-				// Each line looks like: "Microsoft.NETCore.App 8.0.22 [/usr/share/dotnet/shared/...]"
+				// Each line looks like: "8.0.302 [/usr/share/dotnet/sdk]"
 				using var reader = new StringReader(o);
 				string? line;
 				while ((line = reader.ReadLine()) != null)
 				{
-					if (line.StartsWith("Microsoft.NETCore.App") &&
-						line.Contains($" {InstallationConstants.DotNetSDKMajorVersion}"))
+					if (line.StartsWith(InstallationConstants.DotNetSDKMajorVersion + ".", StringComparison.Ordinal))
 					{
 						return true;
 					}
 				}
 				return false;
 			});
+
+			if (installedViaPath)
+			{
+				return true;
+			}
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				string homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+				if (!string.IsNullOrWhiteSpace(homePath))
+				{
+					string userDotnetPath = Path.Combine(homePath, ".dotnet", "dotnet");
+					if (File.Exists(userDotnetPath))
+					{
+						return await InstallerProcessHelper.RunProcessAsync(userDotnetPath, "--list-sdks", (e, o, err) =>
+						{
+							if (e != 0) return false;
+
+							using var reader = new StringReader(o);
+							string? line;
+							while ((line = reader.ReadLine()) != null)
+							{
+								if (line.StartsWith(InstallationConstants.DotNetSDKMajorVersion + ".", StringComparison.Ordinal))
+								{
+									return true;
+								}
+							}
+
+							return false;
+						});
+					}
+				}
+			}
+
+			return false;
 		}
 
 		/// <summary>
@@ -193,29 +234,51 @@ namespace FishMMO.Installer
 			{
 				if (!pathSet)
 				{
-					string? homePath = Environment.GetEnvironmentVariable("HOME");
+					string homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 					if (string.IsNullOrEmpty(homePath))
 					{
 						InstallerProcessHelper.Log("Warning: The HOME environment variable is not set. DotNet commands may fail.");
 					}
 					else
 					{
-						string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+						string currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+						string dotnetPath = Path.Combine(homePath, ".dotnet");
 						string dotnetToolsPath = Path.Combine(homePath, ".dotnet", "tools");
 
-						if (!currentPath.Split(':').Contains(dotnetToolsPath))
+						var pathEntries = currentPath.Split(':', StringSplitOptions.RemoveEmptyEntries);
+						if (!pathEntries.Contains(dotnetPath))
 						{
-							string newPath = $"{currentPath}:{dotnetToolsPath}";
-							Environment.SetEnvironmentVariable("PATH", newPath);
+							currentPath = string.IsNullOrWhiteSpace(currentPath)
+								? dotnetPath
+								: $"{currentPath}:{dotnetPath}";
+							InstallerProcessHelper.Log($"Updated PATH to include: {dotnetPath}");
+						}
+
+						if (!currentPath.Split(':', StringSplitOptions.RemoveEmptyEntries).Contains(dotnetToolsPath))
+						{
+							currentPath = string.IsNullOrWhiteSpace(currentPath)
+								? dotnetToolsPath
+								: $"{currentPath}:{dotnetToolsPath}";
 							InstallerProcessHelper.Log($"Updated PATH to include: {dotnetToolsPath}");
 						}
+
+						Environment.SetEnvironmentVariable("PATH", currentPath);
 					}
 
-					string dotnetRoot = "/usr/share/dotnet";
-					if (Directory.Exists(dotnetRoot))
+					string userDotnetRoot = Path.Combine(homePath, ".dotnet");
+					if (Directory.Exists(userDotnetRoot))
 					{
-						Environment.SetEnvironmentVariable("DOTNET_ROOT", dotnetRoot);
-						InstallerProcessHelper.Log($"Set DOTNET_ROOT to: {dotnetRoot}");
+						Environment.SetEnvironmentVariable("DOTNET_ROOT", userDotnetRoot);
+						InstallerProcessHelper.Log($"Set DOTNET_ROOT to: {userDotnetRoot}");
+					}
+					else
+					{
+						string systemDotnetRoot = "/usr/share/dotnet";
+						if (Directory.Exists(systemDotnetRoot))
+						{
+							Environment.SetEnvironmentVariable("DOTNET_ROOT", systemDotnetRoot);
+							InstallerProcessHelper.Log($"Set DOTNET_ROOT to: {systemDotnetRoot}");
+						}
 					}
 
 					pathSet = true;
@@ -264,6 +327,12 @@ namespace FishMMO.Installer
 		/// <returns>True if the command succeeded, otherwise false.</returns>
 		public static async Task<bool> RunEFMigrationAsync(string migrationName)
 		{
+			if (!Regex.IsMatch(migrationName, "^[A-Za-z][A-Za-z0-9]*$"))
+			{
+				InstallerProcessHelper.Log("Invalid migration name. Use alphanumeric characters only and start with a letter.");
+				return false;
+			}
+
 			return await RunDotNetCommandAsync(
 				$"ef migrations add {migrationName} -p \"{InstallationConstants.ProjectPath}\" -s \"{InstallationConstants.StartupProject}\"");
 		}

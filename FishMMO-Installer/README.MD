@@ -1,118 +1,162 @@
 # FishMMO-Installer
 
-A cross-platform .NET 8.0 console application that automates the installation and configuration of all FishMMO server dependencies.
+FishMMO-Installer is a cross-platform .NET 8 console tool that automates FishMMO server dependency setup.
 
 ## Supported Platforms
 
-| Platform | Package Managers |
+| Platform | Install Strategy |
 |---|---|
-| Windows 10/11 | Direct installers (EXE/ZIP) |
-| Ubuntu / Debian | apt-get |
-| CachyOS / Arch Linux | pacman, yay, paru (AUR) |
+| Windows 10/11 | EXE/ZIP installers + Windows services |
+| Ubuntu/Debian | `apt-get` + `systemctl` |
+| Arch Linux / CachyOS | `pacman` (+ `yay` / `paru` for Unity Hub) + `systemctl` |
+
+---
+
+## What this installer can do
+
+- Install DotNet SDK 8 + `dotnet-ef` `5.0.17`
+- Install Visual Studio Build Tools (Windows)
+- Install Unity Hub
+- Install Unity Editor + selected modules
+- Install NGINX and configure service startup
+- Install/Renew Let's Encrypt certificates for NGINX
+- Install PostgreSQL
+- Create/manage FishMMO database and permissions
 
 ---
 
 ## Prerequisites
 
-A [.NET SDK](https://dotnet.microsoft.com/download/dotnet) (8.0 or newer) is required to build and run this project. The project targets `net8.0`, but any .NET SDK ≥ 8.0 (e.g., 10.0) can build it — you just need the .NET 8.0 **runtime** installed alongside it.
+- .NET SDK 8+ to build and run this repository
+- Administrator/root privileges for system-level installs
+- Internet connectivity for downloads and package repositories
 
-> **Already have a newer .NET SDK?** If you can build and run the installer but are missing the .NET 8.0 runtime, use **menu option 1 (Install DotNet)** — the installer will detect that .NET 8.0 is missing and offer to install it for you.
+### Install .NET SDK (if not already installed)
 
-### Windows
+#### Windows 10/11
 
-Download and run the [.NET 8.0 SDK installer](https://dotnet.microsoft.com/download/dotnet/8.0) from Microsoft, or install a newer SDK which includes backward-compatible runtime support.
+Install from Microsoft:
 
-### Ubuntu / Debian
+- https://dotnet.microsoft.com/download/dotnet/8.0
+
+Then verify:
+
+```powershell
+dotnet --list-sdks
+```
+
+#### Ubuntu/Debian
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y dotnet-sdk-8.0
+dotnet --list-sdks
 ```
 
-Or install a newer SDK and add the 8.0 runtime:
+#### Arch Linux / CachyOS
 
 ```bash
-sudo apt-get install -y dotnet-sdk-10.0 dotnet-runtime-8.0
+sudo pacman -S --noconfirm dotnet-sdk
+dotnet --list-sdks
 ```
 
-### CachyOS / Arch Linux
+### Build and run
 
 ```bash
-sudo pacman -S dotnet-sdk-8.0
+cd path/to/FishMMO-Installer
+dotnet build
+dotnet run --project FishMMO-Installer
 ```
 
-Or if you have a newer SDK (e.g., `dotnet-sdk`), install the 8.0 runtime alongside it:
+Run binary directly:
 
-```bash
-sudo pacman -S dotnet-runtime-8.0
-```
-
-> **Verify your installation:** Run `dotnet --list-runtimes` and confirm you see a `Microsoft.NETCore.App 8.0.x` entry.
+- Windows: `FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer.exe`
+- Linux: `./FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer`
 
 ---
 
-## Building & Running
+## Operating system quick-start guides
 
-### Windows
+### Windows quick start
 
-Open a terminal (PowerShell or Command Prompt) and run:
-
-```powershell
-cd path\to\FishMMO-Installer
-dotnet build
-dotnet run --project FishMMO-Installer
-```
-
-Or run the compiled binary directly:
+1. Open **PowerShell as Administrator**.
+2. Build and run:
 
 ```powershell
-.\FishMMO-Installer\bin\Debug\net8.0\FishMMO-Installer.exe
-```
-
-### Ubuntu / Debian
-
-```bash
-cd path/to/FishMMO-Installer
+cd "path\to\FishMMO-Installer"
 dotnet build
 dotnet run --project FishMMO-Installer
 ```
 
-Or run the compiled binary directly:
+3. Recommended installer order:
+  - `1` Install DotNet
+  - `2` Install Visual Studio Build Tools
+  - `3` Install Unity Hub
+  - `4` Install Unity Editor (+Modules)
+  - `5` Install NGINX
+  - `6` Install/Renew Let's Encrypt Certificate
+  - `7` Install PostgreSQL
+  - `8` Install FishMMO Database
+
+### Ubuntu/Debian quick start
+
+1. Open terminal.
+2. Build and run:
 
 ```bash
-./FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer
-```
-
-Some operations (package installs, `systemctl`, PostgreSQL superuser commands) require `sudo`. The installer will invoke `sudo` as needed — you may be prompted for your password.
-
-### CachyOS / Arch Linux
-
-```bash
-cd path/to/FishMMO-Installer
+cd /path/to/FishMMO-Installer
 dotnet build
 dotnet run --project FishMMO-Installer
 ```
 
-Or run the compiled binary directly:
+3. Recommended installer order:
+  - `1` Install DotNet
+  - `3` Install Unity Hub
+  - `4` Install Unity Editor (+Modules)
+  - `5` Install NGINX
+  - `6` Install/Renew Let's Encrypt Certificate
+  - `7` Install PostgreSQL
+  - `8` Install FishMMO Database
+
+Notes:
+
+- You will be prompted for `sudo` password for system operations.
+- NGINX and PostgreSQL are managed with `systemctl`.
+
+### Arch Linux / CachyOS quick start
+
+1. Open terminal.
+2. Build and run:
 
 ```bash
-./FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer
+cd /path/to/FishMMO-Installer
+dotnet build
+dotnet run --project FishMMO-Installer
 ```
 
-The installer uses `pacman` for system packages and detects `yay` or `paru` for AUR packages (Unity Hub). If you don't have an AUR helper, install one first:
+3. Recommended installer order:
+  - `1` Install DotNet
+  - `3` Install Unity Hub (requires `yay` or `paru`)
+  - `4` Install Unity Editor (+Modules)
+  - `5` Install NGINX
+  - `6` Install/Renew Let's Encrypt Certificate
+  - `7` Install PostgreSQL
+  - `8` Install FishMMO Database
+
+If you do not have an AUR helper:
 
 ```bash
 sudo pacman -S --needed git base-devel
-git clone https://aur.archlinux.org/yay.git && cd yay && makepkg -si
+git clone https://aur.archlinux.org/yay.git
+cd yay
+makepkg -si
 ```
-
-> **Note:** A post-build step automatically copies the `FishMMO-Database` project directory into the build output for EF Core migration support.
 
 ---
 
 ## Configuration
 
-Database operations (options 6–9, A) require an `appsettings.json` file in the working directory with Npgsql connection settings:
+Database options require `appsettings.json` in the working directory:
 
 ```json
 {
@@ -129,150 +173,354 @@ Database operations (options 6–9, A) require an `appsettings.json` file in the
 
 ---
 
-## Menu Options
+## Current Menu
 
-```
+```text
 Welcome to the FishMMO Installer Tool.
-Press a key (0-9, A):
+Press a key (0-9, A-B):
 1 : Install DotNet
 2 : Install Visual Studio Build Tools (Windows Only)
 3 : Install Unity Hub
 4 : Install Unity Editor (+Modules)
 5 : Install NGINX (Web Server/Reverse Proxy)
-6 : Install PostgreSQL (Database Server)
-7 : Install FishMMO Database (User/Schema/Initial Migration)
-8 : Create new database migration
-9 : Grant User Permissions on Database
-A : Delete FishMMO Database (DANGEROUS!)
+6 : Install/Renew Let's Encrypt Certificate (NGINX)
+7 : Install PostgreSQL (Database Server)
+8 : Install FishMMO Database (User/Schema/Initial Migration)
+9 : Create new database migration
+A : Grant User Permissions on Database
+B : Delete FishMMO Database (DANGEROUS!)
 0 : Quit
 ```
 
+---
+
+## Common usage examples
+
+### Example A: Fresh Linux setup (NGINX + cert + DB)
+
+1. Run installer.
+2. Press `5` to install NGINX.
+3. Press `6` to request certificate:
+  - Enter domains (for example: `fishmmo.com,play.fishmmo.com,api.fishmmo.com,game.fishmmo.com`)
+  - Enter email
+  - Use staging first (`Y`) to validate flow
+4. Press `7` to install PostgreSQL.
+5. Press `8` to create FishMMO database and optional initial migration.
+
+### Example B: Fresh Windows setup
+
+1. Run installer from elevated PowerShell.
+2. Press `5` to install NGINX (ZIP extraction + Windows service creation).
+3. Press `6` to install/renew certificate with win-acme.
+4. Press `7` then `8` for PostgreSQL + FishMMO DB setup.
+
+### Example C: Add a new migration
+
+1. Press `9`.
+2. Enter migration name (letters/numbers, starts with a letter), for example: `AddGuildSettings`.
+3. Installer will create migration and run database update.
+
+---
+
+## Operational checks after installation
+
+### NGINX
+
+- Linux:
+
+```bash
+sudo systemctl status nginx
+sudo nginx -t
+```
+
+- Windows (PowerShell):
+
+```powershell
+sc.exe query "FishMMO-NGINX"
+```
+
+### PostgreSQL
+
+- Linux:
+
+```bash
+sudo systemctl status postgresql
+```
+
+- Windows: verify PostgreSQL service is running in Services or with `sc.exe query`.
+
+### DotNet + EF tool
+
+```bash
+dotnet --list-sdks
+dotnet tool list --global
+```
+
+Confirm `dotnet-ef` appears in the global tools list.
+
+---
+
+## NGINX setup guide (per OS)
+
+This section shows exactly where to place `nginx.conf`, which ports must be opened/forwarded, and verification commands.
+
+### Required networking model
+
+- Public internet ports to expose:
+  - `80/tcp` (Let's Encrypt HTTP-01 challenge + HTTP→HTTPS redirect)
+  - `443/tcp` (all game/web/API traffic through NGINX)
+- Keep backend app ports local-only (do **not** forward publicly):
+  - `8000` (WebGL server)
+  - `8080` (IPFetch)
+  - `8090` (Patcher)
+- If using current websocket routing (`wss://game.<domain>/ws/{port}`), keep game ports `7770-7899` private behind NGINX.
+
+> Router/NAT forwarding itself is usually configured on your router UI (not on the host terminal). Terminal commands below open host firewall rules only.
+
+### Linux (Ubuntu/Debian + Arch/CachyOS)
+
+#### 1) Place your nginx.conf
+
+Recommended production location:
+
+```bash
+sudo cp "/home/$USER/Dev/FishMMO Dev/FishMMO-Setup/nginx.conf" /etc/nginx/nginx.conf
+sudo chown root:root /etc/nginx/nginx.conf
+sudo chmod 644 /etc/nginx/nginx.conf
+```
+
+#### 2) Ensure certbot challenge webroot exists
+
+```bash
+sudo mkdir -p /var/www/certbot/.well-known/acme-challenge
+sudo chown -R root:root /var/www/certbot
+sudo chmod -R 755 /var/www/certbot
+```
+
+#### 3) Open host firewall ports 80/443
+
+If using `ufw`:
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw status
+```
+
+If using `firewalld`:
+
+```bash
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+sudo firewall-cmd --list-services
+```
+
+#### 4) Test and reload NGINX
+
+```bash
+sudo nginx -t
+sudo systemctl enable --now nginx
+sudo systemctl reload nginx
+sudo systemctl status nginx
+```
+
+#### 5) Router/NAT forwarding
+
+Forward these from router WAN to your Linux host LAN IP:
+
+- `TCP 80` → `<server_lan_ip>:80`
+- `TCP 443` → `<server_lan_ip>:443`
+
+### Windows 10/11
+
+#### 1) Place your nginx.conf
+
+If installed by this installer, expected NGINX home is:
+
+- `C:\nginx\nginx-1.29.5`
+
+Copy config:
+
+```powershell
+Copy-Item "C:\path\to\FishMMO-Setup\nginx.conf" "C:\nginx\nginx-1.29.5\conf\nginx.conf" -Force
+```
+
+#### 2) Open Windows Firewall ports 80/443
+
+Run PowerShell as Administrator:
+
+```powershell
+netsh advfirewall firewall add rule name="FishMMO NGINX HTTP" dir=in action=allow protocol=TCP localport=80
+netsh advfirewall firewall add rule name="FishMMO NGINX HTTPS" dir=in action=allow protocol=TCP localport=443
+netsh advfirewall firewall show rule name="FishMMO NGINX HTTP"
+netsh advfirewall firewall show rule name="FishMMO NGINX HTTPS"
+```
+
+#### 3) Validate and restart NGINX service
+
+```powershell
+& "C:\nginx\nginx-1.29.5\nginx.exe" -t
+sc.exe stop "FishMMO-NGINX"
+sc.exe start "FishMMO-NGINX"
+sc.exe query "FishMMO-NGINX"
+```
+
+#### 4) Router/NAT forwarding
+
+Forward these from router WAN to your Windows host LAN IP:
+
+- `TCP 80` → `<server_lan_ip>:80`
+- `TCP 443` → `<server_lan_ip>:443`
+
+### Verify externally after forwarding
+
+From any external machine/network:
+
+```bash
+curl -I http://your-domain
+curl -I https://your-domain
+```
+
+Expected outcome:
+
+- HTTP responds with redirect to HTTPS (or ACME challenge path on renewal)
+- HTTPS responds successfully with your configured certificate
+
+### Important FishMMO port notes
+
+- Do **NOT** public-forward `8000`, `8080`, `8090`.
+- Do **NOT** public-forward `7770-7899` unless intentionally bypassing NGINX websocket path routing.
+- Primary public surface should be only `80` and `443`.
+
+---
+
+## Menu Option Details
+
 ### 1 — Install DotNet
 
-Installs the .NET 8.0 SDK and the `dotnet-ef` 5.0.17 global tool (Entity Framework CLI).
+- Installs or validates DotNet SDK 8
+- Installs `dotnet-ef` `5.0.17` (required tooling version)
+- Uses SDK detection via `dotnet --list-sdks`
+- Linux path setup includes `~/.dotnet` and `~/.dotnet/tools`
 
-| Platform | How it works |
-|---|---|
-| **Windows** | Downloads the official `dotnet-sdk-8.0.302-win-x64.exe` installer and runs a silent install (`/install /quiet /norestart`). |
-| **Ubuntu / Debian** | Downloads the `dotnet-install.sh` script from Microsoft and runs it with `--version 8.0.302`. |
-| **CachyOS / Arch** | Same as Ubuntu — uses `dotnet-install.sh`. |
+### 2 — Install Visual Studio Build Tools (Windows only)
 
-After the SDK is installed, the installer checks for `dotnet-ef` and offers to install it globally via `dotnet tool install --global dotnet-ef --version 5.0.17`. On Linux, `~/.dotnet/tools` is automatically added to `PATH` and `DOTNET_ROOT` is set to `/usr/share/dotnet`.
-
-### 2 — Install Visual Studio Build Tools (Windows Only)
-
-Downloads the Visual Studio Build Tools bootstrapper and performs a silent installation with the following workloads:
-
-- **.NET desktop development** — includes .NET Framework development tools.
-- **Desktop development with C++** — MSVC 64-bit compiler for x86, x64, ARM, and ARM64.
-- **Windows 10 SDK** (19041).
-
-This option is skipped automatically on Linux.
+Downloads and runs Build Tools installer silently with required workloads.
 
 ### 3 — Install Unity Hub
 
-Installs Unity Hub, which is required before installing any Unity Editor version (option 4).
-
-| Platform | How it works |
-|---|---|
-| **Windows** | Downloads `UnityHubSetup.exe` from Unity's CDN and runs a silent install (`/S`). |
-| **Ubuntu / Debian** | Adds the official Unity GPG key and apt repository (`hub.unity3d.com`), then runs `sudo apt-get install -y unityhub`. |
-| **CachyOS / Arch** | Detects an AUR helper (`yay` or `paru`) and installs the `unityhub` AUR package. |
-
-The installer detects whether Unity Hub is already present by checking for the `unityhub` binary on disk.
+- Windows: Unity Hub installer EXE
+- Ubuntu/Debian: Unity apt repository + `apt-get install unityhub`
+- Arch/CachyOS: AUR install with detected `yay`/`paru`
 
 ### 4 — Install Unity Editor (+Modules)
 
-Installs a specific Unity Editor version with build modules using the Unity Hub CLI. Requires Unity Hub to be installed first (option 3).
+Installs editor via Unity Hub CLI with module selection.
 
-**Prompts:**
-1. **Unity version** — defaults to `6000.3.2f1` (Unity 6.3 LTS).
-2. **Module selection** — displays a numbered list of available modules. Enter comma-separated numbers, or press Enter to accept the defaults.
-
-**Defaults** (press Enter at each prompt to accept):
-- **Version:** `6000.3.2f1`
-- **Modules:** Linux Build Support (IL2CPP), Linux Dedicated Server Build Support, Web Build Support, Windows Build Support (Mono), Windows Build Support (IL2CPP), Windows Dedicated Server Build Support
-
-**Available modules:**
-
-| # | Module | Default |
-|---|---|---|
-| 1 | Linux Build Support (IL2CPP) | ✔ |
-| 2 | Linux Build Support (Mono) | |
-| 3 | Linux Dedicated Server Build Support | ✔ |
-| 4 | Mac Build Support (Mono) | |
-| 5 | Mac Build Support (IL2CPP) | |
-| 6 | Mac Dedicated Server Build Support | |
-| 7 | Windows Build Support (Mono) | ✔ |
-| 8 | Windows Build Support (IL2CPP) | ✔ |
-| 9 | Windows Dedicated Server Build Support | ✔ |
-| 10 | Web Build Support | ✔ |
-| 11 | Android Build Support | |
-| 12 | iOS Build Support | |
-
-The installer runs the Unity Hub CLI with `-- --headless install --version <version> --module <module1> --module <module2> ...` and works identically on all platforms.
+Default editor version: `6000.3.2f1`.
 
 ### 5 — Install NGINX
 
-Installs NGINX as a web server / reverse proxy.
+#### Windows
 
-| Platform | How it works |
-|---|---|
-| **Windows** | Downloads `nginx-1.24.0.zip` and extracts it to `C:\nginx`. You must start NGINX manually from that directory. |
-| **Ubuntu / Debian** | Runs `sudo apt-get install -y nginx`, then starts and enables the service via `systemctl`. |
-| **CachyOS / Arch** | Runs `sudo pacman -S --noconfirm nginx`, then starts and enables the service via `systemctl`. |
+- Downloads:
+  - `https://github.com/nginx/nginx/releases/download/release-1.29.5/nginx-1.29.5.zip`
+- Extract root: `C:\nginx`
+- Expected home: `C:\nginx\nginx-1.29.5`
+- Service name: `FishMMO-NGINX`
+- Uses NSSM wrapper for reliable Windows service mode
+- Sets automatic startup and ensures service is running
 
-The installer checks if NGINX is already installed by running `nginx -v` before proceeding.
+#### Linux (Ubuntu + Arch/CachyOS)
 
-### 6 — Install PostgreSQL
+- Installs `nginx`
+- Enables and starts with `systemctl enable --now nginx`
+- Verifies enabled/active status
 
-Installs the PostgreSQL database server. Requires `appsettings.json` (for the port configuration).
+### 6 — Install/Renew Let's Encrypt Certificate (NGINX)
 
-| Platform | How it works |
-|---|---|
-| **Windows** | Downloads the official EDB installer and performs an unattended install. Prompts you to set the superuser password. Disables pgAdmin and Stack Builder components. |
-| **Ubuntu / Debian** | Runs `sudo apt-get install -y postgresql postgresql-contrib`, starts and enables the service, then optionally updates the superuser password. |
-| **CachyOS / Arch** | Runs `sudo pacman -S --noconfirm postgresql`, initializes the data directory with `sudo -u postgres initdb -D /var/lib/postgres/data`, starts and enables the service, then optionally updates the superuser password. |
+Requires NGINX to be installed first.
 
-### 7 — Install FishMMO Database
+#### Linux
 
-Creates the FishMMO database, application user role, and runs the initial EF Core migration. Requires `appsettings.json` and prompts for the PostgreSQL superuser password.
+- Installs certbot packages
+- Uses HTTP-01 webroot issuance (`certbot certonly --webroot`)
+- Validates ACME location compatibility in `nginx.conf`
+- Updates SSL cert/key paths in `nginx.conf`
+- Runs `nginx -t` then reloads NGINX
 
-**Steps performed:**
-1. Connects to PostgreSQL as superuser.
-2. Creates the database specified in `appsettings.json` (if it doesn't already exist).
-3. Creates the application user role with the configured username/password (if it doesn't already exist).
-4. Grants all privileges on the database to the application user and transfers ownership.
-5. Optionally creates and applies the `Initial` EF Core migration using `dotnet ef`.
+Default prompt values:
 
-### 8 — Create New Database Migration
+- nginx.conf: `~/Dev/FishMMO Dev/FishMMO-Setup/nginx.conf`
+- ACME webroot: `/var/www/certbot`
+- WebServers path: `~/Dev/FishMMO Dev/FishMMO-WebServers`
 
-Creates a new EF Core migration and applies it to the database. Prompts for a migration name (e.g., `AddPlayerInventory`).
+#### Windows
 
-**Steps performed:**
-1. Runs `dotnet ef migrations add <MigrationName>` against the FishMMO-DB project.
-2. Runs `dotnet ef database update` to apply the new migration.
+- Uses win-acme
+- Uses filesystem validation and PEM output
+- Resolves generated PEM files and updates `nginx.conf`
+- Tests config and reloads NGINX
 
-No superuser credentials are needed — this uses the connection configured in the FishMMO-DB migrator project.
+Notes:
 
-### 9 — Grant User Permissions on Database
+- Wildcard domains (`*.example.com`) are intentionally rejected in this webroot workflow.
+- Use staging mode first for safe validation.
 
-Grants comprehensive permissions to a specified user on a database. Prompts for the PostgreSQL superuser password, target database name, and target username (both default to values from `appsettings.json`).
+### 7 — Install PostgreSQL
 
-**Permissions granted:**
-- `GRANT ALL PRIVILEGES ON DATABASE` to the user.
-- `GRANT ALL PRIVILEGES ON ALL TABLES, SEQUENCES, FUNCTIONS` in the `public` schema.
-- `ALTER DEFAULT PRIVILEGES` so all future tables, sequences, and functions are also accessible to the user.
+- Windows: unattended EDB installer flow
+- Ubuntu/Debian: package install + `systemctl`
+- Arch/CachyOS: package install + initdb (if needed) + `systemctl`
 
-### A — Delete FishMMO Database (DANGEROUS!)
+### 8 — Install FishMMO Database
 
-**Permanently deletes** the FishMMO database. This is irreversible.
+- Creates FishMMO DB and user role (if missing)
+- Grants database privileges
+- Optionally creates/applies `Initial` EF migration
 
-Prompts for the PostgreSQL superuser password, then requires you to type `DELETE` (all caps) to confirm. Before dropping the database, it terminates all active connections to prevent lock conflicts.
+### 9 — Create new database migration
+
+- Creates migration via EF CLI
+- Applies migration via database update
+- Migration name validation is enforced
+
+### A — Grant User Permissions on Database
+
+Grants comprehensive privileges on existing and future objects in `public` schema.
+
+### B — Delete FishMMO Database (DANGEROUS)
+
+Requires explicit `DELETE` confirmation and terminates active sessions before drop.
 
 ### 0 — Quit
 
-Exits the installer.
+Exits installer.
+
+---
+
+## Platform-Specific Summary
+
+### Windows
+
+- NGINX: ZIP install + NSSM-backed service (`FishMMO-NGINX`)
+- Let's Encrypt: win-acme + PEM integration
+- PostgreSQL: EDB unattended installer
+- VS Build Tools: supported
+
+### Ubuntu/Debian
+
+- Package manager: `apt-get`
+- Service management: `systemctl`
+- Let's Encrypt: certbot webroot flow
+
+### Arch/CachyOS
+
+- Package manager: `pacman`
+- Unity Hub: AUR helper (`yay`/`paru`)
+- Service management: `systemctl`
+- Let's Encrypt: certbot webroot flow
 
 ---
 
@@ -280,14 +528,15 @@ Exits the installer.
 
 | File | Responsibility |
 |---|---|
-| `Program.cs` | Entry point, interactive menu loop, settings validation helpers |
-| `InstallationConstants.cs` | URLs, version strings, filenames, and EF Core project paths |
-| `InstallerProcessHelper.cs` | Process execution, console prompts, file downloads, package manager detection, logging |
-| `DotNetInstaller.cs` | .NET SDK and dotnet-ef installation, EF migration/update commands |
-| `UnityInstaller.cs` | Unity Hub and Unity Editor installation with module selection |
+| `Program.cs` | Entry point and interactive menu |
+| `InstallationConstants.cs` | URLs, versions, filenames, key default paths |
+| `InstallerProcessHelper.cs` | Process/shell helpers, download utilities, prompts/logging |
+| `DotNetInstaller.cs` | DotNet SDK and EF tooling installation + EF commands |
+| `VSBuildToolsInstaller.cs` | VS Build Tools (Windows) |
+| `UnityInstaller.cs` | Unity Hub and Unity Editor installation |
 | `NGINXInstaller.cs` | NGINX installation and service management |
-| `PostgreSQLInstaller.cs` | PostgreSQL installation, database/user/migration management, permission grants |
-| `VSBuildToolsInstaller.cs` | Visual Studio Build Tools installation (Windows only) |
+| `LetsEncryptInstaller.cs` | Certificate install/renew flows for NGINX |
+| `PostgreSQLInstaller.cs` | PostgreSQL and FishMMO DB operations |
 
 ## License
 

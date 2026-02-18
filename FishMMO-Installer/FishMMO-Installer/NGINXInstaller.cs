@@ -69,6 +69,25 @@ namespace FishMMO.Installer
 		/// <returns>True if NGINX is installed, otherwise false.</returns>
 		public static async Task<bool> IsNGINXInstalledAsync()
 		{
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				string nginxExecutablePath = Path.Combine(GetExpectedWindowsNginxHomePath(), "nginx.exe");
+				if (File.Exists(nginxExecutablePath))
+				{
+					bool installedFromKnownPath = await InstallerProcessHelper.RunProcessAsync(nginxExecutablePath, "-v", (exitCode, output, error) =>
+					{
+						return (exitCode == 0 || exitCode == 1) &&
+							(output.Contains("nginx version") || error.Contains("nginx version"));
+					});
+
+					if (installedFromKnownPath)
+					{
+						InstallerProcessHelper.Log("NGINX detected from managed Windows installation path.");
+						return true;
+					}
+				}
+			}
+
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 			string arguments = $"{argPrefix} \"nginx -v\"";
 
@@ -227,29 +246,38 @@ namespace FishMMO.Installer
 			}
 
 			string serviceName = InstallationConstants.NGINXWindowsServiceName;
-			string serviceBinPath = $"\"{nginxExecutablePath}\" -p \"{nginxHomeDirectory}\" -c conf\\nginx.conf";
+			string nssmExecutablePath = await EnsureNssmInstalledAsync();
+			if (string.IsNullOrWhiteSpace(nssmExecutablePath) || !File.Exists(nssmExecutablePath))
+			{
+				InstallerProcessHelper.Log("Failed to locate NSSM. Cannot configure Windows NGINX service reliably.");
+				return;
+			}
 
-			bool serviceExists = await InstallerProcessHelper.RunProcessAsync("sc.exe", $"query \"{serviceName}\"", (exitCode, output, error) => exitCode == 0 && output.Contains("SERVICE_NAME", StringComparison.OrdinalIgnoreCase));
+			bool serviceExists = await InstallerProcessHelper.RunProcessAsync("sc.exe", $"query \"{serviceName}\"", (exitCode, output, error) =>
+				exitCode == 0 && output.Contains("SERVICE_NAME", StringComparison.OrdinalIgnoreCase));
 
 			if (!serviceExists)
 			{
 				InstallerProcessHelper.Log($"Creating Windows service '{serviceName}' for NGINX...");
-				bool created = await InstallerProcessHelper.RunProcessAsync("sc.exe", $"create \"{serviceName}\" binPath= \"{serviceBinPath}\" start= auto DisplayName= \"FishMMO NGINX\"", (exitCode, output, error) => exitCode == 0);
+				bool created = await InstallerProcessHelper.RunProcessAsync(
+					nssmExecutablePath,
+					$"install \"{serviceName}\" \"{nginxExecutablePath}\"",
+					(exitCode, output, error) => exitCode == 0);
 
 				if (!created)
 				{
 					InstallerProcessHelper.Log("Failed to create NGINX Windows service. Run installer as administrator.");
 					return;
 				}
-
-				await InstallerProcessHelper.RunProcessAsync("sc.exe", $"description \"{serviceName}\" \"FishMMO NGINX reverse proxy service\"");
 			}
 
-			InstallerProcessHelper.Log("Configuring Windows service startup mode to automatic...");
-			await InstallerProcessHelper.RunProcessAsync("sc.exe", $"config \"{serviceName}\" start= auto");
+			await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"set \"{serviceName}\" AppDirectory \"{nginxHomeDirectory}\"");
+			await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"set \"{serviceName}\" AppParameters \"-p \\\"{nginxHomeDirectory}\\\" -c conf\\nginx.conf\"");
+			await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"set \"{serviceName}\" Start SERVICE_AUTO_START");
+			await InstallerProcessHelper.RunProcessAsync("sc.exe", $"description \"{serviceName}\" \"FishMMO NGINX reverse proxy service\"");
 
 			InstallerProcessHelper.Log("Starting Windows NGINX service...");
-			bool serviceStarted = await InstallerProcessHelper.RunProcessAsync("sc.exe", $"start \"{serviceName}\"", (exitCode, output, error) =>
+			bool serviceStarted = await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"start \"{serviceName}\"", (exitCode, output, error) =>
 				exitCode == 0 ||
 				output.Contains("SERVICE_ALREADY_RUNNING", StringComparison.OrdinalIgnoreCase) ||
 				error.Contains("SERVICE_ALREADY_RUNNING", StringComparison.OrdinalIgnoreCase));
@@ -261,6 +289,47 @@ namespace FishMMO.Installer
 			}
 
 			InstallerProcessHelper.Log($"Windows service '{serviceName}' is configured, enabled, and running.");
+		}
+
+		/// <summary>
+		/// Ensures NSSM is available locally for reliable Windows service management.
+		/// </summary>
+		/// <returns>Absolute path to nssm.exe when available; otherwise an empty string.</returns>
+		private static async Task<string> EnsureNssmInstalledAsync()
+		{
+			string nssmDirectory = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), "nssm");
+			string nssmExecutablePath = Path.Combine(nssmDirectory, "nssm.exe");
+
+			if (File.Exists(nssmExecutablePath))
+			{
+				return nssmExecutablePath;
+			}
+
+			try
+			{
+				string nssmArchivePath = await InstallerProcessHelper.DownloadFileAsync(InstallationConstants.NssmDownloadUrl, InstallationConstants.NssmFileName);
+
+				if (Directory.Exists(nssmDirectory))
+				{
+					Directory.Delete(nssmDirectory, true);
+				}
+				Directory.CreateDirectory(nssmDirectory);
+
+				ZipFile.ExtractToDirectory(nssmArchivePath, nssmDirectory, true);
+
+				string extractedExecutablePath = Path.Combine(nssmDirectory, "nssm-2.24", "win64", "nssm.exe");
+				if (File.Exists(extractedExecutablePath))
+				{
+					File.Copy(extractedExecutablePath, nssmExecutablePath, true);
+					return nssmExecutablePath;
+				}
+			}
+			catch (Exception ex)
+			{
+				InstallerProcessHelper.Log($"Failed to prepare NSSM: {ex.Message}");
+			}
+
+			return string.Empty;
 		}
 	}
 }

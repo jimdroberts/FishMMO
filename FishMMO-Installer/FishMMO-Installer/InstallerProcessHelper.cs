@@ -61,7 +61,8 @@ namespace FishMMO.Installer
 		/// <returns>True if command succeeded, otherwise false.</returns>
 		public static async Task<bool> RunShellCommandAsync(string shell, string argPrefix, string command, string errorMessage)
 		{
-			return await RunProcessAsync(shell, $"{argPrefix} \"{command}\"", (exitCode, output, error) =>
+			string escapedCommand = EscapeShellCommand(command);
+			return await RunProcessAsync(shell, $"{argPrefix} \"{escapedCommand}\"", (exitCode, output, error) =>
 			{
 				if (exitCode != 0)
 				{
@@ -83,27 +84,37 @@ namespace FishMMO.Installer
 			(string shell, string argPrefix) = GetShellCommand();
 
 			if (packageNames.ContainsKey("pacman") &&
-				await RunProcessAsync(shell, $"{argPrefix} \"which pacman\"", (e, o, err) => e == 0))
+				await RunProcessAsync(shell, $"{argPrefix} \"command -v pacman\"", (e, o, err) => e == 0))
 			{
-				return ("sudo pacman -Sy", $"sudo pacman -S --noconfirm {packageNames["pacman"]}", "pacman (Arch/CachyOS)");
+				return ("sudo pacman -Syu --noconfirm", $"sudo pacman -S --noconfirm {packageNames["pacman"]}", "pacman (Arch/CachyOS)");
 			}
 			if (packageNames.ContainsKey("apt-get") &&
-				await RunProcessAsync(shell, $"{argPrefix} \"which apt-get\"", (e, o, err) => e == 0))
+				await RunProcessAsync(shell, $"{argPrefix} \"command -v apt-get\"", (e, o, err) => e == 0))
 			{
 				return ("sudo apt-get update", $"sudo apt-get install -y {packageNames["apt-get"]}", "apt-get (Debian/Ubuntu)");
 			}
 			if (packageNames.ContainsKey("dnf") &&
-				await RunProcessAsync(shell, $"{argPrefix} \"which dnf\"", (e, o, err) => e == 0))
+				await RunProcessAsync(shell, $"{argPrefix} \"command -v dnf\"", (e, o, err) => e == 0))
 			{
 				return ("sudo dnf check-update", $"sudo dnf install -y {packageNames["dnf"]}", "dnf");
 			}
 			if (packageNames.ContainsKey("yum") &&
-				await RunProcessAsync(shell, $"{argPrefix} \"which yum\"", (e, o, err) => e == 0))
+				await RunProcessAsync(shell, $"{argPrefix} \"command -v yum\"", (e, o, err) => e == 0))
 			{
 				return ("sudo yum check-update", $"sudo yum install -y {packageNames["yum"]}", "yum");
 			}
 
 			return null;
+		}
+
+		/// <summary>
+		/// Escapes shell command content inserted into a quoted -c/-lc argument.
+		/// </summary>
+		/// <param name="command">Unescaped shell command.</param>
+		/// <returns>Escaped shell command safe for double-quoted command argument usage.</returns>
+		private static string EscapeShellCommand(string command)
+		{
+			return command.Replace("\\", "\\\\").Replace("\"", "\\\"");
 		}
 
 		/// <summary>
@@ -288,7 +299,7 @@ namespace FishMMO.Installer
 			}
 			catch (Exception ex)
 			{
-				throw new Exception($"Error downloading file: {ex.Message}");
+				throw new Exception($"Error downloading file: {ex.Message}", ex);
 			}
 		}
 	}

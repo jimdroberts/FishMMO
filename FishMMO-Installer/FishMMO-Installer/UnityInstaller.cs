@@ -104,10 +104,10 @@ namespace FishMMO.Installer
 			// Fast check: does the binary exist on disk?
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 			{
-				// On Linux, also check via 'which' in case it's in a non-standard location
+				// On Linux, also check via 'command -v' in case it's in a non-standard location
 				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 				bool found = File.Exists(hubPath) ||
-					await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"which unityhub\"", (e, o, err) => e == 0);
+					await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"command -v unityhub\"", (e, o, err) => e == 0);
 
 				if (found)
 				{
@@ -321,11 +321,11 @@ namespace FishMMO.Installer
 			// Detect AUR helper
 			string? aurHelper = null;
 
-			if (await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"which yay\"", (e, o, err) => e == 0))
+			if (await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"command -v yay\"", (e, o, err) => e == 0))
 			{
 				aurHelper = "yay";
 			}
-			else if (await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"which paru\"", (e, o, err) => e == 0))
+			else if (await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"command -v paru\"", (e, o, err) => e == 0))
 			{
 				aurHelper = "paru";
 			}
