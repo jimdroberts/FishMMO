@@ -64,17 +64,47 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Download URL for the NGINX Windows zip archive.
 		/// </summary>
-		public const string NGINXWindowsDownloadUrl = "http://nginx.org/download/nginx-1.24.0.zip";
+		public const string NGINXWindowsDownloadUrl = "https://github.com/nginx/nginx/releases/download/release-1.29.5/nginx-1.29.5.zip";
 
 		/// <summary>
 		/// Filename for the downloaded NGINX Windows zip archive.
 		/// </summary>
-		public const string NGINXWindowsFileName = "nginx-1.24.0.zip";
+		public const string NGINXWindowsFileName = "nginx-1.29.5.zip";
 
 		/// <summary>
 		/// Default extraction path for NGINX on Windows.
 		/// </summary>
 		public const string NGINXWindowsExtractPath = "C:\\nginx";
+
+		/// <summary>
+		/// Windows service name used for the NGINX service instance managed by this installer.
+		/// </summary>
+		public const string NGINXWindowsServiceName = "FishMMO-NGINX";
+
+		/// <summary>
+		/// Download URL for the win-acme client (Windows Let's Encrypt automation).
+		/// </summary>
+		public const string WinAcmeDownloadUrl = "https://github.com/win-acme/win-acme/releases/download/v2.2.9.1701/win-acme.v2.2.9.1701.x64.trimmed.zip";
+
+		/// <summary>
+		/// Filename for the downloaded win-acme zip archive.
+		/// </summary>
+		public const string WinAcmeFileName = "win-acme.v2.2.9.1701.x64.trimmed.zip";
+
+		/// <summary>
+		/// Default nginx.conf path used in Linux setup automation.
+		/// </summary>
+		public const string LinuxNginxConfigurationPath = "/home/Dev/FishMMO Dev/FishMMO-Setup/nginx.conf";
+
+		/// <summary>
+		/// Default web root for ACME HTTP-01 challenges in Linux deployments.
+		/// </summary>
+		public const string LinuxCertbotWebRoot = "/var/www/certbot";
+
+		/// <summary>
+		/// Default FishMMO web servers directory path used for operational context prompts.
+		/// </summary>
+		public const string LinuxFishMMOWebServersPath = "/home/Dev/FishMMO Dev/FishMMO-WebServers";
 
 		/// <summary>
 		/// Download URL for the Visual Studio Build Tools bootstrapper.

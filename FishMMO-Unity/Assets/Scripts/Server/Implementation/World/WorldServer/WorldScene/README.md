@@ -43,8 +43,63 @@ RuntimeDataContainer
 ├── WorldSceneMappingData          : IWorldSceneMappingData<NetworkConnection>
 ├── WorldSceneSystemRuntimeData    : IWorldSceneSystemRuntimeData
 └── MainThreadQueueData (abstract)
-    └── WorldSceneSystemMainThreadQueueData : IWorldSceneSystemMainThreadQueueData
+    └── SystemMainThreadQueueData (abstract)
+        └── WorldSceneSystemMainThreadQueueData : IWorldSceneSystemMainThreadQueueData
 ```
+
+## Runtime Data Container Details
+
+### `WorldSceneMappingData`
+
+Bidirectional queue maps for open-world and instance connection routing. Implements `IWorldSceneMappingData<NetworkConnection>`.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `WaitingOpenWorldConnections` | `Dictionary<string, HashSet<NetworkConnection>>` | Connections waiting for an open-world scene, keyed by scene name |
+| `OpenWorldConnectionScenes` | `Dictionary<NetworkConnection, string>` | Reverse index: connection → open-world scene name |
+| `WaitingInstanceConnections` | `Dictionary<long, HashSet<NetworkConnection>>` | Connections waiting for an instance scene, keyed by instance ID |
+| `InstanceConnectionScenes` | `Dictionary<NetworkConnection, long>` | Reverse index: connection → instance ID |
+| `ConnectionCount` | `int` | Total managed connections (DB scene population + waiting queues) |
+
+**Design:** Bidirectional maps enable O(1) add/remove and fast cleanup on disconnect.
+
+**Lifecycle:**
+- `InitializeOnce()` — creates empty dictionaries, zeros connection count.
+- `Clear()` — clears all dictionaries and resets count.
+- `Deinitialize()` — clears all data (references remain as Dictionary types don't need nulling).
+
+### `WorldSceneSystemRuntimeData`
+
+Mutable runtime state for queue processing, debounce, and authenticator references. Implements `IWorldSceneSystemRuntimeData`.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `InstanceLookupDebounce` | `ExpiringKeyTracker<string>` | Per-account debounce tracker preventing DB flood from rapid instance lookups |
+| `WaitingQueueEnteredUtcByClientId` | `Dictionary<int, DateTime>` | Timestamps tracking when each client entered a waiting queue (for TTL purge) |
+| `LoginAuthenticator` | `WorldServerAuthenticator` | Reference to the world server authenticator for auth event subscription |
+| `NextWaitQueueUpdate` | `float` | Timer countdown until next wait-queue processing tick |
+
+**Lifecycle:**
+- `InitializeOnce()` — creates `ExpiringKeyTracker` with `OrdinalIgnoreCase` comparer, empty timestamp dictionary.
+- `Clear()` — nulls authenticator, resets timer, clears tracker and timestamps.
+- `Deinitialize()` — clears and nulls tracker and timestamp dictionary.
+
+### `WorldSceneSystemMainThreadQueueData`
+
+Per-system main-thread action queue. Inherits from `SystemMainThreadQueueData` (which inherits from `MainThreadQueueData`). Implements `IWorldSceneSystemMainThreadQueueData`.
+
+Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker responses back to the Unity main thread.
+
+**Why a separate concrete type?** The `DataContainerRegistry` creates independent instances per concrete type, ensuring each system gets its own isolated main-thread queue.
+
+## Required Data Container Attributes
+
+`WorldSceneSystem` declares four required containers:
+
+- `[RequiresDataContainer(typeof(WorldSceneSystemRuntimeData))]`
+- `[RequiresDataContainer(typeof(WorldSceneMappingData))]`
+- `[RequiresDataContainer(typeof(WorldSceneSystemMainThreadQueueData))]`
+- `[RequiresDataContainer(typeof(AsyncWorkerData))]`
 
 ## Core Responsibilities
 

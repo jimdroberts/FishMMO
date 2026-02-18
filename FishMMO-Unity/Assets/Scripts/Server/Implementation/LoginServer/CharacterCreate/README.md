@@ -11,6 +11,7 @@ To mitigate task spam and frame spikes, it uses a per-connection in-flight creat
 ```
 CharacterCreate/
 ├── CharacterCreateSystem.cs                    # Stateless character creation behaviour + async persistence pipeline
+├── CharacterCreateSystemRuntimeData.cs         # Per-connection in-flight gate container
 ├── CharacterCreateSystemMainThreadQueueData.cs # Per-system main-thread action queue container
 └── README.md
 ```
@@ -31,25 +32,54 @@ ServerBehaviour
 └── CharacterCreateSystem : ICharacterCreateSystem
 ```
 
-### Main-Thread Queue Data
+### Runtime Data Containers
 
 ```
 RuntimeDataContainer
+├── CharacterCreateSystemRuntimeData
 └── MainThreadQueueData (abstract)
-    └── CharacterCreateSystemMainThreadQueueData : ICharacterCreateSystemMainThreadQueueData
+    └── SystemMainThreadQueueData (abstract)
+        └── CharacterCreateSystemMainThreadQueueData : ICharacterCreateSystemMainThreadQueueData
 ```
+
+## Runtime Data Container Details
+
+### `CharacterCreateSystemRuntimeData`
+
+Mutable runtime state for the character creation system.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent create operations |
+
+**Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
+
+**Lifecycle:**
+- `InitializeOnce()` — creates empty `ConcurrentDictionary`.
+- `Clear()` — clears dictionary entries.
+- `Deinitialize()` — clears and nulls reference.
+
+### `CharacterCreateSystemMainThreadQueueData`
+
+Per-system main-thread action queue. Inherits from `SystemMainThreadQueueData` (which inherits from `MainThreadQueueData`). Implements `ICharacterCreateSystemMainThreadQueueData`.
+
+Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker responses back to the Unity main thread.
+
+**Why a separate concrete type?** The `DataContainerRegistry` creates independent instances per concrete type, ensuring each system gets its own isolated main-thread queue.
 
 ## Runtime Data Dependencies
 
 `CharacterCreateSystem` declares runtime container dependencies via attributes:
 
 - `[RequiresDataContainer(typeof(CharacterCreateSystemMainThreadQueueData))]`
+- `[RequiresDataContainer(typeof(CharacterCreateSystemRuntimeData))]`
 - `[RequiresDataContainer(typeof(AsyncWorkerData))]`
 
-### Why both containers are required
+### Why all three containers are required
 
 | Container | Responsibility |
 |-----------|----------------|
+| `CharacterCreateSystemRuntimeData` | Per-connection in-flight gate to prevent duplicate concurrent create requests |
 | `AsyncWorkerData` | Runs DB-heavy work off the network/main thread with bounded backpressure-aware queuing |
 | `CharacterCreateSystemMainThreadQueueData` | Marshals thread-unsafe FishNet/Unity operations back to the main thread |
 

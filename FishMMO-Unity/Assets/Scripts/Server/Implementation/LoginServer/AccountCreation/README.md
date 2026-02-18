@@ -11,8 +11,9 @@ Main-thread response dispatch is time-sliced by `maxMainThreadResponsesPerFrame`
 ```
 AccountCreation/
 ├── AccountCreationSystem.cs                     # Stateless ServerBehaviour logic and worker orchestration
-├── AccountCreationSystemRuntimeData.cs          # Metrics, worker task references, cleanup timer
+├── AccountCreationSystemRuntimeData.cs          # Metrics, connection caches, cleanup timer
 ├── AccountCreationSystemMappingData.cs          # Per-IP rate/failure trackers (DoS/rate-limiting)
+├── AccountCreationSystemQueueData.cs            # Bounded Channel + CancellationTokenSource for async queue
 ├── AccountCreationSystemMainThreadQueueData.cs  # Per-system main-thread action queue container
 └── README.md
 ```
@@ -22,6 +23,7 @@ Related core contracts live in `Server/Core/LoginServer/AccountCreation/`:
 - `IAccountCreationSystem<TConnection>`
 - `IAccountCreationSystemRuntimeData`
 - `IAccountCreationSystemMappingData`
+- `IAccountCreationSystemQueueData<TConnection>`
 - `IAccountCreationSystemMainThreadQueueData`
 - `AccountCreationRequest<TConnection>`
 
@@ -40,9 +42,76 @@ ServerBehaviour
 RuntimeDataContainer
 ├── AccountCreationSystemRuntimeData         : IAccountCreationSystemRuntimeData
 ├── AccountCreationSystemMappingData         : IAccountCreationSystemMappingData
+├── AccountCreationSystemQueueData           : IAccountCreationSystemQueueData<NetworkConnection>
 └── MainThreadQueueData (abstract)
-    └── AccountCreationSystemMainThreadQueueData : IAccountCreationSystemMainThreadQueueData
+    └── SystemMainThreadQueueData (abstract)
+        └── AccountCreationSystemMainThreadQueueData : IAccountCreationSystemMainThreadQueueData
 ```
+
+## Runtime Data Container Details
+
+### `AccountCreationSystemRuntimeData`
+
+Runtime statistics, connection caches, and worker tracking. Implements `IAccountCreationSystemRuntimeData`.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `ConnectionIpCache` | `LastSeenCacheTracker<int, string>` | Per-connection IP address cache for ingress validation |
+| `ConnectionEncryptionCache` | `LastSeenCacheTracker<int, ConnectionEncryptionData>` | Per-connection AES key/IV cache for decryption |
+| `TotalProcessed` | `long` | Successfully processed account creations since start |
+| `TotalRejected` | `long` | Rejected requests (rate-limited, queue full) since start |
+| `TotalFailed` | `long` | Failed creations (DB/decrypt errors) since start |
+| `CleanupTimer` | `float` | Accumulator for periodic mapping data cleanup sweeps |
+
+**Lifecycle:**
+- `InitializeOnce()` — creates fresh `LastSeenCacheTracker` instances, zeros all counters.
+- `Clear()` — clears caches and resets counters without nulling references.
+- `Deinitialize()` — clears and nulls all references.
+
+### `AccountCreationSystemMappingData`
+
+Thread-safe per-IP rate limiting and DoS protection data. Implements `IAccountCreationSystemMappingData`.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `IpRateLimitTracker` | `ConcurrentDictionary<string, DateTime>` | Last attempt timestamp per IP for rate limiting |
+| `IpFailureTracker` | `ConcurrentDictionary<string, int>` | Failed attempt count per IP for DoS blocking |
+
+**Thread Safety:** Both dictionaries are `ConcurrentDictionary` — safe for simultaneous access from network and worker threads.
+
+**Lifecycle:**
+- `InitializeOnce()` — creates empty concurrent dictionaries.
+- `Clear()` — clears dictionaries without nulling (may be accessed from other threads).
+- `Deinitialize()` — clears and nulls references.
+
+### `AccountCreationSystemQueueData`
+
+Bounded async request channel and cancellation management. Implements `IAccountCreationSystemQueueData<NetworkConnection>`.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `RequestChannel` | `Channel<AccountCreationRequest<NetworkConnection>>` | Bounded channel (capacity 1000, DropWrite on overflow) |
+| `CancellationTokenSource` | `CancellationTokenSource` | Shutdown signal for async worker threads |
+| `PendingCount` | `int` | Current number of pending requests in the channel |
+
+**Channel Configuration:**
+- Capacity: 1000
+- `FullMode`: `DropWrite` — callers can detect rejection immediately under pressure
+- `SingleReader`: false (multiple workers can read)
+- `SingleWriter`: false (multiple network threads can write)
+
+**Lifecycle:**
+- `InitializeOnce()` — creates bounded channel and cancellation token.
+- `Clear()` — no-op (channel/CTS disposal only on deinitialize).
+- `Deinitialize()` — cancels token, disposes CTS, nulls channel.
+
+### `AccountCreationSystemMainThreadQueueData`
+
+Per-system main-thread action queue. Inherits from `SystemMainThreadQueueData` (which inherits from `MainThreadQueueData`). Implements `IAccountCreationSystemMainThreadQueueData`.
+
+Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker responses back to the Unity main thread.
+
+**Why a separate concrete type?** The `DataContainerRegistry` creates independent instances per concrete type, ensuring each system gets its own isolated main-thread queue.
 
 ## Request Pipeline
 
@@ -110,12 +179,14 @@ Every 60 seconds, stale entries older than `ipBlockDurationSeconds` are evicted 
 
 ## Runtime Metrics
 
-`AccountCreationSystemRuntimeData` tracks:
+`AccountCreationSystemRuntimeData` tracks performance counters and connection caches:
 
-- `TotalProcessed`
-- `TotalRejected`
-- `TotalFailed`
-- `CleanupTimer`
+- `TotalProcessed` — successful account creations
+- `TotalRejected` — rate-limited or backpressure-rejected requests
+- `TotalFailed` — DB/decrypt errors
+- `CleanupTimer` — accumulator for periodic stale-entry sweeps
+- `ConnectionIpCache` — per-connection IP lookup cache
+- `ConnectionEncryptionCache` — per-connection AES encryption data cache
 
 Public behaviour properties expose key counters:
 

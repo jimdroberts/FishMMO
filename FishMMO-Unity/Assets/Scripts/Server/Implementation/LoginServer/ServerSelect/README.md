@@ -11,6 +11,7 @@ The system additionally applies per-connection in-flight request gating and boun
 ```
 ServerSelect/
 ├── ServerSelectSystem.cs                    # Login server behaviour for world server list requests
+├── ServerSelectSystemRuntimeData.cs         # Per-connection in-flight gate container
 ├── ServerSelectSystemMainThreadQueueData.cs # Per-system main-thread action queue container
 └── README.md
 ```
@@ -31,23 +32,52 @@ ServerBehaviour
 └── ServerSelectSystem : IServerSelectSystem
 ```
 
-### Main-Thread Queue Data
+### Runtime Data Containers
 
 ```
 RuntimeDataContainer
+├── ServerSelectSystemRuntimeData
 └── MainThreadQueueData (abstract)
-    └── ServerSelectSystemMainThreadQueueData : IServerSelectSystemMainThreadQueueData
+    └── SystemMainThreadQueueData (abstract)
+        └── ServerSelectSystemMainThreadQueueData : IServerSelectSystemMainThreadQueueData
 ```
+
+## Runtime Data Container Details
+
+### `ServerSelectSystemRuntimeData`
+
+Mutable runtime state for the server selection system.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent server-list requests |
+
+**Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
+
+**Lifecycle:**
+- `InitializeOnce()` — creates empty `ConcurrentDictionary`.
+- `Clear()` — clears dictionary entries.
+- `Deinitialize()` — clears and nulls reference.
+
+### `ServerSelectSystemMainThreadQueueData`
+
+Per-system main-thread action queue. Inherits from `SystemMainThreadQueueData` (which inherits from `MainThreadQueueData`). Implements `IServerSelectSystemMainThreadQueueData`.
+
+Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker responses back to the Unity main thread.
+
+**Why a separate concrete type?** The `DataContainerRegistry` creates independent instances per concrete type, ensuring each system gets its own isolated main-thread queue.
 
 ## Runtime Data Dependencies
 
 `ServerSelectSystem` requires:
 
 - `[RequiresDataContainer(typeof(ServerSelectSystemMainThreadQueueData))]`
+- `[RequiresDataContainer(typeof(ServerSelectSystemRuntimeData))]`
 - `[RequiresDataContainer(typeof(AsyncWorkerData))]`
 
 | Container | Purpose |
 |-----------|---------|
+| `ServerSelectSystemRuntimeData` | Per-connection in-flight gate for server-list request deduplication |
 | `AsyncWorkerData` | Executes database fetches on worker threads |
 | `ServerSelectSystemMainThreadQueueData` | Marshals FishNet broadcasts to the Unity main thread |
 
@@ -83,7 +113,7 @@ RuntimeDataContainer
 
 ## Operational Safeguards
 
-- **Per-connection in-flight gate (`inFlightServerListRequests`)**
+- **Per-connection in-flight gate (`ServerSelectSystemRuntimeData.InFlightRequests`)**
     - Prevents one connection from stacking multiple concurrent server-list tasks.
     - Gate is released on both enqueue failure and async completion (`finally`).
 - **Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`)**

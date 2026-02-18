@@ -5,10 +5,20 @@ namespace FishMMO.Installer
 {
 	/// <summary>
 	/// Handles NGINX installation and detection.
-	/// Supports Windows (zip download) and Linux (pacman, apt-get, dnf, yum).
+	/// Supports Windows (zip download + Windows service) and Linux (pacman, apt-get, dnf, yum + systemd).
 	/// </summary>
 	public static class NGINXInstaller
 	{
+		/// <summary>
+		/// Computes the expected NGINX home directory from configured zip filename.
+		/// </summary>
+		/// <returns>Absolute NGINX home directory path.</returns>
+		public static string GetExpectedWindowsNginxHomePath()
+		{
+			string extractedFolderName = Path.GetFileNameWithoutExtension(InstallationConstants.NGINXWindowsFileName);
+			return Path.Combine(InstallationConstants.NGINXWindowsExtractPath, extractedFolderName);
+		}
+
 		/// <summary>
 		/// Installs NGINX based on the operating system.
 		/// </summary>
@@ -19,7 +29,17 @@ namespace FishMMO.Installer
 
 			if (await IsNGINXInstalledAsync())
 			{
-				InstallerProcessHelper.Log("NGINX appears to be already installed. Skipping installation.");
+				InstallerProcessHelper.Log("NGINX appears to be already installed. Ensuring service is configured and enabled.");
+
+				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+				{
+					await EnsureWindowsServiceConfiguredAsync(GetExpectedWindowsNginxHomePath());
+				}
+				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+				{
+					await EnsureLinuxServiceConfiguredAsync();
+				}
+
 				return;
 			}
 
@@ -77,25 +97,28 @@ namespace FishMMO.Installer
 					InstallationConstants.NGINXWindowsDownloadUrl,
 					InstallationConstants.NGINXWindowsFileName);
 				string extractDirectory = InstallationConstants.NGINXWindowsExtractPath;
+				string nginxHomeDirectory = GetExpectedWindowsNginxHomePath();
 
-				if (Directory.Exists(extractDirectory))
+				Directory.CreateDirectory(extractDirectory);
+
+				if (Directory.Exists(nginxHomeDirectory))
 				{
-					InstallerProcessHelper.Log($"NGINX extraction directory '{extractDirectory}' already exists. Please manually delete it or choose a different path if you want a clean install.");
-					if (!InstallerProcessHelper.PromptForYesNo("Attempt to extract anyway (may overwrite files)?"))
+					InstallerProcessHelper.Log($"Detected existing NGINX directory at '{nginxHomeDirectory}'.");
+					if (InstallerProcessHelper.PromptForYesNo("Delete the existing NGINX directory for a clean reinstall?"))
+					{
+						Directory.Delete(nginxHomeDirectory, true);
+					}
+					else if (!InstallerProcessHelper.PromptForYesNo("Continue and overwrite existing files where possible?"))
 					{
 						InstallerProcessHelper.Log("NGINX installation cancelled.");
 						return;
 					}
 				}
-				else
-				{
-					Directory.CreateDirectory(extractDirectory);
-				}
 
-				ZipFile.ExtractToDirectory(downloadPath, extractDirectory);
-				InstallerProcessHelper.Log($"NGINX successfully extracted to '{extractDirectory}'.");
-				InstallerProcessHelper.Log("To start NGINX, navigate to the extracted directory (e.g., C:\\nginx-1.24.0) and run 'nginx.exe'.");
-				InstallerProcessHelper.Log("For production, consider running NGINX as a Windows service.");
+				ZipFile.ExtractToDirectory(downloadPath, extractDirectory, true);
+				InstallerProcessHelper.Log($"NGINX successfully extracted to '{nginxHomeDirectory}'.");
+
+				await EnsureWindowsServiceConfiguredAsync(nginxHomeDirectory);
 			}
 			catch (Exception ex)
 			{
@@ -145,25 +168,7 @@ namespace FishMMO.Installer
 					return;
 				}
 
-				InstallerProcessHelper.Log("Starting NGINX service...");
-				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo systemctl start nginx", "Failed to start NGINX service."))
-				{
-					InstallerProcessHelper.Log("You may need to start it manually: 'sudo systemctl start nginx'");
-				}
-				else
-				{
-					InstallerProcessHelper.Log("NGINX service started successfully.");
-				}
-
-				InstallerProcessHelper.Log("Enabling NGINX to start on boot...");
-				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo systemctl enable nginx", "Failed to enable NGINX to start on boot."))
-				{
-					InstallerProcessHelper.Log("You may need to enable it manually: 'sudo systemctl enable nginx'");
-				}
-				else
-				{
-					InstallerProcessHelper.Log("NGINX enabled to start on boot.");
-				}
+				await EnsureLinuxServiceConfiguredAsync();
 
 				InstallerProcessHelper.Log("NGINX installed and configured on Linux. Check its status with 'sudo systemctl status nginx'.");
 			}
@@ -171,6 +176,91 @@ namespace FishMMO.Installer
 			{
 				InstallerProcessHelper.Log($"Error during NGINX installation on Linux: {ex.Message}");
 			}
+		}
+
+		/// <summary>
+		/// Ensures the Linux systemd service is enabled and running for NGINX.
+		/// </summary>
+		private static async Task EnsureLinuxServiceConfiguredAsync()
+		{
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+
+			InstallerProcessHelper.Log("Enabling and starting NGINX service via systemd...");
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo systemctl enable --now nginx", "Failed to enable and start NGINX service."))
+			{
+				InstallerProcessHelper.Log("You may need to run: 'sudo systemctl enable --now nginx'");
+				return;
+			}
+
+			bool isEnabled = await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"systemctl is-enabled nginx\"", (exitCode, output, error) => exitCode == 0 && output.Trim().Equals("enabled", StringComparison.OrdinalIgnoreCase));
+			bool isActive = await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"systemctl is-active nginx\"", (exitCode, output, error) => exitCode == 0 && output.Trim().Equals("active", StringComparison.OrdinalIgnoreCase));
+
+			if (isEnabled && isActive)
+			{
+				InstallerProcessHelper.Log("NGINX service is enabled and active.");
+			}
+			else
+			{
+				InstallerProcessHelper.Log("NGINX service verification failed. Check with 'systemctl status nginx'.");
+			}
+		}
+
+		/// <summary>
+		/// Ensures a Windows Service exists for NGINX, is set to automatic startup, and is running.
+		/// </summary>
+		/// <param name="nginxHomeDirectory">NGINX home directory containing nginx.exe and conf/nginx.conf.</param>
+		private static async Task EnsureWindowsServiceConfiguredAsync(string nginxHomeDirectory)
+		{
+			string nginxExecutablePath = Path.Combine(nginxHomeDirectory, "nginx.exe");
+			string nginxConfigurationPath = Path.Combine(nginxHomeDirectory, "conf", "nginx.conf");
+
+			if (!File.Exists(nginxExecutablePath))
+			{
+				InstallerProcessHelper.Log($"Cannot configure Windows service because '{nginxExecutablePath}' does not exist.");
+				return;
+			}
+
+			if (!File.Exists(nginxConfigurationPath))
+			{
+				InstallerProcessHelper.Log($"Cannot configure Windows service because '{nginxConfigurationPath}' does not exist.");
+				return;
+			}
+
+			string serviceName = InstallationConstants.NGINXWindowsServiceName;
+			string serviceBinPath = $"\"{nginxExecutablePath}\" -p \"{nginxHomeDirectory}\" -c conf\\nginx.conf";
+
+			bool serviceExists = await InstallerProcessHelper.RunProcessAsync("sc.exe", $"query \"{serviceName}\"", (exitCode, output, error) => exitCode == 0 && output.Contains("SERVICE_NAME", StringComparison.OrdinalIgnoreCase));
+
+			if (!serviceExists)
+			{
+				InstallerProcessHelper.Log($"Creating Windows service '{serviceName}' for NGINX...");
+				bool created = await InstallerProcessHelper.RunProcessAsync("sc.exe", $"create \"{serviceName}\" binPath= \"{serviceBinPath}\" start= auto DisplayName= \"FishMMO NGINX\"", (exitCode, output, error) => exitCode == 0);
+
+				if (!created)
+				{
+					InstallerProcessHelper.Log("Failed to create NGINX Windows service. Run installer as administrator.");
+					return;
+				}
+
+				await InstallerProcessHelper.RunProcessAsync("sc.exe", $"description \"{serviceName}\" \"FishMMO NGINX reverse proxy service\"");
+			}
+
+			InstallerProcessHelper.Log("Configuring Windows service startup mode to automatic...");
+			await InstallerProcessHelper.RunProcessAsync("sc.exe", $"config \"{serviceName}\" start= auto");
+
+			InstallerProcessHelper.Log("Starting Windows NGINX service...");
+			bool serviceStarted = await InstallerProcessHelper.RunProcessAsync("sc.exe", $"start \"{serviceName}\"", (exitCode, output, error) =>
+				exitCode == 0 ||
+				output.Contains("SERVICE_ALREADY_RUNNING", StringComparison.OrdinalIgnoreCase) ||
+				error.Contains("SERVICE_ALREADY_RUNNING", StringComparison.OrdinalIgnoreCase));
+
+			if (!serviceStarted)
+			{
+				InstallerProcessHelper.Log("Failed to start NGINX Windows service. Verify service account permissions and run as administrator.");
+				return;
+			}
+
+			InstallerProcessHelper.Log($"Windows service '{serviceName}' is configured, enabled, and running.");
 		}
 	}
 }

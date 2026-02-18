@@ -11,6 +11,7 @@ It also applies per-connection in-flight gating for select/delete requests and b
 ```
 CharacterSelect/
 ├── CharacterSelectSystem.cs                    # Stateless login-server character list/delete/select behaviour
+├── CharacterSelectSystemRuntimeData.cs         # Per-connection in-flight gate container
 ├── CharacterSelectSystemMainThreadQueueData.cs # Per-system main-thread action queue container
 └── README.md
 ```
@@ -31,29 +32,58 @@ ServerBehaviour
 └── CharacterSelectSystem : ICharacterSelectSystem
 ```
 
-### Main-Thread Queue Data
+### Runtime Data Containers
 
 ```
 RuntimeDataContainer
+├── CharacterSelectSystemRuntimeData
 └── MainThreadQueueData (abstract)
-    └── CharacterSelectSystemMainThreadQueueData : ICharacterSelectSystemMainThreadQueueData
+    └── SystemMainThreadQueueData (abstract)
+        └── CharacterSelectSystemMainThreadQueueData : ICharacterSelectSystemMainThreadQueueData
 ```
+
+## Runtime Data Container Details
+
+### `CharacterSelectSystemRuntimeData`
+
+Mutable runtime state for the character selection system.
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent select/delete operations |
+
+**Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
+
+**Lifecycle:**
+- `InitializeOnce()` — creates empty `ConcurrentDictionary`.
+- `Clear()` — clears dictionary entries.
+- `Deinitialize()` — clears and nulls reference.
+
+### `CharacterSelectSystemMainThreadQueueData`
+
+Per-system main-thread action queue. Inherits from `SystemMainThreadQueueData` (which inherits from `MainThreadQueueData`). Implements `ICharacterSelectSystemMainThreadQueueData`.
+
+Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker responses back to the Unity main thread.
+
+**Why a separate concrete type?** The `DataContainerRegistry` creates independent instances per concrete type, ensuring each system gets its own isolated main-thread queue.
 
 ## Runtime Data Dependencies
 
-`CharacterSelectSystem` declares two required containers:
+`CharacterSelectSystem` declares three required containers:
 
 - `[RequiresDataContainer(typeof(CharacterSelectSystemMainThreadQueueData))]`
+- `[RequiresDataContainer(typeof(CharacterSelectSystemRuntimeData))]`
 - `[RequiresDataContainer(typeof(AsyncWorkerData))]`
 
 | Container | Responsibility |
 |-----------|----------------|
+| `CharacterSelectSystemRuntimeData` | Per-connection in-flight gate for select/delete request deduplication |
 | `AsyncWorkerData` | Executes database operations in background worker threads |
 | `CharacterSelectSystemMainThreadQueueData` | Marshals network-safe response actions to main thread |
 
 ## Operational Safeguards
 
-- **Per-connection in-flight gate (`inFlightRequests`)**
+- **Per-connection in-flight gate (`CharacterSelectSystemRuntimeData.InFlightRequests`)**
     - Applied to `CharacterDeleteBroadcast` and `CharacterSelectBroadcast`.
     - Prevents a single connection from queueing multiple concurrent select/delete operations.
     - Gate is always released in `finally` after async processing.

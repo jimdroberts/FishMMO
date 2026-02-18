@@ -2,70 +2,158 @@
 
 ## Overview
 
-This project is a patch server for the FishMMO game, built with ASP.NET Core. It provides versioned patch delivery and update management for FishMMO clients, with a focus on Unity-based clients. The server exposes endpoints to:
+ASP.NET Core patch delivery server for FishMMO clients. Determines the latest available patch version by scanning the patch directory on startup, then serves versioned `.zip` patch files to clients that are behind the current version. Access is gated to FishMMO clients only via custom middleware.
 
-- Retrieve the latest available patch version
-- Download patch files for specific versions
-- Restrict access to Unity clients only (via middleware)
-- Track patch versions and serve them from a configurable directory
-- Provide a background heartbeat service for server health
+Designed to run behind NGINX as a reverse proxy (via `api.fishmmo.com`). NGINX terminates SSL and forwards requests over plain HTTP to Kestrel on localhost.
 
-## Features
+## Architecture
 
-- **REST API** for patch version and file delivery
-- **Unity-only middleware**: Only allows requests from Unity clients
-- **Configurable patch directory** and server port
-- **Background heartbeat service** for external IP reporting
-- **PostgreSQL database support** (via Npgsql)
-- **Structured logging**
+```
+Unity Client
+    |
+    v HTTPS (api.fishmmo.com/latest_version or api.fishmmo.com/{version})
++---------+
+|  NGINX  |  <- SSL termination, X-Forwarded-For/Proto
++----+----+
+     | HTTP (localhost:8090)
++----v--------------------------------------+
+|  Kestrel (Patcher)                       |
+|  +-- ForwardedHeaders middleware         |
+|  +-- CORS (AllowXFishMMO)                |
+|  +-- UnityOnlyMiddleware                 |
+|  +-- PatchController                     |
+|       +-- PatchVersionService            |
+|            +-- VersionConfig parser      |
+|       +-- Patches/ directory (zips)      |
++-------------------------------------------+
+```
+
+## Directory Structure
+
+```
+Patcher/
++-- Program.cs                      # Host builder, Kestrel config, middleware pipeline
++-- Controllers/
+|   +-- PatchController.cs          # GET /latest_version, GET /{version}
++-- Services/
+|   +-- PatchVersionService.cs      # Startup patch directory scanner, latest version tracker
++-- VersionConfig.cs                # SemVer parser with pre-release support and comparison operators
++-- UnityOnlyMiddleware.cs          # Rejects requests without X-FishMMO: Client header
++-- appsettings.json                # Port, patch directory, heartbeat, DB config
+```
+
+## Middleware Pipeline
+
+1. **`UseForwardedHeaders`** - trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
+2. **`UseCors("AllowXFishMMO")`** - allows any origin with `X-FishMMO` header.
+3. **`UnityOnlyMiddleware`** - checks `X-FishMMO` header equals `"Client"`. Returns 403 if missing/invalid.
+4. **`UseRouting`** - standard ASP.NET routing.
+5. **`MapControllers`** - maps attribute-routed controller endpoints.
+
+## Endpoints
+
+### `GET /latest_version`
+
+Returns the latest patch version string as JSON:
+```json
+{ "latest_version": "1.2.3" }
+```
+
+### `GET /{version}`
+
+Downloads the patch file for upgrading from `{version}` to the latest version.
+
+**Flow:**
+1. Parse client version via `VersionConfig.Parse(version)`.
+2. Parse server latest version via `VersionConfig.Parse(latest)`.
+3. If client >= latest: return `{ "status": "AlreadyUpdated" }`.
+4. Look for `Patches/{clientVersion}-{latestVersion}.zip`.
+5. If found: stream as `application/octet-stream`.
+
+**Response Codes:**
+
+| Code | Condition |
+|------|-----------|
+| 200 | Patch file streamed, or already up to date |
+| 400 | Invalid client version format |
+| 403 | Missing or invalid `X-FishMMO` header |
+| 404 | Patch file not found |
+| 500 | Latest version unavailable or malformed |
+
+## Key Components
+
+### `PatchVersionService`
+
+Singleton service that scans the `Patches/` directory on startup:
+
+- Matches files against regex: `^(\d+\.\d+\.\d+(?:\.[a-zA-Z0-9]+)?)-(\d+\.\d+\.\d+(?:\.[a-zA-Z0-9]+)?)\.zip$`
+- Parses target versions (second capture group) via `VersionConfig.Parse`.
+- Tracks the highest target version as `LatestVersion`.
+- Falls back to `0.0.0` if no valid patch files are found.
+
+### `VersionConfig`
+
+SemVer-compatible version model with pre-release support:
+
+- **Format:** `Major.Minor.Patch[.PreRelease]` (e.g., `1.2.3`, `1.2.3.alpha`)
+- **Comparison:** `IComparable<VersionConfig>` with full operator overloads (`==`, `!=`, `<`, `>`, `<=`, `>=`)
+- **Pre-release rules:** A pre-release version has lower precedence than a normal version (SemVer compliant). Pre-release tags are compared lexicographically.
+
+### Patch File Naming Convention
+
+```
+<from_version>-<to_version>.zip
+```
+
+Examples:
+- `1.0.0-1.0.1.zip`
+- `1.0.0.alpha-1.0.0.beta.zip`
 
 ## Configuration
 
-All configuration is handled via `appsettings.json` in the `Patcher` directory. Key options:
+`appsettings.json`:
 
-```
+```json
 {
   "WebServer": {
-    "HttpPort": "8090" // Port the server listens on
+    "HttpPort": "8090"
   },
   "Patches": {
-    "DirectoryName": "Patches" // Directory where patch .zip files are stored
+    "DirectoryName": "Patches"
   },
   "HeartbeatService": {
-    "IntervalSeconds": 60, // Heartbeat interval in seconds
-    "ExternalIpServiceUrl": "https://checkip.amazonaws.com/" // Service to check external IP
+    "IntervalSeconds": 60,
+    "ExternalIpServiceUrl": "https://checkip.amazonaws.com/"
   },
   "ConnectionStrings": {
-    "NpgsqlConnection": "Host=localhost;Port=5432;Username=fishmmo_user;Password=your_password;Database=fishmmo_db"
+    "NpgsqlConnection": "Host=localhost;Port=5432;Username=user;Password=pass;Database=fishmmo_db"
   }
 }
 ```
 
-### Patch File Naming
-Patch files must be named in the format:
-```
-<from_version>-<to_version>.zip
-```
-Example: `1.0.0-1.0.1.zip`
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `WebServer:HttpPort` | `8090` | Kestrel listen port (localhost only) |
+| `Patches:DirectoryName` | `Patches` | Subdirectory containing `.zip` patch files |
+| `HeartbeatService:IntervalSeconds` | `60` | Background heartbeat interval |
+| `HeartbeatService:ExternalIpServiceUrl` | `https://checkip.amazonaws.com/` | External IP discovery URL |
+| `ConnectionStrings:NpgsqlConnection` | - | PostgreSQL connection string |
 
-### Endpoints
-- `GET /latest_version` — Returns the latest patch version
-- `GET /{version}` — Returns the patch file for the specified version (if available)
+## Security
 
-## Running the Server
+- **UnityOnlyMiddleware** rejects all requests without `X-FishMMO: Client` header.
+- **CORS policy** (`AllowXFishMMO`) restricts allowed headers to `X-FishMMO`.
+- **ForwardedHeaders** ensures correct client IP logging when behind NGINX.
+- Kestrel binds to **localhost only** - not directly accessible from the internet.
+- Patch files are streamed with async `FileStream` to avoid memory pressure on large patches.
 
-1. Restore dependencies and build the project:
-   ```
-   dotnet restore
-   dotnet build
-   ```
-2. Run the server:
-   ```
-   dotnet run --project Patcher/Patcher.csproj
-   ```
-3. Configure your Unity client to request patches from this server's address and port.
+## External Dependencies
 
-## Notes
-- Only Unity clients (with a valid Unity User-Agent) are allowed to access patch endpoints.
-- Ensure the patch directory exists and contains valid patch files.
-- Update the database connection string as needed for your environment.
+- **FishMMO.Logging** - structured async logging.
+- **Npgsql** - PostgreSQL connection (for heartbeat/registration).
+
+## Requirements
+
+- .NET 8.0 SDK or later
+- `Patches/` directory with properly named `.zip` files
+- NGINX reverse proxy (recommended for production)

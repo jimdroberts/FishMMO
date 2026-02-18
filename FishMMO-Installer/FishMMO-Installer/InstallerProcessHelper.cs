@@ -20,7 +20,7 @@ namespace FishMMO.Installer
 
 		/// <summary>
 		/// Gets the appropriate shell command and argument prefix for the current OS.
-		/// Windows returns cmd.exe /c, Linux returns /bin/bash -c.
+		/// Windows returns cmd.exe /c. Linux prefers fish (-lc) when available, otherwise /bin/bash -c.
 		/// </summary>
 		/// <returns>Tuple of shell executable and argument prefix.</returns>
 		public static (string shell, string argPrefix) GetShellCommand()
@@ -31,6 +31,12 @@ namespace FishMMO.Installer
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 			{
+				const string fishShellPath = "/usr/bin/fish";
+				if (File.Exists(fishShellPath))
+				{
+					return (fishShellPath, "-lc");
+				}
+
 				return ("/bin/bash", "-c");
 			}
 			else
