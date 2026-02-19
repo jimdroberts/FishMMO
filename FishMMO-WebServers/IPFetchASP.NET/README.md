@@ -36,6 +36,7 @@ IpFetchServer/
 |   +-- LoginServerController.cs    # GET /loginserver - returns login server list
 +-- UnityOnlyMiddleware.cs          # Rejects requests without X-FishMMO: Client header
 +-- appsettings.json                # Port, connection string configuration
+
 ```
 
 ## Middleware Pipeline
@@ -65,12 +66,27 @@ Returns JSON array of active login servers with `Address` and `Port` fields.
 
 ## Configuration
 
-`appsettings.json`:
+Configuration is loaded in the following order (later sources override earlier):
+
+- `appsettings.json` (defaults)
+- `appsettings.{Environment}.json` (e.g. `appsettings.Development.json`, `appsettings.Production.json`)
+- Environment variables
+- Command-line arguments
+
+Environment variable precedence:
+
+- `FISHMMO_ENVIRONMENT` (custom, highest precedence for selecting the JSON file)
+- `DOTNET_ENVIRONMENT`
+- `ASPNETCORE_ENVIRONMENT`
+
+The application reads `FISHMMO_ENVIRONMENT` first (if present) and will use it to determine which `appsettings.{Environment}.json` file to load.
+
+Example `appsettings.Development.json` (kept out of source control in most setups):
 
 ```json
 {
   "ConnectionStrings": {
-    "NpgsqlConnection": "Host=localhost;Port=5432;Database=fishmmo_db;Username=user;Password=pass;"
+    "NpgsqlConnection": "Host=localhost;Port=5432;Database=fishmmo_dev;Username=devuser;Password=devpass;"
   },
   "WebServer": {
     "HttpPort": 8080
@@ -78,10 +94,22 @@ Returns JSON array of active login servers with `Address` and `Port` fields.
 }
 ```
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `ConnectionStrings:NpgsqlConnection` | - | PostgreSQL connection string |
-| `WebServer:HttpPort` | `8080` | Kestrel listen port (localhost only) |
+Recommendations:
+
+- Do not commit production connection strings into source control. Remove `ConnectionStrings` from `appsettings.json` and provide them via environment variables or `appsettings.Production.json`.
+- To set the connection string via environment variables, use the double-underscore form to map to nested keys. For example:
+
+```
+export ConnectionStrings__NpgsqlConnection="Host=...;Port=5432;Database=...;Username=...;Password=...;"
+```
+
+- The application will also pick up `WebServer:HttpPort` from configuration or environment variables. For example:
+
+```
+export WebServer__HttpPort=8080
+```
+
+- The code explicitly configures JSON files, environment variables, and command-line args. `Host.CreateDefaultBuilder` already provides similar behavior; this project makes the sources explicit.
 
 ## Security
 

@@ -33,7 +33,7 @@ Browser
 WebGLServer/
 +-- Program.cs                      # Host builder, Kestrel config, middleware pipeline
 +-- RangeRequestMiddleware.cs       # HTTP range request handler for partial content delivery
-+-- appsettings.json                # Port, connection string configuration
+-- appsettings.json                # Port configuration
 +-- wwwroot/                        # Unity WebGL build output (static files served from here)
     +-- index.html
     +-- Build/
@@ -100,9 +100,6 @@ Custom middleware that handles HTTP range requests for efficient streaming of la
 
 ```json
 {
-  "ConnectionStrings": {
-    "NpgsqlConnection": "Host=localhost;Port=5432;Database=fishmmo_db;Username=user;Password=pass;"
-  },
   "WebServer": {
     "HttpPort": 8000
   }
@@ -111,7 +108,6 @@ Custom middleware that handles HTTP range requests for efficient streaming of la
 
 | Key | Default | Purpose |
 |-----|---------|---------|
-| `ConnectionStrings:NpgsqlConnection` | - | PostgreSQL connection string |
 | `WebServer:HttpPort` | `8000` | Kestrel listen port (localhost only) |
 
 ## Security

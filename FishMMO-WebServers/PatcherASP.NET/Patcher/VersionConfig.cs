@@ -2,7 +2,7 @@ using System;
 using System.Text.RegularExpressions;
 using FishMMO.Logging;
 
-public class VersionConfig : IComparable<VersionConfig>
+public class VersionConfig : IComparable<VersionConfig?>
 {
 	public int Major = 0;
 	public int Minor = 0;
@@ -27,7 +27,7 @@ public class VersionConfig : IComparable<VersionConfig>
 	/// </summary>
 	/// <param name="versionString">The version string to parse.</param>
 	/// <returns>A new VersionConfig instance populated with the parsed version, or null if parsing fails.</returns>
-	public static VersionConfig Parse(string versionString)
+	public static VersionConfig? Parse(string versionString)
 	{
 		if (string.IsNullOrWhiteSpace(versionString))
 		{
@@ -60,7 +60,7 @@ public class VersionConfig : IComparable<VersionConfig>
 	///  0 if versions are equal
 	///  1 if this version is newer
 	/// </summary>
-	public int CompareTo(VersionConfig other)
+	public int CompareTo(VersionConfig? other)
 	{
 		if (other == null) return 1; // Any version is newer than null
 
@@ -98,49 +98,54 @@ public class VersionConfig : IComparable<VersionConfig>
 		return 0; // Versions are effectively equal
 	}
 
-	public static bool operator ==(VersionConfig a, VersionConfig b)
+	public static bool operator ==(VersionConfig? a, VersionConfig? b)
 	{
 		if (ReferenceEquals(a, b)) return true;
 		if (ReferenceEquals(a, null) || ReferenceEquals(b, null)) return false;
 		return a.CompareTo(b) == 0;
 	}
 
-	public static bool operator !=(VersionConfig a, VersionConfig b)
+	public static bool operator !=(VersionConfig? a, VersionConfig? b)
 	{
 		return !(a == b);
 	}
 
-	public static bool operator <(VersionConfig a, VersionConfig b)
+	public static bool operator <(VersionConfig? a, VersionConfig? b)
 	{
-		if (ReferenceEquals(a, null)) return !ReferenceEquals(b, null); // null < any non-null
+		if (a is null) return b is not null; // null < any non-null
+		if (b is null) return false;
 		return a.CompareTo(b) < 0;
 	}
 
-	public static bool operator >(VersionConfig a, VersionConfig b)
+	public static bool operator >(VersionConfig? a, VersionConfig? b)
 	{
-		if (ReferenceEquals(b, null)) return !ReferenceEquals(a, null); // any non-null > null
+		if (a is null) return false;
+		if (b is null) return true;
 		return a.CompareTo(b) > 0;
 	}
 
-	public static bool operator <=(VersionConfig a, VersionConfig b)
+	public static bool operator <=(VersionConfig? a, VersionConfig? b)
 	{
 		return a < b || a == b;
 	}
 
-	public static bool operator >=(VersionConfig a, VersionConfig b)
+	public static bool operator >=(VersionConfig? a, VersionConfig? b)
 	{
 		return a > b || a == b;
 	}
 
-	public override bool Equals(object obj)
+	public override bool Equals(object? obj)
 	{
 		return Equals(obj as VersionConfig);
 	}
 
-	public bool Equals(VersionConfig other)
+	public bool Equals(VersionConfig? other)
 	{
-		if (ReferenceEquals(other, null)) return false;
-		return this.CompareTo(other) == 0;
+		if (other is null) return false;
+		return this.Major == other.Major
+			&& this.Minor == other.Minor
+			&& this.Patch == other.Patch
+			&& string.Equals(this.PreRelease, other.PreRelease, StringComparison.OrdinalIgnoreCase);
 	}
 
 	public override int GetHashCode()

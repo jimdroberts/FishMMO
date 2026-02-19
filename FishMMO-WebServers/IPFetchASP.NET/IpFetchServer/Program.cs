@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using FishMMO.Logging;
+using System;
 using System.Threading.Tasks;
 
 namespace FishMMO.WebServer
@@ -23,6 +24,27 @@ namespace FishMMO.WebServer
 
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
+				.ConfigureAppConfiguration((hostingContext, config) =>
+				{
+					// 1. Resolve the environment manually to match the Installer's logic
+					string? envName = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT")
+							?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+							?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+							?? "Production"; // Default to Production if none found
+
+					// 2. Override the HostingEnvironment so .NET knows which JSON to look for
+					hostingContext.HostingEnvironment.EnvironmentName = envName;
+
+					// 3. Clear and Rebuild config to ensure the priority is correct
+					config.Sources.Clear();
+
+					config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+						.AddJsonFile($"appsettings.{envName}.json", optional: true, reloadOnChange: true)
+						.AddEnvironmentVariables() // This allows FISHMMO_ENVIRONMENT to be used as a setting too
+						.AddCommandLine(args ?? Array.Empty<string>());
+
+					Log.Info("Program", $"Configuration loaded for Environment: {envName}");
+				})
 				.ConfigureLogging((context, logging) =>
 				{
 					logging.ClearProviders();

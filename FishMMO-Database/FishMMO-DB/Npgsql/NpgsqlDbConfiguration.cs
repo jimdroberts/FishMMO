@@ -17,18 +17,19 @@ namespace FishMMO.Database.Npgsql
 	/// </remarks>
 	public sealed class NpgsqlDbConfiguration
 	{
+		private const string FishMMOEnvironmentVariable = "FISHMMO_ENVIRONMENT";
 		private const string DotNetEnvironmentVariable = "DOTNET_ENVIRONMENT";
 		private const string AspNetCoreEnvironmentVariable = "ASPNETCORE_ENVIRONMENT";
-
-		/// <summary>
-		/// Gets the database schema name.
-		/// </summary>
-		public string Schema { get; }
 
 		/// <summary>
 		/// Gets the resolved configuration environment name.
 		/// </summary>
 		public string EnvironmentName { get; }
+
+		/// <summary>
+		/// Gets the database schema name.
+		/// </summary>
+		public string Schema { get; }
 
 		/// <summary>
 		/// Gets the database name.
@@ -192,7 +193,13 @@ namespace FishMMO.Database.Npgsql
 				return environmentName.Trim();
 			}
 
-			string resolved = Environment.GetEnvironmentVariable(DotNetEnvironmentVariable);
+			string resolved = Environment.GetEnvironmentVariable(FishMMOEnvironmentVariable);
+			if (!string.IsNullOrWhiteSpace(resolved))
+			{
+				return resolved.Trim();
+			}
+
+			resolved = Environment.GetEnvironmentVariable(DotNetEnvironmentVariable);
 			if (!string.IsNullOrWhiteSpace(resolved))
 			{
 				return resolved.Trim();
@@ -209,11 +216,11 @@ namespace FishMMO.Database.Npgsql
 
 		private static string GetBuildDefaultEnvironmentName()
 		{
-			#if DEBUG
+#if DEBUG
 			return "Development";
-			#else
+#else
 			return "Production";
-			#endif
+#endif
 		}
 
 		/// <summary>

@@ -9,9 +9,10 @@ This library supports layered configuration in this order:
 `Environment` is resolved by:
 
 1. Explicit constructor argument (`environmentName`)
-2. `DOTNET_ENVIRONMENT`
-3. `ASPNETCORE_ENVIRONMENT`
-4. Build fallback: `Development` in Debug, `Production` otherwise
+2. `FISHMMO_ENVIRONMENT`
+3. `DOTNET_ENVIRONMENT`
+4. `ASPNETCORE_ENVIRONMENT`
+5. Build fallback: `Development` in Debug, `Production` otherwise
 
 ---
 
@@ -272,6 +273,6 @@ var factory = new NpgsqlDbContextFactory(config);
 
 ## Notes
 
-- Prefer `DOTNET_ENVIRONMENT` for non-ASP.NET hosts.
+- Prefer `FISHMMO_ENVIRONMENT` for environment configuration.
 - Keep secrets out of source control; use environment variables or secret stores.
 - In production, set `enableLogging: false` to avoid sensitive data logging.

@@ -1,5 +1,5 @@
-using System.Text.Json;
 using FishMMO.Database;
+using Microsoft.Extensions.Configuration;
 
 namespace FishMMO.Installer
 {
@@ -27,24 +27,50 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Loads application settings from appsettings.json in the working directory.
+		/// Loads application settings using ConfigurationBuilder.
+		/// appsettings.json is treated as the default source and optional
+		/// appsettings.{Environment}.json overlays values when an environment is provided.
 		/// </summary>
 		private static void LoadAppSettings()
 		{
 			string workingDirectory = InstallerProcessHelper.GetWorkingDirectory();
-			string appSettingsPath = Path.Combine(workingDirectory, "appsettings.json");
+			string baseAppSettingsPath = Path.Combine(workingDirectory, "appsettings.json");
+			string? environmentName = GetEnvironmentName();
+			string? environmentFileName = string.IsNullOrWhiteSpace(environmentName) ? null : $"appsettings.{environmentName}.json";
+			string? environmentAppSettingsPath = string.IsNullOrWhiteSpace(environmentFileName)
+				? null
+				: Path.Combine(workingDirectory, environmentFileName);
 
-			if (File.Exists(appSettingsPath))
+			if (File.Exists(baseAppSettingsPath))
 			{
 				try
 				{
-					string jsonContent = File.ReadAllText(appSettingsPath);
-					appSettings = JsonSerializer.Deserialize<AppSettings>(jsonContent) ?? new AppSettings();
-					Console.WriteLine("appsettings.json loaded successfully.");
+					var configurationBuilder = new ConfigurationBuilder()
+						.SetBasePath(workingDirectory)
+						.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+
+					if (!string.IsNullOrWhiteSpace(environmentFileName))
+					{
+						configurationBuilder.AddJsonFile(environmentFileName, optional: true, reloadOnChange: false);
+					}
+					configurationBuilder.AddEnvironmentVariables(); // This allows FISHMMO_ENVIRONMENT to be used as a setting too
+
+					IConfigurationRoot configurationRoot = configurationBuilder.Build();
+					appSettings = configurationRoot.Get<AppSettings>() ?? new AppSettings();
+
+					InstallerProcessHelper.Log("Loaded appsettings.json successfully.");
+					if (!string.IsNullOrWhiteSpace(environmentAppSettingsPath) && File.Exists(environmentAppSettingsPath))
+					{
+						InstallerProcessHelper.Log($"Loaded and merged {Path.GetFileName(environmentAppSettingsPath)}.");
+					}
+					else if (!string.IsNullOrWhiteSpace(environmentName))
+					{
+						InstallerProcessHelper.Log($"Environment '{environmentName}' detected but appsettings.{environmentName}.json was not found. Using base appsettings.json.");
+					}
 				}
 				catch (Exception ex)
 				{
-					InstallerProcessHelper.Log($"Error loading appsettings.json: {ex.Message}. Database operations may be affected.");
+					InstallerProcessHelper.Log($"Error loading appsettings: {ex.Message}. Database operations may be affected.");
 					appSettings = new AppSettings();
 				}
 			}
@@ -54,6 +80,35 @@ namespace FishMMO.Installer
 				appSettings = new AppSettings();
 			}
 		}
+
+		/// <summary>
+		/// Resolves the active environment name from known environment variables.
+		/// Priority order: FISHMMO_ENVIRONMENT, DOTNET_ENVIRONMENT, ASPNETCORE_ENVIRONMENT.
+		/// </summary>
+		/// <returns>Environment name when present; otherwise null.</returns>
+		private static string? GetEnvironmentName()
+		{
+			string? fishMmoEnvironment = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT");
+			if (!string.IsNullOrWhiteSpace(fishMmoEnvironment))
+			{
+				return fishMmoEnvironment.Trim();
+			}
+
+			string? dotNetEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+			if (!string.IsNullOrWhiteSpace(dotNetEnvironment))
+			{
+				return dotNetEnvironment.Trim();
+			}
+
+			string? aspNetCoreEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+			if (!string.IsNullOrWhiteSpace(aspNetCoreEnvironment))
+			{
+				return aspNetCoreEnvironment.Trim();
+			}
+
+			return null;
+		}
+
 
 		/// <summary>
 		/// Runs the interactive console menu loop until the user quits.

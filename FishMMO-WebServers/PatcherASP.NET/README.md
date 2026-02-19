@@ -39,7 +39,7 @@ Patcher/
 |   +-- PatchVersionService.cs      # Startup patch directory scanner, latest version tracker
 +-- VersionConfig.cs                # SemVer parser with pre-release support and comparison operators
 +-- UnityOnlyMiddleware.cs          # Rejects requests without X-FishMMO: Client header
-+-- appsettings.json                # Port, patch directory, heartbeat, DB config
++-- appsettings.json                # Port, patch directory
 ```
 
 ## Middleware Pipeline
@@ -120,13 +120,6 @@ Examples:
   },
   "Patches": {
     "DirectoryName": "Patches"
-  },
-  "HeartbeatService": {
-    "IntervalSeconds": 60,
-    "ExternalIpServiceUrl": "https://checkip.amazonaws.com/"
-  },
-  "ConnectionStrings": {
-    "NpgsqlConnection": "Host=localhost;Port=5432;Username=user;Password=pass;Database=fishmmo_db"
   }
 }
 ```
@@ -135,9 +128,6 @@ Examples:
 |-----|---------|---------|
 | `WebServer:HttpPort` | `8090` | Kestrel listen port (localhost only) |
 | `Patches:DirectoryName` | `Patches` | Subdirectory containing `.zip` patch files |
-| `HeartbeatService:IntervalSeconds` | `60` | Background heartbeat interval |
-| `HeartbeatService:ExternalIpServiceUrl` | `https://checkip.amazonaws.com/` | External IP discovery URL |
-| `ConnectionStrings:NpgsqlConnection` | - | PostgreSQL connection string |
 
 ## Security
 
