@@ -20,6 +20,8 @@ nupkg/
 *.user
 *.userosscache
 *.sln.docstates
+[Mm]igrations*
+*appsettings.json
 
 # Build results
 [Dd]ebug/

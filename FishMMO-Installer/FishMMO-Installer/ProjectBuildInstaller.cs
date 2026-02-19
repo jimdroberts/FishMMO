@@ -7,6 +7,27 @@ namespace FishMMO.Installer
 	public static class ProjectBuildInstaller
 	{
 		/// <summary>
+		/// Build result payload for one project build execution.
+		/// </summary>
+		private sealed class ProjectBuildResult
+		{
+			/// <summary>
+			/// Full path to the project that was built.
+			/// </summary>
+			public string projectPath = string.Empty;
+
+			/// <summary>
+			/// True when the build completed successfully.
+			/// </summary>
+			public bool succeeded;
+
+			/// <summary>
+			/// Build error output captured from the DotNet process.
+			/// </summary>
+			public string errorOutput = string.Empty;
+		}
+
+		/// <summary>
 		/// Prompts for a root directory, discovers all .csproj files recursively,
 		/// asks for confirmation, and builds each project with DotNet.
 		/// </summary>
@@ -43,34 +64,98 @@ namespace FishMMO.Installer
 				return;
 			}
 
-			int successCount = 0;
-			int failureCount = 0;
-			var failedProjectPaths = new List<string>();
+			InstallerProcessHelper.Log("Starting parallel build for all discovered projects...");
 
-			foreach (string projectPath in projectPaths)
-			{
-				InstallerProcessHelper.Log($"Building: {projectPath}");
-				bool buildSucceeded = await DotNetInstaller.RunDotNetCommandAsync($"build \"{projectPath}\" -nologo");
-				if (buildSucceeded)
-				{
-					successCount++;
-				}
-				else
-				{
-					failureCount++;
-					failedProjectPaths.Add(projectPath);
-				}
-			}
+			List<Task<ProjectBuildResult>> buildTasks = projectPaths
+				.Select(BuildProjectAsync)
+				.ToList();
+
+			ProjectBuildResult[] buildResults = await Task.WhenAll(buildTasks);
+
+			int successCount = buildResults.Count(result => result.succeeded);
+			int failureCount = buildResults.Length - successCount;
+			List<ProjectBuildResult> failedResults = buildResults
+				.Where(result => !result.succeeded)
+				.ToList();
 
 			InstallerProcessHelper.Log($"Build summary: {successCount} succeeded, {failureCount} failed.");
-			if (failedProjectPaths.Count > 0)
+			if (failedResults.Count > 0)
 			{
 				InstallerProcessHelper.Log("Failed projects:");
-				foreach (string failedProjectPath in failedProjectPaths)
+				foreach (ProjectBuildResult failedResult in failedResults)
 				{
-					InstallerProcessHelper.Log($" - {failedProjectPath}");
+					InstallerProcessHelper.Log($" - {failedResult.projectPath}");
+					if (!string.IsNullOrWhiteSpace(failedResult.errorOutput))
+					{
+						InstallerProcessHelper.Log(failedResult.errorOutput.Trim());
+					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// Cleans and then builds a single project file, capturing the final outcome.
+		/// </summary>
+		/// <param name="projectPath">Absolute path to the project file.</param>
+		/// <returns>Build outcome payload for the requested project.</returns>
+		private static async Task<ProjectBuildResult> BuildProjectAsync(string projectPath)
+		{
+			InstallerProcessHelper.Log($"Cleaning: {projectPath}");
+
+			var result = new ProjectBuildResult
+			{
+				projectPath = projectPath
+			};
+
+			bool cleanSucceeded = await InstallerProcessHelper.RunProcessAsync(
+				"dotnet",
+				$"clean \"{projectPath}\" -nologo",
+				(exitCode, output, error) =>
+				{
+					if (!string.IsNullOrWhiteSpace(output))
+					{
+						Console.WriteLine(output);
+					}
+
+					if (!string.IsNullOrWhiteSpace(error))
+					{
+						result.errorOutput = error;
+					}
+
+					return exitCode == 0;
+				});
+
+			if (!cleanSucceeded)
+			{
+				result.succeeded = false;
+				if (string.IsNullOrWhiteSpace(result.errorOutput))
+				{
+					result.errorOutput = "dotnet clean failed.";
+				}
+				return result;
+			}
+
+			InstallerProcessHelper.Log($"Building: {projectPath}");
+
+			result.succeeded = await InstallerProcessHelper.RunProcessAsync(
+				"dotnet",
+				$"build \"{projectPath}\" -nologo",
+				(exitCode, output, error) =>
+				{
+					if (!string.IsNullOrWhiteSpace(output))
+					{
+						Console.WriteLine(output);
+					}
+
+					if (!string.IsNullOrWhiteSpace(error))
+					{
+						result.errorOutput = error;
+					}
+
+					return exitCode == 0;
+				});
+
+			return result;
 		}
 
 		/// <summary>
