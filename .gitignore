@@ -1,29 +1,27 @@
-# Certificates
-*.pem
-*.pfx
-
-*.swp
-*.*~
-project.lock.json
+# --- OS Metadata ---
 .DS_Store
-*.pyc
-nupkg/
+Thumbs.db
+*.*~
+*.swp
 
-# Visual Studio Code
-.vscode
-
-# Rider
-.idea
-
-# User-specific files
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+.vs/
 *.suo
 *.user
 *.userosscache
 *.sln.docstates
-[Mm]igrations*
-*appsettings.json
+*.vsconfig
 
-# Build results
+# --- Certificates & Secrets ---
+*.pem
+*.pfx
+*.cert
+*.secret
+appsettings.*.json
+
+# --- Build & Output (General) ---
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -35,9 +33,16 @@ bld/
 [Bb]in/
 [Oo]bj/
 [Oo]ut/
+bin/
+obj/
+publish/
 msbuild.log
 msbuild.err
 msbuild.wrn
 
-# Visual Studio cache directory
-.vs/
+# --- .NET / NuGet ---
+project.lock.json
+*.pyc
+nupkg/
+packages/
+[Mm]igrations*
