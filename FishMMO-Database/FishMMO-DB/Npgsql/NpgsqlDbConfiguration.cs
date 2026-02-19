@@ -17,10 +17,18 @@ namespace FishMMO.Database.Npgsql
 	/// </remarks>
 	public sealed class NpgsqlDbConfiguration
 	{
+		private const string DotNetEnvironmentVariable = "DOTNET_ENVIRONMENT";
+		private const string AspNetCoreEnvironmentVariable = "ASPNETCORE_ENVIRONMENT";
+
 		/// <summary>
 		/// Gets the database schema name.
 		/// </summary>
 		public string Schema { get; }
+
+		/// <summary>
+		/// Gets the resolved configuration environment name.
+		/// </summary>
+		public string EnvironmentName { get; }
 
 		/// <summary>
 		/// Gets the database name.
@@ -103,6 +111,26 @@ namespace FishMMO.Database.Npgsql
 		/// <param name="enableLogging">Enable sensitive data logging for development.</param>
 		/// <param name="commandTimeoutOverride">Optional command timeout override (null uses config value).</param>
 		public NpgsqlDbConfiguration(string configPath, bool enableLogging, int? commandTimeoutOverride)
+			: this(configPath, null, enableLogging, commandTimeoutOverride)
+		{
+		}
+
+		/// <summary>
+		/// Initializes configuration from the specified path and environment with optional overrides.
+		/// Layered loading order:
+		/// 1) appsettings.json (required)
+		/// 2) appsettings.{Environment}.json (optional)
+		/// 3) environment variables
+		/// </summary>
+		/// <param name="configPath">Path to configuration directory containing appsettings files.</param>
+		/// <param name="environmentName">
+		/// Optional environment name (for example: Development or Production).
+		/// If null/empty, resolves from DOTNET_ENVIRONMENT or ASPNETCORE_ENVIRONMENT,
+		/// then falls back to Development in Debug builds and Production in non-Debug builds.
+		/// </param>
+		/// <param name="enableLogging">Enable sensitive data logging for development.</param>
+		/// <param name="commandTimeoutOverride">Optional command timeout override (null uses config value).</param>
+		public NpgsqlDbConfiguration(string configPath, string environmentName, bool enableLogging, int? commandTimeoutOverride)
 		{
 			EnableLogging = enableLogging;
 
@@ -110,10 +138,9 @@ namespace FishMMO.Database.Npgsql
 				? AppDomain.CurrentDomain.BaseDirectory
 				: configPath;
 
-			IConfiguration configuration = new ConfigurationBuilder()
-				.SetBasePath(basePath)
-				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-				.Build();
+			EnvironmentName = ResolveEnvironmentName(environmentName);
+
+			IConfiguration configuration = BuildConfiguration(basePath, EnvironmentName);
 
 			var npgsqlSection = configuration.GetSection("Npgsql");
 
@@ -140,6 +167,53 @@ namespace FishMMO.Database.Npgsql
 			ConnectionString = BuildConnectionString();
 			PerformanceConfiguration = LoadPerformanceConfiguration(configuration);
 			RetryPolicy = LoadRetryPolicyConfiguration(configuration);
+		}
+
+		private static IConfiguration BuildConfiguration(string basePath, string environmentName)
+		{
+			var builder = new ConfigurationBuilder()
+				.SetBasePath(basePath)
+				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+
+			if (!string.IsNullOrWhiteSpace(environmentName))
+			{
+				builder.AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: false);
+			}
+
+			builder.AddEnvironmentVariables();
+
+			return builder.Build();
+		}
+
+		private static string ResolveEnvironmentName(string environmentName)
+		{
+			if (!string.IsNullOrWhiteSpace(environmentName))
+			{
+				return environmentName.Trim();
+			}
+
+			string resolved = Environment.GetEnvironmentVariable(DotNetEnvironmentVariable);
+			if (!string.IsNullOrWhiteSpace(resolved))
+			{
+				return resolved.Trim();
+			}
+
+			resolved = Environment.GetEnvironmentVariable(AspNetCoreEnvironmentVariable);
+			if (!string.IsNullOrWhiteSpace(resolved))
+			{
+				return resolved.Trim();
+			}
+
+			return GetBuildDefaultEnvironmentName();
+		}
+
+		private static string GetBuildDefaultEnvironmentName()
+		{
+			#if DEBUG
+			return "Development";
+			#else
+			return "Production";
+			#endif
 		}
 
 		/// <summary>
