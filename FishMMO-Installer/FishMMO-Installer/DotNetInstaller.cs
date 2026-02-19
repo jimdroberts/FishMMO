@@ -288,10 +288,7 @@ namespace FishMMO.Installer
 			Console.WriteLine("Running DotNet Command: \r\n" +
 							  "dotnet " + arguments);
 
-			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
-			string fullArguments = $"{argPrefix} \"dotnet {arguments}\"";
-
-			bool success = await InstallerProcessHelper.RunProcessAsync(shell, fullArguments,
+			bool success = await InstallerProcessHelper.RunProcessAsync("dotnet", arguments,
 				(exitCode, output, error) =>
 				{
 					if (!string.IsNullOrWhiteSpace(output))
