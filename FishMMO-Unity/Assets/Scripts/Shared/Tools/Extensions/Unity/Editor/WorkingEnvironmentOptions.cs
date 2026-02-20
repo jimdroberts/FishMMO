@@ -4,14 +4,14 @@ using UnityEditor;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Represents the working environment state for builds (Development or Release).
+	/// Represents the working environment state for builds (Development or Production).
 	/// </summary>
 	public enum WorkingEnvironmentState
 	{
 		/// <summary>Development environment.</summary>
 		Development = 0,
-		/// <summary>Release environment.</summary>
-		Release,
+		/// <summary>Production environment.</summary>
+		Production,
 	}
 
 	/// <summary>
@@ -31,12 +31,12 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sets the working environment to Release mode.
+		/// Sets the working environment to Production mode.
 		/// </summary>
-		[MenuItem("FishMMO/Build/Environment/Release")]
+		[MenuItem("FishMMO/Build/Environment/Production")]
 		static void WorkingEnvironmentToggleOption0()
 		{
-			EditorPrefs.SetInt("FishMMOWorkingEnvironmentToggle", (int)WorkingEnvironmentState.Release);
+			EditorPrefs.SetInt("FishMMOWorkingEnvironmentToggle", (int)WorkingEnvironmentState.Production);
 		}
 
 		/// <summary>
@@ -52,12 +52,12 @@ namespace FishMMO.Shared
 		/// Validation method for environment menu. Updates checkmarks based on current environment state.
 		/// </summary>
 		/// <returns>True if menu should be shown.</returns>
-		[MenuItem("FishMMO/Build/Environment/Release", true)]
+		[MenuItem("FishMMO/Build/Environment/Production", true)]
 		static bool WorkingEnvironmentValidation()
 		{
 			// Uncheck all options before showing them
 			Menu.SetChecked("FishMMO/Build/Environment/Development", false);
-			Menu.SetChecked("FishMMO/Build/Environment/Release", false);
+			Menu.SetChecked("FishMMO/Build/Environment/Production", false);
 
 			WorkingEnvironmentState status = (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");
 
@@ -67,15 +67,15 @@ namespace FishMMO.Shared
 				case WorkingEnvironmentState.Development:
 					Menu.SetChecked("FishMMO/Build/Environment/Development", true);
 					break;
-				case WorkingEnvironmentState.Release:
-					Menu.SetChecked("FishMMO/Build/Environment/Release", true);
+				case WorkingEnvironmentState.Production:
+					Menu.SetChecked("FishMMO/Build/Environment/Production", true);
 					break;
 			}
 			return true;
 		}
 
 		/// <summary>
-		/// Gets the current working environment state (Development or Release).
+		/// Gets the current working environment state (Development or Production).
 		/// </summary>
 		/// <returns>The current WorkingEnvironmentState.</returns>
 		public static WorkingEnvironmentState GetWorkingEnvironmentState()
@@ -84,7 +84,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Appends the current environment (Development or Release) to the given path.
+		/// Appends the current environment (Development or Production) to the given path.
 		/// </summary>
 		/// <param name="path">The base path to append the environment folder to.</param>
 		/// <returns>The path with the environment folder appended.</returns>
@@ -93,8 +93,8 @@ namespace FishMMO.Shared
 			WorkingEnvironmentState envState = (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");
 			switch (envState)
 			{
-				case WorkingEnvironmentState.Release:
-					return Path.Combine(path, "Release");
+				case WorkingEnvironmentState.Production:
+					return Path.Combine(path, "Production");
 				case WorkingEnvironmentState.Development:
 					return Path.Combine(path, "Development");
 				default:

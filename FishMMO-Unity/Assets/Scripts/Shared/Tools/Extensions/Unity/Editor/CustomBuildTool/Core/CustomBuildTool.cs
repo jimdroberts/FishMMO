@@ -315,7 +315,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			WorkingEnvironmentState workingEnvironmentState = WorkingEnvironmentOptions.GetWorkingEnvironmentState();
 			switch (workingEnvironmentState)
 			{
-				case WorkingEnvironmentState.Release:
+				case WorkingEnvironmentState.Production:
 					break;
 				case WorkingEnvironmentState.Development:
 					if (buildTarget != null && buildTarget == BuildTarget.WebGL)

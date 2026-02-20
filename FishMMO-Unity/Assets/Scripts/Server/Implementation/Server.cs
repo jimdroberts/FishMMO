@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEngine;
