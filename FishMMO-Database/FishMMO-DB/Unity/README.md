@@ -31,9 +31,16 @@ public class ServerManager : MonoBehaviour
 
     void Start()
     {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath("./Config")
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")}.json", optional: true, reloadOnChange: false)
+            .AddEnvironmentVariables()
+            .Build();
+
         // Initialize database
         database = new Database(
-            configPath: "./Config",
+            configuration,
             enableLogging: false,
             commandTimeout: 10,
             healthCheckWarningMs: 100,
@@ -159,6 +166,7 @@ using UnityEngine;
 using FishMMO.Database;
 using FishMMO.Server.Database;
 using FishMMO.Database.Npgsql.Monitoring.Health;
+using Microsoft.Extensions.Configuration;
 
 public class GameServerManager : MonoBehaviour
 {
@@ -167,9 +175,16 @@ public class GameServerManager : MonoBehaviour
 
     async void Start()
     {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath("./Config")
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")}.json", optional: true, reloadOnChange: false)
+            .AddEnvironmentVariables()
+            .Build();
+
         // Initialize database
         database = new Database(
-            configPath: "./Config",
+            configuration,
             enableLogging: false);
 
         // Setup health monitoring

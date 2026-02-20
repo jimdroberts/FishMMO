@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Monitoring.Health;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
@@ -14,87 +15,79 @@ namespace FishMMO.Database
 	/// <summary>
 	/// Main orchestrator and facade for the FishMMO database layer.
 	/// Provides centralized access to database services, health monitoring, and metrics.
-	/// Follows Facade Pattern: simplifies complex subsystem interactions.
-	/// Follows Single Responsibility Principle: coordinates database infrastructure components.
-	/// Designed to be instantiated and managed by the server orchestrator (e.g., Server.cs).
+	/// This class initializes the database context factory, discovers and registers concrete service
+	/// implementations, and exposes monitoring points to the host application.
 	/// </summary>
 	public sealed class Database : IDatabase
 	{
 		/// <inheritdoc/>
+		/// <remarks>
+		/// The service registry is populated during construction by discovering implementations
+		/// in the `FishMMO.Database.Npgsql.Services` assembly. Consumers should call
+		/// <see cref="IDatabaseServiceRegistry.TryGet{TService}(out TService)"/> to obtain services.
+		/// </remarks>
 		public IDatabaseServiceRegistry ServiceRegistry { get; private set; }
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// The <see cref="DatabaseHealthMonitor"/> performs lightweight connectivity and response-time checks
+		/// against the underlying database using <see cref="INpgsqlDbContextFactory"/>.
+		/// </remarks>
 		public DatabaseHealthMonitor HealthMonitor { get; private set; }
 
 		/// <inheritdoc/>
 		public DatabaseMetricsTracker MetricsTracker { get; private set; }
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// Exposes the configured <see cref="INpgsqlDbContextFactory"/> used to create short-lived
+		/// <see cref="NpgsqlDbContext"/> instances. Prefer service interfaces from <see cref="ServiceRegistry"/>
+		/// for application operations.
+		/// </remarks>
 		public INpgsqlDbContextFactory DbContextFactory { get; private set; }
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="Database"/> class with the specified configuration path.
-		/// Creates the DbContext factory from appsettings.json, discovers and registers all services, and sets up monitoring.
+		/// Initializes a new instance of the <see cref="Database"/> class with a pre-built <see cref="IConfiguration"/>.
+		/// Creates the DbContext factory, discovers and registers all services, and sets up monitoring.
 		/// </summary>
-		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
+		/// <param name="configuration">Application configuration containing an <c>Npgsql</c> section. Cannot be <c>null</c>.</param>
 		/// <param name="enableLogging">Enable sensitive data logging for development (default: false).</param>
-		/// <param name="commandTimeout">Database command timeout in seconds (default: 10).</param>
+		/// <param name="commandTimeout">Optional database command timeout override in seconds.</param>
 		/// <param name="healthCheckWarningMs">Health check warning threshold in milliseconds (default: 100).</param>
 		/// <param name="healthCheckCriticalMs">Health check critical threshold in milliseconds (default: 500).</param>
-		/// <exception cref="ArgumentNullException">Thrown when configPath is null or empty.</exception>
+		/// <exception cref="ArgumentNullException">Thrown when <paramref name="configuration"/> is <c>null</c>.</exception>
 		/// <exception cref="DatabaseException">Thrown when initialization fails due to configuration or registration issues.</exception>
 		public Database(
-			string configPath,
+			IConfiguration configuration,
 			bool enableLogging = false,
-			int commandTimeout = 10,
+			int? commandTimeout = null,
 			int healthCheckWarningMs = 100,
 			int healthCheckCriticalMs = 500)
 		{
-			if (string.IsNullOrWhiteSpace(configPath))
-				throw new ArgumentNullException(nameof(configPath));
+			if (configuration == null)
+				throw new ArgumentNullException(nameof(configuration));
 
-			Initialize(
-				new NpgsqlDbContextFactory(configPath, enableLogging, commandTimeout),
-				healthCheckWarningMs,
-				healthCheckCriticalMs);
-		}
-
-		/// <summary>
-		/// Initializes a new instance of the <see cref="Database"/> class with default configuration path.
-		/// Uses the parent directory of the current AppDomain base directory to locate appsettings.json.
-		/// </summary>
-		/// <param name="enableLogging">Enable sensitive data logging for development (default: false).</param>
-		/// <param name="commandTimeout">Database command timeout in seconds (default: 10).</param>
-		/// <param name="healthCheckWarningMs">Health check warning threshold in milliseconds (default: 100).</param>
-		/// <param name="healthCheckCriticalMs">Health check critical threshold in milliseconds (default: 500).</param>
-		/// <exception cref="DatabaseException">Thrown when initialization fails due to configuration or registration issues.</exception>
-		public Database(
-			bool enableLogging = false,
-			int commandTimeout = 10,
-			int healthCheckWarningMs = 100,
-			int healthCheckCriticalMs = 500)
-		{
-			var configuration = new NpgsqlDbConfiguration(
-				NpgsqlDbConfiguration.GetDefaultConfigPath(),
+			var dbConfiguration = new NpgsqlDbConfiguration(
+				configuration,
 				enableLogging,
 				commandTimeout);
 
 			Initialize(
-				new NpgsqlDbContextFactory(configuration),
+				new NpgsqlDbContextFactory(dbConfiguration),
 				healthCheckWarningMs,
 				healthCheckCriticalMs);
 		}
 
 		/// <summary>
-		/// Shared initialization logic for all constructors.
-		/// Creates the service registry, health monitor, and metrics tracker.
+		/// Shared initialization logic used by constructors. Sets up the DbContext factory, service registry,
+		/// health monitor and metrics tracker.
 		/// </summary>
-		/// <param name="dbContextFactory">The pre-configured context factory.</param>
+		/// <param name="dbContextFactory">The pre-configured <see cref="INpgsqlDbContextFactory"/> to use. Cannot be <c>null</c>.</param>
 		/// <param name="healthCheckWarningMs">Health check warning threshold in milliseconds.</param>
 		/// <param name="healthCheckCriticalMs">Health check critical threshold in milliseconds.</param>
 		/// <exception cref="DatabaseException">Thrown when initialization fails.</exception>
 		private void Initialize(
-			NpgsqlDbContextFactory dbContextFactory,
+			INpgsqlDbContextFactory dbContextFactory,
 			int healthCheckWarningMs,
 			int healthCheckCriticalMs)
 		{
@@ -117,6 +110,13 @@ namespace FishMMO.Database
 			}
 		}
 
+		/// <summary>
+		/// Creates and populates an <see cref="NpgsqlServiceRegistry"/> by reflecting over the
+		/// Npgsql services assembly and constructing concrete implementations.
+		/// </summary>
+		/// <param name="dbContextFactory">DbContext factory passed to service constructors.</param>
+		/// <returns>An initialized <see cref="IDatabaseServiceRegistry"/> instance.</returns>
+		/// <exception cref="ArgumentNullException">Thrown when <paramref name="dbContextFactory"/> is <c>null</c>.</exception>
 		private IDatabaseServiceRegistry CreateNpgsqlServiceRegistry(INpgsqlDbContextFactory dbContextFactory)
 		{
 			if (dbContextFactory == null)
@@ -127,6 +127,18 @@ namespace FishMMO.Database
 			return registry;
 		}
 
+		/// <summary>
+		/// Discovers and registers Npgsql service implementations by reflection.
+		///
+		/// The method finds all service interfaces in the namespace
+		/// <c>FishMMO.Database.Npgsql.Services.Interfaces</c> and pairs them with a single concrete
+		/// implementation in <c>FishMMO.Database.Npgsql.Services</c>. Each implementation is constructed
+		/// with the provided <see cref="INpgsqlDbContextFactory"/> and registered into the registry.
+		/// </summary>
+		/// <param name="registry">The registry to populate. Cannot be <c>null</c>.</param>
+		/// <param name="dbContextFactory">Factory instance to pass to service constructors. Cannot be <c>null</c>.</param>
+		/// <exception cref="ArgumentNullException">Thrown when <paramref name="registry"/> or <paramref name="dbContextFactory"/> is <c>null</c>.</exception>
+		/// <exception cref="DatabaseException">Thrown when service discovery or construction fails.</exception>
 		private static void RegisterNpgsqlServicesByReflection(NpgsqlServiceRegistry registry, INpgsqlDbContextFactory dbContextFactory)
 		{
 			if (registry == null)

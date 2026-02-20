@@ -1,50 +1,60 @@
 using FishMMO.Database.Npgsql;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Configuration;
 using FishMMO.Logging;
-using System;
-using System.Threading.Tasks;
 
 namespace FishMMO.WebServer
 {
+	/// <summary>
+	/// Host entry point for the FishMMO web server application.
+	/// Responsible for initializing logging, propagating environment variables
+	/// and building/running the ASP.NET host.
+	/// </summary>
 	public class Program
 	{
+		/// <summary>
+		/// Application entry point. Initializes logging, maps the custom
+		/// <c>FISHMMO_ENVIRONMENT</c> variable to the standard .NET environment
+		/// variables, then builds and runs the web host.
+		/// </summary>
+		/// <param name="args">Command-line arguments passed to the application.</param>
+		/// <returns>A <see cref="Task"/> that completes when the host terminates.</returns>
 		public static async Task Main(string[] args)
 		{
-			await Log.Initialize("logging.json");
+			// Force the .NET Host to recognize FISHMMO_ENVIRONMENT
+			// This ensures context.HostingEnvironment.EnvironmentName is correct globally.
+			string? fishEnv = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT");
+			if (!string.IsNullOrWhiteSpace(fishEnv))
+			{
+				Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", fishEnv);
+				Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", fishEnv);
+			}
 
+			await Log.Initialize("logging.json");
 			await Log.Info("Program", "Starting WebServer application...");
 
-			CreateHostBuilder(args).Build().Run();
-
-			await Log.Shutdown();
-			await Log.Info("Program", "WebServer application shut down.");
+			try
+			{
+				CreateHostBuilder(args).Build().Run();
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("Program", $"Host terminated unexpectedly: {ex.Message}");
+			}
+			finally
+			{
+				await Log.Shutdown();
+			}
 		}
 
+		/// <summary>
+		/// Creates and configures the <see cref="IHostBuilder"/> for the web host.
+		/// This includes Kestrel configuration, DI service registrations, CORS
+		/// policy setup and middleware configuration.
+		/// </summary>
+		/// <param name="args">Command-line arguments forwarded to the host builder.</param>
+		/// <returns>An <see cref="IHostBuilder"/> configured for the FishMMO web server.</returns>
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
-				.ConfigureAppConfiguration((hostingContext, config) =>
-				{
-					// 1. Resolve the environment manually to match the Installer's logic
-					string? envName = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT")
-							?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-							?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-							?? "Production"; // Default to Production if none found
-
-					// 2. Override the HostingEnvironment so .NET knows which JSON to look for
-					hostingContext.HostingEnvironment.EnvironmentName = envName;
-
-					// 3. Clear and Rebuild config to ensure the priority is correct
-					config.Sources.Clear();
-
-					config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-						.AddJsonFile($"appsettings.{envName}.json", optional: true, reloadOnChange: true)
-						.AddEnvironmentVariables() // This allows FISHMMO_ENVIRONMENT to be used as a setting too
-						.AddCommandLine(args ?? Array.Empty<string>());
-
-					Log.Info("Program", $"Configuration loaded for Environment: {envName}");
-				})
 				.ConfigureLogging((context, logging) =>
 				{
 					logging.ClearProviders();
@@ -53,68 +63,42 @@ namespace FishMMO.WebServer
 				{
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
-						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8080"; // Default to 8080 if not found
-						options.ListenLocalhost(int.Parse(httpPort));
-						Log.Info("Kestrel", $"Kestrel configured to listen on localhost on port {httpPort}.");
+						int port = context.Configuration.GetValue<int>("WebServer:HttpPort", 8080);
+						options.ListenLocalhost(port);
+						Log.Info("Kestrel", $"Kestrel listening on localhost port {port} in {context.HostingEnvironment.EnvironmentName} mode.");
 					})
 					.ConfigureServices((context, services) =>
 					{
 						Log.Info("Services", "Registering services...");
 
+						services.AddSingleton(new NpgsqlDbConfiguration(context.Configuration));
 						services.AddSingleton<NpgsqlDbContextFactory>();
-						Log.Info("Services", "Registered NpgsqlDbContextFactory.");
-
 						services.AddMemoryCache();
-						Log.Info("Services", "Registered IMemoryCache.");
-
 						services.AddControllers();
-						Log.Info("Services", "Registered Controllers.");
 
 						services.AddCors(options =>
 						{
 							options.AddPolicy("AllowXFishMMO", builder =>
 							{
-								builder
-									.AllowAnyOrigin()
-									.AllowAnyMethod()
-									.WithHeaders("X-FishMMO");
+								builder.AllowAnyOrigin().AllowAnyMethod().WithHeaders("X-FishMMO");
 							});
 						});
-						Log.Info("Services", "Configured CORS policy 'AllowXFishMMO' with AllowAnyOrigin.");
 
 						services.Configure<ForwardedHeadersOptions>(options =>
 						{
 							options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 						});
-						Log.Info("Services", "Configured ForwardedHeadersOptions.");
 
 						Log.Info("Services", "All services registered.");
 					})
 					.Configure(app =>
 					{
-						Log.Info("Middleware", "Configuring HTTP request pipeline...");
-
 						app.UseForwardedHeaders();
-						Log.Info("Middleware", "Added UseForwardedHeaders middleware.");
-
 						app.UseCors("AllowXFishMMO");
-						Log.Info("Middleware", "Added UseCors middleware with policy 'AllowXFishMMO'.");
-
 						app.UseMiddleware<UnityOnlyMiddleware>();
-						Log.Info("Middleware", "Added UnityOnlyMiddleware.");
-
 						app.UseRouting();
-						Log.Info("Middleware", "Added UseRouting middleware.");
-
 						app.UseAuthorization();
-						Log.Info("Middleware", "Added UseAuthorization middleware.");
-
-						app.UseEndpoints(endpoints =>
-						{
-							endpoints.MapControllers();
-						});
-						Log.Info("Middleware", "Mapped controller endpoints.");
-						Log.Info("Middleware", "HTTP request pipeline configured.");
+						app.UseEndpoints(endpoints => endpoints.MapControllers());
 					});
 				});
 	}

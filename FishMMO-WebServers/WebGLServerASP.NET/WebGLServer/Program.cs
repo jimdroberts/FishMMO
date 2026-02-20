@@ -1,10 +1,24 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using FishMMO.Logging;
 
+/// <summary>
+/// Entry point and host configuration for the FishMMO WebServer application.
+/// This file contains the <see cref="Program"/> class which is responsible
+/// for initializing logging and building the application's host.
+/// </summary>
 namespace FishMMO.WebServer
 {
+	/// <summary>
+	/// Host program for the WebServer. Initializes logging, configures the
+	/// web host and middleware, and starts the ASP.NET Core Kestrel server.
+	/// </summary>
 	public class Program
 	{
+		/// <summary>
+		/// Application entry point. Initializes logging, starts the web host,
+		/// and performs a clean shutdown of logging once the host exits.
+		/// </summary>
+		/// <param name="args">Command-line arguments passed to the application.</param>
 		public static async Task Main(string[] args)
 		{
 			await Log.Initialize("logging.json");
@@ -17,6 +31,13 @@ namespace FishMMO.WebServer
 			await Log.Info("Program", "WebServer application shut down.");
 		}
 
+		/// <summary>
+		/// Creates and configures an <see cref="IHostBuilder"/> for the web host.
+		/// The builder configures logging, Kestrel endpoints, services (including
+		/// CORS and forwarded headers), and the HTTP request pipeline (middleware).
+		/// </summary>
+		/// <param name="args">Command-line arguments forwarded to the host builder.</param>
+		/// <returns>An <see cref="IHostBuilder"/> configured for this application.</returns>
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
 				.ConfigureLogging((context, logging) =>

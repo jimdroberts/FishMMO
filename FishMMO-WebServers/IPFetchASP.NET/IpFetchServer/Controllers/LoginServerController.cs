@@ -3,12 +3,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using FishMMO.Logging;
 
+
+/// <summary>
+/// Controller that exposes endpoints for retrieving available login servers.
+/// Uses an <see cref="NpgsqlDbContextFactory"/> to access the database and an
+/// <see cref="IMemoryCache"/> to cache results for improved performance.
+/// </summary>
 [ApiController]
 [Route("[controller]")]
 public class LoginServerController : ControllerBase
@@ -16,12 +18,26 @@ public class LoginServerController : ControllerBase
 	private readonly NpgsqlDbContextFactory dbContextFactory;
 	private readonly IMemoryCache memoryCache;
 
+	/// <summary>
+	/// Initializes a new instance of the <see cref="LoginServerController"/> class.
+	/// </summary>
+	/// <param name="dbContextFactory">Factory used to create instances of <see cref="NpgsqlDbContext"/>.</param>
+	/// <param name="memoryCache">In-memory cache used to store and retrieve cached login server lists.</param>
 	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, IMemoryCache memoryCache)
 	{
 		this.dbContextFactory = dbContextFactory;
 		this.memoryCache = memoryCache;
 	}
-
+	
+	/// <summary>
+	/// Retrieves a list of available login servers (address and port).
+	/// Results are cached in memory for a short duration to reduce database load.
+	/// </summary>
+	/// <returns>
+	/// An <see cref="IActionResult"/> containing HTTP 200 with the list of servers
+	/// (address and port) on success, HTTP 404 if no servers are available, or
+	/// HTTP 401 if the database context could not be created.
+	/// </returns>
 	[HttpGet]
 	public async Task<IActionResult> GetLoginServers()
 	{

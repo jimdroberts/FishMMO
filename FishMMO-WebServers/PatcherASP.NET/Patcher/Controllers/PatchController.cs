@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
-using System;
-using Microsoft.Extensions.Hosting;
-using System.IO;
 using FishMMO.Logging;
 
+/// <summary>
+/// API controller that exposes endpoints for clients to query the latest
+/// available version and to download patch files from a client version
+/// to the latest server version.
+/// </summary>
 [ApiController]
 [Route("/")]
 public class PatchController : ControllerBase
@@ -11,18 +13,40 @@ public class PatchController : ControllerBase
 	private readonly IHostEnvironment env;
 	private readonly PatchVersionService versionService;
 
+	/// <summary>
+	/// Initializes a new instance of the <see cref="PatchController"/> class.
+	/// </summary>
+	/// <param name="env">The host environment (used for locating application base paths).</param>
+	/// <param name="versionService">Service that provides the latest version derived from patch files.</param>
 	public PatchController(IHostEnvironment env, PatchVersionService versionService)
 	{
 		this.env = env;
 		this.versionService = versionService;
 	}
 
+	/// <summary>
+	/// GET /latest_version
+	/// Returns the latest client version available on the server.
+	/// </summary>
+	/// <returns>An <see cref="IActionResult"/> containing a JSON object with the <c>latest_version</c> property.</returns>
 	[HttpGet("latest_version")]
 	public IActionResult GetLatestVersion()
 	{
 		return Ok(new { latest_version = versionService.LatestVersion });
 	}
 
+	/// <summary>
+	/// GET /{version}
+	/// Streams the patch file that updates a client from the specified <paramref name="version"/>
+	/// to the server's latest version, if available.
+	/// </summary>
+	/// <param name="version">The client's current version string (e.g., "1.0.0").</param>
+	/// <returns>
+	/// - <see cref="IActionResult"/> returning the patch file as a stream when found,
+	/// - <see cref="BadRequestResult"/> for invalid version formats,
+	/// - <see cref="NotFoundResult"/> when the patch file does not exist,
+	/// - or a 500 status code for server-side errors.
+	/// </returns>
 	[HttpGet("{version}")]
 	public IActionResult GetPatch(string version)
 	{

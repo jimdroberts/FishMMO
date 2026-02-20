@@ -1,11 +1,20 @@
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.Extensions.Configuration;
 using FishMMO.Logging;
 
 namespace FishMMO.WebServer
 {
+	/// <summary>
+	/// Program contains the application's entry point and host configuration.
+	/// It initializes logging and builds the ASP.NET Core host that runs the web server.
+	/// </summary>
 	public class Program
 	{
+		/// <summary>
+		/// Application entry point. Initializes logging, starts the web host, and
+		/// performs a graceful shutdown when the host stops.
+		/// </summary>
+		/// <param name="args">Command-line arguments passed to the application.</param>
+		/// <returns>A <see cref="Task"/> that completes when shutdown logic finishes.</returns>
 		public static async Task Main(string[] args)
 		{
 			await Log.Initialize("logging.json");
@@ -18,6 +27,13 @@ namespace FishMMO.WebServer
 			await Log.Info("Program", "WebServer application shut down.");
 		}
 
+		/// <summary>
+		/// Creates and configures the <see cref="IHostBuilder"/> used to run the web server.
+		/// The builder sets up logging, Kestrel server options, DI services, CORS, forwarded headers,
+		/// and the HTTP request pipeline including controllers and middleware.
+		/// </summary>
+		/// <param name="args">Command-line arguments forwarded to the host builder.</param>
+		/// <returns>An <see cref="IHostBuilder"/> configured for this application.</returns>
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
 				.ConfigureLogging((context, logging) =>

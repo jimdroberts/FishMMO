@@ -4,17 +4,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
-using FishMMO.Database.Npgsql.Services;
 
 namespace FishMMO.Database.Npgsql
 {
 	/// <summary>
-	/// Factory for creating NpgsqlDbContext instances with proper async configuration.
-	/// Thread-safe and stateless - creates new DbContext per call.
-	/// Implements both custom interface and IDesignTimeDbContextFactory for migrations.
+	/// Factory for creating <see cref="NpgsqlDbContext"/> instances.
+	/// Thread-safe and intended for singleton registration.
+	/// Implements <see cref="IDesignTimeDbContextFactory{TContext}"/> for EF Core tooling.
 	/// </summary>
 	public class NpgsqlDbContextFactory : INpgsqlDbContextFactory, IDesignTimeDbContextFactory<NpgsqlDbContext>
 	{
@@ -37,40 +37,44 @@ namespace FishMMO.Database.Npgsql
 		private readonly QueryPerformanceTracker performanceTracker;
 
 		/// <summary>
-		/// Initializes a new instance of NpgsqlDbContextFactory with default configuration path.
+		/// Initializes a new instance of <see cref="NpgsqlDbContextFactory"/> for EF Core design-time usage.
+		/// Loads configuration from the current AppDomain base directory.
 		/// </summary>
 		public NpgsqlDbContextFactory()
-			: this(NpgsqlDbConfiguration.CreateDefault())
+			: this(BuildDesignTimeConfiguration())
 		{
 		}
 
 		/// <summary>
-		/// Initializes a new instance of NpgsqlDbContextFactory with specified configuration path.
+		/// Initializes a new instance of <see cref="NpgsqlDbContextFactory"/> from a pre-built <see cref="IConfiguration"/>.
 		/// </summary>
-		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
-		public NpgsqlDbContextFactory(string configPath)
-			: this(new NpgsqlDbConfiguration(configPath))
+		/// <param name="configuration">Configuration root containing an <c>Npgsql</c> section.</param>
+		/// <exception cref="ArgumentNullException">Thrown when <paramref name="configuration"/> is <c>null</c>.</exception>
+		public NpgsqlDbContextFactory(IConfiguration configuration)
+			: this(new NpgsqlDbConfiguration(configuration))
 		{
 		}
 
 		/// <summary>
-		/// Initializes a new instance of NpgsqlDbContextFactory with specified configuration and logging.
+		/// Initializes a new instance of <see cref="NpgsqlDbContextFactory"/> from a pre-built <see cref="IConfiguration"/>.
 		/// </summary>
-		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
+		/// <param name="configuration">Configuration root containing an <c>Npgsql</c> section.</param>
 		/// <param name="enableLogging">Enable sensitive data logging for development.</param>
-		public NpgsqlDbContextFactory(string configPath, bool enableLogging)
-			: this(new NpgsqlDbConfiguration(configPath, enableLogging, null))
+		/// <exception cref="ArgumentNullException">Thrown when <paramref name="configuration"/> is <c>null</c>.</exception>
+		public NpgsqlDbContextFactory(IConfiguration configuration, bool enableLogging)
+			: this(new NpgsqlDbConfiguration(configuration, enableLogging))
 		{
 		}
 
 		/// <summary>
-		/// Initializes a new instance of NpgsqlDbContextFactory with full configuration.
+		/// Initializes a new instance of <see cref="NpgsqlDbContextFactory"/> from a pre-built <see cref="IConfiguration"/>.
 		/// </summary>
-		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
+		/// <param name="configuration">Configuration root containing an <c>Npgsql</c> section.</param>
 		/// <param name="enableLogging">Enable sensitive data logging for development.</param>
 		/// <param name="commandTimeout">Command timeout in seconds (overrides config file value).</param>
-		public NpgsqlDbContextFactory(string configPath, bool enableLogging, int commandTimeout)
-			: this(new NpgsqlDbConfiguration(configPath, enableLogging, commandTimeout))
+		/// <exception cref="ArgumentNullException">Thrown when <paramref name="configuration"/> is <c>null</c>.</exception>
+		public NpgsqlDbContextFactory(IConfiguration configuration, bool enableLogging, int commandTimeout)
+			: this(new NpgsqlDbConfiguration(configuration, enableLogging, commandTimeout))
 		{
 		}
 
@@ -100,7 +104,7 @@ namespace FishMMO.Database.Npgsql
 			}
 
 			cachedOptions = optionsBuilder.Options;
-			performanceTracker = new QueryPerformanceTracker(configuration.PerformanceConfiguration);
+			performanceTracker = new QueryPerformanceTracker(NormalizePerformanceConfiguration(configuration.PerformanceConfiguration));
 		}
 
 		/// <inheritdoc />
@@ -123,8 +127,7 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public NpgsqlDbContext CreateDbContext()
 		{
-			if (Volatile.Read(ref shutdown) != 0)
-				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
+			ThrowIfDisposedOrShutdown();
 
 			try
 			{
@@ -149,8 +152,11 @@ namespace FishMMO.Database.Npgsql
 		}
 
 		/// <summary>
-		/// Callback invoked when a context is disposed, decrements the active context count.
+		/// Callback invoked when a context created by this factory is disposed.
+		/// Detaches the event handler and decrements the active context count tracked by the factory.
 		/// </summary>
+		/// <param name="sender">The object that raised the event; expected to be an <see cref="NpgsqlDbContext"/>.</param>
+		/// <param name="e">Event arguments (unused).</param>
 		private void OnContextDisposed(object sender, EventArgs e)
 		{
 			if (sender is NpgsqlDbContext context)
@@ -161,10 +167,11 @@ namespace FishMMO.Database.Npgsql
 		}
 
 		/// <summary>
-		/// Determines if an NpgsqlException indicates connection pool exhaustion.
+		/// Determines whether the provided <see cref="NpgsqlException"/> indicates connection pool exhaustion
+		/// or another connection-limit condition.
 		/// </summary>
-		/// <param name="exception">The Npgsql exception to check.</param>
-		/// <returns>True if the exception indicates pool exhaustion; otherwise, false.</returns>
+		/// <param name="exception">The <see cref="NpgsqlException"/> to inspect. Cannot be <c>null</c>.</param>
+		/// <returns><c>true</c> when the exception likely indicates pool exhaustion or connection limits; otherwise <c>false</c>.</returns>
 		private static bool IsPoolExhaustionException(NpgsqlException exception)
 		{
 			// IMPORTANT: Do not treat generic "timeout" as pool exhaustion.
@@ -188,7 +195,7 @@ namespace FishMMO.Database.Npgsql
 			var innerException = exception.InnerException;
 			while (innerException != null)
 			{
-				if (innerException is PostgresException pgEx && pgEx.SqlState == PostgresSqlState.TooManyConnections)
+				if (innerException is PostgresException pgEx && string.Equals(pgEx.SqlState, "53300", StringComparison.Ordinal))
 				{
 					return true;
 				}
@@ -209,9 +216,6 @@ namespace FishMMO.Database.Npgsql
 		public Task<NpgsqlDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-
-			if (Volatile.Read(ref shutdown) != 0)
-				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
 
 			return Task.FromResult(CreateDbContext());
 		}
@@ -269,9 +273,6 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public NpgsqlDbContext CreateDbContext(string[] args)
 		{
-			if (Volatile.Read(ref shutdown) != 0)
-				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
-
 			return CreateDbContext();
 		}
 
@@ -346,6 +347,69 @@ namespace FishMMO.Database.Npgsql
 
 			performanceTracker.Dispose();
 			poolMetrics.Reset();
+		}
+
+		/// <summary>
+		/// Throws <see cref="ObjectDisposedException"/> when the factory has been disposed or shutdown.
+		/// Used as a guard at the beginning of public operations to enforce lifecycle rules.
+		/// </summary>
+		/// <exception cref="ObjectDisposedException">Thrown when the factory is disposed or shutdown.</exception>
+		private void ThrowIfDisposedOrShutdown()
+		{
+			if (Volatile.Read(ref disposed) != 0 || Volatile.Read(ref shutdown) != 0)
+			{
+				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
+			}
+		}
+
+		/// <summary>
+		/// Normalizes a performance configuration object into the diagnostics <see cref="QueryPerformanceConfiguration"/> type
+		/// used by internal monitoring components.
+		/// </summary>
+		/// <param name="configurationValue">An object that may be either a diagnostics <see cref="QueryPerformanceConfiguration"/>
+		/// or the legacy <c>FishMMO.Database.QueryPerformanceConfiguration</c> instance.</param>
+		/// <returns>A diagnostics <see cref="QueryPerformanceConfiguration"/> instance (never <c>null</c>).</returns>
+		private static FishMMO.Database.Npgsql.Monitoring.Diagnostics.QueryPerformanceConfiguration NormalizePerformanceConfiguration(object configurationValue)
+		{
+			if (configurationValue is FishMMO.Database.Npgsql.Monitoring.Diagnostics.QueryPerformanceConfiguration diagnosticsConfiguration)
+			{
+				return diagnosticsConfiguration;
+			}
+
+			if (configurationValue is global::FishMMO.Database.QueryPerformanceConfiguration legacyConfiguration)
+			{
+				return new FishMMO.Database.Npgsql.Monitoring.Diagnostics.QueryPerformanceConfiguration
+				{
+					Enabled = legacyConfiguration.Enabled,
+					Level = legacyConfiguration.Level,
+					SlowQueryThresholdMs = legacyConfiguration.SlowQueryThresholdMs,
+					SampleRate = legacyConfiguration.SampleRate
+				};
+			}
+
+			return new FishMMO.Database.Npgsql.Monitoring.Diagnostics.QueryPerformanceConfiguration();
+		}
+
+		/// <summary>
+		/// Builds an <see cref="IConfiguration"/> instance suitable for design-time (EF Core tools).
+		/// Loads <c>appsettings.json</c>, an optional environment-specific file and environment variables
+		/// from <see cref="AppDomain.BaseDirectory"/>. The selected environment is read from
+		/// <c>FISHMMO_ENVIRONMENT</c>, <c>DOTNET_ENVIRONMENT</c> or <c>ASPNETCORE_ENVIRONMENT</c>.
+		/// </summary>
+		/// <returns>A built <see cref="IConfiguration"/> instance.</returns>
+		private static IConfiguration BuildDesignTimeConfiguration()
+		{
+			string env = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT") ??
+						 Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ??
+						 Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
+						 "Development";
+
+			return new ConfigurationBuilder()
+				.SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+				.AddJsonFile("appsettings.json", optional: false)
+				.AddJsonFile($"appsettings.{env}.json", optional: true)
+				.AddEnvironmentVariables()
+				.Build();
 		}
 	}
 }

@@ -1,20 +1,32 @@
-using Microsoft.Extensions.Hosting;
-using System.IO;
-using System;
-using System.Linq;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Configuration;
 using FishMMO.Logging;
 
+/// <summary>
+/// Service responsible for scanning the configured patches directory and
+/// determining the latest client version available from patch filenames.
+/// The service exposes the computed latest version via the <see cref="LatestVersion"/> property.
+/// </summary>
 public class PatchVersionService
 {
 	private readonly IHostEnvironment env;
 	private readonly IConfiguration config;
+	/// <summary>
+	/// The latest client version discovered from patch files, or <c>null</c>
+	/// if it has not yet been determined. The value is represented as the
+	/// full version string from <see cref="VersionConfig.FullVersion"/>.
+	/// </summary>
 	public string? LatestVersion { get; private set; }
 
 	private static readonly Regex PatchFileNameRegex =
 		new Regex(@"^(\d+\.\d+\.\d+(?:\.[a-zA-Z0-9]+)?)-(\d+\.\d+\.\d+(?:\.[a-zA-Z0-9]+)?)\.zip$", RegexOptions.Compiled);
 
+	/// <summary>
+	/// Initializes a new instance of the <see cref="PatchVersionService"/> class.
+	/// The constructor will immediately attempt to determine the latest version
+	/// from patch files in the configured patches directory.
+	/// </summary>
+	/// <param name="env">The host environment (used for path resolution).</param>
+	/// <param name="config">Application configuration used to locate the patches directory.</param>
 	public PatchVersionService(IHostEnvironment env, IConfiguration config)
 	{
 		this.env = env;

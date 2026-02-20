@@ -6,13 +6,7 @@ This library supports layered configuration in this order:
 2. `appsettings.{Environment}.json` (optional)
 3. Environment variables (highest priority)
 
-`Environment` is resolved by:
-
-1. Explicit constructor argument (`environmentName`)
-2. `FISHMMO_ENVIRONMENT`
-3. `DOTNET_ENVIRONMENT`
-4. `ASPNETCORE_ENVIRONMENT`
-5. Build fallback: `Development` in Debug, `Production` otherwise
+Environment is resolved by your host/.NET configuration pipeline (for example via `DOTNET_ENVIRONMENT` or `ASPNETCORE_ENVIRONMENT`).
 
 ---
 
@@ -160,30 +154,37 @@ set -x Npgsql__Password super_secret
 
 ## Database.cs setup examples
 
-## 1) Default config path + resolved environment
+## 1) Build IConfiguration and pass it to Database
 
 ```csharp
 using FishMMO.Database;
+using Microsoft.Extensions.Configuration;
+
+IConfiguration configuration = new ConfigurationBuilder()
+	.SetBasePath("/opt/fishmmo/config")
+	.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+	.AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")}.json", optional: true, reloadOnChange: false)
+	.AddEnvironmentVariables()
+	.Build();
 
 IDatabase database = new Database(
+	configuration,
 	enableLogging: false,
 	commandTimeout: 15,
 	healthCheckWarningMs: 100,
 	healthCheckCriticalMs: 500);
 ```
 
-This uses `NpgsqlDbConfiguration.GetDefaultConfigPath()` and environment resolution rules above.
-
-## 2) Explicit config path
+## 2) Normalize custom environment variable before building configuration
 
 ```csharp
-using FishMMO.Database;
-
-string configPath = "/opt/fishmmo/config";
-IDatabase database = new Database(configPath, enableLogging: false, commandTimeout: 15);
+string? fishEnv = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT");
+if (!string.IsNullOrWhiteSpace(fishEnv))
+{
+	Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", fishEnv);
+	Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", fishEnv);
+}
 ```
-
-Place `appsettings.json` and optional `appsettings.{Environment}.json` in that folder.
 
 ---
 
@@ -255,14 +256,21 @@ if (!persist.IsSuccess)
 
 ## Optional: explicit environment selection in code
 
-If you need to force an environment (instead of relying on env vars), build `NpgsqlDbConfiguration` directly:
+If you need direct factory creation, pass `IConfiguration` into `NpgsqlDbConfiguration`:
 
 ```csharp
 using FishMMO.Database.Npgsql;
+using Microsoft.Extensions.Configuration;
+
+var rootConfiguration = new ConfigurationBuilder()
+	.SetBasePath("/opt/fishmmo/config")
+	.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+	.AddJsonFile("appsettings.Production.json", optional: true, reloadOnChange: false)
+	.AddEnvironmentVariables()
+	.Build();
 
 var config = new NpgsqlDbConfiguration(
-	configPath: "/opt/fishmmo/config",
-	environmentName: "Production",
+	rootConfiguration,
 	enableLogging: false,
 	commandTimeoutOverride: null);
 

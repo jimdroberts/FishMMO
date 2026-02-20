@@ -2,13 +2,37 @@ using System;
 using System.Text.RegularExpressions;
 using FishMMO.Logging;
 
+/// <summary>
+/// Represents a semantic version (Major.Minor.Patch[.PreRelease]) and provides
+/// parsing, comparison, and string representation utilities used by the patching system.
+/// </summary>
 public class VersionConfig : IComparable<VersionConfig?>
 {
+	/// <summary>
+	/// Major version component (e.g., the "1" in 1.2.3).
+	/// </summary>
 	public int Major = 0;
+
+	/// <summary>
+	/// Minor version component (e.g., the "2" in 1.2.3).
+	/// </summary>
 	public int Minor = 0;
+
+	/// <summary>
+	/// Patch version component (e.g., the "3" in 1.2.3).
+	/// </summary>
 	public int Patch = 0;
+
+	/// <summary>
+	/// Optional pre-release identifier (e.g., "alpha" in 1.2.3.alpha).
+	/// An empty string indicates a normal (non pre-release) version.
+	/// </summary>
 	public string PreRelease = "";
 
+	/// <summary>
+	/// The full version string representation constructed from the components.
+	/// Examples: "1.2.3" or "1.2.3.alpha".
+	/// </summary>
 	public string FullVersion
 	{
 		get
@@ -98,6 +122,10 @@ public class VersionConfig : IComparable<VersionConfig?>
 		return 0; // Versions are effectively equal
 	}
 
+	/// <summary>
+	/// Equality operator. Returns true when both versions represent the same
+	/// semantic version (including pre-release equality, case-insensitive for pre-release).
+	/// </summary>
 	public static bool operator ==(VersionConfig? a, VersionConfig? b)
 	{
 		if (ReferenceEquals(a, b)) return true;
@@ -105,11 +133,17 @@ public class VersionConfig : IComparable<VersionConfig?>
 		return a.CompareTo(b) == 0;
 	}
 
+	/// <summary>
+	/// Inequality operator.
+	/// </summary>
 	public static bool operator !=(VersionConfig? a, VersionConfig? b)
 	{
 		return !(a == b);
 	}
 
+	/// <summary>
+	/// Less-than operator based on semantic version ordering.
+	/// </summary>
 	public static bool operator <(VersionConfig? a, VersionConfig? b)
 	{
 		if (a is null) return b is not null; // null < any non-null
@@ -117,6 +151,9 @@ public class VersionConfig : IComparable<VersionConfig?>
 		return a.CompareTo(b) < 0;
 	}
 
+	/// <summary>
+	/// Greater-than operator based on semantic version ordering.
+	/// </summary>
 	public static bool operator >(VersionConfig? a, VersionConfig? b)
 	{
 		if (a is null) return false;
@@ -124,21 +161,34 @@ public class VersionConfig : IComparable<VersionConfig?>
 		return a.CompareTo(b) > 0;
 	}
 
+	/// <summary>
+	/// Less-than-or-equal operator.
+	/// </summary>
 	public static bool operator <=(VersionConfig? a, VersionConfig? b)
 	{
 		return a < b || a == b;
 	}
 
+	/// <summary>
+	/// Greater-than-or-equal operator.
+	/// </summary>
 	public static bool operator >=(VersionConfig? a, VersionConfig? b)
 	{
 		return a > b || a == b;
 	}
 
+	/// <summary>
+	/// Determines whether this instance is equal to another object.
+	/// </summary>
 	public override bool Equals(object? obj)
 	{
 		return Equals(obj as VersionConfig);
 	}
 
+	/// <summary>
+	/// Determines whether this instance is equal to another <see cref="VersionConfig"/> instance.
+	/// Comparison includes Major, Minor, Patch and a case-insensitive comparison of PreRelease.
+	/// </summary>
 	public bool Equals(VersionConfig? other)
 	{
 		if (other is null) return false;
@@ -148,6 +198,9 @@ public class VersionConfig : IComparable<VersionConfig?>
 			&& string.Equals(this.PreRelease, other.PreRelease, StringComparison.OrdinalIgnoreCase);
 	}
 
+	/// <summary>
+	/// Returns a hash code for this version instance suitable for use in hashing structures.
+	/// </summary>
 	public override int GetHashCode()
 	{
 		unchecked

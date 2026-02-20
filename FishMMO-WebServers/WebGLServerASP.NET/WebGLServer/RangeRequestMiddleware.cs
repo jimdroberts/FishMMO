@@ -1,17 +1,37 @@
-using Microsoft.AspNetCore.Http;
-using System.IO;
-using System.Threading.Tasks;
 using FishMMO.Logging;
 
+/// <summary>
+/// Middleware that handles HTTP range requests for files served from the
+/// application's `wwwroot` directory. Supports partial content responses
+/// (HTTP 206) and full-file responses depending on the presence of the
+/// `Range` request header.
+/// </summary>
 public class RangeRequestMiddleware
 {
+	/// <summary>
+	/// The next middleware in the pipeline.
+	/// </summary>
 	private readonly RequestDelegate next;
 
+	/// <summary>
+	/// Initializes a new instance of the <see cref="RangeRequestMiddleware"/> class.
+	/// </summary>
+	/// <param name="next">The next <see cref="RequestDelegate"/> in the ASP.NET Core pipeline.</param>
 	public RangeRequestMiddleware(RequestDelegate next)
 	{
 		this.next = next;
 	}
 
+	/// <summary>
+	/// Invokes the middleware to handle an incoming <see cref="HttpContext"/>.
+	/// If the request path maps to an existing file under `wwwroot` this method
+	/// will either return the requested byte range (when the `Range` header is
+	/// present and valid) or the full file contents. If the file is not found,
+	/// a 404 status code is returned. If a requested range is unsatisfiable,
+	/// a 416 status code is returned.
+	/// </summary>
+	/// <param name="context">The <see cref="HttpContext"/> for the current request.</param>
+	/// <returns>A <see cref="Task"/> that completes when the response has been written.</returns>
 	public async Task InvokeAsync(HttpContext context)
 	{
 		var path = context.Request.Path.Value;
@@ -75,6 +95,12 @@ public class RangeRequestMiddleware
 		await next(context); // Pass control to the next middleware
 	}
 
+	/// <summary>
+	/// Maps a file extension to a MIME content type string used in the
+	/// HTTP response <c>Content-Type</c> header.
+	/// </summary>
+	/// <param name="extension">The file extension, including the leading dot (e.g. ".html").</param>
+	/// <returns>A MIME type string suitable for the <c>Content-Type</c> header.</returns>
 	private string GetContentType(string extension)
 	{
 		return extension.ToLower() switch
