@@ -1,4 +1,5 @@
 ﻿using System;
+using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
 
 namespace FishMMO.Database
 {
@@ -11,12 +12,12 @@ namespace FishMMO.Database
 		/// <summary>
 		/// Gets or sets PostgreSQL connection settings.
 		/// </summary>
-		public NpgsqlSettings Npgsql { get; set; }
+		public NpgsqlSettings Npgsql { get; set; } = new();
 
 		/// <summary>
 		/// Gets or sets Redis connection settings.
 		/// </summary>
-		public RedisSettings Redis { get; set; }
+		public RedisSettings Redis { get; set; } = new();
 	}
 
 	/// <summary>
@@ -26,64 +27,113 @@ namespace FishMMO.Database
 	public class NpgsqlSettings
 	{
 		/// <summary>
-		/// Gets or sets the database name.
+		/// Gets or sets the PostgreSQL host.
 		/// </summary>
-		public string Database { get; set; }
+		public string Host { get; set; } = "127.0.0.1";
+
+		/// <summary>
+		/// Gets or sets the PostgreSQL port.
+		/// </summary>
+		public string Port { get; set; } = "5432";
+
+		/// <summary>
+		/// Gets or sets the PostgreSQL database name.
+		/// </summary>
+		public string Database { get; set; } = "fish_mmo_postgresql";
 
 		/// <summary>
 		/// Gets or sets the database schema name.
 		/// </summary>
-		/// <remarks>
-		/// This value is used as the default schema for EF Core model mapping.
-		/// It must be a safe, unquoted PostgreSQL identifier in snake_case (lowercase letters, digits, and underscores).
-		/// If not specified, the schema defaults to <c>public</c>.
-		/// </remarks>
 		public string Schema { get; set; } = "public";
 
 		/// <summary>
 		/// Gets or sets the database username.
 		/// </summary>
-		public string Username { get; set; }
+		public string Username { get; set; } = "user";
 
 		/// <summary>
 		/// Gets or sets the database password.
 		/// </summary>
-		public string Password { get; set; }
+		public string Password { get; set; } = "pass";
 
 		/// <summary>
-		/// Gets or sets the database host.
-		/// </summary>
-		public string Host { get; set; }
-
-		/// <summary>
-		/// Gets or sets the database port.
-		/// </summary>
-		public string Port { get; set; }
-
-		/// <summary>
-		/// Gets or sets the command timeout in seconds (default: 10).
-		/// Commands exceeding this timeout will be cancelled.
+		/// Gets or sets the command timeout in seconds.
 		/// </summary>
 		public int CommandTimeout { get; set; } = 10;
 
 		/// <summary>
-		/// Gets or sets the connection timeout in seconds (default: 15).
-		/// Time to wait while establishing a connection before terminating the attempt.
-		/// Should typically be higher than CommandTimeout to allow for connection establishment.
+		/// Gets or sets the connection timeout in seconds.
 		/// </summary>
 		public int ConnectionTimeout { get; set; } = 15;
 
 		/// <summary>
-		/// Gets or sets the minimum connection pool size (default: 5).
-		/// Keeps connections warm for better performance.
+		/// Gets or sets the minimum connection pool size.
 		/// </summary>
 		public int MinPoolSize { get; set; } = 5;
 
 		/// <summary>
-		/// Gets or sets the maximum connection pool size (default: 100).
-		/// Limits maximum concurrent connections to the database.
+		/// Gets or sets the maximum connection pool size.
 		/// </summary>
 		public int MaxPoolSize { get; set; } = 100;
+
+		/// <summary>
+		/// Gets or sets query performance tracking configuration.
+		/// </summary>
+		public QueryPerformanceConfiguration QueryPerformanceTracking { get; set; } = new();
+
+		/// <summary>
+		/// Gets or sets the retry policy configuration for transient failure handling.
+		/// </summary>
+		public RetryPolicyConfiguration RetryPolicy { get; set; } = new();
+	}
+
+	/// <summary>
+	/// Configuration for tracking and logging slow database queries.
+	/// </summary>
+	[Serializable]
+	public class QueryPerformanceConfiguration
+	{
+		/// <summary>
+		/// Gets or sets whether query performance tracking is enabled.
+		/// </summary>
+		public bool Enabled { get; set; } = false;
+
+		/// <summary>
+		/// Gets or sets the tracking verbosity level.
+		/// </summary>
+		public TrackingLevel Level { get; set; } = TrackingLevel.Basic;
+
+		/// <summary>
+		/// Gets or sets the threshold in milliseconds for classifying queries as slow.
+		/// </summary>
+		public double SlowQueryThresholdMs { get; set; } = 100.0;
+
+		/// <summary>
+		/// Gets or sets sampling rate for tracked queries in range 0..1.
+		/// </summary>
+		public double SampleRate { get; set; } = 1.0;
+	}
+
+	/// <summary>
+	/// Configuration for handling database connection retries.
+	/// </summary>
+	[Serializable]
+	public class RetryPolicyConfiguration
+	{
+		/// <summary>
+		/// Gets or sets the maximum retry attempts for transient failures.
+		/// </summary>
+		public int MaxRetries { get; set; } = 3;
+
+		/// <summary>
+		/// Gets or sets the base delay in milliseconds between retries.
+		/// </summary>
+		public int BaseDelayMs { get; set; } = 1000;
+
+		/// <summary>
+		/// Gets or sets the maximum random jitter in milliseconds added to retry delays.
+		/// </summary>
+		public int MaxJitterMs { get; set; } = 100;
 	}
 
 	/// <summary>
@@ -95,12 +145,12 @@ namespace FishMMO.Database
 		/// <summary>
 		/// Gets or sets the Redis host.
 		/// </summary>
-		public string Host { get; set; }
+		public string Host { get; set; } = "127.0.0.1";
 
 		/// <summary>
 		/// Gets or sets the Redis port.
 		/// </summary>
-		public string Port { get; set; }
+		public string Port { get; set; } = "6379";
 
 		/// <summary>
 		/// Gets or sets the Redis password.
