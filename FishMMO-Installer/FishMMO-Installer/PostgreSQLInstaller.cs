@@ -111,11 +111,14 @@ namespace FishMMO.Installer
 								   $"--serverport {appSettings.Npgsql.Port} " +
 								   $"--disable-components pgAdmin,stackbuilder";
 
+				InstallerProcessHelper.LogElevatedProcessEnvironmentWarning("PostgreSQL installer");
+
 				ProcessStartInfo startInfo = new ProcessStartInfo
 				{
 					FileName = installerPath,
 					Arguments = arguments,
 					CreateNoWindow = true,
+					WorkingDirectory = Path.GetDirectoryName(installerPath) ?? InstallerProcessHelper.GetWorkingDirectory(),
 					UseShellExecute = true,
 					Verb = "runas"
 				};

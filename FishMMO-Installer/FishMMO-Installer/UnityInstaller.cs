@@ -188,10 +188,13 @@ namespace FishMMO.Installer
 					InstallationConstants.UnityHubWindowsDownloadUrl,
 					InstallationConstants.UnityHubWindowsFileName);
 
+				InstallerProcessHelper.LogElevatedProcessEnvironmentWarning("Unity Hub installer");
+
 				ProcessStartInfo startInfo = new ProcessStartInfo
 				{
 					FileName = installerPath,
 					Arguments = "/S",
+					WorkingDirectory = Path.GetDirectoryName(installerPath) ?? InstallerProcessHelper.GetWorkingDirectory(),
 					UseShellExecute = true,
 					Verb = "runas"
 				};

@@ -107,8 +107,7 @@ namespace FishMMO.Installer
 				projectPath = projectPath
 			};
 
-			bool cleanSucceeded = await InstallerProcessHelper.RunProcessAsync(
-				"dotnet",
+			bool cleanSucceeded = await DotNetInstaller.RunDotNetCommandAsync(
 				$"clean \"{projectPath}\" -nologo",
 				(exitCode, output, error) =>
 				{
@@ -137,8 +136,7 @@ namespace FishMMO.Installer
 
 			InstallerProcessHelper.Log($"Building: {projectPath}");
 
-			result.succeeded = await InstallerProcessHelper.RunProcessAsync(
-				"dotnet",
+			result.succeeded = await DotNetInstaller.RunDotNetCommandAsync(
 				$"build \"{projectPath}\" -nologo",
 				(exitCode, output, error) =>
 				{

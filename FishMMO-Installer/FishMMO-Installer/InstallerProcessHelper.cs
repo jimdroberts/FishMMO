@@ -9,6 +9,9 @@ namespace FishMMO.Installer
 	/// </summary>
 	public static class InstallerProcessHelper
 	{
+		private static bool dotNetEnvironmentPrepared = false;
+		private static readonly object dotNetEnvironmentLock = new object();
+
 		/// <summary>
 		/// Gets the working directory for the current application domain.
 		/// </summary>
@@ -115,6 +118,114 @@ namespace FishMMO.Installer
 		private static string EscapeShellCommand(string command)
 		{
 			return command.Replace("\\", "\\\\").Replace("\"", "\\\"");
+		}
+
+		/// <summary>
+		/// Ensures Linux DotNet runtime/tooling environment variables are configured once per process.
+		/// Adds ~/.dotnet and ~/.dotnet/tools to PATH when missing and sets DOTNET_ROOT.
+		/// </summary>
+		public static void EnsureDotNetEnvironment()
+		{
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				return;
+			}
+
+			lock (dotNetEnvironmentLock)
+			{
+				if (dotNetEnvironmentPrepared)
+				{
+					return;
+				}
+
+				string homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+				if (string.IsNullOrWhiteSpace(homePath))
+				{
+					Log("Warning: The HOME environment variable is not set. DotNet commands may fail.");
+					dotNetEnvironmentPrepared = true;
+					return;
+				}
+
+				string currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+				string dotnetPath = Path.Combine(homePath, ".dotnet");
+				string dotnetToolsPath = Path.Combine(homePath, ".dotnet", "tools");
+
+				var pathEntries = currentPath
+					.Split(':', StringSplitOptions.RemoveEmptyEntries)
+					.Select(entry => entry.Trim())
+					.ToHashSet(StringComparer.Ordinal);
+
+				if (!pathEntries.Contains(dotnetPath))
+				{
+					currentPath = string.IsNullOrWhiteSpace(currentPath)
+						? dotnetPath
+						: $"{currentPath}:{dotnetPath}";
+					Log($"Updated PATH to include: {dotnetPath}");
+				}
+
+				if (!pathEntries.Contains(dotnetToolsPath))
+				{
+					currentPath = string.IsNullOrWhiteSpace(currentPath)
+						? dotnetToolsPath
+						: $"{currentPath}:{dotnetToolsPath}";
+					Log($"Updated PATH to include: {dotnetToolsPath}");
+				}
+
+				Environment.SetEnvironmentVariable("PATH", currentPath);
+
+				string userDotnetRoot = Path.Combine(homePath, ".dotnet");
+				if (Directory.Exists(userDotnetRoot))
+				{
+					Environment.SetEnvironmentVariable("DOTNET_ROOT", userDotnetRoot);
+					Log($"Set DOTNET_ROOT to: {userDotnetRoot}");
+				}
+				else
+				{
+					const string systemDotnetRoot = "/usr/share/dotnet";
+					if (Directory.Exists(systemDotnetRoot))
+					{
+						Environment.SetEnvironmentVariable("DOTNET_ROOT", systemDotnetRoot);
+						Log($"Set DOTNET_ROOT to: {systemDotnetRoot}");
+					}
+				}
+
+				dotNetEnvironmentPrepared = true;
+			}
+		}
+
+		/// <summary>
+		/// Runs a DotNet command after preparing Linux DotNet environment variables.
+		/// </summary>
+		/// <param name="arguments">DotNet command arguments.</param>
+		/// <param name="processResult">Optional callback receiving (exitCode, stdout, stderr) to determine success.</param>
+		/// <returns>True if command succeeded, otherwise false.</returns>
+		public static async Task<bool> RunDotNetProcessAsync(string arguments, Func<int, string, string, bool>? processResult = null)
+		{
+			EnsureDotNetEnvironment();
+
+			try
+			{
+				return await RunProcessAsync("dotnet", arguments, processResult);
+			}
+			catch (Exception ex)
+			{
+				Log($"Failed to run 'dotnet {arguments}': {ex.Message}");
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Logs a warning that elevated Windows processes may not inherit all per-process environment overrides.
+		/// </summary>
+		/// <param name="processName">Human-readable process name.</param>
+		public static void LogElevatedProcessEnvironmentWarning(string processName)
+		{
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				return;
+			}
+
+			Log($"Note: '{processName}' runs elevated (UAC) and may not inherit this process's temporary environment-variable overrides.");
 		}
 
 		/// <summary>

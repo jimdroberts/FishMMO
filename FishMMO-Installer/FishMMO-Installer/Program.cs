@@ -22,7 +22,13 @@ namespace FishMMO.Installer
 		/// </summary>
 		public static async Task Main(string[] args)
 		{
-			LoadAppSettings();
+			// Normalize environment selection once and propagate to standard variables.
+			string environmentName = ResolveEnvironmentName();
+			Environment.SetEnvironmentVariable("FISHMMO_ENVIRONMENT", environmentName);
+			Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", environmentName);
+			Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environmentName);
+
+			LoadAppSettings(environmentName);
 			await RunMenuLoop();
 		}
 
@@ -31,84 +37,57 @@ namespace FishMMO.Installer
 		/// appsettings.json is treated as the default source and optional
 		/// appsettings.{Environment}.json overlays values when an environment is provided.
 		/// </summary>
-		private static void LoadAppSettings()
+		private static void LoadAppSettings(string environmentName)
 		{
 			string workingDirectory = InstallerProcessHelper.GetWorkingDirectory();
-			string baseAppSettingsPath = Path.Combine(workingDirectory, "appsettings.json");
-			string? environmentName = GetEnvironmentName();
-			string? environmentFileName = string.IsNullOrWhiteSpace(environmentName) ? null : $"appsettings.{environmentName}.json";
-			string? environmentAppSettingsPath = string.IsNullOrWhiteSpace(environmentFileName)
-				? null
-				: Path.Combine(workingDirectory, environmentFileName);
 
-			if (File.Exists(baseAppSettingsPath))
+			try
 			{
-				try
-				{
-					var configurationBuilder = new ConfigurationBuilder()
-						.SetBasePath(workingDirectory)
-						.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+				var builder = new ConfigurationBuilder()
+					.SetBasePath(workingDirectory)
+					.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+					.AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: false)
+					.AddEnvironmentVariables(); // Allows system-level overrides
 
-					if (!string.IsNullOrWhiteSpace(environmentFileName))
-					{
-						configurationBuilder.AddJsonFile(environmentFileName, optional: true, reloadOnChange: false);
-					}
-					configurationBuilder.AddEnvironmentVariables(); // This allows FISHMMO_ENVIRONMENT to be used as a setting too
+				IConfigurationRoot configuration = builder.Build();
+				appSettings = configuration.Get<AppSettings>() ?? new AppSettings();
 
-					IConfigurationRoot configurationRoot = configurationBuilder.Build();
-					appSettings = configurationRoot.Get<AppSettings>() ?? new AppSettings();
-
-					InstallerProcessHelper.Log("Loaded appsettings.json successfully.");
-					if (!string.IsNullOrWhiteSpace(environmentAppSettingsPath) && File.Exists(environmentAppSettingsPath))
-					{
-						InstallerProcessHelper.Log($"Loaded and merged {Path.GetFileName(environmentAppSettingsPath)}.");
-					}
-					else if (!string.IsNullOrWhiteSpace(environmentName))
-					{
-						InstallerProcessHelper.Log($"Environment '{environmentName}' detected but appsettings.{environmentName}.json was not found. Using base appsettings.json.");
-					}
-				}
-				catch (Exception ex)
-				{
-					InstallerProcessHelper.Log($"Error loading appsettings: {ex.Message}. Database operations may be affected.");
-					appSettings = new AppSettings();
-				}
+				InstallerProcessHelper.Log($"Configuration successfully loaded for Environment: {environmentName}");
 			}
-			else
+			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log("appsettings.json file not found. Database operations will be limited or unavailable.");
+				InstallerProcessHelper.Log($"Critical error loading configuration: {ex.Message}");
 				appSettings = new AppSettings();
 			}
 		}
 
 		/// <summary>
-		/// Resolves the active environment name from known environment variables.
-		/// Priority order: FISHMMO_ENVIRONMENT, DOTNET_ENVIRONMENT, ASPNETCORE_ENVIRONMENT.
+		/// Resolves the active environment name from known variables, ignoring empty values.
 		/// </summary>
-		/// <returns>Environment name when present; otherwise null.</returns>
-		private static string? GetEnvironmentName()
+		/// <returns>Environment name.</returns>
+		private static string ResolveEnvironmentName()
 		{
-			string? fishMmoEnvironment = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT");
-			if (!string.IsNullOrWhiteSpace(fishMmoEnvironment))
+			string?[] candidates =
+			[
+				Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT"),
+				Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
+				Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+			];
+
+			foreach (string? candidate in candidates)
 			{
-				return fishMmoEnvironment.Trim();
+				if (!string.IsNullOrWhiteSpace(candidate))
+				{
+					return candidate.Trim();
+				}
 			}
 
-			string? dotNetEnvironment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
-			if (!string.IsNullOrWhiteSpace(dotNetEnvironment))
-			{
-				return dotNetEnvironment.Trim();
-			}
-
-			string? aspNetCoreEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-			if (!string.IsNullOrWhiteSpace(aspNetCoreEnvironment))
-			{
-				return aspNetCoreEnvironment.Trim();
-			}
-
-			return null;
+#if DEBUG
+			return "Development";
+#else
+			return "Production";
+#endif
 		}
-
 
 		/// <summary>
 		/// Runs the interactive console menu loop until the user quits.

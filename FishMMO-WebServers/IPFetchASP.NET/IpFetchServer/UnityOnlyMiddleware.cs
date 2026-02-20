@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Http;
-using System.Threading.Tasks;
 using FishMMO.Logging;
 
 public class UnityOnlyMiddleware

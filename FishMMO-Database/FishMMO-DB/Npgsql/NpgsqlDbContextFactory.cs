@@ -391,6 +391,34 @@ namespace FishMMO.Database.Npgsql
 		}
 
 		/// <summary>
+		/// Determines the active environment using a tiered fallback system.
+		/// Priority: FISHMMO_ENVIRONMENT > DOTNET_ENVIRONMENT > ASPNETCORE_ENVIRONMENT.
+		/// </summary>
+		private static string ResolveEnvironmentName()
+		{
+			string?[] candidates =
+			[
+				Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT"),
+				Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
+				Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+			];
+
+			foreach (string? candidate in candidates)
+			{
+				if (!string.IsNullOrWhiteSpace(candidate))
+				{
+					return candidate.Trim();
+				}
+			}
+
+#if DEBUG
+			return "Development";
+#else
+            return "Production";
+#endif
+		}
+
+		/// <summary>
 		/// Builds an <see cref="IConfiguration"/> instance suitable for design-time (EF Core tools).
 		/// Loads <c>appsettings.json</c>, an optional environment-specific file and environment variables
 		/// from <see cref="AppDomain.BaseDirectory"/>. The selected environment is read from
@@ -399,10 +427,7 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>A built <see cref="IConfiguration"/> instance.</returns>
 		private static IConfiguration BuildDesignTimeConfiguration()
 		{
-			string env = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT") ??
-						 Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ??
-						 Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
-						 "Development";
+			string env = ResolveEnvironmentName();
 
 			return new ConfigurationBuilder()
 				.SetBasePath(AppDomain.CurrentDomain.BaseDirectory)

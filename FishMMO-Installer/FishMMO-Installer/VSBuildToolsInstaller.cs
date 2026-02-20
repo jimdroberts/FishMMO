@@ -50,10 +50,13 @@ namespace FishMMO.Installer
 					"--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 " +
 					"--add Microsoft.VisualStudio.Component.Windows10SDK.19041";
 
+				InstallerProcessHelper.LogElevatedProcessEnvironmentWarning("Visual Studio Build Tools installer");
+
 				ProcessStartInfo startInfo = new ProcessStartInfo
 				{
 					FileName = installerPath,
 					Arguments = arguments,
+					WorkingDirectory = Path.GetDirectoryName(installerPath) ?? InstallerProcessHelper.GetWorkingDirectory(),
 					UseShellExecute = true,
 					Verb = "runas"
 				};

@@ -11,11 +11,6 @@ namespace FishMMO.Installer
 	public static class DotNetInstaller
 	{
 		/// <summary>
-		/// Flag to ensure the Linux PATH is configured only once per session.
-		/// </summary>
-		private static bool pathSet = false;
-
-		/// <summary>
 		/// Installs DotNet SDK and DotNet-EF tool if not already installed.
 		/// </summary>
 		/// <returns>True if installation succeeded or already installed.</returns>
@@ -74,10 +69,7 @@ namespace FishMMO.Installer
 		/// <returns>True if installed, otherwise false.</returns>
 		public static async Task<bool> IsDotNetInstalledAsync()
 		{
-			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
-			string arguments = $"{argPrefix} \"dotnet --list-sdks\"";
-
-			bool installedViaPath = await InstallerProcessHelper.RunProcessAsync(shell, arguments, (e, o, err) =>
+			return await InstallerProcessHelper.RunDotNetProcessAsync("--list-sdks", (e, o, err) =>
 			{
 				if (e != 0) return false;
 
@@ -93,41 +85,6 @@ namespace FishMMO.Installer
 				}
 				return false;
 			});
-
-			if (installedViaPath)
-			{
-				return true;
-			}
-
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-			{
-				string homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-				if (!string.IsNullOrWhiteSpace(homePath))
-				{
-					string userDotnetPath = Path.Combine(homePath, ".dotnet", "dotnet");
-					if (File.Exists(userDotnetPath))
-					{
-						return await InstallerProcessHelper.RunProcessAsync(userDotnetPath, "--list-sdks", (e, o, err) =>
-						{
-							if (e != 0) return false;
-
-							using var reader = new StringReader(o);
-							string? line;
-							while ((line = reader.ReadLine()) != null)
-							{
-								if (line.StartsWith(InstallationConstants.DotNetSDKMajorVersion + ".", StringComparison.Ordinal))
-								{
-									return true;
-								}
-							}
-
-							return false;
-						});
-					}
-				}
-			}
-
-			return false;
 		}
 
 		/// <summary>
@@ -145,10 +102,13 @@ namespace FishMMO.Installer
 
 				try
 				{
+					InstallerProcessHelper.LogElevatedProcessEnvironmentWarning("DotNet SDK installer");
+
 					ProcessStartInfo startInfo = new ProcessStartInfo
 					{
 						FileName = installerPath,
 						Arguments = "/install /quiet /norestart",
+						WorkingDirectory = Path.GetDirectoryName(installerPath) ?? InstallerProcessHelper.GetWorkingDirectory(),
 						UseShellExecute = true,
 						Verb = "runas"
 					};
@@ -230,65 +190,10 @@ namespace FishMMO.Installer
 		/// <returns>True if command succeeded, otherwise false.</returns>
 		public static async Task<bool> RunDotNetCommandAsync(string arguments, Func<int, string, string, bool>? customProcessResult = null)
 		{
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-			{
-				if (!pathSet)
-				{
-					string homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-					if (string.IsNullOrEmpty(homePath))
-					{
-						InstallerProcessHelper.Log("Warning: The HOME environment variable is not set. DotNet commands may fail.");
-					}
-					else
-					{
-						string currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-						string dotnetPath = Path.Combine(homePath, ".dotnet");
-						string dotnetToolsPath = Path.Combine(homePath, ".dotnet", "tools");
-
-						var pathEntries = currentPath.Split(':', StringSplitOptions.RemoveEmptyEntries);
-						if (!pathEntries.Contains(dotnetPath))
-						{
-							currentPath = string.IsNullOrWhiteSpace(currentPath)
-								? dotnetPath
-								: $"{currentPath}:{dotnetPath}";
-							InstallerProcessHelper.Log($"Updated PATH to include: {dotnetPath}");
-						}
-
-						if (!currentPath.Split(':', StringSplitOptions.RemoveEmptyEntries).Contains(dotnetToolsPath))
-						{
-							currentPath = string.IsNullOrWhiteSpace(currentPath)
-								? dotnetToolsPath
-								: $"{currentPath}:{dotnetToolsPath}";
-							InstallerProcessHelper.Log($"Updated PATH to include: {dotnetToolsPath}");
-						}
-
-						Environment.SetEnvironmentVariable("PATH", currentPath);
-					}
-
-					string userDotnetRoot = Path.Combine(homePath, ".dotnet");
-					if (Directory.Exists(userDotnetRoot))
-					{
-						Environment.SetEnvironmentVariable("DOTNET_ROOT", userDotnetRoot);
-						InstallerProcessHelper.Log($"Set DOTNET_ROOT to: {userDotnetRoot}");
-					}
-					else
-					{
-						string systemDotnetRoot = "/usr/share/dotnet";
-						if (Directory.Exists(systemDotnetRoot))
-						{
-							Environment.SetEnvironmentVariable("DOTNET_ROOT", systemDotnetRoot);
-							InstallerProcessHelper.Log($"Set DOTNET_ROOT to: {systemDotnetRoot}");
-						}
-					}
-
-					pathSet = true;
-				}
-			}
-
 			Console.WriteLine("Running DotNet Command: \r\n" +
 							  "dotnet " + arguments);
 
-			bool success = await InstallerProcessHelper.RunProcessAsync("dotnet", arguments,
+			bool success = await InstallerProcessHelper.RunDotNetProcessAsync(arguments,
 				(exitCode, output, error) =>
 				{
 					if (!string.IsNullOrWhiteSpace(output))
