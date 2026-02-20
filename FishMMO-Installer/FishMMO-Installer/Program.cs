@@ -23,7 +23,8 @@ namespace FishMMO.Installer
 		public static async Task Main(string[] args)
 		{
 			// Normalize environment selection once and propagate to standard variables.
-			string environmentName = ResolveEnvironmentName();
+			string environmentName = DatabaseConfigurationHelper.ResolveEnvironmentName();
+
 			Environment.SetEnvironmentVariable("FISHMMO_ENVIRONMENT", environmentName);
 			Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", environmentName);
 			Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environmentName);
@@ -39,17 +40,10 @@ namespace FishMMO.Installer
 		/// </summary>
 		private static void LoadAppSettings(string environmentName)
 		{
-			string workingDirectory = InstallerProcessHelper.GetWorkingDirectory();
-
 			try
 			{
-				var builder = new ConfigurationBuilder()
-					.SetBasePath(workingDirectory)
-					.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-					.AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: false)
-					.AddEnvironmentVariables(); // Allows system-level overrides
+				IConfiguration configuration = DatabaseConfigurationHelper.BuildDesignTimeConfiguration();
 
-				IConfigurationRoot configuration = builder.Build();
 				appSettings = configuration.Get<AppSettings>() ?? new AppSettings();
 
 				InstallerProcessHelper.Log($"Configuration successfully loaded for Environment: {environmentName}");
@@ -59,34 +53,6 @@ namespace FishMMO.Installer
 				InstallerProcessHelper.Log($"Critical error loading configuration: {ex.Message}");
 				appSettings = new AppSettings();
 			}
-		}
-
-		/// <summary>
-		/// Resolves the active environment name from known variables, ignoring empty values.
-		/// </summary>
-		/// <returns>Environment name.</returns>
-		private static string ResolveEnvironmentName()
-		{
-			string?[] candidates =
-			[
-				Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT"),
-				Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
-				Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-			];
-
-			foreach (string? candidate in candidates)
-			{
-				if (!string.IsNullOrWhiteSpace(candidate))
-				{
-					return candidate.Trim();
-				}
-			}
-
-#if DEBUG
-			return "Development";
-#else
-			return "Production";
-#endif
 		}
 
 		/// <summary>

@@ -1,4 +1,6 @@
 ﻿using System;
+using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -13,7 +15,6 @@ using FishMMO.Server.Core;
 using FishMMO.Shared;
 using FishMMO.Server.Core.Account;
 using FishNet.Connection;
-using System.Collections.Generic;
 
 namespace FishMMO.Server.Implementation
 {
@@ -168,15 +169,15 @@ namespace FishMMO.Server.Implementation
 
 			CoreServer.Initialize(remoteAddress, gameObject.scene.name);
 
-			string workingDirectory = Constants.GetWorkingDirectory();
-#if UNITY_EDITOR
-			string dbConfigurationPath = Path.Combine(
-				Path.Combine(workingDirectory, Constants.Configuration.SetupDirectory),
-				"Development");
-			Database = new Database.Database(dbConfigurationPath, false);
-#else
-			Database = new Database.Database(workingDirectory, false);
-#endif
+			// Build the configuration using our shared helper
+			// This automatically handles appsettings.json, appsettings.{env}.json, 
+			// and Environment Variables using the BaseDirectory.
+			IConfiguration dbConfig = DatabaseConfigurationHelper.BuildDesignTimeConfiguration();
+
+			// Initialize Database with the configuration object
+			// The Database class will now pull Npgsql and Redis settings directly from dbConfig
+			Log.Debug("Server", $"Initializing Database with Environment: {DatabaseConfigurationHelper.ResolveEnvironmentName()}");
+			Database = new Database.Database(dbConfig);
 
 			AddressProvider = new ServerAddressProvider(
 				NetworkWrapper.NetworkManager.TransportManager.Transport,

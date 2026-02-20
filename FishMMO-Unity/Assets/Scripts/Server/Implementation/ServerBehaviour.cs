@@ -1,7 +1,6 @@
 using FishNet.Connection;
 using FishNet.Managing.Server;
 using UnityEngine;
-using FishMMO.Logging;
 using FishMMO.Server.Core;
 
 namespace FishMMO.Server.Implementation
