@@ -18,9 +18,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Manages player character inventory, equipment, and bank operations with validation and database persistence.
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterInventorySystem", menuName = "FishMMO/Server/SceneServer/Character Inventory System", order = 1)]
+	[RequiresDataContainer(typeof(CharacterInventorySystemRuntimeData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterInventorySystem : ServerBehaviour, ICharacterInventorySystem
 	{
+		/// <summary>
+		/// Debounce window in milliseconds applied to inventory ingress operations.
+		/// </summary>
+		[Header("Ingress Protection")]
+		[Tooltip("Minimum milliseconds between identical inventory requests from the same connection")]
+		[SerializeField] private int ingressDebounceMilliseconds = 60;
+
+		/// <summary>
+		/// Interval in seconds between bounded ingress-guard cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded ingress guard cleanup sweeps")]
+		[SerializeField] private float ingressSweepIntervalSeconds = 5.0f;
+
+		/// <summary>
+		/// Guard entry time-to-live in seconds.
+		/// </summary>
+		[Tooltip("Seconds before stale ingress guard entries are removed")]
+		[SerializeField] private float ingressEntryTtlSeconds = 30.0f;
+
+		/// <summary>
+		/// Maximum number of stale guard entries removed per sweep pass.
+		/// </summary>
+		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
+		[SerializeField] private int ingressSweepMaxRemovals = 128;
+
+		/// <summary>
+		/// Operation codes used by ingress guards.
+		/// </summary>
+		private enum IngressOperation : byte
+		{
+			InventoryRemove = 1,
+			InventorySwap = 2,
+			EquipmentEquip = 3,
+			EquipmentUnequip = 4,
+			BankRemove = 5,
+			BankSwap = 6,
+		}
+
 		/// <summary>
 		/// Initializes the character inventory system, registering broadcast handlers for inventory, equipment, and bank actions.
 		/// </summary>
@@ -49,6 +88,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("CharacterInventorySystem", "InitializeOnce: ICharacterInventorySystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			// Inventory broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived, true);
@@ -60,6 +105,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Bank broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived, true);
+
+			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
+			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
+			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
+			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
+			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("CharacterInventorySystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
@@ -87,6 +138,82 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Bank broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived);
+
+			if (Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.NextAllowedIngressUtcByKey.Clear();
+				runtimeData.IngressInFlightByKey.Clear();
+				runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
+			}
+		}
+
+		/// <summary>
+		/// Sweeps stale ingress guard entries.
+		/// </summary>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			if (!Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextIngressSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
+			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
+
+			int removed = 0;
+			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
+			{
+				if (removed >= ingressSweepMaxRemovals)
+				{
+					break;
+				}
+
+				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
+				{
+					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
+					removed++;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Attempts to acquire ingress debounce and in-flight guard for a connection operation.
+		/// </summary>
+		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
+			{
+				guardKey = 0;
+				return false;
+			}
+
+			guardKey = ((long)connectionId << 8) | (byte)operation;
+			DateTime nowUtc = DateTime.UtcNow;
+
+			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
+			{
+				return false;
+			}
+
+			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
+			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+		}
+
+		/// <summary>
+		/// Releases an ingress in-flight guard key.
+		/// </summary>
+		private void EndIngressGuard(long guardKey)
+		{
+			if (Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+			}
 		}
 
 		/// <summary>
@@ -182,25 +309,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character != null &&
-				!character.IsTeleporting &&
-				character.TryGet(out IInventoryController inventoryController))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.InventoryRemove, out long guardKey))
 			{
-				Item item = inventoryController.RemoveItem(msg.Slot);
-				if (item == null)
+				return;
+			}
+
+			try
+			{
+
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character != null &&
+					!character.IsTeleporting &&
+					character.TryGet(out IInventoryController inventoryController))
 				{
-					return;
+					Item item = inventoryController.RemoveItem(msg.Slot);
+					if (item == null)
+					{
+						return;
+					}
+
+					// fire-and-forget async delete
+					long characterID = character.ID;
+					int slot = msg.Slot;
+					item.Version++;
+					long version = item.Version;
+					TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, slot, version), characterID);
+
+					Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 				}
-
-				// fire-and-forget async delete
-				long characterID = character.ID;
-				int slot = msg.Slot;
-				item.Version++;
-				long version = item.Version;
-				TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, slot, version), characterID);
-
-				Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -218,18 +358,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null ||
-				character.IsTeleporting ||
-				!character.TryGet(out IInventoryController inventoryController))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.InventorySwap, out long guardKey))
 			{
 				return;
 			}
 
-			long characterID = character.ID;
-
-			switch (msg.FromInventory)
+			try
 			{
+
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character == null ||
+					character.IsTeleporting ||
+					!character.TryGet(out IInventoryController inventoryController))
+				{
+					return;
+				}
+
+				long characterID = character.ID;
+
+				switch (msg.FromInventory)
+				{
 				case InventoryType.Inventory:
 					// swap the items in the inventory
 					if (msg.To != msg.From &&
@@ -290,6 +438,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					break;
 				default: break;
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -307,18 +460,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null ||
-				character.IsTeleporting ||
-				!character.TryGet(out IEquipmentController equipmentController))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.EquipmentEquip, out long guardKey))
 			{
 				return;
 			}
 
-			long characterID = character.ID;
-
-			switch (msg.FromInventory)
+			try
 			{
+
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character == null ||
+					character.IsTeleporting ||
+					!character.TryGet(out IEquipmentController equipmentController))
+				{
+					return;
+				}
+
+				long characterID = character.ID;
+
+				switch (msg.FromInventory)
+				{
 				case InventoryType.Inventory:
 					if (character.TryGet(out IInventoryController inventoryController) &&
 						inventoryController.TryGetItem(msg.InventoryIndex, out Item inventoryItem))
@@ -400,6 +561,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					break;
 				default: return;
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -417,18 +583,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null ||
-				character.IsTeleporting ||
-				!character.TryGet(out IEquipmentController equipmentController))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.EquipmentUnequip, out long guardKey))
 			{
 				return;
 			}
 
-			long characterID = character.ID;
-
-			switch (msg.ToInventory)
+			try
 			{
+
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character == null ||
+					character.IsTeleporting ||
+					!character.TryGet(out IEquipmentController equipmentController))
+				{
+					return;
+				}
+
+				long characterID = character.ID;
+
+				switch (msg.ToInventory)
+				{
 				case InventoryType.Inventory:
 					if (character.TryGet(out IInventoryController inventoryController) &&
 						equipmentController.TryGetItem(msg.Slot, out Item toInventory))
@@ -512,6 +686,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					break;
 				default: return;
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -529,25 +708,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character != null &&
-				!character.IsTeleporting &&
-				character.TryGet(out IBankController bankController))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.BankRemove, out long guardKey))
 			{
-				Item item = bankController.RemoveItem(msg.Slot);
-				if (item == null)
+				return;
+			}
+
+			try
+			{
+
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character != null &&
+					!character.IsTeleporting &&
+					character.TryGet(out IBankController bankController))
 				{
-					return;
+					Item item = bankController.RemoveItem(msg.Slot);
+					if (item == null)
+					{
+						return;
+					}
+
+					// fire-and-forget async delete
+					long characterID = character.ID;
+					int slot = msg.Slot;
+					item.Version++;
+					long version = item.Version;
+					TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, slot, version), characterID);
+
+					Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 				}
-
-				// fire-and-forget async delete
-				long characterID = character.ID;
-				int slot = msg.Slot;
-				item.Version++;
-				long version = item.Version;
-				TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, slot, version), characterID);
-
-				Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -565,24 +757,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null ||
-				character.IsTeleporting ||
-				!character.TryGet(out IBankController bankController))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.BankSwap, out long guardKey))
 			{
 				return;
 			}
 
-			// validate banker scene object
-			if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+			try
 			{
-				return;
-			}
 
-			long characterID = character.ID;
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character == null ||
+					character.IsTeleporting ||
+					!character.TryGet(out IBankController bankController))
+				{
+					return;
+				}
 
-			switch (msg.FromInventory)
-			{
+				// validate banker scene object
+				if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+				{
+					return;
+				}
+
+				long characterID = character.ID;
+
+				switch (msg.FromInventory)
+				{
 				case InventoryType.Inventory:
 					if (character.TryGet(out IInventoryController inventoryController) &&
 						SwapContainerItems(inventoryController, bankController, msg.From, msg.To,
@@ -630,6 +830,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					break;
 				default: break;
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 

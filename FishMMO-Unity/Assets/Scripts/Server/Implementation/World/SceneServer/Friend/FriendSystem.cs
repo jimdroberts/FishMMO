@@ -24,6 +24,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	[CreateAssetMenu(fileName = "FriendSystem", menuName = "FishMMO/Server/SceneServer/Friend System", order = 1)]
 	[RequiresDataContainer(typeof(FriendSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(FriendSystemRuntimeData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class FriendSystem : ServerBehaviour, IFriendSystem
 	{
@@ -34,6 +35,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Header("Main Thread Dispatch")]
 		[Tooltip("Max friend-system actions drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
+		/// Debounce window in milliseconds for friend ingress operations.
+		/// </summary>
+		[Header("Ingress Protection")]
+		[Tooltip("Minimum milliseconds between friend add/remove requests per connection")]
+		[SerializeField] private int ingressDebounceMilliseconds = 100;
+
+		/// <summary>
+		/// Interval in seconds between ingress-guard cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded ingress guard cleanup sweeps")]
+		[SerializeField] private float ingressSweepIntervalSeconds = 5.0f;
+
+		/// <summary>
+		/// Guard entry time-to-live in seconds.
+		/// </summary>
+		[Tooltip("Seconds before stale ingress guard entries are removed")]
+		[SerializeField] private float ingressEntryTtlSeconds = 30.0f;
+
+		/// <summary>
+		/// Maximum stale guard entries removed per cleanup sweep.
+		/// </summary>
+		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
+		[SerializeField] private int ingressSweepMaxRemovals = 128;
+
+		/// <summary>
+		/// Operation codes used for ingress guards.
+		/// </summary>
+		private enum IngressOperation : byte
+		{
+			AddFriend = 1,
+			RemoveFriend = 2,
+		}
 
 		/// <summary>
 		/// Maximum number of friends allowed per character.
@@ -69,11 +104,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("FriendSystem", "InitializeOnce: IFriendSystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<FriendAddNewBroadcast>(OnServerFriendAddNewBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<FriendRemoveBroadcast>(OnServerFriendRemoveBroadcastReceived, true);
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
+			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
+			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
+			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
+			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("FriendSystem", $"Initialized (MaxFriends={maxFriends})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -96,6 +142,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<FriendAddNewBroadcast>(OnServerFriendAddNewBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<FriendRemoveBroadcast>(OnServerFriendRemoveBroadcastReceived);
+
+			if (Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.NextAllowedIngressUtcByKey.Clear();
+				runtimeData.IngressInFlightByKey.Clear();
+				runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
+			}
 		}
 
 		/// <summary>
@@ -134,6 +187,68 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override void OnLateUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
+
+			if (!Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextIngressSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
+			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
+			int removed = 0;
+			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
+			{
+				if (removed >= ingressSweepMaxRemovals)
+				{
+					break;
+				}
+
+				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
+				{
+					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
+					removed++;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Attempts to acquire ingress debounce and in-flight guard for a connection operation.
+		/// </summary>
+		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
+			{
+				guardKey = 0;
+				return false;
+			}
+
+			guardKey = ((long)connectionId << 8) | (byte)operation;
+			DateTime nowUtc = DateTime.UtcNow;
+
+			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
+			{
+				return false;
+			}
+
+			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
+			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+		}
+
+		/// <summary>
+		/// Releases a previously acquired ingress guard key.
+		/// </summary>
+		private void EndIngressGuard(long guardKey)
+		{
+			if (Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+			}
 		}
 
 		/// <summary>
@@ -151,6 +266,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AddFriend, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
 			IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 
 			// Validate character
@@ -176,7 +300,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Capture immutable data for the async path
 			long friendCharacterID = msg.CharacterID;
 
-			TryEnqueueAsyncWork(() => AddFriendAsync(conn, characterID, friendCharacterID), characterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => AddFriendAsync(conn, characterID, friendCharacterID), guardKey, characterID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -271,6 +403,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.RemoveFriend, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
 			IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 
 			// Validate character
@@ -285,27 +426,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long characterID = friendController.Character.ID;
 				long friendCharacterID = msg.CharacterID;
 
-				// Remove from in-memory state immediately
-				friendController.Friends.Remove(friendCharacterID);
-
-				// Tell the character they removed a friend
-				Server.NetworkWrapper.Broadcast(conn, new FriendRemoveBroadcast()
+				deferGuardRelease = TryEnqueueIngressWork(() => RemoveFriendAsync(conn, characterID, friendCharacterID), guardKey, characterID);
+			}
+			}
+			finally
+			{
+				if (!deferGuardRelease)
 				{
-					CharacterID = friendCharacterID,
-				}, true, Channel.Reliable);
-
-				// Fire-and-forget async DB delete
-				TryEnqueueAsyncWork(() => DeleteFriendAsync(characterID, friendCharacterID), characterID);
+					EndIngressGuard(guardKey);
+				}
 			}
 		}
 
 		/// <summary>
 		/// Asynchronously deletes a friend relationship from the database.
+		/// On success, marshals in-memory removal and client acknowledgement to the main thread.
 		/// </summary>
+		/// <param name="conn">Owning connection for in-memory state updates and broadcast.</param>
 		/// <param name="characterID">Requesting character identifier.</param>
 		/// <param name="friendCharacterID">Target friend character identifier.</param>
 		/// <returns>Asynchronous remove-friend processing task.</returns>
-		private async Task DeleteFriendAsync(long characterID, long friendCharacterID)
+		private async Task RemoveFriendAsync(NetworkConnection conn, long characterID, long friendCharacterID)
 		{
 			try
 			{
@@ -318,12 +459,59 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await friendService.DeleteAsync(characterID, friendCharacterID, long.MaxValue);
+				DatabaseResult deleteResult = await friendService.DeleteAsync(characterID, friendCharacterID, long.MaxValue);
+				if (!deleteResult.IsSuccess)
+				{
+					return;
+				}
+
+				EnqueueMainThread(() =>
+				{
+					if (conn == null || !conn.IsActive || conn.FirstObject == null)
+					{
+						return;
+					}
+
+					IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
+					if (friendController == null || friendController.Character.ID != characterID)
+					{
+						return;
+					}
+
+					if (!friendController.Friends.Contains(friendCharacterID))
+					{
+						return;
+					}
+
+					friendController.Friends.Remove(friendCharacterID);
+					Server.NetworkWrapper.Broadcast(conn, new FriendRemoveBroadcast()
+					{
+						CharacterID = friendCharacterID,
+					}, true, Channel.Reliable);
+				});
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("FriendSystem", $"Error deleting friend (CharID={characterID}, FriendID={friendCharacterID}): {ex}");
+				await Log.Error("FriendSystem", $"Error removing friend (CharID={characterID}, FriendID={friendCharacterID}): {ex}");
 			}
+		}
+
+		/// <summary>
+		/// Enqueues ingress work and guarantees the ingress guard is released when async processing completes.
+		/// </summary>
+		private bool TryEnqueueIngressWork(Func<Task> work, long guardKey, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			return TryEnqueueAsyncWork(async () =>
+			{
+				try
+				{
+					await work();
+				}
+				finally
+				{
+					EndIngressGuard(guardKey);
+				}
+			}, entityKey, callerName);
 		}
 
 		/// <summary>

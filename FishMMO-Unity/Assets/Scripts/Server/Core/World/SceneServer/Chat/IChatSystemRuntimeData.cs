@@ -17,5 +17,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Position (ID) of the last fetched chat message in the database.
 		/// </summary>
 		long LastFetchPosition { get; set; }
+
+		/// <summary>
+		/// Atomic in-flight flag for the periodic message pump.
+		/// 0 = idle, 1 = running.
+		/// </summary>
+		int MessagePumpInFlight { get; set; }
 	}
 }

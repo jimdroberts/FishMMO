@@ -62,6 +62,15 @@ Final character instance state changes and disconnect are marshalled back to the
 
 Queue submissions use checked enqueue semantics with warning logs when work is rejected or the queue is unavailable.
 
+## Ingress Guarding Model
+
+The system now uses shared per-character ingress guards across all interactable entry points:
+
+- **Single debounce tracker**: `InteractableNextAllowedUtcByCharacter`
+- **Single in-flight tracker**: `InteractableInFlightByCharacter`
+
+This enforces one active interactable operation per character at a time (interactable, merchant, ability-craft, and dungeon-finder), while still applying operation-specific debounce intervals.
+
 ## Data and Service Dependencies
 
 `InteractableSystem` depends on:
@@ -94,4 +103,6 @@ Outbound broadcasts include inventory and known-ability updates, and crafted abi
 - Scene/object/range checks prevent cross-scene and spoofed interaction attempts.
 - Merchant tab accesses use explicit index bounds checks.
 - Ability craft event selection rejects duplicates and unknown/unowned events.
-- Async enqueue failures are logged to surface backpressure or lifecycle ordering issues.
+- Async enqueue failures are handled explicitly:
+  - inventory persistence falls back to direct async persistence with warning logs,
+  - known-ability and crafted-ability persistence failures fail closed (no local learn mutation when enqueue is rejected).

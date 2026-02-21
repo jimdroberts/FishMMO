@@ -77,9 +77,18 @@ Request handler: `OnServerFriendRemoveBroadcastReceived(...)`
 Processing path:
 1. Validate connection/object/controller.
 2. Confirm friend exists in in-memory set.
-3. Remove friend from in-memory state immediately.
-4. Broadcast `FriendRemoveBroadcast` to requester.
-5. Enqueue async delete persistence (`DeleteFriendAsync(...)`).
+3. Enqueue async remove persistence (`RemoveFriendAsync(...)`).
+4. On DB delete success, marshal to main thread.
+5. Remove friend from in-memory state.
+6. Broadcast `FriendRemoveBroadcast` to requester.
+
+This ensures local state and acknowledgement are only applied after persistence succeeds.
+
+## Ingress Guarding
+
+Friend ingress uses per-connection operation keys with debounce + in-flight protection.
+
+For async-backed handlers, guard release is deferred until the queued async operation completes (not at enqueue-time), preventing overlap windows for duplicate operations.
 
 ## Async Worker and Backpressure
 

@@ -29,6 +29,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	[CreateAssetMenu(fileName = "PetSystem", menuName = "FishMMO/Server/SceneServer/Pet System", order = 1)]
 	[RequiresDataContainer(typeof(PetSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(PetSystemRuntimeData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class PetSystem : ServerBehaviour, IPetSystem
 	{
@@ -39,6 +40,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Header("Main Thread Dispatch")]
 		[Tooltip("Max pet-system actions drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
+		/// Debounce window in milliseconds for pet control ingress requests.
+		/// </summary>
+		[Header("Ingress Protection")]
+		[Tooltip("Minimum milliseconds between pet control requests per connection")]
+		[SerializeField] private int ingressDebounceMilliseconds = 80;
+
+		/// <summary>
+		/// Interval in seconds between ingress-guard cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded ingress guard cleanup sweeps")]
+		[SerializeField] private float ingressSweepIntervalSeconds = 5.0f;
+
+		/// <summary>
+		/// Guard entry time-to-live in seconds.
+		/// </summary>
+		[Tooltip("Seconds before stale ingress guard entries are removed")]
+		[SerializeField] private float ingressEntryTtlSeconds = 30.0f;
+
+		/// <summary>
+		/// Maximum stale guard entries removed per cleanup sweep.
+		/// </summary>
+		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
+		[SerializeField] private int ingressSweepMaxRemovals = 128;
+
+		/// <summary>
+		/// Operation codes used by pet ingress guards.
+		/// </summary>
+		private enum IngressOperation : byte
+		{
+			Follow = 1,
+			Stay = 2,
+			Summon = 3,
+			Release = 4,
+		}
 
 		/// <summary>
 		/// Called once to initialize the pet system. Registers broadcast handlers and subscribes to character and ability events.
@@ -54,6 +91,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!Server.DataContainerRegistry.TryGet<IPetSystemMainThreadQueueData>(out _))
 			{
 				Log.Error("PetSystem", "Failed to initialize: IPetSystemMainThreadQueueData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IPetSystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("PetSystem", "Failed to initialize: IPetSystemRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
@@ -75,6 +118,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
+			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
+			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
+			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
+			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("PetSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
@@ -109,6 +157,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
 				characterSystem.OnDespawnCharacter -= CharacterSystem_OnDespawnCharacter;
 				characterSystem.OnPetKilled -= CharacterSystem_OnPetKilled;
+			}
+
+			if (Server.DataContainerRegistry.TryGet<IPetSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.NextAllowedIngressUtcByKey.Clear();
+				runtimeData.IngressInFlightByKey.Clear();
+				runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
+			}
+		}
+
+		/// <summary>
+		/// Attempts to acquire ingress debounce and in-flight guard for a connection operation.
+		/// </summary>
+		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet<IPetSystemRuntimeData>(out var runtimeData))
+			{
+				guardKey = 0;
+				return false;
+			}
+
+			guardKey = ((long)connectionId << 8) | (byte)operation;
+			DateTime nowUtc = DateTime.UtcNow;
+
+			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
+			{
+				return false;
+			}
+
+			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
+			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+		}
+
+		/// <summary>
+		/// Releases an ingress in-flight guard key.
+		/// </summary>
+		private void EndIngressGuard(long guardKey)
+		{
+			if (Server.DataContainerRegistry.TryGet<IPetSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
 			}
 		}
 
@@ -148,6 +237,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override void OnLateUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
+
+			if (!Server.DataContainerRegistry.TryGet<IPetSystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextIngressSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
+			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
+			int removed = 0;
+			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
+			{
+				if (removed >= ingressSweepMaxRemovals)
+				{
+					break;
+				}
+
+				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
+				{
+					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
+					removed++;
+				}
+			}
 		}
 
 		/// <summary>
@@ -160,17 +277,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPetController petController = conn.FirstObject.GetComponent<IPetController>();
-			if (petController == null || petController.Pet == null)
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Follow, out long guardKey))
 			{
-				// no pet exists
 				return;
 			}
 
-			if (petController.Pet.TryGet(out IAIController aiController))
+			try
 			{
-				aiController.Home = petController.Character.Transform.position;
-				aiController.Target = petController.Character.Transform;
+
+				IPetController petController = conn.FirstObject.GetComponent<IPetController>();
+				if (petController == null || petController.Pet == null)
+				{
+					// no pet exists
+					return;
+				}
+
+				if (petController.Pet.TryGet(out IAIController aiController))
+				{
+					aiController.Home = petController.Character.Transform.position;
+					aiController.Target = petController.Character.Transform;
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -184,17 +314,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPetController petController = conn.FirstObject.GetComponent<IPetController>();
-			if (petController == null || petController.Pet == null)
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Stay, out long guardKey))
 			{
-				// no pet exists
 				return;
 			}
 
-			if (petController.Pet.TryGet(out IAIController aiController))
+			try
 			{
-				aiController.Home = petController.Pet.Transform.position;
-				aiController.Target = null;
+
+				IPetController petController = conn.FirstObject.GetComponent<IPetController>();
+				if (petController == null || petController.Pet == null)
+				{
+					// no pet exists
+					return;
+				}
+
+				if (petController.Pet.TryGet(out IAIController aiController))
+				{
+					aiController.Home = petController.Pet.Transform.position;
+					aiController.Target = null;
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -208,16 +351,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPetController petController = conn.FirstObject.GetComponent<IPetController>();
-			if (petController == null || petController.Pet == null)
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Summon, out long guardKey))
 			{
-				// no pet exists
 				return;
 			}
 
-			if (petController.Pet.TryGet(out IAIController aiController))
+			try
 			{
-				aiController.Agent.Warp(petController.Character.Transform.position);
+
+				IPetController petController = conn.FirstObject.GetComponent<IPetController>();
+				if (petController == null || petController.Pet == null)
+				{
+					// no pet exists
+					return;
+				}
+
+				if (petController.Pet.TryGet(out IAIController aiController))
+				{
+					aiController.Agent.Warp(petController.Character.Transform.position);
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -230,6 +386,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Release, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
 			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
@@ -259,6 +423,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Async DB save with spawned=false, keyed by characterID to serialize with summon ops
 			TryEnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+			}
 		}
 
 		/// <summary>

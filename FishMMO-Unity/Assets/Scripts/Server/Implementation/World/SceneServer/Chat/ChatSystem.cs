@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -177,9 +178,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicMessagePump(float deltaTime)
 		{
-			if (Initialized && Server.ServerState == ConnectionState.Started)
+			if (Initialized &&
+				Server.ServerState == ConnectionState.Started &&
+				Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData))
 			{
-				TryEnqueueAsyncWork(() => FetchAndProcessChatMessagesAsync());
+				lock (runtimeData)
+				{
+					if (runtimeData.MessagePumpInFlight != 0)
+					{
+						return;
+					}
+
+					runtimeData.MessagePumpInFlight = 1;
+				}
+
+				if (!TryEnqueueAsyncWork(() => FetchAndProcessChatMessagesAsync()))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.MessagePumpInFlight = 0;
+					}
+				}
 			}
 		}
 
@@ -242,6 +261,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("ChatSystem", $"Error fetching chat messages: {ex}");
+			}
+			finally
+			{
+				if (Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.MessagePumpInFlight = 0;
+					}
+				}
 			}
 		}
 

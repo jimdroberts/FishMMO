@@ -21,12 +21,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public long LastFetchPosition { get; set; }
 
 		/// <summary>
+		/// Atomic in-flight flag for the periodic message pump.
+		/// </summary>
+		public int MessagePumpInFlight { get; set; }
+
+		/// <summary>
 		/// Initializes the chat message queue data container.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			LastFetchTime = DateTime.UtcNow;
 			LastFetchPosition = 0;
+			MessagePumpInFlight = 0;
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -37,6 +43,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			LastFetchTime = DateTime.UtcNow;
 			LastFetchPosition = 0;
+			MessagePumpInFlight = 0;
 		}
 
 		/// <summary>

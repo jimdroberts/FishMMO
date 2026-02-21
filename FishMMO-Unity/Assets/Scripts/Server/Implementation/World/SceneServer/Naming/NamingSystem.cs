@@ -22,6 +22,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Results from async DB queries are marshalled back via INamingSystemMainThreadQueueData.
 	/// </summary>
 	[CreateAssetMenu(fileName = "NamingSystem", menuName = "FishMMO/Server/SceneServer/Naming System", order = 1)]
+	[RequiresDataContainer(typeof(NamingSystemRuntimeData))]
+	[RequiresDataContainer(typeof(NamingSystemMappingData))]
 	[RequiresDataContainer(typeof(NamingSystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class NamingSystem : ServerBehaviour, INamingSystem<NetworkConnection>
@@ -33,6 +35,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Header("Main Thread Dispatch")]
 		[Tooltip("Max naming-system actions drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
+		/// Minimum milliseconds between naming requests per connection.
+		/// </summary>
+		[Header("Request Protection")]
+		[Tooltip("Minimum milliseconds between naming requests per connection")]
+		[SerializeField] private int requestDebounceMilliseconds = 75;
+
+		/// <summary>
+		/// Cache TTL in seconds for naming cache entries.
+		/// </summary>
+		[Tooltip("Cache TTL in seconds for naming lookup caches")]
+		[SerializeField] private float cacheTtlSeconds = 30.0f;
+
+		/// <summary>
+		/// Interval in seconds between bounded cache sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded naming cache sweeps")]
+		[SerializeField] private float cacheSweepIntervalSeconds = 1.0f;
+
+		/// <summary>
+		/// Maximum cache entries scanned per sweep pass.
+		/// </summary>
+		[Tooltip("Maximum cache entries scanned per sweep")]
+		[SerializeField] private int cacheSweepMaxScan = 128;
+
+		/// <summary>
+		/// Maximum cache entries removed per sweep pass.
+		/// </summary>
+		[Tooltip("Maximum cache entries removed per sweep")]
+		[SerializeField] private int cacheSweepMaxRemove = 128;
 
 		/// <summary>
 		/// Initializes the naming system, registering broadcast handlers for naming and reverse naming requests.
@@ -51,11 +84,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out _))
+			{
+				Log.Error("NamingSystem", "Failed to initialize: INamingSystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out _))
+			{
+				Log.Error("NamingSystem", "Failed to initialize: INamingSystemMappingData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<NamingBroadcast>(OnServerNamingBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ReverseNamingBroadcast>(OnServerReverseNamingBroadcastReceived, true);
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			requestDebounceMilliseconds = Mathf.Max(0, requestDebounceMilliseconds);
+			cacheTtlSeconds = Mathf.Max(5.0f, cacheTtlSeconds);
+			cacheSweepIntervalSeconds = Mathf.Max(0.1f, cacheSweepIntervalSeconds);
+			cacheSweepMaxScan = Mathf.Max(1, cacheSweepMaxScan);
+			cacheSweepMaxRemove = Mathf.Max(1, cacheSweepMaxRemove);
+			if (Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.NextCacheSweepUtc = DateTime.UtcNow;
+			}
 
 			Log.Debug("NamingSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
@@ -116,6 +170,69 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override void OnLateUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
+			SweepCaches();
+		}
+
+		/// <summary>
+		/// Checks and updates per-connection request debounce state.
+		/// </summary>
+		private bool IsRequestDebounced(NetworkConnection conn)
+		{
+			if (requestDebounceMilliseconds <= 0 || conn == null)
+			{
+				return false;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+			{
+				return false;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (runtimeData.ConnectionRequestTracker.TryGetAndTouch(conn.ClientId, nowUtc, out DateTime lastRequestUtc))
+			{
+				if ((nowUtc - lastRequestUtc).TotalMilliseconds < requestDebounceMilliseconds)
+				{
+					return true;
+				}
+			}
+
+			runtimeData.ConnectionRequestTracker.Upsert(conn.ClientId, nowUtc, nowUtc);
+			return false;
+		}
+
+		/// <summary>
+		/// Performs bounded TTL sweeps for naming runtime and mapping caches.
+		/// </summary>
+		private void SweepCaches()
+		{
+			if (!Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextCacheSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextCacheSweepUtc = nowUtc.AddSeconds(cacheSweepIntervalSeconds);
+			runtimeData.ConnectionRequestTracker.SweepExpired(
+				nowUtc,
+				TimeSpan.FromSeconds(cacheTtlSeconds),
+				cacheSweepMaxScan,
+				cacheSweepMaxRemove);
+
+			if (Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var mappingData))
+			{
+				TimeSpan ttl = TimeSpan.FromSeconds(cacheTtlSeconds);
+				mappingData.CharacterNameByIdCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
+				mappingData.GuildNameByIdCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
+				mappingData.CharacterIdByNameCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
+				mappingData.CharacterNameByNameCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
+				mappingData.CharacterMissingByNameCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
+			}
 		}
 
 		/// <summary>
@@ -131,6 +248,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+			if (IsRequestDebounced(conn))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (!Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData) ||
+				!Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var namingMappingData))
+			{
+				return;
+			}
 
 			switch (msg.Type)
 			{
@@ -139,19 +267,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 						mappingData.CharactersByID.TryGetValue(msg.ID, out IPlayerCharacter character))
 					{
+						namingMappingData.CharacterNameByIdCache.Upsert(msg.ID, character.CharacterName, nowUtc);
 						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.ID, character.CharacterName);
+					}
+					else if (namingMappingData.CharacterNameByIdCache.TryGetAndTouch(msg.ID, nowUtc, out string cachedCharacterName))
+					{
+						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.ID, cachedCharacterName);
 					}
 					// then check the database asynchronously
 					else if (Server.Database?.ServiceRegistry != null)
 					{
-						TryEnqueueAsyncWork(() => FetchCharacterNameAsync(conn, msg.ID), msg.ID);
+						if (runtimeData.CharacterNameByIdInFlight.TryAdd(msg.ID, 0) &&
+							!TryEnqueueAsyncWork(() => FetchCharacterNameAsync(conn, msg.ID), msg.ID))
+						{
+							runtimeData.CharacterNameByIdInFlight.TryRemove(msg.ID, out _);
+						}
 					}
 					break;
 				case NamingSystemType.GuildName:
+					if (namingMappingData.GuildNameByIdCache.TryGetAndTouch(msg.ID, nowUtc, out string cachedGuildName))
+					{
+						SendNamingBroadcast(conn, NamingSystemType.GuildName, msg.ID, cachedGuildName);
+						break;
+					}
+
 					// get the name from the database asynchronously
 					if (Server.Database?.ServiceRegistry != null)
 					{
-						TryEnqueueAsyncWork(() => FetchGuildNameAsync(conn, msg.ID), msg.ID);
+						if (runtimeData.GuildNameByIdInFlight.TryAdd(msg.ID, 0) &&
+							!TryEnqueueAsyncWork(() => FetchGuildNameAsync(conn, msg.ID), msg.ID))
+						{
+							runtimeData.GuildNameByIdInFlight.TryRemove(msg.ID, out _);
+						}
 					}
 					break;
 				default:
@@ -186,6 +333,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				if (Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var mappingData))
+				{
+					mappingData.CharacterNameByIdCache.Upsert(characterID, name, DateTime.UtcNow);
+				}
+
 				EnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive) return;
@@ -195,6 +347,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("NamingSystem", $"Error fetching character name (ID={characterID}): {ex}");
+			}
+			finally
+			{
+				if (Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+				{
+					runtimeData.CharacterNameByIdInFlight.TryRemove(characterID, out _);
+				}
 			}
 		}
 
@@ -220,6 +379,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				string name = result.Data;
+				if (Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var mappingData))
+				{
+					mappingData.GuildNameByIdCache.Upsert(guildID, name, DateTime.UtcNow);
+				}
 
 				EnqueueMainThread(() =>
 				{
@@ -230,6 +393,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("NamingSystem", $"Error fetching guild name (ID={guildID}): {ex}");
+			}
+			finally
+			{
+				if (Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+				{
+					runtimeData.GuildNameByIdInFlight.TryRemove(guildID, out _);
+				}
 			}
 		}
 
@@ -268,6 +438,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+			if (IsRequestDebounced(conn))
+			{
+				return;
+			}
 
 			if (string.IsNullOrWhiteSpace(msg.NameLowerCase))
 			{
@@ -275,7 +449,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData) ||
+				!Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var namingMappingData))
+			{
+				return;
+			}
+
 			var nameLowerCase = msg.NameLowerCase.ToLowerInvariant();
+			DateTime nowUtc = DateTime.UtcNow;
 			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
@@ -283,18 +464,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 						mappingData.CharactersByLowerCaseName.TryGetValue(nameLowerCase, out IPlayerCharacter character))
 					{
+						namingMappingData.CharacterIdByNameCache.Upsert(nameLowerCase, character.ID, nowUtc);
+						namingMappingData.CharacterNameByNameCache.Upsert(nameLowerCase, character.CharacterName, nowUtc);
+						namingMappingData.CharacterMissingByNameCache.Remove(nameLowerCase);
 						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, character.ID, character.CharacterName);
 						break;
 					}
+
+					if (namingMappingData.CharacterMissingByNameCache.TryGetAndTouch(nameLowerCase, nowUtc, out _))
+					{
+						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, string.Empty);
+						break;
+					}
+
+					if (namingMappingData.CharacterIdByNameCache.TryGetAndTouch(nameLowerCase, nowUtc, out long cachedId) &&
+						namingMappingData.CharacterNameByNameCache.TryGetAndTouch(nameLowerCase, nowUtc, out string cachedName))
+					{
+						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, cachedId, cachedName);
+						break;
+					}
+
 					// then check the database asynchronously
 					if (Server.Database?.ServiceRegistry != null)
 					{
-						TryEnqueueAsyncWork(() => FetchCharacterByNameAsync(conn, nameLowerCase));
+						if (runtimeData.CharacterByNameInFlight.TryAdd(nameLowerCase, 0) &&
+							!TryEnqueueAsyncWork(() => FetchCharacterByNameAsync(conn, nameLowerCase)))
+						{
+							runtimeData.CharacterByNameInFlight.TryRemove(nameLowerCase, out _);
+						}
 					}
 					else
 					{
 						// let the client know it wasn't found
-						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, "");
+						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, string.Empty);
 					}
 					break;
 				case NamingSystemType.GuildName:
@@ -332,6 +534,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					long id = result.Data.Value.ID;
 					string name = result.Data.Value.Name;
 
+					if (Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var mappingData))
+					{
+						DateTime nowUtc = DateTime.UtcNow;
+						mappingData.CharacterIdByNameCache.Upsert(nameLowerCase, id, nowUtc);
+						mappingData.CharacterNameByNameCache.Upsert(nameLowerCase, name, nowUtc);
+						mappingData.CharacterMissingByNameCache.Remove(nameLowerCase);
+					}
+
 					EnqueueMainThread(() =>
 					{
 						if (conn == null || !conn.IsActive) return;
@@ -340,17 +550,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				else
 				{
+					if (Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var mappingData))
+					{
+						mappingData.CharacterMissingByNameCache.Upsert(nameLowerCase, 1, DateTime.UtcNow);
+					}
+
 					// let the client know it wasn't found
 					EnqueueMainThread(() =>
 					{
 						if (conn == null || !conn.IsActive) return;
-						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, "");
+						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, string.Empty);
 					});
 				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("NamingSystem", $"Error fetching character by name '{nameLowerCase}': {ex}");
+			}
+			finally
+			{
+				if (Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+				{
+					runtimeData.CharacterByNameInFlight.TryRemove(nameLowerCase, out _);
+				}
 			}
 		}
 

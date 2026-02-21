@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
+using System;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -13,8 +14,49 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Manages player hotkey configurations, allowing clients to set and update hotkey bindings for abilities and items.
 	/// </summary>
 	[CreateAssetMenu(fileName = "HotkeySystem", menuName = "FishMMO/Server/SceneServer/Hotkey System", order = 1)]
+	[RequiresDataContainer(typeof(HotkeySystemRuntimeData))]
 	public class HotkeySystem : ServerBehaviour, IHotkeySystem
 	{
+		/// <summary>
+		/// Debounce window in milliseconds for hotkey ingress requests.
+		/// </summary>
+		[Header("Ingress Protection")]
+		[Tooltip("Minimum milliseconds between hotkey requests per connection")]
+		[SerializeField] private int ingressDebounceMilliseconds = 75;
+
+		/// <summary>
+		/// Maximum hotkey updates accepted in one bulk request.
+		/// </summary>
+		[Tooltip("Maximum hotkey updates accepted in one bulk request")]
+		[SerializeField] private int maxBulkHotkeyUpdates = 64;
+
+		/// <summary>
+		/// Interval in seconds between ingress-guard cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded ingress guard cleanup sweeps")]
+		[SerializeField] private float ingressSweepIntervalSeconds = 5.0f;
+
+		/// <summary>
+		/// Guard entry time-to-live in seconds.
+		/// </summary>
+		[Tooltip("Seconds before stale ingress guard entries are removed")]
+		[SerializeField] private float ingressEntryTtlSeconds = 30.0f;
+
+		/// <summary>
+		/// Maximum stale guard entries removed per cleanup sweep.
+		/// </summary>
+		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
+		[SerializeField] private int ingressSweepMaxRemovals = 128;
+
+		/// <summary>
+		/// Operation codes used by hotkey ingress guards.
+		/// </summary>
+		private enum IngressOperation : byte
+		{
+			SetSingle = 1,
+			SetMultiple = 2,
+		}
+
 		/// <summary>
 		/// Ensures the character hotkey list exists and is initialized to the configured maximum size.
 		/// </summary>
@@ -46,6 +88,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			EnsureHotkeysInitialized(playerCharacter);
 
+			if (incomingData.ReferenceID < -1)
+			{
+				return false;
+			}
+
 			int slot = incomingData.Slot;
 			if (slot < 0 || slot >= playerCharacter.Hotkeys.Count)
 			{
@@ -73,9 +120,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("HotkeySystem", "InitializeOnce: IHotkeySystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived, true);
+
+			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
+			maxBulkHotkeyUpdates = Mathf.Max(1, maxBulkHotkeyUpdates);
+			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
+			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
+			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
+			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("HotkeySystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
@@ -95,6 +155,81 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived);
+
+			if (Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.NextAllowedIngressUtcByKey.Clear();
+				runtimeData.IngressInFlightByKey.Clear();
+				runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
+			}
+		}
+
+		/// <summary>
+		/// Drains stale ingress entries with bounded cleanup each frame.
+		/// </summary>
+		public override void OnLateUpdate(float deltaTime)
+		{
+			if (!Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextIngressSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
+			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
+			int removed = 0;
+			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
+			{
+				if (removed >= ingressSweepMaxRemovals)
+				{
+					break;
+				}
+
+				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
+				{
+					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
+					removed++;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Attempts to acquire ingress debounce and in-flight guard for a connection operation.
+		/// </summary>
+		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
+			{
+				guardKey = 0;
+				return false;
+			}
+
+			guardKey = ((long)connectionId << 8) | (byte)operation;
+			DateTime nowUtc = DateTime.UtcNow;
+
+			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
+			{
+				return false;
+			}
+
+			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
+			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+		}
+
+		/// <summary>
+		/// Releases a previously acquired ingress guard key.
+		/// </summary>
+		private void EndIngressGuard(long guardKey)
+		{
+			if (Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+			}
 		}
 
 		/// <summary>
@@ -110,6 +245,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetSingle, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (playerCharacter == null || msg.HotkeyData == null)
 			{
@@ -117,6 +260,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			TryApplyHotkey(playerCharacter, msg.HotkeyData);
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+			}
 		}
 
 		/// <summary>
@@ -132,20 +280,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetMultiple, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (playerCharacter == null || msg.Hotkeys == null || msg.Hotkeys.Count < 1)
 			{
 				return;
 			}
 
-			foreach (HotkeySetBroadcast subMsg in msg.Hotkeys)
+			int applyCount = Mathf.Min(msg.Hotkeys.Count, maxBulkHotkeyUpdates);
+
+			for (int i = 0; i < applyCount; ++i)
 			{
+				HotkeySetBroadcast subMsg = msg.Hotkeys[i];
 				if (subMsg.HotkeyData == null)
 				{
 					continue;
 				}
 
 				TryApplyHotkey(playerCharacter, subMsg.HotkeyData);
+			}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 	}

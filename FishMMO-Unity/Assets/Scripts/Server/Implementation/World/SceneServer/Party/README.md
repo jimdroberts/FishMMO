@@ -38,6 +38,7 @@ Primary runtime settings:
 Stores:
 - `PendingInvitations` (`TargetCharacterID -> PartyID`)
 - `LastFetchTime` for periodic party-update polling cursor
+- ingress debounce/in-flight trackers for per-connection operation guards
 
 ### `PartyCharacterMappingData`
 Stores:
@@ -92,13 +93,19 @@ When a party no longer has local online members, both online tracker and cached 
 ### Invite / Accept / Decline
 - Invite validates inviter leadership and capacity.
 - Pending invitations store target -> party mapping.
-- Accept validates pending invite, persists membership, triggers update marker, and applies local member state.
+- Accept validates pending invite, persists membership, triggers update marker, then applies local state and consumes pending invite on success path.
 - Decline removes pending invite entry.
 
 ### Leave / Remove / Rank change
-- Leave immediately updates requester local state, broadcasts leave, then async handles leadership transfer/member delete/party delete-or-update.
+- Leave performs leadership transfer/member delete/party delete-or-update asynchronously first, then applies requester local leave state and broadcasts on success.
 - Remove validates leader permissions, asynchronously removes target, updates trackers, and triggers update marker.
 - Rank change swaps leader/member roles in DB and triggers update marker.
+
+## Ingress Guard Semantics
+
+Party ingress uses debounce + in-flight guards keyed by connection and operation.
+
+For async-backed handlers (`Create`, `Invite`, `AcceptInvite`, `Leave`, `Remove`, `ChangeRank`), guard release is deferred until async completion to prevent overlap while work is in progress.
 
 ## Database Dependencies
 

@@ -12,7 +12,7 @@ It also includes request-debounce and queue-TTL hardening to reduce database flo
 WorldScene/
 ├── WorldSceneSystem.cs                    # Queue orchestration, scene routing, DB coordination
 ├── WorldSceneMappingData.cs               # Runtime queue/state maps for open-world and instance routing
-├── WorldSceneSystemRuntimeData.cs         # Runtime state (authenticator ref, next queue tick)
+├── WorldSceneSystemRuntimeData.cs         # Runtime state (authenticator, timers, processing gate)
 ├── WorldSceneSystemMainThreadQueueData.cs # Per-system main-thread action queue container
 └── README.md
 ```
@@ -74,6 +74,10 @@ Mutable runtime state for queue processing, debounce, and authenticator referenc
 
 | Property | Type | Purpose |
 |----------|------|---------|
+| `IsProcessingQueue` | `int` | Processing gate state to prevent overlapping queue-processing cycles |
+| `WaitQueueRateSeconds` | `float` | Queue tick interval in seconds |
+| `NextWaitingQueueSweep` | `float` | Countdown until stale waiting-queue purge sweep |
+| `NextDebounceCleanup` | `float` | Countdown until debounce cleanup sweep |
 | `InstanceLookupDebounce` | `ExpiringKeyTracker<string>` | Per-account debounce tracker preventing DB flood from rapid instance lookups |
 | `WaitingQueueEnteredUtcByClientId` | `Dictionary<int, DateTime>` | Timestamps tracking when each client entered a waiting queue (for TTL purge) |
 | `LoginAuthenticator` | `WorldServerAuthenticator` | Reference to the world server authenticator for auth event subscription |
@@ -134,11 +138,12 @@ Queue membership timestamps are tracked by `ClientId` to enforce stale-wait TTL 
 1. Drain main-thread action queue.
 2. Sweep stale waiting queue entries (TTL purge).
 3. Sweep expired instance-lookup debounce entries.
-4. Tick wait-queue timer (`waitQueueRate`, default 2s).
+4. Tick wait-queue timer (`WaitQueueRateSeconds`, default 2s).
 5. Snapshot current open-world scene keys + pending instance connections.
-6. Enqueue async queue-processing worker task.
+6. Acquire runtime processing gate.
+7. Enqueue async queue-processing worker task.
 
-An atomic processing gate prevents overlapping queue cycles.
+A runtime-data processing gate prevents overlapping queue cycles.
 
 ## Security and DoS Hardening
 

@@ -6,6 +6,7 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -39,6 +40,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Header("Main Thread Dispatch")]
 		[Tooltip("Max queued scene-server actions drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
+		/// Maximum pending scene load age in seconds before failing and removing the request.
+		/// </summary>
+		[Header("Pending Scene Protection")]
+		[Tooltip("Maximum pending scene load age in seconds before failing the request")]
+		[SerializeField] private float pendingSceneTimeoutSeconds = 60.0f;
+
+		/// <summary>
+		/// Interval in seconds between bounded pending-scene cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded pending-scene cleanup sweeps")]
+		[SerializeField] private float pendingSceneSweepIntervalSeconds = 2.0f;
+
+		/// <summary>
+		/// Maximum number of expired pending scenes removed per sweep pass.
+		/// </summary>
+		[Tooltip("Maximum expired pending scenes removed per sweep")]
+		[SerializeField] private int pendingSceneSweepMaxRemovals = 64;
 
 		/// <summary>
 		/// Interval (in seconds) between heartbeat pulses to the database.
@@ -166,6 +186,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			pendingSceneTimeoutSeconds = Mathf.Max(5.0f, pendingSceneTimeoutSeconds);
+			pendingSceneSweepIntervalSeconds = Mathf.Max(0.25f, pendingSceneSweepIntervalSeconds);
+			pendingSceneSweepMaxRemovals = Mathf.Max(1, pendingSceneSweepMaxRemovals);
+			runtimeData.PulseInFlight = 0;
+			runtimeData.NextPendingSceneSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("SceneServerSystem", $"Initialized (ServerID={id}, Address={server.Address}:{server.Port}, CharacterCount={characterCount})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -215,6 +240,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Scene manager events
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
+
+			if (Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeState))
+			{
+				runtimeState.PendingSceneEnqueueUtcBySceneId.Clear();
+				runtimeState.PulseInFlight = 0;
+			}
 		}
 
 		/// <summary>
@@ -332,6 +363,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) &&
 				Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
 				{
+					SweepExpiredPendingScenes(mappingData);
+
 					int characterCount = characterMappingData.ConnectionCharacters.Count;
 
 					// Collect scene pulse data on the main thread before async work
@@ -378,8 +411,82 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// Fire-and-forget async DB operations
-					TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, runtimeData.IsLocked, scenePulseData), runtimeData.ID);
+					lock (runtimeData)
+					{
+						if (runtimeData.PulseInFlight != 0)
+						{
+							return;
+						}
+
+						runtimeData.PulseInFlight = 1;
+					}
+
+					if (!TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, runtimeData.IsLocked, scenePulseData), runtimeData.ID))
+					{
+						lock (runtimeData)
+						{
+							runtimeData.PulseInFlight = 0;
+						}
+					}
 				}
+			}
+		}
+
+		/// <summary>
+		/// Performs a bounded TTL sweep of expired pending scene load requests.
+		/// Expired requests are failed in the database and removed from local tracking.
+		/// </summary>
+		private void SweepExpiredPendingScenes(ISceneInstanceMappingData mappingData)
+		{
+			if (mappingData == null || mappingData.PendingScenes == null)
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextPendingSceneSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextPendingSceneSweepUtc = nowUtc.AddSeconds(pendingSceneSweepIntervalSeconds);
+			DateTime staleBeforeUtc = nowUtc.AddSeconds(-pendingSceneTimeoutSeconds);
+
+			List<long> expiredSceneIds = new List<long>();
+			int removed = 0;
+			foreach (var kvp in mappingData.PendingScenes)
+			{
+				if (removed >= pendingSceneSweepMaxRemovals)
+				{
+					break;
+				}
+
+				if (!runtimeData.PendingSceneEnqueueUtcBySceneId.TryGetValue(kvp.Key, out DateTime enqueuedUtc))
+				{
+					runtimeData.PendingSceneEnqueueUtcBySceneId[kvp.Key] = nowUtc;
+					continue;
+				}
+
+				if (enqueuedUtc <= staleBeforeUtc)
+				{
+					expiredSceneIds.Add(kvp.Key);
+					removed++;
+				}
+			}
+
+			for (int i = 0; i < expiredSceneIds.Count; ++i)
+			{
+				long sceneId = expiredSceneIds[i];
+				mappingData.PendingScenes.Remove(sceneId);
+				runtimeData.PendingSceneEnqueueUtcBySceneId.Remove(sceneId);
+
+				Log.Warning("SceneServerSystem", $"Pending scene request timed out and was failed: SceneID={sceneId}");
+				TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneId, SceneStatus.Failed), sceneId);
 			}
 		}
 
@@ -433,6 +540,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("SceneServerSystem", $"Error during periodic pulse: {ex}");
 			}
+			finally
+			{
+				if (Server != null &&
+					Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.PulseInFlight = 0;
+					}
+				}
+			}
 		}
 
 		/// <summary>
@@ -445,6 +563,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				!WorldSceneDetailsCache.Scenes.Contains(sceneData.SceneName))
 			{
 				Log.Debug("SceneServerSystem", "Scene Server System: Scene is missing from the cache. Unable to load the scene.");
+				TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID);
 				// TODO: kick players waiting for this scene otherwise they get stuck
 				return;
 			}
@@ -453,8 +572,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+			if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
 
 			mappingData.PendingScenes[sceneData.ID] = sceneData;
+			runtimeData.PendingSceneEnqueueUtcBySceneId[sceneData.ID] = DateTime.UtcNow;
 
 			// Pre-cache the scene on the server
 			SceneLookupData lookupData = new SceneLookupData(sceneData.SceneName);
@@ -504,12 +628,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Log.Warning("SceneServerSystem", "Pending Scene does not exist!");
 				return;
 			}
+			if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+			{
+				Log.Warning("SceneServerSystem", "Runtime data missing while processing scene load end.");
+				return;
+			}
 
 			mappingData.PendingScenes.Remove(sceneData.ID);
+			runtimeData.PendingSceneEnqueueUtcBySceneId.Remove(sceneData.ID);
 
 			if (sceneData.WorldServerID == UNKNOWN_WORLD_ID)
 			{
 				Log.Warning("SceneServerSystem", "Failed to get World Server ID.");
+				TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID);
 				return;
 			}
 
@@ -517,6 +648,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (sceneType == SceneType.Unknown)
 			{
 				Log.Warning("SceneServerSystem", "Unknown scene type.");
+				TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID);
 				return;
 			}
 
@@ -533,11 +665,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Process the scene by adding it to the world dictionary mappings.
 				ProcessScene(scene, sceneType, sceneData.WorldServerID);
 
-				if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
-				{
-					Log.Error("SceneServerSystem", "Failed to get ISceneServerRuntimeData after scene load.");
-					return;
-				}
 				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
 				TryEnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle), runtimeData.ID);
 			}

@@ -12,6 +12,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	/// </summary>
 	public class WorldSceneSystemRuntimeData : RuntimeDataContainer, IWorldSceneSystemRuntimeData
 	{
+		public int IsProcessingQueue { get; set; }
+		public float WaitQueueRateSeconds { get; set; }
+		public float NextWaitingQueueSweep { get; set; }
+		public float NextDebounceCleanup { get; set; }
+
 		/// <summary>
 		/// Per-account debounce tracker for world-scene instance lookups.
 		/// </summary>
@@ -37,6 +42,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			IsProcessingQueue = 0;
+			WaitQueueRateSeconds = 2.0f;
+			NextWaitingQueueSweep = 0.0f;
+			NextDebounceCleanup = 0.0f;
 			LoginAuthenticator = null;
 			NextWaitQueueUpdate = 0.0f;
 			InstanceLookupDebounce = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
@@ -49,6 +58,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override void Clear()
 		{
+			IsProcessingQueue = 0;
+			WaitQueueRateSeconds = 2.0f;
+			NextWaitingQueueSweep = 0.0f;
+			NextDebounceCleanup = 0.0f;
 			LoginAuthenticator = null;
 			NextWaitQueueUpdate = 0.0f;
 			InstanceLookupDebounce?.Clear();

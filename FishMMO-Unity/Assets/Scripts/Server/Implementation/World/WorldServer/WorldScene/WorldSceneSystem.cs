@@ -6,7 +6,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -70,22 +69,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private const int MAX_CLIENTS_PER_INSTANCE = 500;
 
 		/// <summary>
-		/// Prevents overlapping async queue processing cycles.
-		/// </summary>
-		private int _isProcessing;
-
-		/// <summary>
 		/// Cache of world scene details, including max clients per scene.
 		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
-
-		/// <summary>
-		/// Interval (in seconds) between wait queue updates.
-		/// </summary>
-		private float waitQueueRate = 2.0f;
-
-		private float nextWaitingQueueSweep;
-		private float nextDebounceCleanup;
 
 		/// <summary>
 		/// Called once to initialize the world scene system. Subscribes to authentication and connection events.
@@ -143,10 +129,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			debounceCleanupMaxScanPerSweep = Mathf.Max(1, debounceCleanupMaxScanPerSweep);
 			debounceCleanupMaxRemovalsPerSweep = Mathf.Max(1, debounceCleanupMaxRemovalsPerSweep);
 			waitingQueuePurgeMaxPerSweep = Mathf.Max(1, waitingQueuePurgeMaxPerSweep);
-			nextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
-			nextDebounceCleanup = debounceCleanupIntervalSeconds;
+			runtimeData.WaitQueueRateSeconds = Mathf.Max(0.1f, runtimeData.WaitQueueRateSeconds);
+			runtimeData.IsProcessingQueue = 0;
+			runtimeData.NextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
+			runtimeData.NextDebounceCleanup = debounceCleanupIntervalSeconds;
 
-			Log.Debug("WorldSceneSystem", $"Initialized (WaitQueueRate={waitQueueRate}s, MaxClientsPerInstance={MAX_CLIENTS_PER_INSTANCE})");
+			Log.Debug("WorldSceneSystem", $"Initialized (WaitQueueRate={runtimeData.WaitQueueRateSeconds}s, MaxClientsPerInstance={MAX_CLIENTS_PER_INSTANCE})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -253,31 +241,31 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
-			// Drain queued main-thread actions from async operations
-			DrainMainThreadQueue(drainAll: false);
-
-			nextWaitingQueueSweep -= deltaTime;
-			if (nextWaitingQueueSweep <= 0f)
-			{
-				nextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
-				PurgeExpiredWaitingConnections();
-			}
-
-			nextDebounceCleanup -= deltaTime;
-			if (nextDebounceCleanup <= 0f)
-			{
-				nextDebounceCleanup = debounceCleanupIntervalSeconds;
-				CleanupExpiredDebounceEntries();
-			}
-
-			if (!Server.DataContainerRegistry.TryGet<IWorldSceneSystemRuntimeData>(out var runtimeData))
+			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
 			{
 				return;
 			}
 
+			// Drain queued main-thread actions from async operations
+			DrainMainThreadQueue(drainAll: false);
+
+			runtimeData.NextWaitingQueueSweep -= deltaTime;
+			if (runtimeData.NextWaitingQueueSweep <= 0f)
+			{
+				runtimeData.NextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
+				PurgeExpiredWaitingConnections();
+			}
+
+			runtimeData.NextDebounceCleanup -= deltaTime;
+			if (runtimeData.NextDebounceCleanup <= 0f)
+			{
+				runtimeData.NextDebounceCleanup = debounceCleanupIntervalSeconds;
+				CleanupExpiredDebounceEntries();
+			}
+
 			if (runtimeData.NextWaitQueueUpdate <= 0)
 			{
-				runtimeData.NextWaitQueueUpdate = waitQueueRate;
+				runtimeData.NextWaitQueueUpdate = runtimeData.WaitQueueRateSeconds;
 
 				if (Initialized &&
 					Server.Database?.ServiceRegistry != null &&
@@ -287,11 +275,24 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					List<string> openWorldSceneNames = mappingData.WaitingOpenWorldConnections.Keys.ToList();
 					List<NetworkConnection> instanceConns = mappingData.InstanceConnectionScenes.Keys.ToList();
 
-					if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0)
+					bool beginProcessing = false;
+					lock (runtimeData)
+					{
+						if (runtimeData.IsProcessingQueue == 0)
+						{
+							runtimeData.IsProcessingQueue = 1;
+							beginProcessing = true;
+						}
+					}
+
+					if (beginProcessing)
 					{
 						if (!TryEnqueueAsyncWork(() => ProcessQueuesAsync(openWorldSceneNames, instanceConns)))
 						{
-							Interlocked.Exchange(ref _isProcessing, 0);
+							lock (runtimeData)
+							{
+								runtimeData.IsProcessingQueue = 0;
+							}
 							Log.Warning("WorldSceneSystem", "Failed to enqueue world scene queue processing work item.");
 						}
 					}
@@ -330,7 +331,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 			finally
 			{
-				Interlocked.Exchange(ref _isProcessing, 0);
+				if (Server != null && Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.IsProcessingQueue = 0;
+					}
+				}
 			}
 		}
 

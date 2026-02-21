@@ -39,6 +39,7 @@ Primary runtime properties:
 Stores:
 - `PendingInvitations` (`TargetCharacterID -> GuildID`)
 - `LastFetchTime` for guild update polling cursor
+- ingress debounce/in-flight trackers for per-connection operation guards
 
 ### `GuildCharacterMappingData`
 Stores:
@@ -99,13 +100,19 @@ When a guild no longer has local members, both local tracker and cached member t
 ### Invite / Accept / Decline
 - Invite validates inviter permissions and guild capacity.
 - Pending invitation stores target -> guild mapping.
-- Accept validates pending invite, persists membership, pushes guild-update marker, updates local state.
+- Accept validates pending invite, persists membership, pushes guild-update marker, then updates local state and consumes pending invite on success path.
 - Decline clears pending invitation.
 
 ### Leave / Remove / Rank change
-- Leave immediately updates in-memory requester state and broadcasts leave, then async handles leader transfer, member delete, and guild delete/update marker.
+- Leave performs leader transfer/member delete/guild delete-or-update asynchronously first, then applies requester local leave state and broadcasts on success.
 - Remove validates requester rank and target rank constraints, then async deletes target and triggers guild update marker.
 - Rank change is leader-only and updates rank asynchronously, then triggers update marker.
+
+## Ingress Guard Semantics
+
+Guild ingress uses debounce + in-flight guards keyed by connection and operation.
+
+For async-backed handlers (`Create`, `Invite`, `AcceptInvite`, `Leave`, `Remove`, `ChangeRank`), guard release is deferred until async completion to prevent overlap while work is in progress.
 
 ## Database Dependencies
 

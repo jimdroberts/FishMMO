@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
@@ -26,19 +27,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterSystem", menuName = "FishMMO/Server/SceneServer/Character System", order = 1)]
 	[RequiresDataContainer(typeof(CharacterMappingData))]
+	[RequiresDataContainer(typeof(CharacterSystemRuntimeData))]
 	[RequiresDataContainer(typeof(CharacterSystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterSystem : ServerBehaviour, ICharacterSystem<NetworkConnection, Scene>
 	{
 		/// <summary>
-		/// Authenticator for login and character loading.
+		/// Maximum number of queued main-thread actions processed per frame.
 		/// </summary>
-		private SceneServerAuthenticator loginAuthenticator;
-
-		/// <summary>
-		/// Prevents overlapping async periodic save operations.
-		/// </summary>
-		private volatile bool _isProcessing;
+		[Header("Main Thread Dispatch")]
+		[Tooltip("Max character-system actions drained from main-thread queue per frame")]
+		[SerializeField] private int maxMainThreadActionsPerFrame = 200;
 
 		/// <summary>
 		/// Interval in seconds between periodic character saves.
@@ -114,11 +113,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
+			SceneServerAuthenticator loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
 			if (loginAuthenticator == null)
 			{
 				Log.Error("CharacterSystem", "Failed to initialize: SceneServerAuthenticator not found");
 				throw new UnityException("SceneServerAuthenticator not found!");
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ICharacterSystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("CharacterSystem", "Failed to initialize: ICharacterSystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			// Authentication events
@@ -145,6 +150,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(OutOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
 			}
 
+			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			runtimeData.SaveInFlight = 0;
+
 			Log.Debug("CharacterSystem", $"Initialized (SaveRate={SaveRate}s, OutOfBoundsCheckRate={OutOfBoundsCheckRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -167,6 +175,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Authentication events
+			SceneServerAuthenticator loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
 			if (loginAuthenticator != null)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
@@ -333,9 +342,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Log.Debug("CharacterSystem", "Save" + "[" + DateTime.UtcNow + "]");
 
-			if (_isProcessing)
+			if (!Server.DataContainerRegistry.TryGet<ICharacterSystemRuntimeData>(out var runtimeData))
 			{
 				return;
+			}
+
+			lock (runtimeData)
+			{
+				if (runtimeData.SaveInFlight != 0)
+				{
+					return;
+				}
+
+				runtimeData.SaveInFlight = 1;
 			}
 
 			// Snapshot character data on the main thread
@@ -350,6 +369,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList, sessionTokens)))
 			{
+				lock (runtimeData)
+				{
+					runtimeData.SaveInFlight = 0;
+				}
 				Log.Warning("CharacterSystem", "OnPeriodicSave: Failed to enqueue SaveAllCharactersAsync work item.");
 			}
 		}
@@ -1724,7 +1747,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (Server.DataContainerRegistry.TryGet<ICharacterSystemMainThreadQueueData>(out var queueData))
 			{
-				queueData.Drain();
+				queueData.Drain(maxMainThreadActionsPerFrame);
 			}
 		}
 
@@ -1832,12 +1855,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private async Task SaveAllCharactersAsync(List<CharacterData> characterDataList, Dictionary<long, CharacterSessionInfo> sessionTokens)
 		{
-			if (_isProcessing)
-			{
-				return;
-			}
-			_isProcessing = true;
-
 			try
 			{
 				if (Server.Database?.ServiceRegistry == null ||
@@ -1875,7 +1892,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			finally
 			{
-				_isProcessing = false;
+				if (Server.DataContainerRegistry.TryGet<ICharacterSystemRuntimeData>(out var runtimeData))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.SaveInFlight = 0;
+					}
+				}
 			}
 		}
 

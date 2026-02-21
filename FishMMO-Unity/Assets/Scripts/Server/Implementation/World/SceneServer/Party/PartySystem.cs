@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -53,9 +54,68 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public float UpdatePumpRate = 1.0f;
 
 		/// <summary>
-		/// Registered chat commands for party actions.
+		/// Invitation lifetime in seconds before automatic expiration.
 		/// </summary>
-		private Dictionary<string, ChatCommand> partyChatCommands;
+		[Header("Invitation Protection")]
+		[Tooltip("Invitation lifetime in seconds before automatic expiration")]
+		[SerializeField] private float invitationTtlSeconds = 45.0f;
+
+		/// <summary>
+		/// Interval between invitation cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded invitation cleanup sweeps")]
+		[SerializeField] private float invitationSweepIntervalSeconds = 1.0f;
+
+		/// <summary>
+		/// Maximum invitation entries scanned per cleanup sweep.
+		/// </summary>
+		[Tooltip("Max invitation entries scanned per sweep")]
+		[SerializeField] private int invitationSweepMaxScan = 128;
+
+		/// <summary>
+		/// Maximum invitation entries removed per cleanup sweep.
+		/// </summary>
+		[Tooltip("Max invitation entries removed per sweep")]
+		[SerializeField] private int invitationSweepMaxRemove = 128;
+
+		/// <summary>
+		/// Debounce window in milliseconds for party ingress operations.
+		/// </summary>
+		[Header("Ingress Protection")]
+		[Tooltip("Minimum milliseconds between party requests per connection and operation")]
+		[SerializeField] private int ingressDebounceMilliseconds = 100;
+
+		/// <summary>
+		/// Interval in seconds between ingress-guard cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded ingress guard cleanup sweeps")]
+		[SerializeField] private float ingressSweepIntervalSeconds = 5.0f;
+
+		/// <summary>
+		/// Guard entry time-to-live in seconds.
+		/// </summary>
+		[Tooltip("Seconds before stale ingress guard entries are removed")]
+		[SerializeField] private float ingressEntryTtlSeconds = 30.0f;
+
+		/// <summary>
+		/// Maximum stale ingress entries removed per sweep.
+		/// </summary>
+		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
+		[SerializeField] private int ingressSweepMaxRemovals = 128;
+
+		/// <summary>
+		/// Operation keys used by party ingress guards.
+		/// </summary>
+		private enum IngressOperation : byte
+		{
+			Create = 1,
+			Invite = 2,
+			AcceptInvite = 3,
+			DeclineInvite = 4,
+			Leave = 5,
+			Remove = 6,
+			ChangeRank = 7,
+		}
 
 		/// <summary>
 		/// Handles party invite chat commands.
@@ -106,7 +166,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Chat commands
-			partyChatCommands = new Dictionary<string, ChatCommand>()
+			Dictionary<string, ChatCommand> partyChatCommands = new Dictionary<string, ChatCommand>()
 			{
 				{ "/pi", OnPartyInvite },
 				{ "/invite", OnPartyInvite },
@@ -132,7 +192,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(UpdatePumpRate, OnPeriodicUpdate);
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("PartySystem", "Failed to initialize: IPartySystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			invitationTtlSeconds = Mathf.Max(5.0f, invitationTtlSeconds);
+			invitationSweepIntervalSeconds = Mathf.Max(0.1f, invitationSweepIntervalSeconds);
+			invitationSweepMaxScan = Mathf.Max(1, invitationSweepMaxScan);
+			invitationSweepMaxRemove = Mathf.Max(1, invitationSweepMaxRemove);
+			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
+			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
+			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
+			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
+			runtimeData.UpdatePumpInFlight = 0;
+			runtimeData.NextInvitationSweepUtc = DateTime.UtcNow;
+			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("PartySystem", $"Initialized (MaxPartySize={MaxPartySize}, UpdatePumpRate={UpdatePumpRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
@@ -211,6 +288,101 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override void OnLateUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
+			SweepPendingInvitations();
+			SweepIngressGuards();
+		}
+
+		/// <summary>
+		/// Attempts to acquire ingress debounce and in-flight guard for a connection operation.
+		/// </summary>
+		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+			{
+				guardKey = 0;
+				return false;
+			}
+
+			guardKey = ((long)connectionId << 8) | (byte)operation;
+			DateTime nowUtc = DateTime.UtcNow;
+
+			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
+			{
+				return false;
+			}
+
+			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
+			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+		}
+
+		/// <summary>
+		/// Releases an ingress in-flight guard key.
+		/// </summary>
+		private void EndIngressGuard(long guardKey)
+		{
+			if (Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+			{
+				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+			}
+		}
+
+		/// <summary>
+		/// Performs bounded cleanup of stale ingress guard entries.
+		/// </summary>
+		private void SweepIngressGuards()
+		{
+			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextIngressSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
+			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
+			int removed = 0;
+			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
+			{
+				if (removed >= ingressSweepMaxRemovals)
+				{
+					break;
+				}
+
+				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
+				{
+					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
+					removed++;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Performs a bounded TTL sweep over pending party invitations.
+		/// </summary>
+		private void SweepPendingInvitations()
+		{
+			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextInvitationSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextInvitationSweepUtc = nowUtc.AddSeconds(invitationSweepIntervalSeconds);
+
+			runtimeData.SweepExpiredInvitations(
+				nowUtc,
+				TimeSpan.FromSeconds(invitationTtlSeconds),
+				invitationSweepMaxScan,
+				invitationSweepMaxRemove);
 		}
 
 		/// <summary>
@@ -221,7 +393,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
-				TryEnqueueAsyncWork(() => FetchAndProcessPartyUpdatesAsync());
+				if (!Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var runtimeData))
+				{
+					return;
+				}
+
+				lock (runtimeData)
+				{
+					if (runtimeData.UpdatePumpInFlight != 0)
+					{
+						return;
+					}
+
+					runtimeData.UpdatePumpInFlight = 1;
+				}
+
+				if (!TryEnqueueAsyncWork(() => FetchAndProcessPartyUpdatesAsync()))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.UpdatePumpInFlight = 0;
+					}
+				}
 			}
 		}
 
@@ -377,6 +570,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("PartySystem", $"Error fetching/processing party updates: {ex}");
 			}
+			finally
+			{
+				if (Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var runtimeData))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.UpdatePumpInFlight = 0;
+					}
+				}
+			}
 		}
 
 		/// <summary>
@@ -471,7 +674,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 			{
-				runtimeData.PendingInvitations.Remove(character.ID);
+				runtimeData.RemovePendingInvitation(character.ID);
 			}
 
 			if (character == null)
@@ -576,6 +779,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Create, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
 			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
@@ -595,7 +807,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				? attributeController.GetHealthResourceAttributeCurrentPercentage()
 				: 0.0f;
 
-			TryEnqueueAsyncWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT), characterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT), guardKey, characterID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -676,11 +896,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyInviteBroadcastReceived(NetworkConnection conn, PartyInviteBroadcast msg, Channel channel)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
-			if (conn == null || conn.FirstObject == null)
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Invite, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -699,7 +928,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long inviterCharacterID = inviter.Character.ID;
 			long targetCharacterID = msg.TargetCharacterID;
 
-			TryEnqueueAsyncWork(() => ValidateAndSendPartyInviteAsync(conn, inviterPartyID, inviterCharacterID, targetCharacterID), inviterCharacterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => ValidateAndSendPartyInviteAsync(conn, inviterPartyID, inviterCharacterID, targetCharacterID), guardKey, inviterCharacterID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -740,7 +977,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// if the target doesn't already have a pending invite
-					if (!runtimeData.PendingInvitations.ContainsKey(targetCharacterID) &&
+					if (runtimeData.TryAddPendingInvitation(targetCharacterID, inviterPartyID, DateTime.UtcNow) &&
 						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
 						characterMappingData.CharactersByID.TryGetValue(targetCharacterID, out IPlayerCharacter targetCharacter) &&
 						targetCharacter.TryGet(out IPartyController targetPartyController))
@@ -755,11 +992,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								SenderID = targetCharacterID,
 								Text = ChatHelper.PARTY_ERROR_TARGET_IN_PARTY + " ",
 							}, true, Channel.Reliable);
+							runtimeData.RemovePendingInvitation(targetCharacterID);
 							return;
 						}
 
-						// add to our list of pending invitations... value stores PartyID for accept flow
-						runtimeData.PendingInvitations.Add(targetCharacter.ID, inviterPartyID);
 						Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new PartyInviteBroadcast()
 						{
 							InviterCharacterID = inviterCharacterID,
@@ -786,6 +1022,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AcceptInvite, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
 			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
 			// validate character
@@ -800,10 +1045,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// validate party invite
-			if (runtimeData.PendingInvitations.TryGetValue(partyController.Character.ID, out long pendingPartyID))
+			if (runtimeData.TryGetPendingInvitation(partyController.Character.ID, out long pendingPartyID))
 			{
-				runtimeData.PendingInvitations.Remove(partyController.Character.ID);
-
 				if (Server?.Database?.ServiceRegistry == null)
 				{
 					return;
@@ -814,7 +1057,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
 				float healthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f;
 
-				TryEnqueueAsyncWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT), characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT), guardKey, characterID);
+			}
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
 			}
 		}
 
@@ -873,6 +1124,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					pc.ID = partyID;
 					pc.Rank = PartyRank.Member;
 
+					if (Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+					{
+						runtimeData.RemovePendingInvitation(characterID);
+					}
+
 					AddPartyCharacterTracker(partyID, characterID);
 
 					// tell the new member they joined immediately, other clients will catch up with the PartyUpdate pass
@@ -903,10 +1159,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DeclineInvite, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 			{
-				runtimeData.PendingInvitations.Remove(character.ID);
+				runtimeData.RemovePendingInvitation(character.ID);
+			}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -918,11 +1187,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyLeaveBroadcastReceived(NetworkConnection conn, PartyLeaveBroadcast msg, Channel channel)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
-			if (conn == null || conn.FirstObject == null)
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Leave, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -940,27 +1218,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long characterID = partyController.Character.ID;
 			PartyRank rank = partyController.Rank;
 
-			// Immediate main-thread state update
-			partyController.ID = 0;
-			partyController.Rank = PartyRank.None;
-			RemovePartyCharacterTracker(partyID, characterID);
-
-			// Tell character that they left the party immediately
-			Server.NetworkWrapper.Broadcast(conn, new PartyLeaveBroadcast(), true, Channel.Reliable);
-
-			// Fire-and-forget async DB cleanup
-			TryEnqueueAsyncWork(() => LeavePartyAsync(characterID, partyID, rank), characterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => LeavePartyAsync(conn, characterID, partyID, rank), guardKey, characterID);
+			if (!deferGuardRelease)
+			{
+				return;
+			}
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
 		/// Asynchronously handles party leave DB operations: fetches members, transfers leadership if needed,
 		/// deletes the leaving member, and cleans up or notifies other servers.
 		/// </summary>
+		/// <param name="conn">Leaving character connection.</param>
 		/// <param name="characterID">Leaving character identifier.</param>
 		/// <param name="partyID">Party identifier being left.</param>
 		/// <param name="rank">Leaving character rank.</param>
 		/// <returns>Asynchronous leave-party task.</returns>
-		private async Task LeavePartyAsync(long characterID, long partyID, PartyRank rank)
+		private async Task LeavePartyAsync(NetworkConnection conn, long characterID, long partyID, PartyRank rank)
 		{
 			try
 			{
@@ -1023,6 +1305,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// Tell the other servers to update their party lists
 					await partyUpdateService.PersistAsync(partyID);
 				}
+
+				EnqueueMainThread(() =>
+				{
+					if (conn == null || !conn.IsActive || conn.FirstObject == null)
+					{
+						return;
+					}
+
+					IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
+					if (partyController == null || partyController.Character.ID != characterID || partyController.ID != partyID)
+					{
+						return;
+					}
+
+					partyController.ID = 0;
+					partyController.Rank = PartyRank.None;
+					RemovePartyCharacterTracker(partyID, characterID);
+
+					Server.NetworkWrapper.Broadcast(conn, new PartyLeaveBroadcast(), true, Channel.Reliable);
+				});
 			}
 			catch (Exception ex)
 			{
@@ -1039,11 +1341,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyRemoveBroadcastReceived(NetworkConnection conn, PartyRemoveBroadcast msg, Channel channel)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
-			if (conn == null || conn.FirstObject == null)
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Remove, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -1073,7 +1384,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long memberID = msg.MemberID;
 			long characterID = partyController.Character.ID;
 
-			TryEnqueueAsyncWork(() => RemovePartyMemberAsync(partyID, memberID, characterID), characterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => RemovePartyMemberAsync(partyID, memberID, characterID), guardKey, characterID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -1139,11 +1458,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyChangeRankBroadcastReceived(NetworkConnection conn, PartyChangeRankBroadcast msg, Channel channel)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
-			if (conn == null || conn.FirstObject == null)
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.ChangeRank, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -1173,7 +1501,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long leaderCharacterID = partyController.Character.ID;
 			long targetMemberID = msg.MemberID;
 
-			TryEnqueueAsyncWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID), leaderCharacterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID), guardKey, leaderCharacterID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -1275,6 +1611,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Log.Warning("PartySystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
 			return false;
+		}
+
+		/// <summary>
+		/// Enqueues ingress work and guarantees guard release when async processing completes.
+		/// </summary>
+		private bool TryEnqueueIngressWork(Func<Task> work, long guardKey, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			return TryEnqueueAsyncWork(async () =>
+			{
+				try
+				{
+					await work();
+				}
+				finally
+				{
+					EndIngressGuard(guardKey);
+				}
+			}, entityKey, callerName);
 		}
 	}
 }

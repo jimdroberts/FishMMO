@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -41,11 +43,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
 
 		/// <summary>
-		/// Thread-safe random instance for use in async methods where UnityEngine.Random is not available.
-		/// </summary>
-		private static readonly System.Random asyncRandom = new System.Random();
-
-		/// <summary>
 		/// Maximum number of members allowed per guild.
 		/// </summary>
 		[SerializeField]
@@ -63,6 +60,70 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private float updatePumpRate = 1.0f;
 
 		/// <summary>
+		/// Invitation lifetime in seconds before automatic expiration.
+		/// </summary>
+		[Header("Invitation Protection")]
+		[Tooltip("Invitation lifetime in seconds before automatic expiration")]
+		[SerializeField] private float invitationTtlSeconds = 45.0f;
+
+		/// <summary>
+		/// Interval between invitation cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded invitation cleanup sweeps")]
+		[SerializeField] private float invitationSweepIntervalSeconds = 1.0f;
+
+		/// <summary>
+		/// Maximum invitation entries scanned per cleanup sweep.
+		/// </summary>
+		[Tooltip("Max invitation entries scanned per sweep")]
+		[SerializeField] private int invitationSweepMaxScan = 128;
+
+		/// <summary>
+		/// Maximum invitation entries removed per cleanup sweep.
+		/// </summary>
+		[Tooltip("Max invitation entries removed per sweep")]
+		[SerializeField] private int invitationSweepMaxRemove = 128;
+
+		/// <summary>
+		/// Debounce window in milliseconds for guild ingress operations.
+		/// </summary>
+		[Header("Ingress Protection")]
+		[Tooltip("Minimum milliseconds between guild requests per connection and operation")]
+		[SerializeField] private int ingressDebounceMilliseconds = 100;
+
+		/// <summary>
+		/// Interval in seconds between ingress-guard cleanup sweeps.
+		/// </summary>
+		[Tooltip("Seconds between bounded ingress guard cleanup sweeps")]
+		[SerializeField] private float ingressSweepIntervalSeconds = 5.0f;
+
+		/// <summary>
+		/// Guard entry time-to-live in seconds.
+		/// </summary>
+		[Tooltip("Seconds before stale ingress guard entries are removed")]
+		[SerializeField] private float ingressEntryTtlSeconds = 30.0f;
+
+		/// <summary>
+		/// Maximum stale ingress entries removed per sweep.
+		/// </summary>
+		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
+		[SerializeField] private int ingressSweepMaxRemovals = 128;
+
+		/// <summary>
+		/// Operation keys used by guild ingress guards.
+		/// </summary>
+		private enum IngressOperation : byte
+		{
+			Create = 1,
+			Invite = 2,
+			AcceptInvite = 3,
+			DeclineInvite = 4,
+			Leave = 5,
+			Remove = 6,
+			ChangeRank = 7,
+		}
+
+		/// <summary>
 		/// Gets or sets the update pump rate for guild synchronization.
 		/// </summary>
 		public float UpdatePumpRate { get { return updatePumpRate; } set { updatePumpRate = value; } }
@@ -75,11 +136,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Maximum length allowed for a guild name.
 		/// </summary>
 		public int MaxGuildNameLength { get { return maxGuildNameLength; } }
-
-		/// <summary>
-		/// Registered chat commands for guild actions.
-		/// </summary>
-		private Dictionary<string, ChatCommand> guildChatCommands;
 
 		/// <summary>
 		/// Handles guild invite chat commands.
@@ -133,7 +189,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Chat commands
-			guildChatCommands = new Dictionary<string, ChatCommand>()
+			Dictionary<string, ChatCommand> guildChatCommands = new Dictionary<string, ChatCommand>()
 			{
 				{ "/gi", OnGuildInvite },
 				{ "/ginvite", OnGuildInvite },
@@ -159,7 +215,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(UpdatePumpRate, OnPeriodicUpdate);
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("GuildSystem", "Failed to initialize: IGuildSystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			invitationTtlSeconds = Mathf.Max(5.0f, invitationTtlSeconds);
+			invitationSweepIntervalSeconds = Mathf.Max(0.1f, invitationSweepIntervalSeconds);
+			invitationSweepMaxScan = Mathf.Max(1, invitationSweepMaxScan);
+			invitationSweepMaxRemove = Mathf.Max(1, invitationSweepMaxRemove);
+			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
+			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
+			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
+			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
+			runtimeData.UpdatePumpInFlight = 0;
+			runtimeData.NextInvitationSweepUtc = DateTime.UtcNow;
+			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("GuildSystem", $"Initialized (MaxGuildSize={MaxGuildSize}, UpdatePumpRate={UpdatePumpRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
@@ -238,6 +311,101 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override void OnLateUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
+			SweepPendingInvitations();
+			SweepIngressGuards();
+		}
+
+		/// <summary>
+		/// Attempts to acquire ingress debounce and in-flight guard for a connection operation.
+		/// </summary>
+		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+			{
+				guardKey = 0;
+				return false;
+			}
+
+			guardKey = ((long)connectionId << 8) | (byte)operation;
+			DateTime nowUtc = DateTime.UtcNow;
+
+			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
+			{
+				return false;
+			}
+
+			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
+			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+		}
+
+		/// <summary>
+		/// Releases an ingress in-flight guard key.
+		/// </summary>
+		private void EndIngressGuard(long guardKey)
+		{
+			if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+			{
+				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+			}
+		}
+
+		/// <summary>
+		/// Performs bounded cleanup of stale ingress guard entries.
+		/// </summary>
+		private void SweepIngressGuards()
+		{
+			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextIngressSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
+			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
+			int removed = 0;
+			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
+			{
+				if (removed >= ingressSweepMaxRemovals)
+				{
+					break;
+				}
+
+				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
+				{
+					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
+					removed++;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Performs a bounded TTL sweep over pending guild invitations.
+		/// </summary>
+		private void SweepPendingInvitations()
+		{
+			if (!Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (nowUtc < runtimeData.NextInvitationSweepUtc)
+			{
+				return;
+			}
+
+			runtimeData.NextInvitationSweepUtc = nowUtc.AddSeconds(invitationSweepIntervalSeconds);
+
+			runtimeData.SweepExpiredInvitations(
+				nowUtc,
+				TimeSpan.FromSeconds(invitationTtlSeconds),
+				invitationSweepMaxScan,
+				invitationSweepMaxRemove);
 		}
 
 		/// <summary>
@@ -248,7 +416,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
-				TryEnqueueAsyncWork(() => FetchAndProcessGuildUpdatesAsync());
+				if (!Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
+				{
+					return;
+				}
+
+				lock (runtimeData)
+				{
+					if (runtimeData.UpdatePumpInFlight != 0)
+					{
+						return;
+					}
+
+					runtimeData.UpdatePumpInFlight = 1;
+				}
+
+				if (!TryEnqueueAsyncWork(() => FetchAndProcessGuildUpdatesAsync()))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.UpdatePumpInFlight = 0;
+					}
+				}
 			}
 		}
 
@@ -410,6 +599,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("GuildSystem", $"Error fetching/processing guild updates: {ex}");
 			}
+			finally
+			{
+				if (Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
+				{
+					lock (runtimeData)
+					{
+						runtimeData.UpdatePumpInFlight = 0;
+					}
+				}
+			}
 		}
 
 		/// <summary>
@@ -510,7 +709,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
-				runtimeData.PendingInvitations.Remove(character.ID);
+				runtimeData.RemovePendingInvitation(character.ID);
 			}
 
 			if (character == null)
@@ -597,6 +796,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Create, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
 			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
@@ -630,7 +838,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string guildName = msg.GuildName;
 			string sceneName = conn.FirstObject.gameObject.scene.name;
 
-			TryEnqueueAsyncWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName), characterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName), guardKey, characterID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -726,11 +942,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildInviteBroadcastReceived(NetworkConnection conn, GuildInviteBroadcast msg, Channel channel)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
-			if (conn == null || conn.FirstObject == null)
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Invite, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -750,7 +975,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long guildID = inviter.ID;
 			long targetCharacterID = msg.TargetCharacterID;
 
-			TryEnqueueAsyncWork(() => InviteToGuildAsync(conn, inviterCharacterID, guildID, targetCharacterID), inviterCharacterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => InviteToGuildAsync(conn, inviterCharacterID, guildID, targetCharacterID), guardKey, inviterCharacterID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -786,7 +1019,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// if the target doesn't already have a pending invite
-					if (!runtimeData.PendingInvitations.ContainsKey(targetCharacterID) &&
+					if (runtimeData.TryAddPendingInvitation(targetCharacterID, guildID, DateTime.UtcNow) &&
 						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
 						characterMappingData.CharactersByID.TryGetValue(targetCharacterID, out IPlayerCharacter targetCharacter) &&
 						targetCharacter.TryGet(out IGuildController targetGuildController))
@@ -804,11 +1037,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									Text = ChatHelper.GUILD_ERROR_TARGET_IN_GUILD + " ",
 								}, true, Channel.Reliable);
 							}
+							runtimeData.RemovePendingInvitation(targetCharacterID);
 							return;
 						}
 
-						// add to our list of pending invitations (value stores GuildID)
-						runtimeData.PendingInvitations.Add(targetCharacter.ID, guildID);
 						Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new GuildInviteBroadcast()
 						{
 							InviterCharacterID = inviterCharacterID,
@@ -836,6 +1068,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AcceptInvite, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
 			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
 			// validate character
@@ -850,10 +1091,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// validate guild invite
-			if (runtimeData.PendingInvitations.TryGetValue(guildController.Character.ID, out long pendingGuildID))
+			if (runtimeData.TryGetPendingInvitation(guildController.Character.ID, out long pendingGuildID))
 			{
-				runtimeData.PendingInvitations.Remove(guildController.Character.ID);
-
 				if (Server?.Database?.ServiceRegistry == null)
 				{
 					return;
@@ -863,7 +1102,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long characterID = guildController.Character.ID;
 				string sceneName = conn.FirstObject.gameObject.scene.name;
 
-				TryEnqueueAsyncWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName), characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName), guardKey, characterID);
+			}
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
 			}
 		}
 
@@ -918,6 +1165,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					gc.ID = guildID;
 					gc.Rank = GuildRank.Member;
 
+					if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+					{
+						runtimeData.RemovePendingInvitation(characterID);
+					}
+
 					AddGuildCharacterTracker(gc.ID, characterID);
 
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
@@ -948,10 +1200,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DeclineInvite, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
-				runtimeData.PendingInvitations.Remove(character.ID);
+				runtimeData.RemovePendingInvitation(character.ID);
+			}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -964,11 +1229,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildLeaveBroadcastReceived(NetworkConnection conn, GuildLeaveBroadcast msg, Channel channel)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
-			if (conn == null || conn.FirstObject == null)
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Leave, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -986,28 +1260,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long guildID = guildController.ID;
 			GuildRank rank = guildController.Rank;
 
-			// Immediately update in-memory state on main thread
-			guildController.ID = 0;
-			guildController.Rank = GuildRank.None;
-
-			RemoveGuildCharacterTracker(guildID, characterID);
-
-			// Tell character that they left the guild immediately
-			Server.NetworkWrapper.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
-
-			// Fire-and-forget async DB operations
-			TryEnqueueAsyncWork(() => LeaveGuildAsync(characterID, guildID, rank), characterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => LeaveGuildAsync(conn, characterID, guildID, rank), guardKey, characterID);
+			if (!deferGuardRelease)
+			{
+				return;
+			}
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
 		/// Asynchronously handles guild leave: fetches members for leadership transfer,
 		/// removes the member, and either deletes or updates the guild.
 		/// </summary>
+		/// <param name="conn">Leaving character connection.</param>
 		/// <param name="characterID">Leaving character identifier.</param>
 		/// <param name="guildID">Guild identifier being left.</param>
 		/// <param name="rank">Leaving character rank.</param>
 		/// <returns>Asynchronous leave-guild task.</returns>
-		private async Task LeaveGuildAsync(long characterID, long guildID, GuildRank rank)
+		private async Task LeaveGuildAsync(NetworkConnection conn, long characterID, long guildID, GuildRank rank)
 		{
 			try
 			{
@@ -1058,12 +1335,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (officers.Count > 0)
 					{
 						// pick a random officer
-						newLeader = officers[asyncRandom.Next(0, officers.Count)];
+						newLeader = officers[RandomNumberGenerator.GetInt32(officers.Count)];
 					}
 					else if (remainingMembers.Count > 0)
 					{
 						// pick a random member
-						newLeader = remainingMembers[asyncRandom.Next(0, remainingMembers.Count)];
+						newLeader = remainingMembers[RandomNumberGenerator.GetInt32(remainingMembers.Count)];
 					}
 
 					// update the guild leader status in the database
@@ -1087,6 +1364,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// Tell the other servers to update their guild lists
 					await guildUpdateService.PersistAsync(guildID);
 				}
+
+				EnqueueMainThread(() =>
+				{
+					if (conn == null || !conn.IsActive || conn.FirstObject == null)
+					{
+						return;
+					}
+
+					IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+					if (guildController == null || guildController.Character.ID != characterID || guildController.ID != guildID)
+					{
+						return;
+					}
+
+					guildController.ID = 0;
+					guildController.Rank = GuildRank.None;
+					RemoveGuildCharacterTracker(guildID, characterID);
+
+					Server.NetworkWrapper.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
+				});
 			}
 			catch (Exception ex)
 			{
@@ -1103,11 +1400,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildRemoveBroadcastReceived(NetworkConnection conn, GuildRemoveBroadcast msg, Channel channel)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
-			if (conn == null || conn.FirstObject == null)
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Remove, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -1138,7 +1444,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long characterID = guildController.Character.ID;
 			GuildRank requesterRank = guildController.Rank;
 
-			TryEnqueueAsyncWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank), characterID);
+			deferGuardRelease = TryEnqueueIngressWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank), guardKey, characterID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -1216,11 +1530,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildChangeRankBroadcastReceived(NetworkConnection conn, GuildChangeRankBroadcast msg, Channel channel)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
-			if (conn == null || conn.FirstObject == null)
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.ChangeRank, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -1250,7 +1573,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long memberID = msg.GuildMemberID;
 			GuildRank newRank = msg.Rank;
 
-			TryEnqueueAsyncWork(() => ChangeGuildRankAsync(guildID, memberID, newRank), guildID);
+			deferGuardRelease = TryEnqueueIngressWork(() => ChangeGuildRankAsync(guildID, memberID, newRank), guardKey, guildID);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
 		}
 
 		/// <summary>
@@ -1322,6 +1653,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Log.Warning("GuildSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
 			return false;
+		}
+
+		/// <summary>
+		/// Enqueues ingress work and guarantees guard release when async processing completes.
+		/// </summary>
+		private bool TryEnqueueIngressWork(Func<Task> work, long guardKey, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			return TryEnqueueAsyncWork(async () =>
+			{
+				try
+				{
+					await work();
+				}
+				finally
+				{
+					EndIngressGuard(guardKey);
+				}
+			}, entityKey, callerName);
 		}
 	}
 }
