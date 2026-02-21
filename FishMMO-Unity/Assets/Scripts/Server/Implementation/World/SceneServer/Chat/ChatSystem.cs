@@ -44,7 +44,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		[SerializeField]
 		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
-		private float messageRateLimit = 0.0f;
+		private float messageRateLimit = 500.0f;
 		/// <summary>
 		/// Maximum allowed chat message length.
 		/// </summary>
@@ -761,6 +761,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (string.IsNullOrWhiteSpace(targetName))
 			{
 				// no target in the tell message
+				return false;
+			}
+
+			// Reject oversized target names before any DB work.
+			if (targetName.Length > Authentication.CharacterNameMaxLength)
+			{
+				return false;
+			}
+
+			// Short-circuit self-tell before the async DB round-trip.
+			if (sender != null &&
+				!string.IsNullOrEmpty(sender.CharacterName) &&
+				sender.CharacterName.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+			{
+				Server.NetworkWrapper.Broadcast(sender.Owner, new ChatBroadcast()
+				{
+					Channel = msg.Channel,
+					SenderID = msg.SenderID,
+					Text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
+				}, true, Channel.Reliable);
 				return false;
 			}
 

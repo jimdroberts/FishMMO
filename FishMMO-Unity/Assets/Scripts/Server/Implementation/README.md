@@ -22,6 +22,7 @@ Implementation/
 ├── PhysicsTicker.cs                  # Physics tick integration
 ├── ServerLauncher.cs                 # Server bootstrap helper
 ├── ServerWindowTitleUpdater.cs       # Window title status updater
+├── ServerWindowTitleUpdaterRuntimeData.cs # Runtime state for window title updater
 ├── RuntimeData/                      # Shared runtime data containers
 ├── Account/                          # Account/auth related implementation pieces
 ├── Authentication/                   # Authenticator and auth workflow integration

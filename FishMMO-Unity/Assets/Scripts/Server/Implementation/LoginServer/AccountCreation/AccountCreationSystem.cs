@@ -365,6 +365,26 @@ namespace FishMMO.Server.Implementation.LoginServer
 					byte[] decryptedVerifier = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedVerifier);
 
 					string username = Encoding.UTF8.GetString(decryptedUsername);
+
+					// Validate decrypted username against centralized naming rules before any DB work.
+					if (!Authentication.IsAllowedUsername(username))
+					{
+						result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+
+						// Marshal early rejection — skip DB call entirely
+						NetworkConnection earlyConn = request.Connection;
+						EnqueueMainThread(() =>
+						{
+							if (earlyConn != null && earlyConn.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(earlyConn,
+									new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.InvalidUsernameOrPassword },
+									false, Channel.Reliable);
+							}
+						});
+						return;
+					}
+
 					string salt = Encoding.UTF8.GetString(decryptedSalt);
 					string verifier = Encoding.UTF8.GetString(decryptedVerifier);
 

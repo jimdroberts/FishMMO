@@ -91,6 +91,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		public int MaxAbilityCount = 25;
 		/// <summary>
+		/// Maximum number of ability events allowed per craft request.
+		/// Defense-in-depth cap to prevent processing oversized payloads.
+		/// </summary>
+		public int MaxAbilityCraftEvents = 32;
+		/// <summary>
 		/// Currency attribute required to buy merchant items and abilities.
 		/// </summary>
 		public CharacterAttributeTemplate CurrencyTemplate;
@@ -886,6 +891,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				// validate eventIds if there are any...
 				if (msg.Events != null)
 				{
+				// Defense-in-depth: cap event list size to prevent processing oversized payloads.
+				if (msg.Events.Count > MaxAbilityCraftEvents)
+				{
+					return;
+				}
+
 				//bool hasTypeOverride = false;
 				HashSet<int> validatedEvents = new HashSet<int>();
 				for (int i = 0; i < msg.Events.Count; ++i)

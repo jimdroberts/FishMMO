@@ -69,6 +69,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private const int MAX_CLIENTS_PER_INSTANCE = 500;
 
 		/// <summary>
+		/// Maximum total connections allowed across all waiting queues.
+		/// Defense-in-depth cap to prevent unbounded memory growth.
+		/// </summary>
+		private const int MAX_WAITING_QUEUE_SIZE = 5000;
+
+		/// <summary>
 		/// Cache of world scene details, including max clients per scene.
 		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
@@ -779,6 +785,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			Dictionary<T, HashSet<NetworkConnection>> queue,
 			Dictionary<NetworkConnection, T> reverseMap)
 		{
+			// Defense-in-depth: cap total queue size to prevent unbounded memory growth.
+			if (reverseMap.Count >= MAX_WAITING_QUEUE_SIZE)
+			{
+				Kick(conn, "Waiting queue capacity exceeded");
+				return;
+			}
+
 			reverseMap[conn] = key;
 			if (!queue.TryGetValue(key, out var set))
 			{

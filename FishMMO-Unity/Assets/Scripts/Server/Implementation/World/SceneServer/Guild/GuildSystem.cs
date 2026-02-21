@@ -124,9 +124,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Gets or sets the update pump rate for guild synchronization.
+		/// Gets the update pump rate for guild synchronization.
 		/// </summary>
-		public float UpdatePumpRate { get { return updatePumpRate; } set { updatePumpRate = value; } }
+		public float UpdatePumpRate { get { return updatePumpRate; } }
 
 		/// <summary>
 		/// Maximum number of members allowed in a guild.

@@ -120,8 +120,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 			else if (conn.IsActive)
 			{
+				if (!TryBeginInFlightRequest(conn))
+				{
+					return;
+				}
+
 				if (!TryEnqueueAsyncWork(() => ProcessCharacterListRequestAsync(conn, accountName)))
 				{
+					EndInFlightRequest(conn);
 					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character list request for account '{accountName}'.");
 				}
 			}
@@ -177,6 +183,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				await Log.Error("CharacterSelectSystem", $"Error processing character list request: {ex}");
 			}
+			finally
+			{
+				EndInFlightRequest(conn);
+			}
 		}
 
 		/// <summary>
@@ -191,6 +201,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				if (!TryBeginInFlightRequest(conn))
 				{
+					return;
+				}
+
+				if (!Authentication.IsAllowedCharacterName(msg.CharacterName))
+				{
+					EndInFlightRequest(conn);
 					return;
 				}
 
@@ -336,6 +352,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				if (!TryBeginInFlightRequest(conn))
 				{
+					return;
+				}
+
+				if (!Authentication.IsAllowedCharacterName(msg.CharacterName))
+				{
+					EndInFlightRequest(conn);
 					return;
 				}
 

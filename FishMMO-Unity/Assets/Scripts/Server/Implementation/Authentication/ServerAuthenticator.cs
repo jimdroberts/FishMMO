@@ -119,6 +119,12 @@ namespace FishMMO.Server.Implementation
 		private const float ConnectionIpCacheTtlSeconds = 120f;
 
 		/// <summary>
+		/// Maximum allowed size in bytes for any single encrypted SRP payload field.
+		/// Prevents oversized payloads from consuming AES decryption CPU on workers.
+		/// </summary>
+		private const int MaxSrpPayloadBytes = 1024;
+
+		/// <summary>
 		/// Bounded channel for queuing SRP verify requests for async worker processing.
 		/// </summary>
 		private System.Threading.Channels.Channel<SrpVerifyRequest<NetworkConnection>> verifyChannel;
@@ -462,6 +468,14 @@ namespace FishMMO.Server.Implementation
 			}
 
 			// Enqueue encrypted data for async processing — no decryption on network thread
+			if (msg.S == null || msg.S.Length > MaxSrpPayloadBytes ||
+				msg.PublicEphemeral == null || msg.PublicEphemeral.Length > MaxSrpPayloadBytes)
+			{
+				verifyInFlightByClientId.TryRemove(conn.ClientId, out _);
+				conn.Disconnect(true);
+				return;
+			}
+
 			var request = new SrpVerifyRequest<NetworkConnection>(
 				conn,
 				msg.S,
@@ -517,6 +531,13 @@ namespace FishMMO.Server.Implementation
 			}
 
 			// Enqueue encrypted data for async processing — no SRP math on network thread
+			if (msg.Proof == null || msg.Proof.Length > MaxSrpPayloadBytes)
+			{
+				proofInFlightByClientId.TryRemove(conn.ClientId, out _);
+				conn.Disconnect(true);
+				return;
+			}
+
 			var request = new SrpProofRequest<NetworkConnection>(
 				conn,
 				msg.Proof,

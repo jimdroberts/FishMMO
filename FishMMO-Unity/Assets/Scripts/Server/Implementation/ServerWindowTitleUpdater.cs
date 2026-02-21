@@ -19,6 +19,7 @@ namespace FishMMO.Server.Implementation
 	/// Supports Windows, Linux, and OSX platforms.
 	/// </summary>
 	[CreateAssetMenu(fileName = "ServerWindowTitleUpdater", menuName = "FishMMO/Server/Server Window Title Updater", order = 1)]
+	[RequiresDataContainer(typeof(ServerWindowTitleUpdaterRuntimeData))]
 	public class ServerWindowTitleUpdater : ServerBehaviour
 	{
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
@@ -47,26 +48,28 @@ namespace FishMMO.Server.Implementation
 #endif
 
 		/// <summary>
-		/// The current window or console title for the server.
-		/// </summary>
-		public string Title = "";
-		/// <summary>
 		/// How often (in seconds) to update the window title.
 		/// </summary>
-		public float UpdateRate = 15.0f;
-		/// <summary>
-		/// Time remaining until the next window title update.
-		/// </summary>
-		public float NextUpdate = 0.0f;
+		[SerializeField] private float updateRate = 15.0f;
 
 		/// <summary>
 		/// Called once to initialize the server window title updater.
-		/// Disables the component if ServerManager is not available.
+		/// Validates that the required RuntimeDataContainer is available.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				return ServerComponentInitializationStatus.FailedToFindServer;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ServerWindowTitleUpdaterRuntimeData>(out _))
+			{
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
 			UpdateWindowTitle();
-			
+
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -88,14 +91,20 @@ namespace FishMMO.Server.Implementation
 			{
 				return;
 			}
-			// Only update when NextUpdate is less than zero.
-			if (NextUpdate < 0)
+
+			if (!Server.DataContainerRegistry.TryGet<ServerWindowTitleUpdaterRuntimeData>(out var runtimeData))
 			{
-				NextUpdate = UpdateRate;
+				return;
+			}
+
+			// Only update when NextUpdate is less than zero.
+			if (runtimeData.NextUpdate < 0)
+			{
+				runtimeData.NextUpdate = updateRate;
 
 				UpdateWindowTitle();
 			}
-			NextUpdate -= deltaTime;
+			runtimeData.NextUpdate -= deltaTime;
 		}
 
 		/// <summary>
@@ -105,15 +114,19 @@ namespace FishMMO.Server.Implementation
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void UpdateWindowTitle()
 		{
-			Title = null;
-			Title = BuildWindowTitle();
+			if (!Server.DataContainerRegistry.TryGet<ServerWindowTitleUpdaterRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			runtimeData.Title = BuildWindowTitle();
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-			SetConsoleTitle(Title);
+			SetConsoleTitle(runtimeData.Title);
 #elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-			prctl(PR_SET_NAME, Title, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+			prctl(PR_SET_NAME, runtimeData.Title, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
 #elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
-			setproctitle("{0}", Title);
+			setproctitle("{0}", runtimeData.Title);
 #endif
 		}
 

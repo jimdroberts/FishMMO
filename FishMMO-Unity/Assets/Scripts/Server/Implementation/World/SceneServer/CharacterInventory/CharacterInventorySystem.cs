@@ -721,6 +721,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					!character.IsTeleporting &&
 					character.TryGet(out IBankController bankController))
 				{
+					// validate banker scene object before allowing bank removal
+					if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+					{
+						return;
+					}
+
 					Item item = bankController.RemoveItem(msg.Slot);
 					if (item == null)
 					{

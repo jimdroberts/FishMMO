@@ -449,6 +449,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Reject oversized names before any cache lookup or DB query.
+			if (msg.NameLowerCase.Length > Authentication.CharacterNameMaxLength)
+			{
+				return;
+			}
+
 			if (!Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData) ||
 				!Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var namingMappingData))
 			{
