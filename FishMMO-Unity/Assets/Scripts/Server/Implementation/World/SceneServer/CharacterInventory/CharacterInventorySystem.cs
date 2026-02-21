@@ -378,66 +378,66 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				switch (msg.FromInventory)
 				{
-				case InventoryType.Inventory:
-					// swap the items in the inventory
-					if (msg.To != msg.From &&
-						SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected))
-					{
-						// fire-and-forget async persist for each affected inventory item
-						var invDtos = BuildInventoryItemDataList(characterID, invAffected);
-						TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
-
-						// tell the client we succeeded
-						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-					}
-					break;
-				case InventoryType.Equipment:
-					break;
-				case InventoryType.Bank:
-					{
-						if (!character.TryGet(out IBankController bankController))
+					case InventoryType.Inventory:
+						// swap the items in the inventory
+						if (msg.To != msg.From &&
+							SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected))
 						{
-							return;
-						}
+							// fire-and-forget async persist for each affected inventory item
+							var invDtos = BuildInventoryItemDataList(characterID, invAffected);
+							TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
 
-						// validate banker scene object
-						if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
-						{
-							return;
-						}
-
-						if (SwapContainerItems(bankController, inventoryController, msg.From, msg.To,
-							out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
-						{
-							// persist bank items that moved to the source (bank) container
-							if (fromItems != null && fromItems.Count > 0)
-							{
-								var bankDtos = BuildBankItemDataList(characterID, fromItems);
-								TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
-							}
-							// delete vacated bank slots
-							if (deletedSlots != null && deletedSlots.Count > 0)
-							{
-								foreach (long slot in deletedSlots)
-								{
-									// Deleted slots no longer have an item reference;
-									// use long.MaxValue to ensure the delete succeeds.
-									TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue), characterID);
-								}
-							}
-							// persist inventory items that moved to the destination (inventory) container
-							if (toItems != null && toItems.Count > 0)
-							{
-								var invDtos2 = BuildInventoryItemDataList(characterID, toItems);
-								TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos2), characterID);
-							}
-
-							// tell the client
+							// tell the client we succeeded
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
-					}
-					break;
-				default: break;
+						break;
+					case InventoryType.Equipment:
+						break;
+					case InventoryType.Bank:
+						{
+							if (!character.TryGet(out IBankController bankController))
+							{
+								return;
+							}
+
+							// validate banker scene object
+							if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+							{
+								return;
+							}
+
+							if (SwapContainerItems(bankController, inventoryController, msg.From, msg.To,
+								out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
+							{
+								// persist bank items that moved to the source (bank) container
+								if (fromItems != null && fromItems.Count > 0)
+								{
+									var bankDtos = BuildBankItemDataList(characterID, fromItems);
+									TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
+								}
+								// delete vacated bank slots
+								if (deletedSlots != null && deletedSlots.Count > 0)
+								{
+									foreach (long slot in deletedSlots)
+									{
+										// Deleted slots no longer have an item reference;
+										// use long.MaxValue to ensure the delete succeeds.
+										TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue), characterID);
+									}
+								}
+								// persist inventory items that moved to the destination (inventory) container
+								if (toItems != null && toItems.Count > 0)
+								{
+									var invDtos2 = BuildInventoryItemDataList(characterID, toItems);
+									TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos2), characterID);
+								}
+
+								// tell the client
+								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							}
+						}
+						break;
+					default: break;
 				}
 			}
 			finally
@@ -480,76 +480,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				switch (msg.FromInventory)
 				{
-				case InventoryType.Inventory:
-					if (character.TryGet(out IInventoryController inventoryController) &&
-						inventoryController.TryGetItem(msg.InventoryIndex, out Item inventoryItem))
-					{
-						if (!equipmentController.Equip(inventoryItem, msg.InventoryIndex, inventoryController, (ItemSlot)msg.Slot))
+					case InventoryType.Inventory:
+						if (character.TryGet(out IInventoryController inventoryController) &&
+							inventoryController.TryGetItem(msg.InventoryIndex, out Item inventoryItem))
 						{
-							return;
-						}
-
-						// did we replace an already equipped item?
-						if (inventoryController.TryGetItem(msg.InventoryIndex, out Item prevItem))
-						{
-							var dto = BuildInventoryItemData(characterID, prevItem);
-							TryEnqueueAsyncWork(() => PersistInventoryItemAsync(dto), characterID);
-						}
-						// remove the inventory item from the database
-						else
-						{
-							// Item moved out of inventory — use long.MaxValue to ensure delete succeeds
-							TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
-						}
-
-						// set the equipment slot in the database
-						var equipDto = BuildEquipmentItemData(characterID, inventoryItem);
-						TryEnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto), characterID);
-
-						// save attributes
-						var attrDtos = BuildAttributeDataList(character);
-						TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
-
-						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-					}
-					break;
-				case InventoryType.Equipment:
-					return;
-				case InventoryType.Bank:
-					{
-						if (!character.TryGet(out IBankController bankController))
-						{
-							return;
-						}
-
-						// validate banker scene object
-						if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
-						{
-							return;
-						}
-
-						if (bankController.TryGetItem(msg.InventoryIndex, out Item bankItem))
-						{
-							if (!equipmentController.Equip(bankItem, msg.InventoryIndex, bankController, (ItemSlot)msg.Slot))
+							if (!equipmentController.Equip(inventoryItem, msg.InventoryIndex, inventoryController, (ItemSlot)msg.Slot))
 							{
 								return;
 							}
 
 							// did we replace an already equipped item?
-							if (bankController.TryGetItem(msg.InventoryIndex, out Item prevItem))
+							if (inventoryController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 							{
-								var dto = BuildBankItemData(characterID, prevItem);
-								TryEnqueueAsyncWork(() => PersistBankItemAsync(dto), characterID);
+								var dto = BuildInventoryItemData(characterID, prevItem);
+								TryEnqueueAsyncWork(() => PersistInventoryItemAsync(dto), characterID);
 							}
-							// remove the bank item from the database
+							// remove the inventory item from the database
 							else
 							{
-								// Item moved out of bank — use long.MaxValue to ensure delete succeeds
-								TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
+								// Item moved out of inventory — use long.MaxValue to ensure delete succeeds
+								TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
 							}
 
 							// set the equipment slot in the database
-							var equipDto = BuildEquipmentItemData(characterID, bankItem);
+							var equipDto = BuildEquipmentItemData(characterID, inventoryItem);
 							TryEnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto), characterID);
 
 							// save attributes
@@ -558,9 +512,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
-					}
-					break;
-				default: return;
+						break;
+					case InventoryType.Equipment:
+						return;
+					case InventoryType.Bank:
+						{
+							if (!character.TryGet(out IBankController bankController))
+							{
+								return;
+							}
+
+							// validate banker scene object
+							if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+							{
+								return;
+							}
+
+							if (bankController.TryGetItem(msg.InventoryIndex, out Item bankItem))
+							{
+								if (!equipmentController.Equip(bankItem, msg.InventoryIndex, bankController, (ItemSlot)msg.Slot))
+								{
+									return;
+								}
+
+								// did we replace an already equipped item?
+								if (bankController.TryGetItem(msg.InventoryIndex, out Item prevItem))
+								{
+									var dto = BuildBankItemData(characterID, prevItem);
+									TryEnqueueAsyncWork(() => PersistBankItemAsync(dto), characterID);
+								}
+								// remove the bank item from the database
+								else
+								{
+									// Item moved out of bank — use long.MaxValue to ensure delete succeeds
+									TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
+								}
+
+								// set the equipment slot in the database
+								var equipDto = BuildEquipmentItemData(characterID, bankItem);
+								TryEnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto), characterID);
+
+								// save attributes
+								var attrDtos = BuildAttributeDataList(character);
+								TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
+
+								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							}
+						}
+						break;
+					default: return;
 				}
 			}
 			finally
@@ -603,61 +603,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				switch (msg.ToInventory)
 				{
-				case InventoryType.Inventory:
-					if (character.TryGet(out IInventoryController inventoryController) &&
-						equipmentController.TryGetItem(msg.Slot, out Item toInventory))
-					{
-						// save the old slot index so we can delete the item
-						int oldSlot = toInventory.Slot;
-
-						// if we found the item we should unequip it
-						if (!equipmentController.Unequip(inventoryController, msg.Slot, out List<Item> modifiedItems))
+					case InventoryType.Inventory:
+						if (character.TryGet(out IInventoryController inventoryController) &&
+							equipmentController.TryGetItem(msg.Slot, out Item toInventory))
 						{
-							return;
-						}
+							// save the old slot index so we can delete the item
+							int oldSlot = toInventory.Slot;
 
-						// see if we have successfully added the item
-						if (modifiedItems == null ||
-							modifiedItems.Count < 1)
-						{
-							return;
-						}
-
-						// persist all modified inventory slots
-						var invDtos = BuildInventoryItemDataList(characterID, modifiedItems);
-						TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
-
-						// delete the item from the equipment table
-						// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
-						TryEnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
-
-						// save attributes
-						var attrDtos = BuildAttributeDataList(character);
-						TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
-
-						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-					}
-					break;
-				case InventoryType.Equipment:
-					break;
-				case InventoryType.Bank:
-					{
-						if (!character.TryGet(out IBankController bankController))
-						{
-							return;
-						}
-
-						// validate banker scene object
-						if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
-						{
-							return;
-						}
-
-						if (equipmentController.TryGetItem(msg.Slot, out Item toBank))
-						{
-							int oldSlot = toBank.Slot;
-
-							if (!equipmentController.Unequip(bankController, msg.Slot, out List<Item> modifiedItems))
+							// if we found the item we should unequip it
+							if (!equipmentController.Unequip(inventoryController, msg.Slot, out List<Item> modifiedItems))
 							{
 								return;
 							}
@@ -669,9 +623,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								return;
 							}
 
-							// persist all modified bank slots
-							var bankDtos = BuildBankItemDataList(characterID, modifiedItems);
-							TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
+							// persist all modified inventory slots
+							var invDtos = BuildInventoryItemDataList(characterID, modifiedItems);
+							TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
 
 							// delete the item from the equipment table
 							// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
@@ -683,9 +637,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
-					}
-					break;
-				default: return;
+						break;
+					case InventoryType.Equipment:
+						break;
+					case InventoryType.Bank:
+						{
+							if (!character.TryGet(out IBankController bankController))
+							{
+								return;
+							}
+
+							// validate banker scene object
+							if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+							{
+								return;
+							}
+
+							if (equipmentController.TryGetItem(msg.Slot, out Item toBank))
+							{
+								int oldSlot = toBank.Slot;
+
+								if (!equipmentController.Unequip(bankController, msg.Slot, out List<Item> modifiedItems))
+								{
+									return;
+								}
+
+								// see if we have successfully added the item
+								if (modifiedItems == null ||
+									modifiedItems.Count < 1)
+								{
+									return;
+								}
+
+								// persist all modified bank slots
+								var bankDtos = BuildBankItemDataList(characterID, modifiedItems);
+								TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
+
+								// delete the item from the equipment table
+								// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
+								TryEnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
+
+								// save attributes
+								var attrDtos = BuildAttributeDataList(character);
+								TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
+
+								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							}
+						}
+						break;
+					default: return;
 				}
 			}
 			finally
@@ -789,53 +789,53 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				switch (msg.FromInventory)
 				{
-				case InventoryType.Inventory:
-					if (character.TryGet(out IInventoryController inventoryController) &&
-						SwapContainerItems(inventoryController, bankController, msg.From, msg.To,
-							out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
-					{
-						// persist inventory items that went into source (inventory) container
-						if (fromItems != null && fromItems.Count > 0)
+					case InventoryType.Inventory:
+						if (character.TryGet(out IInventoryController inventoryController) &&
+							SwapContainerItems(inventoryController, bankController, msg.From, msg.To,
+								out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
 						{
-							var invDtos = BuildInventoryItemDataList(characterID, fromItems);
-							TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
-						}
-						// delete vacated inventory slots
-						if (deletedSlots != null && deletedSlots.Count > 0)
-						{
-							foreach (long slot in deletedSlots)
+							// persist inventory items that went into source (inventory) container
+							if (fromItems != null && fromItems.Count > 0)
 							{
-								// Deleted slots no longer have an item reference;
-								// use long.MaxValue to ensure the delete succeeds.
-								TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, (int)slot, long.MaxValue), characterID);
+								var invDtos = BuildInventoryItemDataList(characterID, fromItems);
+								TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
 							}
+							// delete vacated inventory slots
+							if (deletedSlots != null && deletedSlots.Count > 0)
+							{
+								foreach (long slot in deletedSlots)
+								{
+									// Deleted slots no longer have an item reference;
+									// use long.MaxValue to ensure the delete succeeds.
+									TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, (int)slot, long.MaxValue), characterID);
+								}
+							}
+							// persist bank items that went into destination (bank) container
+							if (toItems != null && toItems.Count > 0)
+							{
+								var bankDtos = BuildBankItemDataList(characterID, toItems);
+								TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
+							}
+
+							// tell the client
+							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
-						// persist bank items that went into destination (bank) container
-						if (toItems != null && toItems.Count > 0)
+						break;
+					case InventoryType.Equipment:
+						break;
+					case InventoryType.Bank:
+						// swap the items in the bank
+						if (msg.To != msg.From &&
+							SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected))
 						{
-							var bankDtos = BuildBankItemDataList(characterID, toItems);
-							TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
+							var bankDtos2 = BuildBankItemDataList(characterID, bankAffected);
+							TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos2), characterID);
+
+							// tell the client we succeeded
+							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
-
-						// tell the client
-						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-					}
-					break;
-				case InventoryType.Equipment:
-					break;
-				case InventoryType.Bank:
-					// swap the items in the bank
-					if (msg.To != msg.From &&
-						SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected))
-					{
-						var bankDtos2 = BuildBankItemDataList(characterID, bankAffected);
-						TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos2), characterID);
-
-						// tell the client we succeeded
-						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-					}
-					break;
-				default: break;
+						break;
+					default: break;
 				}
 			}
 			finally

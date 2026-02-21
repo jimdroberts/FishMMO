@@ -79,6 +79,22 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private int cleanupMaxRemovalsPerMap = 128;
 
 		/// <summary>
+		/// Maximum allowed size in bytes for any single encrypted field in CreateAccountBroadcast.
+		/// Rejects oversized payloads on the network thread before any decryption or allocation.
+		/// </summary>
+		private const int MaxEncryptedFieldSize = 2048;
+
+		/// <summary>
+		/// Maximum allowed length for the decrypted SRP salt string.
+		/// </summary>
+		private const int MaxSaltLength = 256;
+
+		/// <summary>
+		/// Maximum allowed length for the decrypted SRP verifier string.
+		/// </summary>
+		private const int MaxVerifierLength = 1024;
+
+		/// <summary>
 		/// Gets the current number of pending account creation requests in the async queue.
 		/// </summary>
 		public int PendingRequestCount
@@ -224,6 +240,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			// Fast validation - don't block network thread
 			if (!ResolveEncryptionData(conn, out ConnectionEncryptionData encryptionData))
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
+			// Reject oversized encrypted fields before any allocation or decryption.
+			if (msg.Username == null || msg.Username.Length > MaxEncryptedFieldSize ||
+				msg.Salt == null || msg.Salt.Length > MaxEncryptedFieldSize ||
+				msg.Verifier == null || msg.Verifier.Length > MaxEncryptedFieldSize)
 			{
 				conn.Disconnect(true);
 				return;
@@ -387,6 +412,22 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 					string salt = Encoding.UTF8.GetString(decryptedSalt);
 					string verifier = Encoding.UTF8.GetString(decryptedVerifier);
+
+					// Validate decrypted salt/verifier lengths before any DB work.
+					if (salt.Length > MaxSaltLength || verifier.Length > MaxVerifierLength)
+					{
+						NetworkConnection earlyConn = request.Connection;
+						EnqueueMainThread(() =>
+						{
+							if (earlyConn != null && earlyConn.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(earlyConn,
+									new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.InvalidUsernameOrPassword },
+									false, Channel.Reliable);
+							}
+						});
+						return;
+					}
 
 					// Database operation via registry-resolved service (BaseService handles context lifecycle)
 					DatabaseResult dbResult = await accountService.PersistAsync(username, salt, verifier);

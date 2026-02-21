@@ -125,6 +125,13 @@ namespace FishMMO.Server.Implementation
 		private const int MaxSrpPayloadBytes = 1024;
 
 		/// <summary>
+		/// Maximum allowed size in bytes for a client RSA public key during handshake.
+		/// A 2048-bit RSA key is 256-byte modulus + 3-byte exponent = 259 bytes.
+		/// 512 provides generous headroom while blocking multi-MB abuse payloads.
+		/// </summary>
+		private const int MaxRsaPublicKeyBytes = 512;
+
+		/// <summary>
 		/// Bounded channel for queuing SRP verify requests for async worker processing.
 		/// </summary>
 		private System.Threading.Channels.Channel<SrpVerifyRequest<NetworkConnection>> verifyChannel;
@@ -382,7 +389,8 @@ namespace FishMMO.Server.Implementation
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.IsAuthenticated ||
-				msg.PublicKey == null)
+				msg.PublicKey == null ||
+				msg.PublicKey.Length > MaxRsaPublicKeyBytes)
 			{
 				conn.Disconnect(true);
 				return;

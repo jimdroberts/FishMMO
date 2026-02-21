@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using FishMMO.Server.Implementation.World.SceneServer.Interactable;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {

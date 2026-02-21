@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -13,7 +12,6 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 
@@ -788,26 +786,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
 
-			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
-			if (partyController == null || partyController.ID > 0)
-			{
-				// already in a party
-				return;
-			}
+				IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
+				if (partyController == null || partyController.ID > 0)
+				{
+					// already in a party
+					return;
+				}
 
-			// Capture immutable data for the async path
-			long characterID = partyController.Character.ID;
-			string sceneName = conn.FirstObject.gameObject.scene.name;
-			float healthPCT = partyController.Character.TryGet(out ICharacterAttributeController attributeController)
-				? attributeController.GetHealthResourceAttributeCurrentPercentage()
-				: 0.0f;
+				// Capture immutable data for the async path
+				long characterID = partyController.Character.ID;
+				string sceneName = conn.FirstObject.gameObject.scene.name;
+				float healthPCT = partyController.Character.TryGet(out ICharacterAttributeController attributeController)
+					? attributeController.GetHealthResourceAttributeCurrentPercentage()
+					: 0.0f;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT), guardKey, characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT), guardKey, characterID);
 			}
 			finally
 			{
@@ -909,26 +907,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			IPartyController inviter = conn.FirstObject.GetComponent<IPartyController>();
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				IPartyController inviter = conn.FirstObject.GetComponent<IPartyController>();
 
-			// validate party leader is inviting
-			if (inviter == null ||
-				inviter.ID < 1 ||
-				inviter.Rank != PartyRank.Leader)
-			{
-				return;
-			}
+				// validate party leader is inviting
+				if (inviter == null ||
+					inviter.ID < 1 ||
+					inviter.Rank != PartyRank.Leader)
+				{
+					return;
+				}
 
-			// Capture immutable data for the async path
-			long inviterPartyID = inviter.ID;
-			long inviterCharacterID = inviter.Character.ID;
-			long targetCharacterID = msg.TargetCharacterID;
+				// Capture immutable data for the async path
+				long inviterPartyID = inviter.ID;
+				long inviterCharacterID = inviter.Character.ID;
+				long targetCharacterID = msg.TargetCharacterID;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => ValidateAndSendPartyInviteAsync(conn, inviterPartyID, inviterCharacterID, targetCharacterID), guardKey, inviterCharacterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => ValidateAndSendPartyInviteAsync(conn, inviterPartyID, inviterCharacterID, targetCharacterID), guardKey, inviterCharacterID);
 			}
 			finally
 			{
@@ -1031,34 +1029,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
+				IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
-			// validate character
-			if (partyController == null || partyController.ID > 0)
-			{
-				return;
-			}
-
-			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
-			{
-				return;
-			}
-
-			// validate party invite
-			if (runtimeData.TryGetPendingInvitation(partyController.Character.ID, out long pendingPartyID))
-			{
-				if (Server?.Database?.ServiceRegistry == null)
+				// validate character
+				if (partyController == null || partyController.ID > 0)
 				{
 					return;
 				}
 
-				// Capture immutable data for the async path
-				long characterID = partyController.Character.ID;
-				bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
-				float healthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f;
+				if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+				{
+					return;
+				}
 
-				deferGuardRelease = TryEnqueueIngressWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT), guardKey, characterID);
-			}
+				// validate party invite
+				if (runtimeData.TryGetPendingInvitation(partyController.Character.ID, out long pendingPartyID))
+				{
+					if (Server?.Database?.ServiceRegistry == null)
+					{
+						return;
+					}
+
+					// Capture immutable data for the async path
+					long characterID = partyController.Character.ID;
+					bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
+					float healthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f;
+
+					deferGuardRelease = TryEnqueueIngressWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT), guardKey, characterID);
+				}
 			}
 			finally
 			{
@@ -1167,11 +1165,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
-			{
-				runtimeData.RemovePendingInvitation(character.ID);
-			}
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+				{
+					runtimeData.RemovePendingInvitation(character.ID);
+				}
 			}
 			finally
 			{
@@ -1200,29 +1198,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
-			// validate character
-			if (partyController == null || partyController.ID < 1)
-			{
-				// not in a party..
-				return;
-			}
+				// validate character
+				if (partyController == null || partyController.ID < 1)
+				{
+					// not in a party..
+					return;
+				}
 
-			// Capture immutable data for the async path
-			long partyID = partyController.ID;
-			long characterID = partyController.Character.ID;
-			PartyRank rank = partyController.Rank;
+				// Capture immutable data for the async path
+				long partyID = partyController.ID;
+				long characterID = partyController.Character.ID;
+				PartyRank rank = partyController.Rank;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => LeavePartyAsync(conn, characterID, partyID, rank), guardKey, characterID);
-			if (!deferGuardRelease)
-			{
-				return;
-			}
+				deferGuardRelease = TryEnqueueIngressWork(() => LeavePartyAsync(conn, characterID, partyID, rank), guardKey, characterID);
+				if (!deferGuardRelease)
+				{
+					return;
+				}
 			}
 			finally
 			{
@@ -1354,37 +1352,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
-			// Validate that the requester is a party leader and not trying to remove themselves.
-			if (partyController == null ||
-				partyController.ID < 1 ||
-				partyController.Rank != PartyRank.Leader)
-			{
-				return;
-			}
+				// Validate that the requester is a party leader and not trying to remove themselves.
+				if (partyController == null ||
+					partyController.ID < 1 ||
+					partyController.Rank != PartyRank.Leader)
+				{
+					return;
+				}
 
-			if (msg.MemberID < 1)
-			{
-				return;
-			}
+				if (msg.MemberID < 1)
+				{
+					return;
+				}
 
-			// Prevent party leaders from kicking themselves.
-			if (msg.MemberID == partyController.Character.ID)
-			{
-				return;
-			}
+				// Prevent party leaders from kicking themselves.
+				if (msg.MemberID == partyController.Character.ID)
+				{
+					return;
+				}
 
-			// Capture immutable data for the async path
-			long partyID = partyController.ID;
-			long memberID = msg.MemberID;
-			long characterID = partyController.Character.ID;
+				// Capture immutable data for the async path
+				long partyID = partyController.ID;
+				long memberID = msg.MemberID;
+				long characterID = partyController.Character.ID;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => RemovePartyMemberAsync(partyID, memberID, characterID), guardKey, characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => RemovePartyMemberAsync(partyID, memberID, characterID), guardKey, characterID);
 			}
 			finally
 			{
@@ -1471,37 +1469,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
-			// validate character
-			if (partyController == null ||
-				partyController.ID < 1 ||
-				partyController.Rank != PartyRank.Leader)
-			{
-				return;
-			}
+				// validate character
+				if (partyController == null ||
+					partyController.ID < 1 ||
+					partyController.Rank != PartyRank.Leader)
+				{
+					return;
+				}
 
-			if (msg.MemberID < 1)
-			{
-				return;
-			}
+				if (msg.MemberID < 1)
+				{
+					return;
+				}
 
-			// we can't promote ourself
-			if (msg.MemberID == partyController.Character.ID)
-			{
-				return;
-			}
+				// we can't promote ourself
+				if (msg.MemberID == partyController.Character.ID)
+				{
+					return;
+				}
 
-			// Capture immutable data for the async path
-			long partyID = partyController.ID;
-			long leaderCharacterID = partyController.Character.ID;
-			long targetMemberID = msg.MemberID;
+				// Capture immutable data for the async path
+				long partyID = partyController.ID;
+				long leaderCharacterID = partyController.Character.ID;
+				long targetMemberID = msg.MemberID;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID), guardKey, leaderCharacterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID), guardKey, leaderCharacterID);
 			}
 			finally
 			{

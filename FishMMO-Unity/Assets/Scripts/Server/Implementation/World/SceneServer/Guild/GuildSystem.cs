@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -14,7 +13,6 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 
@@ -805,40 +803,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-
-			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
-			if (guildController == null || guildController.ID > 0)
-			{
-				// already in a guild
-				Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+				if (Server?.Database?.ServiceRegistry == null)
 				{
-					Result = GuildResultType.AlreadyInGuild,
-				}, true, Channel.Reliable);
-				return;
-			}
+					return;
+				}
 
-			// remove white space
-			msg.GuildName = msg.GuildName.Trim();
-
-			if (!Constants.Authentication.IsAllowedGuildName(msg.GuildName))
-			{
-				Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (guildController == null || guildController.ID > 0)
 				{
-					Result = GuildResultType.InvalidGuildName,
-				}, true, Channel.Reliable);
-				return;
-			}
+					// already in a guild
+					Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+					{
+						Result = GuildResultType.AlreadyInGuild,
+					}, true, Channel.Reliable);
+					return;
+				}
 
-			// Capture immutable data for the async path
-			long characterID = guildController.Character.ID;
-			string guildName = msg.GuildName;
-			string sceneName = conn.FirstObject.gameObject.scene.name;
+				// remove white space
+				msg.GuildName = msg.GuildName.Trim();
 
-			deferGuardRelease = TryEnqueueIngressWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName), guardKey, characterID);
+				if (!Constants.Authentication.IsAllowedGuildName(msg.GuildName))
+				{
+					Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+					{
+						Result = GuildResultType.InvalidGuildName,
+					}, true, Channel.Reliable);
+					return;
+				}
+
+				// Capture immutable data for the async path
+				long characterID = guildController.Character.ID;
+				string guildName = msg.GuildName;
+				string sceneName = conn.FirstObject.gameObject.scene.name;
+
+				deferGuardRelease = TryEnqueueIngressWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName), guardKey, characterID);
 			}
 			finally
 			{
@@ -955,27 +953,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			IGuildController inviter = conn.FirstObject.GetComponent<IGuildController>();
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				IGuildController inviter = conn.FirstObject.GetComponent<IGuildController>();
 
-			// validate guild leader or officer is inviting
-			if (inviter == null ||
-				inviter.ID < 1 ||
-				inviter.Character.ID == msg.TargetCharacterID ||
-				!(inviter.Rank == GuildRank.Leader || inviter.Rank == GuildRank.Officer))
-			{
-				return;
-			}
+				// validate guild leader or officer is inviting
+				if (inviter == null ||
+					inviter.ID < 1 ||
+					inviter.Character.ID == msg.TargetCharacterID ||
+					!(inviter.Rank == GuildRank.Leader || inviter.Rank == GuildRank.Officer))
+				{
+					return;
+				}
 
-			// Capture immutable data for async path
-			long inviterCharacterID = inviter.Character.ID;
-			long guildID = inviter.ID;
-			long targetCharacterID = msg.TargetCharacterID;
+				// Capture immutable data for async path
+				long inviterCharacterID = inviter.Character.ID;
+				long guildID = inviter.ID;
+				long targetCharacterID = msg.TargetCharacterID;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => InviteToGuildAsync(conn, inviterCharacterID, guildID, targetCharacterID), guardKey, inviterCharacterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => InviteToGuildAsync(conn, inviterCharacterID, guildID, targetCharacterID), guardKey, inviterCharacterID);
 			}
 			finally
 			{
@@ -1077,33 +1075,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
-			// validate character
-			if (guildController == null || guildController.ID > 0)
-			{
-				return;
-			}
-
-			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
-			{
-				return;
-			}
-
-			// validate guild invite
-			if (runtimeData.TryGetPendingInvitation(guildController.Character.ID, out long pendingGuildID))
-			{
-				if (Server?.Database?.ServiceRegistry == null)
+				// validate character
+				if (guildController == null || guildController.ID > 0)
 				{
 					return;
 				}
 
-				// Capture immutable data for async path
-				long characterID = guildController.Character.ID;
-				string sceneName = conn.FirstObject.gameObject.scene.name;
+				if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+				{
+					return;
+				}
 
-				deferGuardRelease = TryEnqueueIngressWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName), guardKey, characterID);
-			}
+				// validate guild invite
+				if (runtimeData.TryGetPendingInvitation(guildController.Character.ID, out long pendingGuildID))
+				{
+					if (Server?.Database?.ServiceRegistry == null)
+					{
+						return;
+					}
+
+					// Capture immutable data for async path
+					long characterID = guildController.Character.ID;
+					string sceneName = conn.FirstObject.gameObject.scene.name;
+
+					deferGuardRelease = TryEnqueueIngressWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName), guardKey, characterID);
+				}
 			}
 			finally
 			{
@@ -1208,11 +1206,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
-			{
-				runtimeData.RemovePendingInvitation(character.ID);
-			}
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+				{
+					runtimeData.RemovePendingInvitation(character.ID);
+				}
 			}
 			finally
 			{
@@ -1242,29 +1240,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
-			// validate character
-			if (guildController == null || guildController.ID < 1)
-			{
-				// not in a guild..
-				return;
-			}
+				// validate character
+				if (guildController == null || guildController.ID < 1)
+				{
+					// not in a guild..
+					return;
+				}
 
-			// Capture immutable data for async path
-			long characterID = guildController.Character.ID;
-			long guildID = guildController.ID;
-			GuildRank rank = guildController.Rank;
+				// Capture immutable data for async path
+				long characterID = guildController.Character.ID;
+				long guildID = guildController.ID;
+				GuildRank rank = guildController.Rank;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => LeaveGuildAsync(conn, characterID, guildID, rank), guardKey, characterID);
-			if (!deferGuardRelease)
-			{
-				return;
-			}
+				deferGuardRelease = TryEnqueueIngressWork(() => LeaveGuildAsync(conn, characterID, guildID, rank), guardKey, characterID);
+				if (!deferGuardRelease)
+				{
+					return;
+				}
 			}
 			finally
 			{
@@ -1413,38 +1411,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
-			// validate character
-			if (guildController == null ||
-				guildController.ID < 1 ||
-				guildController.Rank < GuildRank.Officer)
-			{
-				return;
-			}
+				// validate character
+				if (guildController == null ||
+					guildController.ID < 1 ||
+					guildController.Rank < GuildRank.Officer)
+				{
+					return;
+				}
 
-			if (msg.GuildMemberID < 1)
-			{
-				return;
-			}
+				if (msg.GuildMemberID < 1)
+				{
+					return;
+				}
 
-			// we can't kick ourself
-			if (msg.GuildMemberID == guildController.Character.ID)
-			{
-				return;
-			}
+				// we can't kick ourself
+				if (msg.GuildMemberID == guildController.Character.ID)
+				{
+					return;
+				}
 
-			// Capture immutable data for async path
-			long guildID = guildController.ID;
-			long memberID = msg.GuildMemberID;
-			long characterID = guildController.Character.ID;
-			GuildRank requesterRank = guildController.Rank;
+				// Capture immutable data for async path
+				long guildID = guildController.ID;
+				long memberID = msg.GuildMemberID;
+				long characterID = guildController.Character.ID;
+				GuildRank requesterRank = guildController.Rank;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank), guardKey, characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank), guardKey, characterID);
 			}
 			finally
 			{
@@ -1543,37 +1541,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
-			// validate character
-			if (guildController == null ||
-				guildController.ID < 1 ||
-				guildController.Rank != GuildRank.Leader)
-			{
-				return;
-			}
+				// validate character
+				if (guildController == null ||
+					guildController.ID < 1 ||
+					guildController.Rank != GuildRank.Leader)
+				{
+					return;
+				}
 
-			if (msg.GuildMemberID < 1)
-			{
-				return;
-			}
+				if (msg.GuildMemberID < 1)
+				{
+					return;
+				}
 
-			// we can't promote ourself
-			if (msg.GuildMemberID == guildController.Character.ID)
-			{
-				return;
-			}
+				// we can't promote ourself
+				if (msg.GuildMemberID == guildController.Character.ID)
+				{
+					return;
+				}
 
-			// Capture immutable data for async path
-			long guildID = guildController.ID;
-			long memberID = msg.GuildMemberID;
-			GuildRank newRank = msg.Rank;
+				// Capture immutable data for async path
+				long guildID = guildController.ID;
+				long memberID = msg.GuildMemberID;
+				GuildRank newRank = msg.Rank;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => ChangeGuildRankAsync(guildID, memberID, newRank), guardKey, guildID);
+				deferGuardRelease = TryEnqueueIngressWork(() => ChangeGuildRankAsync(guildID, memberID, newRank), guardKey, guildID);
 			}
 			finally
 			{

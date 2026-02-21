@@ -6,7 +6,6 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;

@@ -2,7 +2,6 @@ using FishNet.Connection;
 using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -10,7 +9,6 @@ using System.Threading.Tasks;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
-using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.WorldServer;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -398,6 +396,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 								return;
 							}
 
+							Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var snapshotRuntimeData);
+
 							foreach (NetworkConnection connection in connections.ToList())
 							{
 								if (currentCount >= maxClientsPerInstance)
@@ -407,6 +407,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 								connections.Remove(connection);
 								mappingData.OpenWorldConnectionScenes.Remove(connection);
+								snapshotRuntimeData?.WaitingQueueEnteredUtcByClientId.Remove(connection.ClientId);
 
 								if (!IsValidConnection(connection, out string accountName))
 								{

@@ -1,5 +1,3 @@
-using FishMMO.Server.Core.Account;
-
 namespace FishMMO.Server.Core.Authentication
 {
 	/// <summary>

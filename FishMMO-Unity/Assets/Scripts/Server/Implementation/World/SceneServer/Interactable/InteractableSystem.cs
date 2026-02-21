@@ -5,8 +5,6 @@ using FishMMO.Shared;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.Implementation;
-using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System.Collections.Generic;
@@ -629,61 +627,61 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				switch (msg.Type)
 				{
-				case MerchantTabType.Item:
-					if (merchantTemplate.Items == null ||
-						msg.Index < 0 ||
-						msg.Index >= merchantTemplate.Items.Count)
-					{
-						return;
-					}
+					case MerchantTabType.Item:
+						if (merchantTemplate.Items == null ||
+							msg.Index < 0 ||
+							msg.Index >= merchantTemplate.Items.Count)
+						{
+							return;
+						}
 
-					BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
-					if (itemTemplate == null)
-					{
-						return;
-					}
+						BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
+						if (itemTemplate == null)
+						{
+							return;
+						}
 
-					// do we have enough currency to purchase this?
-					if (CurrencyTemplate == null)
-					{
-						Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
-						return;
-					}
-					if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-						!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
-						currency.FinalValue < itemTemplate.Price)
-					{
-						return;
-					}
+						// do we have enough currency to purchase this?
+						if (CurrencyTemplate == null)
+						{
+							Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
+							return;
+						}
+						if (!character.TryGet(out ICharacterAttributeController attributeController) ||
+							!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+							currency.FinalValue < itemTemplate.Price)
+						{
+							return;
+						}
 
-					Item newItem = new Item(itemTemplate, 1);
-					if (newItem == null)
-					{
-						return;
-					}
+						Item newItem = new Item(itemTemplate, 1);
+						if (newItem == null)
+						{
+							return;
+						}
 
-					if (SendNewItemBroadcast(conn, character, inventoryController, newItem))
-					{
-						currency.AddValue(-itemTemplate.Price);
-					}
-					break;
-				case MerchantTabType.Ability:
-					if (merchantTemplate.Abilities != null &&
-						msg.Index >= 0 &&
-						msg.Index < merchantTemplate.Abilities.Count)
-					{
-						LearnAbilityTemplate(conn, character, merchantTemplate.Abilities[msg.Index]);
-					}
-					break;
-				case MerchantTabType.AbilityEvent:
-					if (merchantTemplate.AbilityEvents != null &&
-						msg.Index >= 0 &&
-						msg.Index < merchantTemplate.AbilityEvents.Count)
-					{
-						LearnAbilityEvent(conn, character, merchantTemplate.AbilityEvents[msg.Index]);
-					}
-					break;
-				default: return;
+						if (SendNewItemBroadcast(conn, character, inventoryController, newItem))
+						{
+							currency.AddValue(-itemTemplate.Price);
+						}
+						break;
+					case MerchantTabType.Ability:
+						if (merchantTemplate.Abilities != null &&
+							msg.Index >= 0 &&
+							msg.Index < merchantTemplate.Abilities.Count)
+						{
+							LearnAbilityTemplate(conn, character, merchantTemplate.Abilities[msg.Index]);
+						}
+						break;
+					case MerchantTabType.AbilityEvent:
+						if (merchantTemplate.AbilityEvents != null &&
+							msg.Index >= 0 &&
+							msg.Index < merchantTemplate.AbilityEvents.Count)
+						{
+							LearnAbilityEvent(conn, character, merchantTemplate.AbilityEvents[msg.Index]);
+						}
+						break;
+					default: return;
 				}
 			}
 			finally
@@ -891,48 +889,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				// validate eventIds if there are any...
 				if (msg.Events != null)
 				{
-				// Defense-in-depth: cap event list size to prevent processing oversized payloads.
-				if (msg.Events.Count > MaxAbilityCraftEvents)
-				{
-					return;
-				}
-
-				//bool hasTypeOverride = false;
-				HashSet<int> validatedEvents = new HashSet<int>();
-				for (int i = 0; i < msg.Events.Count; ++i)
-				{
-					int id = msg.Events[i];
-					if (validatedEvents.Contains(id))
-					{
-						// duplicate events
-						return;
-					}
-					validatedEvents.Add(id);
-					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(id);
-					if (abilityEvent == null)
-					{
-						// unknown ability event
-						return;
-					}
-
-					// validate that the character knows the ability event
-					if (!abilityController.KnowsAbilityEvent(abilityEvent.ID))
+					// Defense-in-depth: cap event list size to prevent processing oversized payloads.
+					if (msg.Events.Count > MaxAbilityCraftEvents)
 					{
 						return;
 					}
 
-					/*if (trigger is AbilityTypeOverrideEventType)
+					//bool hasTypeOverride = false;
+					HashSet<int> validatedEvents = new HashSet<int>();
+					for (int i = 0; i < msg.Events.Count; ++i)
 					{
-						if (hasTypeOverride)
+						int id = msg.Events[i];
+						if (validatedEvents.Contains(id))
 						{
-							// duplicate ability type override
+							// duplicate events
 							return;
 						}
-						hasTypeOverride = true;
-					}*/
+						validatedEvents.Add(id);
+						AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(id);
+						if (abilityEvent == null)
+						{
+							// unknown ability event
+							return;
+						}
 
-					price += abilityEvent.Price;
-				}
+						// validate that the character knows the ability event
+						if (!abilityController.KnowsAbilityEvent(abilityEvent.ID))
+						{
+							return;
+						}
+
+						/*if (trigger is AbilityTypeOverrideEventType)
+						{
+							if (hasTypeOverride)
+							{
+								// duplicate ability type override
+								return;
+							}
+							hasTypeOverride = true;
+						}*/
+
+						price += abilityEvent.Price;
+					}
 				}
 
 				// do we have enough currency to purchase this?
