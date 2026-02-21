@@ -277,6 +277,79 @@ var config = new NpgsqlDbConfiguration(
 var factory = new NpgsqlDbContextFactory(config);
 ```
 
+## Securing appsettings.json
+
+Protecting `appsettings.json` (and any environment-specific overrides) is essential to prevent accidental secret leakage. The following guidance shows practical, OS-specific steps and general recommendations.
+
+- **General recommendations:**
+	- **Avoid committing secrets:** Add `appsettings.*.json` to `.gitignore` in your project root.
+	- **Prefer environment variables/secret stores:** Use environment variables or a secret manager (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault) in production instead of plaintext files.
+	- **Use `dotnet user-secrets` for development only:** Useful for local dev, not for servers.
+	- **Restrict file read access:** Ensure only the service account or user running the application can read the file.
+
+### Ubuntu / Debian (and most Linux distributions)
+
+- **Set ownership and permissions** (example where `fishmmo` is the service user and `/opt/fishmmo/config/appsettings.json` is the file):
+
+	```bash
+	sudo chown root:fishmmo /opt/fishmmo/config/appsettings.json
+	sudo chmod 640 /opt/fishmmo/config/appsettings.json
+	# If the service runs as root-owned user, consider 600 and appropriate owner
+	```
+
+- **Systemd service using an EnvironmentFile** (store sensitive values in a separate file with restricted permissions):
+
+	```ini
+	[Service]
+	User=fishmmo
+	Group=fishmmo
+	EnvironmentFile=/etc/fishmmo-db.env
+	```
+
+	Set permissions on the env file so only root (or the service user) can read it:
+
+	```bash
+	sudo chown root:root /etc/fishmmo-db.env
+	sudo chmod 600 /etc/fishmmo-db.env
+	```
+
+- **Optional: encrypt config files at rest** using tools like `gpg` or filesystem encryption (LUKS) if disk-level protection is required.
+
+### CachyOS / Arch Linux
+
+- Arch-derived systems use the same POSIX permissions and `systemd` examples above. Use the same `chown`/`chmod` patterns and keep the environment file under `/etc` with `600` permissions.
+
+### Windows
+
+- **Use ACLs to restrict access** to the JSON file. Example using `icacls` to remove inheritance and grant read access to a specific service account (replace `NT Service\\MyService` or `DOMAIN\\svc_account` as appropriate):
+
+	```powershell
+	# Remove inherited permissions and grant read to the service account
+	icacls "C:\\path\\to\\appsettings.json" /inheritance:r
+	icacls "C:\\path\\to\\appsettings.json" /grant "NT Service\\MyService":R
+	```
+
+- **Data Protection API / user secrets:** For development, prefer `dotnet user-secrets`. For production, use Windows Certificate Store or a managed secret store rather than plaintext files.
+
+### Git / Source control
+
+- **Exclude configuration with secrets** from commits. Add this to your repository `.gitignore`:
+
+	```gitignore
+	# Local/secret config
+	FishMMO-DB/appsettings.*.json
+	**/appsettings.*.json
+	```
+
+- **Audit history:** If secrets were committed historically, rotate those credentials immediately and remove them from git history using tools like `git-filter-repo`.
+
+### Quick checklist before deploy
+
+- **Remove secrets from repo**, or ensure overrides are not committed.
+- **Set file ownership and permissions** so only the service user can read config files.
+- **Use environment variables or secret manager** for production secrets.
+- **Disable sensitive logging** in production (`enableLogging: false`).
+
 ---
 
 ## Notes

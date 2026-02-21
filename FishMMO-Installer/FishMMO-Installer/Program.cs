@@ -6,6 +6,7 @@ namespace FishMMO.Installer
 	/// <summary>
 	/// Console-based installer tool for FishMMO dependencies and database setup.
 	/// Delegates all work to focused installer classes: <see cref="DotNetInstaller"/>,
+	/// <see cref="PgBouncerInstaller"/>,
 	/// <see cref="PostgreSQLInstaller"/>, <see cref="NGINXInstaller"/>,
 	/// <see cref="VSBuildToolsInstaller"/>, <see cref="UnityInstaller"/>, <see cref="LetsEncryptInstaller"/>,
 	/// and <see cref="ProjectBuildInstaller"/>.
@@ -64,19 +65,20 @@ namespace FishMMO.Installer
 			{
 				Console.Clear();
 				Console.WriteLine("Welcome to the FishMMO Installer Tool.");
-				Console.WriteLine("Press a key (0-9, A-C):");
+				Console.WriteLine("Press a key (0-9, A-D):");
 				Console.WriteLine("1 : Install DotNet");
 				Console.WriteLine("2 : Install Visual Studio Build Tools (Windows Only)");
-				Console.WriteLine("3 : Build all C# Projects");
-				Console.WriteLine("4 : Install Unity Hub");
-				Console.WriteLine("5 : Install Unity Editor (+Modules)");
-				Console.WriteLine("6 : Install NGINX (Web Server/Reverse Proxy)");
-				Console.WriteLine("7 : Install/Renew Let's Encrypt Certificate (NGINX)");
-				Console.WriteLine("8 : Install PostgreSQL (Database Server)");
-				Console.WriteLine("9 : Install FishMMO Database (User/Schema/Initial Migration)");
-				Console.WriteLine("A : Create new database migration");
-				Console.WriteLine("B : Grant User Permissions on Database");
-				Console.WriteLine("C : Delete FishMMO Database (DANGEROUS!)");
+				Console.WriteLine("3 : Install PgBouncer (Connection Pooler)");
+				Console.WriteLine("4 : Build all C# Projects");
+				Console.WriteLine("5 : Install Unity Hub");
+				Console.WriteLine("6 : Install Unity Editor (+Modules)");
+				Console.WriteLine("7 : Install NGINX (Web Server/Reverse Proxy)");
+				Console.WriteLine("8 : Install/Renew Let's Encrypt Certificate (NGINX)");
+				Console.WriteLine("9 : Install PostgreSQL (Database Server)");
+				Console.WriteLine("A : Install FishMMO Database (User/Schema/Initial Migration)");
+				Console.WriteLine("B : Create new database migration");
+				Console.WriteLine("C : Grant User Permissions on Database");
+				Console.WriteLine("D : Delete FishMMO Database (DANGEROUS!)");
 				Console.WriteLine("0 : Quit");
 
 				ConsoleKeyInfo key = Console.ReadKey(true);
@@ -90,42 +92,45 @@ namespace FishMMO.Installer
 						await VSBuildToolsInstaller.InstallVSBuildTools();
 						break;
 					case ConsoleKey.D3:
-						await ProjectBuildInstaller.BuildAllProjectsInSelectedRootAsync();
+						await PgBouncerInstaller.InstallPgBouncer(appSettings);
 						break;
 					case ConsoleKey.D4:
-						await UnityInstaller.InstallUnityHub();
+						await ProjectBuildInstaller.BuildAllProjectsInSelectedRootAsync();
 						break;
 					case ConsoleKey.D5:
-						await UnityInstaller.InstallUnityVersion();
+						await UnityInstaller.InstallUnityHub();
 						break;
 					case ConsoleKey.D6:
-						await NGINXInstaller.InstallNGINX();
+						await UnityInstaller.InstallUnityVersion();
 						break;
 					case ConsoleKey.D7:
-						await LetsEncryptInstaller.InstallLetsEncryptCertificate();
+						await NGINXInstaller.InstallNGINX();
 						break;
 					case ConsoleKey.D8:
+						await LetsEncryptInstaller.InstallLetsEncryptCertificate();
+						break;
+					case ConsoleKey.D9:
 						await HandleWithSettings(
 							s => s.Npgsql?.Host,
 							"Npgsql host",
 							s => PostgreSQLInstaller.InstallPostgreSQL(s));
 						break;
-					case ConsoleKey.D9:
+					case ConsoleKey.A:
 						await HandleWithSuperuser(
 							s => s.Npgsql?.Database,
 							"Npgsql database",
 							PostgreSQLInstaller.InstallFishMMODatabase);
 						break;
-					case ConsoleKey.A:
+					case ConsoleKey.B:
 						await PostgreSQLInstaller.CreateMigration();
 						break;
-					case ConsoleKey.B:
+					case ConsoleKey.C:
 						await HandleWithSuperuser(
 							s => s.Npgsql?.Username,
 							"Npgsql database/username",
 							PostgreSQLInstaller.GrantUserPermissions);
 						break;
-					case ConsoleKey.C:
+					case ConsoleKey.D:
 						await HandleWithSuperuser(
 							s => s.Npgsql?.Database,
 							"Npgsql database",

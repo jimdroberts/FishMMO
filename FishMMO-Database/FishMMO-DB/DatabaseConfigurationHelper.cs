@@ -40,12 +40,12 @@ namespace FishMMO.Database
 		/// <c>FISHMMO_ENVIRONMENT</c>, <c>DOTNET_ENVIRONMENT</c> or <c>ASPNETCORE_ENVIRONMENT</c>.
 		/// </summary>
 		/// <returns>A built <see cref="IConfiguration"/> instance.</returns>
-		public static IConfiguration BuildDesignTimeConfiguration()
+		public static IConfiguration BuildDesignTimeConfiguration(string basePath = null)
 		{
 			string env = ResolveEnvironmentName();
 
 			return new ConfigurationBuilder()
-				.SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+				.SetBasePath(!string.IsNullOrWhiteSpace(basePath) ? basePath : AppDomain.CurrentDomain.BaseDirectory)
 				.AddJsonFile("appsettings.json", optional: false)
 				.AddJsonFile($"appsettings.{env}.json", optional: true)
 				.AddEnvironmentVariables()

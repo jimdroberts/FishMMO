@@ -62,6 +62,16 @@ namespace FishMMO.Installer
 		public const string PostgreSQLDefaultAdminDb = "postgres";
 
 		/// <summary>
+		/// Default PgBouncer listen port.
+		/// </summary>
+		public const string PgBouncerDefaultPort = "6432";
+
+		/// <summary>
+		/// Default Linux systemd service name for PgBouncer.
+		/// </summary>
+		public const string PgBouncerLinuxServiceName = "pgbouncer";
+
+		/// <summary>
 		/// Download URL for the NGINX Windows zip archive.
 		/// </summary>
 		public const string NGINXWindowsDownloadUrl = "https://github.com/nginx/nginx/releases/download/release-1.29.5/nginx-1.29.5.zip";

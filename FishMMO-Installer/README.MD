@@ -16,12 +16,38 @@ FishMMO-Installer is a cross-platform .NET 8 console tool that automates FishMMO
 
 - Install DotNet SDK 8 + `dotnet-ef` `5.0.17`
 - Install Visual Studio Build Tools (Windows)
+- Install PgBouncer (connection pooler)
+- Build all discovered C# projects under a selected root directory
 - Install Unity Hub
 - Install Unity Editor + selected modules
 - Install NGINX and configure service startup
 - Install/Renew Let's Encrypt certificates for NGINX
 - Install PostgreSQL
 - Create/manage FishMMO database and permissions
+
+---
+
+## Recent updates worth knowing
+
+### Environment selection and configuration load flow
+
+At startup, the installer resolves environment once and sets all three environment variables:
+
+- `FISHMMO_ENVIRONMENT`
+- `DOTNET_ENVIRONMENT`
+- `ASPNETCORE_ENVIRONMENT`
+
+Configuration is then loaded through shared design-time configuration logic, allowing `appsettings.json` plus environment overlays (`appsettings.{Environment}.json`).
+
+### DotNet command reliability on Linux
+
+Before DotNet commands execute, Linux runtime environment is prepared in-process:
+
+- Adds `~/.dotnet` to `PATH` if missing
+- Adds `~/.dotnet/tools` to `PATH` if missing
+- Sets `DOTNET_ROOT` (`~/.dotnet` preferred, `/usr/share/dotnet` fallback)
+
+This is especially important for EF migration commands run by the installer.
 
 ---
 
@@ -91,12 +117,14 @@ dotnet run --project FishMMO-Installer
 3. Recommended installer order:
   - `1` Install DotNet
   - `2` Install Visual Studio Build Tools
-  - `3` Install Unity Hub
-  - `4` Install Unity Editor (+Modules)
-  - `5` Install NGINX
-  - `6` Install/Renew Let's Encrypt Certificate
-  - `7` Install PostgreSQL
-  - `8` Install FishMMO Database
+  - `3` Install PgBouncer
+  - `4` Build all C# Projects
+  - `5` Install Unity Hub
+  - `6` Install Unity Editor (+Modules)
+  - `7` Install NGINX
+  - `8` Install/Renew Let's Encrypt Certificate
+  - `9` Install PostgreSQL
+  - `A` Install FishMMO Database
 
 ### Ubuntu/Debian quick start
 
@@ -111,12 +139,14 @@ dotnet run --project FishMMO-Installer
 
 3. Recommended installer order:
   - `1` Install DotNet
-  - `3` Install Unity Hub
-  - `4` Install Unity Editor (+Modules)
-  - `5` Install NGINX
-  - `6` Install/Renew Let's Encrypt Certificate
-  - `7` Install PostgreSQL
-  - `8` Install FishMMO Database
+  - `3` Install PgBouncer
+  - `4` Build all C# Projects
+  - `5` Install Unity Hub
+  - `6` Install Unity Editor (+Modules)
+  - `7` Install NGINX
+  - `8` Install/Renew Let's Encrypt Certificate
+  - `9` Install PostgreSQL
+  - `A` Install FishMMO Database
 
 Notes:
 
@@ -136,12 +166,14 @@ dotnet run --project FishMMO-Installer
 
 3. Recommended installer order:
   - `1` Install DotNet
-  - `3` Install Unity Hub (requires `yay` or `paru`)
-  - `4` Install Unity Editor (+Modules)
-  - `5` Install NGINX
-  - `6` Install/Renew Let's Encrypt Certificate
-  - `7` Install PostgreSQL
-  - `8` Install FishMMO Database
+  - `3` Install PgBouncer
+  - `4` Build all C# Projects
+  - `5` Install Unity Hub (requires `yay` or `paru`)
+  - `6` Install Unity Editor (+Modules)
+  - `7` Install NGINX
+  - `8` Install/Renew Let's Encrypt Certificate
+  - `9` Install PostgreSQL
+  - `A` Install FishMMO Database
 
 If you do not have an AUR helper:
 
@@ -177,18 +209,20 @@ Database options require `appsettings.json` in the working directory:
 
 ```text
 Welcome to the FishMMO Installer Tool.
-Press a key (0-9, A-B):
+Press a key (0-9, A-D):
 1 : Install DotNet
 2 : Install Visual Studio Build Tools (Windows Only)
-3 : Install Unity Hub
-4 : Install Unity Editor (+Modules)
-5 : Install NGINX (Web Server/Reverse Proxy)
-6 : Install/Renew Let's Encrypt Certificate (NGINX)
-7 : Install PostgreSQL (Database Server)
-8 : Install FishMMO Database (User/Schema/Initial Migration)
-9 : Create new database migration
-A : Grant User Permissions on Database
-B : Delete FishMMO Database (DANGEROUS!)
+3 : Install PgBouncer (Connection Pooler)
+4 : Build all C# Projects
+5 : Install Unity Hub
+6 : Install Unity Editor (+Modules)
+7 : Install NGINX (Web Server/Reverse Proxy)
+8 : Install/Renew Let's Encrypt Certificate (NGINX)
+9 : Install PostgreSQL (Database Server)
+A : Install FishMMO Database (User/Schema/Initial Migration)
+B : Create new database migration
+C : Grant User Permissions on Database
+D : Delete FishMMO Database (DANGEROUS!)
 0 : Quit
 ```
 
@@ -199,24 +233,24 @@ B : Delete FishMMO Database (DANGEROUS!)
 ### Example A: Fresh Linux setup (NGINX + cert + DB)
 
 1. Run installer.
-2. Press `5` to install NGINX.
-3. Press `6` to request certificate:
+2. Press `7` to install NGINX.
+3. Press `8` to request certificate:
   - Enter domains (for example: `fishmmo.com,play.fishmmo.com,api.fishmmo.com,game.fishmmo.com`)
   - Enter email
   - Use staging first (`Y`) to validate flow
-4. Press `7` to install PostgreSQL.
-5. Press `8` to create FishMMO database and optional initial migration.
+4. Press `9` to install PostgreSQL.
+5. Press `A` to create FishMMO database and optional initial migration.
 
 ### Example B: Fresh Windows setup
 
 1. Run installer from elevated PowerShell.
-2. Press `5` to install NGINX (ZIP extraction + Windows service creation).
-3. Press `6` to install/renew certificate with win-acme.
-4. Press `7` then `8` for PostgreSQL + FishMMO DB setup.
+2. Press `7` to install NGINX (ZIP extraction + Windows service creation).
+3. Press `8` to install/renew certificate with win-acme.
+4. Press `9` then `A` for PostgreSQL + FishMMO DB setup.
 
 ### Example C: Add a new migration
 
-1. Press `9`.
+1. Press `B`.
 2. Enter migration name (letters/numbers, starts with a letter), for example: `AddGuildSettings`.
 3. Installer will create migration and run database update.
 
@@ -408,19 +442,33 @@ Expected outcome:
 
 Downloads and runs Build Tools installer silently with required workloads.
 
-### 3 — Install Unity Hub
+### 3 — Install PgBouncer (Connection Pooler)
+
+- Windows: attempts `winget` package install first, then Chocolatey fallback
+- Ubuntu/Debian: package install + `systemctl enable --now pgbouncer`
+- Arch/CachyOS: package install + `systemctl enable --now pgbouncer`
+- Prints post-install checklist for mapping FishMMO DB through pool port `6432`
+
+### 4 — Build all C# Projects
+
+- Prompts for root folder (auto-suggested from solution hierarchy)
+- Recursively discovers `.csproj` files
+- Cleans and builds each project with parallel execution
+- Prints success/failure summary with per-project errors
+
+### 5 — Install Unity Hub
 
 - Windows: Unity Hub installer EXE
 - Ubuntu/Debian: Unity apt repository + `apt-get install unityhub`
 - Arch/CachyOS: AUR install with detected `yay`/`paru`
 
-### 4 — Install Unity Editor (+Modules)
+### 6 — Install Unity Editor (+Modules)
 
 Installs editor via Unity Hub CLI with module selection.
 
 Default editor version: `6000.3.2f1`.
 
-### 5 — Install NGINX
+### 7 — Install NGINX
 
 #### Windows
 
@@ -438,7 +486,7 @@ Default editor version: `6000.3.2f1`.
 - Enables and starts with `systemctl enable --now nginx`
 - Verifies enabled/active status
 
-### 6 — Install/Renew Let's Encrypt Certificate (NGINX)
+### 8 — Install/Renew Let's Encrypt Certificate (NGINX)
 
 Requires NGINX to be installed first.
 
@@ -468,29 +516,29 @@ Notes:
 - Wildcard domains (`*.example.com`) are intentionally rejected in this webroot workflow.
 - Use staging mode first for safe validation.
 
-### 7 — Install PostgreSQL
+### 9 — Install PostgreSQL
 
 - Windows: unattended EDB installer flow
 - Ubuntu/Debian: package install + `systemctl`
 - Arch/CachyOS: package install + initdb (if needed) + `systemctl`
 
-### 8 — Install FishMMO Database
+### A — Install FishMMO Database
 
 - Creates FishMMO DB and user role (if missing)
 - Grants database privileges
 - Optionally creates/applies `Initial` EF migration
 
-### 9 — Create new database migration
+### B — Create new database migration
 
 - Creates migration via EF CLI
 - Applies migration via database update
 - Migration name validation is enforced
 
-### A — Grant User Permissions on Database
+### C — Grant User Permissions on Database
 
 Grants comprehensive privileges on existing and future objects in `public` schema.
 
-### B — Delete FishMMO Database (DANGEROUS)
+### D — Delete FishMMO Database (DANGEROUS)
 
 Requires explicit `DELETE` confirmation and terminates active sessions before drop.
 
@@ -507,17 +555,20 @@ Exits installer.
 - NGINX: ZIP install + NSSM-backed service (`FishMMO-NGINX`)
 - Let's Encrypt: win-acme + PEM integration
 - PostgreSQL: EDB unattended installer
+- PgBouncer: package-manager installation attempt (`winget` then Chocolatey fallback)
 - VS Build Tools: supported
 
 ### Ubuntu/Debian
 
 - Package manager: `apt-get`
+- PgBouncer: package install + systemd enable/start
 - Service management: `systemctl`
 - Let's Encrypt: certbot webroot flow
 
 ### Arch/CachyOS
 
 - Package manager: `pacman`
+- PgBouncer: package install + systemd enable/start
 - Unity Hub: AUR helper (`yay`/`paru`)
 - Service management: `systemctl`
 - Let's Encrypt: certbot webroot flow
@@ -533,6 +584,8 @@ Exits installer.
 | `InstallerProcessHelper.cs` | Process/shell helpers, download utilities, prompts/logging |
 | `DotNetInstaller.cs` | DotNet SDK and EF tooling installation + EF commands |
 | `VSBuildToolsInstaller.cs` | VS Build Tools (Windows) |
+| `PgBouncerInstaller.cs` | PgBouncer installation + post-install pooling guidance |
+| `ProjectBuildInstaller.cs` | Recursive C# project discovery + parallel clean/build |
 | `UnityInstaller.cs` | Unity Hub and Unity Editor installation |
 | `NGINXInstaller.cs` | NGINX installation and service management |
 | `LetsEncryptInstaller.cs` | Certificate install/renew flows for NGINX |
