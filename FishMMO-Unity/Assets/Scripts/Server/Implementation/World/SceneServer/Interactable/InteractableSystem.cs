@@ -38,25 +38,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		[Header("Request Protection")]
 		[Tooltip("Minimum milliseconds between merchant purchase requests per character")]
-		[SerializeField] private int merchantRequestDebounceMilliseconds = 150;
+		[SerializeField] private int merchantRequestDebounceMilliseconds = 1000;
 
 		/// <summary>
 		/// Minimum milliseconds between dungeon finder requests per character.
 		/// </summary>
 		[Tooltip("Minimum milliseconds between dungeon finder requests per character")]
-		[SerializeField] private int dungeonFinderDebounceMilliseconds = 500;
+		[SerializeField] private int dungeonFinderDebounceMilliseconds = 1000;
 
 		/// <summary>
 		/// Minimum milliseconds between generic interactable requests per character.
 		/// </summary>
 		[Tooltip("Minimum milliseconds between generic interactable requests per character")]
-		[SerializeField] private int interactableRequestDebounceMilliseconds = 100;
+		[SerializeField] private int interactableRequestDebounceMilliseconds = 1000;
 
 		/// <summary>
 		/// Minimum milliseconds between ability craft requests per character.
 		/// </summary>
 		[Tooltip("Minimum milliseconds between ability craft requests per character")]
-		[SerializeField] private int abilityCraftDebounceMilliseconds = 150;
+		[SerializeField] private int abilityCraftDebounceMilliseconds = 1000;
 
 		/// <summary>
 		/// Interval between debounce-tracker cleanup sweeps.
@@ -78,25 +78,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		/// <summary>
 		/// Cache of world scene details used for scene validation and respawn lookup.
+		/// FIXME: This should be injected via the data container registry instead of being a public field.
 		/// </summary>
-		public WorldSceneDetailsCache WorldSceneDetailsCache;
+		[SerializeField] private WorldSceneDetailsCache worldSceneDetailsCache;
 		/// <summary>
 		/// Registers and clears interactable handlers for this system.
 		/// </summary>
-		public InteractableHandlerInitializer InteractableHandlerInitializer;
+		[SerializeField] private InteractableHandlerInitializer interactableHandlerInitializer;
 		/// <summary>
 		/// Maximum number of crafted abilities a character may learn.
 		/// </summary>
-		public int MaxAbilityCount = 25;
+		[SerializeField] [Min(1)] private int maxAbilityCount = 25;
 		/// <summary>
 		/// Maximum number of ability events allowed per craft request.
 		/// Defense-in-depth cap to prevent processing oversized payloads.
 		/// </summary>
-		public int MaxAbilityCraftEvents = 32;
+		[SerializeField] [Min(1)] private int maxAbilityCraftEvents = 32;
 		/// <summary>
 		/// Currency attribute required to buy merchant items and abilities.
 		/// </summary>
-		public CharacterAttributeTemplate CurrencyTemplate;
+		[SerializeField] private CharacterAttributeTemplate currencyTemplate;
 
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
@@ -106,7 +107,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			if (InteractableHandlerInitializer == null)
+			if (interactableHandlerInitializer == null)
 			{
 				Log.Error("InteractableSystem", "InitializeOnce: InteractableHandlerInitializer is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
@@ -131,7 +132,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// Interactable handlers
-			InteractableHandlerInitializer.RegisterHandlers(Server, this);
+			interactableHandlerInitializer.RegisterHandlers(Server, this);
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
@@ -181,7 +182,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
 		}
 
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 			SweepDebounceTrackers();
@@ -231,27 +232,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server != null &&
-				Server.DataContainerRegistry.TryGet<IInteractableSystemMainThreadQueueData>(out var queueData))
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadActionsPerFrame);
-				}
-			}
+			MainThreadQueueHelper.Drain<IInteractableSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
 		}
 
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server != null &&
-				Server.DataContainerRegistry.TryGet<IInteractableSystemMainThreadQueueData>(out var queueData))
-			{
-				queueData.Enqueue(action);
-			}
+			return MainThreadQueueHelper.TryEnqueue<IInteractableSystemMainThreadQueueData>(Server, action);
 		}
 
 		/// <summary>
@@ -414,7 +400,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					if (!TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(itemsToSave), character.ID))
 					{
-						_ = PersistInventoryItemsAsync(itemsToSave);
+						_ = PersistInventoryItemsAsync(itemsToSave).ContinueWith(
+							t => Log.Error("InteractableSystem", $"Fallback inventory persist failed for CharID={character.ID}: {t.Exception}"),
+							TaskContinuationOptions.OnlyOnFaulted);
 						Log.Warning("InteractableSystem", $"SendNewItemBroadcast: Async worker rejected inventory persist for CharID={character.ID}; executed fallback persistence path.");
 					}
 				}
@@ -491,8 +479,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 
 				// validate scene
-				if (WorldSceneDetailsCache == null ||
-					!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails _))
+				if (worldSceneDetailsCache == null ||
+					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails _))
 				{
 					Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 					return;
@@ -598,8 +586,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				// validate scene
-				if (WorldSceneDetailsCache == null ||
-					!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
+				if (worldSceneDetailsCache == null ||
+					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
 				{
 					Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 					return;
@@ -642,23 +630,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						}
 
 						// do we have enough currency to purchase this?
-						if (CurrencyTemplate == null)
+						if (currencyTemplate == null)
 						{
-							Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
+							Log.Debug("InteractableSystem", "currencyTemplate is null.");
 							return;
 						}
 						if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-							!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+							!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
 							currency.FinalValue < itemTemplate.Price)
 						{
 							return;
 						}
 
 						Item newItem = new Item(itemTemplate, 1);
-						if (newItem == null)
-						{
-							return;
-						}
 
 						if (SendNewItemBroadcast(conn, character, inventoryController, newItem))
 						{
@@ -707,13 +691,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (CurrencyTemplate == null)
+			if (currencyTemplate == null)
 			{
-				Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
+				Log.Debug("InteractableSystem", "currencyTemplate is null.");
 				return;
 			}
 			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+				!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
 				currency.FinalValue < priceSelector(template))
 			{
 				Log.Debug("InteractableSystem", "Not enough currency!");
@@ -855,8 +839,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				// validate scene
-				if (WorldSceneDetailsCache == null ||
-					!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
+				if (worldSceneDetailsCache == null ||
+					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
 				{
 					Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 					return;
@@ -879,7 +863,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				// validate the character can learn the ability
 				if (!abilityController.KnowsAbility(mainAbility.ID) ||
 					abilityController.KnowsLearnedAbility(mainAbility.ID) ||
-					abilityController.KnownAbilities.Count >= MaxAbilityCount)
+					abilityController.KnownAbilities.Count >= maxAbilityCount)
 				{
 					return;
 				}
@@ -890,12 +874,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (msg.Events != null)
 				{
 					// Defense-in-depth: cap event list size to prevent processing oversized payloads.
-					if (msg.Events.Count > MaxAbilityCraftEvents)
+					if (msg.Events.Count > maxAbilityCraftEvents)
 					{
 						return;
 					}
 
-					//bool hasTypeOverride = false;
 					HashSet<int> validatedEvents = new HashSet<int>();
 					for (int i = 0; i < msg.Events.Count; ++i)
 					{
@@ -919,28 +902,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							return;
 						}
 
-						/*if (trigger is AbilityTypeOverrideEventType)
-						{
-							if (hasTypeOverride)
-							{
-								// duplicate ability type override
-								return;
-							}
-							hasTypeOverride = true;
-						}*/
-
 						price += abilityEvent.Price;
 					}
 				}
 
 				// do we have enough currency to purchase this?
-				if (CurrencyTemplate == null)
+				if (currencyTemplate == null)
 				{
-					Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
+					Log.Debug("InteractableSystem", "currencyTemplate is null.");
 					return;
 				}
 				if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-					!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+					!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
 					currency.FinalValue < price)
 				{
 					return;
@@ -1016,8 +989,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// Validate scene
-			if (WorldSceneDetailsCache == null ||
-				!WorldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
+			if (worldSceneDetailsCache == null ||
+				!worldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
 			{
 				Log.Debug("InteractableSystem", "Missing Scene:" + dungeonEntrance.DungeonName);
 				return;
@@ -1038,6 +1011,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				partyID = partyController.ID;
 			}
 			string dungeonName = dungeonEntrance.DungeonName;
+
 			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
 
 			if (!runtimeData.InteractableInFlightByCharacter.TryAdd(characterID, 0))
@@ -1109,7 +1083,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 
 					long sceneID = enqueueResult.Data;
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						character.InstanceID = sceneID;
 						character.InstancePosition = respawnDetails.Position;
@@ -1121,7 +1095,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				else
 				{
 					long existingInstanceID = instanceResult.Data.ID;
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						character.InstanceID = existingInstanceID;
 						character.InstancePosition = respawnDetails.Position;
@@ -1242,14 +1216,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			if (!SceneObject.Objects.TryGetValue(sceneObjectID, out sceneObject))
 			{
-				if (sceneObject == null)
-				{
-					Log.Debug("InteractableSystem", "Missing SceneObject");
-				}
-				else
-				{
-					Log.Debug("InteractableSystem", "Missing ID:" + sceneObjectID);
-				}
+				Log.Debug("InteractableSystem", $"Missing SceneObject ID:{sceneObjectID}");
 				return false;
 			}
 			if (sceneObject.GameObject.scene.handle != characterSceneHandle)

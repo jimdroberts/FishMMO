@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Concurrent;
+using System.Threading;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
@@ -22,20 +22,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public DateTime LastFetchTime { get; set; }
 
+		private int updatePumpInFlight;
+
 		/// <inheritdoc/>
-		public int UpdatePumpInFlight { get; set; }
+		public bool TryBeginUpdatePump()
+		{
+			return Interlocked.CompareExchange(ref updatePumpInFlight, 1, 0) == 0;
+		}
+
+		/// <inheritdoc/>
+		public void EndUpdatePump()
+		{
+			Interlocked.Exchange(ref updatePumpInFlight, 0);
+		}
 
 		/// <inheritdoc/>
 		public DateTime NextInvitationSweepUtc { get; set; }
 
 		/// <inheritdoc/>
-		public ConcurrentDictionary<long, DateTime> NextAllowedIngressUtcByKey { get; private set; }
-
-		/// <inheritdoc/>
-		public ConcurrentDictionary<long, byte> IngressInFlightByKey { get; private set; }
-
-		/// <inheritdoc/>
-		public DateTime NextIngressSweepUtc { get; set; }
+		public IngressGuard IngressGuard { get; private set; }
 
 		/// <summary>
 		/// Initializes the party runtime data container.
@@ -44,11 +49,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			pendingInvitations = new LastSeenCacheTracker<long, long>();
 			LastFetchTime = DateTime.UtcNow;
-			UpdatePumpInFlight = 0;
+			Interlocked.Exchange(ref updatePumpInFlight, 0);
 			NextInvitationSweepUtc = DateTime.UtcNow;
-			NextAllowedIngressUtcByKey = new ConcurrentDictionary<long, DateTime>();
-			IngressInFlightByKey = new ConcurrentDictionary<long, byte>();
-			NextIngressSweepUtc = DateTime.UtcNow;
+			IngressGuard = new IngressGuard();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -59,11 +62,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			pendingInvitations?.Clear();
 			LastFetchTime = DateTime.UtcNow;
-			UpdatePumpInFlight = 0;
+			Interlocked.Exchange(ref updatePumpInFlight, 0);
 			NextInvitationSweepUtc = DateTime.UtcNow;
-			NextAllowedIngressUtcByKey?.Clear();
-			IngressInFlightByKey?.Clear();
-			NextIngressSweepUtc = DateTime.UtcNow;
+			IngressGuard?.Clear();
 		}
 
 		/// <inheritdoc/>
@@ -120,8 +121,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			Clear();
 			pendingInvitations = null;
-			NextAllowedIngressUtcByKey = null;
-			IngressInFlightByKey = null;
 		}
 	}
 }

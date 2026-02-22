@@ -180,9 +180,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicPulse(float deltaTime)
 		{
-			if (Server.ServerState == ConnectionState.Started &&
-				Initialized &&
-				Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem))
+			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
+			{
+				return;
+			}
+
+			if (Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem))
 			{
 				// Send a heartbeat pulse to the database with the current character count using the interface method.
 				int characterCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) ? sceneData.ConnectionCount : 0;

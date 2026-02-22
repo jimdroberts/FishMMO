@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
@@ -49,9 +48,15 @@ namespace FishMMO.Server.Core.World.SceneServer
 		DateTime LastFetchTime { get; set; }
 
 		/// <summary>
-		/// Atomic in-flight gate for periodic update work.
+		/// Atomically transitions the update pump from idle to in-flight.
+		/// Returns true if this call won the race; false if a pump is already in flight.
 		/// </summary>
-		int UpdatePumpInFlight { get; set; }
+		bool TryBeginUpdatePump();
+
+		/// <summary>
+		/// Atomically transitions the update pump from in-flight back to idle.
+		/// </summary>
+		void EndUpdatePump();
 
 		/// <summary>
 		/// Next scheduled UTC time for invitation cleanup.
@@ -59,18 +64,8 @@ namespace FishMMO.Server.Core.World.SceneServer
 		DateTime NextInvitationSweepUtc { get; set; }
 
 		/// <summary>
-		/// Tracks next-allowed timestamps per connection-operation key.
+		/// Shared ingress guard for per-connection per-operation debounce and in-flight tracking.
 		/// </summary>
-		ConcurrentDictionary<long, DateTime> NextAllowedIngressUtcByKey { get; }
-
-		/// <summary>
-		/// Tracks in-flight ingress operation keys.
-		/// </summary>
-		ConcurrentDictionary<long, byte> IngressInFlightByKey { get; }
-
-		/// <summary>
-		/// Next UTC timestamp when ingress cleanup sweep is allowed.
-		/// </summary>
-		DateTime NextIngressSweepUtc { get; set; }
+		IngressGuard IngressGuard { get; }
 	}
 }

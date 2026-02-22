@@ -1,3 +1,4 @@
+using FishMMO.Server.Core;
 
 namespace FishMMO.Server.Implementation
 {

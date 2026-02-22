@@ -63,10 +63,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Register login server in database (Task.Run avoids deadlock from
-			// Unity's SynchronizationContext when blocking on async during init)
-			DatabaseResult<LoginServerData> dbResult = Task.Run(() =>
-				loginServerService.PersistAsync(name, server.Address, server.Port))
-				.GetAwaiter().GetResult();
+			// Unity's SynchronizationContext when blocking on async during init).
+			// Timeout prevents hanging indefinitely if the DB is unreachable.
+			const int dbRegistrationTimeoutMs = 30_000;
+			Task<DatabaseResult<LoginServerData>> registerTask = Task.Run(() =>
+				loginServerService.PersistAsync(name, server.Address, server.Port));
+
+			if (!registerTask.Wait(dbRegistrationTimeoutMs))
+			{
+				Log.Error("LoginServerSystem", $"Login server DB registration timed out after {dbRegistrationTimeoutMs}ms");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
+			}
+
+			DatabaseResult<LoginServerData> dbResult = registerTask.GetAwaiter().GetResult();
 
 			if (!dbResult.IsSuccess)
 			{
@@ -102,15 +111,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPulse);
 			}
+
+			// Deregister login server from database on shutdown
+			if (Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData) &&
+				runtimeData.ID > 0 &&
+				Server.Database?.ServiceRegistry != null &&
+				Server.Database.ServiceRegistry.TryGet<ILoginServerService>(out var loginServerService))
+			{
+				try
+				{
+					Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("LoginServerSystem", $"Failed to deregister login server from DB: {ex.Message}");
+				}
+			}
 		}
 
-		/// <summary>
-		/// Called by the server's LateUpdate. Periodically sends heartbeat pulses to the database to indicate server activity.
-		/// </summary>
-		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public override void OnLateUpdate(float deltaTime)
-		{
-		}
+
 
 		/// <summary>
 		/// Periodic callback that sends a heartbeat pulse to the database.
@@ -118,8 +137,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicPulse(float deltaTime)
 		{
-			if (Server.ServerState == ConnectionState.Started &&
-				Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
+			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
+			{
+				return;
+			}
+
+			if (Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
 			{
 				if (!TryEnqueueAsyncWork(() => PulseAsync(runtimeData.ID)))
 				{

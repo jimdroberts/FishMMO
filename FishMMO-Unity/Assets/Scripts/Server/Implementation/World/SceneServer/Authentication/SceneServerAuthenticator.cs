@@ -10,13 +10,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	{
 		/// <summary>
 		/// Executed when a player tries to login to the Scene Server.
-		/// Always returns SceneLoginSuccess for scene server authentication.
+		/// Returns SceneLoginSuccess only if the initial authentication succeeded.
 		/// </summary>
-		/// <param name="result">Initial authentication result.</param>
+		/// <param name="result">Initial authentication result from the base authenticator.</param>
 		/// <param name="username">Username of the player attempting login.</param>
-		/// <returns>SceneLoginSuccess result for successful authentication.</returns>
+		/// <returns>SceneLoginSuccess if the initial result indicates success; otherwise the original failure result.</returns>
 		internal override Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult result, string username)
 		{
+			if (result != ClientAuthenticationResult.LoginSuccess)
+			{
+				return Task.FromResult(result);
+			}
+
 			return Task.FromResult(ClientAuthenticationResult.SceneLoginSuccess);
 		}
 	}

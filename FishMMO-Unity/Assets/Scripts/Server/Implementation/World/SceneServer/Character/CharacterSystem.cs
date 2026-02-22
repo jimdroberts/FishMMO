@@ -41,12 +41,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Interval in seconds between periodic character saves.
 		/// </summary>
-		public float SaveRate = 30.0f;
+		[Tooltip("Interval in seconds between periodic character saves")]
+		[SerializeField] [Min(1f)] private float saveRate = 30.0f;
 
 		/// <summary>
 		/// Interval in seconds between out-of-bounds checks for characters.
 		/// </summary>
-		public float OutOfBoundsCheckRate = 2.5f;
+		[Tooltip("Interval in seconds between out-of-bounds checks")]
+		[SerializeField] [Min(0.1f)] private float outOfBoundsCheckRate = 2.5f;
 
 		/// <summary>
 		/// Triggered before a character is loaded from the database. <conn, CharacterID>
@@ -143,16 +145,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
 
 			// Periodic callbacks
+			saveRate = Mathf.Max(1f, saveRate);
+			outOfBoundsCheckRate = Mathf.Max(0.1f, outOfBoundsCheckRate);
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
-				periodicSystem.RegisterPeriodicCallback(SaveRate, OnPeriodicSave);
-				periodicSystem.RegisterPeriodicCallback(OutOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
+				periodicSystem.RegisterPeriodicCallback(saveRate, OnPeriodicSave);
+				periodicSystem.RegisterPeriodicCallback(outOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
-			runtimeData.SaveInFlight = 0;
+			runtimeData.EndSave();
 
-			Log.Debug("CharacterSystem", $"Initialized (SaveRate={SaveRate}s, OutOfBoundsCheckRate={OutOfBoundsCheckRate}s)");
+			Log.Debug("CharacterSystem", $"Initialized (SaveRate={saveRate}s, OutOfBoundsCheckRate={outOfBoundsCheckRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -262,7 +266,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicOutOfBoundsCheck(float deltaTime)
 		{
-			if (!Initialized || Server.ServerState != ConnectionState.Started)
+			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
 			{
 				return;
 			}
@@ -302,6 +306,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
 					if (!details.Boundaries.PointContainedInBoundaries(character.Transform.position))
 					{
+						if (details.RespawnPositions.Count < 1)
+						{
+							continue;
+						}
+
 						CharacterRespawnPositionDetails spawnPoint = details.RespawnPositions.Values.ToList().GetRandom();
 						if (spawnPoint == null ||
 							character == null ||
@@ -324,7 +333,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicSave(float deltaTime)
 		{
-			if (!Initialized)
+			if (!Initialized || Server == null)
 			{
 				return;
 			}
@@ -346,14 +355,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			lock (runtimeData)
+			if (!runtimeData.TryBeginSave())
 			{
-				if (runtimeData.SaveInFlight != 0)
-				{
-					return;
-				}
-
-				runtimeData.SaveInFlight = 1;
+				return;
 			}
 
 			// Snapshot character data on the main thread
@@ -368,10 +372,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList, sessionTokens)))
 			{
-				lock (runtimeData)
-				{
-					runtimeData.SaveInFlight = 0;
-				}
+				runtimeData.EndSave();
 				Log.Warning("CharacterSystem", "OnPeriodicSave: Failed to enqueue SaveAllCharactersAsync work item.");
 			}
 		}
@@ -503,7 +504,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (Server.Database?.ServiceRegistry == null ||
+			if (Server?.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -546,7 +547,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!serviceRegistry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
 				{
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -575,7 +576,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
 				if (!uowResult.IsSuccess)
 				{
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -592,7 +593,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(accountName, selected: true);
 					if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
 					{
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (conn != null && conn.IsActive)
 							{
@@ -614,7 +615,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (!claimResult.IsSuccess)
 					{
 						await Log.Error("CharacterSystem", $"TryClaimAsync failed for character {characterID}: {claimResult.ErrorCode} - {claimResult.ErrorMessage}");
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (conn != null && conn.IsActive)
 							{
@@ -698,7 +699,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Marshal back to main thread for Unity object instantiation
-				EnqueueMainThread(() => InstantiateAndLoadCharacter(
+				TryEnqueueMainThread(() => InstantiateAndLoadCharacter(
 					conn, charData, sessionToken, serverID,
 					inventoryData, bankData, equipmentData,
 					attributeData, abilityData, knownAbilityData,
@@ -723,7 +724,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)
 					{
@@ -1268,7 +1269,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (Server.Database?.ServiceRegistry == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
 			}
@@ -1290,7 +1291,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							Location = x.Location,
 						}).ToList();
 
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (owner != null && owner.IsActive)
 							{
@@ -1318,7 +1319,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							HealthPCT = x.HealthPCT,
 						}).ToList();
 
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (owner != null && owner.IsActive)
 							{
@@ -1349,7 +1350,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					if (friends.Count > 0)
 					{
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (owner != null && owner.IsActive)
 							{
@@ -1726,7 +1727,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						//Log.Debug("CharacterSystem", $"Pet: {pet.GameObject.name} Died");
 
 						IPlayerCharacter petOwner = pet.PetOwner as IPlayerCharacter;
-						OnPetKilled?.Invoke(petOwner.NetworkObject.Owner, petOwner);
+						if (petOwner != null)
+						{
+							OnPetKilled?.Invoke(petOwner.NetworkObject.Owner, petOwner);
+						}
 					}
 					else
 					{
@@ -1742,23 +1746,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Drains the main-thread queue each frame.
 		/// </summary>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
-			if (Server.DataContainerRegistry.TryGet<ICharacterSystemMainThreadQueueData>(out var queueData))
-			{
-				queueData.Drain(maxMainThreadActionsPerFrame);
-			}
+			MainThreadQueueHelper.Drain<ICharacterSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll: false);
 		}
 
 		/// <summary>
 		/// Enqueues an action to be executed on the main Unity thread.
 		/// </summary>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server.DataContainerRegistry.TryGet<ICharacterSystemMainThreadQueueData>(out var queueData))
-			{
-				queueData.Enqueue(action);
-			}
+			return MainThreadQueueHelper.TryEnqueue<ICharacterSystemMainThreadQueueData>(Server, action);
 		}
 
 		/// <summary>
@@ -1817,7 +1815,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server.Database?.ServiceRegistry == null ||
+				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
 					return;
@@ -1856,7 +1854,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server.Database?.ServiceRegistry == null ||
+				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
 					return;
@@ -1891,12 +1889,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			finally
 			{
-				if (Server.DataContainerRegistry.TryGet<ICharacterSystemRuntimeData>(out var runtimeData))
+				if (Server?.DataContainerRegistry.TryGet<ICharacterSystemRuntimeData>(out var runtimeData) == true)
 				{
-					lock (runtimeData)
-					{
-						runtimeData.SaveInFlight = 0;
-					}
+					runtimeData.EndSave();
 				}
 			}
 		}
@@ -1926,7 +1921,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server.Database?.ServiceRegistry == null ||
+				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
 					await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync: ICharacterService not available for character {characterID}.");

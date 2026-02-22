@@ -69,10 +69,25 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Called by the Server's LateUpdate to provide mutable data and perform per-frame logic.
-		/// Override this method in derived classes that need per-frame updates.
+		/// Performs a guard check to ensure the behaviour is initialized and the server reference is valid,
+		/// then delegates to <see cref="OnUpdate"/> for subclass-specific logic.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public virtual void OnLateUpdate(float deltaTime) { }
+		public void OnLateUpdate(float deltaTime)
+		{
+			if (!Initialized || Server == null)
+			{
+				return;
+			}
+			OnUpdate(deltaTime);
+		}
+
+		/// <summary>
+		/// Override this method in derived classes that need per-frame updates.
+		/// Guaranteed to run only when the behaviour is initialized and <see cref="Server"/> is non-null.
+		/// </summary>
+		/// <param name="deltaTime">Time elapsed since last frame.</param>
+		protected virtual void OnUpdate(float deltaTime) { }
 
 		/// <summary>
 		/// Deinitializes this behaviour, calling OnDeinitialize and clearing references.

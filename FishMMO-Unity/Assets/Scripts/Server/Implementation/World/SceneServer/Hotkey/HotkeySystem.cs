@@ -49,6 +49,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
+		/// Maximum ingress-tracker entries before rejecting requests.
+		/// </summary>
+
+		/// <summary>
 		/// Operation codes used by hotkey ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte
@@ -135,7 +139,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
 			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
-			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("HotkeySystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
@@ -158,43 +161,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.NextAllowedIngressUtcByKey.Clear();
-				runtimeData.IngressInFlightByKey.Clear();
-				runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
+				runtimeData.IngressGuard?.Clear();
 			}
 		}
 
 		/// <summary>
 		/// Drains stale ingress entries with bounded cleanup each frame.
 		/// </summary>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
-			if (!Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
 			{
-				return;
-			}
-
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < runtimeData.NextIngressSweepUtc)
-			{
-				return;
-			}
-
-			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
-			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
-			int removed = 0;
-			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
-			{
-				if (removed >= ingressSweepMaxRemovals)
-				{
-					break;
-				}
-
-				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
-				{
-					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
-					removed++;
-				}
+				runtimeData.IngressGuard.Sweep(ingressSweepIntervalSeconds, ingressEntryTtlSeconds, ingressSweepMaxRemovals);
 			}
 		}
 
@@ -208,17 +186,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guardKey = 0;
 				return false;
 			}
-
-			guardKey = ((long)connectionId << 8) | (byte)operation;
-			DateTime nowUtc = DateTime.UtcNow;
-
-			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
-			{
-				return false;
-			}
-
-			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
-			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+			return runtimeData.IngressGuard.TryBegin(connectionId, (byte)operation, ingressDebounceMilliseconds, out guardKey);
 		}
 
 		/// <summary>
@@ -228,7 +196,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+				runtimeData.IngressGuard.End(guardKey);
 			}
 		}
 

@@ -1,3 +1,4 @@
+using System;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.SceneServer;
@@ -24,6 +25,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <inheritdoc/>
 		public LastSeenCacheTracker<string, byte> CharacterMissingByNameCache { get; private set; }
+
+		/// <inheritdoc/>
+		public void SweepAllCaches(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove)
+		{
+			CharacterNameByIdCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
+			GuildNameByIdCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
+			CharacterIdByNameCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
+			CharacterNameByNameCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
+			CharacterMissingByNameCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
+		}
 
 		/// <summary>
 		/// Initializes all naming caches.

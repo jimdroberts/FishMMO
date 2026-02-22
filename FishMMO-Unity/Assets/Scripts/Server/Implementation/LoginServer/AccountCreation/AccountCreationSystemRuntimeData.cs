@@ -1,3 +1,4 @@
+using System.Threading;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.Account;
 using FishMMO.Server.Core.Collections;
@@ -8,6 +9,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// <summary>
 	/// Runtime statistics and worker tracking for account creation system.
 	/// Tracks performance metrics and worker lifecycle state.
+	/// Counter fields use Interlocked for thread-safe increments from async workers.
 	/// </summary>
 	public class AccountCreationSystemRuntimeData : RuntimeDataContainer, IAccountCreationSystemRuntimeData
 	{
@@ -17,20 +19,39 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <inheritdoc/>
 		public LastSeenCacheTracker<int, ConnectionEncryptionData> ConnectionEncryptionCache { get; private set; }
 
+		private long totalProcessed;
+		private long totalRejected;
+		private long totalFailed;
+
 		/// <summary>
 		/// Total number of successfully processed account creations.
 		/// </summary>
-		public long TotalProcessed { get; set; }
+		public long TotalProcessed => Interlocked.Read(ref totalProcessed);
 
 		/// <summary>
 		/// Total number of rejected account creation requests.
 		/// </summary>
-		public long TotalRejected { get; set; }
+		public long TotalRejected => Interlocked.Read(ref totalRejected);
 
 		/// <summary>
 		/// Total number of failed account creations (errors).
 		/// </summary>
-		public long TotalFailed { get; set; }
+		public long TotalFailed => Interlocked.Read(ref totalFailed);
+
+		/// <summary>
+		/// Atomically increments the processed counter.
+		/// </summary>
+		public void IncrementProcessed() => Interlocked.Increment(ref totalProcessed);
+
+		/// <summary>
+		/// Atomically increments the rejected counter.
+		/// </summary>
+		public void IncrementRejected() => Interlocked.Increment(ref totalRejected);
+
+		/// <summary>
+		/// Atomically increments the failed counter.
+		/// </summary>
+		public void IncrementFailed() => Interlocked.Increment(ref totalFailed);
 
 		/// <summary>
 		/// Timer accumulator for periodic mapping data cleanup.
@@ -44,9 +65,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			ConnectionIpCache = new LastSeenCacheTracker<int, string>();
 			ConnectionEncryptionCache = new LastSeenCacheTracker<int, ConnectionEncryptionData>();
-			TotalProcessed = 0;
-			TotalRejected = 0;
-			TotalFailed = 0;
+			Interlocked.Exchange(ref totalProcessed, 0);
+			Interlocked.Exchange(ref totalRejected, 0);
+			Interlocked.Exchange(ref totalFailed, 0);
 			CleanupTimer = 0f;
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -58,9 +79,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			ConnectionIpCache?.Clear();
 			ConnectionEncryptionCache?.Clear();
-			TotalProcessed = 0;
-			TotalRejected = 0;
-			TotalFailed = 0;
+			Interlocked.Exchange(ref totalProcessed, 0);
+			Interlocked.Exchange(ref totalRejected, 0);
+			Interlocked.Exchange(ref totalFailed, 0);
 			CleanupTimer = 0f;
 		}
 

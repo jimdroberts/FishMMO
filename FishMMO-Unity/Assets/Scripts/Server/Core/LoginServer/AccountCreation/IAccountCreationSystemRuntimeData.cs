@@ -12,17 +12,32 @@ namespace FishMMO.Server.Core.LoginServer
 		/// <summary>
 		/// Total number of successfully processed account creations since server start.
 		/// </summary>
-		long TotalProcessed { get; set; }
+		long TotalProcessed { get; }
 
 		/// <summary>
 		/// Total number of rejected account creation requests (rate limited, queue full, validation failed) since server start.
 		/// </summary>
-		long TotalRejected { get; set; }
+		long TotalRejected { get; }
 
 		/// <summary>
 		/// Total number of failed account creations due to errors (database errors, exceptions, etc.) since server start.
 		/// </summary>
-		long TotalFailed { get; set; }
+		long TotalFailed { get; }
+
+		/// <summary>
+		/// Atomically increments the processed counter.
+		/// </summary>
+		void IncrementProcessed();
+
+		/// <summary>
+		/// Atomically increments the rejected counter.
+		/// </summary>
+		void IncrementRejected();
+
+		/// <summary>
+		/// Atomically increments the failed counter.
+		/// </summary>
+		void IncrementFailed();
 
 		/// <summary>
 		/// Timer accumulator for periodic mapping data cleanup.

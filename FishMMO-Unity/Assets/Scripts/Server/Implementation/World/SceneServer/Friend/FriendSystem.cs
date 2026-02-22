@@ -61,6 +61,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
+		/// Maximum entries in the ingress tracker dictionaries before new requests are rejected.
+		/// </summary>
+
+		/// <summary>
 		/// Operation codes used for ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte
@@ -118,7 +122,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
 			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
-			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("FriendSystem", $"Initialized (MaxFriends={maxFriends})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -144,9 +147,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.NextAllowedIngressUtcByKey.Clear();
-				runtimeData.IngressInFlightByKey.Clear();
-				runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
+				runtimeData.IngressGuard?.Clear();
 			}
 		}
 
@@ -155,64 +156,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IFriendSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadActionsPerFrame);
-				}
-			}
+			MainThreadQueueHelper.Drain<IFriendSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Enqueues an action to be executed on the main thread.
 		/// </summary>
 		/// <param name="action">The action to enqueue.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IFriendSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				queueData.Enqueue(action);
-			}
+			return MainThreadQueueHelper.TryEnqueue<IFriendSystemMainThreadQueueData>(Server, action);
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue each frame.
 		/// </summary>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 
-			if (!Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
 			{
-				return;
-			}
-
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < runtimeData.NextIngressSweepUtc)
-			{
-				return;
-			}
-
-			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
-			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
-			int removed = 0;
-			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
-			{
-				if (removed >= ingressSweepMaxRemovals)
-				{
-					break;
-				}
-
-				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
-				{
-					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
-					removed++;
-				}
+				runtimeData.IngressGuard.Sweep(ingressSweepIntervalSeconds, ingressEntryTtlSeconds, ingressSweepMaxRemovals);
 			}
 		}
 
@@ -226,17 +191,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guardKey = 0;
 				return false;
 			}
-
-			guardKey = ((long)connectionId << 8) | (byte)operation;
-			DateTime nowUtc = DateTime.UtcNow;
-
-			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
-			{
-				return false;
-			}
-
-			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
-			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+			return runtimeData.IngressGuard.TryBegin(connectionId, (byte)operation, ingressDebounceMilliseconds, out guardKey);
 		}
 
 		/// <summary>
@@ -244,9 +199,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void EndIngressGuard(long guardKey)
 		{
-			if (Server.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData))
+			if (Server?.DataContainerRegistry.TryGet<IFriendSystemRuntimeData>(out var runtimeData) == true)
 			{
-				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+				runtimeData.IngressGuard.End(guardKey);
 			}
 		}
 
@@ -322,7 +277,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
 					return;
 				}
@@ -349,7 +305,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Marshal in-memory update + Broadcast to main thread
 				bool friendOnline = friendData.Online;
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					// Re-validate the connection is still valid
 					if (conn == null || !conn.IsActive || conn.FirstObject == null)
@@ -449,7 +405,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server.Database?.ServiceRegistry == null)
+				if (Server?.Database?.ServiceRegistry == null)
 				{
 					return;
 				}
@@ -464,7 +420,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive || conn.FirstObject == null)
 					{

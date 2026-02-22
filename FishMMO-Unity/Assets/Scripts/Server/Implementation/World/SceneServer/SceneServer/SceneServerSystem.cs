@@ -188,7 +188,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			pendingSceneTimeoutSeconds = Mathf.Max(5.0f, pendingSceneTimeoutSeconds);
 			pendingSceneSweepIntervalSeconds = Mathf.Max(0.25f, pendingSceneSweepIntervalSeconds);
 			pendingSceneSweepMaxRemovals = Mathf.Max(1, pendingSceneSweepMaxRemovals);
-			runtimeData.PulseInFlight = 0;
+			runtimeData.EndPulse();
 			runtimeData.NextPendingSceneSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("SceneServerSystem", $"Initialized (ServerID={id}, Address={server.Address}:{server.Port}, CharacterCount={characterCount})");
@@ -237,13 +237,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Scene manager events
-			Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
-			Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
+			var sceneManager = Server.NetworkWrapper?.NetworkManager?.SceneManager;
+			if (sceneManager != null)
+			{
+				sceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
+				sceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
+			}
 
 			if (Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeState))
 			{
 				runtimeState.PendingSceneEnqueueUtcBySceneId.Clear();
-				runtimeState.PulseInFlight = 0;
+				runtimeState.EndPulse();
 			}
 		}
 
@@ -252,35 +256,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<ISceneServerSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadActionsPerFrame);
-				}
-			}
+			MainThreadQueueHelper.Drain<ISceneServerSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Enqueues an action to be executed on the main thread.
 		/// </summary>
 		/// <param name="action">The action to enqueue.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<ISceneServerSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				queueData.Enqueue(action);
-			}
+			return MainThreadQueueHelper.TryEnqueue<ISceneServerSystemMainThreadQueueData>(Server, action);
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue each frame.
 		/// </summary>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 		}
@@ -354,80 +345,77 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicPulse(float deltaTime)
 		{
-			if (Server.ServerState == ConnectionState.Started)
+			if (!Initialized ||
+				Server == null ||
+				Server.ServerState != ConnectionState.Started ||
+				Server.BehaviourRegistry == null)
 			{
-				if (Server != null &&
-					Server.BehaviourRegistry != null &&
-				Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) &&
-				Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) &&
-				Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
+				!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ||
+				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+			{
+				return;
+			}
+
+			SweepExpiredPendingScenes(mappingData);
+
+			int characterCount = characterMappingData.ConnectionCharacters.Count;
+
+			// Collect scene pulse data on the main thread before async work
+			List<(int Handle, int CharacterCount, bool StalePulse, double TimeSinceLastExit)> scenePulseData =
+				new List<(int, int, bool, double)>();
+			List<int> scenesToUnload = new List<int>();
+
+			if (mappingData.WorldScenes != null)
+			{
+				foreach (var sceneGroup in mappingData.WorldScenes.Values)
 				{
-					SweepExpiredPendingScenes(mappingData);
-
-					int characterCount = characterMappingData.ConnectionCharacters.Count;
-
-					// Collect scene pulse data on the main thread before async work
-					List<(int Handle, int CharacterCount, bool StalePulse, double TimeSinceLastExit)> scenePulseData =
-						new List<(int, int, bool, double)>();
-					List<int> scenesToUnload = new List<int>();
-
-					if (mappingData.WorldScenes != null)
+					foreach (var scenes in new List<IReadOnlyDictionary<int, ISceneInstanceDetails>>(sceneGroup.Values))
 					{
-						foreach (var sceneGroup in mappingData.WorldScenes.Values)
+						foreach (ISceneInstanceDetails sceneDetails in new List<ISceneInstanceDetails>(scenes.Values))
 						{
-							foreach (var scenes in new List<IReadOnlyDictionary<int, ISceneInstanceDetails>>(sceneGroup.Values))
+							if (sceneDetails.StalePulse)
 							{
-								foreach (ISceneInstanceDetails sceneDetails in new List<ISceneInstanceDetails>(scenes.Values))
+								double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
+								if (Server.Configuration.TryGetInt("StaleSceneTimeout", out int result) &&
+									timeSinceLastExit < result)
 								{
-									if (sceneDetails.StalePulse)
-									{
-										double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
-										if (Server.Configuration.TryGetInt("StaleSceneTimeout", out int result) &&
-											timeSinceLastExit < result)
-										{
-											Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
-											scenePulseData.Add((sceneDetails.Handle, sceneDetails.CharacterCount, true, timeSinceLastExit));
-										}
-										else
-										{
-											// Mark for unload on main thread
-											scenesToUnload.Add(sceneDetails.Handle);
-										}
-									}
-									else
-									{
-										scenePulseData.Add((sceneDetails.Handle, sceneDetails.CharacterCount, false, 0));
-									}
+									Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
+									scenePulseData.Add((sceneDetails.Handle, sceneDetails.CharacterCount, true, timeSinceLastExit));
 								}
+								else
+								{
+									// Mark for unload on main thread
+									scenesToUnload.Add(sceneDetails.Handle);
+								}
+							}
+							else
+							{
+								scenePulseData.Add((sceneDetails.Handle, sceneDetails.CharacterCount, false, 0));
 							}
 						}
 					}
-
-					// Unload stale scenes immediately on main thread
-					foreach (int handle in scenesToUnload)
-					{
-						UnloadScene(handle);
-					}
-
-					// Fire-and-forget async DB operations
-					lock (runtimeData)
-					{
-						if (runtimeData.PulseInFlight != 0)
-						{
-							return;
-						}
-
-						runtimeData.PulseInFlight = 1;
-					}
-
-					if (!TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, runtimeData.IsLocked, scenePulseData), runtimeData.ID))
-					{
-						lock (runtimeData)
-						{
-							runtimeData.PulseInFlight = 0;
-						}
-					}
 				}
+			}
+
+			// Unload stale scenes immediately on main thread
+			foreach (int handle in scenesToUnload)
+			{
+				UnloadScene(handle);
+			}
+
+			// Fire-and-forget async DB operations
+			if (!runtimeData.TryBeginPulse())
+			{
+				return;
+			}
+
+			if (!TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, runtimeData.IsLocked, scenePulseData), runtimeData.ID))
+			{
+				runtimeData.EndPulse();
 			}
 		}
 
@@ -491,7 +479,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Asynchronously sends heartbeat pulses to the database and processes pending scene requests.
-		/// Scene pulse data and dequeued scene requests are processed on the main thread via EnqueueMainThread.
+		/// Scene pulse data and dequeued scene requests are processed on the main thread via TryEnqueueMainThread.
 		/// </summary>
 		/// <param name="serverID">Scene server identifier.</param>
 		/// <param name="characterCount">Current connected character count.</param>
@@ -528,7 +516,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (dequeueResult.IsSuccess)
 				{
 					SceneData pending = dequeueResult.Data;
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						Log.Debug("SceneServerSystem", $"Scene Server System: Dequeued Pending Scene Load request World:{pending.WorldServerID} Scene:{pending.SceneName}");
 						ProcessSceneLoadRequest(pending);
@@ -544,10 +532,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (Server != null &&
 					Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
 				{
-					lock (runtimeData)
-					{
-						runtimeData.PulseInFlight = 0;
-					}
+					runtimeData.EndPulse();
 				}
 			}
 		}
@@ -621,8 +606,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			if (!(args.QueueData.SceneLoadData.Params.ServerParams[0] is long sceneDataKey))
+			{
+				Log.Warning("SceneServerSystem", $"ServerParams[0] is not a long (actual type: {args.QueueData.SceneLoadData.Params.ServerParams[0]?.GetType()}).");
+				return;
+			}
+
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
-				!mappingData.PendingScenes.TryGetValue((long)args.QueueData.SceneLoadData.Params.ServerParams[0], out SceneData sceneData))
+				!mappingData.PendingScenes.TryGetValue(sceneDataKey, out SceneData sceneData))
 			{
 				Log.Warning("SceneServerSystem", "Pending Scene does not exist!");
 				return;

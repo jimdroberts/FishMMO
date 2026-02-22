@@ -35,6 +35,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
 
 		/// <summary>
+		/// Minimum interval in milliseconds between successive character-select requests from the same connection.
+		/// </summary>
+		private const int RequestCooldownMilliseconds = 2000;
+
+		/// <summary>
 		/// If true, keeps deleted character data in the database for recovery or auditing.
 		/// </summary>
 		public bool KeepDeleteData = true;
@@ -144,6 +149,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (Server.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
+					await Log.Warning("CharacterSelectSystem", "CharacterService unavailable for character list request.");
 					return;
 				}
 
@@ -151,6 +157,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (!dbResult.IsSuccess || dbResult.Data == null)
 				{
+					await Log.Warning("CharacterSelectSystem", $"Failed to fetch character list for account '{accountName}': {dbResult.ErrorMessage}");
 					return;
 				}
 
@@ -167,7 +174,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 
 				// Marshal response back to main thread - FishNet Broadcast is not thread-safe
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)
 					{
@@ -245,6 +252,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					!registry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService) ||
 					!registry.TryGet<ICharacterPetService>(out var petService))
 				{
+					await Log.Warning("CharacterSelectSystem", "One or more DB services unavailable for character delete.");
 					return;
 				}
 
@@ -263,6 +271,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchAsync(characterName);
 					if (!fetchResult.IsSuccess || fetchResult.Data == null)
 					{
+						await Log.Warning("CharacterSelectSystem", $"Failed to fetch character '{characterName}' for deletion: {fetchResult.ErrorMessage}");
 						return;
 					}
 
@@ -271,6 +280,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					// Verify ownership
 					if (!string.Equals(character.Account, accountName, StringComparison.OrdinalIgnoreCase))
 					{
+						await Log.Warning("CharacterSelectSystem", $"Account '{accountName}' attempted to delete character '{characterName}' owned by '{character.Account}'.");
 						return;
 					}
 
@@ -286,18 +296,33 @@ namespace FishMMO.Server.Implementation.LoginServer
 						// Delete all sub-entity data before deleting the character row.
 						// CharacterService.DeleteAsync already hard-deletes guild and party memberships,
 						// so those are excluded here.
-						await abilityService.DeleteAsync(characterId, deleteVersion);
-						await achievementService.DeleteAsync(characterId, deleteVersion);
-						await attributeService.DeleteAsync(characterId, deleteVersion);
-						await bankService.DeleteAsync(characterId, deleteVersion);
-						await buffService.DeleteAsync(characterId, deleteVersion);
-						await equipmentService.DeleteAsync(characterId, deleteVersion);
-						await factionService.DeleteAsync(characterId, deleteVersion);
-						await friendService.DeleteAsync(characterId, deleteVersion);
-						await hotkeyService.DeleteAsync(characterId, deleteVersion);
-						await inventoryService.DeleteAsync(characterId, deleteVersion);
-						await knownAbilityService.DeleteAsync(characterId, deleteVersion);
-						await petService.DeleteAsync(characterId, deleteVersion);
+						// Log but do not abort on sub-entity delete failures — the character row
+						// soft-delete is the critical operation; orphaned sub-entity rows are harmless.
+						DatabaseResult r;
+						r = await abilityService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete abilities for character {characterId}: {r.ErrorMessage}");
+						r = await achievementService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete achievements for character {characterId}: {r.ErrorMessage}");
+						r = await attributeService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete attributes for character {characterId}: {r.ErrorMessage}");
+						r = await bankService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete bank for character {characterId}: {r.ErrorMessage}");
+						r = await buffService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete buffs for character {characterId}: {r.ErrorMessage}");
+						r = await equipmentService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete equipment for character {characterId}: {r.ErrorMessage}");
+						r = await factionService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete factions for character {characterId}: {r.ErrorMessage}");
+						r = await friendService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete friends for character {characterId}: {r.ErrorMessage}");
+						r = await hotkeyService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete hotkeys for character {characterId}: {r.ErrorMessage}");
+						r = await inventoryService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete inventory for character {characterId}: {r.ErrorMessage}");
+						r = await knownAbilityService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete known abilities for character {characterId}: {r.ErrorMessage}");
+						r = await petService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete pets for character {characterId}: {r.ErrorMessage}");
 					}
 
 					// Soft-delete the character row (also hard-deletes guild/party memberships)
@@ -318,7 +343,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 
 				// Marshal response back to main thread - FishNet Broadcast is not thread-safe
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)
 					{
@@ -403,7 +428,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchAsync(characterName);
 					if (!fetchResult.IsSuccess || fetchResult.Data == null)
 					{
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (conn != null && conn.IsActive)
 							{
@@ -416,7 +441,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					CharacterData character = fetchResult.Data.Value;
 					if (!string.Equals(character.Account, accountName, StringComparison.OrdinalIgnoreCase))
 					{
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (conn != null && conn.IsActive)
 							{
@@ -472,7 +497,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 
 					// Marshal response back to main thread - FishNet Broadcast is not thread-safe
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -500,7 +525,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// to ensure they execute on the main Unity thread.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 		}
@@ -528,12 +553,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// via the RuntimeDataContainer.
 		/// </summary>
 		/// <param name="action">The action to execute on the main thread.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
 			if (Server?.DataContainerRegistry.TryGet<ICharacterSelectSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Enqueue(action);
+				return queueData.TryEnqueue(action);
 			}
+			return false;
 		}
 
 		/// <summary>
@@ -557,7 +583,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Attempts to acquire a per-connection in-flight request slot.
+		/// Attempts to acquire a per-connection in-flight request slot and enforces a cooldown between requests.
 		/// </summary>
 		/// <param name="conn">Requesting connection.</param>
 		/// <returns><c>true</c> if the slot was acquired; otherwise <c>false</c>.</returns>
@@ -568,12 +594,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return false;
 			}
 
-			return Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData) &&
-				runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
+			if (!Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
+			{
+				return false;
+			}
+
+			// Enforce per-connection cooldown
+			DateTime nowUtc = DateTime.UtcNow;
+			if (runtimeData.NextAllowedRequestUtc.TryGetValue(conn.ClientId, out DateTime nextAllowed) &&
+				nowUtc < nextAllowed)
+			{
+				return false;
+			}
+
+			return runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
 		}
 
 		/// <summary>
-		/// Releases the per-connection in-flight request slot.
+		/// Releases the per-connection in-flight request slot and records the cooldown timestamp.
 		/// </summary>
 		/// <param name="conn">Connection to release.</param>
 		private void EndInFlightRequest(NetworkConnection conn)
@@ -582,6 +620,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedRequestUtc[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(RequestCooldownMilliseconds);
 			}
 		}
 
@@ -595,6 +634,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedRequestUtc.TryRemove(conn.ClientId, out _);
 			}
 		}
 	}

@@ -2,7 +2,6 @@
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -106,6 +105,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
+
+		/// <summary>
+		/// Maximum ingress-tracker entries before rejecting requests.
+		/// </summary>
 
 		/// <summary>
 		/// Operation keys used by guild ingress guards.
@@ -228,9 +231,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
 			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
-			runtimeData.UpdatePumpInFlight = 0;
+			runtimeData.EndUpdatePump();
 			runtimeData.NextInvitationSweepUtc = DateTime.UtcNow;
-			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("GuildSystem", $"Initialized (MaxGuildSize={MaxGuildSize}, UpdatePumpRate={UpdatePumpRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
@@ -278,35 +280,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IGuildSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadActionsPerFrame);
-				}
-			}
+			MainThreadQueueHelper.Drain<IGuildSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Enqueues an action to be executed on the main thread.
 		/// </summary>
 		/// <param name="action">The action to enqueue.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IGuildSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				queueData.Enqueue(action);
-			}
+			return MainThreadQueueHelper.TryEnqueue<IGuildSystemMainThreadQueueData>(Server, action);
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue each frame.
 		/// </summary>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 			SweepPendingInvitations();
@@ -323,17 +312,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guardKey = 0;
 				return false;
 			}
-
-			guardKey = ((long)connectionId << 8) | (byte)operation;
-			DateTime nowUtc = DateTime.UtcNow;
-
-			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
-			{
-				return false;
-			}
-
-			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
-			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+			return runtimeData.IngressGuard.TryBegin(connectionId, (byte)operation, ingressDebounceMilliseconds, out guardKey);
 		}
 
 		/// <summary>
@@ -341,9 +320,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void EndIngressGuard(long guardKey)
 		{
-			if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+			if (Server?.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData) == true)
 			{
-				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+				runtimeData.IngressGuard.End(guardKey);
 			}
 		}
 
@@ -352,32 +331,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void SweepIngressGuards()
 		{
-			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+			if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
-				return;
-			}
-
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < runtimeData.NextIngressSweepUtc)
-			{
-				return;
-			}
-
-			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
-			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
-			int removed = 0;
-			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
-			{
-				if (removed >= ingressSweepMaxRemovals)
-				{
-					break;
-				}
-
-				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
-				{
-					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
-					removed++;
-				}
+				runtimeData.IngressGuard.Sweep(ingressSweepIntervalSeconds, ingressEntryTtlSeconds, ingressSweepMaxRemovals);
 			}
 		}
 
@@ -412,30 +368,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicUpdate(float deltaTime)
 		{
-			if (Initialized && Server.ServerState == ConnectionState.Started)
+			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
 			{
-				if (!Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
-				{
-					return;
-				}
+				return;
+			}
 
-				lock (runtimeData)
-				{
-					if (runtimeData.UpdatePumpInFlight != 0)
-					{
-						return;
-					}
+			if (!Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
 
-					runtimeData.UpdatePumpInFlight = 1;
-				}
+			if (!runtimeData.TryBeginUpdatePump())
+			{
+				return;
+			}
 
-				if (!TryEnqueueAsyncWork(() => FetchAndProcessGuildUpdatesAsync()))
-				{
-					lock (runtimeData)
-					{
-						runtimeData.UpdatePumpInFlight = 0;
-					}
-				}
+			// Snapshot main-thread-only Dictionary keys before going async (C4 fix).
+			if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
+				mappingData.GuildCharacterTracker.Count == 0)
+			{
+				runtimeData.EndUpdatePump();
+				return;
+			}
+
+			List<long> guildIds = new List<long>(mappingData.GuildCharacterTracker.Keys);
+			DateTime lastFetch = runtimeData.LastFetchTime;
+
+			if (!TryEnqueueAsyncWork(() => FetchAndProcessGuildUpdatesAsync(guildIds, lastFetch)))
+			{
+				runtimeData.EndUpdatePump();
 			}
 		}
 
@@ -443,7 +404,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously fetches guild updates from the database and marshals the processing back to the main thread.
 		/// </summary>
 		/// <returns>Asynchronous fetch-and-process task.</returns>
-		private async Task FetchAndProcessGuildUpdatesAsync()
+		private async Task FetchAndProcessGuildUpdatesAsync(List<long> guildIds, DateTime lastFetch)
 		{
 			try
 			{
@@ -460,24 +421,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Capture data from main-thread containers
-				List<long> guildIds = null;
-				DateTime lastFetch = DateTime.UtcNow;
-				// This method is queued from the periodic callback path, so we can capture
-				// tracker state synchronously before the first await.
-				if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData))
-				{
-					return;
-				}
-				if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
-				{
-					return;
-				}
-
-				guildIds = mappingData.GuildCharacterTracker.Keys.ToList();
-				lastFetch = runtimeData.LastFetchTime;
-
-				if (guildIds == null || guildIds.Count == 0)
+				if (guildIds.Count == 0)
 				{
 					return;
 				}
@@ -512,7 +456,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Marshal all main-thread state changes + broadcasts
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (Server == null)
 					{
@@ -535,13 +479,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						long guildID = kvp.Key;
 						IReadOnlyList<CharacterGuildData> dbMembers = kvp.Value;
 
-						var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
+						var currentMemberIDs = new HashSet<long>(dbMembers.Count);
+						for (int i = 0; i < dbMembers.Count; i++)
+						{
+							currentMemberIDs.Add(dbMembers[i].CharacterID);
+						}
 
 						// Check if we have previously cached the guild member list
 						if (mapData.GuildMemberTracker.TryGetValue(guildID, out var previousMembers))
 						{
 							// Compute the difference: members that are in previousMembers but not in currentMemberIDs
-							List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
+							var difference = new List<long>();
+							foreach (long prevID in previousMembers)
+							{
+								if (!currentMemberIDs.Contains(prevID))
+								{
+									difference.Add(prevID);
+								}
+							}
 
 							foreach (long memberID in difference)
 							{
@@ -559,13 +514,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// Cache the guild member IDs
 						mapData.GuildMemberTracker[guildID] = currentMemberIDs;
 
-						var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
+						var addBroadcasts = new List<GuildAddBroadcast>(dbMembers.Count);
+						for (int i = 0; i < dbMembers.Count; i++)
 						{
-							GuildID = x.GuildID,
-							CharacterID = x.CharacterID,
-							Rank = (GuildRank)x.Rank,
-							Location = x.Location,
-						}).ToList();
+							var x = dbMembers[i];
+							addBroadcasts.Add(new GuildAddBroadcast()
+							{
+								GuildID = x.GuildID,
+								CharacterID = x.CharacterID,
+								Rank = (GuildRank)x.Rank,
+								Location = x.Location,
+							});
+						}
 
 						GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
 						{
@@ -599,12 +559,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			finally
 			{
-				if (Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
+				if (Server?.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData) == true)
 				{
-					lock (runtimeData)
-					{
-						runtimeData.UpdatePumpInFlight = 0;
-					}
+					runtimeData.EndUpdatePump();
 				}
 			}
 		}
@@ -860,7 +817,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
 				{
 					return;
 				}
@@ -877,7 +835,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				if (existsResult.Data)
 				{
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn == null || !conn.IsActive) return;
 						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
@@ -902,7 +860,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await charGuildService.PersistAsync(memberData, maxGuildSize);
 
 				// Marshal in-memory state changes + Broadcast back to main thread
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive || conn.FirstObject == null) return;
 
@@ -996,7 +954,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
 				{
 					return;
 				}
@@ -1009,7 +968,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Marshal invite logic back to main thread
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 					{
@@ -1125,7 +1084,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
 				{
 					return;
 				}
@@ -1153,7 +1113,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await guildUpdateService.PersistAsync(guildID);
 
 				// Marshal state changes + Broadcast back to main thread
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive || conn.FirstObject == null) return;
 
@@ -1286,7 +1246,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
 				{
 					return;
 				}
@@ -1308,6 +1269,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				IReadOnlyList<CharacterGuildData> members = membersResult.Data;
 				int remainingCount = members.Count - 1;
+
+				// Find the leaving member's version for optimistic concurrency on delete
+				long leavingMemberVersion = 1;
+				foreach (CharacterGuildData member in members)
+				{
+					if (member.CharacterID == characterID)
+					{
+						leavingMemberVersion = member.Version + 1;
+						break;
+					}
+				}
 
 				// Handle leadership transfer if the leaving member is the leader
 				if (rank == GuildRank.Leader && remainingCount > 0)
@@ -1349,7 +1321,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Remove the guild member
-				await charGuildService.DeleteAsync(characterID, long.MaxValue);
+				await charGuildService.DeleteAsync(characterID, leavingMemberVersion);
 
 				if (remainingCount < 1)
 				{
@@ -1363,7 +1335,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await guildUpdateService.PersistAsync(guildID);
 				}
 
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive || conn.FirstObject == null)
 					{
@@ -1466,7 +1438,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
 				{
 					return;
 				}
@@ -1497,7 +1470,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Delete the member
-				DatabaseResult deleteResult = await charGuildService.DeleteAsync(memberID, long.MaxValue);
+				DatabaseResult deleteResult = await charGuildService.DeleteAsync(memberID, targetMember.Version + 1);
 				if (!deleteResult.IsSuccess)
 				{
 					return;
@@ -1507,7 +1480,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await guildUpdateService.PersistAsync(guildID);
 
 				// Marshal tracker cleanup to main thread
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					RemoveGuildCharacterTracker(guildID, memberID);
 				});
@@ -1571,6 +1544,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long memberID = msg.GuildMemberID;
 				GuildRank newRank = msg.Rank;
 
+				// Validate rank is within assignable range — only Member or Officer are valid targets.
+				// Leader promotion is handled separately via leadership transfer.
+				if (newRank < GuildRank.Member || newRank >= GuildRank.Leader)
+				{
+					return;
+				}
+
 				deferGuardRelease = TryEnqueueIngressWork(() => ChangeGuildRankAsync(guildID, memberID, newRank), guardKey, guildID);
 			}
 			finally
@@ -1593,7 +1573,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
 				{
 					return;
 				}
@@ -1602,7 +1583,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult rankResult = await charGuildService.UpdateRankAsync(memberID, guildID, (byte)newRank, long.MaxValue);
+				// Fetch the member's current version for optimistic concurrency
+				DatabaseResult<CharacterGuildData?> memberResult = await charGuildService.FetchAsync(memberID);
+				if (!memberResult.IsSuccess || !memberResult.Data.HasValue)
+				{
+					return;
+				}
+
+				DatabaseResult rankResult = await charGuildService.UpdateRankAsync(memberID, guildID, (byte)newRank, memberResult.Data.Value.Version + 1);
 				if (rankResult.IsSuccess)
 				{
 					// Tell the other servers to update their guild lists

@@ -20,9 +20,15 @@ namespace FishMMO.Server.Core.World.SceneServer
 		bool IsLocked { get; set; }
 
 		/// <summary>
-		/// Atomic in-flight gate for periodic pulse work.
+		/// Atomically transitions the pulse gate from idle to in-flight.
+		/// Returns true if this call won the race; false if a pulse is already in flight.
 		/// </summary>
-		int PulseInFlight { get; set; }
+		bool TryBeginPulse();
+
+		/// <summary>
+		/// Atomically transitions the pulse gate from in-flight back to idle.
+		/// </summary>
+		void EndPulse();
 
 		/// <summary>
 		/// Tracks UTC enqueue timestamps for pending scene load requests.

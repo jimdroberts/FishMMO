@@ -1,3 +1,4 @@
+using System;
 using FishMMO.Server.Core.Collections;
 
 namespace FishMMO.Server.Core.World.SceneServer
@@ -32,5 +33,10 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Negative reverse-lookup cache keyed by lowercase character name.
 		/// </summary>
 		LastSeenCacheTracker<string, byte> CharacterMissingByNameCache { get; }
+
+		/// <summary>
+		/// Sweeps all five caches with identical TTL and scan parameters.
+		/// </summary>
+		void SweepAllCaches(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
 	}
 }

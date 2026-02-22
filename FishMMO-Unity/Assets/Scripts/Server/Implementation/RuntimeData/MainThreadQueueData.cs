@@ -45,12 +45,22 @@ namespace FishMMO.Server.Implementation
 			Drain();
 		}
 
+		/// <summary>
+		/// Defense-in-depth: maximum pending actions before new enqueues are rejected.
+		/// </summary>
+		private const int MaxQueueCapacity = 10000;
+
 		/// <inheritdoc/>
-		public void Enqueue(Action action)
+		public bool TryEnqueue(Action action)
 		{
 			lock (_lock)
 			{
+				if (_queue.Count >= MaxQueueCapacity)
+				{
+					return false;
+				}
 				_queue.Enqueue(action);
+				return true;
 			}
 		}
 

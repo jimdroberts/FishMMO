@@ -59,7 +59,7 @@ namespace FishMMO.Shared
 		{
 			for (int i = 0; i < list.Count; ++i)
 			{
-				int j = GetNext(0, list.Count - 1);
+				int j = GetNext(0, list.Count);
 				T element = list[j];
 				list[j] = list[i];
 				list[i] = element;
@@ -78,7 +78,7 @@ namespace FishMMO.Shared
 			{
 				return default;
 			}
-			return list[GetNext(0, list.Count - 1)];
+			return list[GetNext(0, list.Count)];
 		}
 	}
 }

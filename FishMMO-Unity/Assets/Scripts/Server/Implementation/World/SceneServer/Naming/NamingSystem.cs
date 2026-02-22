@@ -28,6 +28,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	public class NamingSystem : ServerBehaviour, INamingSystem<NetworkConnection>
 	{
 		/// <summary>
+		/// Maximum concurrent in-flight naming lookups per dictionary before new requests are dropped.
+		/// </summary>
+		private const int MaxInFlightLookups = 5000;
+
+		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
 		/// This time-slices queue draining to avoid frame spikes.
 		/// </summary>
@@ -138,35 +143,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<INamingSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadActionsPerFrame);
-				}
-			}
+			MainThreadQueueHelper.Drain<INamingSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Enqueues an action to be executed on the main thread.
 		/// </summary>
 		/// <param name="action">The action to enqueue.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<INamingSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				queueData.Enqueue(action);
-			}
+			return MainThreadQueueHelper.TryEnqueue<INamingSystemMainThreadQueueData>(Server, action);
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue each frame.
 		/// </summary>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 			SweepCaches();
@@ -225,12 +217,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (Server.DataContainerRegistry.TryGet<INamingSystemMappingData>(out var mappingData))
 			{
-				TimeSpan ttl = TimeSpan.FromSeconds(cacheTtlSeconds);
-				mappingData.CharacterNameByIdCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
-				mappingData.GuildNameByIdCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
-				mappingData.CharacterIdByNameCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
-				mappingData.CharacterNameByNameCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
-				mappingData.CharacterMissingByNameCache.SweepExpired(nowUtc, ttl, cacheSweepMaxScan, cacheSweepMaxRemove);
+				mappingData.SweepAllCaches(nowUtc, TimeSpan.FromSeconds(cacheTtlSeconds), cacheSweepMaxScan, cacheSweepMaxRemove);
 			}
 		}
 
@@ -276,7 +263,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// then check the database asynchronously
 					else if (Server.Database?.ServiceRegistry != null)
 					{
-						if (runtimeData.CharacterNameByIdInFlight.TryAdd(msg.ID, 0) &&
+						if (runtimeData.CharacterNameByIdInFlight.Count < MaxInFlightLookups &&
+							runtimeData.CharacterNameByIdInFlight.TryAdd(msg.ID, 0) &&
 							!TryEnqueueAsyncWork(() => FetchCharacterNameAsync(conn, msg.ID), msg.ID))
 						{
 							runtimeData.CharacterNameByIdInFlight.TryRemove(msg.ID, out _);
@@ -293,7 +281,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// get the name from the database asynchronously
 					if (Server.Database?.ServiceRegistry != null)
 					{
-						if (runtimeData.GuildNameByIdInFlight.TryAdd(msg.ID, 0) &&
+						if (runtimeData.GuildNameByIdInFlight.Count < MaxInFlightLookups &&
+							runtimeData.GuildNameByIdInFlight.TryAdd(msg.ID, 0) &&
 							!TryEnqueueAsyncWork(() => FetchGuildNameAsync(conn, msg.ID), msg.ID))
 						{
 							runtimeData.GuildNameByIdInFlight.TryRemove(msg.ID, out _);
@@ -315,7 +304,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
 					return;
 				}
@@ -337,7 +327,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					mappingData.CharacterNameByIdCache.Upsert(characterID, name, DateTime.UtcNow);
 				}
 
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive) return;
 					SendNamingBroadcast(conn, NamingSystemType.CharacterName, characterID, name);
@@ -349,7 +339,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			finally
 			{
-				if (Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+				if (Server?.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData) == true)
 				{
 					runtimeData.CharacterNameByIdInFlight.TryRemove(characterID, out _);
 				}
@@ -366,7 +356,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
 				{
 					return;
 				}
@@ -383,7 +374,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					mappingData.GuildNameByIdCache.Upsert(guildID, name, DateTime.UtcNow);
 				}
 
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive) return;
 					SendNamingBroadcast(conn, NamingSystemType.GuildName, guildID, name);
@@ -395,7 +386,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			finally
 			{
-				if (Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+				if (Server?.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData) == true)
 				{
 					runtimeData.GuildNameByIdInFlight.TryRemove(guildID, out _);
 				}
@@ -492,7 +483,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// then check the database asynchronously
 					if (Server.Database?.ServiceRegistry != null)
 					{
-						if (runtimeData.CharacterByNameInFlight.TryAdd(nameLowerCase, 0) &&
+						if (runtimeData.CharacterByNameInFlight.Count < MaxInFlightLookups &&
+							runtimeData.CharacterByNameInFlight.TryAdd(nameLowerCase, 0) &&
 							!TryEnqueueAsyncWork(() => FetchCharacterByNameAsync(conn, nameLowerCase)))
 						{
 							runtimeData.CharacterByNameInFlight.TryRemove(nameLowerCase, out _);
@@ -523,9 +515,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn == null || !conn.IsActive) return;
 						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, "");
@@ -547,7 +540,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						mappingData.CharacterMissingByNameCache.Remove(nameLowerCase);
 					}
 
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn == null || !conn.IsActive) return;
 						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, id, name);
@@ -561,7 +554,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// let the client know it wasn't found
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn == null || !conn.IsActive) return;
 						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, 0, string.Empty);
@@ -574,7 +567,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			finally
 			{
-				if (Server.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData))
+				if (Server?.DataContainerRegistry.TryGet<INamingSystemRuntimeData>(out var runtimeData) == true)
 				{
 					runtimeData.CharacterByNameInFlight.TryRemove(nameLowerCase, out _);
 				}

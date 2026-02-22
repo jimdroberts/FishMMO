@@ -67,15 +67,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private const int MAX_CLIENTS_PER_INSTANCE = 500;
 
 		/// <summary>
-		/// Maximum total connections allowed across all waiting queues.
+		/// Maximum connections allowed per waiting queue type (open-world or instance).
 		/// Defense-in-depth cap to prevent unbounded memory growth.
+		/// Effective global limit is 2 × this value (one cap per queue type).
 		/// </summary>
-		private const int MAX_WAITING_QUEUE_SIZE = 5000;
+		private const int MAX_WAITING_QUEUE_SIZE = 2500;
 
 		/// <summary>
 		/// Cache of world scene details, including max clients per scene.
+		/// FIXME: This should be injected via the data container registry instead of being a public field.
 		/// </summary>
-		public WorldSceneDetailsCache WorldSceneDetailsCache;
+		[SerializeField] private WorldSceneDetailsCache worldSceneDetailsCache;
 
 		/// <summary>
 		/// Called once to initialize the world scene system. Subscribes to authentication and connection events.
@@ -195,29 +197,41 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IWorldSceneSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadActionsPerFrame);
-				}
-			}
+			MainThreadQueueHelper.Drain<IWorldSceneSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Enqueues an action to be executed on the main thread.
 		/// </summary>
 		/// <param name="action">The action to enqueue.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IWorldSceneSystemMainThreadQueueData>(out var queueData) == true)
+			return MainThreadQueueHelper.TryEnqueue<IWorldSceneSystemMainThreadQueueData>(Server, action);
+		}
+
+		/// <summary>
+		/// Enqueues an action on the main thread and returns a task that completes when the action finishes.
+		/// If the enqueue fails (queue full or unavailable), the returned task completes immediately with false.
+		/// Prevents the caller from hanging forever on an unfulfilled TaskCompletionSource.
+		/// </summary>
+		private Task<bool> RunOnMainThreadAsync(Action action)
+		{
+			var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			if (!TryEnqueueMainThread(() =>
 			{
-				queueData.Enqueue(action);
+				try
+				{
+					action();
+				}
+				finally
+				{
+					tcs.TrySetResult(true);
+				}
+			}))
+			{
+				tcs.TrySetResult(false);
 			}
+			return tcs.Task;
 		}
 
 		/// <summary>
@@ -243,7 +257,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Called by the server's LateUpdate. Periodically processes open world and instance queues, and updates connection count.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
 			{
@@ -271,8 +285,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				runtimeData.NextWaitQueueUpdate = runtimeData.WaitQueueRateSeconds;
 
-				if (Initialized &&
-					Server.Database?.ServiceRegistry != null &&
+				if (Server.Database?.ServiceRegistry != null &&
 					Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 				{
 					// Snapshot the scene names and connections to process before going async
@@ -307,7 +320,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 		/// <summary>
 		/// Asynchronously processes open world and instance queues, then updates connection count.
-		/// All main-thread state changes and Broadcasts are marshalled via EnqueueMainThread.
+		/// All main-thread state changes and Broadcasts are marshalled via TryEnqueueMainThread.
 		/// </summary>
 		private async Task ProcessQueuesAsync(List<string> openWorldSceneNames, List<NetworkConnection> instanceConns)
 		{
@@ -381,51 +394,43 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					List<(NetworkConnection conn, string accountName)> validConnections = new List<(NetworkConnection, string)>();
 					int currentCount = loadedScene.CharacterCount;
 
-					var snapshotTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-					EnqueueMainThread(() =>
+					if (!await RunOnMainThreadAsync(() =>
 					{
-						try
+						if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 						{
-							if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
-							{
-								return;
-							}
-							if (!mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
-								connections == null)
-							{
-								return;
-							}
-
-							Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var snapshotRuntimeData);
-
-							foreach (NetworkConnection connection in connections.ToList())
-							{
-								if (currentCount >= maxClientsPerInstance)
-								{
-									break;
-								}
-
-								connections.Remove(connection);
-								mappingData.OpenWorldConnectionScenes.Remove(connection);
-								snapshotRuntimeData?.WaitingQueueEnteredUtcByClientId.Remove(connection.ClientId);
-
-								if (!IsValidConnection(connection, out string accountName))
-								{
-									continue;
-								}
-
-								validConnections.Add((connection, accountName));
-								currentCount++;
-							}
+							return;
 						}
-						finally
+						if (!mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
+							connections == null)
 						{
-							snapshotTcs.TrySetResult(true);
+							return;
 						}
-					});
 
-					// Wait until the main thread has actually processed the snapshot
-					await snapshotTcs.Task;
+						Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var snapshotRuntimeData);
+
+						foreach (NetworkConnection connection in connections.ToList())
+						{
+							if (currentCount >= maxClientsPerInstance)
+							{
+								break;
+							}
+
+							connections.Remove(connection);
+							mappingData.OpenWorldConnectionScenes.Remove(connection);
+							snapshotRuntimeData?.WaitingQueueEnteredUtcByClientId.Remove(connection.ClientId);
+
+							if (!IsValidConnection(connection, out string accountName))
+							{
+								continue;
+							}
+
+							validConnections.Add((connection, accountName));
+							currentCount++;
+						}
+					}))
+					{
+						continue;
+					}
 
 					// Now update the DB and broadcast for each valid connection
 					foreach (var (conn, accountName) in validConnections)
@@ -438,7 +443,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						}
 
 						// Tell the client to connect to the scene
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
 							{
@@ -451,7 +456,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Check if we still have some players that are waiting for a scene
-			EnqueueMainThread(() =>
+			TryEnqueueMainThread(() =>
 			{
 				if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 				{
@@ -468,25 +473,19 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Also check if we need to enqueue a new scene load request
 			// We need to check the waiting count on the main thread
 			bool needsNewScene = false;
-			var checkTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-			EnqueueMainThread(() =>
+			if (!await RunOnMainThreadAsync(() =>
 			{
-				try
+				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData) &&
+					mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) &&
+					connections != null &&
+					connections.Count > 0)
 				{
-					if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData) &&
-						mappingData.WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) &&
-						connections != null &&
-						connections.Count > 0)
-					{
-						needsNewScene = true;
-					}
+					needsNewScene = true;
 				}
-				finally
-				{
-					checkTcs.TrySetResult(true);
-				}
-			});
-			await checkTcs.Task;
+			}))
+			{
+				return;
+			}
 
 			if (needsNewScene)
 			{
@@ -514,26 +513,20 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Validate the connection on main thread
 			string accountName = null;
-			var validateTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-			EnqueueMainThread(() =>
+			if (!await RunOnMainThreadAsync(() =>
 			{
-				try
+				if (!IsValidConnection(conn, out string acct))
 				{
-					if (!IsValidConnection(conn, out string acct))
-					{
-						Kick(conn, "Failed to get account name");
-					}
-					else
-					{
-						accountName = acct;
-					}
+					Kick(conn, "Failed to get account name");
 				}
-				finally
+				else
 				{
-					validateTcs.TrySetResult(true);
+					accountName = acct;
 				}
-			});
-			await validateTcs.Task;
+			}))
+			{
+				return;
+			}
 
 			if (string.IsNullOrEmpty(accountName))
 			{
@@ -549,7 +542,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			var charResult = await charService.FetchByAccountAsync(accountName, selected: true);
 			if (!charResult.IsSuccess || !charResult.Data.HasValue)
 			{
-				EnqueueMainThread(() => Kick(conn, "invalid character ID"));
+				TryEnqueueMainThread(() => Kick(conn, "invalid character ID"));
 				return;
 			}
 			var charData = charResult.Data.Value;
@@ -666,8 +659,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				if (sceneServerResult.IsSuccess)
 				{
 					var sceneServer = sceneServerResult.Data;
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
+						// Remove from instance queue before routing — prevents re-processing and erroneous TTL kicks.
+						if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var routeMappingData))
+						{
+							RemoveFromQueue(conn, routeMappingData.InstanceConnectionScenes, routeMappingData.WaitingInstanceConnections);
+						}
+
 						Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
 						{
 							Address = sceneServer.Address,
@@ -684,7 +683,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			else if (sceneStatus == FishMMO.Shared.SceneStatus.Pending ||
 					 sceneStatus == FishMMO.Shared.SceneStatus.Loading)
 			{
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 					{
@@ -716,7 +715,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				sceneCharacterCount = scenesResult.Data.Sum(scene => scene.CharacterCount);
 			}
 
-			EnqueueMainThread(() =>
+			TryEnqueueMainThread(() =>
 			{
 				if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 				{
@@ -1001,18 +1000,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			var fetchResult = await charService.FetchByAccountAsync(accountName, selected: true);
 			if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
 			{
-				EnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
+				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
 				return;
 			}
 			var selectedChar = fetchResult.Data.Value;
 			if (selectedChar.ID <= 0 || string.IsNullOrEmpty(selectedChar.SceneName))
 			{
-				EnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
+				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
 				return;
 			}
 			string sceneName = selectedChar.SceneName;
 
-			EnqueueMainThread(() =>
+			TryEnqueueMainThread(() =>
 			{
 				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 				{
@@ -1052,7 +1051,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <returns>Maximum number of clients for the scene.</returns>
 		public int GetMaxClients(string sceneName)
 		{
-			if (WorldSceneDetailsCache?.Scenes?.TryGetValue(sceneName, out var details) == true)
+			if (worldSceneDetailsCache?.Scenes?.TryGetValue(sceneName, out var details) == true)
 			{
 				return Mathf.Clamp(details.MaxClients, 1, MAX_CLIENTS_PER_INSTANCE);
 			}

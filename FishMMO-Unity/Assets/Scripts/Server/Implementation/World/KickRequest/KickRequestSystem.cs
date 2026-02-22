@@ -178,7 +178,7 @@ namespace FishMMO.Server.Implementation.World
 		/// to ensure they execute on the main Unity thread.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 		}
@@ -189,12 +189,14 @@ namespace FishMMO.Server.Implementation.World
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicUpdate(float deltaTime)
 		{
-			if (Server.ServerState == ConnectionState.Started)
+			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
 			{
-				if (!TryEnqueueAsyncWork(() => ProcessKickRequestsAsync()))
-				{
-					Log.Warning("KickRequestSystem", "Failed to enqueue periodic kick-request processing work item.");
-				}
+				return;
+			}
+
+			if (!TryEnqueueAsyncWork(() => ProcessKickRequestsAsync()))
+			{
+				Log.Warning("KickRequestSystem", "Failed to enqueue periodic kick-request processing work item.");
 			}
 		}
 
@@ -238,24 +240,37 @@ namespace FishMMO.Server.Implementation.World
 					return;
 				}
 
-				// Update polling position
+				// Update polling position under lock for safe cross-thread visibility.
 				KickRequestData latest = dbResult.Data[dbResult.Data.Count - 1];
-				data.LastFetchTime = latest.TimeCreated;
-				data.LastPosition = latest.ID;
-
-				// Fire all last-login checks in parallel
-				var loginTasks = new Task<DatabaseResult<DateTime>>[dbResult.Data.Count];
-				for (int i = 0; i < dbResult.Data.Count; i++)
+				lock (data)
 				{
-					loginTasks[i] = accountService.FetchLastLoginAsync(dbResult.Data[i].AccountName);
+					data.LastFetchTime = latest.TimeCreated;
+					data.LastPosition = latest.ID;
 				}
-				await Task.WhenAll(loginTasks);
+
+				// Process last-login checks in batches to avoid saturating the DB connection pool.
+				const int BatchSize = 10;
+				var loginResults = new DatabaseResult<DateTime>[dbResult.Data.Count];
+				for (int batchStart = 0; batchStart < dbResult.Data.Count; batchStart += BatchSize)
+				{
+					int batchEnd = Math.Min(batchStart + BatchSize, dbResult.Data.Count);
+					var batchTasks = new Task<DatabaseResult<DateTime>>[batchEnd - batchStart];
+					for (int i = batchStart; i < batchEnd; i++)
+					{
+						batchTasks[i - batchStart] = accountService.FetchLastLoginAsync(dbResult.Data[i].AccountName);
+					}
+					await Task.WhenAll(batchTasks);
+					for (int i = batchStart; i < batchEnd; i++)
+					{
+						loginResults[i] = batchTasks[i - batchStart].Result;
+					}
+				}
 
 				// Process results — kick any accounts that haven't reconnected since the request
 				for (int i = 0; i < dbResult.Data.Count; i++)
 				{
 					KickRequestData kickRequest = dbResult.Data[i];
-					DatabaseResult<DateTime> lastLoginResult = loginTasks[i].Result;
+					DatabaseResult<DateTime> lastLoginResult = loginResults[i];
 
 					// If the last successful login happened after the kick request,
 					// the account reconnected and the kick is stale.
@@ -266,7 +281,7 @@ namespace FishMMO.Server.Implementation.World
 
 					// Marshal Kick to main thread - FishNet is not thread-safe
 					string accountName = kickRequest.AccountName;
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (Server.AccountManager.GetConnectionByAccountName(accountName, out NetworkConnection conn))
 						{
@@ -311,12 +326,13 @@ namespace FishMMO.Server.Implementation.World
 		/// via the RuntimeDataContainer.
 		/// </summary>
 		/// <param name="action">The action to execute on the main thread.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IKickRequestSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Enqueue(action);
+				return queueData.TryEnqueue(action);
 			}
+			return false;
 		}
 
 		/// <summary>

@@ -22,6 +22,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Atomic in-flight flag for the periodic message pump.
 		/// 0 = idle, 1 = running.
 		/// </summary>
-		int MessagePumpInFlight { get; set; }
+		bool TryBeginMessagePump();
+		void EndMessagePump();
 	}
 }

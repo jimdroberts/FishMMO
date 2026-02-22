@@ -36,10 +36,22 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
 
 		/// <summary>
+		/// Maximum allowed length for scene and spawner name fields from client messages.
+		/// </summary>
+		private const int MaxSceneFieldLength = 256;
+
+		/// <summary>
 		/// Maximum number of characters allowed per account.
 		/// </summary>
 		[SerializeField]
 		private int maxCharacters = 8;
+
+		/// <summary>
+		/// Cooldown in milliseconds between character-create requests per connection.
+		/// Prevents sequential spam even after the in-flight guard releases.
+		/// </summary>
+		[Tooltip("Cooldown in milliseconds between create requests per connection")]
+		[SerializeField] private int createRequestCooldownMilliseconds = 2000;
 
 		/// <summary>
 		/// Gets the maximum number of characters allowed per account.
@@ -153,6 +165,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
+			// Validate string field lengths to prevent oversized allocations.
+			if (string.IsNullOrWhiteSpace(msg.SceneName) || msg.SceneName.Length > MaxSceneFieldLength ||
+				string.IsNullOrWhiteSpace(msg.SpawnerName) || msg.SpawnerName.Length > MaxSceneFieldLength)
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
+				return;
+			}
+
 			// Validate account
 			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
@@ -262,7 +282,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					WorldSceneDetailsCache.Scenes == null ||
 					WorldSceneDetailsCache.Scenes.Count < 1)
 				{
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -278,7 +298,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!WorldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails details))
 				{
 					await Log.Debug("CharacterCreateSystem", "Unable to get World Scene Details.");
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -294,7 +314,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!details.InitialSpawnPositions.TryGetValue(msg.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
 				{
 					await Log.Debug("CharacterCreateSystem", "Unable to find initial spawn position for Spawner.");
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -319,7 +339,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 				if (!validateAllowedRace)
 				{
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -334,7 +354,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				DatabaseResult<int> countResult = await characterService.CountAsync(accountName);
 				if (!countResult.IsSuccess || countResult.Data >= MaxCharacters)
 				{
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -410,7 +430,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!uowResult.IsSuccess)
 				{
 					await Log.Error("CharacterCreateSystem", $"Failed to begin unit of work: {uowResult.ErrorMessage}");
-					EnqueueMainThread(() =>
+					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
@@ -435,7 +455,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 							DatabaseErrorCodes.ValidationError => CharacterCreateResult.InvalidCharacterName,
 							_ => CharacterCreateResult.Error,
 						};
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (conn != null && conn.IsActive)
 							{
@@ -461,23 +481,98 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 					if (factions.Count > 0)
 					{
-						await factionService.PersistAsync(factions);
+						DatabaseResult factionResult = await factionService.PersistAsync(factions);
+						if (!factionResult.IsSuccess)
+						{
+							await Log.Error("CharacterCreateSystem", $"Failed to persist factions: {factionResult.ErrorMessage}");
+							TryEnqueueMainThread(() =>
+							{
+								if (conn != null && conn.IsActive)
+								{
+									Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+									{
+										Result = CharacterCreateResult.Error,
+									}, true, Channel.Reliable);
+								}
+							});
+							return;
+						}
 					}
 					if (abilities.Count > 0)
 					{
-						await abilityService.PersistAsync(abilities);
+						DatabaseResult abilityResult = await abilityService.PersistAsync(abilities);
+						if (!abilityResult.IsSuccess)
+						{
+							await Log.Error("CharacterCreateSystem", $"Failed to persist abilities: {abilityResult.ErrorMessage}");
+							TryEnqueueMainThread(() =>
+							{
+								if (conn != null && conn.IsActive)
+								{
+									Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+									{
+										Result = CharacterCreateResult.Error,
+									}, true, Channel.Reliable);
+								}
+							});
+							return;
+						}
 					}
 					if (inventoryItems.Count > 0)
 					{
-						await inventoryService.PersistAsync(inventoryItems);
+						DatabaseResult inventoryResult = await inventoryService.PersistAsync(inventoryItems);
+						if (!inventoryResult.IsSuccess)
+						{
+							await Log.Error("CharacterCreateSystem", $"Failed to persist inventory: {inventoryResult.ErrorMessage}");
+							TryEnqueueMainThread(() =>
+							{
+								if (conn != null && conn.IsActive)
+								{
+									Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+									{
+										Result = CharacterCreateResult.Error,
+									}, true, Channel.Reliable);
+								}
+							});
+							return;
+						}
 					}
 					if (equipment.Count > 0)
 					{
-						await equipmentService.PersistAsync(equipment);
+						DatabaseResult equipResult = await equipmentService.PersistAsync(equipment);
+						if (!equipResult.IsSuccess)
+						{
+							await Log.Error("CharacterCreateSystem", $"Failed to persist equipment: {equipResult.ErrorMessage}");
+							TryEnqueueMainThread(() =>
+							{
+								if (conn != null && conn.IsActive)
+								{
+									Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+									{
+										Result = CharacterCreateResult.Error,
+									}, true, Channel.Reliable);
+								}
+							});
+							return;
+						}
 					}
 					if (initialAttributes.Count > 0)
 					{
-						await attributeService.PersistAsync(initialAttributes.Values);
+						DatabaseResult attrResult = await attributeService.PersistAsync(initialAttributes.Values);
+						if (!attrResult.IsSuccess)
+						{
+							await Log.Error("CharacterCreateSystem", $"Failed to persist attributes: {attrResult.ErrorMessage}");
+							TryEnqueueMainThread(() =>
+							{
+								if (conn != null && conn.IsActive)
+								{
+									Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+									{
+										Result = CharacterCreateResult.Error,
+									}, true, Channel.Reliable);
+								}
+							});
+							return;
+						}
 					}
 
 					// All writes succeeded — commit the transaction
@@ -485,7 +580,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (!commitResult.IsSuccess)
 					{
 						await Log.Error("CharacterCreateSystem", $"Failed to commit unit of work: {commitResult.ErrorMessage}");
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (conn != null && conn.IsActive)
 							{
@@ -500,7 +595,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 
 				// Marshal success response back to main thread
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)
 					{
@@ -516,7 +611,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterCreateSystem", $"ProcessCharacterCreateAsync failed: {ex.Message}");
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)
 					{
@@ -790,7 +885,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// to ensure they execute on the main Unity thread.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 		}
@@ -818,12 +913,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// via the RuntimeDataContainer.
 		/// </summary>
 		/// <param name="action">The action to execute on the main thread.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
 			if (Server?.DataContainerRegistry.TryGet<ICharacterCreateSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Enqueue(action);
+				return queueData.TryEnqueue(action);
 			}
+			return false;
 		}
 
 		/// <summary>
@@ -858,8 +954,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return false;
 			}
 
-			return Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData) &&
-				runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
+			if (!Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
+			{
+				return false;
+			}
+
+			// Debounce — reject if cooldown hasn't elapsed since the last completed request.
+			DateTime nowUtc = DateTime.UtcNow;
+			if (runtimeData.NextAllowedCreateUtcByClientId.TryGetValue(conn.ClientId, out DateTime nextAllowed) && nowUtc < nextAllowed)
+			{
+				return false;
+			}
+
+			return runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
 		}
 
 		/// <summary>
@@ -872,6 +979,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedCreateUtcByClientId[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(createRequestCooldownMilliseconds);
 			}
 		}
 
@@ -885,6 +993,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedCreateUtcByClientId.TryRemove(conn.ClientId, out _);
 			}
 		}
 

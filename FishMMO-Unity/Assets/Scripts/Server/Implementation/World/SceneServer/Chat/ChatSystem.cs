@@ -28,6 +28,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	public class ChatSystem : ServerBehaviour, IChatSystem
 	{
 		/// <summary>
+		/// Maximum additional characters a channel ID prefix (e.g., guild/party/world ID + space) can add to a message.
+		/// </summary>
+		private const int MaxChannelIdPrefixLength = 22;
+
+		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
 		/// This time-slices queue draining to avoid frame spikes.
 		/// </summary>
@@ -135,35 +140,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IChatSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadActionsPerFrame);
-				}
-			}
+			MainThreadQueueHelper.Drain<IChatSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Enqueues an action to be executed on the main thread.
 		/// </summary>
 		/// <param name="action">The action to enqueue.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IChatSystemMainThreadQueueData>(out var queueData) == true)
+			return MainThreadQueueHelper.TryEnqueue<IChatSystemMainThreadQueueData>(Server, action);
+		}
+
+		/// <summary>
+		/// Clears the MessagePumpInFlight flag. Null-safe for shutdown scenarios.
+		/// </summary>
+		private void ClearMessagePumpFlag()
+		{
+			if (Server?.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) == true)
 			{
-				queueData.Enqueue(action);
+				runtimeData.EndMessagePump();
 			}
 		}
 
 		/// <summary>
 		/// Drains the main-thread queue each frame.
 		/// </summary>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 		}
@@ -175,25 +178,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void OnPeriodicMessagePump(float deltaTime)
 		{
 			if (Initialized &&
+				Server != null &&
 				Server.ServerState == ConnectionState.Started &&
 				Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData))
 			{
-				lock (runtimeData)
+				if (!runtimeData.TryBeginMessagePump())
 				{
-					if (runtimeData.MessagePumpInFlight != 0)
-					{
-						return;
-					}
-
-					runtimeData.MessagePumpInFlight = 1;
+					return;
 				}
 
 				if (!TryEnqueueAsyncWork(() => FetchAndProcessChatMessagesAsync()))
 				{
-					lock (runtimeData)
-					{
-						runtimeData.MessagePumpInFlight = 0;
-					}
+					runtimeData.EndMessagePump();
 				}
 			}
 		}
@@ -214,7 +210,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return;
 				}
-				if (Server.Database?.ServiceRegistry == null)
+				if (Server?.Database?.ServiceRegistry == null)
 				{
 					return;
 				}
@@ -242,31 +238,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ChatData latest = messages[messages.Count - 1];
 
 				// Marshal processing to main thread — Broadcasts must run on main thread
-				EnqueueMainThread(() =>
+				if (!TryEnqueueMainThread(() =>
 				{
-					// Update fetch state on main thread
-					if (Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData mainData))
+					try
 					{
-						mainData.LastFetchPosition = latest.ID;
-						mainData.LastFetchTime = latest.TimeCreated;
-					}
+						// Update fetch state on main thread
+						if (Server?.DataContainerRegistry.TryGet(out IChatSystemRuntimeData mainData) == true)
+						{
+							mainData.LastFetchPosition = latest.ID;
+							mainData.LastFetchTime = latest.TimeCreated;
+						}
 
-					ProcessChatMessages(messages);
-				});
+						ProcessChatMessages(messages);
+					}
+					finally
+					{
+						// C2 fix: clear pump flag AFTER cursor update, preventing re-fetch of same rows.
+						ClearMessagePumpFlag();
+					}
+				}))
+				{
+					// Enqueue failed — clear flag immediately so pump can retry next interval.
+					ClearMessagePumpFlag();
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("ChatSystem", $"Error fetching chat messages: {ex}");
-			}
-			finally
-			{
-				if (Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData))
-				{
-					lock (runtimeData)
-					{
-						runtimeData.MessagePumpInFlight = 0;
-					}
-				}
+				// C3 fix: null-conditional on Server to prevent NRE during shutdown.
+				ClearMessagePumpFlag();
 			}
 		}
 
@@ -293,6 +293,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					sayCommand.Func?.Invoke(null, new ChatBroadcast()
 					{
 						Channel = channel,
+						SenderID = message.CharacterID,
 						Text = message.Message,
 					});
 				}
@@ -434,6 +435,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						break;
 				}
 
+				// Enforce maximum persistable message length after channel ID prepend.
+				// A long ID + space adds up to 21 chars; cap at maxMessageLength + MaxChannelIdPrefixLength for safety.
+				if (msg.Text.Length > maxMessageLength + MaxChannelIdPrefixLength)
+				{
+					msg.Text = msg.Text.Substring(0, maxMessageLength + MaxChannelIdPrefixLength);
+				}
+
 				if (commandDetails.Func.Invoke(sender, msg))
 				{
 					// write the parsed message to the database (fire-and-forget async)
@@ -455,7 +463,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server.Database?.ServiceRegistry == null)
+				if (Server?.Database?.ServiceRegistry == null)
 				{
 					return;
 				}
@@ -537,7 +545,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (Server.NetworkWrapper.NetworkManager.SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections))
 				{
-					foreach (NetworkConnection connection in connections)
+					// Defensive copy: Broadcast may trigger a disconnect callback that modifies the set.
+					foreach (NetworkConnection connection in new List<NetworkConnection>(connections))
 					{
 						Server.NetworkWrapper.Broadcast(connection, msg, true, Channel.Reliable);
 					}
@@ -576,13 +585,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-			TryEnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID), senderID);
+			bool persist = sender != null;
+			TryEnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
 		/// <summary>
 		/// Asynchronously fetches party members from the database, marshals Broadcasts to the main thread,
-		/// and persists the chat message on success.
+		/// and persists the chat message on success (unless called from the message pump).
 		/// </summary>
 		/// <param name="partyID">Party identifier used to resolve recipients.</param>
 		/// <param name="senderID">Sender character identifier.</param>
@@ -593,11 +603,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="accountName">Sender account name used for persistence.</param>
 		/// <param name="worldServerId">Sender world server identifier.</param>
 		/// <returns>Asynchronous party chat processing task.</returns>
-		private async Task OnPartyChatAsync(long partyID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId)
+		private async Task OnPartyChatAsync(long partyID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist)
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var partyService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var partyService))
 				{
 					return;
 				}
@@ -611,7 +622,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterPartyData> members = result.Data;
 
 				// Marshal Broadcasts to main thread
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 					{
@@ -635,12 +646,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				});
 
-				// Persist the chat message
-				await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, trimmed);
+				// Only persist for live player messages — pump-sourced messages are already persisted.
+				if (persist)
+				{
+					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
+					await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, partyID + " " + trimmed);
+				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("ChatSystem", $"Error in OnPartyChatAsync: {ex}");
+				await Log.Error("ChatSystem", $"Error in OnPartyChatAsync (PartyID={partyID}, SenderID={senderID}): {ex}");
 			}
 		}
 
@@ -674,13 +689,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-			TryEnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID), senderID);
+			bool persist = sender != null;
+			TryEnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
 		/// <summary>
 		/// Asynchronously fetches guild members from the database, marshals Broadcasts to the main thread,
-		/// and persists the chat message on success.
+		/// and persists the chat message on success (unless called from the message pump).
 		/// </summary>
 		/// <param name="guildID">Guild identifier used to resolve recipients.</param>
 		/// <param name="senderID">Sender character identifier.</param>
@@ -691,11 +707,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="accountName">Sender account name used for persistence.</param>
 		/// <param name="worldServerId">Sender world server identifier.</param>
 		/// <returns>Asynchronous guild chat processing task.</returns>
-		private async Task OnGuildChatAsync(long guildID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId)
+		private async Task OnGuildChatAsync(long guildID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist)
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var guildService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var guildService))
 				{
 					return;
 				}
@@ -709,7 +726,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterGuildData> members = result.Data;
 
 				// Marshal Broadcasts to main thread
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 					{
@@ -733,12 +750,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				});
 
-				// Persist the chat message
-				await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, trimmed);
+				// Only persist for live player messages — pump-sourced messages are already persisted.
+				if (persist)
+				{
+					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
+					await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, guildID + " " + trimmed);
+				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("ChatSystem", $"Error in OnGuildChatAsync: {ex}");
+				await Log.Error("ChatSystem", $"Error in OnGuildChatAsync (GuildID={guildID}, SenderID={senderID}): {ex}");
 			}
 		}
 
@@ -793,13 +814,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
-			TryEnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID), senderID);
+			bool persist = sender != null;
+			TryEnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID, persist), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
 		/// <summary>
 		/// Asynchronously resolves the target character by name, marshals Broadcasts to the main thread,
-		/// and persists the chat message on success.
+		/// and persists the chat message on success (unless called from the message pump).
 		/// </summary>
 		/// <param name="senderConn">Sender connection for relay/status responses.</param>
 		/// <param name="senderID">Sender character identifier.</param>
@@ -810,11 +832,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="accountName">Sender account name used for persistence.</param>
 		/// <param name="worldServerId">Sender world server identifier.</param>
 		/// <returns>Asynchronous tell chat processing task.</returns>
-		private async Task OnTellChatAsync(NetworkConnection senderConn, long senderID, ChatChannel channel, string targetName, string trimmed, string characterName, string accountName, long worldServerId)
+		private async Task OnTellChatAsync(NetworkConnection senderConn, long senderID, ChatChannel channel, string targetName, string trimmed, string characterName, string accountName, long worldServerId, bool persist)
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
 					return;
 				}
@@ -837,7 +860,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Marshal Broadcasts to main thread
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					// if the sender exists then we can send a return message if the target character is valid
 					if (senderConn != null)
@@ -890,12 +913,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				});
 
-				// Persist the chat message
-				await PersistChatMessageAsync(senderID, characterName, accountName, worldServerId, channel, trimmed);
+				// Only persist for live player messages — pump-sourced messages are already persisted.
+				if (persist)
+				{
+					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
+					await PersistChatMessageAsync(senderID, characterName, accountName, worldServerId, channel, targetName + " " + trimmed);
+				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("ChatSystem", $"Error in OnTellChatAsync: {ex}");
+				await Log.Error("ChatSystem", $"Error in OnTellChatAsync (SenderID={senderID}, Target='{targetName}'): {ex}");
 			}
 		}
 

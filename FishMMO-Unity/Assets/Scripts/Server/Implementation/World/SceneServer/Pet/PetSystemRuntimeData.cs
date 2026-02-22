@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Concurrent;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 
@@ -10,30 +8,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	public class PetSystemRuntimeData : RuntimeDataContainer, IPetSystemRuntimeData
 	{
-		public ConcurrentDictionary<long, DateTime> NextAllowedIngressUtcByKey { get; private set; }
-		public ConcurrentDictionary<long, byte> IngressInFlightByKey { get; private set; }
-		public DateTime NextIngressSweepUtc { get; set; }
+		public IngressGuard IngressGuard { get; private set; }
 
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			NextAllowedIngressUtcByKey = new ConcurrentDictionary<long, DateTime>();
-			IngressInFlightByKey = new ConcurrentDictionary<long, byte>();
-			NextIngressSweepUtc = DateTime.UtcNow;
+			IngressGuard = new IngressGuard();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		public override void Clear()
 		{
-			NextAllowedIngressUtcByKey?.Clear();
-			IngressInFlightByKey?.Clear();
-			NextIngressSweepUtc = DateTime.UtcNow;
+			IngressGuard?.Clear();
 		}
 
 		public override void Deinitialize()
 		{
 			Clear();
-			NextAllowedIngressUtcByKey = null;
-			IngressInFlightByKey = null;
 		}
 	}
 }

@@ -84,10 +84,9 @@ namespace FishMMO.Server.Implementation
 		/// Called by the server's LateUpdate. Updates the window title at the specified rate while the server is running.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
-			if (ServerManager == null ||
-				!ServerManager.Started)
+			if (!ServerManager.Started)
 			{
 				return;
 			}

@@ -2,6 +2,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -21,8 +22,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public bool IsLocked { get; set; }
 
+		private int pulseInFlight;
+
 		/// <inheritdoc/>
-		public int PulseInFlight { get; set; }
+		public bool TryBeginPulse()
+		{
+			return Interlocked.CompareExchange(ref pulseInFlight, 1, 0) == 0;
+		}
+
+		/// <inheritdoc/>
+		public void EndPulse()
+		{
+			Interlocked.Exchange(ref pulseInFlight, 0);
+		}
 
 		/// <inheritdoc/>
 		public Dictionary<long, DateTime> PendingSceneEnqueueUtcBySceneId { get; private set; }
@@ -37,7 +49,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			PendingSceneEnqueueUtcBySceneId = new Dictionary<long, DateTime>();
 			NextPendingSceneSweepUtc = DateTime.UtcNow;
-			PulseInFlight = 0;
+			Interlocked.Exchange(ref pulseInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -48,7 +60,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			ID = 0;
 			IsLocked = false;
-			PulseInFlight = 0;
+			Interlocked.Exchange(ref pulseInFlight, 0);
 			PendingSceneEnqueueUtcBySceneId?.Clear();
 			NextPendingSceneSweepUtc = DateTime.UtcNow;
 		}

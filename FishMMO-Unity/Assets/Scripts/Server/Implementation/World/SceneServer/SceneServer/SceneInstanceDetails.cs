@@ -49,8 +49,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="count">Amount to add or subtract from the character count.</param>
 		public void AddCharacterCount(int count)
 		{
-			//UnityEngine.Log.Debug($"{Name} adding {count} to CharacterCount {CharacterCount}");
-			CharacterCount += count;
+			CharacterCount = Math.Max(0, CharacterCount + count);
 			if (CharacterCount < 1)
 			{
 				LastExit = DateTime.UtcNow;

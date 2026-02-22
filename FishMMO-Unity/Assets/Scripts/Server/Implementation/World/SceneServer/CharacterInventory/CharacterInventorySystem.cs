@@ -48,6 +48,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
+		/// Maximum entries in the ingress tracker dictionaries before new requests are rejected.
+		/// </summary>
+
+		/// <summary>
+		/// Global per-connection rate limit in milliseconds across all inventory operations.
+		/// </summary>
+		private const int GlobalPerConnectionRateMilliseconds = 15;
+
+		/// <summary>
 		/// Operation codes used by ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte
@@ -110,7 +119,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
 			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
-			runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
 
 			Log.Debug("CharacterInventorySystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
@@ -141,44 +149,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.NextAllowedIngressUtcByKey.Clear();
-				runtimeData.IngressInFlightByKey.Clear();
-				runtimeData.NextIngressSweepUtc = DateTime.UtcNow;
+				runtimeData.IngressGuard?.Clear();
 			}
 		}
 
 		/// <summary>
 		/// Sweeps stale ingress guard entries.
 		/// </summary>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
-			if (!Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
 			{
-				return;
-			}
-
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < runtimeData.NextIngressSweepUtc)
-			{
-				return;
-			}
-
-			runtimeData.NextIngressSweepUtc = nowUtc.AddSeconds(ingressSweepIntervalSeconds);
-			DateTime staleBeforeUtc = nowUtc.AddSeconds(-ingressEntryTtlSeconds);
-
-			int removed = 0;
-			foreach (var kvp in runtimeData.NextAllowedIngressUtcByKey)
-			{
-				if (removed >= ingressSweepMaxRemovals)
-				{
-					break;
-				}
-
-				if (kvp.Value <= staleBeforeUtc && runtimeData.NextAllowedIngressUtcByKey.TryRemove(kvp.Key, out _))
-				{
-					runtimeData.IngressInFlightByKey.TryRemove(kvp.Key, out _);
-					removed++;
-				}
+				runtimeData.IngressGuard.Sweep(ingressSweepIntervalSeconds, ingressEntryTtlSeconds, ingressSweepMaxRemovals);
 			}
 		}
 
@@ -192,17 +174,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guardKey = 0;
 				return false;
 			}
-
-			guardKey = ((long)connectionId << 8) | (byte)operation;
-			DateTime nowUtc = DateTime.UtcNow;
-
-			if (runtimeData.NextAllowedIngressUtcByKey.TryGetValue(guardKey, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
-			{
-				return false;
-			}
-
-			runtimeData.NextAllowedIngressUtcByKey[guardKey] = nowUtc.AddMilliseconds(ingressDebounceMilliseconds);
-			return runtimeData.IngressInFlightByKey.TryAdd(guardKey, 0);
+			return runtimeData.IngressGuard.TryBegin(connectionId, (byte)operation, ingressDebounceMilliseconds, out guardKey, GlobalPerConnectionRateMilliseconds);
 		}
 
 		/// <summary>
@@ -212,7 +184,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.IngressInFlightByKey.TryRemove(guardKey, out _);
+				runtimeData.IngressGuard.End(guardKey);
 			}
 		}
 
@@ -476,6 +448,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				// Validate that the target equipment slot is a defined enum value.
+				if (!Enum.IsDefined(typeof(ItemSlot), (byte)msg.Slot))
+				{
+					return;
+				}
+
 				long characterID = character.ID;
 
 				switch (msg.FromInventory)
@@ -595,6 +573,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (character == null ||
 					character.IsTeleporting ||
 					!character.TryGet(out IEquipmentController equipmentController))
+				{
+					return;
+				}
+
+				// Validate that the equipment slot is a defined enum value.
+				if (!Enum.IsDefined(typeof(ItemSlot), (byte)msg.Slot))
 				{
 					return;
 				}
@@ -855,14 +839,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			if (!SceneObject.Objects.TryGetValue(sceneObjectID, out ISceneObject sceneObject))
 			{
-				if (sceneObject == null)
-				{
-					Log.Debug("CharacterInventorySystem", "Missing SceneObject");
-				}
-				else
-				{
-					Log.Debug("CharacterInventorySystem", "Missing ID:" + sceneObjectID);
-				}
+				Log.Debug("CharacterInventorySystem", $"Missing SceneObject ID:{sceneObjectID}");
 				return false;
 			}
 			if (sceneObject.GameObject.scene.handle != character.GameObject.scene.handle)
@@ -1050,7 +1027,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "PersistInventoryItemAsync: Failed to resolve ICharacterInventoryService");
 					return;
@@ -1072,7 +1050,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "PersistInventoryItemsAsync: Failed to resolve ICharacterInventoryService");
 					return;
@@ -1096,7 +1075,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "DeleteInventorySlotAsync: Failed to resolve ICharacterInventoryService");
 					return;
@@ -1118,7 +1098,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "PersistBankItemAsync: Failed to resolve ICharacterBankService");
 					return;
@@ -1140,7 +1121,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "PersistBankItemsAsync: Failed to resolve ICharacterBankService");
 					return;
@@ -1164,7 +1146,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "DeleteBankSlotAsync: Failed to resolve ICharacterBankService");
 					return;
@@ -1186,7 +1169,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterEquipmentService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterEquipmentService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "PersistEquipmentItemAsync: Failed to resolve ICharacterEquipmentService");
 					return;
@@ -1210,7 +1194,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterEquipmentService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterEquipmentService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "DeleteEquipmentSlotAsync: Failed to resolve ICharacterEquipmentService");
 					return;
@@ -1234,7 +1219,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (dtos == null || dtos.Count < 1) return;
 
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterAttributeService>(out var service))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterAttributeService>(out var service))
 				{
 					await Log.Error("CharacterInventorySystem", "PersistAttributesAsync: Failed to resolve ICharacterAttributeService");
 					return;

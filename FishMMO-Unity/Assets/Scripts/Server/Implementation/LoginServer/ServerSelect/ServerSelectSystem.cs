@@ -36,7 +36,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Idle timeout in seconds for world servers to be considered active.
 		/// </summary>
-		public float IdleTimeout = 60;
+		[Tooltip("Idle timeout in seconds for world servers to be considered active")]
+		[SerializeField] [Min(1f)] private float idleTimeout = 60;
+
+		/// <summary>
+		/// Cooldown in milliseconds between server-list requests per connection.
+		/// Prevents sequential spam even after the in-flight guard releases.
+		/// </summary>
+		[Tooltip("Cooldown in milliseconds between server-list requests per connection")]
+		[SerializeField] private int serverListCooldownMilliseconds = 1000;
 
 		/// <summary>
 		/// Initializes the server select system, registering broadcast handlers for server list requests.
@@ -68,7 +76,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
 
-			Log.Debug("ServerSelectSystem", $"Initialized (IdleTimeout={IdleTimeout}s)");
+			Log.Debug("ServerSelectSystem", $"Initialized (idleTimeout={idleTimeout}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -113,6 +121,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
+			// M5: Verify the connection is authenticated before processing server list requests
+			if (!Server.AccountManager.GetAccountNameByConnection(conn, out _))
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
 			if (!TryBeginServerListRequest(conn))
 			{
 				return;
@@ -139,7 +154,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					return;
 				}
 
-				DatabaseResult<List<WorldServerData>> dbResult = await worldServerService.FetchActiveAsync(IdleTimeout);
+				DatabaseResult<List<WorldServerData>> dbResult = await worldServerService.FetchActiveAsync(idleTimeout);
 
 				if (!dbResult.IsSuccess || dbResult.Data == null)
 				{
@@ -163,7 +178,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 
 				// Marshal response back to main thread - FishNet Broadcast is not thread-safe
-				EnqueueMainThread(() =>
+				TryEnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)
 					{
@@ -190,7 +205,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// to ensure they execute on the main Unity thread.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 		}
@@ -218,12 +233,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// via the RuntimeDataContainer.
 		/// </summary>
 		/// <param name="action">The action to execute on the main thread.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IServerSelectSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Enqueue(action);
+				return queueData.TryEnqueue(action);
 			}
+			return false;
 		}
 
 		/// <summary>
@@ -258,8 +274,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return false;
 			}
 
-			return Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData) &&
-				runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
+			if (!Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData))
+			{
+				return false;
+			}
+
+			// Debounce — reject if cooldown hasn't elapsed since the last completed request.
+			DateTime nowUtc = DateTime.UtcNow;
+			if (runtimeData.NextAllowedRequestUtcByClientId.TryGetValue(conn.ClientId, out DateTime nextAllowed) && nowUtc < nextAllowed)
+			{
+				return false;
+			}
+
+			return runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
 		}
 
 		/// <summary>
@@ -272,6 +299,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedRequestUtcByClientId[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(serverListCooldownMilliseconds);
 			}
 		}
 
@@ -285,6 +313,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedRequestUtcByClientId.TryRemove(conn.ClientId, out _);
 			}
 		}
 	}

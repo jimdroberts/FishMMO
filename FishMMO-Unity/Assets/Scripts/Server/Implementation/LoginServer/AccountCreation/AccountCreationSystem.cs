@@ -306,24 +306,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return EnqueueResult.Unavailable;
 			}
 
-			// Check IP rate limit
-			if (mappingData.IpRateLimitTracker.TryGetValue(request.IpAddress, out DateTime lastAttempt))
-			{
-				double secondsSinceLastAttempt = (DateTime.UtcNow - lastAttempt).TotalSeconds;
-				if (secondsSinceLastAttempt < ipRateLimitSeconds)
-				{
-					return EnqueueResult.RateLimited;
-				}
-			}
-
-			// Check IP block (too many failures)
+			// Check IP block BEFORE updating rate-limit timestamp.
+			// This ensures blocked IPs don't refresh their rate-limit entry,
+			// so the cleanup sweep can expire and eventually lift the block.
 			if (mappingData.IpFailureTracker.TryGetValue(request.IpAddress, out int failureCount))
 			{
 				if (failureCount >= maxFailedAttempts)
 				{
 					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 					{
-						runtimeData.TotalRejected++;
+						runtimeData.IncrementRejected();
 					}
 
 					request.Connection.Disconnect(true); // Disconnect immediately to mitigate DoS
@@ -331,8 +323,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 			}
 
-			// Update rate limit tracker
-			mappingData.IpRateLimitTracker[request.IpAddress] = DateTime.UtcNow;
+			// Atomic IP rate-limit check using AddOrUpdate to prevent TOCTOU race.
+			bool wasRateLimited = false;
+			DateTime nowUtc = DateTime.UtcNow;
+			mappingData.IpRateLimitTracker.AddOrUpdate(
+				request.IpAddress,
+				nowUtc,
+				(_, lastAttempt) =>
+				{
+					if ((nowUtc - lastAttempt).TotalSeconds < ipRateLimitSeconds)
+					{
+						wasRateLimited = true;
+						return lastAttempt; // Don't update timestamp if rate limited.
+					}
+					return nowUtc;
+				});
+			if (wasRateLimited)
+			{
+				return EnqueueResult.RateLimited;
+			}
 
 			// Try to enqueue to centralized async worker.
 			if (TryEnqueueAsyncWork(() => ProcessAccountCreationAsync(request), request.Connection.ClientId))
@@ -353,7 +362,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Increment rejection counter
 			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.TotalRejected++;
+				runtimeData.IncrementRejected();
 			}
 
 			// Send immediate response as unreliable as we don't want to risk blocking the network thread during a DoS attack
@@ -398,7 +407,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 						// Marshal early rejection — skip DB call entirely
 						NetworkConnection earlyConn = request.Connection;
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (earlyConn != null && earlyConn.IsActive)
 							{
@@ -417,7 +426,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (salt.Length > MaxSaltLength || verifier.Length > MaxVerifierLength)
 					{
 						NetworkConnection earlyConn = request.Connection;
-						EnqueueMainThread(() =>
+						TryEnqueueMainThread(() =>
 						{
 							if (earlyConn != null && earlyConn.IsActive)
 							{
@@ -439,7 +448,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						if (dbResult.IsSuccess)
 						{
 							result = ClientAuthenticationResult.AccountCreated;
-							runtimeData.TotalProcessed++;
+							runtimeData.IncrementProcessed();
 							// Clear failure tracker on success
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
 						}
@@ -455,7 +464,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 							// Track failure atomically
 							mappingData.IpFailureTracker.AddOrUpdate(request.IpAddress, 1, (_, existing) => existing + 1);
-							runtimeData.TotalRejected++;
+							runtimeData.IncrementRejected();
 						}
 					}
 				}
@@ -466,7 +475,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 					{
-						runtimeData.TotalFailed++;
+						runtimeData.IncrementFailed();
+					}
+
+					// Track failure against IP for blocking (e.g., garbage-payload decryption exceptions).
+					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var failMappingData))
+					{
+						failMappingData.IpFailureTracker.AddOrUpdate(request.IpAddress, 1, (_, existing) => existing + 1);
 					}
 				}
 			}
@@ -474,7 +489,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Marshal response back to main thread - FishNet Broadcast is not thread-safe
 			ClientAuthenticationResult capturedResult = result;
 			NetworkConnection capturedConn = request.Connection;
-			EnqueueMainThread(() =>
+			TryEnqueueMainThread(() =>
 			{
 				if (capturedConn != null && capturedConn.IsActive)
 				{
@@ -491,7 +506,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// to ensure they execute on the main Unity thread.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
-		public override void OnLateUpdate(float deltaTime)
+		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
 			CleanUpMappingData(deltaTime);
@@ -609,12 +624,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// via the RuntimeDataContainer.
 		/// </summary>
 		/// <param name="action">The action to execute on the main thread.</param>
-		private void EnqueueMainThread(Action action)
+		private bool TryEnqueueMainThread(Action action)
 		{
 			if (Server?.DataContainerRegistry.TryGet<IAccountCreationSystemMainThreadQueueData>(out var queueData) == true)
 			{
-				queueData.Enqueue(action);
+				return queueData.TryEnqueue(action);
 			}
+			return false;
 		}
 
 		/// <summary>

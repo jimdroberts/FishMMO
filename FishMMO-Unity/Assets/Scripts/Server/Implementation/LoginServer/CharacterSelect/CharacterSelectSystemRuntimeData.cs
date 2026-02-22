@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using FishMMO.Server.Core;
 
@@ -13,10 +14,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		public ConcurrentDictionary<int, byte> InFlightRequests { get; private set; }
 
+		/// <summary>
+		/// Per-connection cooldown tracker: maps clientId to the earliest UTC time the next request is allowed.
+		/// </summary>
+		public ConcurrentDictionary<int, DateTime> NextAllowedRequestUtc { get; private set; }
+
 		/// <inheritdoc/>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			InFlightRequests = new ConcurrentDictionary<int, byte>();
+			NextAllowedRequestUtc = new ConcurrentDictionary<int, DateTime>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -24,6 +31,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public override void Clear()
 		{
 			InFlightRequests?.Clear();
+			NextAllowedRequestUtc?.Clear();
 		}
 
 		/// <inheritdoc/>
@@ -31,6 +39,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			Clear();
 			InFlightRequests = null;
+			NextAllowedRequestUtc = null;
 		}
 	}
 }

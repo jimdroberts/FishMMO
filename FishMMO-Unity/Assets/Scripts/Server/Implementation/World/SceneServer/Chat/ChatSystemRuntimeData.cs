@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 
@@ -20,10 +21,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public long LastFetchPosition { get; set; }
 
-		/// <summary>
-		/// Atomic in-flight flag for the periodic message pump.
-		/// </summary>
-		public int MessagePumpInFlight { get; set; }
+		private int messagePumpInFlight;
+
+		/// <inheritdoc/>
+		public bool TryBeginMessagePump()
+		{
+			return Interlocked.CompareExchange(ref messagePumpInFlight, 1, 0) == 0;
+		}
+
+		/// <inheritdoc/>
+		public void EndMessagePump()
+		{
+			Interlocked.Exchange(ref messagePumpInFlight, 0);
+		}
 
 		/// <summary>
 		/// Initializes the chat message queue data container.
@@ -32,7 +42,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			LastFetchTime = DateTime.UtcNow;
 			LastFetchPosition = 0;
-			MessagePumpInFlight = 0;
+			Interlocked.Exchange(ref messagePumpInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -43,7 +53,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			LastFetchTime = DateTime.UtcNow;
 			LastFetchPosition = 0;
-			MessagePumpInFlight = 0;
+			Interlocked.Exchange(ref messagePumpInFlight, 0);
 		}
 
 		/// <summary>
