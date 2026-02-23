@@ -51,6 +51,7 @@ Mutable runtime state for the server selection system.
 | Property | Type | Purpose |
 |----------|------|---------|
 | `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent server-list requests |
+| `NextAllowedRequestUtcByClientId` | `ConcurrentDictionary<int, DateTime>` | Per-connection post-release cooldown timestamp; enforces `serverListCooldownMilliseconds` gap between successive list requests |
 
 **Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
 
@@ -118,6 +119,11 @@ On failure (service unavailable or fetch failure), an empty `ServerListBroadcast
 - **Per-connection in-flight gate (`ServerSelectSystemRuntimeData.InFlightRequests`)**
     - Prevents one connection from stacking multiple concurrent server-list tasks.
     - Gate is released on both enqueue failure and async completion (`finally`).
+- **Post-release cooldown (`serverListCooldownMilliseconds`, default `1000`)**
+    - After an in-flight request completes, the connection must wait the configured cooldown before another server-list request is accepted.
+    - Tracked via `NextAllowedRequestUtcByClientId` in runtime data.
+    - Prevents rapid sequential spam after each request completes.
+    - Entries are cleaned up on disconnect.
 - **Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`)**
     - Time-slices queued responses to avoid frame-time spikes.
 

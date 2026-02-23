@@ -944,54 +944,62 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			// Validate scene object
-			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+			bool asyncOwnsGuard = false;
+			try
 			{
-				EndIngressGuard(guardKey);
-				return;
+				// Validate scene object
+				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+				{
+					return;
+				}
+
+				// Validate Dungeon Entrance
+				DungeonEntrance dungeonEntrance = sceneObject.GameObject.GetComponent<DungeonEntrance>();
+				if (dungeonEntrance == null ||
+					!dungeonEntrance.InRange(character.Transform))
+				{
+					return;
+				}
+
+				// Validate scene
+				if (worldSceneDetailsCache == null ||
+					!worldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
+				{
+					Log.Debug("InteractableSystem", "Missing Scene:" + dungeonEntrance.DungeonName);
+					return;
+				}
+
+				if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
+				{
+					Log.Debug("InteractableSystem", $"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
+					return;
+				}
+
+				// Capture main-thread state before going async
+				long characterID = character.ID;
+				long worldServerID = character.WorldServerID;
+				long partyID = 0;
+				if (character.TryGet(out IPartyController partyController) && partyController.ID != 0)
+				{
+					partyID = partyController.ID;
+				}
+				string dungeonName = dungeonEntrance.DungeonName;
+
+				CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
+
+				// Fire-and-forget: process dungeon instance assignment asynchronously.
+				// The async task's own finally block will release the guard on completion.
+				if (TryEnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails, guardKey), characterID))
+				{
+					asyncOwnsGuard = true;
+				}
 			}
-
-			// Validate Dungeon Entrance
-			DungeonEntrance dungeonEntrance = sceneObject.GameObject.GetComponent<DungeonEntrance>();
-			if (dungeonEntrance == null ||
-				!dungeonEntrance.InRange(character.Transform))
+			finally
 			{
-				EndIngressGuard(guardKey);
-				return;
-			}
-
-			// Validate scene
-			if (worldSceneDetailsCache == null ||
-				!worldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
-			{
-				Log.Debug("InteractableSystem", "Missing Scene:" + dungeonEntrance.DungeonName);
-				EndIngressGuard(guardKey);
-				return;
-			}
-
-			if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
-			{
-				Log.Debug("InteractableSystem", $"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
-				EndIngressGuard(guardKey);
-				return;
-			}
-
-			// Capture main-thread state before going async
-			long characterID = character.ID;
-			long worldServerID = character.WorldServerID;
-			long partyID = 0;
-			if (character.TryGet(out IPartyController partyController) && partyController.ID != 0)
-			{
-				partyID = partyController.ID;
-			}
-			string dungeonName = dungeonEntrance.DungeonName;
-
-			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
-
-			// Fire-and-forget: process dungeon instance assignment asynchronously
-			if (!TryEnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails, guardKey), characterID))
-			{
-				EndIngressGuard(guardKey);
+				if (!asyncOwnsGuard)
+				{
+					EndIngressGuard(guardKey);
+				}
 			}
 		}
 

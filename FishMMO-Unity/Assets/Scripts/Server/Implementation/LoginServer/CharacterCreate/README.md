@@ -51,6 +51,7 @@ Mutable runtime state for the character creation system.
 | Property | Type | Purpose |
 |----------|------|---------|
 | `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent create operations |
+| `NextAllowedCreateUtcByClientId` | `ConcurrentDictionary<int, DateTime>` | Per-connection post-release cooldown timestamp; enforces `createRequestCooldownMilliseconds` gap between successive create attempts |
 
 **Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
 
@@ -136,9 +137,14 @@ The in-flight create gate is released in `finally` to prevent stale lockout on e
 
 ## Operational Safeguards
 
-- **In-flight create gate (`inFlightCreateRequests`)**
+- **In-flight create gate (`InFlightRequests`)**
    - One concurrent create operation per connection.
    - Protects async worker queue and allocations from repeated create-button spam.
+- **Post-release cooldown (`createRequestCooldownMilliseconds`, default `2000`)**
+   - After an in-flight create completes, the connection must wait the configured cooldown before another create attempt is accepted.
+   - Tracked via `NextAllowedCreateUtcByClientId` in runtime data.
+   - Prevents rapid sequential spam after each request completes.
+   - Entries are cleaned up on disconnect.
 - **Bounded main-thread drain (`maxMainThreadResponsesPerFrame`)**
    - Limits per-frame response dispatch cost.
 

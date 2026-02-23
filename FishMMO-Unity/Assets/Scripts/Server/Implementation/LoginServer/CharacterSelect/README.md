@@ -50,7 +50,8 @@ Mutable runtime state for the character selection system.
 
 | Property | Type | Purpose |
 |----------|------|---------|
-| `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent select/delete operations |
+| `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent list/select/delete operations |
+| `NextAllowedRequestUtc` | `ConcurrentDictionary<int, DateTime>` | Per-connection post-release cooldown timestamp; enforces `RequestCooldownMilliseconds` gap between successive requests |
 
 **Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
 
@@ -77,16 +78,21 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 
 | Container | Responsibility |
 |-----------|----------------|
-| `CharacterSelectSystemRuntimeData` | Per-connection in-flight gate for select/delete request deduplication |
+| `CharacterSelectSystemRuntimeData` | Per-connection in-flight gate and cooldown for list/select/delete request deduplication |
 | `AsyncWorkerData` | Executes database operations in background worker threads |
 | `CharacterSelectSystemMainThreadQueueData` | Marshals network-safe response actions to main thread |
 
 ## Operational Safeguards
 
 - **Per-connection in-flight gate (`CharacterSelectSystemRuntimeData.InFlightRequests`)**
-    - Applied to `CharacterDeleteBroadcast` and `CharacterSelectBroadcast`.
-    - Prevents a single connection from queueing multiple concurrent select/delete operations.
+    - Applied to `CharacterRequestListBroadcast`, `CharacterDeleteBroadcast`, and `CharacterSelectBroadcast`.
+    - Prevents a single connection from queueing multiple concurrent list/select/delete operations.
     - Gate is always released in `finally` after async processing.
+- **Post-release cooldown (`RequestCooldownMilliseconds`, constant `2000`)**
+    - After an in-flight request completes, the connection must wait the configured cooldown before another request is accepted.
+    - Tracked via `NextAllowedRequestUtc` in runtime data.
+    - Prevents rapid sequential spam after each request completes.
+    - Entries are cleaned up on disconnect.
 - **Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`)**
     - `OnLateUpdate` drains up to `maxMainThreadResponsesPerFrame` actions each frame.
     - `OnDeinitialize` drains all remaining actions.

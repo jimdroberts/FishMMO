@@ -7,7 +7,7 @@ namespace FishMMO.Server.Implementation.World
 	/// Separate concrete type ensures the DataContainerRegistry creates
 	/// an independent instance for this system.
 	/// </summary>
-	public class KickRequestSystemMainThreadQueueData : MainThreadQueueData, IKickRequestSystemMainThreadQueueData
+	public class KickRequestSystemMainThreadQueueData : SystemMainThreadQueueData, IKickRequestSystemMainThreadQueueData
 	{
 	}
 }
