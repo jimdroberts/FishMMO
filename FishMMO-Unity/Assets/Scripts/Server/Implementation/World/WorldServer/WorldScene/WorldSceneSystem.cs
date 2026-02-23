@@ -182,8 +182,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Delete world scene data from database
-			if (Server.Database?.ServiceRegistry != null &&
-				Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService) &&
+			if (TryGetDbService(out ISceneService sceneService) &&
 				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
 			{
 				Log.Debug("WorldSceneSystem", $"Deinitializing: Deleting world scenes (WorldServerID={worldData.ID})");
@@ -364,13 +363,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="sceneName">Name of the scene to process.</param>
 		private async Task ProcessOpenWorldQueueAsync(string sceneName)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			if (!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService) ||
-				!Server.Database.ServiceRegistry.TryGet<ISceneServerService>(out var sceneServerService) ||
-				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var charService))
+			if (!TryGetDbService(out ISceneService sceneService) ||
+				!TryGetDbService(out ISceneServerService sceneServerService) ||
+				!TryGetDbService(out ICharacterService charService))
 			{
 				return;
 			}
@@ -504,42 +499,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			string accountName)
 		{
 			characterFlags.DisableBit(CharacterFlags.IsInInstance);
-			var updatedChar = new CharacterData(
-				id: charData.ID,
-				name: charData.Name,
-				nameLowercase: charData.NameLowercase,
-				account: charData.Account,
-				selected: charData.Selected,
-				worldServerID: charData.WorldServerID,
-				sceneName: charData.SceneName,
-				sceneHandle: charData.SceneHandle,
-				bindScene: charData.BindScene,
-				bindX: charData.BindX,
-				bindY: charData.BindY,
-				bindZ: charData.BindZ,
-				instanceID: charData.InstanceID,
-				instanceX: charData.InstanceX,
-				instanceY: charData.InstanceY,
-				instanceZ: charData.InstanceZ,
-				instanceRotX: charData.InstanceRotX,
-				instanceRotY: charData.InstanceRotY,
-				instanceRotZ: charData.InstanceRotZ,
-				instanceRotW: charData.InstanceRotW,
-				raceID: charData.RaceID,
-				modelIndex: charData.ModelIndex,
-				x: charData.X,
-				y: charData.Y,
-				z: charData.Z,
-				rotX: charData.RotX,
-				rotY: charData.RotY,
-				rotZ: charData.RotZ,
-				rotW: charData.RotW,
-				accessLevel: charData.AccessLevel,
-				online: charData.Online,
-				flags: characterFlags,
-				version: charData.Version + 1,
-				timeCreated: charData.TimeCreated,
-				lastSaved: DateTime.UtcNow
+			var updatedChar = charData.WithFlagsVersionAndTimestamp(
+				characterFlags,
+				charData.Version + 1,
+				DateTime.UtcNow
 			);
 			await charService.PersistAsync(updatedChar);
 			await FallbackToWorldSceneAsync(conn, accountName);
@@ -552,13 +515,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="skipDebounce">When true, skips per-account debounce check because the caller already reserved the lookup window.</param>
 		private async Task ProcessInstanceConnectionAsync(NetworkConnection conn, bool skipDebounce = false)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var charService) ||
-				!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService) ||
-				!Server.Database.ServiceRegistry.TryGet<ISceneServerService>(out var sceneServerService))
+			if (!TryGetDbService(out ICharacterService charService) ||
+				!TryGetDbService(out ISceneService sceneService) ||
+				!TryGetDbService(out ISceneServerService sceneServerService))
 			{
 				return;
 			}
@@ -668,11 +627,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		private async Task UpdateConnectionCountAsync()
 		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			if (!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
+			if (!TryGetDbService(out ISceneService sceneService))
 			{
 				return;
 			}
@@ -958,11 +913,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="accountName">Account name for the connection.</param>
 		private async Task FallbackToWorldSceneAsync(NetworkConnection conn, string accountName)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
-			if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var charService))
+			if (!TryGetDbService(out ICharacterService charService))
 			{
 				return;
 			}

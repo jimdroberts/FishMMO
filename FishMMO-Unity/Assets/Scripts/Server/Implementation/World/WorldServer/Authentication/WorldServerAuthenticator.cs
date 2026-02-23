@@ -74,7 +74,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}
 
-			return ClientAuthenticationResult.ServerBusy;
+			return ClientAuthenticationResult.NoCharacterSelected;
 		}
 	}
 }

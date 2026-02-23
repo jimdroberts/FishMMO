@@ -82,6 +82,24 @@ The system relies on `IPeriodicUpdateSystem` for fixed-rate callbacks:
 
 This keeps pulse cadence independent from frame rate while avoiding per-frame DB calls.
 
+## Configuration Surface
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `PulseRate` | `float` | `5.0f` | Periodic heartbeat interval (seconds) |
+
+`PulseRate` is exposed as a read-only property backed by `[SerializeField] private float pulseRate`.
+
+## Shutdown Cleanup
+
+`OnDeinitialize()` performs:
+
+1. Unregisters the periodic pulse callback from `IPeriodicUpdateSystem`.
+2. Deletes the login server's DB row (`ILoginServerService.DeleteAsync(serverId)`) with a 5-second timeout.
+3. Resets `ILoginServerRuntimeData.ID` to zero.
+
+This prevents ghost rows from persisting in the database after an orderly shutdown.
+
 ## Runtime Data Lifecycle
 
 `LoginServerRuntimeData` stores one mutable value:

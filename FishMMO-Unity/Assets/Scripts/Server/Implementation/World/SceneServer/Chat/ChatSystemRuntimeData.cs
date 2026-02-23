@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
+using FishNet.Connection;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -20,6 +23,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Position (ID) of the last fetched chat message in the database.
 		/// </summary>
 		public long LastFetchPosition { get; set; }
+
+		/// <inheritdoc/>
+		public List<IPlayerCharacter> CharacterBroadcastBuffer { get; private set; }
+
+		/// <inheritdoc/>
+		public List<NetworkConnection> ConnectionBroadcastBuffer { get; private set; }
 
 		private int messagePumpInFlight;
 
@@ -42,6 +51,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			LastFetchTime = DateTime.UtcNow;
 			LastFetchPosition = 0;
+			CharacterBroadcastBuffer = new List<IPlayerCharacter>();
+			ConnectionBroadcastBuffer = new List<NetworkConnection>();
 			Interlocked.Exchange(ref messagePumpInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -53,6 +64,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			LastFetchTime = DateTime.UtcNow;
 			LastFetchPosition = 0;
+			CharacterBroadcastBuffer?.Clear();
+			ConnectionBroadcastBuffer?.Clear();
 			Interlocked.Exchange(ref messagePumpInFlight, 0);
 		}
 
@@ -62,6 +75,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override void Deinitialize()
 		{
 			Clear();
+			CharacterBroadcastBuffer = null;
+			ConnectionBroadcastBuffer = null;
 		}
 	}
 }

@@ -29,8 +29,8 @@ Implementation targets:
 - `IPartyCharacterMappingData`
 
 Primary runtime settings:
-- `MaxPartySize`
-- `UpdatePumpRate`
+- `MaxPartySize` — read-only property backed by `[SerializeField] private int maxPartySize`
+- `UpdatePumpRate` — read-only property backed by `[SerializeField] private float updatePumpRate`
 
 ## Runtime Data Containers
 

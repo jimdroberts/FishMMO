@@ -131,6 +131,14 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 11. Send `ServerListBroadcast`.
 12. Release in-flight gate in `finally`.
 
+## Failure Response Behavior
+
+All request flows guarantee a response to the client, even on failure, to prevent indefinite client hangs:
+
+- **Character List**: On DB service unavailability or fetch failure, an empty `CharacterListBroadcast` is sent.
+- **Character Select**: On any failure (service unavailability, UoW failure, ownership mismatch, commit failure, or world server fetch failure), an empty `ServerListBroadcast` is sent.
+- **Character Delete**: On failure, no `CharacterDeleteBroadcast` echo is sent — the character stays in the client's list. The in-flight guard releases so the user can retry.
+
 ## Transaction Boundaries
 
 Both delete and select operations run under `IUnitOfWorkService` to preserve consistency:

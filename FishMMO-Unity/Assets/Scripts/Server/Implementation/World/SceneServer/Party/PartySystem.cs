@@ -43,13 +43,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Maximum number of members allowed in a party.
 		/// </summary>
-		public int MaxPartySize = 6;
+		[SerializeField] private int maxPartySize = 6;
+
+		/// <summary>
+		/// Maximum number of members allowed in a party.
+		/// </summary>
+		public int MaxPartySize => maxPartySize;
 		/// <summary>
 		/// The server party update pump rate limit in seconds.
 		/// </summary>
 		[Tooltip("The server party update pump rate limit in seconds.")]
-		[SerializeField]
-		public float UpdatePumpRate = 1.0f;
+		[SerializeField] private float updatePumpRate = 1.0f;
+
+		/// <summary>
+		/// The server party update pump rate limit in seconds.
+		/// </summary>
+		public float UpdatePumpRate => updatePumpRate;
 
 		/// <summary>
 		/// Invitation lifetime in seconds before automatic expiration.

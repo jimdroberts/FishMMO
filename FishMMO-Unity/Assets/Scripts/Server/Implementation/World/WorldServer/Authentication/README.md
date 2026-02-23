@@ -54,17 +54,17 @@ On success, base flow calls:
 5. Verify account has a selected character (`FetchByAccountAsync(username, selected: true)`):
    - DB call failed -> `ServerBusy`
    - selected character exists -> `WorldLoginSuccess`
-   - no selected character -> `InvalidUsernameOrPassword`
+   - no selected character -> `NoCharacterSelected`
 
 ## Admission Rules
 
 | Rule | Source | Outcome |
-|------|--------|---------|
+|------|--------|--------|
 | World server is locked | `IWorldServerSystemRuntimeData.IsLocked` | `ServerFull` |
 | World server is at capacity | `IWorldSceneMappingData<NetworkConnection>.ConnectionCount >= MaxPlayers` | `ServerFull` |
 | Character service unavailable | DB service registry | `ServerBusy` |
 | Selected character present | `ICharacterService.FetchByAccountAsync(..., selected: true)` | `WorldLoginSuccess` |
-| Selected character missing | Same query | `InvalidUsernameOrPassword` |
+| Selected character missing | Same query | `NoCharacterSelected` |
 
 ## Configuration
 

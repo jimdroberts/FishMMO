@@ -3,7 +3,6 @@ using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -42,7 +41,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// If true, keeps deleted character data in the database for recovery or auditing.
 		/// </summary>
-		public bool KeepDeleteData = true;
+		[SerializeField] private bool keepDeleteData = true;
+
+		/// <summary>
+		/// If true, keeps deleted character data in the database for recovery or auditing.
+		/// </summary>
+		public bool KeepDeleteData => keepDeleteData;
 
 		/// <summary>
 		/// Initializes the character select system, registering broadcast handlers for character list, delete, and select requests.
@@ -146,10 +150,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			try
 			{
-				if (Server.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				if (!TryGetDbService(out ICharacterService characterService))
 				{
 					await Log.Warning("CharacterSelectSystem", "CharacterService unavailable for character list request.");
+					SendEmptyCharacterList(conn);
 					return;
 				}
 
@@ -158,6 +162,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!dbResult.IsSuccess || dbResult.Data == null)
 				{
 					await Log.Warning("CharacterSelectSystem", $"Failed to fetch character list for account '{accountName}': {dbResult.ErrorMessage}");
+					SendEmptyCharacterList(conn);
 					return;
 				}
 
@@ -235,22 +240,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			try
 			{
-				var registry = Server.Database?.ServiceRegistry;
-				if (registry == null ||
-					!registry.TryGet<ICharacterService>(out var characterService) ||
-					!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService) ||
-					!registry.TryGet<ICharacterAbilityService>(out var abilityService) ||
-					!registry.TryGet<ICharacterAchievementService>(out var achievementService) ||
-					!registry.TryGet<ICharacterAttributeService>(out var attributeService) ||
-					!registry.TryGet<ICharacterBankService>(out var bankService) ||
-					!registry.TryGet<ICharacterBuffService>(out var buffService) ||
-					!registry.TryGet<ICharacterEquipmentService>(out var equipmentService) ||
-					!registry.TryGet<ICharacterFactionService>(out var factionService) ||
-					!registry.TryGet<ICharacterFriendService>(out var friendService) ||
-					!registry.TryGet<ICharacterHotkeyService>(out var hotkeyService) ||
-					!registry.TryGet<ICharacterInventoryService>(out var inventoryService) ||
-					!registry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService) ||
-					!registry.TryGet<ICharacterPetService>(out var petService))
+				if (!TryGetDbService(out ICharacterService characterService) ||
+					!TryGetDbService(out IUnitOfWorkService unitOfWorkService) ||
+					!TryGetDbService(out ICharacterAbilityService abilityService) ||
+					!TryGetDbService(out ICharacterAchievementService achievementService) ||
+					!TryGetDbService(out ICharacterAttributeService attributeService) ||
+					!TryGetDbService(out ICharacterBankService bankService) ||
+					!TryGetDbService(out ICharacterBuffService buffService) ||
+					!TryGetDbService(out ICharacterEquipmentService equipmentService) ||
+					!TryGetDbService(out ICharacterFactionService factionService) ||
+					!TryGetDbService(out ICharacterFriendService friendService) ||
+					!TryGetDbService(out ICharacterHotkeyService hotkeyService) ||
+					!TryGetDbService(out ICharacterInventoryService inventoryService) ||
+					!TryGetDbService(out ICharacterKnownAbilityService knownAbilityService) ||
+					!TryGetDbService(out ICharacterPetService petService))
 				{
 					await Log.Warning("CharacterSelectSystem", "One or more DB services unavailable for character delete.");
 					return;
@@ -404,12 +407,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			try
 			{
-				var registry = Server.Database?.ServiceRegistry;
-				if (registry == null ||
-					!registry.TryGet<ICharacterService>(out var characterService) ||
-					!registry.TryGet<IWorldServerService>(out var worldServerService) ||
-					!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
+					if (!TryGetDbService(out ICharacterService characterService) ||
+					!TryGetDbService(out IWorldServerService worldServerService) ||
+					!TryGetDbService(out IUnitOfWorkService unitOfWorkService))
 				{
+					await Log.Warning("CharacterSelectSystem", "DB services unavailable for character select.");
+					SendEmptyServerList(conn);
 					return;
 				}
 
@@ -419,6 +422,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!uowResult.IsSuccess)
 				{
 					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character select: {uowResult.ErrorMessage}");
+					SendEmptyServerList(conn);
 					return;
 				}
 
@@ -455,6 +459,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult setSelectedResult = await characterService.SetSelectedAsync(accountName, character.ID);
 					if (!setSelectedResult.IsSuccess)
 					{
+						await Log.Warning("CharacterSelectSystem", $"SetSelectedAsync failed for account '{accountName}': {setSelectedResult.ErrorMessage}");
+						SendEmptyServerList(conn);
 						return;
 					}
 
@@ -465,6 +471,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						!string.Equals(selectedResult.Data.Value.Name, characterName, StringComparison.OrdinalIgnoreCase))
 					{
 						await Log.Warning("CharacterSelectSystem", $"Character select ownership verification failed for account '{accountName}' and character '{characterName}'.");
+						SendEmptyServerList(conn);
 						return;
 					}
 
@@ -473,6 +480,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (!commitResult.IsSuccess)
 					{
 						await Log.Error("CharacterSelectSystem", $"Failed to commit character select: {commitResult.ErrorMessage}");
+						SendEmptyServerList(conn);
 						return;
 					}
 				}
@@ -508,6 +516,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 						}
 					});
 				}
+				else
+				{
+					await Log.Warning("CharacterSelectSystem", $"Failed to fetch active world servers after character select: {worldResult.ErrorMessage}");
+					SendEmptyServerList(conn);
+				}
 			}
 			catch (Exception ex)
 			{
@@ -535,17 +548,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<ICharacterSelectSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadResponsesPerFrame);
-				}
-			}
+			DrainMainThreadQueue<ICharacterSelectSystemMainThreadQueueData>(maxMainThreadResponsesPerFrame, drainAll);
 		}
 
 		/// <summary>
@@ -555,11 +558,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="action">The action to execute on the main thread.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<ICharacterSelectSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				return queueData.TryEnqueue(action);
-			}
-			return false;
+			return TryEnqueueMainThread<ICharacterSelectSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -616,6 +615,44 @@ namespace FishMMO.Server.Implementation.LoginServer
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 				runtimeData.NextAllowedRequestUtc.TryRemove(conn.ClientId, out _);
 			}
+		}
+
+		/// <summary>
+		/// Sends an empty server list to the client when the character select flow fails.
+		/// Prevents the client from hanging indefinitely waiting for a response.
+		/// </summary>
+		/// <param name="conn">Network connection to send the empty list to.</param>
+		private void SendEmptyServerList(NetworkConnection conn)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn != null && conn.IsActive)
+				{
+					Server.NetworkWrapper.Broadcast(conn, new ServerListBroadcast()
+					{
+						Servers = new List<WorldServerDetails>(),
+					}, true, Channel.Reliable);
+				}
+			});
+		}
+
+		/// <summary>
+		/// Sends an empty character list to the client when the fetch operation fails.
+		/// Prevents the client from hanging indefinitely waiting for a response.
+		/// </summary>
+		/// <param name="conn">Network connection to send the empty list to.</param>
+		private void SendEmptyCharacterList(NetworkConnection conn)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn != null && conn.IsActive)
+				{
+					Server.NetworkWrapper.Broadcast(conn, new CharacterListBroadcast()
+					{
+						Characters = new List<CharacterDetails>(),
+					}, true, Channel.Reliable);
+				}
+			});
 		}
 	}
 }

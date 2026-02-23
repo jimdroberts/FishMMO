@@ -120,6 +120,18 @@ This separation avoids blocking frame/update loops during normal operation while
 |---|---|---|---|
 | `PulseRate` | `float` | `5.0f` | Periodic heartbeat interval (seconds) |
 
+`PulseRate` is exposed as a read-only property backed by `[SerializeField] private float pulseRate`.
+
+## Shutdown Cleanup
+
+`OnDeinitialize()` performs:
+
+1. Unregisters the periodic pulse callback from `IPeriodicUpdateSystem`.
+2. Deletes the world server's DB row (`IWorldServerService.DeleteAsync(serverId)`) with a 5-second timeout.
+3. Resets `IWorldServerSystemRuntimeData.ID` to zero.
+
+This prevents ghost rows from persisting in the database after an orderly shutdown, mirroring the LoginServerSystem cleanup pattern.
+
 ## External Integration Points
 
 - **AddressProvider** (`IServerAddressProvider`) — resolves public endpoint for registration.

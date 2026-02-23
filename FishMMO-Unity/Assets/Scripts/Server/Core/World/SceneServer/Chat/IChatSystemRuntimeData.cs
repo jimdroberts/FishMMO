@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using FishNet.Connection;
+using FishMMO.Shared;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
@@ -17,6 +20,18 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Position (ID) of the last fetched chat message in the database.
 		/// </summary>
 		long LastFetchPosition { get; set; }
+
+		/// <summary>
+		/// Reusable scratch list for character broadcast iteration, avoiding per-message allocation.
+		/// Only used from the main thread.
+		/// </summary>
+		List<IPlayerCharacter> CharacterBroadcastBuffer { get; }
+
+		/// <summary>
+		/// Reusable scratch list for connection broadcast iteration, avoiding per-message allocation.
+		/// Only used from the main thread.
+		/// </summary>
+		List<NetworkConnection> ConnectionBroadcastBuffer { get; }
 
 		/// <summary>
 		/// Atomic in-flight flag for the periodic message pump.

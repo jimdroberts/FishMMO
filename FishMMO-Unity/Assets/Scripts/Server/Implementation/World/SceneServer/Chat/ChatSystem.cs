@@ -3,7 +3,6 @@ using FishNet.Transporting;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -32,17 +31,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private const int MaxChannelIdPrefixLength = 22;
 
-		/// <summary>
-		/// Reusable scratch list for character broadcast iteration, avoiding per-message allocation.
-		/// Only used from the main thread.
-		/// </summary>
-		private readonly List<IPlayerCharacter> characterBroadcastBuffer = new List<IPlayerCharacter>();
 
-		/// <summary>
-		/// Reusable scratch list for connection broadcast iteration, avoiding per-message allocation.
-		/// Only used from the main thread.
-		/// </summary>
-		private readonly List<NetworkConnection> connectionBroadcastBuffer = new List<NetworkConnection>();
 
 		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
@@ -538,14 +527,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			};
 
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
-				mappingData.CharactersByWorld.TryGetValue(worldID, out var characters))
+				mappingData.CharactersByWorld.TryGetValue(worldID, out var characters) &&
+				Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
 			{
 				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
-				characterBroadcastBuffer.Clear();
-				characterBroadcastBuffer.AddRange(characters.Values);
-				for (int i = 0; i < characterBroadcastBuffer.Count; i++)
+				var buffer = chatData.CharacterBroadcastBuffer;
+				buffer.Clear();
+				buffer.AddRange(characters.Values);
+				for (int i = 0; i < buffer.Count; i++)
 				{
-					Server.NetworkWrapper.Broadcast(characterBroadcastBuffer[i].Owner, newMsg, true, Channel.Reliable);
+					Server.NetworkWrapper.Broadcast(buffer[i].Owner, newMsg, true, Channel.Reliable);
 				}
 			}
 			return true;
@@ -569,14 +560,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Server.NetworkWrapper.NetworkManager != null &&
 				Server.NetworkWrapper.NetworkManager.SceneManager != null)
 			{
-				if (Server.NetworkWrapper.NetworkManager.SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections))
+				if (Server.NetworkWrapper.NetworkManager.SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections) &&
+					Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
 				{
 					// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the set.
-					connectionBroadcastBuffer.Clear();
-					connectionBroadcastBuffer.AddRange(connections);
-					for (int i = 0; i < connectionBroadcastBuffer.Count; i++)
+					var buffer = chatData.ConnectionBroadcastBuffer;
+					buffer.Clear();
+					buffer.AddRange(connections);
+					for (int i = 0; i < buffer.Count; i++)
 					{
-						Server.NetworkWrapper.Broadcast(connectionBroadcastBuffer[i], msg, true, Channel.Reliable);
+						Server.NetworkWrapper.Broadcast(buffer[i], msg, true, Channel.Reliable);
 					}
 				}
 			}
@@ -593,7 +586,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>False — persistence is handled inside the async path.</returns>
 		public bool OnPartyChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			if (Server.Database?.ServiceRegistry == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return false;
 			}
@@ -635,8 +628,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var partyService))
+				if (!TryGetDbService(out ICharacterPartyService partyService))
 				{
 					return;
 				}
@@ -697,7 +689,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>False — persistence is handled inside the async path.</returns>
 		public bool OnGuildChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			if (Server.Database?.ServiceRegistry == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return false;
 			}
@@ -739,8 +731,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var guildService))
+				if (!TryGetDbService(out ICharacterGuildService guildService))
 				{
 					return;
 				}
@@ -829,7 +820,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			if (Server.Database?.ServiceRegistry == null)
+			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return false;
 			}
@@ -864,8 +855,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				if (!TryGetDbService(out ICharacterService characterService))
 				{
 					return;
 				}
@@ -978,14 +968,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					SenderID = msg.SenderID,
 					Text = trimmed,
 				};
-				if (mappingData.CharactersByWorld.TryGetValue(worldID, out var characters))
+				if (mappingData.CharactersByWorld.TryGetValue(worldID, out var characters) &&
+					Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
 				{
 					// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
-					characterBroadcastBuffer.Clear();
-					characterBroadcastBuffer.AddRange(characters.Values);
-					for (int i = 0; i < characterBroadcastBuffer.Count; i++)
+					var buffer = chatData.CharacterBroadcastBuffer;
+					buffer.Clear();
+					buffer.AddRange(characters.Values);
+					for (int i = 0; i < buffer.Count; i++)
 					{
-						Server.NetworkWrapper.Broadcast(characterBroadcastBuffer[i].Owner, newMsg, true, Channel.Reliable);
+						Server.NetworkWrapper.Broadcast(buffer[i].Owner, newMsg, true, Channel.Reliable);
 					}
 				}
 				return true;
@@ -1047,14 +1039,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			};
 
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
-				mappingData.CharactersByWorld.TryGetValue(worldServerID, out var characters))
+				mappingData.CharactersByWorld.TryGetValue(worldServerID, out var characters) &&
+				Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
 			{
 				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
-				characterBroadcastBuffer.Clear();
-				characterBroadcastBuffer.AddRange(characters.Values);
-				for (int i = 0; i < characterBroadcastBuffer.Count; i++)
+				var buffer = chatData.CharacterBroadcastBuffer;
+				buffer.Clear();
+				buffer.AddRange(characters.Values);
+				for (int i = 0; i < buffer.Count; i++)
 				{
-					Server.NetworkWrapper.Broadcast(characterBroadcastBuffer[i].Owner, newMsg, true, Channel.Reliable);
+					Server.NetworkWrapper.Broadcast(buffer[i].Owner, newMsg, true, Channel.Reliable);
 				}
 			}
 		}

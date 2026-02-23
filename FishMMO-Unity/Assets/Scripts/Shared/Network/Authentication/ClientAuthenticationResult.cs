@@ -50,5 +50,9 @@
 		/// Server is busy and cannot process the request at this time.
 		/// </summary>
 		ServerBusy,
+		/// <summary>
+		/// No character is selected on the account. The client must select a character before connecting to a world server.
+		/// </summary>
+		NoCharacterSelected,
 	}
 }

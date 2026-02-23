@@ -3,7 +3,6 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -404,15 +403,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				if (!TryGetDbService(out IGuildUpdateService guildUpdateService) ||
+					!TryGetDbService(out ICharacterGuildService charGuildService))
 				{
 					return;
 				}
@@ -702,15 +694,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
+					!TryGetDbService(out IGuildUpdateService guildUpdateService))
 				{
 					return;
 				}
@@ -813,12 +798,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				if (!TryGetDbService(out IGuildService guildService) ||
+					!TryGetDbService(out ICharacterGuildService charGuildService))
 				{
 					return;
 				}
@@ -950,8 +931,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
+				if (!TryGetDbService(out ICharacterGuildService charGuildService))
 				{
 					return;
 				}
@@ -1080,12 +1060,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
+					!TryGetDbService(out IGuildUpdateService guildUpdateService))
 				{
 					return;
 				}
@@ -1242,16 +1218,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildService>(out var guildService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
+					!TryGetDbService(out IGuildService guildService) ||
+					!TryGetDbService(out IGuildUpdateService guildUpdateService))
 				{
 					return;
 				}
@@ -1298,15 +1267,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					CharacterGuildData? newLeader = null;
+					var rng = new Random();
 					if (officers.Count > 0)
 					{
 						// pick a random officer
-						newLeader = officers[RandomNumberGenerator.GetInt32(officers.Count)];
+						newLeader = officers[rng.Next(officers.Count)];
 					}
 					else if (remainingMembers.Count > 0)
 					{
 						// pick a random member
-						newLeader = remainingMembers[RandomNumberGenerator.GetInt32(remainingMembers.Count)];
+						newLeader = remainingMembers[rng.Next(remainingMembers.Count)];
 					}
 
 					// update the guild leader status in the database
@@ -1434,12 +1404,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
+					!TryGetDbService(out IGuildUpdateService guildUpdateService))
 				{
 					return;
 				}
@@ -1569,12 +1535,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterGuildService>(out var charGuildService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IGuildUpdateService>(out var guildUpdateService))
+				if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
+					!TryGetDbService(out IGuildUpdateService guildUpdateService))
 				{
 					return;
 				}

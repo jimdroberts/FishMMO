@@ -1,6 +1,5 @@
 ﻿using FishNet.Connection;
 using System;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -26,7 +25,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Interval (in seconds) between heartbeat pulses to the database.
 		/// </summary>
-		public float PulseRate = 5.0f;
+		[SerializeField] private float pulseRate = 5.0f;
+
+		/// <summary>
+		/// Interval (in seconds) between heartbeat pulses to the database.
+		/// </summary>
+		public float PulseRate => pulseRate;
 
 		/// <summary>
 		/// Initializes the world server system, validates dependencies, registers
@@ -79,7 +83,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
-		/// Called when the system is being destroyed. No custom logic implemented.
+		/// Called when the system is being destroyed. Deregisters the world server from the database and unregisters periodic callbacks.
 		/// </summary>
 		public override void OnDeinitialize()
 		{
@@ -93,6 +97,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPulse);
+			}
+
+			// Deregister world server from database on shutdown
+			if (Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var runtimeData) &&
+				runtimeData.ID > 0 &&
+				Server.Database?.ServiceRegistry != null &&
+				Server.Database.ServiceRegistry.TryGet<IWorldServerService>(out var worldServerService))
+			{
+				try
+				{
+					Task.Run(() => worldServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("WorldServerSystem", $"Failed to deregister world server from DB: {ex.Message}");
+				}
 			}
 		}
 

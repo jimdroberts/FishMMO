@@ -105,6 +105,17 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
+		/// Attempts to resolve a database service from the server's database service registry.
+		/// Encapsulates the null-check on Server.Database.ServiceRegistry and the TryGet call.
+		/// </summary>
+		protected bool TryGetDbService<T>(out T service) where T : class
+		{
+			service = default;
+			var registry = Server?.Database?.ServiceRegistry;
+			return registry != null && registry.TryGet(out service);
+		}
+
+		/// <summary>
 		/// Enqueue a unit of asynchronous work to the centralized AsyncWorker. Returns false when rejected.
 		/// Logs warnings using the concrete behaviour name for diagnostics.
 		/// </summary>

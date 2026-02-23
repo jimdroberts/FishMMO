@@ -103,6 +103,8 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 4. Enqueues a main-thread response action.
 5. Releases in-flight gate in `finally`.
 
+On failure (service unavailable or fetch failure), an empty `ServerListBroadcast` is sent to prevent indefinite client hangs.
+
 ### 3) Main-Thread Dispatch
 
 `OnLateUpdate` drains the queue each frame through `DrainMainThreadQueue()`, then sends:

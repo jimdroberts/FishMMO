@@ -91,5 +91,10 @@ namespace FishMMO.Database.Data
 		{
 			return new CharacterData(ID, Name, NameLowercase, Account, Selected, WorldServerID, SceneName, SceneHandle, BindScene, BindX, BindY, BindZ, InstanceID, InstanceX, InstanceY, InstanceZ, InstanceRotX, InstanceRotY, InstanceRotZ, InstanceRotW, RaceID, ModelIndex, X, Y, Z, RotX, RotY, RotZ, RotW, AccessLevel, Online, Flags, newVersion, TimeCreated, LastSaved);
 		}
+
+		public CharacterData WithFlagsVersionAndTimestamp(int flags, long version, DateTime lastSaved)
+		{
+			return new CharacterData(ID, Name, NameLowercase, Account, Selected, WorldServerID, SceneName, SceneHandle, BindScene, BindX, BindY, BindZ, InstanceID, InstanceX, InstanceY, InstanceZ, InstanceRotX, InstanceRotY, InstanceRotZ, InstanceRotW, RaceID, ModelIndex, X, Y, Z, RotX, RotY, RotZ, RotW, AccessLevel, Online, flags, version, TimeCreated, lastSaved);
+		}
 	}
 }

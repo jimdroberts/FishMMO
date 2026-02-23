@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -23,7 +22,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Interval in seconds between database heartbeat pulses.
 		/// </summary>
-		public float PulseRate = 5.0f;
+		[SerializeField] private float pulseRate = 5.0f;
+
+		/// <summary>
+		/// Interval in seconds between database heartbeat pulses.
+		/// </summary>
+		public float PulseRate => pulseRate;
 
 		/// <summary>
 		/// Initializes the login server system, registers event handlers, and adds the server to the database.

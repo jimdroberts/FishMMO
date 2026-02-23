@@ -2,7 +2,6 @@
 using FishNet.Managing.Server;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishNet.Transporting;
 using FishMMO.Database;
@@ -148,9 +147,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			try
 			{
-				if (Server.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<IWorldServerService>(out var worldServerService))
+				if (!TryGetDbService(out IWorldServerService worldServerService))
 				{
+					await Log.Warning("ServerSelectSystem", "WorldServerService unavailable for server list request.");
+					SendEmptyServerList(conn);
 					return;
 				}
 
@@ -159,6 +159,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!dbResult.IsSuccess || dbResult.Data == null)
 				{
 					await Log.Warning("ServerSelectSystem", $"Failed to fetch active servers: {dbResult.ErrorMessage}");
+					SendEmptyServerList(conn);
 					return;
 				}
 
@@ -226,6 +227,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private bool TryEnqueueMainThread(Action action)
 		{
 			return TryEnqueueMainThread<IServerSelectSystemMainThreadQueueData>(action);
+		}
+
+		/// <summary>
+		/// Sends an empty server list to the client when the fetch operation fails.
+		/// Prevents the client from hanging indefinitely waiting for a response.
+		/// </summary>
+		/// <param name="conn">Network connection to send the empty list to.</param>
+		private void SendEmptyServerList(NetworkConnection conn)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn != null && conn.IsActive)
+				{
+					Server.NetworkWrapper.Broadcast(conn, new ServerListBroadcast()
+					{
+						Servers = new List<WorldServerDetails>(),
+					}, true, Channel.Reliable);
+				}
+			});
 		}
 
 		// Uses ServerBehaviour.TryEnqueueAsyncWork

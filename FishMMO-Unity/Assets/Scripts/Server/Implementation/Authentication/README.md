@@ -174,6 +174,7 @@ In-flight gate maps are separate from channel capacity and provide per-connectio
 | `AlreadyOnline` | Account has an online character (kick request issued) |
 | `Banned` | Account is banned |
 | `ServerBusy` | Channel full or services unavailable |
+| `NoCharacterSelected` | Account has no selected character (world-server gate) |
 
 ## Extensibility
 
