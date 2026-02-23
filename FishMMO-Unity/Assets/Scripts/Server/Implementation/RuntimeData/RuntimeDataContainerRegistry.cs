@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishNet.Connection;
@@ -60,9 +61,14 @@ namespace FishMMO.Server.Implementation
 
 			Log.Debug(RegistryName, "Deinitializing all data containers");
 
+			// Use a HashSet to avoid calling Clear/Deinitialize multiple times
+			// on the same instance registered under multiple keys.
+			var deinitialized = new HashSet<IRuntimeDataContainer>();
+
 			foreach (var component in components.Values)
 			{
-				if (component is IRuntimeDataContainer<INetworkManagerWrapper, ServerManager, NetworkConnection, IRuntimeDataContainer> container)
+				if (component is IRuntimeDataContainer<INetworkManagerWrapper, ServerManager, NetworkConnection, IRuntimeDataContainer> container &&
+					deinitialized.Add(component))
 				{
 					container.Clear();
 					container.Deinitialize();

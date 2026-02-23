@@ -2,6 +2,10 @@ using FishNet.Connection;
 using FishNet.Managing.Server;
 using UnityEngine;
 using FishMMO.Server.Core;
+using System;
+using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
+using FishMMO.Logging;
 
 namespace FishMMO.Server.Implementation
 {
@@ -80,6 +84,96 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 			OnUpdate(deltaTime);
+		}
+
+		/// <summary>
+		/// Drain the specified main-thread queue for this server behaviour.
+		/// </summary>
+		protected void DrainMainThreadQueue<TQueue>(int maxActions, bool drainAll)
+			where TQueue : class, IMainThreadQueueData
+		{
+			MainThreadQueueHelper.Drain<TQueue>(Server, maxActions, drainAll);
+		}
+
+		/// <summary>
+		/// Enqueue an action to the specified main-thread queue.
+		/// </summary>
+		protected bool TryEnqueueMainThread<TQueue>(Action action)
+			where TQueue : class, IMainThreadQueueData
+		{
+			return MainThreadQueueHelper.TryEnqueue<TQueue>(Server, action);
+		}
+
+		/// <summary>
+		/// Enqueue a unit of asynchronous work to the centralized AsyncWorker. Returns false when rejected.
+		/// Logs warnings using the concrete behaviour name for diagnostics.
+		/// </summary>
+		protected bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			string tag = GetType().Name;
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				if (entityKey != 0)
+				{
+					if (asyncWorker.Enqueue(work, entityKey, callerName))
+						return true;
+
+					Log.Warning(tag, $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
+					return false;
+				}
+
+				if (asyncWorker.Enqueue(work, callerName))
+					return true;
+				
+				Log.Warning(tag, $"{callerName}: Async worker queue rejected work.");
+				return false;
+			}
+
+			Log.Warning(tag, $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
+		}
+
+		/// <summary>
+		/// Generic helper to attempt acquiring an in-flight slot from a runtime data container.
+		/// Caller supplies a lambda that performs the actual add (e.g. runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0)).
+		/// </summary>
+		protected bool TryBeginInFlightRequest<TRuntime>(NetworkConnection conn, Func<TRuntime, bool> tryAdd)
+			where TRuntime : class, FishMMO.Server.Core.IRuntimeDataContainer
+		{
+			if (conn == null || tryAdd == null)
+				return false;
+
+			if (!Server.DataContainerRegistry.TryGet<TRuntime>(out var runtimeData))
+				return false;
+
+			try
+			{
+				return tryAdd(runtimeData);
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Generic helper to release an in-flight slot from a runtime data container.
+		/// Caller supplies an action that performs the remove/cleanup on the runtime data.
+		/// </summary>
+		protected void EndInFlightRequest<TRuntime>(NetworkConnection conn, Action<TRuntime> onEnd)
+			where TRuntime : class, FishMMO.Server.Core.IRuntimeDataContainer
+		{
+			if (conn == null || onEnd == null)
+				return;
+
+			if (!Server.DataContainerRegistry.TryGet<TRuntime>(out var runtimeData))
+				return;
+
+			try
+			{
+				onEnd(runtimeData);
+			}
+			catch { }
 		}
 
 		/// <summary>

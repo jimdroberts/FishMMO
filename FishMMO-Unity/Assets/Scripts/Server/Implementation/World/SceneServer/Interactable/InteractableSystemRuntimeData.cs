@@ -13,33 +13,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	{
 		public Dictionary<Type, IInteractableHandler> InteractableHandlers { get; private set; }
 
-		public ConcurrentDictionary<long, DateTime> InteractableNextAllowedUtcByCharacter { get; private set; }
-		public ConcurrentDictionary<long, byte> InteractableInFlightByCharacter { get; private set; }
-		public DateTime NextDebounceSweepUtc { get; set; }
+		public IngressGuard IngressGuard { get; private set; }
 
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			InteractableHandlers = new Dictionary<Type, IInteractableHandler>();
-			InteractableNextAllowedUtcByCharacter = new ConcurrentDictionary<long, DateTime>();
-			InteractableInFlightByCharacter = new ConcurrentDictionary<long, byte>();
-			NextDebounceSweepUtc = DateTime.UtcNow;
+			IngressGuard = new IngressGuard();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		public override void Clear()
 		{
 			InteractableHandlers?.Clear();
-			InteractableNextAllowedUtcByCharacter?.Clear();
-			InteractableInFlightByCharacter?.Clear();
-			NextDebounceSweepUtc = DateTime.UtcNow;
+			IngressGuard?.Clear();
 		}
 
 		public override void Deinitialize()
 		{
 			Clear();
 			InteractableHandlers = null;
-			InteractableNextAllowedUtcByCharacter = null;
-			InteractableInFlightByCharacter = null;
+			IngressGuard = null;
 		}
 	}
 }

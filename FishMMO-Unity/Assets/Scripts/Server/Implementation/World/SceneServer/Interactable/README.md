@@ -64,10 +64,11 @@ Queue submissions use checked enqueue semantics with warning logs when work is r
 
 ## Ingress Guarding Model
 
-The system now uses shared per-character ingress guards across all interactable entry points:
+The system now uses a shared `IngressGuard` instance (exposed on the runtime data container) to manage per-character, per-operation debounce and in-flight state for all interactable entry points. `IngressGuard` provides:
 
-- **Single debounce tracker**: `InteractableNextAllowedUtcByCharacter`
-- **Single in-flight tracker**: `InteractableInFlightByCharacter`
+- bounded debounce timestamps per (connection, operation)
+- in-flight acquisition (one active operation key per connection+operation)
+- periodic bounded sweep of stale entries
 
 This enforces one active interactable operation per character at a time (interactable, merchant, ability-craft, and dungeon-finder), while still applying operation-specific debounce intervals.
 

@@ -61,10 +61,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
-		/// Maximum entries in the ingress tracker dictionaries before new requests are rejected.
-		/// </summary>
-
-		/// <summary>
 		/// Operation codes used for ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte
@@ -467,44 +463,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					EndIngressGuard(guardKey);
 				}
 			}, entityKey, callerName);
-		}
-
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// Returns false when the queue is unavailable or rejected due to backpressure.
-		/// </summary>
-		/// <param name="work">Asynchronous work delegate to queue.</param>
-		/// <param name="entityKey">Optional entity key for ordered execution.</param>
-		/// <param name="callerName">Optional caller name used for diagnostics.</param>
-		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-				{
-					if (asyncWorker.Enqueue(work, entityKey, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("FriendSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
-					return false;
-				}
-				else
-				{
-					if (asyncWorker.Enqueue(work, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("FriendSystem", $"{callerName}: Async worker queue rejected work.");
-					return false;
-				}
-			}
-
-			Log.Warning("FriendSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
-			return false;
 		}
 	}
 }

@@ -12,6 +12,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	/// </summary>
 	public class WorldSceneSystemRuntimeData : RuntimeDataContainer, IWorldSceneSystemRuntimeData
 	{
+		/// <summary>
+		/// Dedicated lock object for queue-processing synchronization.
+		/// Avoids using the data container itself as a monitor target.
+		/// </summary>
+		public readonly object ProcessingLock = new object();
+
 		public int IsProcessingQueue { get; set; }
 		public float WaitQueueRateSeconds { get; set; }
 		public float NextWaitingQueueSweep { get; set; }

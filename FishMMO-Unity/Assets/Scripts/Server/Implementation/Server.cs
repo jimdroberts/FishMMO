@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using FishNet.Managing;
 using FishNet.Transporting;
 using KinematicCharacterController;
@@ -107,6 +109,11 @@ namespace FishMMO.Server.Implementation
 		/// Dictionary of registered periodic callbacks indexed by their callback delegate.
 		/// </summary>
 		private Dictionary<Action<float>, PeriodicCallbackData> periodicCallbacks = new Dictionary<Action<float>, PeriodicCallbackData>();
+
+		/// <summary>
+		/// Reusable scratch list for periodic callbacks ready to invoke, avoiding per-frame allocation.
+		/// </summary>
+		private readonly List<PeriodicCallbackData> readyCallbacks = new List<PeriodicCallbackData>();
 
 		/// <summary>
 		/// Cached server-initialized log callback for login server initialization.
@@ -280,8 +287,7 @@ namespace FishMMO.Server.Implementation
 			if (periodicCallbacks.Count == 0)
 				return;
 
-			// Create temporary list to avoid modification during iteration
-			var callbacksToInvoke = new List<PeriodicCallbackData>();
+			readyCallbacks.Clear();
 
 			foreach (var kvp in periodicCallbacks)
 			{
@@ -290,12 +296,12 @@ namespace FishMMO.Server.Implementation
 
 				if (data.TimeRemaining <= 0)
 				{
-					callbacksToInvoke.Add(data);
+					readyCallbacks.Add(data);
 				}
 			}
 
 			// Invoke callbacks that are ready
-			foreach (var data in callbacksToInvoke)
+			foreach (var data in readyCallbacks)
 			{
 				try
 				{

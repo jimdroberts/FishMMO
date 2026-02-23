@@ -107,10 +107,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
-		/// Maximum ingress-tracker entries before rejecting requests.
-		/// </summary>
-
-		/// <summary>
 		/// Operation keys used by guild ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte
@@ -1601,44 +1597,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("GuildSystem", $"Error changing guild rank (GuildID={guildID}, MemberID={memberID}): {ex}");
 			}
-		}
-
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// Returns false when the queue is unavailable or rejected due to backpressure.
-		/// </summary>
-		/// <param name="work">Asynchronous work delegate to queue.</param>
-		/// <param name="entityKey">Optional entity key for ordered execution.</param>
-		/// <param name="callerName">Optional caller name used for diagnostics.</param>
-		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-				{
-					if (asyncWorker.Enqueue(work, entityKey, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("GuildSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
-					return false;
-				}
-				else
-				{
-					if (asyncWorker.Enqueue(work, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("GuildSystem", $"{callerName}: Async worker queue rejected work.");
-					return false;
-				}
-			}
-
-			Log.Warning("GuildSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
-			return false;
 		}
 
 		/// <summary>

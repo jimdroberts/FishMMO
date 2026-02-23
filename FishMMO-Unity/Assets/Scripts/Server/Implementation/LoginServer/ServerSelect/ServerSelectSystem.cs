@@ -215,17 +215,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IServerSelectSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadResponsesPerFrame);
-				}
-			}
+			DrainMainThreadQueue<IServerSelectSystemMainThreadQueueData>(maxMainThreadResponsesPerFrame, drainAll);
 		}
 
 		/// <summary>
@@ -235,32 +225,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="action">The action to execute on the main thread.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IServerSelectSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				return queueData.TryEnqueue(action);
-			}
-			return false;
+			return TryEnqueueMainThread<IServerSelectSystemMainThreadQueueData>(action);
 		}
 
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// </summary>
-		/// <param name="work">The async work delegate to enqueue.</param>
-		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
-		/// <param name="callerName">Caller member name used for diagnostics.</param>
-		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-					return asyncWorker.Enqueue(work, entityKey, callerName);
-				else
-					return asyncWorker.Enqueue(work, callerName);
-			}
-
-			return false;
-		}
+		// Uses ServerBehaviour.TryEnqueueAsyncWork
 
 		/// <summary>
 		/// Attempts to acquire a per-connection in-flight server-list slot.
@@ -269,24 +237,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <returns><c>true</c> if the slot was acquired; otherwise <c>false</c>.</returns>
 		private bool TryBeginServerListRequest(NetworkConnection conn)
 		{
-			if (conn == null)
-			{
-				return false;
-			}
+			if (conn == null) return false;
 
-			if (!Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData))
+			// Debounce and add in-flight slot using generic helper
+			return TryBeginInFlightRequest<ServerSelectSystemRuntimeData>(conn, runtimeData =>
 			{
-				return false;
-			}
-
-			// Debounce — reject if cooldown hasn't elapsed since the last completed request.
-			DateTime nowUtc = DateTime.UtcNow;
-			if (runtimeData.NextAllowedRequestUtcByClientId.TryGetValue(conn.ClientId, out DateTime nextAllowed) && nowUtc < nextAllowed)
-			{
-				return false;
-			}
-
-			return runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
+				DateTime nowUtc = DateTime.UtcNow;
+				if (runtimeData.NextAllowedRequestUtcByClientId.TryGetValue(conn.ClientId, out DateTime nextAllowed) && nowUtc < nextAllowed)
+				{
+					return false;
+				}
+				return runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
+			});
 		}
 
 		/// <summary>
@@ -295,12 +257,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="conn">Connection to release.</param>
 		private void EndServerListRequest(NetworkConnection conn)
 		{
-			if (conn != null &&
-				Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData))
+			if (conn == null) return;
+
+			EndInFlightRequest<ServerSelectSystemRuntimeData>(conn, runtimeData =>
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 				runtimeData.NextAllowedRequestUtcByClientId[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(serverListCooldownMilliseconds);
-			}
+			});
 		}
 
 		/// <summary>

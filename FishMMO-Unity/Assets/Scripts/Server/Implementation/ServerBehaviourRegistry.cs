@@ -45,6 +45,11 @@ namespace FishMMO.Server.Implementation
 				{
 					ServerComponentInitializationStatus initializationStatus = 
 						behaviour.InternalInitializeOnce(typedServer, typedServer.NetworkWrapper.NetworkManager.ServerManager);
+
+					if (initializationStatus != ServerComponentInitializationStatus.Initialized)
+					{
+						Log.Warning(RegistryName, $"Behaviour '{behaviour.name}' failed to initialize: {initializationStatus}");
+					}
 				}
 			}
 

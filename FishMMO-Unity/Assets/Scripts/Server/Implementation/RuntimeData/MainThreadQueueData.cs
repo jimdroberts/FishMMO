@@ -18,6 +18,12 @@ namespace FishMMO.Server.Implementation
 		private readonly object _lock = new object();
 
 		/// <summary>
+		/// Reusable scratch list for draining actions, avoiding per-call allocation.
+		/// Only accessed from the main thread via Drain(), so no synchronization needed.
+		/// </summary>
+		private readonly List<Action> drainBuffer = new List<Action>();
+
+		/// <summary>
 		/// No additional initialization needed — queue is ready at construction.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -78,7 +84,7 @@ namespace FishMMO.Server.Implementation
 				return 0;
 			}
 
-			List<Action> actions;
+			drainBuffer.Clear();
 			lock (_lock)
 			{
 				if (_queue.Count == 0)
@@ -87,19 +93,20 @@ namespace FishMMO.Server.Implementation
 				}
 
 				int count = Math.Min(maxActions, _queue.Count);
-				actions = new List<Action>(count);
 				for (int i = 0; i < count; ++i)
 				{
-					actions.Add(_queue.Dequeue());
+					drainBuffer.Add(_queue.Dequeue());
 				}
 			}
 
-			for (int i = 0; i < actions.Count; i++)
+			for (int i = 0; i < drainBuffer.Count; i++)
 			{
-				actions[i].Invoke();
+				drainBuffer[i].Invoke();
 			}
 
-			return actions.Count;
+			int drained = drainBuffer.Count;
+			drainBuffer.Clear();
+			return drained;
 		}
 	}
 }

@@ -102,10 +102,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
-		/// Maximum ingress-tracker entries before rejecting requests.
-		/// </summary>
-
-		/// <summary>
 		/// Operation keys used by party ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte
@@ -361,7 +357,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!TryEnqueueAsyncWork(() => FetchAndProcessPartyUpdatesAsync()))
+			// Snapshot containers on main thread to avoid accessing them from worker threads
+			if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData))
+			{
+				runtimeData.EndUpdatePump();
+				return;
+			}
+
+			List<long> partyIds = new List<long>(mappingData.PartyCharacterTracker.Keys);
+			DateTime lastFetch = runtimeData.LastFetchTime;
+
+			if (!TryEnqueueAsyncWork(() => FetchAndProcessPartyUpdatesAsync(partyIds, lastFetch)))
 			{
 				runtimeData.EndUpdatePump();
 			}
@@ -371,7 +377,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously fetches party updates from the database and marshals the processing back to the main thread.
 		/// </summary>
 		/// <returns>Asynchronous fetch-and-process task.</returns>
-		private async Task FetchAndProcessPartyUpdatesAsync()
+		private async Task FetchAndProcessPartyUpdatesAsync(List<long> partyIds, DateTime lastFetch)
 		{
 			try
 			{
@@ -387,20 +393,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return;
 				}
-
-				// Read containers on main thread before awaiting (periodic callback runs on main thread)
-				if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData))
-				{
-					return;
-				}
-				if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
-				{
-					return;
-				}
-
-				List<long> partyIds = mappingData.PartyCharacterTracker.Keys.ToList();
-				DateTime lastFetch = runtimeData.LastFetchTime;
-
 				if (partyIds == null || partyIds.Count == 0)
 				{
 					return;
@@ -1519,7 +1511,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult demoteResult = await charPartyService.UpdateRankAsync(leaderCharacterID, partyID, (byte)PartyRank.Member, leaderData.Version + 1);
 				if (!demoteResult.IsSuccess)
 				{
-					await Log.Warning("PartySystem", $"Promoted target {targetMemberID} but failed to demote old leader {leaderCharacterID} in party {partyID}. Party has two leaders until corrected.");
+					// Rollback: revert the target back to their original rank to avoid two leaders.
+					DatabaseResult rollbackResult = await charPartyService.UpdateRankAsync(targetMemberID, partyID, targetData.Rank, targetData.Version + 2);
+					if (!rollbackResult.IsSuccess)
+					{
+						await Log.Error("PartySystem", $"CRITICAL: Promoted target {targetMemberID} but failed to demote old leader {leaderCharacterID} AND failed to rollback in party {partyID}. Party has two leaders until manually corrected.");
+					}
+					else
+					{
+						await Log.Warning("PartySystem", $"Promoted target {targetMemberID} but failed to demote old leader {leaderCharacterID} in party {partyID}. Rolled back promotion successfully.");
+					}
+					return;
 				}
 
 				// Tell the other servers to update their party lists
@@ -1531,43 +1533,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// Returns false when the queue is unavailable or rejected due to backpressure.
-		/// </summary>
-		/// <param name="work">Asynchronous work delegate to queue.</param>
-		/// <param name="entityKey">Optional entity key for ordered execution.</param>
-		/// <param name="callerName">Optional caller name used for diagnostics.</param>
-		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-				{
-					if (asyncWorker.Enqueue(work, entityKey, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("PartySystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
-					return false;
-				}
-				else
-				{
-					if (asyncWorker.Enqueue(work, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("PartySystem", $"{callerName}: Async worker queue rejected work.");
-					return false;
-				}
-			}
-
-			Log.Warning("PartySystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
-			return false;
-		}
+		// Uses ServerBehaviour.TryEnqueueAsyncWork
 
 		/// <summary>
 		/// Enqueues ingress work and guarantees guard release when async processing completes.

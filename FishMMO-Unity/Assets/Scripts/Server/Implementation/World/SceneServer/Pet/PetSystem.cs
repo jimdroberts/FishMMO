@@ -66,10 +66,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
-		/// Maximum ingress-tracker entries before rejecting requests.
-		/// </summary>
-
-		/// <summary>
 		/// Operation codes used by pet ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte
@@ -197,7 +193,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			MainThreadQueueHelper.Drain<IPetSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
+			DrainMainThreadQueue<IPetSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
@@ -206,7 +202,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="action">The action to enqueue.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<IPetSystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<IPetSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -444,6 +440,78 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Shared helper that despawns any existing pet, instantiates and initialises a new one,
+		/// moves it to the owner's scene, spawns it on the network, copies faction data, and broadcasts the add.
+		/// Called from both <see cref="LoadAndSpawnPetAsync"/> and <see cref="AbilityObject_OnPetSummon"/>.
+		/// </summary>
+		/// <param name="owner">The player character that owns the pet.</param>
+		/// <param name="petController">The owner's pet controller component.</param>
+		/// <param name="petAbilityTemplate">Template describing the pet prefab and abilities.</param>
+		/// <param name="nob">Pooled NetworkObject already instantiated at the desired spawn position.</param>
+		/// <param name="aiInitPosition">Position passed to <see cref="IAIController.Initialize"/>.</param>
+		/// <param name="abilities">Optional ability list restored from the database; null when summoned fresh.</param>
+		/// <param name="broadcastTarget">Network connection that should receive the PetAddBroadcast.</param>
+		/// <returns>True if the pet was successfully spawned; false if the pooled object had no Pet component.</returns>
+		private bool SpawnAndInitializePet(
+			IPlayerCharacter owner,
+			IPetController petController,
+			PetAbilityTemplate petAbilityTemplate,
+			NetworkObject nob,
+			Vector3 aiInitPosition,
+			List<int> abilities,
+			NetworkConnection broadcastTarget)
+		{
+			// Despawn any existing pet before assigning the new one to prevent ghost pets.
+			if (petController.Pet != null &&
+				petController.Pet.NetworkObject != null &&
+				petController.Pet.NetworkObject.IsSpawned)
+			{
+				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
+				petController.Pet = null;
+			}
+
+			Pet pet = nob.GetComponent<Pet>();
+			if (pet == null)
+			{
+				// Pool object has no Pet component — return it to the pool to prevent a leak.
+				ServerManager.Despawn(nob, DespawnType.Pool);
+				return false;
+			}
+
+			pet.PetOwner = owner;
+			pet.PetAbilityTemplate = petAbilityTemplate;
+			if (abilities != null)
+			{
+				pet.Abilities = abilities;
+			}
+			petController.Pet = pet;
+
+			if (pet.TryGet(out IAIController aiController))
+			{
+				aiController.Initialize(aiInitPosition);
+				aiController.Target = owner.Transform;
+			}
+
+			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(pet.GameObject, owner.GameObject.scene);
+
+			// Ensure the game object is active, pooled objects are disabled
+			pet.GameObject.SetActive(true);
+
+			ServerManager.Spawn(pet.GameObject, owner.NetworkObject.Owner, owner.GameObject.scene);
+
+			if (pet.TryGet(out IFactionController petFactionController))
+			{
+				if (owner.TryGet(out IFactionController ownerFactionController))
+				{
+					petFactionController.CopyFrom(ownerFactionController);
+				}
+			}
+
+			Server.NetworkWrapper.Broadcast(broadcastTarget, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
+			return true;
+		}
+
+		/// <summary>
 		/// Asynchronously fetches the spawned pet from the database and marshals pet instantiation back to the main thread.
 		/// </summary>
 		/// <param name="conn">Owning connection for pet broadcasts.</param>
@@ -491,15 +559,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					// Despawn any existing pet before assigning the new one.
-					if (petController.Pet != null &&
-						petController.Pet.NetworkObject != null &&
-						petController.Pet.NetworkObject.IsSpawned)
-					{
-						ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
-						petController.Pet = null;
-					}
-
 					// Instantiate the pet from the prefab pool
 					Vector3 spawnPosition = character.Transform.position;
 					NetworkObject nob = Server.NetworkWrapper.NetworkManager.GetPooledInstantiated(
@@ -508,40 +567,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						ObjectPoolRetrieveOption.Unset,
 						null, spawnPosition, character.Transform.rotation, null, true);
 
-					Pet pet = nob.GetComponent<Pet>();
-					if (pet == null)
-					{
-						return;
-					}
-
-					pet.PetOwner = character;
-					pet.PetAbilityTemplate = petAbilityTemplate;
-					pet.Abilities = petData.Abilities != null ? new List<int>(petData.Abilities) : new List<int>();
-					petController.Pet = pet;
-
-					if (pet.TryGet(out IAIController aiController))
-					{
-						// Initialize AI Controller
-						aiController.Initialize(Vector3.zero);
-						aiController.Target = character.Transform;
-					}
-
-					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(pet.GameObject, character.GameObject.scene);
-
-					// Ensure the game object is active, pooled objects are disabled
-					pet.GameObject.SetActive(true);
-
-					ServerManager.Spawn(pet.GameObject, character.NetworkObject.Owner, character.GameObject.scene);
-
-					if (pet.TryGet(out IFactionController petFactionController))
-					{
-						if (character.TryGet(out IFactionController casterFactionController))
-						{
-							petFactionController.CopyFrom(casterFactionController);
-						}
-					}
-
-					Server.NetworkWrapper.Broadcast(conn, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
+					List<int> abilities = petData.Abilities != null ? new List<int>(petData.Abilities) : new List<int>();
+					SpawnAndInitializePet(character, petController, petAbilityTemplate, nob, Vector3.zero, abilities, conn);
 				});
 			}
 			catch (Exception ex)
@@ -696,87 +723,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			NetworkObject nob = Server.NetworkWrapper.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab.PrefabId, petAbilityTemplate.PetPrefab.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, spawnPosition, caster.Transform.rotation, null, true);
-			// Despawn any existing pet before assigning the new one to prevent ghost pets.
-			if (petController.Pet != null &&
-				petController.Pet.NetworkObject != null &&
-				petController.Pet.NetworkObject.IsSpawned)
-			{
-				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
-				petController.Pet = null;
-			}
-
-			Pet pet = nob.GetComponent<Pet>();
-			if (pet == null)
-			{
-				// Pool object has no Pet component — return it to the pool to prevent a leak.
-				ServerManager.Despawn(nob, DespawnType.Pool);
-				return;
-			}
-			pet.PetOwner = caster;
-			pet.PetAbilityTemplate = petAbilityTemplate;
-			petController.Pet = pet;
-
-			if (pet.TryGet(out IAIController aiController))
-			{
-				// Initialize AI Controller
-				aiController.Initialize(spawnPosition);
-				aiController.Target = caster.Transform;
-			}
-
-			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(nob.gameObject, caster.GameObject.scene);
-
-			// Ensure the game object is active, pooled objects are disabled
-			pet.GameObject.SetActive(true);
-
-			ServerManager.Spawn(nob.gameObject, caster.NetworkObject.Owner, caster.GameObject.scene);
-
-			if (pet.TryGet(out IFactionController petFactionController))
-			{
-				if (caster.TryGet(out IFactionController casterFactionController))
-				{
-					petFactionController.CopyFrom(casterFactionController);
-				}
-			}
-
-			Server.NetworkWrapper.Broadcast(caster.Owner, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
+			SpawnAndInitializePet(caster, petController, petAbilityTemplate, nob, spawnPosition, null, caster.Owner);
 		}
 
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// Returns false when the queue is unavailable or rejected due to backpressure.
-		/// </summary>
-		/// <param name="work">Asynchronous work delegate to queue.</param>
-		/// <param name="entityKey">Optional entity key for ordered execution.</param>
-		/// <param name="callerName">Optional caller name used for diagnostics.</param>
-		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-				{
-					if (asyncWorker.Enqueue(work, entityKey, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("PetSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
-					return false;
-				}
-				else
-				{
-					if (asyncWorker.Enqueue(work, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("PetSystem", $"{callerName}: Async worker queue rejected work.");
-					return false;
-				}
-			}
-
-			Log.Warning("PetSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
-			return false;
-		}
+		// Uses ServerBehaviour.TryEnqueueAsyncWork
 	}
 }

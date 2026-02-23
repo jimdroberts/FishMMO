@@ -334,25 +334,5 @@ namespace FishMMO.Server.Implementation.World
 			}
 			return false;
 		}
-
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// </summary>
-		/// <param name="work">The async work delegate to enqueue.</param>
-		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
-		/// <param name="callerName">Caller member name used for diagnostics.</param>
-		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-					return asyncWorker.Enqueue(work, entityKey, callerName);
-				else
-					return asyncWorker.Enqueue(work, callerName);
-			}
-
-			return false;
-		}
 	}
 }

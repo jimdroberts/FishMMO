@@ -33,6 +33,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private const int MaxChannelIdPrefixLength = 22;
 
 		/// <summary>
+		/// Reusable scratch list for character broadcast iteration, avoiding per-message allocation.
+		/// Only used from the main thread.
+		/// </summary>
+		private readonly List<IPlayerCharacter> characterBroadcastBuffer = new List<IPlayerCharacter>();
+
+		/// <summary>
+		/// Reusable scratch list for connection broadcast iteration, avoiding per-message allocation.
+		/// Only used from the main thread.
+		/// </summary>
+		private readonly List<NetworkConnection> connectionBroadcastBuffer = new List<NetworkConnection>();
+
+		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
 		/// This time-slices queue draining to avoid frame spikes.
 		/// </summary>
@@ -56,7 +68,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// If true, allows repeat messages from clients without spam filtering.
 		/// </summary>
-		public bool AllowRepeatMessages = false;
+		[SerializeField] private bool allowRepeatMessages = false;
 		/// <summary>
 		/// The server chat rate limit in milliseconds. Should match the client's UIChat.messageRateLimit.
 		/// </summary>
@@ -69,11 +81,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// The server chat message pump rate limit in seconds.
 		/// </summary>
 		[Tooltip("The server chat message pump rate limit in seconds.")]
-		public float MessagePumpRate = 2.0f;
+		[SerializeField] private float messagePumpRate = 2.0f;
 		/// <summary>
 		/// Number of chat messages to fetch per database poll.
 		/// </summary>
-		public int MessageFetchCount = 20;
+		[SerializeField] private int messageFetchCount = 20;
+		/// <summary>
+		/// If true, allows repeat messages from clients without spam filtering.
+		/// </summary>
+		public bool AllowRepeatMessages => allowRepeatMessages;
+		/// <summary>
+		/// The server chat message pump rate limit in seconds.
+		/// </summary>
+		public float MessagePumpRate => messagePumpRate;
+		/// <summary>
+		/// Number of chat messages to fetch per database poll.
+		/// </summary>
+		public int MessageFetchCount => messageFetchCount;
 
 		/// <summary>
 		/// Initializes the chat system, registering broadcast handlers and chat helper commands.
@@ -516,10 +540,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 				mappingData.CharactersByWorld.TryGetValue(worldID, out var characters))
 			{
-				// send to all world characters
-				foreach (IPlayerCharacter character in new List<IPlayerCharacter>(characters.Values))
+				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
+				characterBroadcastBuffer.Clear();
+				characterBroadcastBuffer.AddRange(characters.Values);
+				for (int i = 0; i < characterBroadcastBuffer.Count; i++)
 				{
-					Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
+					Server.NetworkWrapper.Broadcast(characterBroadcastBuffer[i].Owner, newMsg, true, Channel.Reliable);
 				}
 			}
 			return true;
@@ -545,10 +571,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (Server.NetworkWrapper.NetworkManager.SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections))
 				{
-					// Defensive copy: Broadcast may trigger a disconnect callback that modifies the set.
-					foreach (NetworkConnection connection in new List<NetworkConnection>(connections))
+					// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the set.
+					connectionBroadcastBuffer.Clear();
+					connectionBroadcastBuffer.AddRange(connections);
+					for (int i = 0; i < connectionBroadcastBuffer.Count; i++)
 					{
-						Server.NetworkWrapper.Broadcast(connection, msg, true, Channel.Reliable);
+						Server.NetworkWrapper.Broadcast(connectionBroadcastBuffer[i], msg, true, Channel.Reliable);
 					}
 				}
 			}
@@ -952,10 +980,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				};
 				if (mappingData.CharactersByWorld.TryGetValue(worldID, out var characters))
 				{
-					// send to all world characters
-					foreach (IPlayerCharacter character in new List<IPlayerCharacter>(characters.Values))
+					// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
+					characterBroadcastBuffer.Clear();
+					characterBroadcastBuffer.AddRange(characters.Values);
+					for (int i = 0; i < characterBroadcastBuffer.Count; i++)
 					{
-						Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
+						Server.NetworkWrapper.Broadcast(characterBroadcastBuffer[i].Owner, newMsg, true, Channel.Reliable);
 					}
 				}
 				return true;
@@ -1019,50 +1049,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 				mappingData.CharactersByWorld.TryGetValue(worldServerID, out var characters))
 			{
-				// send to all world characters
-				foreach (IPlayerCharacter character in new List<IPlayerCharacter>(characters.Values))
+				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
+				characterBroadcastBuffer.Clear();
+				characterBroadcastBuffer.AddRange(characters.Values);
+				for (int i = 0; i < characterBroadcastBuffer.Count; i++)
 				{
-					Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
+					Server.NetworkWrapper.Broadcast(characterBroadcastBuffer[i].Owner, newMsg, true, Channel.Reliable);
 				}
 			}
-		}
-
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// Returns false when the queue is unavailable or rejected due to backpressure.
-		/// </summary>
-		/// <param name="work">Asynchronous work delegate to queue.</param>
-		/// <param name="entityKey">Optional entity key for ordered execution.</param>
-		/// <param name="callerName">Optional caller name used for diagnostics.</param>
-		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-				{
-					if (asyncWorker.Enqueue(work, entityKey, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("ChatSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
-					return false;
-				}
-				else
-				{
-					if (asyncWorker.Enqueue(work, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("ChatSystem", $"{callerName}: Async worker queue rejected work.");
-					return false;
-				}
-			}
-
-			Log.Warning("ChatSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
-			return false;
 		}
 	}
 }

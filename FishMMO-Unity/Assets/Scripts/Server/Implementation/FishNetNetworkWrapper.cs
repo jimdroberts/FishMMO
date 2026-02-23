@@ -17,6 +17,7 @@ namespace FishMMO.Server.Implementation
 	{
 		private readonly IServerConfiguration config;
 		private readonly MonoBehaviour coroutineHost;
+		private Coroutine awaitingConnectionCoroutine;
 
 		/// <summary>
 		/// Gets the network manager wrapper instance.
@@ -46,7 +47,7 @@ namespace FishMMO.Server.Implementation
 				NetworkManager.ServerManager.StartConnection();
 				if (coroutineHost != null)
 				{
-					coroutineHost.StartCoroutine(OnAwaitingConnectionReady());
+					awaitingConnectionCoroutine = coroutineHost.StartCoroutine(OnAwaitingConnectionReady());
 				}
 			}
 		}
@@ -58,7 +59,11 @@ namespace FishMMO.Server.Implementation
 		{
 			if (NetworkManager.ServerManager != null)
 			{
-				coroutineHost.StopAllCoroutines();
+				if (awaitingConnectionCoroutine != null && coroutineHost != null)
+				{
+					coroutineHost.StopCoroutine(awaitingConnectionCoroutine);
+					awaitingConnectionCoroutine = null;
+				}
 				
 				NetworkManager.ServerManager.StopConnection(true);
 			}

@@ -365,6 +365,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}, true, Channel.Reliable);
 				}
 			}
+			else
+			{
+				// Both inventory and bank are full — notify the player so items are not silently lost.
+				Log.Warning("AchievementSystem", $"Achievement item rewards dropped for CharID={character.ID}: both inventory and bank are full ({itemRewards.Count} items lost).");
+				character.Owner.Broadcast(new ChatBroadcast()
+				{
+					Channel = ChatChannel.System,
+					Text = "Your inventory and bank are full. Achievement item rewards could not be delivered.",
+				}, true, Channel.Reliable);
+			}
 		}
 
 		/// <summary>
@@ -399,26 +409,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("AchievementSystem", $"Error persisting bank slot (CharID={dto.CharacterID}, Slot={dto.Slot}): {ex}");
 			}
-		}
-
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// </summary>
-		/// <param name="work">The async work delegate to enqueue.</param>
-		/// <param name="entityKey">Optional entity key for consistent worker routing.</param>
-		/// <param name="callerName">Caller member name used for diagnostics.</param>
-		/// <returns><c>true</c> if the work item was enqueued; otherwise, <c>false</c>.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-					return asyncWorker.Enqueue(work, entityKey, callerName);
-				else
-					return asyncWorker.Enqueue(work, callerName);
-			}
-
-			return false;
 		}
 	}
 }

@@ -5,6 +5,7 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core.World.WorldServer;
 using FishMMO.Shared;
+using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.WorldServer
 {
@@ -17,7 +18,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Maximum number of players allowed to connect to the world server.
 		/// </summary>
-		public uint MaxPlayers = 5000;
+		[SerializeField] private uint maxPlayers = 5000;
+
+		/// <summary>
+		/// Maximum number of players allowed to connect to the world server.
+		/// </summary>
+		public uint MaxPlayers => maxPlayers;
 
 		/// <summary>
 		/// Attempts to authenticate a client login and assign the character to the world server.
@@ -31,6 +37,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			if (result != ClientAuthenticationResult.LoginSuccess)
 			{
 				return result;
+			}
+
+			if (string.IsNullOrWhiteSpace(username))
+			{
+				return ClientAuthenticationResult.InvalidUsernameOrPassword;
 			}
 
 			if (Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) && worldData.IsLocked)
@@ -63,7 +74,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}
 
-			return ClientAuthenticationResult.InvalidUsernameOrPassword;
+			return ClientAuthenticationResult.ServerBusy;
 		}
 	}
 }

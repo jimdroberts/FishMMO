@@ -148,7 +148,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			debounceSweepIntervalSeconds = Mathf.Max(0.25f, debounceSweepIntervalSeconds);
 			debounceEntryTtlSeconds = Mathf.Max(1.0f, debounceEntryTtlSeconds);
 			debounceSweepMaxRemovals = Mathf.Max(1, debounceSweepMaxRemovals);
-			runtimeData.NextDebounceSweepUtc = DateTime.UtcNow;
+			// IngressGuard initialized in runtimeData; no additional init required here.
 
 			Log.Debug("InteractableSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
@@ -170,9 +170,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			if (Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InteractableHandlers.Clear();
-				runtimeData.InteractableNextAllowedUtcByCharacter.Clear();
-				runtimeData.InteractableInFlightByCharacter.Clear();
-				runtimeData.NextDebounceSweepUtc = DateTime.UtcNow;
+				runtimeData.IngressGuard?.Clear();
 			}
 
 			// Network broadcasts
@@ -189,75 +187,58 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
-		/// Performs bounded cleanup for stale debounce tracker entries.
+		/// Performs bounded cleanup via the runtime IngressGuard sweep.
 		/// </summary>
 		private void SweepDebounceTrackers()
 		{
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
 			{
-				return;
-			}
-
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < runtimeData.NextDebounceSweepUtc)
-			{
-				return;
-			}
-
-			runtimeData.NextDebounceSweepUtc = nowUtc.AddSeconds(debounceSweepIntervalSeconds);
-			DateTime staleBeforeUtc = nowUtc.AddSeconds(-debounceEntryTtlSeconds);
-
-			PruneDebounceTracker(runtimeData.InteractableNextAllowedUtcByCharacter, staleBeforeUtc, debounceSweepMaxRemovals);
-		}
-
-		/// <summary>
-		/// Removes stale entries from a debounce tracker with bounded removals.
-		/// </summary>
-		private static void PruneDebounceTracker(System.Collections.Concurrent.ConcurrentDictionary<long, DateTime> tracker, DateTime staleBeforeUtc, int maxRemovals)
-		{
-			int removed = 0;
-			foreach (var kvp in tracker)
-			{
-				if (removed >= maxRemovals)
-				{
-					break;
-				}
-
-				if (kvp.Value <= staleBeforeUtc && tracker.TryRemove(kvp.Key, out _))
-				{
-					removed++;
-				}
+				runtimeData.IngressGuard.Sweep(debounceSweepIntervalSeconds, debounceEntryTtlSeconds, debounceSweepMaxRemovals);
 			}
 		}
 
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			MainThreadQueueHelper.Drain<IInteractableSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
+			DrainMainThreadQueue<IInteractableSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<IInteractableSystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<IInteractableSystemMainThreadQueueData>(action);
 		}
 
-		/// <summary>
-		/// Returns true when the request is currently rate-limited for the character and false when accepted.
-		/// </summary>
-		private static bool IsDebounced(System.Collections.Concurrent.ConcurrentDictionary<long, DateTime> tracker, long characterID, int debounceMilliseconds)
+		private enum IngressOperation : byte
 		{
-			if (debounceMilliseconds <= 0)
+			Interact = 1,
+			MerchantPurchase = 2,
+			AbilityCraft = 3,
+			DungeonFinder = 4,
+		}
+
+		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
 			{
+				guardKey = 0;
 				return false;
 			}
-
-			DateTime nowUtc = DateTime.UtcNow;
-			if (tracker.TryGetValue(characterID, out DateTime nextAllowedUtc) && nowUtc < nextAllowedUtc)
+			int debounce = operation switch
 			{
-				return true;
-			}
+				IngressOperation.Interact => interactableRequestDebounceMilliseconds,
+				IngressOperation.MerchantPurchase => merchantRequestDebounceMilliseconds,
+				IngressOperation.AbilityCraft => abilityCraftDebounceMilliseconds,
+				IngressOperation.DungeonFinder => dungeonFinderDebounceMilliseconds,
+				_ => interactableRequestDebounceMilliseconds,
+			};
+			return runtimeData.IngressGuard.TryBegin(connectionId, (byte)operation, debounce, out guardKey);
+		}
 
-			tracker[characterID] = nowUtc.AddMilliseconds(debounceMilliseconds);
-			return false;
+		private void EndIngressGuard(long guardKey)
+		{
+			if (Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.IngressGuard.End(guardKey);
+			}
 		}
 
 		/// <summary>
@@ -465,12 +446,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (IsDebounced(runtimeData.InteractableNextAllowedUtcByCharacter, character.ID, interactableRequestDebounceMilliseconds))
-			{
-				return;
-			}
-
-			if (!runtimeData.InteractableInFlightByCharacter.TryAdd(character.ID, 0))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Interact, out long guardKey))
 			{
 				return;
 			}
@@ -510,7 +486,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 			finally
 			{
-				runtimeData.InteractableInFlightByCharacter.TryRemove(character.ID, out _);
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -565,12 +541,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (IsDebounced(runtimeData.InteractableNextAllowedUtcByCharacter, character.ID, merchantRequestDebounceMilliseconds))
-			{
-				return;
-			}
 
-			if (!runtimeData.InteractableInFlightByCharacter.TryAdd(character.ID, 0))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.MerchantPurchase, out long guardKey))
 			{
 				return;
 			}
@@ -670,7 +642,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 			finally
 			{
-				runtimeData.InteractableInFlightByCharacter.TryRemove(character.ID, out _);
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -818,12 +790,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (IsDebounced(runtimeData.InteractableNextAllowedUtcByCharacter, character.ID, abilityCraftDebounceMilliseconds))
-			{
-				return;
-			}
 
-			if (!runtimeData.InteractableInFlightByCharacter.TryAdd(character.ID, 0))
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AbilityCraft, out long guardKey))
 			{
 				return;
 			}
@@ -936,7 +904,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 			finally
 			{
-				runtimeData.InteractableInFlightByCharacter.TryRemove(character.ID, out _);
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -969,7 +937,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (IsDebounced(runtimeData.InteractableNextAllowedUtcByCharacter, character.ID, dungeonFinderDebounceMilliseconds))
+
+			// Acquire ingress guard for dungeon finder
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DungeonFinder, out long guardKey))
 			{
 				return;
 			}
@@ -977,6 +947,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Validate scene object
 			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
+				EndIngressGuard(guardKey);
 				return;
 			}
 
@@ -985,6 +956,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			if (dungeonEntrance == null ||
 				!dungeonEntrance.InRange(character.Transform))
 			{
+				EndIngressGuard(guardKey);
 				return;
 			}
 
@@ -993,12 +965,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				!worldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
 			{
 				Log.Debug("InteractableSystem", "Missing Scene:" + dungeonEntrance.DungeonName);
+				EndIngressGuard(guardKey);
 				return;
 			}
 
 			if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
 			{
 				Log.Debug("InteractableSystem", $"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
+				EndIngressGuard(guardKey);
 				return;
 			}
 
@@ -1014,15 +988,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
 
-			if (!runtimeData.InteractableInFlightByCharacter.TryAdd(characterID, 0))
-			{
-				return;
-			}
-
 			// Fire-and-forget: process dungeon instance assignment asynchronously
-			if (!TryEnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails), characterID))
+			if (!TryEnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails, guardKey), characterID))
 			{
-				runtimeData.InteractableInFlightByCharacter.TryRemove(characterID, out _);
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -1045,7 +1014,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			long worldServerID,
 			long partyID,
 			string dungeonName,
-			CharacterRespawnPositionDetails respawnDetails)
+			CharacterRespawnPositionDetails respawnDetails,
+			long guardKey)
 		{
 			try
 			{
@@ -1085,6 +1055,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					long sceneID = enqueueResult.Data;
 					TryEnqueueMainThread(() =>
 					{
+						// Guard against character/connection being destroyed between async DB return and main-thread execution
+						if (Server == null || conn == null || !conn.IsActive || character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+						{
+							return;
+						}
+
 						character.InstanceID = sceneID;
 						character.InstancePosition = respawnDetails.Position;
 						character.InstanceRotation = respawnDetails.Rotation;
@@ -1097,6 +1073,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					long existingInstanceID = instanceResult.Data.ID;
 					TryEnqueueMainThread(() =>
 					{
+						// Guard against character/connection being destroyed between async DB return and main-thread execution
+						if (Server == null || conn == null || !conn.IsActive || character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+						{
+							return;
+						}
+
 						character.InstanceID = existingInstanceID;
 						character.InstancePosition = respawnDetails.Position;
 						character.InstanceRotation = respawnDetails.Rotation;
@@ -1111,11 +1093,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 			finally
 			{
-				if (Server != null &&
-					Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-				{
-					runtimeData.InteractableInFlightByCharacter.TryRemove(characterID, out _);
-				}
+				EndIngressGuard(guardKey);
 			}
 		}
 
@@ -1227,42 +1205,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			return true;
 		}
 
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// Returns false when the queue is unavailable or rejected.
-		/// </summary>
-		/// <param name="work">Asynchronous work delegate to enqueue.</param>
-		/// <param name="entityKey">Optional entity key for ordered queue partitioning.</param>
-		/// <param name="callerName">Caller member name used for diagnostics.</param>
-		/// <returns>True if enqueue succeeded; otherwise false.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-				{
-					if (asyncWorker.Enqueue(work, entityKey, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("InteractableSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
-					return false;
-				}
-				else
-				{
-					if (asyncWorker.Enqueue(work, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("InteractableSystem", $"{callerName}: Async worker queue rejected work.");
-					return false;
-				}
-			}
-
-			Log.Warning("InteractableSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
-			return false;
-		}
+		// Uses ServerBehaviour.TryEnqueueAsyncWork
 	}
 }

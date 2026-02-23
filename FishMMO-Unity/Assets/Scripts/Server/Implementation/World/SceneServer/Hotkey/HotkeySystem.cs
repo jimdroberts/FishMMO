@@ -49,10 +49,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
-		/// Maximum ingress-tracker entries before rejecting requests.
-		/// </summary>
-
-		/// <summary>
 		/// Operation codes used by hotkey ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte

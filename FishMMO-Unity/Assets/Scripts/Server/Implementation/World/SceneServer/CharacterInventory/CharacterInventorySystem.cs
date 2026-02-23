@@ -245,23 +245,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				deletedFromSlots = new List<long>(1);
 				affectedToItems = new List<Item>(1);
 
-				// check if we need to swap items
-				if (to.TryGetItem(toIndex, out Item toItem))
+				// Capture original state for rollback in case of an unexpected exception.
+				Item originalFromItem = fromItem;
+				Item originalToItem = null;
+				bool hadToItem = to.TryGetItem(toIndex, out Item toItem);
+
+				try
 				{
-					// put the target item in the old container
-					from.SetItemSlot(toItem, fromIndex);
-					affectedFromItems.Add(toItem);
+					// check if we need to swap items
+					if (hadToItem)
+					{
+						originalToItem = toItem;
+						// put the target item in the old container
+						from.SetItemSlot(toItem, fromIndex);
+						affectedFromItems.Add(toItem);
+					}
+					// the slot we want to move the item to is empty
+					else
+					{
+						// remove the item from the old container
+						from.SetItemSlot(null, fromIndex);
+						deletedFromSlots.Add(fromItem.Slot);
+					}
+					// put the item in the new container
+					to.SetItemSlot(fromItem, toIndex);
+					affectedToItems.Add(fromItem);
 				}
-				// the slot we want to move the item to is empty
-				else
+				catch (Exception ex)
 				{
-					// remove the item from the old container
-					from.SetItemSlot(null, fromIndex);
-					deletedFromSlots.Add(fromItem.Slot);
+					// Rollback: restore both containers to their original state.
+					from.SetItemSlot(originalFromItem, fromIndex);
+					if (hadToItem)
+					{
+						to.SetItemSlot(originalToItem, toIndex);
+					}
+					affectedFromItems.Clear();
+					deletedFromSlots.Clear();
+					affectedToItems.Clear();
+					Log.Error("CharacterInventorySystem", $"Cross-container swap failed, rolled back: {ex}");
+					return false;
 				}
-				// put the item in the new container
-				to.SetItemSlot(fromItem, toIndex);
-				affectedToItems.Add(fromItem);
 				return true;
 			}
 			return false;
@@ -1234,43 +1257,5 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		#endregion
-
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// Returns false when the queue is unavailable or rejected due to backpressure.
-		/// </summary>
-		/// <param name="work">Asynchronous work delegate to queue.</param>
-		/// <param name="entityKey">Optional entity key for ordered execution.</param>
-		/// <param name="callerName">Optional caller name used for diagnostics.</param>
-		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-				{
-					if (asyncWorker.Enqueue(work, entityKey, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("CharacterInventorySystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
-					return false;
-				}
-				else
-				{
-					if (asyncWorker.Enqueue(work, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("CharacterInventorySystem", $"{callerName}: Async worker queue rejected work.");
-					return false;
-				}
-			}
-
-			Log.Warning("CharacterInventorySystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
-			return false;
-		}
 	}
 }

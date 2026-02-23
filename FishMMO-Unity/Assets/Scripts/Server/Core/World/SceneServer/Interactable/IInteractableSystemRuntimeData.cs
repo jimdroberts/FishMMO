@@ -11,8 +11,6 @@ namespace FishMMO.Server.Core.World.SceneServer
 	{
 		Dictionary<Type, FishMMO.Server.Implementation.World.SceneServer.Interactable.IInteractableHandler> InteractableHandlers { get; }
 
-		ConcurrentDictionary<long, DateTime> InteractableNextAllowedUtcByCharacter { get; }
-		ConcurrentDictionary<long, byte> InteractableInFlightByCharacter { get; }
-		DateTime NextDebounceSweepUtc { get; set; }
+		FishMMO.Server.Core.IngressGuard IngressGuard { get; }
 	}
 }

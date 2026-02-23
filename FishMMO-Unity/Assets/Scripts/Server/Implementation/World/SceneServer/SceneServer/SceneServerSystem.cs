@@ -210,8 +210,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DrainMainThreadQueue(drainAll: true);
 
 			// Delete scene server data from database
-			if (Server.Configuration.TryGetString("ServerName", out string name) &&
-				Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
 			{
 				Log.Debug("SceneServerSystem", $"Deinitializing: Removing Scene Server scenes (ServerID={runtimeData.ID})");
 
@@ -256,7 +255,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			MainThreadQueueHelper.Drain<ISceneServerSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
+			DrainMainThreadQueue<ISceneServerSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
@@ -265,7 +264,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="action">The action to enqueue.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<ISceneServerSystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<ISceneServerSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -958,44 +957,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("SceneServerSystem", $"Error deleting scene by handle (ServerID={sceneServerId}, Handle={sceneHandle}): {ex}");
 			}
-		}
-
-		/// <summary>
-		/// Enqueues an async work item to the centralized async worker for controlled execution.
-		/// Returns false when the queue is unavailable or rejected due to backpressure.
-		/// </summary>
-		/// <param name="work">Asynchronous work delegate to queue.</param>
-		/// <param name="entityKey">Optional entity key for ordered execution.</param>
-		/// <param name="callerName">Optional caller name used for diagnostics.</param>
-		/// <returns>True if work was accepted by the queue; otherwise false.</returns>
-		private bool TryEnqueueAsyncWork(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
-		{
-			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
-			{
-				if (entityKey != 0)
-				{
-					if (asyncWorker.Enqueue(work, entityKey, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("SceneServerSystem", $"{callerName}: Async worker queue rejected work (entityKey={entityKey}).");
-					return false;
-				}
-				else
-				{
-					if (asyncWorker.Enqueue(work, callerName))
-					{
-						return true;
-					}
-
-					Log.Warning("SceneServerSystem", $"{callerName}: Async worker queue rejected work.");
-					return false;
-				}
-			}
-
-			Log.Warning("SceneServerSystem", $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
-			return false;
 		}
 	}
 }
