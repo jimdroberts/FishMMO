@@ -1,3 +1,5 @@
+using FishMMO.Server.Core.Account;
+
 namespace FishMMO.Server.Core.Authentication
 {
 	/// <summary>
@@ -24,14 +26,10 @@ namespace FishMMO.Server.Core.Authentication
 		public readonly byte[] EncryptedPublicEphemeral;
 
 		/// <summary>
-		/// AES symmetric key for decrypting request data on the worker thread.
+		/// Per-connection encryption state holding the symmetric key, session prefix, and counters
+		/// for deriving unique GCM nonces on the worker thread.
 		/// </summary>
-		public readonly byte[] SymmetricKey;
-
-		/// <summary>
-		/// AES initialization vector for decrypting request data on the worker thread.
-		/// </summary>
-		public readonly byte[] IV;
+		public readonly ConnectionEncryptionData EncryptionData;
 
 		/// <summary>
 		/// Creates a new SRP verify request with encrypted data for deferred processing.
@@ -39,16 +37,14 @@ namespace FishMMO.Server.Core.Authentication
 		/// <param name="connection">The originating network connection.</param>
 		/// <param name="encryptedUsername">Encrypted username bytes.</param>
 		/// <param name="encryptedPublicEphemeral">Encrypted client public ephemeral bytes.</param>
-		/// <param name="symmetricKey">AES key for decryption.</param>
-		/// <param name="iv">AES IV for decryption.</param>
+		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
 		public SrpVerifyRequest(TConnection connection, byte[] encryptedUsername, byte[] encryptedPublicEphemeral,
-			byte[] symmetricKey, byte[] iv)
+			ConnectionEncryptionData encryptionData)
 		{
 			Connection = connection;
 			EncryptedUsername = encryptedUsername;
 			EncryptedPublicEphemeral = encryptedPublicEphemeral;
-			SymmetricKey = symmetricKey;
-			IV = iv;
+			EncryptionData = encryptionData;
 		}
 	}
 }

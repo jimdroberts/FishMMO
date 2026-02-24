@@ -23,7 +23,7 @@ namespace FishMMO.Server.Implementation
 		private readonly object syncRoot = new object();
 
 		/// <summary>
-		/// Maps each connection to its encryption data (public key, symmetric key, IV).
+		/// Maps each connection to its encryption data (public key, symmetric key, session prefix, and counters).
 		/// </summary>
 		private readonly Dictionary<NetworkConnection, ConnectionEncryptionData> connectionEncryptionEntries = new Dictionary<NetworkConnection, ConnectionEncryptionData>();
 
@@ -55,10 +55,11 @@ namespace FishMMO.Server.Implementation
 		/// <param name="publicKey">The public key for encryption.</param>
 		public void AddConnectionEncryptionData(NetworkConnection connection, byte[] publicKey)
 		{
-			// Generate a fresh AES-256 key and a 12-byte GCM nonce per login handshake.
+			// Generate a fresh AES-256 key and a 4-byte random session prefix per login handshake.
+			// The prefix is combined with per-message counters to derive unique 12-byte GCM nonces.
 			var data = new ConnectionEncryptionData(publicKey,
 								CryptoHelper.GenerateKey(32),
-								CryptoHelper.GenerateKey(12));
+								CryptoHelper.GenerateKey(CryptoHelper.SessionPrefixLength));
 			lock (syncRoot)
 			{
 				connectionEncryptionEntries[connection] = data;
@@ -120,7 +121,7 @@ namespace FishMMO.Server.Implementation
 		{
 			lock (syncRoot)
 			{
-				connectionEncryptionEntries.Remove(connection);
+				ClearAndRemoveEncryptionData_NoLock(connection);
 				connectionAccountData.Remove(connection);
 				UntrackUnauthenticatedConnection_NoLock(connection);
 
@@ -142,7 +143,7 @@ namespace FishMMO.Server.Implementation
 			{
 				if (accountConnections.TryGetValue(accountName, out NetworkConnection connection))
 				{
-					connectionEncryptionEntries.Remove(connection);
+					ClearAndRemoveEncryptionData_NoLock(connection);
 					connectionAccountData.Remove(connection);
 					connectionAccounts.Remove(connection);
 					accountConnections.Remove(accountName);
@@ -297,7 +298,7 @@ namespace FishMMO.Server.Implementation
 					}
 
 					// Purge stale unauthenticated connection state.
-					connectionEncryptionEntries.Remove(connection);
+					ClearAndRemoveEncryptionData_NoLock(connection);
 					connectionAccountData.Remove(connection);
 					if (connectionAccounts.TryGetValue(connection, out string accountName))
 					{
@@ -343,12 +344,29 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Clears all stored account and connection data.
+		/// Zeroes and removes encryption data for a single connection.
+		/// Must be called inside <see cref="syncRoot"/> lock.
+		/// </summary>
+		private void ClearAndRemoveEncryptionData_NoLock(NetworkConnection connection)
+		{
+			if (connectionEncryptionEntries.TryGetValue(connection, out ConnectionEncryptionData encData))
+			{
+				encData.Clear();
+				connectionEncryptionEntries.Remove(connection);
+			}
+		}
+
+		/// <summary>
+		/// Zeroes all sensitive key material and clears all stored account and connection data.
 		/// </summary>
 		public void Clear()
 		{
 			lock (syncRoot)
 			{
+				foreach (ConnectionEncryptionData encData in connectionEncryptionEntries.Values)
+				{
+					encData.Clear();
+				}
 				connectionEncryptionEntries.Clear();
 				connectionAccounts.Clear();
 				accountConnections.Clear();

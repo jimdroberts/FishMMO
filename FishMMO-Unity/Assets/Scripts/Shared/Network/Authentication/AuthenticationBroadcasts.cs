@@ -25,14 +25,15 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Broadcast sent by the server to complete the handshake, containing encryption key and IV.
+	/// Broadcast sent by the server to complete the handshake, containing the encrypted
+	/// symmetric key and session prefix for counter-based GCM nonce derivation.
 	/// </summary>
 	public struct ServerHandshake : IBroadcast
 	{
-		/// <summary>Server's encryption key.</summary>
+		/// <summary>Server's encryption key (RSA-encrypted AES-256 key).</summary>
 		public byte[] Key;
-		/// <summary>Server's initialization vector for encryption.</summary>
-		public byte[] IV;
+		/// <summary>RSA-encrypted 4-byte session prefix for GCM nonce derivation.</summary>
+		public byte[] SessionPrefix;
 	}
 
 	/// <summary>

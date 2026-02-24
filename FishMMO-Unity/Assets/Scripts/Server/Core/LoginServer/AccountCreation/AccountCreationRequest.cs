@@ -1,3 +1,5 @@
+using FishMMO.Server.Core.Account;
+
 namespace FishMMO.Server.Core.LoginServer
 {
 	/// <summary>
@@ -29,14 +31,10 @@ namespace FishMMO.Server.Core.LoginServer
 		public readonly byte[] EncryptedVerifier;
 
 		/// <summary>
-		/// AES symmetric key for decryption (from connection encryption data).
+		/// Per-connection encryption state holding the symmetric key, session prefix, and counters
+		/// for deriving unique GCM nonces on the worker thread.
 		/// </summary>
-		public readonly byte[] SymmetricKey;
-
-		/// <summary>
-		/// AES initialization vector for decryption (from connection encryption data).
-		/// </summary>
-		public readonly byte[] IV;
+		public readonly ConnectionEncryptionData EncryptionData;
 
 		/// <summary>
 		/// IP address of the client for rate limiting and DoS protection.
@@ -50,18 +48,16 @@ namespace FishMMO.Server.Core.LoginServer
 		/// <param name="encryptedUsername">Encrypted username bytes.</param>
 		/// <param name="encryptedSalt">Encrypted salt bytes.</param>
 		/// <param name="encryptedVerifier">Encrypted verifier bytes.</param>
-		/// <param name="symmetricKey">AES symmetric key for decryption.</param>
-		/// <param name="iv">AES initialization vector for decryption.</param>
+		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
 		/// <param name="ipAddress">IP address of the client.</param>
 		public AccountCreationRequest(TConnection connection, byte[] encryptedUsername, byte[] encryptedSalt,
-			byte[] encryptedVerifier, byte[] symmetricKey, byte[] iv, string ipAddress)
+			byte[] encryptedVerifier, ConnectionEncryptionData encryptionData, string ipAddress)
 		{
 			Connection = connection;
 			EncryptedUsername = encryptedUsername;
 			EncryptedSalt = encryptedSalt;
 			EncryptedVerifier = encryptedVerifier;
-			SymmetricKey = symmetricKey;
-			IV = iv;
+			EncryptionData = encryptionData;
 			IpAddress = ipAddress;
 		}
 	}

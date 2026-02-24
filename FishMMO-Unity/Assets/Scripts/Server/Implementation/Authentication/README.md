@@ -90,6 +90,41 @@ Workers enqueue `Action` delegates into `mainThreadQueue`, which is drained each
 - Cache entries are touched on read and swept with bounded scan/remove limits.
 - This keeps IP-based rate limiting effective without unbounded memory growth under connection churn.
 
+## Cryptographic Hardening
+
+### AES-GCM with AAD
+
+All AES-GCM operations pass the 12-byte nonce as Additional Authenticated Data (AAD). This binds each ciphertext to its specific nonce context — if an attacker swaps ciphertext between different nonce slots, GCM tag verification fails immediately.
+
+### Counter overflow guards
+
+Both client (`ClientLoginAuthenticator`) and server (`ConnectionEncryptionData`) nonce helpers check for `uint.MaxValue` before incrementing and throw `CryptographicException` on overflow. This guarantees nonce uniqueness within a session and prevents silent wraparound.
+
+### Buffer zeroing
+
+Decrypted plaintext buffers (usernames, salt, verifier, ephemeral values, proofs) are zeroed with `CryptographicOperations.ZeroMemory()` immediately after use. Symmetric keys and session prefixes are zeroed on disconnect via `ClearKeyMaterial()` / `AccountManager.RemoveConnectionAccount()`.
+
+### Credential clearing
+
+The client authenticator nulls `username` and `password` fields immediately after the SRP proof is derived (last point of use) and again as a safety net in `ClearKeyMaterial()` on disconnect.
+
+### Unified pre-proof failure responses
+
+All failure paths in `ProcessSrpVerifyAsync` follow a consistent pattern:
+1. Enqueue a `ClientAuthResultBroadcast` on `Channel.Reliable` to the main thread.
+2. Disconnect the client after the broadcast is sent.
+3. Purge all transient auth state.
+
+This prevents information leakage through inconsistent error timing or channel differences.
+
+### Constant-time comparison
+
+`CryptoHelper.FixedTimeEquals(byte[], byte[])` delegates to `CryptographicOperations.FixedTimeEquals` for timing-safe byte comparisons. SRP proof verification is handled internally by the `SecureRemotePassword` library.
+
+### Try/catch on all AES operations
+
+Every `CryptoHelper.DecryptAES` and `EncryptAES` call site is wrapped in `try/catch (CryptographicException)` to handle GCM tag verification failures, counter exhaustion, or malformed ciphertext gracefully — logging a warning and disconnecting the client rather than crashing the worker.
+
 ## Authentication Flow
 
 ### Phase 1: Key Exchange (Inline — No Channel)
@@ -99,12 +134,30 @@ Client                              Server (Network Thread)
   │                                      │
   │── ClientHandshake ─────────────────► │  OnServerClientHandshakeReceived()
   │   { PublicKey (RSA) }                │    • AddConnectionEncryptionData()
-  │                                      │    • Generate AES key + IV
-  │◄── ServerHandshake ──────────────── │    • RSA-encrypt AES key + IV
-  │   { Key, IV (RSA-encrypted) }        │    • Broadcast response
+  │                                      │    • Generate AES-256 key + 4-byte session prefix
+  │◄── ServerHandshake ──────────────── │    • RSA-OAEP-SHA256 encrypt key + prefix
+  │   { Key, SessionPrefix (encrypted) } │    • Broadcast response
 ```
 
 This phase runs inline because it is pure in-memory crypto — no database or SRP work.
+
+### Counter-Based Nonce Scheme
+
+All AES-GCM operations use a deterministic 12-byte nonce built from three components:
+
+```
+┌─────────────┬───────────┬────────────┬─────────────┐
+│ Prefix (4B) │ Dir (1B)  │ Pad (3B)   │ Counter (4B)│
+│ session     │ 0x00=C→S  │ 0x00 0x00  │ big-endian  │
+│ prefix      │ 0x01=S→C  │ 0x00       │ uint32      │
+└─────────────┴───────────┴────────────┴─────────────┘
+```
+
+- **Session prefix**: 4 random bytes generated per connection, shared via RSA.
+- **Direction byte**: Distinguishes client→server and server→client nonces, preventing reflection attacks.
+- **Counter**: Monotonically incremented per encrypt/decrypt operation. Throws `CryptographicException` at `uint.MaxValue` to prevent nonce reuse.
+
+The nonce is also passed as **Additional Authenticated Data (AAD)** to AES-GCM, cryptographically binding ciphertext to its nonce context and preventing ciphertext transplant attacks.
 
 ### Phase 2: SRP Verify (Bounded Channel)
 
@@ -158,7 +211,7 @@ In-flight gate maps are separate from channel capacity and provide per-connectio
 | Broadcast | Direction | Contents |
 |-----------|-----------|----------|
 | `ClientHandshake` | Client → Server | RSA public key |
-| `ServerHandshake` | Server → Client | RSA-encrypted AES key + IV |
+| `ServerHandshake` | Server → Client | RSA-OAEP-SHA256 encrypted AES key + session prefix |
 | `SrpVerifyBroadcast` | Bidirectional | Encrypted salt + public ephemeral |
 | `SrpProofBroadcast` | Client → Server | Encrypted client proof |
 | `SrpSuccessBroadcast` | Server → Client | Encrypted server proof + auth result |
@@ -199,7 +252,7 @@ In-flight gate maps are separate from channel capacity and provide per-connectio
 | `FishNet.Connection.NetworkConnection` | Connection type used as `TConnection` |
 | `System.Threading.Channels` | Bounded async producer-consumer channels |
 | `SecureRemotePassword` | SRP-6a protocol library (2048-bit, SHA-512) |
-| `CryptoHelper` | AES encrypt/decrypt, RSA public key import, key generation |
+| `CryptoHelper` | AES-GCM encrypt/decrypt with AAD, RSA-OAEP-SHA256, nonce builder, constant-time compare |
 | `IAccountManager<NetworkConnection>` | Thread-safe account/connection/SRP state management |
 | `ICharacterService` | Database: check if characters are already online |
 | `IKickRequestService` | Database: persist kick requests for already-online accounts |

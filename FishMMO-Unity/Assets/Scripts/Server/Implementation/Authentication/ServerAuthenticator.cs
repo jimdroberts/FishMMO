@@ -413,15 +413,15 @@ namespace FishMMO.Server.Implementation
 				// Reconstruct the client's public key from the wire bytes.
 				var clientPublicKey = CryptoHelper.ImportPublicKey(msg.PublicKey);
 
-				// Encrypt the symmetric key and IV using the client's public key (OAEP-SHA256 via BouncyCastle).
+				// Encrypt the symmetric key and session prefix using the client's public key (OAEP-SHA256 via BouncyCastle).
 				byte[] encryptedSymmetricKey = CryptoHelper.EncryptRsaOaepSha256(clientPublicKey, encryptionData.SymmetricKey);
-				byte[] encryptedIV = CryptoHelper.EncryptRsaOaepSha256(clientPublicKey, encryptionData.IV);
+				byte[] encryptedSessionPrefix = CryptoHelper.EncryptRsaOaepSha256(clientPublicKey, encryptionData.SessionPrefix);
 
-				// Send the encrypted symmetric key and IV to the client for secure communication.
+				// Send the encrypted symmetric key and session prefix to the client for secure communication.
 				ServerHandshake handshake = new ServerHandshake()
 				{
 					Key = encryptedSymmetricKey,
-					IV = encryptedIV,
+					SessionPrefix = encryptedSessionPrefix,
 				};
 				NetworkManager.ServerManager.Broadcast(conn, handshake, false, Channel.Reliable);
 			}
@@ -485,8 +485,7 @@ namespace FishMMO.Server.Implementation
 				conn,
 				msg.S,
 				msg.PublicEphemeral,
-				encryptionData.SymmetricKey,
-				encryptionData.IV
+				encryptionData
 			);
 
 			if (verifyChannel == null || !verifyChannel.Writer.TryWrite(request))
@@ -546,8 +545,7 @@ namespace FishMMO.Server.Implementation
 			var request = new SrpProofRequest<NetworkConnection>(
 				conn,
 				msg.Proof,
-				encryptionData.SymmetricKey,
-				encryptionData.IV
+				encryptionData
 			);
 
 			if (proofChannel == null || !proofChannel.Writer.TryWrite(request))
@@ -644,7 +642,7 @@ namespace FishMMO.Server.Implementation
 			string username;
 			try
 			{
-				byte[] decryptedRawUsername = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedUsername);
+				byte[] decryptedRawUsername = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedUsername);
 				username = Encoding.UTF8.GetString(decryptedRawUsername);
 				// zero decrypted buffer
 				CryptographicOperations.ZeroMemory(decryptedRawUsername);
@@ -652,21 +650,32 @@ namespace FishMMO.Server.Implementation
 			catch (CryptographicException ex)
 			{
 				await Log.Warning("ServerAuthenticator", $"AES decryption/authentication failed for SRP verify: {ex.Message}");
-				PurgeConnectionAuthState(conn, disconnect: true);
-				return;
-			}
-
-			if (!TryBeginAccountVerifyAttempt(username))
-			{
-				result = ClientAuthenticationResult.ServerBusy;
 				EnqueueMainThread(() =>
 				{
 					if (conn.IsActive)
 					{
 						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 						{
-							Result = result,
-						}, false, Channel.Unreliable);
+							Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
+						}, false, Channel.Reliable);
+						conn.Disconnect(false);
+					}
+				});
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
+
+			if (!TryBeginAccountVerifyAttempt(username))
+			{
+				EnqueueMainThread(() =>
+				{
+					if (conn.IsActive)
+					{
+						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
+						{
+							Result = ClientAuthenticationResult.ServerBusy,
+						}, false, Channel.Reliable);
+						conn.Disconnect(false);
 					}
 				});
 
@@ -716,14 +725,25 @@ namespace FishMMO.Server.Implementation
 						string publicEphemeral;
 						try
 						{
-							byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedPublicEphemeral);
+							byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedPublicEphemeral);
 							publicEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
 							CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
 						}
 						catch (CryptographicException ex)
 						{
 							await Log.Warning("ServerAuthenticator", $"AES decryption/authentication failed for public ephemeral: {ex.Message}");
-							PurgeConnectionAuthState(conn, disconnect: true);
+							EnqueueMainThread(() =>
+							{
+								if (conn.IsActive)
+								{
+									NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
+									{
+										Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
+									}, false, Channel.Reliable);
+									conn.Disconnect(false);
+								}
+							});
+							PurgeConnectionAuthState(conn, disconnect: false);
 							return;
 						}
 
@@ -766,13 +786,24 @@ namespace FishMMO.Server.Implementation
 								byte[] encryptedPublicServerEphemeral;
 								try
 								{
-									encryptedSalt = CryptoHelper.EncryptAES(request.SymmetricKey, request.IV, Encoding.UTF8.GetBytes(srpSalt));
-									encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.SymmetricKey, request.IV, Encoding.UTF8.GetBytes(srpPublicServerEphemeral));
+									encryptedSalt = CryptoHelper.EncryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextSendNonce(), Encoding.UTF8.GetBytes(srpSalt));
+									encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextSendNonce(), Encoding.UTF8.GetBytes(srpPublicServerEphemeral));
 								}
 								catch (CryptographicException ex)
 								{
 									await Log.Error("ServerAuthenticator", $"AES encryption failed for SRP response: {ex.Message}");
-									PurgeConnectionAuthState(conn, disconnect: true);
+									EnqueueMainThread(() =>
+									{
+										if (conn.IsActive)
+										{
+											NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
+											{
+												Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
+											}, false, Channel.Reliable);
+											conn.Disconnect(false);
+										}
+									});
+									PurgeConnectionAuthState(conn, disconnect: false);
 									return;
 								}
 
@@ -801,7 +832,7 @@ namespace FishMMO.Server.Implementation
 				}
 			}
 
-			// Marshal authentication result to main thread.
+			// Marshal authentication result + disconnect to main thread.
 			EnqueueMainThread(() =>
 			{
 				if (conn.IsActive)
@@ -810,6 +841,7 @@ namespace FishMMO.Server.Implementation
 					{
 						Result = result,
 					}, false, Channel.Reliable);
+					conn.Disconnect(false);
 				}
 			});
 
@@ -835,7 +867,7 @@ namespace FishMMO.Server.Implementation
 			string clientProof;
 			try
 			{
-				byte[] decryptedClientProof = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedClientProof);
+				byte[] decryptedClientProof = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedClientProof);
 				clientProof = Encoding.UTF8.GetString(decryptedClientProof);
 				CryptographicOperations.ZeroMemory(decryptedClientProof);
 			}
@@ -917,7 +949,7 @@ namespace FishMMO.Server.Implementation
 				authenticationSucceeded = authenticated;
 
 				// Encrypt server proof on worker thread.
-				byte[] encryptedServerProof = CryptoHelper.EncryptAES(request.SymmetricKey, request.IV, Encoding.UTF8.GetBytes(serverProof));
+				byte[] encryptedServerProof = CryptoHelper.EncryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextSendNonce(), Encoding.UTF8.GetBytes(serverProof));
 
 				// Marshal final broadcast + authentication events to main thread.
 				EnqueueMainThread(() =>

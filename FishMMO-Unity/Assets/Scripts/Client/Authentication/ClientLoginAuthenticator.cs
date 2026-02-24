@@ -36,9 +36,17 @@ namespace FishMMO.Client
 		/// </summary>
 		private byte[] symmetricKey;
 		/// <summary>
-		/// Initialization vector for AES encryption after handshake.
+		/// 4-byte random session prefix for GCM nonce derivation.
 		/// </summary>
-		private byte[] iv;
+		private byte[] sessionPrefix;
+		/// <summary>
+		/// Monotonic counter for client→server (encrypt) nonces.
+		/// </summary>
+		private uint sendCounter;
+		/// <summary>
+		/// Monotonic counter for server→client (decrypt) nonces.
+		/// </summary>
+		private uint receiveCounter;
 		/// <summary>
 		/// SRP data for secure remote password authentication.
 		/// </summary>
@@ -131,6 +139,7 @@ namespace FishMMO.Client
 				args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				rsaKeyPair = null;
+				ClearKeyMaterial();
 			}
 
 			if (args.ConnectionState != LocalConnectionState.Started)
@@ -154,7 +163,7 @@ namespace FishMMO.Client
 		private void OnClientServerHandshakeBroadcastReceived(ServerHandshake msg, Channel channel)
 		{
 			if (msg.Key == null ||
-				msg.IV == null)
+				msg.SessionPrefix == null)
 			{
 				Client.ForceDisconnect();
 				return;
@@ -162,7 +171,7 @@ namespace FishMMO.Client
 			try
 			{
 				symmetricKey = CryptoHelper.DecryptRsaOaepSha256(rsaKeyPair.Private, msg.Key);
-				iv = CryptoHelper.DecryptRsaOaepSha256(rsaKeyPair.Private, msg.IV);
+				sessionPrefix = CryptoHelper.DecryptRsaOaepSha256(rsaKeyPair.Private, msg.SessionPrefix);
 			}
 			catch (CryptographicException ex)
 			{
@@ -175,12 +184,17 @@ namespace FishMMO.Client
 			rsaKeyPair = null;
 
 			// Validate sizes
-			if (symmetricKey == null || symmetricKey.Length != 32 || iv == null || iv.Length != 12)
+			if (symmetricKey == null || symmetricKey.Length != 32 ||
+				sessionPrefix == null || sessionPrefix.Length != CryptoHelper.SessionPrefixLength)
 			{
-				Log.Warning("ClientLoginAuthenticator", "Invalid symmetric key or IV received from server.");
+				Log.Warning("ClientLoginAuthenticator", "Invalid symmetric key or session prefix received from server.");
 				Client.ForceDisconnect();
 				return;
 			}
+
+			// Reset counters for the new session.
+			sendCounter = 0;
+			receiveCounter = 0;
 
 			SrpData = new ClientSrpData(SrpParameters.Create2048<SHA512>());
 
@@ -189,7 +203,7 @@ namespace FishMMO.Client
 			byte[] encryptedUsername;
 			try
 			{
-				encryptedUsername = CryptoHelper.EncryptAES(symmetricKey, iv, usernameBytes);
+				encryptedUsername = CryptoHelper.EncryptAES(symmetricKey, NextSendNonce(), usernameBytes);
 			}
 			catch (CryptographicException ex)
 			{
@@ -212,8 +226,8 @@ namespace FishMMO.Client
 				byte[] encryptedVerifier;
 				try
 				{
-					encryptedSalt = CryptoHelper.EncryptAES(symmetricKey, iv, saltBytes);
-					encryptedVerifier = CryptoHelper.EncryptAES(symmetricKey, iv, verifierBytes);
+					encryptedSalt = CryptoHelper.EncryptAES(symmetricKey, NextSendNonce(), saltBytes);
+					encryptedVerifier = CryptoHelper.EncryptAES(symmetricKey, NextSendNonce(), verifierBytes);
 				}
 				catch (CryptographicException ex)
 				{
@@ -240,7 +254,7 @@ namespace FishMMO.Client
 				byte[] encryptedClientEphemeral;
 				try
 				{
-					encryptedClientEphemeral = CryptoHelper.EncryptAES(symmetricKey, iv, clientEphemeralBytes);
+					encryptedClientEphemeral = CryptoHelper.EncryptAES(symmetricKey, NextSendNonce(), clientEphemeralBytes);
 				}
 				catch (CryptographicException ex)
 				{
@@ -271,15 +285,45 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] decryptedSalt = CryptoHelper.DecryptAES(symmetricKey, iv, msg.S);
-			byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(symmetricKey, iv, msg.PublicEphemeral);
+			byte[] decryptedSalt;
+			byte[] decryptedRawPublicEphemeral;
+			try
+			{
+				decryptedSalt = CryptoHelper.DecryptAES(symmetricKey, NextReceiveNonce(), msg.S);
+				decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(symmetricKey, NextReceiveNonce(), msg.PublicEphemeral);
+			}
+			catch (CryptographicException ex)
+			{
+				Log.Warning("ClientLoginAuthenticator", $"AES decryption failed for SRP verify: {ex.Message}");
+				Client.ForceDisconnect();
+				return;
+			}
 
 			string salt = Encoding.UTF8.GetString(decryptedSalt);
 			string publicServerEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
+			CryptographicOperations.ZeroMemory(decryptedSalt);
+			CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
 
 			if (SrpData.GetProof(this.username, this.password, salt, publicServerEphemeral, out string proof))
 			{
-				byte[] encryptedProof = CryptoHelper.EncryptAES(symmetricKey, iv, Encoding.UTF8.GetBytes(proof));
+				// Credentials are no longer needed — clear immediately.
+				username = null;
+				password = null;
+
+				byte[] proofBytes = Encoding.UTF8.GetBytes(proof);
+				byte[] encryptedProof;
+				try
+				{
+					encryptedProof = CryptoHelper.EncryptAES(symmetricKey, NextSendNonce(), proofBytes);
+				}
+				catch (CryptographicException ex)
+				{
+					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for client proof: {ex.Message}");
+					Client.ForceDisconnect();
+					CryptographicOperations.ZeroMemory(proofBytes);
+					return;
+				}
+				CryptographicOperations.ZeroMemory(proofBytes);
 
 				Client.Broadcast(new SrpProofBroadcast()
 				{
@@ -288,9 +332,10 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				username = null;
+				password = null;
 				Client.ForceDisconnect();
 			}
-			//Log.Debug("ClientLoginAuthenticator", "Srp: " + proof);
 		}
 
 		/// <summary>
@@ -305,9 +350,20 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] decryptedProof = CryptoHelper.DecryptAES(symmetricKey, iv, msg.Proof);
+			byte[] decryptedProof;
+			try
+			{
+				decryptedProof = CryptoHelper.DecryptAES(symmetricKey, NextReceiveNonce(), msg.Proof);
+			}
+			catch (CryptographicException ex)
+			{
+				Log.Warning("ClientLoginAuthenticator", $"AES decryption failed for SRP success: {ex.Message}");
+				Client.ForceDisconnect();
+				return;
+			}
 
 			string proof = Encoding.UTF8.GetString(decryptedProof);
+			CryptographicOperations.ZeroMemory(decryptedProof);
 
 			// Verify the client session
 			if (SrpData.Verify(proof, out string result))
@@ -320,7 +376,6 @@ namespace FishMMO.Client
 			{
 				Client.ForceDisconnect();
 			}
-			//Log.Debug("ClientLoginAuthenticator", "Srp: " + result);
 		}
 
 		/// <summary>
@@ -336,6 +391,49 @@ namespace FishMMO.Client
 			// Invoke result on the client
 			OnClientAuthenticationResult(msg.Result);
 			Log.Debug("ClientLoginAuthenticator", msg.Result.ToString());
+		}
+
+		/// <summary>
+		/// Builds the next client→server GCM nonce and advances <see cref="sendCounter"/>.
+		/// </summary>
+		/// <exception cref="CryptographicException">Thrown when the counter would overflow.</exception>
+		private byte[] NextSendNonce()
+		{
+			if (sendCounter == uint.MaxValue)
+				throw new CryptographicException("AES-GCM send counter exhausted.");
+			return CryptoHelper.BuildGcmNonce(sessionPrefix, sendCounter++, serverToClient: false);
+		}
+
+		/// <summary>
+		/// Builds the next server→client GCM nonce and advances <see cref="receiveCounter"/>.
+		/// </summary>
+		/// <exception cref="CryptographicException">Thrown when the counter would overflow.</exception>
+		private byte[] NextReceiveNonce()
+		{
+			if (receiveCounter == uint.MaxValue)
+				throw new CryptographicException("AES-GCM receive counter exhausted.");
+			return CryptoHelper.BuildGcmNonce(sessionPrefix, receiveCounter++, serverToClient: true);
+		}
+
+		/// <summary>
+		/// Zeroes all sensitive key material and resets counters.
+		/// </summary>
+		private void ClearKeyMaterial()
+		{
+			if (symmetricKey != null)
+			{
+				CryptographicOperations.ZeroMemory(symmetricKey);
+				symmetricKey = null;
+			}
+			if (sessionPrefix != null)
+			{
+				CryptographicOperations.ZeroMemory(sessionPrefix);
+				sessionPrefix = null;
+			}
+			sendCounter = 0;
+			receiveCounter = 0;
+			username = null;
+			password = null;
 		}
 	}
 }

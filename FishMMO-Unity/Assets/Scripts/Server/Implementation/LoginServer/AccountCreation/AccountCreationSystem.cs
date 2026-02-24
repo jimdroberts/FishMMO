@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using FishMMO.Database;
@@ -269,8 +270,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				msg.Username,              // Still encrypted!
 				msg.Salt,                  // Still encrypted!
 				msg.Verifier,              // Still encrypted!
-				encryptionData.SymmetricKey,
-				encryptionData.IV,
+				encryptionData,
 				ipAddress
 			);
 
@@ -400,9 +400,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 				try
 				{
 					// Decrypt credentials on worker thread (doesn't block network)
-					byte[] decryptedUsername = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedUsername);
-					byte[] decryptedSalt = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedSalt);
-					byte[] decryptedVerifier = CryptoHelper.DecryptAES(request.SymmetricKey, request.IV, request.EncryptedVerifier);
+					byte[] decryptedUsername;
+					byte[] decryptedSalt;
+					byte[] decryptedVerifier;
+					try
+					{
+						decryptedUsername = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedUsername);
+						decryptedSalt = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedSalt);
+						decryptedVerifier = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedVerifier);
+					}
+					catch (CryptographicException)
+					{
+						NetworkConnection failConn = request.Connection;
+						TryEnqueueMainThread(() =>
+						{
+							if (failConn != null && failConn.IsActive)
+								failConn.Disconnect(false);
+						});
+						return;
+					}
 
 					string username = Encoding.UTF8.GetString(decryptedUsername);
 

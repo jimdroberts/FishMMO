@@ -1,3 +1,5 @@
+using FishMMO.Server.Core.Account;
+
 namespace FishMMO.Server.Core.Authentication
 {
 	/// <summary>
@@ -19,29 +21,23 @@ namespace FishMMO.Server.Core.Authentication
 		public readonly byte[] EncryptedClientProof;
 
 		/// <summary>
-		/// AES symmetric key for decrypting request data on the worker thread.
+		/// Per-connection encryption state holding the symmetric key, session prefix, and counters
+		/// for deriving unique GCM nonces on the worker thread.
 		/// </summary>
-		public readonly byte[] SymmetricKey;
-
-		/// <summary>
-		/// AES initialization vector for decrypting request data on the worker thread.
-		/// </summary>
-		public readonly byte[] IV;
+		public readonly ConnectionEncryptionData EncryptionData;
 
 		/// <summary>
 		/// Creates a new SRP proof request with encrypted data for deferred processing.
 		/// </summary>
 		/// <param name="connection">The originating network connection.</param>
 		/// <param name="encryptedClientProof">Encrypted client proof bytes.</param>
-		/// <param name="symmetricKey">AES key for decryption.</param>
-		/// <param name="iv">AES IV for decryption.</param>
+		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
 		public SrpProofRequest(TConnection connection, byte[] encryptedClientProof,
-			byte[] symmetricKey, byte[] iv)
+			ConnectionEncryptionData encryptionData)
 		{
 			Connection = connection;
 			EncryptedClientProof = encryptedClientProof;
-			SymmetricKey = symmetricKey;
-			IV = iv;
+			EncryptionData = encryptionData;
 		}
 	}
 }

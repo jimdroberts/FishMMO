@@ -147,23 +147,69 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Encrypts input data using AES symmetric encryption with the provided key and IV.
+		/// Builds a 12-byte GCM nonce from a session prefix, message counter, and direction flag.
+		/// Layout: [4-byte prefix][8-byte direction-encoded counter (big-endian)].
+		/// The direction flag occupies the upper 32 bits of the counter field, ensuring
+		/// server-to-client and client-to-server nonces never collide for the same counter value.
+		/// </summary>
+		/// <param name="sessionPrefix">4-byte random prefix unique to the session.</param>
+		/// <param name="counter">Monotonically increasing per-message counter.</param>
+		/// <param name="serverToClient">
+		/// <c>true</c> for server→client messages; <c>false</c> for client→server messages.
+		/// </param>
+		/// <returns>A 12-byte nonce suitable for AES-GCM.</returns>
+		public static byte[] BuildGcmNonce(byte[] sessionPrefix, uint counter, bool serverToClient)
+		{
+			if (sessionPrefix == null || sessionPrefix.Length != SessionPrefixLength)
+				throw new ArgumentException($"Session prefix must be exactly {SessionPrefixLength} bytes.", nameof(sessionPrefix));
+
+			byte[] nonce = new byte[GcmNonceLength];
+			Buffer.BlockCopy(sessionPrefix, 0, nonce, 0, SessionPrefixLength);
+
+			// Encode direction in upper 32 bits to prevent nonce collision across directions.
+			// Client→server: direction = 0, Server→client: direction = 1.
+			// Layout: [prefix(4)] [direction(1)] [0x00(3)] [counter big-endian(4)]
+			nonce[SessionPrefixLength] = serverToClient ? (byte)1 : (byte)0;
+			// nonce[5..7] remain zero (padding).
+			nonce[8] = (byte)(counter >> 24);
+			nonce[9] = (byte)(counter >> 16);
+			nonce[10] = (byte)(counter >> 8);
+			nonce[11] = (byte)counter;
+
+			return nonce;
+		}
+
+		/// <summary>
+		/// Required length for a GCM session prefix in bytes.
+		/// </summary>
+		public const int SessionPrefixLength = 4;
+
+		/// <summary>
+		/// Required length for a GCM nonce in bytes.
+		/// </summary>
+		public const int GcmNonceLength = 12;
+
+		/// <summary>
+		/// Encrypts input data using AES-GCM symmetric encryption with the provided key and nonce.
+		/// The nonce is also passed as Additional Authenticated Data (AAD) to cryptographically
+		/// bind the ciphertext to its nonce context, preventing ciphertext transplant attacks.
 		/// </summary>
 		/// <param name="symmetricKey">AES symmetric key.</param>
-		/// <param name="iv">Initialization vector for AES.</param>
+		/// <param name="iv">12-byte nonce for GCM (also used as AAD).</param>
 		/// <param name="input">Input data to encrypt.</param>
-		/// <returns>Encrypted data as a byte array.</returns>
+		/// <returns>Encrypted data as a byte array (ciphertext + 128-bit tag).</returns>
 		public static byte[] EncryptAES(byte[] symmetricKey, byte[] iv, byte[] input)
 		{
 			if (symmetricKey == null) throw new ArgumentNullException(nameof(symmetricKey));
 			if (iv == null) throw new ArgumentNullException(nameof(iv));
 			if (input == null) throw new ArgumentNullException(nameof(input));
-			if (iv.Length != 12) throw new ArgumentException("IV must be 12 bytes for GCM.", nameof(iv));
+			if (iv.Length != GcmNonceLength) throw new ArgumentException("IV must be 12 bytes for GCM.", nameof(iv));
 
 			// Use BouncyCastle AES-GCM (tag appended to ciphertext)
 			var cipher = new Org.BouncyCastle.Crypto.Modes.GcmBlockCipher(new AesEngine());
 			int tagLenBits = 128;
-			var parameters = new AeadParameters(new KeyParameter(symmetricKey), tagLenBits, iv, null);
+			// Pass iv as AAD to bind ciphertext to its nonce context.
+			var parameters = new AeadParameters(new KeyParameter(symmetricKey), tagLenBits, iv, iv);
 			cipher.Init(true, parameters);
 
 			byte[] output = new byte[cipher.GetOutputSize(input.Length)];
@@ -189,22 +235,24 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Decrypts input data using AES symmetric decryption with the provided key and IV.
+		/// Decrypts input data using AES-GCM symmetric decryption with the provided key and nonce.
+		/// The nonce must match the one used for encryption (also verified as AAD).
 		/// </summary>
 		/// <param name="symmetricKey">AES symmetric key.</param>
-		/// <param name="iv">Initialization vector for AES.</param>
-		/// <param name="input">Input data to decrypt.</param>
+		/// <param name="iv">12-byte nonce for GCM (also used as AAD).</param>
+		/// <param name="input">Input data to decrypt (ciphertext + 128-bit tag).</param>
 		/// <returns>Decrypted data as a byte array.</returns>
 		public static byte[] DecryptAES(byte[] symmetricKey, byte[] iv, byte[] input)
 		{
 			if (symmetricKey == null) throw new ArgumentNullException(nameof(symmetricKey));
 			if (iv == null) throw new ArgumentNullException(nameof(iv));
 			if (input == null) throw new ArgumentNullException(nameof(input));
-			if (iv.Length != 12) throw new ArgumentException("IV must be 12 bytes for GCM.", nameof(iv));
+			if (iv.Length != GcmNonceLength) throw new ArgumentException("IV must be 12 bytes for GCM.", nameof(iv));
 
 			var cipher = new Org.BouncyCastle.Crypto.Modes.GcmBlockCipher(new AesEngine());
 			int tagLenBits = 128;
-			var parameters = new AeadParameters(new KeyParameter(symmetricKey), tagLenBits, iv, null);
+			// Pass iv as AAD — must match the AAD used during encryption.
+			var parameters = new AeadParameters(new KeyParameter(symmetricKey), tagLenBits, iv, iv);
 			cipher.Init(false, parameters);
 
 			byte[] output = new byte[cipher.GetOutputSize(input.Length)];
@@ -225,6 +273,24 @@ namespace FishMMO.Shared
 			// zero temporary output buffer
 			CryptographicOperations.ZeroMemory(output);
 			return result;
+		}
+
+		/// <summary>
+		/// Compares two byte spans in constant time to prevent timing side-channel attacks.
+		/// Delegates to <see cref="CryptographicOperations.FixedTimeEquals"/> which is
+		/// guaranteed not to short-circuit on the first differing byte.
+		/// </summary>
+		/// <param name="left">First byte array.</param>
+		/// <param name="right">Second byte array.</param>
+		/// <returns><c>true</c> if both arrays are non-null, equal length, and contain the same bytes; otherwise <c>false</c>.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool FixedTimeEquals(byte[] left, byte[] right)
+		{
+			if (left == null || right == null)
+				return false;
+			if (left.Length != right.Length)
+				return false;
+			return CryptographicOperations.FixedTimeEquals(left, right);
 		}
 	}
 }
