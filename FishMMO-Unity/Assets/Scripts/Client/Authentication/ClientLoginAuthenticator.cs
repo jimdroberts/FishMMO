@@ -9,6 +9,7 @@ using SecureRemotePassword;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using System.Runtime.CompilerServices;
+using Org.BouncyCastle.Crypto;
 
 namespace FishMMO.Client
 {
@@ -27,9 +28,9 @@ namespace FishMMO.Client
 		/// </summary>
 		private bool register;
 		/// <summary>
-		/// RSA instance for asymmetric encryption/decryption during handshake.
+		/// RSA key pair for asymmetric encryption/decryption during handshake (BouncyCastle, no dispose needed).
 		/// </summary>
-		private RSA rsa;
+		private AsymmetricCipherKeyPair rsaKeyPair;
 		/// <summary>
 		/// Symmetric key used for AES encryption after handshake.
 		/// </summary>
@@ -83,15 +84,11 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Unity event called when the object is destroyed. Disposes RSA resources.
+		/// Unity event called when the object is destroyed. Clears RSA key pair reference.
 		/// </summary>
 		private void OnDestroy()
 		{
-			if (rsa != null)
-			{
-				rsa.Dispose();
-				rsa = null;
-			}
+			rsaKeyPair = null;
 		}
 
 		/// <summary>
@@ -133,18 +130,14 @@ namespace FishMMO.Client
 			if (args.ConnectionState == LocalConnectionState.Stopping ||
 				args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				if (rsa != null)
-				{
-					rsa.Dispose();
-					rsa = null;
-				}
+				rsaKeyPair = null;
 			}
 
 			if (args.ConnectionState != LocalConnectionState.Started)
 				return;
 
-			rsa = RSA.Create(2048);
-			byte[] publicKey = CryptoHelper.ExportPublicKey(rsa);
+			rsaKeyPair = CryptoHelper.GenerateRsaKeyPair();
+			byte[] publicKey = CryptoHelper.ExportPublicKey(rsaKeyPair);
 
 			// Initiate a handshake with the server
 			Client.Broadcast(new ClientHandshake()
@@ -166,14 +159,46 @@ namespace FishMMO.Client
 				Client.ForceDisconnect();
 				return;
 			}
+			try
+			{
+				symmetricKey = CryptoHelper.DecryptRsaOaepSha256(rsaKeyPair.Private, msg.Key);
+				iv = CryptoHelper.DecryptRsaOaepSha256(rsaKeyPair.Private, msg.IV);
+			}
+			catch (CryptographicException ex)
+			{
+				Log.Warning("ClientLoginAuthenticator", $"RSA decryption failed during handshake: {ex.Message}");
+				Client.ForceDisconnect();
+				return;
+			}
 
-			symmetricKey = rsa.Decrypt(msg.Key, RSAEncryptionPadding.Pkcs1);
-			iv = rsa.Decrypt(msg.IV, RSAEncryptionPadding.Pkcs1);
+			// Clear private key reference after use to reduce lifetime of sensitive material.
+			rsaKeyPair = null;
+
+			// Validate sizes
+			if (symmetricKey == null || symmetricKey.Length != 32 || iv == null || iv.Length != 12)
+			{
+				Log.Warning("ClientLoginAuthenticator", "Invalid symmetric key or IV received from server.");
+				Client.ForceDisconnect();
+				return;
+			}
 
 			SrpData = new ClientSrpData(SrpParameters.Create2048<SHA512>());
 
 			// Encrypt the username before sending
-			byte[] encryptedUsername = CryptoHelper.EncryptAES(symmetricKey, iv, Encoding.UTF8.GetBytes(this.username));
+			byte[] usernameBytes = Encoding.UTF8.GetBytes(this.username);
+			byte[] encryptedUsername;
+			try
+			{
+				encryptedUsername = CryptoHelper.EncryptAES(symmetricKey, iv, usernameBytes);
+			}
+			catch (CryptographicException ex)
+			{
+				Log.Error("ClientLoginAuthenticator", $"AES encryption failed for username: {ex.Message}");
+				Client.ForceDisconnect();
+				CryptographicOperations.ZeroMemory(usernameBytes);
+				return;
+			}
+			CryptographicOperations.ZeroMemory(usernameBytes);
 
 			// Register a new account
 			if (register)
@@ -181,8 +206,25 @@ namespace FishMMO.Client
 				SrpData.GetSaltAndVerifier(username, password, out string salt, out string verifier);
 
 				// Encrypt the salt and verifier before sending
-				byte[] encryptedSalt = CryptoHelper.EncryptAES(symmetricKey, iv, Encoding.UTF8.GetBytes(salt));
-				byte[] encryptedVerifier = CryptoHelper.EncryptAES(symmetricKey, iv, Encoding.UTF8.GetBytes(verifier));
+				byte[] saltBytes = Encoding.UTF8.GetBytes(salt);
+				byte[] verifierBytes = Encoding.UTF8.GetBytes(verifier);
+				byte[] encryptedSalt;
+				byte[] encryptedVerifier;
+				try
+				{
+					encryptedSalt = CryptoHelper.EncryptAES(symmetricKey, iv, saltBytes);
+					encryptedVerifier = CryptoHelper.EncryptAES(symmetricKey, iv, verifierBytes);
+				}
+				catch (CryptographicException ex)
+				{
+					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for salt/verifier: {ex.Message}");
+					Client.ForceDisconnect();
+					CryptographicOperations.ZeroMemory(saltBytes);
+					CryptographicOperations.ZeroMemory(verifierBytes);
+					return;
+				}
+				CryptographicOperations.ZeroMemory(saltBytes);
+				CryptographicOperations.ZeroMemory(verifierBytes);
 
 				Client.Broadcast(new CreateAccountBroadcast()
 				{
@@ -194,7 +236,20 @@ namespace FishMMO.Client
 			// Try to login
 			else
 			{
-				byte[] encryptedClientEphemeral = CryptoHelper.EncryptAES(symmetricKey, iv, Encoding.UTF8.GetBytes(SrpData.ClientEphemeral.Public));
+				byte[] clientEphemeralBytes = Encoding.UTF8.GetBytes(SrpData.ClientEphemeral.Public);
+				byte[] encryptedClientEphemeral;
+				try
+				{
+					encryptedClientEphemeral = CryptoHelper.EncryptAES(symmetricKey, iv, clientEphemeralBytes);
+				}
+				catch (CryptographicException ex)
+				{
+					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for client ephemeral: {ex.Message}");
+					Client.ForceDisconnect();
+					CryptographicOperations.ZeroMemory(clientEphemeralBytes);
+					return;
+				}
+				CryptographicOperations.ZeroMemory(clientEphemeralBytes);
 
 				Client.Broadcast(new SrpVerifyBroadcast()
 				{

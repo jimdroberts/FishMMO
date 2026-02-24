@@ -55,9 +55,10 @@ namespace FishMMO.Server.Implementation
 		/// <param name="publicKey">The public key for encryption.</param>
 		public void AddConnectionEncryptionData(NetworkConnection connection, byte[] publicKey)
 		{
+			// Generate a fresh AES-256 key and a 12-byte GCM nonce per login handshake.
 			var data = new ConnectionEncryptionData(publicKey,
-													CryptoHelper.GenerateKey(32),
-													CryptoHelper.GenerateKey(16));
+								CryptoHelper.GenerateKey(32),
+								CryptoHelper.GenerateKey(12));
 			lock (syncRoot)
 			{
 				connectionEncryptionEntries[connection] = data;
