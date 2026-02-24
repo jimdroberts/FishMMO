@@ -1,5 +1,4 @@
 using FishNet.Connection;
-using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Server.Core;
@@ -18,10 +17,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// When a connection disconnects the server removes all known instances of the character and saves it to the database.
 		/// </summary>
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped &&
-				Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
+			// Clean up auth callback rate-limit tracking for this connection.
+			authCallbackLastTimeByClientId.TryRemove(conn.ClientId, out _);
+
+			if (Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				RemoveCharacterConnectionMapping(conn);
 			}
@@ -245,7 +246,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (defender.TryGet(out IBuffController buffController))
 			{
-				buffController.RemoveAll(true);
+				buffController.RemoveAll(false);
 			}
 
 			// Handle Player deaths

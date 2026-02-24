@@ -8,6 +8,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// <summary>
 	/// Handles interactions with ability crafter objects, allowing players to open the ability crafting interface and triggers NPC interaction logic.
 	/// </summary>
+	[HandlesInteractable(typeof(AbilityCrafter))]
 	public class AbilityCrafterHandler : IInteractableHandler
 	{
 		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;

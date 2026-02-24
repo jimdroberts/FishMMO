@@ -45,7 +45,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Deinitializes the mapping data container and releases references.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 			IpRateLimitTracker = null;

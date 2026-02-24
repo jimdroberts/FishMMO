@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.WorldServer;
@@ -12,13 +13,24 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	/// </summary>
 	public class WorldSceneSystemRuntimeData : RuntimeDataContainer, IWorldSceneSystemRuntimeData
 	{
-		/// <summary>
-		/// Dedicated lock object for queue-processing synchronization.
-		/// Avoids using the data container itself as a monitor target.
-		/// </summary>
-		public readonly object ProcessingLock = new object();
+		private int isProcessingQueue;
 
-		public int IsProcessingQueue { get; set; }
+		/// <summary>
+		/// Atomically attempts to begin queue processing.
+		/// </summary>
+		/// <returns><c>true</c> if processing was started; otherwise <c>false</c>.</returns>
+		public bool TryBeginProcessing()
+		{
+			return Interlocked.CompareExchange(ref isProcessingQueue, 1, 0) == 0;
+		}
+
+		/// <summary>
+		/// Atomically ends queue processing.
+		/// </summary>
+		public void EndProcessing()
+		{
+			Interlocked.Exchange(ref isProcessingQueue, 0);
+		}
 		public float WaitQueueRateSeconds { get; set; }
 		public float NextWaitingQueueSweep { get; set; }
 		public float NextDebounceCleanup { get; set; }
@@ -48,7 +60,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			IsProcessingQueue = 0;
+			EndProcessing();
 			WaitQueueRateSeconds = 2.0f;
 			NextWaitingQueueSweep = 0.0f;
 			NextDebounceCleanup = 0.0f;
@@ -64,7 +76,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override void Clear()
 		{
-			IsProcessingQueue = 0;
+			EndProcessing();
 			WaitQueueRateSeconds = 2.0f;
 			NextWaitingQueueSweep = 0.0f;
 			NextDebounceCleanup = 0.0f;
@@ -77,7 +89,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Deinitializes the runtime data. Called when shutting down the server.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 			InstanceLookupDebounce = null;

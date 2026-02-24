@@ -57,7 +57,7 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Deinitializes all registered behaviours.
+		/// Deinitializes all registered behaviours with deduplication.
 		/// </summary>
 		public override void DeinitializeAll()
 		{
@@ -66,9 +66,13 @@ namespace FishMMO.Server.Implementation
 
 			Log.Debug(RegistryName, "Deinitializing all behaviours");
 
+			// Use a HashSet to avoid calling Deinitialize multiple times
+			// on the same instance registered under multiple keys.
+			var deinitialized = new HashSet<IServerBehaviour>();
+
 			foreach (var component in components.Values)
 			{
-				if (component is ServerBehaviour behaviour)
+				if (component is ServerBehaviour behaviour && deinitialized.Add(component))
 				{
 					behaviour.Deinitialize();
 				}

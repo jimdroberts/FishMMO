@@ -250,7 +250,6 @@ The guild ID is synced via SyncVar at 1.0s intervals on the unreliable channel (
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `maxGuildSize` | `int` | 100 | Maximum members per guild |
-| `maxGuildNameLength` | `int` | 64 | Maximum characters in a guild name |
 | `updatePumpRate` | `float` | 1.0 | Seconds between cross-server guild sync polls |
 
 ## Chat Commands

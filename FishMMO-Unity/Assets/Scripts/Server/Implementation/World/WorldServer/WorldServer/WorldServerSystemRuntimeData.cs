@@ -41,7 +41,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Deinitializes the world server runtime data container.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 		}

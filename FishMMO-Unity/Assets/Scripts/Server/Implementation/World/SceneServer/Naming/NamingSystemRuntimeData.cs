@@ -54,7 +54,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Deinitializes runtime trackers and releases references.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 			CharacterNameByIdInFlight = null;

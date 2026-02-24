@@ -2,7 +2,6 @@
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -263,7 +262,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			MainThreadQueueHelper.Drain<IPartySystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
+			DrainMainThreadQueue<IPartySystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
@@ -272,7 +271,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="action">The action to enqueue.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<IPartySystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<IPartySystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -459,13 +458,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						long partyID = kvp.Key;
 						IReadOnlyList<CharacterPartyData> dbMembers = kvp.Value;
 
-						var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
+						var currentMemberIDs = new HashSet<long>(dbMembers.Count);
+						for (int i = 0; i < dbMembers.Count; i++)
+						{
+							currentMemberIDs.Add(dbMembers[i].CharacterID);
+						}
 
 						// Check if we have previously cached the party member list
 						if (mapData.PartyMemberTracker.TryGetValue(partyID, out var previousMembers))
 						{
 							// Compute the difference: members that are in previousMembers but not in currentMemberIDs
-							List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
+							List<long> difference = new List<long>();
+							foreach (long prevID in previousMembers)
+							{
+								if (!currentMemberIDs.Contains(prevID))
+								{
+									difference.Add(prevID);
+								}
+							}
 
 							foreach (long memberID in difference)
 							{
@@ -483,13 +493,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// Cache the party member IDs
 						mapData.PartyMemberTracker[partyID] = currentMemberIDs;
 
-						var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
+						var addBroadcasts = new List<PartyAddBroadcast>(dbMembers.Count);
+						for (int i = 0; i < dbMembers.Count; i++)
 						{
-							PartyID = x.PartyID,
-							CharacterID = x.CharacterID,
-							Rank = (PartyRank)x.Rank,
-							HealthPCT = x.HealthPCT,
-						}).ToList();
+							var x = dbMembers[i];
+							addBroadcasts.Add(new PartyAddBroadcast()
+							{
+								PartyID = x.PartyID,
+								CharacterID = x.CharacterID,
+								Rank = (PartyRank)x.Rank,
+								HealthPCT = x.HealthPCT,
+							});
+						}
 
 						PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
 						{
@@ -1222,14 +1237,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Count remaining (excluding the leaving character)
 				List<CharacterPartyData> remainingMembers = new List<CharacterPartyData>();
 				CharacterPartyData leavingMember = default;
+				bool leavingMemberFound = false;
 				foreach (CharacterPartyData member in members)
 				{
 					if (member.CharacterID == characterID)
 					{
 						leavingMember = member;
+						leavingMemberFound = true;
 						continue;
 					}
 					remainingMembers.Add(member);
+				}
+
+				// If the leaving member was not found, their Version would default to 0
+				// causing incorrect optimistic concurrency tokens. Abort early.
+				if (!leavingMemberFound)
+				{
+					return;
 				}
 
 				int remainingCount = remainingMembers.Count;
@@ -1549,17 +1573,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private bool TryEnqueueIngressWork(Func<Task> work, long guardKey, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
-			return TryEnqueueAsyncWork(async () =>
-			{
-				try
-				{
-					await work();
-				}
-				finally
-				{
-					EndIngressGuard(guardKey);
-				}
-			}, entityKey, callerName);
+			return TryEnqueueGuardedAsyncWork(work, EndIngressGuard, guardKey, entityKey, callerName);
 		}
 	}
 }

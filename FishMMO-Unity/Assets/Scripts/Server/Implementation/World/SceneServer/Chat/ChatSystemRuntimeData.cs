@@ -30,6 +30,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <inheritdoc/>
 		public List<NetworkConnection> ConnectionBroadcastBuffer { get; private set; }
 
+		/// <inheritdoc/>
+		public Dictionary<ChatChannel, ChatCommand> ChannelCommandMap { get; set; }
+
 		private int messagePumpInFlight;
 
 		/// <inheritdoc/>
@@ -53,6 +56,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			LastFetchPosition = 0;
 			CharacterBroadcastBuffer = new List<IPlayerCharacter>();
 			ConnectionBroadcastBuffer = new List<NetworkConnection>();
+			ChannelCommandMap = new Dictionary<ChatChannel, ChatCommand>();
 			Interlocked.Exchange(ref messagePumpInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -66,17 +70,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			LastFetchPosition = 0;
 			CharacterBroadcastBuffer?.Clear();
 			ConnectionBroadcastBuffer?.Clear();
+			ChannelCommandMap?.Clear();
 			Interlocked.Exchange(ref messagePumpInFlight, 0);
 		}
 
 		/// <summary>
 		/// Deinitializes the chat message queue data container.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 			CharacterBroadcastBuffer = null;
 			ConnectionBroadcastBuffer = null;
+			ChannelCommandMap = null;
 		}
 	}
 }

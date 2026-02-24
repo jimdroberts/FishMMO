@@ -41,7 +41,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Deinitializes the runtime data container.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 		}

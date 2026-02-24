@@ -1,5 +1,4 @@
-﻿using FishNet.Broadcast;
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -9,7 +8,6 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Linq;
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -23,7 +21,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	[RequiresDataContainer(typeof(InteractableSystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(InteractableSystemRuntimeData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
-	public class InteractableSystem : ServerBehaviour
+	public partial class InteractableSystem : ServerBehaviour
 	{
 		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
@@ -78,7 +76,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		/// <summary>
 		/// Cache of world scene details used for scene validation and respawn lookup.
-		/// FIXME: This should be injected via the data container registry instead of being a public field.
+		/// Injected via Unity's [SerializeField] as a ScriptableObject asset reference,
+		/// which is the standard Unity pattern for editor-assigned asset dependencies.
 		/// </summary>
 		[SerializeField] private WorldSceneDetailsCache worldSceneDetailsCache;
 		/// <summary>
@@ -238,6 +237,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			if (Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.IngressGuard.End(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Registers an interactable handler for a specific interactable type (non-generic overload).
+		/// Used by reflection-based auto-discovery in InteractableHandlerInitializer.
+		/// </summary>
+		/// <param name="interactableType">The interactable type to register the handler for. Must implement IInteractable.</param>
+		/// <param name="handler">The handler instance for the specified interactable type.</param>
+		public void RegisterInteractableHandler(Type interactableType, IInteractableHandler handler)
+		{
+			if (interactableType == null || handler == null)
+			{
+				return;
+			}
+
+			if (!typeof(IInteractable).IsAssignableFrom(interactableType))
+			{
+				Log.Warning("InteractableSystem", $"Type {interactableType.Name} does not implement IInteractable. Skipping registration.");
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
+			{
+				return;
+			}
+
+			Dictionary<Type, IInteractableHandler> interactableHandlers = runtimeData.InteractableHandlers;
+			if (!interactableHandlers.ContainsKey(interactableType))
+			{
+				interactableHandlers.Add(interactableType, handler);
+				Log.Debug("InteractableSystem", $"Registered handler for {interactableType.Name}");
+			}
+			else
+			{
+				Log.Warning("InteractableSystem", $"Handler for type {interactableType.Name} is already registered. Overwriting existing handler.");
+				interactableHandlers[interactableType] = handler;
 			}
 		}
 
@@ -515,686 +551,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Look at the target and transition to idle state
 			aiController.LookTarget = character.Transform;
 			aiController.TransitionToIdleState();
-		}
-
-		private void OnServerMerchantPurchaseBroadcastReceived(NetworkConnection conn, MerchantPurchaseBroadcast msg, Channel channel)
-		{
-			if (conn == null)
-			{
-				return;
-			}
-
-			// validate connection character
-			if (conn.FirstObject == null)
-			{
-				return;
-			}
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null ||
-				!character.TryGet(out IInventoryController inventoryController))
-			{
-				return;
-			}
-
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
-
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.MerchantPurchase, out long guardKey))
-			{
-				return;
-			}
-
-			try
-			{
-
-				// validate template exists
-				MerchantTemplate merchantTemplate = MerchantTemplate.Get<MerchantTemplate>(msg.ID);
-				if (merchantTemplate == null)
-				{
-					return;
-				}
-
-				// validate scene
-				if (worldSceneDetailsCache == null ||
-					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
-				{
-					Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
-					return;
-				}
-
-				// validate scene object
-				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
-				{
-					return;
-				}
-
-				// validate interactable
-				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
-				if (interactable == null ||
-					!interactable.InRange(character.Transform))
-				{
-					return;
-				}
-				Merchant merchant = interactable as Merchant;
-				if (merchant == null ||
-					merchantTemplate.ID != merchant.Template.ID)
-				{
-					return;
-				}
-
-				switch (msg.Type)
-				{
-					case MerchantTabType.Item:
-						if (merchantTemplate.Items == null ||
-							msg.Index < 0 ||
-							msg.Index >= merchantTemplate.Items.Count)
-						{
-							return;
-						}
-
-						BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
-						if (itemTemplate == null)
-						{
-							return;
-						}
-
-						// do we have enough currency to purchase this?
-						if (currencyTemplate == null)
-						{
-							Log.Debug("InteractableSystem", "currencyTemplate is null.");
-							return;
-						}
-						if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-							!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-							currency.FinalValue < itemTemplate.Price)
-						{
-							return;
-						}
-
-						Item newItem = new Item(itemTemplate, 1);
-
-						if (SendNewItemBroadcast(conn, character, inventoryController, newItem))
-						{
-							currency.AddValue(-itemTemplate.Price);
-						}
-						break;
-					case MerchantTabType.Ability:
-						if (merchantTemplate.Abilities != null &&
-							msg.Index >= 0 &&
-							msg.Index < merchantTemplate.Abilities.Count)
-						{
-							LearnAbilityTemplate(conn, character, merchantTemplate.Abilities[msg.Index]);
-						}
-						break;
-					case MerchantTabType.AbilityEvent:
-						if (merchantTemplate.AbilityEvents != null &&
-							msg.Index >= 0 &&
-							msg.Index < merchantTemplate.AbilityEvents.Count)
-						{
-							LearnAbilityEvent(conn, character, merchantTemplate.AbilityEvents[msg.Index]);
-						}
-						break;
-					default: return;
-				}
-			}
-			finally
-			{
-				EndIngressGuard(guardKey);
-			}
-		}
-
-		private void LearnAbilityGeneric<TTemplate, TBroadcast>(
-			NetworkConnection conn,
-			IPlayerCharacter character,
-			TTemplate template,
-			Func<IAbilityController, int, bool> knowsFunc,
-			Action<IAbilityController, List<TTemplate>> learnFunc,
-			Func<TTemplate, int> idSelector,
-			Func<TTemplate, int> priceSelector,
-			Func<TTemplate, TBroadcast> broadcastFactory)
-			where TTemplate : class
-			where TBroadcast : struct, IBroadcast
-		{
-			if (template == null || character == null || !character.TryGet(out IAbilityController abilityController) || knowsFunc(abilityController, idSelector(template)))
-			{
-				return;
-			}
-
-			if (currencyTemplate == null)
-			{
-				Log.Debug("InteractableSystem", "currencyTemplate is null.");
-				return;
-			}
-			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-				currency.FinalValue < priceSelector(template))
-			{
-				Log.Debug("InteractableSystem", "Not enough currency!");
-				return;
-			}
-
-			long charID = character.ID;
-			int templateID = idSelector(template);
-			if (!TryEnqueueAsyncWork(() => PersistKnownAbilityAsync(charID, templateID), charID))
-			{
-				Log.Warning("InteractableSystem", $"LearnAbilityGeneric: Async worker rejected known-ability persist for CharID={charID}, TemplateID={templateID}.");
-				return;
-			}
-
-			// learn the ability or event
-			learnFunc(abilityController, new List<TTemplate> { template });
-
-			// remove the price from the characters currency
-			currency.AddValue(-priceSelector(template));
-
-			// tell the client about the new ability/event
-			Server.NetworkWrapper.Broadcast(conn, broadcastFactory(template), true, Channel.Reliable);
-		}
-
-		/// <summary>
-		/// Persists a known ability or event to the database asynchronously.
-		/// </summary>
-		private async Task PersistKnownAbilityAsync(long characterID, int templateID)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService))
-				{
-					return;
-				}
-
-				await knownAbilityService.PersistAsync(characterID, templateID, 1);
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("InteractableSystem", $"Error persisting known ability: {ex}");
-			}
-		}
-
-		/// <summary>
-		/// Learns a base ability template and synchronizes the result to the client.
-		/// </summary>
-		/// <typeparam name="T">Concrete base ability template type.</typeparam>
-		/// <param name="conn">Client connection to notify.</param>
-		/// <param name="character">Character learning the ability.</param>
-		/// <param name="template">Ability template to learn.</param>
-		public void LearnAbilityTemplate<T>(NetworkConnection conn, IPlayerCharacter character, T template) where T : BaseAbilityTemplate
-		{
-			LearnAbilityGeneric<BaseAbilityTemplate, KnownAbilityAddBroadcast>(
-				conn,
-				character,
-				template,
-				(abilityController, id) => abilityController.KnowsAbility(id),
-				(abilityController, list) => abilityController.LearnBaseAbilities(list.Cast<BaseAbilityTemplate>().ToList()),
-				t => t.ID,
-				t => t.Price,
-				t => new KnownAbilityAddBroadcast { TemplateID = t.ID }
-			);
-		}
-
-		/// <summary>
-		/// Learns an ability event template and synchronizes the result to the client.
-		/// </summary>
-		/// <typeparam name="T">Concrete ability event type.</typeparam>
-		/// <param name="conn">Client connection to notify.</param>
-		/// <param name="character">Character learning the ability event.</param>
-		/// <param name="template">Ability event template to learn.</param>
-		public void LearnAbilityEvent<T>(NetworkConnection conn, IPlayerCharacter character, T template) where T : AbilityEvent
-		{
-			LearnAbilityGeneric<AbilityEvent, KnownAbilityEventAddBroadcast>(
-				conn,
-				character,
-				template,
-				(abilityController, id) => abilityController.KnowsAbilityEvent(id),
-				(abilityController, list) => abilityController.LearnAbilityEvents(list.Cast<AbilityEvent>().ToList()),
-				t => t.ID,
-				t => t.Price,
-				t => new KnownAbilityEventAddBroadcast { TemplateID = t.ID }
-			);
-		}
-
-		/// <summary>
-		/// Handles an incoming ability crafting request and validates cost, ownership, and selected events.
-		/// </summary>
-		/// <param name="conn">Requesting client connection.</param>
-		/// <param name="msg">Ability crafting request payload.</param>
-		/// <param name="channel">Transport channel used by FishNet.</param>
-		public void OnServerAbilityCraftBroadcastReceived(NetworkConnection conn, AbilityCraftBroadcast msg, Channel channel)
-		{
-			if (conn == null)
-			{
-				return;
-			}
-
-			// validate connection character
-			if (conn.FirstObject == null)
-			{
-				return;
-			}
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null ||
-				!character.TryGet(out IAbilityController abilityController))
-			{
-				return;
-			}
-
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
-
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AbilityCraft, out long guardKey))
-			{
-				return;
-			}
-
-			try
-			{
-
-				// validate main ability exists
-				AbilityTemplate mainAbility = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
-				if (mainAbility == null)
-				{
-					return;
-				}
-
-				// validate scene
-				if (worldSceneDetailsCache == null ||
-					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
-				{
-					Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
-					return;
-				}
-
-				// validate scene object
-				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
-				{
-					return;
-				}
-
-				// validate interactable
-				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
-				if (interactable == null ||
-					!interactable.InRange(character.Transform))
-				{
-					return;
-				}
-
-				// validate the character can learn the ability
-				if (!abilityController.KnowsAbility(mainAbility.ID) ||
-					abilityController.KnowsLearnedAbility(mainAbility.ID) ||
-					abilityController.KnownAbilities.Count >= maxAbilityCount)
-				{
-					return;
-				}
-
-				int price = mainAbility.Price;
-
-				// validate eventIds if there are any...
-				if (msg.Events != null)
-				{
-					// Defense-in-depth: cap event list size to prevent processing oversized payloads.
-					if (msg.Events.Count > maxAbilityCraftEvents)
-					{
-						return;
-					}
-
-					HashSet<int> validatedEvents = new HashSet<int>();
-					for (int i = 0; i < msg.Events.Count; ++i)
-					{
-						int id = msg.Events[i];
-						if (validatedEvents.Contains(id))
-						{
-							// duplicate events
-							return;
-						}
-						validatedEvents.Add(id);
-						AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(id);
-						if (abilityEvent == null)
-						{
-							// unknown ability event
-							return;
-						}
-
-						// validate that the character knows the ability event
-						if (!abilityController.KnowsAbilityEvent(abilityEvent.ID))
-						{
-							return;
-						}
-
-						price += abilityEvent.Price;
-					}
-				}
-
-				// do we have enough currency to purchase this?
-				if (currencyTemplate == null)
-				{
-					Log.Debug("InteractableSystem", "currencyTemplate is null.");
-					return;
-				}
-				if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-					!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-					currency.FinalValue < price)
-				{
-					return;
-				}
-
-				Ability newAbility = LearnAbility(abilityController, mainAbility, msg.Events);
-				if (newAbility != null)
-				{
-					currency.AddValue(-price);
-
-					AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
-					{
-						ID = newAbility.ID,
-						TemplateID = newAbility.Template.ID,
-						Events = msg.Events,
-					};
-
-					Server.NetworkWrapper.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
-				}
-			}
-			finally
-			{
-				EndIngressGuard(guardKey);
-			}
-		}
-
-		/// <summary>
-		/// Handles a dungeon finder request from a dungeon entrance interactable.
-		/// </summary>
-		/// <param name="conn">Requesting client connection.</param>
-		/// <param name="msg">Dungeon finder payload containing interactable id.</param>
-		/// <param name="channel">Transport channel used by FishNet.</param>
-		public void OnServerDungeonFinderBroadcastReceived(NetworkConnection conn, DungeonFinderBroadcast msg, Channel channel)
-		{
-			if (conn == null)
-			{
-				return;
-			}
-
-			// Validate connection character
-			if (conn.FirstObject == null)
-			{
-				return;
-			}
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
-			{
-				return;
-			}
-
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
-
-			// Acquire ingress guard for dungeon finder
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DungeonFinder, out long guardKey))
-			{
-				return;
-			}
-
-			bool asyncOwnsGuard = false;
-			try
-			{
-				// Validate scene object
-				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
-				{
-					return;
-				}
-
-				// Validate Dungeon Entrance
-				DungeonEntrance dungeonEntrance = sceneObject.GameObject.GetComponent<DungeonEntrance>();
-				if (dungeonEntrance == null ||
-					!dungeonEntrance.InRange(character.Transform))
-				{
-					return;
-				}
-
-				// Validate scene
-				if (worldSceneDetailsCache == null ||
-					!worldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
-				{
-					Log.Debug("InteractableSystem", "Missing Scene:" + dungeonEntrance.DungeonName);
-					return;
-				}
-
-				if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
-				{
-					Log.Debug("InteractableSystem", $"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
-					return;
-				}
-
-				// Capture main-thread state before going async
-				long characterID = character.ID;
-				long worldServerID = character.WorldServerID;
-				long partyID = 0;
-				if (character.TryGet(out IPartyController partyController) && partyController.ID != 0)
-				{
-					partyID = partyController.ID;
-				}
-				string dungeonName = dungeonEntrance.DungeonName;
-
-				CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
-
-				// Fire-and-forget: process dungeon instance assignment asynchronously.
-				// The async task's own finally block will release the guard on completion.
-				if (TryEnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails, guardKey), characterID))
-				{
-					asyncOwnsGuard = true;
-				}
-			}
-			finally
-			{
-				if (!asyncOwnsGuard)
-				{
-					EndIngressGuard(guardKey);
-				}
-			}
-		}
-
-		/// <summary>
-		/// Asynchronously processes dungeon finder logic: checks for existing instances, party instances, or enqueues a new one.
-		/// Marshals character state changes and disconnect back to the main thread.
-		/// </summary>
-		/// <param name="conn">Owning connection used for disconnecting after assignment.</param>
-		/// <param name="character">Character requesting dungeon finder processing.</param>
-		/// <param name="characterID">Unique identifier of the requesting character.</param>
-		/// <param name="worldServerID">World server identifier where the request originated.</param>
-		/// <param name="partyID">Party identifier if the character is grouped; otherwise 0.</param>
-		/// <param name="dungeonName">Target dungeon scene name.</param>
-		/// <param name="respawnDetails">Respawn position and rotation to apply on entry.</param>
-		/// <returns>A task representing asynchronous dungeon finder processing.</returns>
-		private async Task ProcessDungeonFinderAsync(
-			NetworkConnection conn,
-			IPlayerCharacter character,
-			long characterID,
-			long worldServerID,
-			long partyID,
-			string dungeonName,
-			CharacterRespawnPositionDetails respawnDetails,
-			long guardKey)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
-				{
-					return;
-				}
-
-				// Check the status of the characters instance
-				var instanceResult = await sceneService.FetchCharacterInstanceAsync(characterID, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group);
-				if (!instanceResult.IsSuccess)
-				{
-					// No existing instance found
-					// Check if any party members currently have an instance
-					if (partyID > 0 && await CheckCharacterPartyInstanceAsync(partyID))
-					{
-						// Notify the connection the party member already has an instance.
-						return;
-					}
-
-					var enqueueResult = await sceneService.EnqueueAsync(
-						worldServerID,
-						dungeonName,
-						(FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group,
-						characterID);
-
-					if (!enqueueResult.IsSuccess)
-					{
-						await Log.Debug("InteractableSystem", "Failed to enqueue new pending scene load request: " + worldServerID + ":" + dungeonName);
-						return;
-					}
-
-					long sceneID = enqueueResult.Data;
-					TryEnqueueMainThread(() =>
-					{
-						// Guard against character/connection being destroyed between async DB return and main-thread execution
-						if (Server == null || conn == null || !conn.IsActive || character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
-						{
-							return;
-						}
-
-						character.InstanceID = sceneID;
-						character.InstancePosition = respawnDetails.Position;
-						character.InstanceRotation = respawnDetails.Rotation;
-						character.EnableFlags(CharacterFlags.IsInInstance);
-						conn.Disconnect(false);
-					});
-				}
-				else
-				{
-					long existingInstanceID = instanceResult.Data.ID;
-					TryEnqueueMainThread(() =>
-					{
-						// Guard against character/connection being destroyed between async DB return and main-thread execution
-						if (Server == null || conn == null || !conn.IsActive || character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
-						{
-							return;
-						}
-
-						character.InstanceID = existingInstanceID;
-						character.InstancePosition = respawnDetails.Position;
-						character.InstanceRotation = respawnDetails.Rotation;
-						character.EnableFlags(CharacterFlags.IsInInstance);
-						conn.Disconnect(false);
-					});
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("InteractableSystem", $"Error processing dungeon finder: {ex}");
-			}
-			finally
-			{
-				EndIngressGuard(guardKey);
-			}
-		}
-
-		/// <summary>
-		/// Checks if a characters party members have a valid instance.
-		/// </summary>
-		/// <param name="partyID">Party identifier to check for existing instances.</param>
-		/// <returns>True if any member has an existing group instance; otherwise false.</returns>
-		private async Task<bool> CheckCharacterPartyInstanceAsync(long partyID)
-		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return false;
-			}
-			if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService) ||
-				!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
-			{
-				return false;
-			}
-
-			var membersResult = await charPartyService.FetchManyAsync(partyID);
-			if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count == 0)
-			{
-				return false;
-			}
-
-			foreach (var member in membersResult.Data)
-			{
-				var instanceResult = await sceneService.FetchCharacterInstanceAsync(member.CharacterID, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group);
-				if (instanceResult.IsSuccess)
-				{
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		/// <summary>
-		/// Creates and learns a new crafted ability, then schedules asynchronous persistence.
-		/// </summary>
-		/// <param name="abilityController">Ability controller receiving the new ability.</param>
-		/// <param name="abilityTemplate">Base ability template used for creation.</param>
-		/// <param name="abilityEvents">Selected ability event identifiers to attach.</param>
-		/// <returns>The created ability instance.</returns>
-		public Ability LearnAbility(IAbilityController abilityController, AbilityTemplate abilityTemplate, List<int> abilityEvents)
-		{
-			Ability newAbility = new Ability(abilityTemplate, abilityEvents);
-
-			// Fire-and-forget: persist the ability to the database
-			long charID = abilityController.Character.ID;
-			newAbility.Version++;
-			var abilityData = new CharacterAbilityData(
-				id: newAbility.ID,
-				version: newAbility.Version,
-				characterID: charID,
-				templateID: newAbility.Template.ID,
-				abilityEvents: abilityEvents,
-				cooldown: 0f
-			);
-			if (!TryEnqueueAsyncWork(() => PersistAbilityAsync(abilityData), charID))
-			{
-				Log.Warning("InteractableSystem", $"LearnAbility: Async worker rejected learned-ability persist for CharID={charID}, AbilityID={newAbility.ID}.");
-				return null;
-			}
-
-			abilityController.LearnAbility(newAbility);
-
-			return newAbility;
-		}
-
-		/// <summary>
-		/// Persists an ability to the database asynchronously.
-		/// </summary>
-		private async Task PersistAbilityAsync(CharacterAbilityData abilityData)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterAbilityService>(out var abilityService))
-				{
-					return;
-				}
-
-				await abilityService.PersistAsync(abilityData);
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("InteractableSystem", $"Error persisting ability: {ex}");
-			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

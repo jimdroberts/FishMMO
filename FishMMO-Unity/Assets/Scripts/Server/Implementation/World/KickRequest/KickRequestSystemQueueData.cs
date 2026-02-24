@@ -49,7 +49,7 @@ namespace FishMMO.Server.Implementation.World
 		/// <summary>
 		/// Deinitializes the kick request queue data container.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 		}

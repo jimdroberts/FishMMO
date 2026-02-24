@@ -46,7 +46,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Drains remaining actions and releases resources.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Drain();
 		}

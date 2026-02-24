@@ -86,7 +86,7 @@ namespace FishMMO.Server.Implementation.World
 			}
 
 			// Connection state events
-			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+			SubscribeToConnectionEvents();
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -122,7 +122,7 @@ namespace FishMMO.Server.Implementation.World
 			DrainMainThreadQueue(drainAll: true);
 
 			// Connection state events
-			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+			UnsubscribeFromConnectionEvents();
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -132,15 +132,13 @@ namespace FishMMO.Server.Implementation.World
 		}
 
 		/// <summary>
-		/// Handles remote connection state changes. Deletes kick requests for accounts that disconnect.
+		/// Handles remote connection disconnects. Deletes kick requests for accounts that disconnect.
 		/// Database operation is performed asynchronously to avoid blocking the callback thread.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
-		/// <param name="args">Remote connection state arguments.</param>
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped &&
-				Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
 				long entityKey = (long)accountName.GetHashCode();
 				if (!TryEnqueueAsyncWork(() => DeleteKickRequestAsync(accountName), entityKey))
@@ -304,35 +302,21 @@ namespace FishMMO.Server.Implementation.World
 		}
 
 		/// <summary>
-		/// Drains the main-thread queue via the RuntimeDataContainer.
+		/// Drains the main-thread queue via the base class generic helper.
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IKickRequestSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadActionsPerFrame);
-				}
-			}
+			DrainMainThreadQueue<IKickRequestSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Thread-safe enqueue of an action to be executed on the main Unity thread
-		/// via the RuntimeDataContainer.
+		/// via the base class generic helper.
 		/// </summary>
 		/// <param name="action">The action to execute on the main thread.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IKickRequestSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				return queueData.TryEnqueue(action);
-			}
-			return false;
+			return TryEnqueueMainThread<IKickRequestSystemMainThreadQueueData>(action);
 		}
 	}
 }

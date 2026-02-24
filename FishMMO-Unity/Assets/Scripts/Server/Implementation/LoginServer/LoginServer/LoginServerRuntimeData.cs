@@ -33,7 +33,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Deinitializes the runtime data. Called when shutting down the server.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			ID = 0;
 		}

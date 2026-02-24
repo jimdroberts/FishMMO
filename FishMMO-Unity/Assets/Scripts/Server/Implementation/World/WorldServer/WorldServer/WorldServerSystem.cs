@@ -205,7 +205,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			if (Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem))
+			if (Server.BehaviourRegistry.TryGet(out IWorldSceneSystem _))
 			{
 				// Send a heartbeat pulse to the database with the current character count using the interface method.
 				int characterCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) ? sceneData.ConnectionCount : 0;

@@ -45,6 +45,12 @@ namespace FishMMO.Server.Implementation
 				{
 					ServerComponentInitializationStatus initializationStatus =
 						container.Initialize(typedServer, typedServer.NetworkWrapper.NetworkManager.ServerManager);
+
+					if (initializationStatus != ServerComponentInitializationStatus.Initialized &&
+						initializationStatus != ServerComponentInitializationStatus.AlreadyInitialized)
+					{
+						Log.Warning(RegistryName, $"Data container '{component.GetType().Name}' failed to initialize: {initializationStatus}");
+					}
 				}
 			}
 

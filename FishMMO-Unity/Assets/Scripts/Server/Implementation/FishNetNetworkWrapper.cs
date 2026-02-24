@@ -147,10 +147,8 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		/// <typeparam name="T">The broadcast type.</typeparam>
 		/// <param name="handler">The handler to unregister.</param>
-		/// <param name="requireAuthentication">Whether authentication is required for the broadcast.</param>
 		public void UnregisterBroadcast<T>(
-			Action<NetworkConnection, T, Channel> handler,
-			bool requireAuthentication = true) where T : struct, IBroadcast
+			Action<NetworkConnection, T, Channel> handler) where T : struct, IBroadcast
 		{
 			Log.Debug("Broadcast", "Unregistered " + typeof(T));
 			NetworkManager.ServerManager.UnregisterBroadcast(handler);
@@ -198,7 +196,6 @@ namespace FishMMO.Server.Implementation
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Broadcast<T>(NetworkConnection conn, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
 		{
-			Log.Debug("Broadcast", "Sending: " + typeof(T));
 			conn.Broadcast(broadcast, requireAuthentication, channel);
 		}
 	}

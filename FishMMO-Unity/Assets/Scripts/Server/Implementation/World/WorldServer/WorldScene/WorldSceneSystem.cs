@@ -122,7 +122,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Connection state events
-			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+			SubscribeToConnectionEvents();
 
 			// Authentication events
 			runtimeData.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
@@ -136,7 +136,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			debounceCleanupMaxRemovalsPerSweep = Mathf.Max(1, debounceCleanupMaxRemovalsPerSweep);
 			waitingQueuePurgeMaxPerSweep = Mathf.Max(1, waitingQueuePurgeMaxPerSweep);
 			runtimeData.WaitQueueRateSeconds = Mathf.Max(0.1f, runtimeData.WaitQueueRateSeconds);
-			runtimeData.IsProcessingQueue = 0;
+			runtimeData.EndProcessing();
 			runtimeData.NextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
 			runtimeData.NextDebounceCleanup = debounceCleanupIntervalSeconds;
 
@@ -173,7 +173,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			runtimeData.WaitingQueueEnteredUtcByClientId?.Clear();
 
 			// Connection state events
-			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+			UnsubscribeFromConnectionEvents();
 
 			// Authentication events
 			if (runtimeData.LoginAuthenticator != null)
@@ -186,8 +186,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
 			{
 				Log.Debug("WorldSceneSystem", $"Deinitializing: Deleting world scenes (WorldServerID={worldData.ID})");
-				// Blocking call during shutdown to ensure cleanup completes
-				Task.Run(() => sceneService.DeleteByWorldServerAsync(worldData.ID)).GetAwaiter().GetResult();
+				// Blocking call during shutdown with timeout to prevent indefinite hang
+				try
+				{
+					Task.Run(() => sceneService.DeleteByWorldServerAsync(worldData.ID)).Wait(5000);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("WorldSceneSystem", $"Failed to delete world scenes during shutdown: {ex.Message}");
+				}
 			}
 		}
 
@@ -205,7 +212,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="action">The action to enqueue.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<IWorldSceneSystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<IWorldSceneSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -234,17 +241,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
-		/// Handles remote connection state changes. Removes connections from queues when they disconnect.
+		/// Handles remote connection disconnects. Removes connections from queues when they disconnect.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
-		/// <param name="args">Remote connection state arguments.</param>
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
-			if (args.ConnectionState != RemoteConnectionState.Stopped)
-			{
-				return;
-			}
-
 			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 			{
 				RemoveFromQueue(conn, mappingData.OpenWorldConnectionScenes, mappingData.WaitingOpenWorldConnections);
@@ -287,28 +288,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				if (Server.Database?.ServiceRegistry != null &&
 					Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 				{
-					// Snapshot the scene names and connections to process before going async
-					List<string> openWorldSceneNames = mappingData.WaitingOpenWorldConnections.Keys.ToList();
-					List<NetworkConnection> instanceConns = mappingData.InstanceConnectionScenes.Keys.ToList();
+					// Snapshot the scene names and connections to process before going async (pooled lists).
+					List<string> openWorldSceneNames = new List<string>(mappingData.WaitingOpenWorldConnections.Keys);
+					List<NetworkConnection> instanceConns = new List<NetworkConnection>(mappingData.InstanceConnectionScenes.Keys);
 
-					bool beginProcessing = false;
-					lock (runtimeData.ProcessingLock)
-					{
-						if (runtimeData.IsProcessingQueue == 0)
-						{
-							runtimeData.IsProcessingQueue = 1;
-							beginProcessing = true;
-						}
-					}
-
-					if (beginProcessing)
+					if (runtimeData.TryBeginProcessing())
 					{
 						if (!TryEnqueueAsyncWork(() => ProcessQueuesAsync(openWorldSceneNames, instanceConns)))
 						{
-							lock (runtimeData.ProcessingLock)
-							{
-								runtimeData.IsProcessingQueue = 0;
-							}
+							runtimeData.EndProcessing();
 							Log.Warning("WorldSceneSystem", "Failed to enqueue world scene queue processing work item.");
 						}
 					}
@@ -349,10 +337,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				if (Server != null && Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
 				{
-					lock (runtimeData.ProcessingLock)
-					{
-						runtimeData.IsProcessingQueue = 0;
-					}
+					runtimeData.EndProcessing();
 				}
 			}
 		}

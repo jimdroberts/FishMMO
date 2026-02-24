@@ -8,6 +8,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// <summary>
 	/// Handles interactions with merchant objects, allowing players to open merchant interfaces and interact with NPC merchants.
 	/// </summary>
+	[HandlesInteractable(typeof(Merchant))]
 	public class MerchantHandler : IInteractableHandler
 	{
 		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;

@@ -132,7 +132,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
 
 			// Connection state events
-			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+			SubscribeToConnectionEvents();
 
 			// Character events
 			IPlayerCharacter.OnTeleport += IPlayerCharacter_OnTeleport;
@@ -179,14 +179,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Network broadcasts
-			Server.NetworkWrapper.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
-			Server.NetworkWrapper.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
+			Server.NetworkWrapper.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived);
 
 			// Scene manager events
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
 
 			// Connection state events
-			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+			UnsubscribeFromConnectionEvents();
 
 			// Character events
 			IPlayerCharacter.OnTeleport -= IPlayerCharacter_OnTeleport;
@@ -261,7 +261,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		protected override void OnUpdate(float deltaTime)
 		{
-			MainThreadQueueHelper.Drain<ICharacterSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll: false);
+			DrainMainThreadQueue<ICharacterSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll: false);
 		}
 
 		/// <summary>
@@ -269,7 +269,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<ICharacterSystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<ICharacterSystemMainThreadQueueData>(action);
 		}
 
 		#endregion

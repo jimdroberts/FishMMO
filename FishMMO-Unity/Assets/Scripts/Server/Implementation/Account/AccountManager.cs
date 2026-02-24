@@ -25,7 +25,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Maps each connection to its encryption data (public key, symmetric key, IV).
 		/// </summary>
-		private readonly Dictionary<NetworkConnection, ConnectionEncryptionData> connectionEncryptionDatas = new Dictionary<NetworkConnection, ConnectionEncryptionData>();
+		private readonly Dictionary<NetworkConnection, ConnectionEncryptionData> connectionEncryptionEntries = new Dictionary<NetworkConnection, ConnectionEncryptionData>();
 
 		/// <summary>
 		/// Maps each connection to its associated account name.
@@ -60,7 +60,7 @@ namespace FishMMO.Server.Implementation
 													CryptoHelper.GenerateKey(16));
 			lock (syncRoot)
 			{
-				connectionEncryptionDatas[connection] = data;
+				connectionEncryptionEntries[connection] = data;
 				TrackUnauthenticatedConnection_NoLock(connection);
 			}
 		}
@@ -75,7 +75,7 @@ namespace FishMMO.Server.Implementation
 		{
 			lock (syncRoot)
 			{
-				return connectionEncryptionDatas.TryGetValue(connection, out encryptionData);
+				return connectionEncryptionEntries.TryGetValue(connection, out encryptionData);
 			}
 		}
 
@@ -119,7 +119,7 @@ namespace FishMMO.Server.Implementation
 		{
 			lock (syncRoot)
 			{
-				connectionEncryptionDatas.Remove(connection);
+				connectionEncryptionEntries.Remove(connection);
 				connectionAccountData.Remove(connection);
 				UntrackUnauthenticatedConnection_NoLock(connection);
 
@@ -141,7 +141,7 @@ namespace FishMMO.Server.Implementation
 			{
 				if (accountConnections.TryGetValue(accountName, out NetworkConnection connection))
 				{
-					connectionEncryptionDatas.Remove(connection);
+					connectionEncryptionEntries.Remove(connection);
 					connectionAccountData.Remove(connection);
 					connectionAccounts.Remove(connection);
 					accountConnections.Remove(accountName);
@@ -296,7 +296,7 @@ namespace FishMMO.Server.Implementation
 					}
 
 					// Purge stale unauthenticated connection state.
-					connectionEncryptionDatas.Remove(connection);
+					connectionEncryptionEntries.Remove(connection);
 					connectionAccountData.Remove(connection);
 					if (connectionAccounts.TryGetValue(connection, out string accountName))
 					{
@@ -348,7 +348,7 @@ namespace FishMMO.Server.Implementation
 		{
 			lock (syncRoot)
 			{
-				connectionEncryptionDatas.Clear();
+				connectionEncryptionEntries.Clear();
 				connectionAccounts.Clear();
 				accountConnections.Clear();
 				connectionAccountData.Clear();

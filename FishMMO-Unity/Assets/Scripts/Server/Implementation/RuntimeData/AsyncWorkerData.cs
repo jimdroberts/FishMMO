@@ -183,7 +183,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Signals cancellation to all workers and waits for graceful drain.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			if (cts != null)
 			{

@@ -21,7 +21,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IngressGuard?.Clear();
 		}
 
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 		}

@@ -58,6 +58,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Maximum valid hotkey type byte value.
+		/// Corresponds to the highest defined ReferenceButtonType enum member.
+		/// </summary>
+		private const byte MaxHotkeyType = 4;
+
+		/// <summary>
 		/// Ensures the character hotkey list exists and is initialized to the configured maximum size.
 		/// </summary>
 		/// <param name="playerCharacter">Character whose hotkeys should be initialized.</param>
@@ -87,6 +93,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private static bool TryApplyHotkey(IPlayerCharacter playerCharacter, HotkeyData incomingData)
 		{
 			EnsureHotkeysInitialized(playerCharacter);
+
+			// Validate hotkey type is within the defined enum range
+			if (incomingData.Type > MaxHotkeyType)
+			{
+				return false;
+			}
 
 			if (incomingData.ReferenceID < -1)
 			{

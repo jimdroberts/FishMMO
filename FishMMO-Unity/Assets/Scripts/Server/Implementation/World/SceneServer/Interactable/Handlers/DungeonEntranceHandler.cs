@@ -8,6 +8,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// <summary>
 	/// Handles interactions with dungeon entrance objects, allowing players to open the dungeon finder interface.
 	/// </summary>
+	[HandlesInteractable(typeof(DungeonEntrance))]
 	public class DungeonEntranceHandler : IInteractableHandler
 	{
 		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;

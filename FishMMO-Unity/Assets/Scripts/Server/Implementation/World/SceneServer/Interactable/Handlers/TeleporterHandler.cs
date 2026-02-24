@@ -8,6 +8,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// <summary>
 	/// Handles interactions with teleporter objects, allowing players to teleport to target locations or named destinations.
 	/// </summary>
+	[HandlesInteractable(typeof(Teleporter))]
 	public class TeleporterHandler : IInteractableHandler
 	{
 		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;

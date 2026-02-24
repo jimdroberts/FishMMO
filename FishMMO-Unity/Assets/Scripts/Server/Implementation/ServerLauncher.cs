@@ -53,21 +53,21 @@ namespace FishMMO.Server.Implementation
 			else
 			{
 				// Use the second argument to select which server scene to load.
-				switch (args[1].ToUpper())
+				var serverTypeMap = new Dictionary<string, string>
 				{
-					case "LOGIN":
-						initialScenes.Add(new AddressableSceneLoadData("LoginServer"));
-						break;
-					case "WORLD":
-						initialScenes.Add(new AddressableSceneLoadData("WorldServer"));
-						break;
-					case "SCENE":
-						initialScenes.Add(new AddressableSceneLoadData("SceneServer"));
-						break;
-					default:
-						// Unknown argument: close the server.
-						Close();
-						break;
+					{ "LOGIN", "LoginServer" },
+					{ "WORLD", "WorldServer" },
+					{ "SCENE", "SceneServer" },
+				};
+				string key = args[1].ToUpper();
+				if (serverTypeMap.TryGetValue(key, out string sceneName))
+				{
+					initialScenes.Add(new AddressableSceneLoadData(sceneName));
+				}
+				else
+				{
+					// Unknown argument: close the server.
+					Close();
 				}
 			}
 #endif

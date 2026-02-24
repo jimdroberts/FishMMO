@@ -24,14 +24,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	[RequiresDataContainer(typeof(ChatSystemRuntimeData))]
 	[RequiresDataContainer(typeof(ChatSystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
-	public class ChatSystem : ServerBehaviour, IChatSystem
+	public partial class ChatSystem : ServerBehaviour, IChatSystem
 	{
 		/// <summary>
 		/// Maximum additional characters a channel ID prefix (e.g., guild/party/world ID + space) can add to a message.
 		/// </summary>
 		private const int MaxChannelIdPrefixLength = 22;
-
-
 
 		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
@@ -105,6 +103,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("ChatSystem", "Failed to initialize: IChatSystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToGetDataContainer;
+			}
+
+			// Channel → handler dictionary (replaces switch in GetChannelCommand — OCP fix)
+			runtimeData.ChannelCommandMap = new Dictionary<ChatChannel, ChatCommand>
+			{
+				{ ChatChannel.World, OnWorldChat },
+				{ ChatChannel.Region, OnRegionChat },
+				{ ChatChannel.Party, OnPartyChat },
+				{ ChatChannel.Guild, OnGuildChat },
+				{ ChatChannel.Tell, OnTellChat },
+				{ ChatChannel.Trade, OnTradeChat },
+				{ ChatChannel.Say, OnSayChat },
+			};
+
 			// Chat helper commands
 			ChatHelper.InitializeOnce(GetChannelCommand);
 
@@ -153,7 +169,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			MainThreadQueueHelper.Drain<IChatSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
+			DrainMainThreadQueue<IChatSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
@@ -162,7 +178,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="action">The action to enqueue.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<IChatSystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<IChatSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -320,18 +336,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>Chat command delegate for the channel.</returns>
 		public ChatCommand GetChannelCommand(ChatChannel channel)
 		{
-			switch (channel)
+			if (Server?.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) == true &&
+				runtimeData.ChannelCommandMap != null &&
+				runtimeData.ChannelCommandMap.TryGetValue(channel, out ChatCommand command))
 			{
-				case ChatChannel.World: return OnWorldChat;
-				case ChatChannel.Region: return OnRegionChat;
-				case ChatChannel.Party: return OnPartyChat;
-				case ChatChannel.Guild: return OnGuildChat;
-				case ChatChannel.Tell: return OnTellChat;
-				case ChatChannel.Trade: return OnTradeChat;
-				case ChatChannel.Say: return OnSayChat;
-				// ChatChannel.System is Server->Client only. We never parse system messages locally.
-				default: return OnSayChat;
+				return command;
 			}
+			// ChatChannel.System is Server->Client only. We never parse system messages locally.
+			return OnSayChat;
 		}
 
 		/// <summary>
@@ -501,507 +513,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("ChatSystem", $"Error persisting chat message (CharID={characterId}): {ex}");
 			}
-		}
-
-		/// <summary>
-		/// Handles world chat messages, broadcasting to all characters in the specified world.
-		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>True if message was broadcast, false otherwise.</returns>
-		public bool OnWorldChat(IPlayerCharacter sender, ChatBroadcast msg)
-		{
-			// get the world ID
-			string wid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(wid) || !long.TryParse(wid, out long worldID))
-			{
-				// no worldID in the message
-				return false;
-			}
-
-			ChatBroadcast newMsg = new ChatBroadcast()
-			{
-				Channel = msg.Channel,
-				SenderID = msg.SenderID,
-				Text = trimmed,
-			};
-
-			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
-				mappingData.CharactersByWorld.TryGetValue(worldID, out var characters) &&
-				Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
-			{
-				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
-				var buffer = chatData.CharacterBroadcastBuffer;
-				buffer.Clear();
-				buffer.AddRange(characters.Values);
-				for (int i = 0; i < buffer.Count; i++)
-				{
-					Server.NetworkWrapper.Broadcast(buffer[i].Owner, newMsg, true, Channel.Reliable);
-				}
-			}
-			return true;
-		}
-
-		/// <summary>
-		/// Handles region chat messages, broadcasting to all connections in the sender's scene.
-		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False to prevent message from being written to the database.</returns>
-		public bool OnRegionChat(IPlayerCharacter sender, ChatBroadcast msg)
-		{
-			if (sender == null)
-			{
-				return false;
-			}
-			// get the senders observed scene
-			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName);
-			if (scene.IsValid() &&
-				Server.NetworkWrapper.NetworkManager != null &&
-				Server.NetworkWrapper.NetworkManager.SceneManager != null)
-			{
-				if (Server.NetworkWrapper.NetworkManager.SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections) &&
-					Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
-				{
-					// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the set.
-					var buffer = chatData.ConnectionBroadcastBuffer;
-					buffer.Clear();
-					buffer.AddRange(connections);
-					for (int i = 0; i < buffer.Count; i++)
-					{
-						Server.NetworkWrapper.Broadcast(buffer[i], msg, true, Channel.Reliable);
-					}
-				}
-			}
-			return false; // we return false here so the message is not written to the database
-		}
-
-		/// <summary>
-		/// Handles party chat messages, querying party members asynchronously from the database
-		/// and marshalling Broadcasts back to the main thread. Returns false to suppress the
-		/// synchronous DB save — the async path handles persistence when broadcast succeeds.
-		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False — persistence is handled inside the async path.</returns>
-		public bool OnPartyChat(IPlayerCharacter sender, ChatBroadcast msg)
-		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return false;
-			}
-
-			// get the party ID
-			string gid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long partyID))
-			{
-				// no partyID in the message
-				return false;
-			}
-
-			// Capture immutable data for the async path
-			long senderID = msg.SenderID;
-			ChatChannel channel = msg.Channel;
-			string characterName = sender?.CharacterName ?? string.Empty;
-			string accountName = sender?.Account ?? string.Empty;
-			long worldServerID = sender != null ? sender.WorldServerID : 0;
-
-			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist), senderID);
-			return false; // suppress synchronous save — async path handles it
-		}
-
-		/// <summary>
-		/// Asynchronously fetches party members from the database, marshals Broadcasts to the main thread,
-		/// and persists the chat message on success (unless called from the message pump).
-		/// </summary>
-		/// <param name="partyID">Party identifier used to resolve recipients.</param>
-		/// <param name="senderID">Sender character identifier.</param>
-		/// <param name="channel">Chat channel to broadcast.</param>
-		/// <param name="trimmed">Message body without command prefix/party token.</param>
-		/// <param name="characterId">Sender character identifier used for persistence.</param>
-		/// <param name="characterName">Sender character name used for persistence.</param>
-		/// <param name="accountName">Sender account name used for persistence.</param>
-		/// <param name="worldServerId">Sender world server identifier.</param>
-		/// <returns>Asynchronous party chat processing task.</returns>
-		private async Task OnPartyChatAsync(long partyID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist)
-		{
-			try
-			{
-				if (!TryGetDbService(out ICharacterPartyService partyService))
-				{
-					return;
-				}
-
-				DatabaseResult<IReadOnlyList<CharacterPartyData>> result = await partyService.FetchManyAsync(partyID);
-				if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
-				{
-					return;
-				}
-
-				IReadOnlyList<CharacterPartyData> members = result.Data;
-
-				// Marshal Broadcasts to main thread
-				TryEnqueueMainThread(() =>
-				{
-					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
-					{
-						return;
-					}
-
-					ChatBroadcast newMsg = new ChatBroadcast()
-					{
-						Channel = channel,
-						SenderID = senderID,
-						Text = trimmed,
-					};
-
-					foreach (CharacterPartyData member in members)
-					{
-						if (mappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
-						{
-							// broadcast to party member...
-							Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
-						}
-					}
-				});
-
-				// Only persist for live player messages — pump-sourced messages are already persisted.
-				if (persist)
-				{
-					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
-					await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, partyID + " " + trimmed);
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("ChatSystem", $"Error in OnPartyChatAsync (PartyID={partyID}, SenderID={senderID}): {ex}");
-			}
-		}
-
-		/// <summary>
-		/// Handles guild chat messages, querying guild members asynchronously from the database
-		/// and marshalling Broadcasts back to the main thread. Returns false to suppress the
-		/// synchronous DB save — the async path handles persistence when broadcast succeeds.
-		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False — persistence is handled inside the async path.</returns>
-		public bool OnGuildChat(IPlayerCharacter sender, ChatBroadcast msg)
-		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return false;
-			}
-
-			// get the guild ID
-			string gid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long guildID))
-			{
-				// no guildID in the message
-				return false;
-			}
-
-			// Capture immutable data for the async path
-			long senderID = msg.SenderID;
-			ChatChannel channel = msg.Channel;
-			string characterName = sender?.CharacterName ?? string.Empty;
-			string accountName = sender?.Account ?? string.Empty;
-			long worldServerID = sender != null ? sender.WorldServerID : 0;
-
-			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist), senderID);
-			return false; // suppress synchronous save — async path handles it
-		}
-
-		/// <summary>
-		/// Asynchronously fetches guild members from the database, marshals Broadcasts to the main thread,
-		/// and persists the chat message on success (unless called from the message pump).
-		/// </summary>
-		/// <param name="guildID">Guild identifier used to resolve recipients.</param>
-		/// <param name="senderID">Sender character identifier.</param>
-		/// <param name="channel">Chat channel to broadcast.</param>
-		/// <param name="trimmed">Message body without command prefix/guild token.</param>
-		/// <param name="characterId">Sender character identifier used for persistence.</param>
-		/// <param name="characterName">Sender character name used for persistence.</param>
-		/// <param name="accountName">Sender account name used for persistence.</param>
-		/// <param name="worldServerId">Sender world server identifier.</param>
-		/// <returns>Asynchronous guild chat processing task.</returns>
-		private async Task OnGuildChatAsync(long guildID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist)
-		{
-			try
-			{
-				if (!TryGetDbService(out ICharacterGuildService guildService))
-				{
-					return;
-				}
-
-				DatabaseResult<IReadOnlyList<CharacterGuildData>> result = await guildService.FetchManyAsync(guildID);
-				if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
-				{
-					return;
-				}
-
-				IReadOnlyList<CharacterGuildData> members = result.Data;
-
-				// Marshal Broadcasts to main thread
-				TryEnqueueMainThread(() =>
-				{
-					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
-					{
-						return;
-					}
-
-					ChatBroadcast newMsg = new ChatBroadcast()
-					{
-						Channel = channel,
-						SenderID = senderID,
-						Text = trimmed,
-					};
-
-					foreach (CharacterGuildData member in members)
-					{
-						if (mappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
-						{
-							// broadcast to guild member...
-							Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
-						}
-					}
-				});
-
-				// Only persist for live player messages — pump-sourced messages are already persisted.
-				if (persist)
-				{
-					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
-					await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, guildID + " " + trimmed);
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("ChatSystem", $"Error in OnGuildChatAsync (GuildID={guildID}, SenderID={senderID}): {ex}");
-			}
-		}
-
-		/// <summary>
-		/// Handles tell (private) chat messages. Queries the target character asynchronously from the database,
-		/// marshals Broadcasts to the main thread, and persists the message on success.
-		/// Returns false to suppress the synchronous DB save — the async path handles persistence.
-		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False — persistence is handled inside the async path.</returns>
-		public bool OnTellChat(IPlayerCharacter sender, ChatBroadcast msg)
-		{
-			// get the target
-			string targetName = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(targetName))
-			{
-				// no target in the tell message
-				return false;
-			}
-
-			// Reject oversized target names before any DB work.
-			if (targetName.Length > Authentication.CharacterNameMaxLength)
-			{
-				return false;
-			}
-
-			// Short-circuit self-tell before the async DB round-trip.
-			if (sender != null &&
-				!string.IsNullOrEmpty(sender.CharacterName) &&
-				sender.CharacterName.Equals(targetName, StringComparison.OrdinalIgnoreCase))
-			{
-				Server.NetworkWrapper.Broadcast(sender.Owner, new ChatBroadcast()
-				{
-					Channel = msg.Channel,
-					SenderID = msg.SenderID,
-					Text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
-				}, true, Channel.Reliable);
-				return false;
-			}
-
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return false;
-			}
-
-			// Capture immutable data for the async path
-			long senderID = msg.SenderID;
-			ChatChannel channel = msg.Channel;
-			NetworkConnection senderConn = sender?.Owner;
-			string characterName = sender?.CharacterName ?? string.Empty;
-			string accountName = sender?.Account ?? string.Empty;
-			long worldServerID = sender != null ? sender.WorldServerID : 0;
-
-			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID, persist), senderID);
-			return false; // suppress synchronous save — async path handles it
-		}
-
-		/// <summary>
-		/// Asynchronously resolves the target character by name, marshals Broadcasts to the main thread,
-		/// and persists the chat message on success (unless called from the message pump).
-		/// </summary>
-		/// <param name="senderConn">Sender connection for relay/status responses.</param>
-		/// <param name="senderID">Sender character identifier.</param>
-		/// <param name="channel">Chat channel to broadcast.</param>
-		/// <param name="targetName">Target character name.</param>
-		/// <param name="trimmed">Message body without tell target prefix.</param>
-		/// <param name="characterName">Sender character name used for persistence.</param>
-		/// <param name="accountName">Sender account name used for persistence.</param>
-		/// <param name="worldServerId">Sender world server identifier.</param>
-		/// <returns>Asynchronous tell chat processing task.</returns>
-		private async Task OnTellChatAsync(NetworkConnection senderConn, long senderID, ChatChannel channel, string targetName, string trimmed, string characterName, string accountName, long worldServerId, bool persist)
-		{
-			try
-			{
-				if (!TryGetDbService(out ICharacterService characterService))
-				{
-					return;
-				}
-
-				// Look up target character by name
-				DatabaseResult<CharacterData?> result = await characterService.FetchAsync(targetName);
-				if (!result.IsSuccess || !result.Data.HasValue)
-				{
-					return;
-				}
-
-				CharacterData targetData = result.Data.Value;
-				long targetID = targetData.ID;
-				bool online = targetData.Online;
-
-				// did we find the ID?
-				if (targetID < 1)
-				{
-					return;
-				}
-
-				// Marshal Broadcasts to main thread
-				TryEnqueueMainThread(() =>
-				{
-					// if the sender exists then we can send a return message if the target character is valid
-					if (senderConn != null)
-					{
-						// are we messaging ourself?
-						if (senderID == targetID)
-						{
-							Server.NetworkWrapper.Broadcast(senderConn, new ChatBroadcast()
-							{
-								Channel = channel,
-								SenderID = senderID,
-								Text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
-							}, true, Channel.Reliable);
-							return;
-						}
-						else if (!online)
-						{
-							// if the target character is not online
-							Server.NetworkWrapper.Broadcast(senderConn, new ChatBroadcast()
-							{
-								Channel = channel,
-								SenderID = senderID,
-								Text = ChatHelper.TARGET_OFFLINE + " " + targetName,
-							}, true, Channel.Reliable);
-							return;
-						}
-						else if (targetID > 0)
-						{
-							Server.NetworkWrapper.Broadcast(senderConn, new ChatBroadcast()
-							{
-								Channel = channel,
-								SenderID = targetID,
-								Text = ChatHelper.TELL_RELAYED + " " + trimmed,
-							}, true, Channel.Reliable);
-						}
-					}
-
-					if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
-					{
-						// if the target character is on this server we send them the message
-						if (mappingData.CharactersByID.TryGetValue(targetID, out IPlayerCharacter targetCharacter))
-						{
-							Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new ChatBroadcast()
-							{
-								Channel = channel,
-								SenderID = senderID,
-								Text = trimmed,
-							}, true, Channel.Reliable);
-						}
-					}
-				});
-
-				// Only persist for live player messages — pump-sourced messages are already persisted.
-				if (persist)
-				{
-					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
-					await PersistChatMessageAsync(senderID, characterName, accountName, worldServerId, channel, targetName + " " + trimmed);
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("ChatSystem", $"Error in OnTellChatAsync (SenderID={senderID}, Target='{targetName}'): {ex}");
-			}
-		}
-
-		/// <summary>
-		/// Handles trade chat messages, broadcasting to all characters in the specified world.
-		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>True if message was broadcast, false otherwise.</returns>
-		public bool OnTradeChat(IPlayerCharacter sender, ChatBroadcast msg)
-		{
-			// get the world ID
-			string wid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(wid) || !long.TryParse(wid, out long worldID))
-			{
-				// no worldID in the message
-				return false;
-			}
-
-			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
-			{
-				ChatBroadcast newMsg = new ChatBroadcast()
-				{
-					Channel = msg.Channel,
-					SenderID = msg.SenderID,
-					Text = trimmed,
-				};
-				if (mappingData.CharactersByWorld.TryGetValue(worldID, out var characters) &&
-					Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
-				{
-					// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
-					var buffer = chatData.CharacterBroadcastBuffer;
-					buffer.Clear();
-					buffer.AddRange(characters.Values);
-					for (int i = 0; i < buffer.Count; i++)
-					{
-						Server.NetworkWrapper.Broadcast(buffer[i].Owner, newMsg, true, Channel.Reliable);
-					}
-				}
-				return true;
-			}
-			return false;
-		}
-
-		/// <summary>
-		/// Handles say (local) chat messages, broadcasting to all observers of the sender.
-		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False to prevent message from being written to the database.</returns>
-		public bool OnSayChat(IPlayerCharacter sender, ChatBroadcast msg)
-		{
-			if (sender != null && sender.Observers != null)
-			{
-				// get the senders observed characters and send them the chat message
-				foreach (NetworkConnection obsConnection in sender.Observers)
-				{
-					Server.NetworkWrapper.Broadcast(obsConnection, msg, true, Channel.Reliable);
-				}
-			}
-			return false; // we return false here so the message is not written to the database
 		}
 
 		/// <summary>

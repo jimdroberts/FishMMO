@@ -3,6 +3,7 @@ using FishNet.Object;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
 using FishNet.Transporting;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Server.Core.World.SceneServer;
@@ -22,12 +23,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	public partial class CharacterSystem
 	{
 		/// <summary>
+		/// Minimum seconds between auth-callback character load requests per connection.
+		/// Prevents a misbehaving or compromised client from spamming expensive DB load operations.
+		/// </summary>
+		private const float AuthCallbackCooldownSeconds = 2.0f;
+
+		/// <summary>
+		/// Tracks the last auth-callback time per connection ClientId for rate limiting.
+		/// Entries are removed when the connection disconnects via OnRemoteConnectionStopped.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, DateTime> authCallbackLastTimeByClientId =
+			new ConcurrentDictionary<int, DateTime>();
+		/// <summary>
 		/// Handles client authentication results, loads character data and initiates scene loading.
 		/// </summary>
 		/// <param name="conn">Network connection of the client.</param>
 		/// <param name="authenticated">True if authentication succeeded.</param>
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
+			// Per-connection rate limit: prevent repeated auth callbacks from triggering
+			// expensive DB load operations in rapid succession.
+			DateTime nowUtc = DateTime.UtcNow;
+			bool wasCoolingDown = false;
+			authCallbackLastTimeByClientId.AddOrUpdate(
+				conn.ClientId,
+				nowUtc,
+				(_, lastTime) =>
+				{
+					if ((nowUtc - lastTime).TotalSeconds < AuthCallbackCooldownSeconds)
+					{
+						wasCoolingDown = true;
+						return lastTime; // Don't update timestamp if cooling down.
+					}
+					return nowUtc;
+				});
+			if (wasCoolingDown)
+			{
+				Log.Warning("CharacterSystem", $"Auth callback rate-limited for connection {conn.ClientId}");
+				return;
+			}
+
 			// Is the character already loading?
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
@@ -242,13 +277,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Marshal back to main thread for Unity object instantiation
-				TryEnqueueMainThread(() => InstantiateAndLoadCharacter(
+				var loadContext = new CharacterLoadContext(
 					conn, charData, sessionToken, serverID,
 					inventoryData, bankData, equipmentData,
 					attributeData, abilityData, knownAbilityData,
 					achievementData, friendData,
 					guildData, partyData,
-					hotkeyData, buffData, factionData));
+					hotkeyData, buffData, factionData);
+				TryEnqueueMainThread(() => InstantiateAndLoadCharacter(loadContext));
 			}
 			catch (Exception ex)
 			{
@@ -282,22 +318,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// with pre-fetched sub-entity data, and initiates scene loading.
 		/// Must be called on the main Unity thread.
 		/// </summary>
-		private void InstantiateAndLoadCharacter(
-			NetworkConnection conn, CharacterData charData, Guid sessionToken, long serverID,
-			IReadOnlyList<CharacterInventoryData> inventoryData,
-			IReadOnlyList<CharacterBankData> bankData,
-			IReadOnlyList<CharacterEquipmentData> equipmentData,
-			IReadOnlyList<CharacterAttributeData> attributeData,
-			IReadOnlyList<CharacterAbilityData> abilityData,
-			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData,
-			IReadOnlyList<CharacterAchievementData> achievementData,
-			IReadOnlyList<CharacterFriendData> friendData,
-			CharacterGuildData? guildData,
-			CharacterPartyData? partyData,
-			IReadOnlyList<CharacterHotkeyData> hotkeyData,
-			IReadOnlyList<CharacterBuffData> buffData,
-			IReadOnlyList<CharacterFactionData> factionData)
+		/// <param name="ctx">Bundled character data, session info, and all sub-entity data for loading.</param>
+		private void InstantiateAndLoadCharacter(CharacterLoadContext ctx)
 		{
+			NetworkConnection conn = ctx.Connection;
+			CharacterData charData = ctx.CharacterData;
+			Guid sessionToken = ctx.SessionToken;
+			long serverID = ctx.ServerID;
+			IReadOnlyList<CharacterInventoryData> inventoryData = ctx.InventoryData;
+			IReadOnlyList<CharacterBankData> bankData = ctx.BankData;
+			IReadOnlyList<CharacterEquipmentData> equipmentData = ctx.EquipmentData;
+			IReadOnlyList<CharacterAttributeData> attributeData = ctx.AttributeData;
+			IReadOnlyList<CharacterAbilityData> abilityData = ctx.AbilityData;
+			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = ctx.KnownAbilityData;
+			IReadOnlyList<CharacterAchievementData> achievementData = ctx.AchievementData;
+			IReadOnlyList<CharacterFriendData> friendData = ctx.FriendData;
+			CharacterGuildData? guildData = ctx.GuildData;
+			CharacterPartyData? partyData = ctx.PartyData;
+			IReadOnlyList<CharacterHotkeyData> hotkeyData = ctx.HotkeyData;
+			IReadOnlyList<CharacterBuffData> buffData = ctx.BuffData;
+			IReadOnlyList<CharacterFactionData> factionData = ctx.FactionData;
+
 			if (conn == null || !conn.IsActive)
 			{
 				// Connection died between async load and main-thread marshal — release the claimed session
@@ -795,6 +836,67 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Otherwise disconnect the connection.
 			conn.Disconnect(false);
+		}
+
+		/// <summary>
+		/// Bundles all data needed to instantiate and load a character on the main thread.
+		/// Created on the async worker after the DB fetch, consumed by InstantiateAndLoadCharacter.
+		/// </summary>
+		private sealed class CharacterLoadContext
+		{
+			public readonly NetworkConnection Connection;
+			public readonly CharacterData CharacterData;
+			public readonly Guid SessionToken;
+			public readonly long ServerID;
+			public readonly IReadOnlyList<CharacterInventoryData> InventoryData;
+			public readonly IReadOnlyList<CharacterBankData> BankData;
+			public readonly IReadOnlyList<CharacterEquipmentData> EquipmentData;
+			public readonly IReadOnlyList<CharacterAttributeData> AttributeData;
+			public readonly IReadOnlyList<CharacterAbilityData> AbilityData;
+			public readonly IReadOnlyList<CharacterKnownAbilityData> KnownAbilityData;
+			public readonly IReadOnlyList<CharacterAchievementData> AchievementData;
+			public readonly IReadOnlyList<CharacterFriendData> FriendData;
+			public readonly CharacterGuildData? GuildData;
+			public readonly CharacterPartyData? PartyData;
+			public readonly IReadOnlyList<CharacterHotkeyData> HotkeyData;
+			public readonly IReadOnlyList<CharacterBuffData> BuffData;
+			public readonly IReadOnlyList<CharacterFactionData> FactionData;
+
+			public CharacterLoadContext(
+				NetworkConnection connection, CharacterData characterData,
+				Guid sessionToken, long serverID,
+				IReadOnlyList<CharacterInventoryData> inventoryData,
+				IReadOnlyList<CharacterBankData> bankData,
+				IReadOnlyList<CharacterEquipmentData> equipmentData,
+				IReadOnlyList<CharacterAttributeData> attributeData,
+				IReadOnlyList<CharacterAbilityData> abilityData,
+				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData,
+				IReadOnlyList<CharacterAchievementData> achievementData,
+				IReadOnlyList<CharacterFriendData> friendData,
+				CharacterGuildData? guildData,
+				CharacterPartyData? partyData,
+				IReadOnlyList<CharacterHotkeyData> hotkeyData,
+				IReadOnlyList<CharacterBuffData> buffData,
+				IReadOnlyList<CharacterFactionData> factionData)
+			{
+				Connection = connection;
+				CharacterData = characterData;
+				SessionToken = sessionToken;
+				ServerID = serverID;
+				InventoryData = inventoryData;
+				BankData = bankData;
+				EquipmentData = equipmentData;
+				AttributeData = attributeData;
+				AbilityData = abilityData;
+				KnownAbilityData = knownAbilityData;
+				AchievementData = achievementData;
+				FriendData = friendData;
+				GuildData = guildData;
+				PartyData = partyData;
+				HotkeyData = hotkeyData;
+				BuffData = buffData;
+				FactionData = factionData;
+			}
 		}
 	}
 }

@@ -15,11 +15,6 @@ namespace FishMMO.Server.Core.World.SceneServer
 		int MaxGuildSize { get; }
 
 		/// <summary>
-		/// Maximum allowed length for guild names.
-		/// </summary>
-		int MaxGuildNameLength { get; }
-
-		/// <summary>
 		/// Pump/update rate (in seconds) used by the guild system for polling/sync.
 		/// </summary>
 		float UpdatePumpRate { get; }

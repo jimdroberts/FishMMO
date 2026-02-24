@@ -7,9 +7,15 @@ namespace FishMMO.Server.Core.World.WorldServer
 	public interface IWorldSceneSystemRuntimeData : IRuntimeDataContainer
 	{
 		/// <summary>
-		/// Prevents overlapping async queue processing cycles.
+		/// Atomically attempts to begin queue processing.
 		/// </summary>
-		int IsProcessingQueue { get; set; }
+		/// <returns><c>true</c> if processing was started; otherwise <c>false</c>.</returns>
+		bool TryBeginProcessing();
+
+		/// <summary>
+		/// Atomically ends queue processing.
+		/// </summary>
+		void EndProcessing();
 
 		/// <summary>
 		/// Interval (in seconds) between wait queue updates.

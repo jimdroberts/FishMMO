@@ -71,7 +71,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived, true);
-			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+			SubscribeToConnectionEvents();
 
 			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
 
@@ -100,10 +100,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived);
-			if (ServerManager != null)
-			{
-				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
-			}
+			UnsubscribeFromConnectionEvents();
 		}
 
 		/// <summary>
@@ -289,11 +286,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Releases per-connection in-flight server-list state when a client disconnects.
 		/// </summary>
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped &&
-				conn != null &&
-				Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 				runtimeData.NextAllowedRequestUtcByClientId.TryRemove(conn.ClientId, out _);

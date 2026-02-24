@@ -42,6 +42,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <inheritdoc/>
 		public DateTime NextPendingSceneSweepUtc { get; set; }
 
+		/// <inheritdoc/>
+		public List<(int Handle, int CharacterCount, bool StalePulse, double TimeSinceLastExit)> ScenePulseDataBuffer { get; private set; }
+
+		/// <inheritdoc/>
+		public List<int> ScenesToUnloadBuffer { get; private set; }
+
+		/// <inheritdoc/>
+		public List<Dictionary<int, ISceneInstanceDetails>> SceneGroupValuesBuffer { get; private set; }
+
+		/// <inheritdoc/>
+		public List<ISceneInstanceDetails> SceneDetailsValuesBuffer { get; private set; }
+
+		/// <inheritdoc/>
+		public List<long> ExpiredSceneIdsBuffer { get; private set; }
+
 		/// <summary>
 		/// Initializes the scene server runtime data container.
 		/// </summary>
@@ -49,6 +64,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			PendingSceneEnqueueUtcBySceneId = new Dictionary<long, DateTime>();
 			NextPendingSceneSweepUtc = DateTime.UtcNow;
+			ScenePulseDataBuffer = new List<(int, int, bool, double)>();
+			ScenesToUnloadBuffer = new List<int>();
+			SceneGroupValuesBuffer = new List<Dictionary<int, ISceneInstanceDetails>>();
+			SceneDetailsValuesBuffer = new List<ISceneInstanceDetails>();
+			ExpiredSceneIdsBuffer = new List<long>();
 			Interlocked.Exchange(ref pulseInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -63,15 +83,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Interlocked.Exchange(ref pulseInFlight, 0);
 			PendingSceneEnqueueUtcBySceneId?.Clear();
 			NextPendingSceneSweepUtc = DateTime.UtcNow;
+			ScenePulseDataBuffer?.Clear();
+			ScenesToUnloadBuffer?.Clear();
+			SceneGroupValuesBuffer?.Clear();
+			SceneDetailsValuesBuffer?.Clear();
+			ExpiredSceneIdsBuffer?.Clear();
 		}
 
 		/// <summary>
 		/// Deinitializes the scene server runtime data container.
 		/// </summary>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 			PendingSceneEnqueueUtcBySceneId = null;
+			ScenePulseDataBuffer = null;
+			ScenesToUnloadBuffer = null;
+			SceneGroupValuesBuffer = null;
+			SceneDetailsValuesBuffer = null;
+			ExpiredSceneIdsBuffer = null;
 		}
 	}
 }

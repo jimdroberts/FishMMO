@@ -1,5 +1,6 @@
 using FishNet.Connection;
 using FishNet.Managing.Server;
+using FishNet.Transporting;
 using UnityEngine;
 using FishMMO.Server.Core;
 using System;
@@ -185,6 +186,64 @@ namespace FishMMO.Server.Implementation
 				onEnd(runtimeData);
 			}
 			catch { }
+		}
+
+		/// <summary>
+		/// Enqueues async work that guarantees an ingress guard is released (via <paramref name="releaseGuard"/>)
+		/// when the work completes, even if it throws.
+		/// </summary>
+		protected bool TryEnqueueGuardedAsyncWork(Func<Task> work, Action<long> releaseGuard, long guardKey, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			return TryEnqueueAsyncWork(async () =>
+			{
+				try
+				{
+					await work();
+				}
+				finally
+				{
+					releaseGuard(guardKey);
+				}
+			}, entityKey, callerName);
+		}
+
+		/// <summary>
+		/// Called when a remote connection stops. Override in derived classes to perform
+		/// per-connection cleanup (e.g. clearing in-flight requests, caches, queue entries).
+		/// Systems must call <see cref="SubscribeToConnectionEvents"/> in <see cref="InitializeOnce"/>
+		/// and <see cref="UnsubscribeFromConnectionEvents"/> in <see cref="OnDeinitialize"/> to use this.
+		/// </summary>
+		protected virtual void OnRemoteConnectionStopped(NetworkConnection conn) { }
+
+		/// <summary>
+		/// Subscribes to <see cref="ServerManager.OnRemoteConnectionState"/> and dispatches
+		/// disconnect events to <see cref="OnRemoteConnectionStopped"/>.
+		/// </summary>
+		protected void SubscribeToConnectionEvents()
+		{
+			if (ServerManager != null)
+			{
+				ServerManager.OnRemoteConnectionState += HandleRemoteConnectionState;
+			}
+		}
+
+		/// <summary>
+		/// Unsubscribes from <see cref="ServerManager.OnRemoteConnectionState"/>.
+		/// </summary>
+		protected void UnsubscribeFromConnectionEvents()
+		{
+			if (ServerManager != null)
+			{
+				ServerManager.OnRemoteConnectionState -= HandleRemoteConnectionState;
+			}
+		}
+
+		private void HandleRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		{
+			if (args.ConnectionState == RemoteConnectionState.Stopped && conn != null)
+			{
+				OnRemoteConnectionStopped(conn);
+			}
 		}
 
 		/// <summary>

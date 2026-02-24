@@ -65,8 +65,7 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		/// <typeparam name="T">The broadcast type.</typeparam>
 		/// <param name="handler">The handler to unregister.</param>
-		/// <param name="requireAuthentication">Whether authentication is required for the broadcast.</param>
-		void UnregisterBroadcast<T>(Action<NetworkConnection, T, Channel> handler, bool requireAuthentication = true) where T : struct, IBroadcast;
+		void UnregisterBroadcast<T>(Action<NetworkConnection, T, Channel> handler) where T : struct, IBroadcast;
 
 		/// <summary>
 		/// Subscribes to server connection state changes.

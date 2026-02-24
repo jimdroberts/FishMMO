@@ -39,5 +39,30 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Next UTC timestamp when pending-scene cleanup is allowed.
 		/// </summary>
 		DateTime NextPendingSceneSweepUtc { get; set; }
+
+		/// <summary>
+		/// Reusable buffer for scene pulse payload data. Only used from the main thread.
+		/// </summary>
+		List<(int Handle, int CharacterCount, bool StalePulse, double TimeSinceLastExit)> ScenePulseDataBuffer { get; }
+
+		/// <summary>
+		/// Reusable buffer for scene handles queued for unloading. Only used from the main thread.
+		/// </summary>
+		List<int> ScenesToUnloadBuffer { get; }
+
+		/// <summary>
+		/// Reusable buffer for iterating scene group value collections. Only used from the main thread.
+		/// </summary>
+		List<Dictionary<int, ISceneInstanceDetails>> SceneGroupValuesBuffer { get; }
+
+		/// <summary>
+		/// Reusable buffer for iterating scene instance details. Only used from the main thread.
+		/// </summary>
+		List<ISceneInstanceDetails> SceneDetailsValuesBuffer { get; }
+
+		/// <summary>
+		/// Reusable buffer for expired pending scene IDs during cleanup sweeps. Only used from the main thread.
+		/// </summary>
+		List<long> ExpiredSceneIdsBuffer { get; }
 	}
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
@@ -28,7 +27,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			IngressGuard?.Clear();
 		}
 
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 			InteractableHandlers = null;

@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using FishMMO.Database;
@@ -75,6 +76,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		[Tooltip("Max entries removed per map each cleanup sweep")]
 		[SerializeField] private int cleanupMaxRemovalsPerMap = 128;
+
+		/// <summary>
+		/// When true, uses the transport-level connection ID (conn.ClientId) as the rate-limiting key
+		/// instead of the resolved IP address. Enable this when the server is behind a proxy, NAT, or
+		/// load balancer where all clients share the proxy's IP, causing false-positive rate limiting
+		/// that blocks legitimate users.
+		/// </summary>
+		[Header("Proxy Compatibility")]
+		[Tooltip("Use connection ID instead of IP for rate limiting. Enable when behind a proxy/NAT/load balancer where all clients share one IP.")]
+		[SerializeField] private bool useConnectionIdForRateLimit = false;
 
 		/// <summary>
 		/// Maximum allowed size in bytes for any single encrypted field in CreateAccountBroadcast.
@@ -179,7 +190,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return ServerComponentInitializationStatus.FailedToFindServerManager;
 			}
 
-			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+			SubscribeToConnectionEvents();
 
 			// Clamp tunables to safe values.
 			ipRateLimitSeconds = Mathf.Max(0f, ipRateLimitSeconds);
@@ -207,10 +218,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			if (ServerManager != null)
-			{
-				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
-			}
+			UnsubscribeFromConnectionEvents();
 
 			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
@@ -599,46 +607,30 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Drains the main-thread queue via the RuntimeDataContainer.
+		/// Drains the main-thread queue via the base class generic helper.
 		/// Uses time-slicing during normal updates and full drain during shutdown.
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IAccountCreationSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadResponsesPerFrame);
-				}
-			}
+			DrainMainThreadQueue<IAccountCreationSystemMainThreadQueueData>(maxMainThreadResponsesPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Thread-safe enqueue of an action to be executed on the main Unity thread
-		/// via the RuntimeDataContainer.
+		/// via the base class generic helper.
 		/// </summary>
 		/// <param name="action">The action to execute on the main thread.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<IAccountCreationSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				return queueData.TryEnqueue(action);
-			}
-			return false;
+			return TryEnqueueMainThread<IAccountCreationSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
 		/// Removes cached connection-IP mapping when a connection closes.
 		/// </summary>
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
-			if (conn != null &&
-				args.ConnectionState == RemoteConnectionState.Stopped &&
-				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.ConnectionIpCache.Remove(conn.ClientId);
 				runtimeData.ConnectionEncryptionCache.Remove(conn.ClientId);
@@ -646,13 +638,63 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Resolves a stable IP key for rate-limiting while avoiding repeated address string allocations.
+		/// Resolves a stable key for rate-limiting while avoiding repeated address string allocations.
+		///
+		/// <para><b>Proxy / NAT / Load Balancer Limitation:</b></para>
+		/// <para>
+		/// The default mode uses <c>conn.GetAddress()</c> which returns the transport-level (TCP/UDP)
+		/// source IP. When the server sits behind a reverse proxy, NAT gateway, or cloud load balancer,
+		/// <b>all</b> clients share the proxy's single IP address. This causes false-positive rate
+		/// limiting: one client's request can block every other client behind the same proxy.
+		/// </para>
+		///
+		/// <para><b>Mitigation options (ordered by robustness):</b></para>
+		/// <list type="number">
+		///   <item>
+		///     <description>
+		///       <b>PROXY protocol support at the transport layer</b> – configure the proxy to prepend
+		///       the real client IP via PROXY protocol v1/v2. The transport must parse and expose the
+		///       original IP so <c>conn.GetAddress()</c> returns it natively.
+		///     </description>
+		///   </item>
+		///   <item>
+		///     <description>
+		///       <b>Application-level client fingerprinting</b> – use a combination of connection ID,
+		///       handshake data, or encrypted client tokens to produce a per-client key that does not
+		///       depend on source IP.
+		///     </description>
+		///   </item>
+		///   <item>
+		///     <description>
+		///       <b>Configurable trusted-proxy list</b> – maintain a whitelist of known proxy IPs.
+		///       When the source IP matches a trusted proxy, switch to an alternative key
+		///       (e.g., connection ID or forwarded header).
+		///     </description>
+		///   </item>
+		/// </list>
+		///
+		/// <para>
+		/// For direct connections (no proxy), the current implementation is correct.
+		/// When <see cref="useConnectionIdForRateLimit"/> is enabled, this method returns
+		/// <c>conn.ClientId.ToString()</c> as a proxy-compatible fallback key.
+		/// Operators must be aware that connection-ID keying trades IP-level aggregation
+		/// for per-socket granularity, which may be less effective against distributed attacks
+		/// but avoids false-positive blocking behind proxies.
+		/// </para>
 		/// </summary>
+		/// <param name="conn">The network connection to resolve a rate-limit key for.</param>
+		/// <returns>A stable string key for IP-based or connection-based rate limiting.</returns>
 		private string ResolveIpAddress(NetworkConnection conn)
 		{
 			if (conn == null)
 			{
 				return string.Empty;
+			}
+
+			// Proxy-compatible fallback: use connection ID instead of IP when configured.
+			if (useConnectionIdForRateLimit)
+			{
+				return conn.ClientId.ToString();
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))

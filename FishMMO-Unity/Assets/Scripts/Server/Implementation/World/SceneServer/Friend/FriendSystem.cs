@@ -152,7 +152,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			MainThreadQueueHelper.Drain<IFriendSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
+			DrainMainThreadQueue<IFriendSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
@@ -161,7 +161,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="action">The action to enqueue.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<IFriendSystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<IFriendSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -452,17 +452,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private bool TryEnqueueIngressWork(Func<Task> work, long guardKey, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
-			return TryEnqueueAsyncWork(async () =>
-			{
-				try
-				{
-					await work();
-				}
-				finally
-				{
-					EndIngressGuard(guardKey);
-				}
-			}, entityKey, callerName);
+			return TryEnqueueGuardedAsyncWork(work, EndIngressGuard, guardKey, entityKey, callerName);
 		}
 	}
 }

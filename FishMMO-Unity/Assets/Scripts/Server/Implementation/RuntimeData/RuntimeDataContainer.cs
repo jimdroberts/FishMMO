@@ -70,9 +70,21 @@ namespace FishMMO.Server.Implementation
 		public abstract ServerComponentInitializationStatus InitializeOnce();
 
 		/// <summary>
+		/// Deinitializes the data container and resets base lifecycle fields.
+		/// Derived classes should override <see cref="OnDeinitialize"/> for custom cleanup.
+		/// </summary>
+		public void Deinitialize()
+		{
+			OnDeinitialize();
+			Initialized = false;
+			Server = null;
+			ServerManager = null;
+		}
+
+		/// <summary>
 		/// Called when the data container is being deinitialized. Must be implemented by derived classes.
 		/// </summary>
-		public abstract void Deinitialize();
+		protected abstract void OnDeinitialize();
 
 		/// <summary>
 		/// Clears all runtime data in this container, resetting it to initial state.

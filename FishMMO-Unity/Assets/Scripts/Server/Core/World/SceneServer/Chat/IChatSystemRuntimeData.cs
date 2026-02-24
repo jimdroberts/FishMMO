@@ -39,5 +39,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// </summary>
 		bool TryBeginMessagePump();
 		void EndMessagePump();
+
+		/// <summary>
+		/// Maps each <see cref="ChatChannel"/> to its corresponding handler delegate.
+		/// Populated during initialization; used for OCP-compliant channel dispatch.
+		/// </summary>
+		Dictionary<ChatChannel, ChatCommand> ChannelCommandMap { get; set; }
 	}
 }

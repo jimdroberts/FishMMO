@@ -76,7 +76,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Server.NetworkWrapper.RegisterBroadcast<CharacterRequestListBroadcast>(OnServerCharacterRequestListBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<CharacterDeleteBroadcast>(OnServerCharacterDeleteBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<CharacterSelectBroadcast>(OnServerCharacterSelectBroadcastReceived, true);
-			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+			SubscribeToConnectionEvents();
 
 			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
 
@@ -107,10 +107,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterRequestListBroadcast>(OnServerCharacterRequestListBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterDeleteBroadcast>(OnServerCharacterDeleteBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterSelectBroadcast>(OnServerCharacterSelectBroadcastReceived);
-			if (ServerManager != null)
-			{
-				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
-			}
+			UnsubscribeFromConnectionEvents();
 		}
 
 		/// <summary>
@@ -218,12 +215,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!Authentication.IsAllowedCharacterName(msg.CharacterName))
 				{
 					EndInFlightRequest(conn);
+					SendDeleteFailure(conn);
 					return;
 				}
 
 				if (!TryEnqueueAsyncWork(() => ProcessCharacterDeleteAsync(conn, accountName, msg.CharacterName), conn.ClientId))
 				{
 					EndInFlightRequest(conn);
+					SendDeleteFailure(conn);
 					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character delete request for account '{accountName}'.");
 				}
 			}
@@ -256,6 +255,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					!TryGetDbService(out ICharacterPetService petService))
 				{
 					await Log.Warning("CharacterSelectSystem", "One or more DB services unavailable for character delete.");
+					SendDeleteFailure(conn);
 					return;
 				}
 
@@ -265,6 +265,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!uowResult.IsSuccess)
 				{
 					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character delete: {uowResult.ErrorMessage}");
+					SendDeleteFailure(conn);
 					return;
 				}
 
@@ -275,6 +276,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (!fetchResult.IsSuccess || fetchResult.Data == null)
 					{
 						await Log.Warning("CharacterSelectSystem", $"Failed to fetch character '{characterName}' for deletion: {fetchResult.ErrorMessage}");
+						SendDeleteFailure(conn);
 						return;
 					}
 
@@ -284,6 +286,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (!string.Equals(character.Account, accountName, StringComparison.OrdinalIgnoreCase))
 					{
 						await Log.Warning("CharacterSelectSystem", $"Account '{accountName}' attempted to delete character '{characterName}' owned by '{character.Account}'.");
+						SendDeleteFailure(conn);
 						return;
 					}
 
@@ -333,6 +336,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (!deleteResult.IsSuccess)
 					{
 						await Log.Error("CharacterSelectSystem", $"Failed to delete character '{characterName}': {deleteResult.ErrorMessage}");
+						SendDeleteFailure(conn);
 						return;
 					}
 
@@ -341,6 +345,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (!commitResult.IsSuccess)
 					{
 						await Log.Error("CharacterSelectSystem", $"Failed to commit character delete: {commitResult.ErrorMessage}");
+						SendDeleteFailure(conn);
 						return;
 					}
 				}
@@ -360,6 +365,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSelectSystem", $"Error processing character delete: {ex}");
+				SendDeleteFailure(conn);
 			}
 			finally
 			{
@@ -385,12 +391,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!Authentication.IsAllowedCharacterName(msg.CharacterName))
 				{
 					EndInFlightRequest(conn);
+					SendEmptyServerList(conn);
 					return;
 				}
 
 				if (!TryEnqueueAsyncWork(() => ProcessCharacterSelectAsync(conn, accountName, msg.CharacterName), conn.ClientId))
 				{
 					EndInFlightRequest(conn);
+					SendEmptyServerList(conn);
 					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character select request for account '{accountName}'.");
 				}
 			}
@@ -606,11 +614,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Releases per-connection in-flight request state when a client disconnects.
 		/// </summary>
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped &&
-				conn != null &&
-				Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 				runtimeData.NextAllowedRequestUtc.TryRemove(conn.ClientId, out _);
@@ -650,6 +656,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 					Server.NetworkWrapper.Broadcast(conn, new CharacterListBroadcast()
 					{
 						Characters = new List<CharacterDetails>(),
+					}, true, Channel.Reliable);
+				}
+			});
+		}
+
+		/// <summary>
+		/// Sends a delete-failure response to the client (empty character name).
+		/// Prevents the client from remaining in an indeterminate state when deletion fails.
+		/// </summary>
+		/// <param name="conn">Network connection to notify.</param>
+		private void SendDeleteFailure(NetworkConnection conn)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn != null && conn.IsActive)
+				{
+					Server.NetworkWrapper.Broadcast(conn, new CharacterDeleteBroadcast()
+					{
+						CharacterName = string.Empty,
 					}, true, Channel.Reliable);
 				}
 			});

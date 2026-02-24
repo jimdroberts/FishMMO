@@ -143,7 +143,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			MainThreadQueueHelper.Drain<INamingSystemMainThreadQueueData>(Server, maxMainThreadActionsPerFrame, drainAll);
+			DrainMainThreadQueue<INamingSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
 		/// <summary>
@@ -152,7 +152,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="action">The action to enqueue.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			return MainThreadQueueHelper.TryEnqueue<INamingSystemMainThreadQueueData>(Server, action);
+			return TryEnqueueMainThread<INamingSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -230,7 +230,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerNamingBroadcastReceived(NetworkConnection conn, NamingBroadcast msg, Channel channel)
 		{
-			if (conn == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}
@@ -424,7 +424,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerReverseNamingBroadcastReceived(NetworkConnection conn, ReverseNamingBroadcast msg, Channel channel)
 		{
-			if (conn == null)
+			if (conn == null || conn.FirstObject == null)
 			{
 				return;
 			}

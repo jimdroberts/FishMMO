@@ -317,6 +317,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					!character.IsTeleporting &&
 					character.TryGet(out IInventoryController inventoryController))
 				{
+					// Validate slot bounds before processing
+					if (!inventoryController.IsValidSlot(msg.Slot))
+					{
+						return;
+					}
+
 					Item item = inventoryController.RemoveItem(msg.Slot);
 					if (item == null)
 					{
@@ -374,6 +380,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				switch (msg.FromInventory)
 				{
 					case InventoryType.Inventory:
+						// Validate slot bounds before processing
+						if (!inventoryController.IsValidSlot(msg.From) || !inventoryController.IsValidSlot(msg.To))
+						{
+							return;
+						}
 						// swap the items in the inventory
 						if (msg.To != msg.From &&
 							SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected))
@@ -395,8 +406,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								return;
 							}
 
-							// validate banker scene object
+							// Validate banker scene object
 							if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+							{
+								return;
+							}
+
+							// Validate slot bounds before processing
+							if (!bankController.IsValidSlot(msg.From) || !inventoryController.IsValidSlot(msg.To))
 							{
 								return;
 							}
@@ -404,13 +421,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (SwapContainerItems(bankController, inventoryController, msg.From, msg.To,
 								out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
 							{
-								// persist bank items that moved to the source (bank) container
+								// Persist bank items that moved to the source (bank) container
 								if (fromItems != null && fromItems.Count > 0)
 								{
 									var bankDtos = BuildBankItemDataList(characterID, fromItems);
 									TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
 								}
-								// delete vacated bank slots
+								// Delete vacated bank slots
 								if (deletedSlots != null && deletedSlots.Count > 0)
 								{
 									foreach (long slot in deletedSlots)
@@ -420,14 +437,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 										TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue), characterID);
 									}
 								}
-								// persist inventory items that moved to the destination (inventory) container
+								// Persist inventory items that moved to the destination (inventory) container
 								if (toItems != null && toItems.Count > 0)
 								{
 									var invDtos2 = BuildInventoryItemDataList(characterID, toItems);
 									TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos2), characterID);
 								}
 
-								// tell the client
+								// Tell the client
 								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 							}
 						}
@@ -483,6 +500,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					case InventoryType.Inventory:
 						if (character.TryGet(out IInventoryController inventoryController) &&
+							inventoryController.IsValidSlot(msg.InventoryIndex) &&
 							inventoryController.TryGetItem(msg.InventoryIndex, out Item inventoryItem))
 						{
 							if (!equipmentController.Equip(inventoryItem, msg.InventoryIndex, inventoryController, (ItemSlot)msg.Slot))
@@ -525,6 +543,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 							// validate banker scene object
 							if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+							{
+								return;
+							}
+
+							// Validate slot bounds before processing
+							if (!bankController.IsValidSlot(msg.InventoryIndex))
 							{
 								return;
 							}
@@ -734,6 +758,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
+					// Validate slot bounds before processing
+					if (!bankController.IsValidSlot(msg.Slot))
+					{
+						return;
+					}
+
 					Item item = bankController.RemoveItem(msg.Slot);
 					if (item == null)
 					{
@@ -798,6 +828,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					case InventoryType.Inventory:
 						if (character.TryGet(out IInventoryController inventoryController) &&
+							inventoryController.IsValidSlot(msg.From) &&
+							bankController.IsValidSlot(msg.To) &&
 							SwapContainerItems(inventoryController, bankController, msg.From, msg.To,
 								out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
 						{
@@ -831,6 +863,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					case InventoryType.Equipment:
 						break;
 					case InventoryType.Bank:
+						// Validate slot bounds before processing
+						if (!bankController.IsValidSlot(msg.From) || !bankController.IsValidSlot(msg.To))
+						{
+							return;
+						}
 						// swap the items in the bank
 						if (msg.To != msg.From &&
 							SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected))

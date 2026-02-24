@@ -44,11 +44,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField]
 		private int maxGuildSize = 100;
 		/// <summary>
-		/// Maximum allowed guild name length.
-		/// </summary>
-		[SerializeField]
-		private int maxGuildNameLength = 64;
-		/// <summary>
 		/// Periodic guild update polling interval in seconds.
 		/// </summary>
 		[Tooltip("The server guild update pump rate limit in seconds.")]
@@ -128,10 +123,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Maximum number of members allowed in a guild.
 		/// </summary>
 		public int MaxGuildSize { get { return maxGuildSize; } }
-		/// <summary>
-		/// Maximum length allowed for a guild name.
-		/// </summary>
-		public int MaxGuildNameLength { get { return maxGuildNameLength; } }
 
 		/// <summary>
 		/// Handles guild invite chat commands.
@@ -1267,7 +1258,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					CharacterGuildData? newLeader = null;
-					var rng = new Random();
+					var rng = new System.Random();
 					if (officers.Count > 0)
 					{
 						// pick a random officer
@@ -1566,17 +1557,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private bool TryEnqueueIngressWork(Func<Task> work, long guardKey, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
-			return TryEnqueueAsyncWork(async () =>
-			{
-				try
-				{
-					await work();
-				}
-				finally
-				{
-					EndIngressGuard(guardKey);
-				}
-			}, entityKey, callerName);
+			return TryEnqueueGuardedAsyncWork(work, EndIngressGuard, guardKey, entityKey, callerName);
 		}
 	}
 }

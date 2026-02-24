@@ -9,6 +9,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// <summary>
 	/// Handles interactions with bindstone objects, allowing players to set their respawn location to the current scene and position.
 	/// </summary>
+	[HandlesInteractable(typeof(Bindstone))]
 	public class BindstoneHandler : IInteractableHandler
 	{
 		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;

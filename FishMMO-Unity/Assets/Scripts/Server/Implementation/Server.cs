@@ -88,12 +88,12 @@ namespace FishMMO.Server.Implementation
 		/// List of all server behaviours attached to the server.
 		/// </summary>
 		[SerializeField]
-		public List<ServerBehaviour> ServerBehaviours = new List<ServerBehaviour>();
+		private List<ServerBehaviour> serverBehaviours = new List<ServerBehaviour>();
 
 		/// <summary>
 		/// List of all runtime data containers managed by the server.
 		/// </summary>
-		public List<RuntimeDataContainer> DataContainers = new List<RuntimeDataContainer>();
+		private List<RuntimeDataContainer> dataContainers = new List<RuntimeDataContainer>();
 
 		/// <summary>
 		/// Registry that manages all server behaviours.
@@ -265,12 +265,12 @@ namespace FishMMO.Server.Implementation
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		private void UpdateServerBehaviours(float deltaTime)
 		{
-			if (ServerBehaviours == null)
+			if (serverBehaviours == null)
 				return;
 
-			for (int i = 0; i < ServerBehaviours.Count; i++)
+			for (int i = 0; i < serverBehaviours.Count; i++)
 			{
-				var behaviour = ServerBehaviours[i];
+				var behaviour = serverBehaviours[i];
 				if (behaviour != null && behaviour.Initialized)
 				{
 					behaviour.OnLateUpdate(deltaTime);
@@ -374,12 +374,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void RegisterAllBehaviours()
 		{
-			if (ServerBehaviours != null && BehaviourRegistry != null)
+			if (serverBehaviours != null && BehaviourRegistry != null)
 			{
 				// Register in order
-				for (int i = 0; i < ServerBehaviours.Count; i++)
+				for (int i = 0; i < serverBehaviours.Count; i++)
 				{
-					var behaviour = ServerBehaviours[i];
+					var behaviour = serverBehaviours[i];
 					if (behaviour != null && !behaviour.Initialized)
 					{
 						// Register to registry before initializing
@@ -401,7 +401,7 @@ namespace FishMMO.Server.Implementation
 			var containersByPriority = new SortedDictionary<int, List<Type>>();
 
 			// Scan all ServerBehaviours for RequiresDataContainer attributes
-			foreach (var behaviour in ServerBehaviours)
+			foreach (var behaviour in serverBehaviours)
 			{
 				if (behaviour == null)
 					continue;
@@ -437,7 +437,7 @@ namespace FishMMO.Server.Implementation
 				foreach (var containerType in priorityGroup)
 				{
 					var container = factory.CreateContainer(containerType);
-					DataContainers.Add((RuntimeDataContainer)container);
+					dataContainers.Add((RuntimeDataContainer)container);
 					Log.Debug("Server", $"Auto-created RuntimeDataContainer: {containerType.Name}");
 				}
 			}
@@ -448,12 +448,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void RegisterAllDataContainers()
 		{
-			if (DataContainers != null && DataContainerRegistry != null)
+			if (dataContainers != null && DataContainerRegistry != null)
 			{
 				// Register in order
-				for (int i = 0; i < DataContainers.Count; i++)
+				for (int i = 0; i < dataContainers.Count; i++)
 				{
-					var container = DataContainers[i];
+					var container = dataContainers[i];
 					if (container != null && !container.Initialized)
 					{
 						// Register to registry before initializing
@@ -468,12 +468,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void DeinitializeAllBehaviours()
 		{
-			if (ServerBehaviours != null && BehaviourRegistry != null)
+			if (serverBehaviours != null && BehaviourRegistry != null)
 			{
 				// Deinitialize in reverse order to ensure proper cleanup dependencies
-				for (int i = ServerBehaviours.Count - 1; i >= 0; i--)
+				for (int i = serverBehaviours.Count - 1; i >= 0; i--)
 				{
-					var behaviour = ServerBehaviours[i];
+					var behaviour = serverBehaviours[i];
 					if (behaviour != null && behaviour.Initialized)
 					{
 						// Deinitialize the behaviour (calls OnDeinitialize and clears references)
@@ -488,12 +488,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void UnregisterAllBehaviours()
 		{
-			if (ServerBehaviours != null && BehaviourRegistry != null)
+			if (serverBehaviours != null && BehaviourRegistry != null)
 			{
 				// Unregister in reverse order to ensure proper cleanup dependencies
-				for (int i = ServerBehaviours.Count - 1; i >= 0; i--)
+				for (int i = serverBehaviours.Count - 1; i >= 0; i--)
 				{
-					var behaviour = ServerBehaviours[i];
+					var behaviour = serverBehaviours[i];
 					if (behaviour != null)
 					{
 						// Unregister from registry before deinitializing
@@ -519,12 +519,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void UnregisterAllDataContainers()
 		{
-			if (DataContainers != null && DataContainerRegistry != null)
+			if (dataContainers != null && DataContainerRegistry != null)
 			{
 				// Unregister in reverse order to ensure proper cleanup dependencies
-				for (int i = DataContainers.Count - 1; i >= 0; i--)
+				for (int i = dataContainers.Count - 1; i >= 0; i--)
 				{
-					var container = DataContainers[i];
+					var container = dataContainers[i];
 					if (container != null)
 					{
 						// Unregister from registry

@@ -60,19 +60,36 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Cached world scene details used for validating spawn positions and initial character creation.
 		/// </summary>
-		public WorldSceneDetailsCache WorldSceneDetailsCache;
+		[SerializeField] private WorldSceneDetailsCache worldSceneDetailsCache;
 		/// <summary>
 		/// List of ability templates to grant to new characters on creation.
 		/// </summary>
-		public List<AbilityTemplate> StartingAbilities = new List<AbilityTemplate>();
+		[SerializeField] private List<AbilityTemplate> startingAbilities = new List<AbilityTemplate>();
 		/// <summary>
 		/// List of item templates to add to new characters' inventory on creation.
 		/// </summary>
-		public List<BaseItemTemplate> StartingInventoryItems = new List<BaseItemTemplate>();
+		[SerializeField] private List<BaseItemTemplate> startingInventoryItems = new List<BaseItemTemplate>();
 		/// <summary>
 		/// List of equipment templates to equip on new characters at creation.
 		/// </summary>
-		public List<EquippableItemTemplate> StartingEquipment = new List<EquippableItemTemplate>();
+		[SerializeField] private List<EquippableItemTemplate> startingEquipment = new List<EquippableItemTemplate>();
+
+		/// <summary>
+		/// Read-only access to the cached world scene details.
+		/// </summary>
+		public WorldSceneDetailsCache WorldSceneDetailsCache => worldSceneDetailsCache;
+		/// <summary>
+		/// Read-only view of the starting ability templates for new characters.
+		/// </summary>
+		public IReadOnlyList<AbilityTemplate> StartingAbilities => startingAbilities;
+		/// <summary>
+		/// Read-only view of the starting inventory item templates for new characters.
+		/// </summary>
+		public IReadOnlyList<BaseItemTemplate> StartingInventoryItems => startingInventoryItems;
+		/// <summary>
+		/// Read-only view of the starting equipment templates for new characters.
+		/// </summary>
+		public IReadOnlyList<EquippableItemTemplate> StartingEquipment => startingEquipment;
 
 		/// <summary>
 		/// Initializes the character creation system, registering broadcast handlers for character creation requests.
@@ -100,7 +117,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived, true);
-			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+			SubscribeToConnectionEvents();
 
 			maxCharacters = Mathf.Max(1, maxCharacters);
 			maxMainThreadResponsesPerFrame = Mathf.Max(1, maxMainThreadResponsesPerFrame);
@@ -130,10 +147,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CharacterCreateBroadcast>(OnServerCharacterCreateBroadcastReceived);
-			if (ServerManager != null)
-			{
-				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
-			}
+			UnsubscribeFromConnectionEvents();
 		}
 
 		/// <summary>
@@ -278,9 +292,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				// --- Validate immutable spawn data (safe to read off main thread) ---
 
-				if (WorldSceneDetailsCache == null ||
-					WorldSceneDetailsCache.Scenes == null ||
-					WorldSceneDetailsCache.Scenes.Count < 1)
+				if (worldSceneDetailsCache == null ||
+					worldSceneDetailsCache.Scenes == null ||
+					worldSceneDetailsCache.Scenes.Count < 1)
 				{
 					TryEnqueueMainThread(() =>
 					{
@@ -295,7 +309,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					return;
 				}
 
-				if (!WorldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails details))
+				if (!worldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails details))
 				{
 					await Log.Debug("CharacterCreateSystem", "Unable to get World Scene Details.");
 					TryEnqueueMainThread(() =>
@@ -413,15 +427,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 				List<PreparedFactionEntry> preparedFactions = BuildStartingFactionEntries(raceTemplate);
 
 				List<PreparedAbilityEntry> preparedAbilities = new List<PreparedAbilityEntry>();
-				BuildStartingAbilityEntries(StartingAbilities, preparedAbilities);
+				BuildStartingAbilityEntries(startingAbilities, preparedAbilities);
 				BuildStartingAbilityEntries(raceTemplate.StartingAbilities, preparedAbilities);
 
 				List<PreparedInventoryEntry> preparedInventoryItems = new List<PreparedInventoryEntry>();
-				BuildStartingInventoryEntries(StartingInventoryItems, preparedInventoryItems);
+				BuildStartingInventoryEntries(startingInventoryItems, preparedInventoryItems);
 				BuildStartingInventoryEntries(raceTemplate.StartingInventoryItems, preparedInventoryItems);
 
 				List<PreparedEquipmentEntry> preparedEquipment = new List<PreparedEquipmentEntry>();
-				BuildStartingEquipmentEntries(StartingEquipment, preparedEquipment);
+				BuildStartingEquipmentEntries(startingEquipment, preparedEquipment);
 				BuildStartingEquipmentEntries(raceTemplate.StartingEquipment, preparedEquipment);
 
 				// --- Begin Unit of Work for atomic character creation ---
@@ -891,35 +905,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Drains the main-thread queue via the RuntimeDataContainer.
+		/// Drains the main-thread queue via the base class generic helper.
 		/// </summary>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			if (Server?.DataContainerRegistry.TryGet<ICharacterCreateSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				if (drainAll)
-				{
-					queueData.Drain();
-				}
-				else
-				{
-					queueData.Drain(maxMainThreadResponsesPerFrame);
-				}
-			}
+			DrainMainThreadQueue<ICharacterCreateSystemMainThreadQueueData>(maxMainThreadResponsesPerFrame, drainAll);
 		}
 
 		/// <summary>
 		/// Thread-safe enqueue of an action to be executed on the main Unity thread
-		/// via the RuntimeDataContainer.
+		/// via the base class generic helper.
 		/// </summary>
 		/// <param name="action">The action to execute on the main thread.</param>
 		private bool TryEnqueueMainThread(Action action)
 		{
-			if (Server?.DataContainerRegistry.TryGet<ICharacterCreateSystemMainThreadQueueData>(out var queueData) == true)
-			{
-				return queueData.TryEnqueue(action);
-			}
-			return false;
+			return TryEnqueueMainThread<ICharacterCreateSystemMainThreadQueueData>(action);
 		}
 
 		/// <summary>
@@ -966,11 +966,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Releases per-connection in-flight create state when a client disconnects.
 		/// </summary>
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped &&
-				conn != null &&
-				Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
+			if (Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 				runtimeData.NextAllowedCreateUtcByClientId.TryRemove(conn.ClientId, out _);

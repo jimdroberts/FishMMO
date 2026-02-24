@@ -415,9 +415,9 @@ namespace FishMMO.Server.Implementation
 					// Import the client's public key into the RSA instance.
 					CryptoHelper.ImportPublicKey(rsa, msg.PublicKey);
 
-					// Encrypt the symmetric key and IV using the client's public key.
-					byte[] encryptedSymmetricKey = rsa.Encrypt(encryptionData.SymmetricKey, RSAEncryptionPadding.Pkcs1);
-					byte[] encryptedIV = rsa.Encrypt(encryptionData.IV, RSAEncryptionPadding.Pkcs1);
+					// Encrypt the symmetric key and IV using the client's public key (OAEP-SHA256 padding).
+					byte[] encryptedSymmetricKey = rsa.Encrypt(encryptionData.SymmetricKey, RSAEncryptionPadding.OaepSHA256);
+					byte[] encryptedIV = rsa.Encrypt(encryptionData.IV, RSAEncryptionPadding.OaepSHA256);
 
 					// Send the encrypted symmetric key and IV to the client for secure communication.
 					ServerHandshake handshake = new ServerHandshake()
@@ -730,16 +730,21 @@ namespace FishMMO.Server.Implementation
 
 							// Atomically transition SRP state. Encryption runs inside the lock
 							// (pure computation), but the Broadcast is enqueued for the main thread.
-							byte[] encryptedSalt = null;
-							byte[] encryptedPublicServerEphemeral = null;
+							string srpSalt = null;
+							string srpPublicServerEphemeral = null;
 
 							if (Server.AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpVerify, (a) =>
 								{
-									encryptedSalt = CryptoHelper.EncryptAES(request.SymmetricKey, request.IV, Encoding.UTF8.GetBytes(a.SrpData.Salt));
-									encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.SymmetricKey, request.IV, Encoding.UTF8.GetBytes(a.SrpData.ServerEphemeral.Public));
+									// Extract SRP data inside the lock; encrypt outside to reduce lock hold time.
+									srpSalt = a.SrpData.Salt;
+									srpPublicServerEphemeral = a.SrpData.ServerEphemeral.Public;
 									return true;
 								}))
 							{
+								// AES encryption runs outside the AccountManager lock.
+								byte[] encryptedSalt = CryptoHelper.EncryptAES(request.SymmetricKey, request.IV, Encoding.UTF8.GetBytes(srpSalt));
+								byte[] encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.SymmetricKey, request.IV, Encoding.UTF8.GetBytes(srpPublicServerEphemeral));
+
 								waitingForProof = true;
 								// Marshal SRP verify response to main thread.
 								EnqueueMainThread(() =>

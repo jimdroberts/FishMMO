@@ -34,7 +34,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Character
 			Interlocked.Exchange(ref saveInFlight, 0);
 		}
 
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 		}

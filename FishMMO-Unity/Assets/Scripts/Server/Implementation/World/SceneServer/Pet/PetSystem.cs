@@ -649,7 +649,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Fetch existing pet record to get ID and version
+				// Fetch existing pet record to get ID and version for optimistic concurrency.
 				DatabaseResult<CharacterPetData?> fetchResult = await charPetService.FetchAsync(characterID);
 				long existingID = 0;
 				long existingVersion = 0;
@@ -659,8 +659,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					existingVersion = fetchResult.Data.Value.Version;
 				}
 
+				// Version is set to existingVersion + 1 for optimistic concurrency.
+				// The DB layer should enforce WHERE version = existingVersion to prevent stale overwrites.
 				CharacterPetData petData = new CharacterPetData(existingID, existingVersion + 1, characterID, templateID, abilities, spawned);
-				await charPetService.PersistAsync(petData);
+				DatabaseResult persistResult = await charPetService.PersistAsync(petData);
+				if (!persistResult.IsSuccess)
+				{
+					await Log.Warning("PetSystem", $"SavePetAsync version conflict or DB error for CharID={characterID}: " +
+						$"expectedVersion={existingVersion}, newVersion={existingVersion + 1}, " +
+						$"error={persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

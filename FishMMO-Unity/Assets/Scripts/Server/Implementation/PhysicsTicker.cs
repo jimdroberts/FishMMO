@@ -11,7 +11,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// The physics scene to simulate.
 		/// </summary>
-		private PhysicsScene _physicsScene;
+		private PhysicsScene physicsScene;
 		/// <summary>
 		/// Reference to the TimeManager that provides simulation events.
 		/// </summary>
@@ -30,7 +30,7 @@ namespace FishMMO.Server.Implementation
 				this.timeManager = timeManager;
 				// Subscribe to pre-physics simulation event to manually tick the physics scene.
 				this.timeManager.OnPrePhysicsSimulation += TimeManager_OnPrePhysicsSimulation;
-				_physicsScene = physicsScene;
+				this.physicsScene = physicsScene;
 			}
 		}
 
@@ -52,7 +52,7 @@ namespace FishMMO.Server.Implementation
 		/// <param name="deltaTime">The time step for the simulation.</param>
 		void TimeManager_OnPrePhysicsSimulation(float deltaTime)
 		{
-			_physicsScene.Simulate(deltaTime);
+			physicsScene.Simulate(deltaTime);
 		}
 	}
 }

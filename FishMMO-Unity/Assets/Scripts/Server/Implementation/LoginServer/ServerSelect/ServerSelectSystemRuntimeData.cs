@@ -35,7 +35,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <inheritdoc/>
-		public override void Deinitialize()
+		protected override void OnDeinitialize()
 		{
 			Clear();
 			InFlightRequests = null;
