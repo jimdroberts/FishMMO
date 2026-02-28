@@ -1,5 +1,4 @@
 ﻿using System.Runtime.CompilerServices;
-using UnityEngine.TextCore.Text;
 
 namespace FishMMO.Shared
 {

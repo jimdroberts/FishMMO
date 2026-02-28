@@ -115,7 +115,7 @@ namespace FishMMO.Shared
 					if (attribute.IsResourceAttribute)
 					{
 						// Resource attributes (e.g., health, mana) are initialized with current and max values.
-						AddResourceAttribute(new CharacterResourceAttribute(this,attribute.ID, attribute.InitialValue, attribute.InitialValue, 0));
+						AddResourceAttribute(new CharacterResourceAttribute(this, attribute.ID, attribute.InitialValue, attribute.InitialValue, 0));
 					}
 					else
 					{
