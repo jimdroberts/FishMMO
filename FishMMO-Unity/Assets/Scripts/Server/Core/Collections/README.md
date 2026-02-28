@@ -37,3 +37,4 @@ These trackers are transport-agnostic and can be used from both Core and Impleme
 - Avoid full dictionary enumeration in hot-path maintenance loops.
 - Bound per-sweep work via `maxScan` and `maxRemove` parameters.
 - Keep update-loop cleanup predictable during large attack spikes.
+- Nested structs reuse enclosing type parameters (no generic shadows).

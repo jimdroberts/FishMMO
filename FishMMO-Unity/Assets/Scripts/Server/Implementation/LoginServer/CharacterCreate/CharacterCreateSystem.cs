@@ -1,9 +1,7 @@
 ﻿using FishNet.Connection;
-using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -170,7 +168,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// --- Main-thread-only validation ---
 
 			// Validate character name
-			if (!Constants.Authentication.IsAllowedCharacterName(msg.CharacterName))
+			if (!Authentication.IsAllowedCharacterName(msg.CharacterName))
 			{
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{

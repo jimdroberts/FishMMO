@@ -2,7 +2,7 @@
 
 ## Overview
 
-The client authentication system implements the client side of SRP-6a (Secure Remote Password) authentication with AES-256-GCM encrypted transport. It handles the RSA key exchange, counter-based nonce management, SRP verify/proof flow, and credential lifecycle. All crypto operations use BouncyCastle under the hood via `CryptoHelper`.
+The client authentication system implements the client side of SRP-6a (Secure Remote Password) authentication with AES-256-GCM encrypted transport. It handles the X25519 ECDH key exchange, counter-based nonce management, SRP verify/proof flow, and credential lifecycle. All crypto operations use BouncyCastle under the hood via `CryptoHelper`.
 
 ## Directory Structure
 
@@ -13,7 +13,7 @@ Client/Authentication/
 └── README.md
 
 Related:
-├── Shared/Tools/Extensions/Crypto/CryptoHelper.cs   # AES-GCM, RSA, nonce builder
+├── Shared/Tools/Extensions/Crypto/CryptoHelper.cs   # AES-GCM, X25519 ECDH, nonce builder
 └── Shared/Network/Authentication/                     # Broadcast message types
 ```
 
@@ -24,12 +24,12 @@ Related:
 ```
 Client                                    Server
   │                                          │
-  │  Generate RSA-2048 key pair              │
+  │  Generate X25519 ephemeral keypair        │
   │── ClientHandshake { PublicKey } ───────► │
-  │                                          │  Generate AES-256 key + 4-byte session prefix
-  │◄── ServerHandshake { Key, Prefix } ──── │  RSA-OAEP-SHA256 encrypt both
+  │                                          │  X25519 ECDH + HKDF-SHA256 → directional keys + prefix
+  │◄── ServerHandshake { PublicKey, Cookie } │
   │                                          │
-  │  RSA decrypt → symmetricKey, sessionPrefix
+  │  X25519 ECDH + HKDF → directional AES keys, sessionPrefix
   │  Reset send/receive counters to 0
 ```
 
@@ -110,10 +110,11 @@ Each AES-GCM operation uses a deterministic 12-byte nonce:
 - Every `CryptoHelper.EncryptAES` and `DecryptAES` call is wrapped in `try/catch (CryptographicException)`.
 - On failure: logs warning, calls `ForceDisconnect()`, zeros any intermediate buffers.
 
-### RSA key pair lifecycle
+### X25519 keypair lifecycle
 
-- A new RSA-2048 key pair is generated per connection attempt.
-- The key pair reference is nulled on disconnect (`ClientManager_OnClientConnectionState`).
+- A new X25519 ephemeral keypair is generated per connection attempt.
+- The private key is zeroed and disposed via `X25519EphemeralKeyPair.Dispose()` after ECDH derivation.
+- The keypair reference is nulled on disconnect (`ClientManager_OnClientConnectionState`).
 
 ## Key Types
 
@@ -134,5 +135,5 @@ Each AES-GCM operation uses a deterministic 12-byte nonce:
 |------------|---------|
 | `FishNet.Authenticating.Authenticator` | Base class for client/server authentication |
 | `SecureRemotePassword` | SRP-6a protocol library (2048-bit, SHA-512) |
-| `CryptoHelper` | AES-GCM with AAD, RSA-OAEP-SHA256, nonce builder |
+| `CryptoHelper` | AES-GCM with AAD, X25519 ECDH + HKDF-SHA256, nonce builder; also provides shared constants (`StrictUtf8`, `MaxSrpPayloadBytes`) |
 | `Client` | FishNet client wrapper for `Broadcast()` and `ForceDisconnect()` |

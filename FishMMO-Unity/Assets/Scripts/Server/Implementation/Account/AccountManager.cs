@@ -1,68 +1,85 @@
 ﻿using FishNet.Connection;
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
-using SecureRemotePassword;
 using FishMMO.Server.Core.Account;
-using FishMMO.Server.Core.Account.SRP;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation
 {
 	/// <summary>
-	/// Thread-safe manager for account and connection data, including encryption and SRP authentication state.
+	/// Thread-safe base manager for account and connection data, including encryption state
+	/// and the unified <see cref="AuthState"/> machine.
 	/// All public methods are synchronized via a shared lock to support concurrent access from
 	/// network broadcast handlers and async worker threads.
+	/// Subclass <see cref="SrpAccountManager"/> or <see cref="TokenAccountManager"/> for
+	/// authentication-method-specific behaviour.
 	/// </summary>
 	public class AccountManager : IAccountManager<NetworkConnection>
 	{
 		/// <summary>
 		/// Synchronization object for all dictionary access.
+		/// Subclasses must acquire this lock before accessing any protected field.
 		/// </summary>
-		private readonly object syncRoot = new object();
+		protected readonly object syncRoot = new object();
 
 		/// <summary>
 		/// Maps each connection to its encryption data (public key, symmetric key, session prefix, and counters).
 		/// </summary>
-		private readonly Dictionary<NetworkConnection, ConnectionEncryptionData> connectionEncryptionEntries = new Dictionary<NetworkConnection, ConnectionEncryptionData>();
+		protected readonly Dictionary<NetworkConnection, ConnectionEncryptionData> connectionEncryptionEntries = new Dictionary<NetworkConnection, ConnectionEncryptionData>();
 
 		/// <summary>
 		/// Maps each connection to its associated account name.
 		/// </summary>
-		private readonly Dictionary<NetworkConnection, string> connectionAccounts = new Dictionary<NetworkConnection, string>();
+		protected readonly Dictionary<NetworkConnection, string> connectionAccounts = new Dictionary<NetworkConnection, string>();
 
 		/// <summary>
 		/// Reverse lookup: maps each account name back to its connection.
 		/// </summary>
-		private readonly Dictionary<string, NetworkConnection> accountConnections = new Dictionary<string, NetworkConnection>();
+		protected readonly Dictionary<string, NetworkConnection> accountConnections = new Dictionary<string, NetworkConnection>();
 
 		/// <summary>
-		/// Maps each connection to its full account data (access level and SRP state).
+		/// Maps each connection to its full account data (auth state, access level, and SRP state).
+		/// AccountData is created at handshake time with <see cref="AuthState.Handshake"/>.
 		/// </summary>
-		private readonly Dictionary<NetworkConnection, AccountData> connectionAccountData = new Dictionary<NetworkConnection, AccountData>();
+		protected readonly Dictionary<NetworkConnection, AccountData> connectionAccountData = new Dictionary<NetworkConnection, AccountData>();
 
 		/// <summary>
 		/// Tracks unauthenticated connections in arrival order for efficient TTL sweeps.
 		/// Oldest entries are at the head.
 		/// </summary>
-		private readonly ArrivalOrderTracker<NetworkConnection> unauthenticatedTracker = new ArrivalOrderTracker<NetworkConnection>();
+		protected readonly ArrivalOrderTracker<NetworkConnection> unauthenticatedTracker = new ArrivalOrderTracker<NetworkConnection>();
 
 		/// <summary>
-		/// Adds encryption data for a connection.
+		/// Registers a connection's X25519 public key and creates initial AccountData with Handshake state.
+		/// Directional encryption keys are established later by the handshake handler after
+		/// X25519 ECDH key agreement completes.
+		/// If the connection already has AccountData beyond Handshake state, the encryption data
+		/// is still updated but AccountData is preserved (defensive against re-handshake during auth).
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
-		/// <param name="publicKey">The public key for encryption.</param>
+		/// <param name="publicKey">The client's X25519 public key (32 bytes).</param>
 		public void AddConnectionEncryptionData(NetworkConnection connection, byte[] publicKey)
 		{
-			// Generate a fresh AES-256 key and a 4-byte random session prefix per login handshake.
-			// The prefix is combined with per-message counters to derive unique 12-byte GCM nonces.
-			var data = new ConnectionEncryptionData(publicKey,
-								CryptoHelper.GenerateKey(32),
-								CryptoHelper.GenerateKey(CryptoHelper.SessionPrefixLength));
+			var data = new ConnectionEncryptionData(publicKey);
 			lock (syncRoot)
 			{
 				connectionEncryptionEntries[connection] = data;
+
+				// Create AccountData at Handshake state if it doesn't exist yet.
+				// If it already exists (re-handshake), reset it to Handshake.
+				if (!connectionAccountData.TryGetValue(connection, out AccountData existing) || existing == null)
+				{
+					connectionAccountData[connection] = new AccountData();
+				}
+				else
+				{
+					// Reset to Handshake for re-handshake (only safe if not past Handshake).
+					// If auth is in progress, the handshake gate prevents reaching here.
+					existing.Clear();
+					existing.AuthState = AuthState.Handshake;
+				}
+
 				TrackUnauthenticatedConnection_NoLock(connection);
 			}
 		}
@@ -82,38 +99,6 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Adds or updates account data and mappings for a connection.
-		/// </summary>
-		/// <param name="connection">The network connection.</param>
-		/// <param name="accountName">The account name.</param>
-		/// <param name="publicClientEphemeral">The public ephemeral value from the client.</param>
-		/// <param name="salt">The salt for SRP.</param>
-		/// <param name="verifier">The verifier for SRP.</param>
-		/// <param name="accessLevel">The access level for the account.</param>
-		public void AddConnectionAccount(NetworkConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel)
-		{
-			ServerSrpData srpData = new ServerSrpData(SrpParameters.Create2048<SHA512>(),
-													  accountName,
-													  publicClientEphemeral,
-													  salt,
-													  verifier);
-
-			lock (syncRoot)
-			{
-				connectionAccountData.Remove(connection);
-				connectionAccountData.Add(connection, new AccountData(accessLevel, srpData));
-
-				connectionAccounts.Remove(connection);
-				connectionAccounts.Add(connection, accountName);
-
-				accountConnections.Remove(accountName);
-				accountConnections.Add(accountName, connection);
-
-				TrackUnauthenticatedConnection_NoLock(connection);
-			}
-		}
-
-		/// <summary>
 		/// Removes all account mappings for a connection.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
@@ -122,32 +107,19 @@ namespace FishMMO.Server.Implementation
 			lock (syncRoot)
 			{
 				ClearAndRemoveEncryptionData_NoLock(connection);
+
+				if (connectionAccountData.TryGetValue(connection, out AccountData data) && data != null)
+				{
+					data.Clear();
+				}
 				connectionAccountData.Remove(connection);
+
 				UntrackUnauthenticatedConnection_NoLock(connection);
 
 				if (connectionAccounts.TryGetValue(connection, out string accountName))
 				{
 					connectionAccounts.Remove(connection);
 					accountConnections.Remove(accountName);
-				}
-			}
-		}
-
-		/// <summary>
-		/// Removes all connection mappings for an account name.
-		/// </summary>
-		/// <param name="accountName">The account name.</param>
-		public void RemoveAccountConnection(string accountName)
-		{
-			lock (syncRoot)
-			{
-				if (accountConnections.TryGetValue(accountName, out NetworkConnection connection))
-				{
-					ClearAndRemoveEncryptionData_NoLock(connection);
-					connectionAccountData.Remove(connection);
-					connectionAccounts.Remove(connection);
-					accountConnections.Remove(accountName);
-					UntrackUnauthenticatedConnection_NoLock(connection);
 				}
 			}
 		}
@@ -195,45 +167,46 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Attempts to update the SRP state for a connection.
+		/// Atomically advances the authentication state for a connection (compare-and-swap).
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
-		/// <param name="requiredState">The required current SRP state.</param>
-		/// <param name="nextState">The next SRP state to set if the current state matches.</param>
-		/// <returns><c>true</c> if the state was updated; otherwise, <c>false</c>.</returns>
-		public bool TryUpdateSrpState(NetworkConnection connection, SrpState requiredState, SrpState nextState)
+		/// <param name="required">The expected current auth state.</param>
+		/// <param name="next">The new auth state to set.</param>
+		/// <returns><c>true</c> if the state was advanced; otherwise, <c>false</c>.</returns>
+		public bool TryAdvanceAuthState(NetworkConnection connection, AuthState required, AuthState next)
 		{
-			return TryUpdateSrpState(connection, requiredState, nextState, null);
+			return TryAdvanceAuthState(connection, required, next, null);
 		}
 
 		/// <summary>
-		/// Attempts to update the SRP state for a connection and invokes a callback on success.
-		/// The callback is invoked inside the lock, so it must not block or re-enter the AccountManager.
+		/// Atomically advances the authentication state for a connection and invokes a callback.
+		/// The callback runs inside the lock and must not block or re-enter the AccountManager.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
-		/// <param name="requiredState">The required current SRP state.</param>
-		/// <param name="nextState">The next SRP state to set if the current state matches.</param>
-		/// <param name="onSuccess">A callback to invoke if the state is updated; should return true to continue.</param>
-		/// <returns><c>true</c> if the state was updated and the callback (if provided) succeeded; otherwise, <c>false</c>.</returns>
-		public bool TryUpdateSrpState(NetworkConnection connection, SrpState requiredState, SrpState nextState, Func<AccountData, bool> onSuccess)
+		/// <param name="required">The expected current auth state.</param>
+		/// <param name="next">The new auth state to set.</param>
+		/// <param name="onSuccess">Optional callback invoked inside the lock. Must return true to confirm.</param>
+		/// <returns><c>true</c> if the state was advanced and the callback (if any) succeeded.</returns>
+		public bool TryAdvanceAuthState(NetworkConnection connection, AuthState required, AuthState next, Func<AccountData, bool> onSuccess)
 		{
 			lock (syncRoot)
 			{
 				if (!connectionAccountData.TryGetValue(connection, out AccountData accountData)
 					|| accountData == null
-					|| accountData.SrpData == null
-					|| accountData.SrpData.State != requiredState)
-				{
-					return false;
-				}
-				accountData.SrpData.State = nextState;
-				if (onSuccess != null &&
-					!onSuccess.Invoke(accountData))
+					|| accountData.AuthState != required)
 				{
 					return false;
 				}
 
-				if (nextState == SrpState.SrpSuccess)
+				accountData.AuthState = next;
+
+				if (onSuccess != null && !onSuccess.Invoke(accountData))
+				{
+					return false;
+				}
+
+				// Untrack from unauthenticated set when reaching terminal auth states.
+				if (next == AuthState.SrpSuccess || next == AuthState.Authenticated)
 				{
 					UntrackUnauthenticatedConnection_NoLock(connection);
 				}
@@ -243,75 +216,34 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Sweeps and removes stale unauthenticated connection state to bound SRP/encryption memory growth.
-		/// Authenticated connections are only untracked from the unauthenticated timer map.
+		/// Checks whether a connection has the specified authentication state.
 		/// </summary>
-		/// <param name="maxUnauthenticatedAge">Maximum allowed age for unauthenticated state.</param>
-		/// <param name="isAuthenticated">Connection authentication predicate.</param>
-		/// <param name="maxScan">Maximum tracked entries to evaluate this sweep.</param>
-		/// <param name="maxRemovals">Maximum stale entries to purge this sweep.</param>
-		/// <returns>Number of stale unauthenticated entries purged.</returns>
-		public int SweepUnauthenticatedConnections(TimeSpan maxUnauthenticatedAge, Func<NetworkConnection, bool> isAuthenticated, int maxScan, int maxRemovals)
+		/// <param name="connection">The network connection.</param>
+		/// <param name="state">The auth state to check for.</param>
+		/// <returns><c>true</c> if the connection has exactly the given state; otherwise, <c>false</c>.</returns>
+		public bool HasAuthState(NetworkConnection connection, AuthState state)
 		{
-			if (maxUnauthenticatedAge <= TimeSpan.Zero || maxScan <= 0 || maxRemovals <= 0)
-			{
-				return 0;
-			}
-
 			lock (syncRoot)
 			{
-				if (unauthenticatedTracker.Count == 0)
-				{
-					return 0;
-				}
+				return connectionAccountData.TryGetValue(connection, out AccountData accountData)
+					&& accountData != null
+					&& accountData.AuthState == state;
+			}
+		}
 
-				DateTime now = DateTime.UtcNow;
-				int scanned = 0;
-				int removed = 0;
-
-				while (scanned < maxScan && removed < maxRemovals)
-				{
-					if (!unauthenticatedTracker.TryPeekOldest(out NetworkConnection connection, out DateTime firstSeenUtc))
-					{
-						break;
-					}
-
-					if (connection == null)
-					{
-						unauthenticatedTracker.PopOldest(out _, out _);
-						scanned++;
-						continue;
-					}
-
-					bool authenticated = isAuthenticated != null && isAuthenticated(connection);
-					if (authenticated)
-					{
-						UntrackUnauthenticatedConnection_NoLock(connection);
-						scanned++;
-						continue;
-					}
-
-					if ((now - firstSeenUtc) < maxUnauthenticatedAge)
-					{
-						// Queue is ordered oldest->newest. If head is fresh, the rest are fresh.
-						break;
-					}
-
-					// Purge stale unauthenticated connection state.
-					ClearAndRemoveEncryptionData_NoLock(connection);
-					connectionAccountData.Remove(connection);
-					if (connectionAccounts.TryGetValue(connection, out string accountName))
-					{
-						connectionAccounts.Remove(connection);
-						accountConnections.Remove(accountName);
-					}
-
-					UntrackUnauthenticatedConnection_NoLock(connection);
-					scanned++;
-					removed++;
-				}
-
-				return removed;
+		/// <summary>
+		/// Checks whether a connection has progressed beyond <see cref="AuthState.Handshake"/>.
+		/// Used by handshake handlers to reject repeated handshakes while auth is in progress.
+		/// </summary>
+		/// <param name="connection">The network connection.</param>
+		/// <returns><c>true</c> if auth is in progress (state &gt; Handshake); otherwise, <c>false</c>.</returns>
+		public bool IsAuthInProgress(NetworkConnection connection)
+		{
+			lock (syncRoot)
+			{
+				return connectionAccountData.TryGetValue(connection, out AccountData accountData)
+					&& accountData != null
+					&& accountData.AuthState > AuthState.Handshake;
 			}
 		}
 
@@ -319,7 +251,7 @@ namespace FishMMO.Server.Implementation
 		/// Ensures a connection is tracked in unauthenticated-state timing map.
 		/// Must be called inside <see cref="syncRoot"/> lock.
 		/// </summary>
-		private void TrackUnauthenticatedConnection_NoLock(NetworkConnection connection)
+		protected void TrackUnauthenticatedConnection_NoLock(NetworkConnection connection)
 		{
 			if (connection == null)
 			{
@@ -333,7 +265,7 @@ namespace FishMMO.Server.Implementation
 		/// Removes a connection from unauthenticated tracking structures.
 		/// Must be called inside <see cref="syncRoot"/> lock.
 		/// </summary>
-		private void UntrackUnauthenticatedConnection_NoLock(NetworkConnection connection)
+		protected void UntrackUnauthenticatedConnection_NoLock(NetworkConnection connection)
 		{
 			if (connection == null)
 			{
@@ -347,7 +279,7 @@ namespace FishMMO.Server.Implementation
 		/// Zeroes and removes encryption data for a single connection.
 		/// Must be called inside <see cref="syncRoot"/> lock.
 		/// </summary>
-		private void ClearAndRemoveEncryptionData_NoLock(NetworkConnection connection)
+		protected void ClearAndRemoveEncryptionData_NoLock(NetworkConnection connection)
 		{
 			if (connectionEncryptionEntries.TryGetValue(connection, out ConnectionEncryptionData encData))
 			{
@@ -370,7 +302,16 @@ namespace FishMMO.Server.Implementation
 				connectionEncryptionEntries.Clear();
 				connectionAccounts.Clear();
 				accountConnections.Clear();
+
+				foreach (AccountData accountData in connectionAccountData.Values)
+				{
+					if (accountData != null)
+					{
+						accountData.Clear();
+					}
+				}
 				connectionAccountData.Clear();
+
 				unauthenticatedTracker.Clear();
 			}
 		}

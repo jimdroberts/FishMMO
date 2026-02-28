@@ -1,11 +1,12 @@
 using System;
-using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using FishNet.Connection;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.WorldServer;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -13,24 +14,33 @@ using UnityEngine;
 namespace FishMMO.Server.Implementation.World.WorldServer
 {
 	/// <summary>
-	/// Authenticator for world server connections, allowing clients to connect with basic password authentication.
+	/// Authenticator for world server connections using token-based authentication.
 	/// Handles player limit and world assignment on login.
-	/// Scene servers are internal, so the rate limit is generous (1 attempt per second per account).
 	/// </summary>
-	public class WorldServerAuthenticator : ServerAuthenticator
+	public class WorldServerAuthenticator : TokenServerAuthenticator
 	{
 		/// <summary>
-		/// Minimum seconds between TryLoginAsync attempts for the same account.
-		/// Scene servers are internal so this is intentionally generous.
+		/// Debounce window for TryLoginAsync per account.
 		/// </summary>
-		private const float LoginAttemptDebounceSeconds = 1.0f;
+		private static readonly TimeSpan LoginAttemptDebounceWindow = TimeSpan.FromSeconds(1.0);
+
+		/// <summary>
+		/// Maximum entries to scan per sweep cycle.
+		/// </summary>
+		private const int SweepMaxScan = 128;
+
+		/// <summary>
+		/// Maximum entries to remove per sweep cycle.
+		/// </summary>
+		private const int SweepMaxRemove = 64;
 
 		/// <summary>
 		/// Tracks last TryLoginAsync attempt time per account for rate limiting.
 		/// Prevents repeated expensive DB calls (FetchByAccountAsync) from rapid re-auth attempts.
+		/// Entries expire automatically and are swept via <see cref="OnAuthSweep"/>.
 		/// </summary>
-		private readonly ConcurrentDictionary<string, DateTime> loginAttemptByAccount =
-			new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+		private readonly ExpiringKeyTracker<string> loginAttemptByAccount =
+			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Maximum number of players allowed to connect to the world server.
@@ -62,21 +72,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Rate-limit TryLoginAsync per account to prevent repeated expensive DB calls.
-			DateTime nowUtc = DateTime.UtcNow;
-			bool wasRateLimited = false;
-			loginAttemptByAccount.AddOrUpdate(
-				username,
-				nowUtc,
-				(_, lastAttempt) =>
-				{
-					if ((nowUtc - lastAttempt).TotalSeconds < LoginAttemptDebounceSeconds)
-					{
-						wasRateLimited = true;
-						return lastAttempt; // Don't update timestamp if rate limited.
-					}
-					return nowUtc;
-				});
-			if (wasRateLimited)
+			if (!loginAttemptByAccount.TryBegin(username, DateTime.UtcNow, LoginAttemptDebounceWindow))
 			{
 				await Log.Warning("WorldServerAuthenticator", $"Rate-limited TryLoginAsync for account '{username}'");
 				return ClientAuthenticationResult.ServerBusy;
@@ -113,6 +109,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			return ClientAuthenticationResult.NoCharacterSelected;
+		}
+
+		/// <summary>
+		/// Sweeps expired login-attempt rate-limit entries to prevent unbounded memory growth.
+		/// </summary>
+		protected override void OnAuthSweep()
+		{
+			base.OnAuthSweep();
+			loginAttemptByAccount.SweepExpired(DateTime.UtcNow, SweepMaxScan, SweepMaxRemove);
 		}
 	}
 }

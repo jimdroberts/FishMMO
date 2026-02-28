@@ -6,6 +6,15 @@ namespace FishMMO.Server.Core.Account.SRP
 	/// <summary>
 	/// Holds SRP (Secure Remote Password) authentication data and logic for a server-side session.
 	/// </summary>
+	/// <remarks>
+	/// <b>String zeroization limitation:</b> SRP values (username, salt, verifier, ephemeral,
+	/// proof) are .NET immutable strings that cannot be deterministically zeroed. The
+	/// SecureRemotePassword library and database boundary both require string parameters.
+	/// <see cref="Clear"/> nulls all references so the GC can collect them, but the string
+	/// contents remain in managed heap memory until garbage-collected. Intermediate decrypted
+	/// <c>byte[]</c> buffers are zeroed via <c>CryptographicOperations.ZeroMemory</c> in the
+	/// authenticator workers.
+	/// </remarks>
 	public class ServerSrpData
 	{
 		/// <summary>
@@ -44,11 +53,6 @@ namespace FishMMO.Server.Core.Account.SRP
 		public SrpSession Session { get; private set; }
 
 		/// <summary>
-		/// Gets or sets the current SRP state.
-		/// </summary>
-		public SrpState State { get; set; }
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="ServerSrpData"/> class.
 		/// </summary>
 		/// <param name="parameters">The SRP parameters to use.</param>
@@ -64,7 +68,6 @@ namespace FishMMO.Server.Core.Account.SRP
 			this.Salt = salt;
 			this.Verifier = verifier;
 			ServerEphemeral = SrpServer.GenerateEphemeral(this.Verifier);
-			State = SrpState.SrpVerify;
 		}
 
 		/// <summary>
@@ -91,6 +94,27 @@ namespace FishMMO.Server.Core.Account.SRP
 				serverProof = e.Message;
 				return false;
 			}
+		}
+
+		/// <summary>
+		/// Nulls all string and object references to allow GC collection of sensitive SRP material.
+		/// Call after SRP success to minimize the window during which secrets reside in memory.
+		/// </summary>
+		/// <remarks>
+		/// .NET strings are immutable and GC-managed — their contents cannot be deterministically
+		/// zeroed. This method nulls all references so the GC can collect the backing memory at
+		/// its next opportunity. For true defense-in-depth, ensure the process runs with locked
+		/// pages or consider a native SRP library that operates on pinned byte arrays.
+		/// </remarks>
+		public void Clear()
+		{
+			UserName = null;
+			PublicClientEphemeral = null;
+			SrpServer = null;
+			Salt = null;
+			Verifier = null;
+			ServerEphemeral = null;
+			Session = null;
 		}
 	}
 }

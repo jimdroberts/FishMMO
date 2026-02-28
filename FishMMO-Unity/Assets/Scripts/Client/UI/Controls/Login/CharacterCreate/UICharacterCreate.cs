@@ -284,7 +284,7 @@ namespace FishMMO.Client
 		public void OnClick_CreateCharacter()
 		{
 			if (Client.IsConnectionReady() &&
-				Constants.Authentication.IsAllowedCharacterName(CharacterName) &&
+				Authentication.IsAllowedCharacterName(CharacterName) &&
 				WorldSceneDetailsCache != null &&
 				RaceIndex > -1 &&
 				ModelIndex > -1 &&

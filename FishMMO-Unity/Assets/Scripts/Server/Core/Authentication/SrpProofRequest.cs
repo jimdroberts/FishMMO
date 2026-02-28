@@ -21,6 +21,11 @@ namespace FishMMO.Server.Core.Authentication
 		public readonly byte[] EncryptedClientProof;
 
 		/// <summary>
+		/// Explicit client-sent sequence number for this proof message.
+		/// </summary>
+		public readonly uint Seq;
+
+		/// <summary>
 		/// Per-connection encryption state holding the symmetric key, session prefix, and counters
 		/// for deriving unique GCM nonces on the worker thread.
 		/// </summary>
@@ -33,11 +38,12 @@ namespace FishMMO.Server.Core.Authentication
 		/// <param name="encryptedClientProof">Encrypted client proof bytes.</param>
 		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
 		public SrpProofRequest(TConnection connection, byte[] encryptedClientProof,
-			ConnectionEncryptionData encryptionData)
+			ConnectionEncryptionData encryptionData, uint seq)
 		{
 			Connection = connection;
 			EncryptedClientProof = encryptedClientProof;
 			EncryptionData = encryptionData;
+			Seq = seq;
 		}
 	}
 }

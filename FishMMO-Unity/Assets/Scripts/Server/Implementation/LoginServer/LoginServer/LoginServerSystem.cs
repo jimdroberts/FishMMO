@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -89,6 +90,45 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			runtimeData.ID = dbResult.Data.ID;
 
+			// Generate and persist HMAC signing key for token issuance
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var signingKeyService))
+			{
+				Log.Error("LoginServerSystem", "Failed to resolve ILoginServerSigningKeyService from database service registry");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
+			}
+
+			byte[] hmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
+
+			Task<DatabaseResult<LoginServerSigningKeyData>> keyTask = Task.Run(() =>
+				signingKeyService.UpsertAsync(runtimeData.ID, hmacKey));
+
+			if (!keyTask.Wait(dbRegistrationTimeoutMs))
+			{
+				Log.Error("LoginServerSystem", $"HMAC signing key persistence timed out after {dbRegistrationTimeoutMs}ms");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
+			}
+
+			DatabaseResult<LoginServerSigningKeyData> keyResult = keyTask.GetAwaiter().GetResult();
+
+			if (!keyResult.IsSuccess)
+			{
+				Log.Error("LoginServerSystem", $"Failed to persist HMAC signing key: {keyResult.ErrorMessage}");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
+			}
+
+			// Configure the authenticator for token issuance
+			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
+			{
+				authenticator.TokenSigningKey = hmacKey;
+				authenticator.LoginServerId = runtimeData.ID;
+			}
+			else
+			{
+				Log.Error("LoginServerSystem", "Failed to configure authenticator: ServerAuthenticator not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
@@ -116,19 +156,41 @@ namespace FishMMO.Server.Implementation.LoginServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPulse);
 			}
 
-			// Deregister login server from database on shutdown
+			// Zero the authenticator's signing key before shutdown
+			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator &&
+				authenticator.TokenSigningKey != null)
+			{
+				CryptographicOperations.ZeroMemory(authenticator.TokenSigningKey);
+				authenticator.TokenSigningKey = null;
+			}
+
+			// Deregister login server and signing key from database on shutdown
 			if (Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData) &&
 				runtimeData.ID > 0 &&
-				Server.Database?.ServiceRegistry != null &&
-				Server.Database.ServiceRegistry.TryGet<ILoginServerService>(out var loginServerService))
+				Server.Database?.ServiceRegistry != null)
 			{
-				try
+				if (Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var signingKeyService))
 				{
-					Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
+					try
+					{
+						Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID)).Wait(5000);
+					}
+					catch (Exception ex)
+					{
+						Log.Error("LoginServerSystem", $"Failed to delete signing key from DB: {ex.Message}");
+					}
 				}
-				catch (Exception ex)
+
+				if (Server.Database.ServiceRegistry.TryGet<ILoginServerService>(out var loginServerService))
 				{
-					Log.Error("LoginServerSystem", $"Failed to deregister login server from DB: {ex.Message}");
+					try
+					{
+						Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
+					}
+					catch (Exception ex)
+					{
+						Log.Error("LoginServerSystem", $"Failed to deregister login server from DB: {ex.Message}");
+					}
 				}
 			}
 		}

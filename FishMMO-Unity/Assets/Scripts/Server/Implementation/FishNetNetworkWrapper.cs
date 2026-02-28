@@ -178,7 +178,7 @@ namespace FishMMO.Server.Implementation
 		/// <param name="server">The server instance providing infrastructure access.</param>
 		public void AttachLoginAuthenticator(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
-			if (NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
+			if (NetworkManager.ServerManager.GetAuthenticator() is IServerAuthenticator authenticator)
 			{
 				authenticator.Server = server;
 				authenticator.InitializeWorkers();

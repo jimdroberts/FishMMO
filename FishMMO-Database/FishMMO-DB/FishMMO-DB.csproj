@@ -25,6 +25,9 @@
     <PackageReference Include="StackExchange.Redis" Version="2.7.4" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\FishMMO-SharedUtility\FishMMO-SharedUtility\FishMMO-SharedUtility.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <Folder Include="Migrations\" />
   </ItemGroup>
   <!-- Define a custom property based on the existence of the marker file -->

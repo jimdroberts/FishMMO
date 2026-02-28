@@ -12,8 +12,8 @@ namespace FishMMO.Server.Core.Collections
 	{
 		private readonly object gate = new object();
 		private readonly Dictionary<TKey, DateTime> nextAllowedUtc;
-		private readonly LinkedList<ExpiryQueueNode<TKey>> expiryQueue = new LinkedList<ExpiryQueueNode<TKey>>();
-		private readonly Dictionary<TKey, LinkedListNode<ExpiryQueueNode<TKey>>> queueNodes;
+		private readonly LinkedList<ExpiryQueueNode> expiryQueue = new LinkedList<ExpiryQueueNode>();
+		private readonly Dictionary<TKey, LinkedListNode<ExpiryQueueNode>> queueNodes;
 
 		/// <summary>
 		/// Initializes a new tracker with an optional key comparer.
@@ -25,8 +25,8 @@ namespace FishMMO.Server.Core.Collections
 				: new Dictionary<TKey, DateTime>(comparer);
 
 			queueNodes = comparer == null
-				? new Dictionary<TKey, LinkedListNode<ExpiryQueueNode<TKey>>>()
-				: new Dictionary<TKey, LinkedListNode<ExpiryQueueNode<TKey>>>(comparer);
+				? new Dictionary<TKey, LinkedListNode<ExpiryQueueNode>>()
+				: new Dictionary<TKey, LinkedListNode<ExpiryQueueNode>>(comparer);
 		}
 
 		/// <summary>
@@ -66,12 +66,12 @@ namespace FishMMO.Server.Core.Collections
 				DateTime expiresUtc = nowUtc.Add(duration);
 				nextAllowedUtc[key] = expiresUtc;
 
-				if (queueNodes.TryGetValue(key, out LinkedListNode<ExpiryQueueNode<TKey>> existingNode))
+				if (queueNodes.TryGetValue(key, out LinkedListNode<ExpiryQueueNode> existingNode))
 				{
 					expiryQueue.Remove(existingNode);
 				}
 
-				queueNodes[key] = expiryQueue.AddLast(new ExpiryQueueNode<TKey>(key, expiresUtc));
+				queueNodes[key] = expiryQueue.AddLast(new ExpiryQueueNode(key, expiresUtc));
 				return true;
 			}
 		}
@@ -97,14 +97,14 @@ namespace FishMMO.Server.Core.Collections
 
 				while (scanned < maxScan && removed < maxRemove)
 				{
-					LinkedListNode<ExpiryQueueNode<TKey>> head = expiryQueue.First;
+					LinkedListNode<ExpiryQueueNode> head = expiryQueue.First;
 					if (head == null)
 					{
 						break;
 					}
 
 					scanned++;
-					ExpiryQueueNode<TKey> queued = head.Value;
+					ExpiryQueueNode queued = head.Value;
 
 					if (!nextAllowedUtc.TryGetValue(queued.Key, out DateTime currentExpiry))
 					{
@@ -135,12 +135,12 @@ namespace FishMMO.Server.Core.Collections
 			}
 		}
 
-		private readonly struct ExpiryQueueNode<T>
+		private readonly struct ExpiryQueueNode
 		{
-			public readonly T Key;
+			public readonly TKey Key;
 			public readonly DateTime ExpiresUtc;
 
-			public ExpiryQueueNode(T key, DateTime expiresUtc)
+			public ExpiryQueueNode(TKey key, DateTime expiresUtc)
 			{
 				Key = key;
 				ExpiresUtc = expiresUtc;

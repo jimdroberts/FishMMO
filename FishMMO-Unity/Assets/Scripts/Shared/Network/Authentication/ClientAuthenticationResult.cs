@@ -54,5 +54,17 @@
 		/// No character is selected on the account. The client must select a character before connecting to a world server.
 		/// </summary>
 		NoCharacterSelected,
+		/// <summary>
+		/// The authentication token is invalid (malformed, bad signature, or not found).
+		/// </summary>
+		TokenInvalid,
+		/// <summary>
+		/// The authentication token has expired.
+		/// </summary>
+		TokenExpired,
+		/// <summary>
+		/// The authentication token has been revoked.
+		/// </summary>
+		TokenRevoked,
 	}
 }

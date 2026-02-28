@@ -229,7 +229,7 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Please type the name of your new guild!", (s) =>
 					{
-						if (Constants.Authentication.IsAllowedGuildName(s))
+						if (Authentication.IsAllowedGuildName(s))
 						{
 							Client.Broadcast(new GuildCreateBroadcast()
 							{
@@ -289,7 +289,7 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
 					{
-						if (Constants.Authentication.IsAllowedCharacterName(s))
+						if (Authentication.IsAllowedCharacterName(s))
 						{
 							ClientNamingSystem.GetCharacterID(s, (id) =>
 							{

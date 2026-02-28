@@ -140,10 +140,12 @@ Requests are dispatched through centralized `AsyncWorkerData`:
 `AsyncWorkerData` workers execute `ProcessAccountCreationAsync`:
 
 1. AES-decrypt username, salt, verifier.
-2. Resolve `IAccountService` from database service registry.
-3. Persist account via `PersistAsync(username, salt, verifier)`.
-4. Update runtime metrics and per-IP failure tracking.
-5. Enqueue response action to main thread queue.
+2. Convert decrypted bytes to strings via `CryptoHelper.StrictUtf8` (throws `DecoderFallbackException` on malformed UTF-8).
+3. Zero decrypted byte arrays with `CryptographicOperations.ZeroMemory()` immediately after conversion (or on failure).
+4. Resolve `IAccountService` from database service registry.
+5. Persist account via `PersistAsync(username, salt, verifier)`.
+6. Update runtime metrics and per-IP failure tracking.
+7. Enqueue response action to main thread queue.
 
 ### 4) Main Thread Response
 

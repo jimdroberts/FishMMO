@@ -37,6 +37,13 @@ namespace FishMMO.Server.Core.LoginServer
 		public readonly ConnectionEncryptionData EncryptionData;
 
 		/// <summary>
+		/// Explicit client-sent sequence number for this create-account message. This
+		/// represents the last sequence used when encrypting multi-field payloads
+		/// (e.g., username, salt, verifier) and is used to derive nonces for each field.
+		/// </summary>
+		public readonly uint Seq;
+
+		/// <summary>
 		/// IP address of the client for rate limiting and DoS protection.
 		/// </summary>
 		public readonly string IpAddress;
@@ -51,7 +58,7 @@ namespace FishMMO.Server.Core.LoginServer
 		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
 		/// <param name="ipAddress">IP address of the client.</param>
 		public AccountCreationRequest(TConnection connection, byte[] encryptedUsername, byte[] encryptedSalt,
-			byte[] encryptedVerifier, ConnectionEncryptionData encryptionData, string ipAddress)
+			byte[] encryptedVerifier, ConnectionEncryptionData encryptionData, string ipAddress, uint seq)
 		{
 			Connection = connection;
 			EncryptedUsername = encryptedUsername;
@@ -59,6 +66,7 @@ namespace FishMMO.Server.Core.LoginServer
 			EncryptedVerifier = encryptedVerifier;
 			EncryptionData = encryptionData;
 			IpAddress = ipAddress;
+			Seq = seq;
 		}
 	}
 }

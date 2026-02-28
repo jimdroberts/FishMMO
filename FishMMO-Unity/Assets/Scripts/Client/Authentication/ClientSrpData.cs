@@ -93,5 +93,18 @@ namespace FishMMO.Client
 				return false;
 			}
 		}
+
+		/// <summary>
+		/// Clears all SRP references so the GC can collect sensitive SRP strings
+		/// (salt, verifier, proofs, session keys) as early as possible.
+		/// .NET strings cannot be deterministically zeroed, but nulling references
+		/// removes the reachability root and allows collection.
+		/// </summary>
+		public void Clear()
+		{
+			SrpClient = null;
+			ClientEphemeral = null;
+			Session = null;
+		}
 	}
 }

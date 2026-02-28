@@ -9,6 +9,7 @@ using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Database.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using FishMMO.Shared;
 
 namespace FishMMO.Database.Npgsql.Services
 {

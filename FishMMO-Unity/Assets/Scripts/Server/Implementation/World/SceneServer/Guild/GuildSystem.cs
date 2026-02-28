@@ -751,7 +751,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// remove white space
 				msg.GuildName = msg.GuildName.Trim();
 
-				if (!Constants.Authentication.IsAllowedGuildName(msg.GuildName))
+				if (!Authentication.IsAllowedGuildName(msg.GuildName))
 				{
 					Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
 					{

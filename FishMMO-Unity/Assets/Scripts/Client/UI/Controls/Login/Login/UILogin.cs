@@ -9,6 +9,20 @@ using System.Collections;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Login UI control providing username/password input, registration, and sign-in.
+	/// </summary>
+	/// <remarks>
+	/// <para><b>Secure password input limitation:</b> <see cref="TMP_InputField"/> stores
+	/// text as a managed <see cref="string"/> (<c>m_Text</c>) and exposes no <c>byte[]</c>,
+	/// <c>char[]</c>, or <c>SecureString</c> API. .NET strings are immutable and cannot be
+	/// deterministically zeroed; <c>Password.text = null</c> only removes the reference \u2014
+	/// the string data lingers in the managed heap until overwritten by the GC.</para>
+	/// <para>The <c>InputType.Password</c> content type provides visual masking (asterisks) only.
+	/// This is an inherent limitation of the Unity UI stack and the .NET runtime.
+	/// The SRP protocol ensures the password never travels on the wire, which is the
+	/// primary protection. See also the design note on <c>ClientLoginAuthenticator.password</c>.</para>
+	/// </remarks>
 	public class UILogin : UIControl
 	{
 		/// <summary>
@@ -223,8 +237,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Login()
 		{
-			if (!Constants.Authentication.IsAllowedUsername(Username.text) ||
-				!Constants.Authentication.IsAllowedPassword(Password.text))
+			if (!Authentication.IsAllowedUsername(Username.text) ||
+				!Authentication.IsAllowedPassword(Password.text))
 			{
 				return;
 			}
@@ -258,8 +272,8 @@ namespace FishMMO.Client
 		private void Connect(string handshakeMessage, string username, string password, bool isRegistration = false, string address = null, ushort port = 0)
 		{
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Constants.Authentication.IsAllowedUsername(username) &&
-				Constants.Authentication.IsAllowedPassword(password) &&
+				Authentication.IsAllowedUsername(username) &&
+				Authentication.IsAllowedPassword(password) &&
 				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress) &&
 				Constants.IsAddressValid(serverAddress.Address))
 			{

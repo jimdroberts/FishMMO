@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>FishMMO.Shared</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  	<ItemGroup>
+		<PackageReference Include="ZString" Version="2.6.0" />
+	</ItemGroup>
+
+  <!-- Copy the built DLL to the Unity project Dependencies folder. -->
+  <Target Name="CopyToUnityDependencies" AfterTargets="Build">
+    <PropertyGroup>
+      <TargetDir>..\..\FishMMO-Unity\Assets\Dependencies</TargetDir>
+      <BuildConfiguration>Debug</BuildConfiguration>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+      <BuildConfiguration>Release</BuildConfiguration>
+    </PropertyGroup>
+    <ItemGroup>
+      <SharedUtilityDll Include="bin\$(BuildConfiguration)\**\FishMMO-SharedUtility.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SharedUtilityDll)" DestinationFolder="$(TargetDir)" />
+  </Target>
+
+</Project>

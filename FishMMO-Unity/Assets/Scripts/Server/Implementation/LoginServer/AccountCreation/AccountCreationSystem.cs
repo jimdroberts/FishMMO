@@ -271,7 +271,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 				msg.Salt,                  // Still encrypted!
 				msg.Verifier,              // Still encrypted!
 				encryptionData,
-				ipAddress
+				ipAddress,
+				msg.Seq
 			);
 
 			// Try to enqueue request for async processing
@@ -399,15 +400,49 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				try
 				{
-					// Decrypt credentials on worker thread (doesn't block network)
+					// Decrypt credentials on worker thread using explicit sequence numbers provided by client.
 					byte[] decryptedUsername;
 					byte[] decryptedSalt;
 					byte[] decryptedVerifier;
 					try
 					{
-						decryptedUsername = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedUsername);
-						decryptedSalt = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedSalt);
-						decryptedVerifier = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedVerifier);
+						uint seq = request.Seq;
+						if (seq == 0 || seq < 2)
+						{
+							NetworkConnection failConn = request.Connection;
+							TryEnqueueMainThread(() =>
+							{
+								if (failConn != null && failConn.IsActive)
+									failConn.Disconnect(false);
+							});
+							return;
+						}
+
+						// Expected order: username (seq-2), salt (seq-1), verifier (seq)
+						uint seqUsername = seq - 2;
+						uint seqSalt = seq - 1;
+						uint seqVerifier = seq;
+
+						// Consume and decrypt username
+						if (!request.EncryptionData.TryConsumeReceiveSequence(seqUsername))
+							throw new CryptographicException("Account creation username sequence out-of-order or duplicate.");
+						byte[] nonceU = request.EncryptionData.BuildReceiveNonce(seqUsername);
+						byte[] aadU = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqUsername);
+						decryptedUsername = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceU, request.EncryptedUsername, aadU);
+
+						// Consume and decrypt salt
+						if (!request.EncryptionData.TryConsumeReceiveSequence(seqSalt))
+							throw new CryptographicException("Account creation salt sequence out-of-order or duplicate.");
+						byte[] nonceS = request.EncryptionData.BuildReceiveNonce(seqSalt);
+						byte[] aadS = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqSalt);
+						decryptedSalt = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceS, request.EncryptedSalt, aadS);
+
+						// Consume and decrypt verifier
+						if (!request.EncryptionData.TryConsumeReceiveSequence(seqVerifier))
+							throw new CryptographicException("Account creation verifier sequence out-of-order or duplicate.");
+						byte[] nonceV = request.EncryptionData.BuildReceiveNonce(seqVerifier);
+						byte[] aadV = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqVerifier);
+						decryptedVerifier = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceV, request.EncryptedVerifier, aadV);
 					}
 					catch (CryptographicException)
 					{
@@ -420,7 +455,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 						return;
 					}
 
-					string username = Encoding.UTF8.GetString(decryptedUsername);
+					string username;
+					try
+					{
+						username = CryptoHelper.StrictUtf8.GetString(decryptedUsername);
+					}
+					catch (DecoderFallbackException)
+					{
+						CryptographicOperations.ZeroMemory(decryptedUsername);
+						CryptographicOperations.ZeroMemory(decryptedSalt);
+						CryptographicOperations.ZeroMemory(decryptedVerifier);
+						NetworkConnection failConn = request.Connection;
+						TryEnqueueMainThread(() =>
+						{
+							if (failConn != null && failConn.IsActive)
+								failConn.Disconnect(false);
+						});
+						return;
+					}
+					CryptographicOperations.ZeroMemory(decryptedUsername);
 
 					// Validate decrypted username against centralized naming rules before any DB work.
 					if (!Authentication.IsAllowedUsername(username))
@@ -441,8 +494,27 @@ namespace FishMMO.Server.Implementation.LoginServer
 						return;
 					}
 
-					string salt = Encoding.UTF8.GetString(decryptedSalt);
-					string verifier = Encoding.UTF8.GetString(decryptedVerifier);
+					string salt;
+					string verifier;
+					try
+					{
+						salt = CryptoHelper.StrictUtf8.GetString(decryptedSalt);
+						verifier = CryptoHelper.StrictUtf8.GetString(decryptedVerifier);
+					}
+					catch (DecoderFallbackException)
+					{
+						CryptographicOperations.ZeroMemory(decryptedSalt);
+						CryptographicOperations.ZeroMemory(decryptedVerifier);
+						NetworkConnection failConn = request.Connection;
+						TryEnqueueMainThread(() =>
+						{
+							if (failConn != null && failConn.IsActive)
+								failConn.Disconnect(false);
+						});
+						return;
+					}
+					CryptographicOperations.ZeroMemory(decryptedSalt);
+					CryptographicOperations.ZeroMemory(decryptedVerifier);
 
 					// Validate decrypted salt/verifier lengths before any DB work.
 					if (salt.Length > MaxSaltLength || verifier.Length > MaxVerifierLength)

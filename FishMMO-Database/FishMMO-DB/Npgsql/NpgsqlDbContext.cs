@@ -51,6 +51,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<SceneEntity> Scenes { get; set; }
 		public DbSet<AccountEntity> Accounts { get; set; }
 		public DbSet<KickRequestEntity> KickRequests { get; set; }
+		public DbSet<LoginServerSigningKeyEntity> LoginServerSigningKeys { get; set; }
+		public DbSet<AuthTokenEntity> AuthTokens { get; set; }
 
 		public DbSet<CharacterEntity> Characters { get; set; }
 		public DbSet<CharacterAbilityEntity> CharacterAbilities { get; set; }

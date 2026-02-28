@@ -26,6 +26,11 @@ namespace FishMMO.Server.Core.Authentication
 		public readonly byte[] EncryptedPublicEphemeral;
 
 		/// <summary>
+		/// Explicit client-sent sequence number (last sequence used for this broadcast).
+		/// </summary>
+		public readonly uint Seq;
+
+		/// <summary>
 		/// Per-connection encryption state holding the symmetric key, session prefix, and counters
 		/// for deriving unique GCM nonces on the worker thread.
 		/// </summary>
@@ -39,12 +44,13 @@ namespace FishMMO.Server.Core.Authentication
 		/// <param name="encryptedPublicEphemeral">Encrypted client public ephemeral bytes.</param>
 		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
 		public SrpVerifyRequest(TConnection connection, byte[] encryptedUsername, byte[] encryptedPublicEphemeral,
-			ConnectionEncryptionData encryptionData)
+			ConnectionEncryptionData encryptionData, uint seq)
 		{
 			Connection = connection;
 			EncryptedUsername = encryptedUsername;
 			EncryptedPublicEphemeral = encryptedPublicEphemeral;
 			EncryptionData = encryptionData;
+			Seq = seq;
 		}
 	}
 }

@@ -12,9 +12,9 @@ namespace FishMMO.Server.Core.Collections
 	public sealed class LastSeenCacheTracker<TKey, TValue>
 	{
 		private readonly object gate = new object();
-		private readonly Dictionary<TKey, CacheValue<TValue>> values;
-		private readonly LinkedList<QueueNode<TKey>> queue = new LinkedList<QueueNode<TKey>>();
-		private readonly Dictionary<TKey, LinkedListNode<QueueNode<TKey>>> nodes;
+		private readonly Dictionary<TKey, CacheValue> values;
+		private readonly LinkedList<QueueNode> queue = new LinkedList<QueueNode>();
+		private readonly Dictionary<TKey, LinkedListNode<QueueNode>> nodes;
 
 		/// <summary>
 		/// Initializes a new tracker with an optional key comparer.
@@ -22,12 +22,12 @@ namespace FishMMO.Server.Core.Collections
 		public LastSeenCacheTracker(IEqualityComparer<TKey> comparer = null)
 		{
 			values = comparer == null
-				? new Dictionary<TKey, CacheValue<TValue>>()
-				: new Dictionary<TKey, CacheValue<TValue>>(comparer);
+				? new Dictionary<TKey, CacheValue>()
+				: new Dictionary<TKey, CacheValue>(comparer);
 
 			nodes = comparer == null
-				? new Dictionary<TKey, LinkedListNode<QueueNode<TKey>>>()
-				: new Dictionary<TKey, LinkedListNode<QueueNode<TKey>>>(comparer);
+				? new Dictionary<TKey, LinkedListNode<QueueNode>>()
+				: new Dictionary<TKey, LinkedListNode<QueueNode>>(comparer);
 		}
 
 		/// <summary>
@@ -50,21 +50,21 @@ namespace FishMMO.Server.Core.Collections
 		{
 			lock (gate)
 			{
-				if (!values.TryGetValue(key, out CacheValue<TValue> current))
+				if (!values.TryGetValue(key, out CacheValue current))
 				{
 					value = default;
 					return false;
 				}
 
-				current = new CacheValue<TValue>(current.Value, nowUtc);
+				current = new CacheValue(current.Value, nowUtc);
 				values[key] = current;
 
-				if (nodes.TryGetValue(key, out LinkedListNode<QueueNode<TKey>> oldNode))
+				if (nodes.TryGetValue(key, out LinkedListNode<QueueNode> oldNode))
 				{
 					queue.Remove(oldNode);
 				}
 
-				nodes[key] = queue.AddLast(new QueueNode<TKey>(key, nowUtc));
+				nodes[key] = queue.AddLast(new QueueNode(key, nowUtc));
 				value = current.Value;
 				return true;
 			}
@@ -77,14 +77,14 @@ namespace FishMMO.Server.Core.Collections
 		{
 			lock (gate)
 			{
-				values[key] = new CacheValue<TValue>(value, nowUtc);
+				values[key] = new CacheValue(value, nowUtc);
 
-				if (nodes.TryGetValue(key, out LinkedListNode<QueueNode<TKey>> oldNode))
+				if (nodes.TryGetValue(key, out LinkedListNode<QueueNode> oldNode))
 				{
 					queue.Remove(oldNode);
 				}
 
-				nodes[key] = queue.AddLast(new QueueNode<TKey>(key, nowUtc));
+				nodes[key] = queue.AddLast(new QueueNode(key, nowUtc));
 			}
 		}
 
@@ -96,7 +96,7 @@ namespace FishMMO.Server.Core.Collections
 			lock (gate)
 			{
 				values.Remove(key);
-				if (nodes.TryGetValue(key, out LinkedListNode<QueueNode<TKey>> node))
+				if (nodes.TryGetValue(key, out LinkedListNode<QueueNode> node))
 				{
 					nodes.Remove(key);
 					queue.Remove(node);
@@ -121,16 +121,16 @@ namespace FishMMO.Server.Core.Collections
 
 				while (scanned < maxScan && removed < maxRemove)
 				{
-					LinkedListNode<QueueNode<TKey>> head = queue.First;
+					LinkedListNode<QueueNode> head = queue.First;
 					if (head == null)
 					{
 						break;
 					}
 
 					scanned++;
-					QueueNode<TKey> queued = head.Value;
+					QueueNode queued = head.Value;
 
-					if (!values.TryGetValue(queued.Key, out CacheValue<TValue> current))
+					if (!values.TryGetValue(queued.Key, out CacheValue current))
 					{
 						queue.RemoveFirst();
 						nodes.Remove(queued.Key);
@@ -159,24 +159,24 @@ namespace FishMMO.Server.Core.Collections
 			}
 		}
 
-		private readonly struct QueueNode<T>
+		private readonly struct QueueNode
 		{
-			public readonly T Key;
+			public readonly TKey Key;
 			public readonly DateTime LastSeenUtc;
 
-			public QueueNode(T key, DateTime lastSeenUtc)
+			public QueueNode(TKey key, DateTime lastSeenUtc)
 			{
 				Key = key;
 				LastSeenUtc = lastSeenUtc;
 			}
 		}
 
-		private readonly struct CacheValue<T>
+		private readonly struct CacheValue
 		{
-			public readonly T Value;
+			public readonly TValue Value;
 			public readonly DateTime LastSeenUtc;
 
-			public CacheValue(T value, DateTime lastSeenUtc)
+			public CacheValue(TValue value, DateTime lastSeenUtc)
 			{
 				Value = value;
 				LastSeenUtc = lastSeenUtc;

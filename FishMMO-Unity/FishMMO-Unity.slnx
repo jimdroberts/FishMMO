@@ -8,7 +8,6 @@
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="SimpleWebTransport.csproj" />
   <Project Path="Bayou.csproj" />
-  <Project Path="ZString.csproj" />
   <Project Path="FishNet.Demos.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />

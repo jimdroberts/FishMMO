@@ -1,12 +1,13 @@
 ﻿using System.Threading.Tasks;
+using FishMMO.Server.Implementation;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// Scene Server Authenticator for basic password authentication on scene servers.
+	/// Scene Server Authenticator using token-based authentication.
 	/// </summary>
-	public class SceneServerAuthenticator : ServerAuthenticator
+	public class SceneServerAuthenticator : TokenServerAuthenticator
 	{
 		/// <summary>
 		/// Executed when a player tries to login to the Scene Server.

@@ -1,5 +1,4 @@
-﻿using FishNet.Authenticating;
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database;
@@ -14,7 +13,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.Account;
-using FishMMO.Server.Core.Account.SRP;
 using FishMMO.Server.Core.Authentication;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Shared;
@@ -29,14 +27,20 @@ namespace FishMMO.Server.Implementation
 	/// crypto, database, and SRP work is offloaded to async workers via bounded channels.
 	/// Thread-safe: broadcast handlers run on the network thread, workers run on thread pool threads.
 	/// </summary>
-	public class ServerAuthenticator : Authenticator
+	/// <remarks>
+	/// <para><b>INVARIANT — AES-GCM failure is connection-fatal:</b> Any GCM tag mismatch
+	/// permanently invalidates the session. No retries, no partial continuation, no oracle.
+	/// The handler logs, sends a generic failure, disconnects, and purges all state.</para>
+	/// <para><b>DropWrite self-healing:</b> Bounded channels use
+	/// <c>BoundedChannelFullMode.DropWrite</c>. If a TryWrite fails after an
+	/// <see cref="AuthState"/> advance, the handler immediately rolls the state back
+	/// to its prior value so the client can retry without re-handshaking.
+	/// <see cref="BaseServerAuthenticator.SweepStaleAuthentication"/> remains the ultimate safety net,
+	/// unconditionally purging all auth state for connections exceeding
+	/// the auth TTL without completing authentication.</para>
+	/// </remarks>
+	public class ServerAuthenticator : BaseServerAuthenticator
 	{
-		/// <summary>
-		/// Maximum number of queued main-thread actions processed per Update tick.
-		/// This time-slices queue draining to avoid frame spikes.
-		/// </summary>
-		private const int MaxMainThreadActionsPerUpdate = 100;
-
 		/// <summary>
 		/// Number of concurrent workers processing SRP verify requests.
 		/// </summary>
@@ -56,16 +60,6 @@ namespace FishMMO.Server.Implementation
 		/// Bounded channel capacity for SRP proof requests.
 		/// </summary>
 		private const int ProofChannelCapacity = 500;
-
-		/// <summary>
-		/// Authentication TTL in seconds. Connections that do not complete SRP within this window are purged.
-		/// </summary>
-		private const float AuthStaleTtlSeconds = 15f;
-
-		/// <summary>
-		/// Sweep interval in seconds for stale authentication cleanup.
-		/// </summary>
-		private const float AuthSweepIntervalSeconds = 1f;
 
 		/// <summary>
 		/// Maximum AccountManager unauthenticated entries evaluated per sweep.
@@ -90,6 +84,13 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Minimum seconds between SRP verify attempts from the same IP.
 		/// </summary>
+		/// <remarks>
+		/// <para><b>NAT consideration:</b> Multiple legitimate users behind a shared NAT/CGNAT
+		/// gateway share a single IP. This debounce may cause brief delays for subsequent users.
+		/// The 1-second window balances abuse mitigation against NAT user impact.
+		/// If NAT issues arise in production, consider per-IP-plus-port tracking or raising
+		/// the debounce only under detected attack conditions.</para>
+		/// </remarks>
 		private const float IpAuthAttemptDebounceSeconds = 1f;
 
 		/// <summary>
@@ -119,17 +120,30 @@ namespace FishMMO.Server.Implementation
 		private const float ConnectionIpCacheTtlSeconds = 120f;
 
 		/// <summary>
-		/// Maximum allowed size in bytes for any single encrypted SRP payload field.
-		/// Prevents oversized payloads from consuming AES decryption CPU on workers.
+		/// Pre-computed fake SRP salt/verifier for non-existent accounts.
+		/// Avoids per-request SRP math during credential-stuffing attacks.
+		/// The salt is AES-GCM encrypted before transmission, so reuse is unobservable on the wire.
+		/// The SRP server session (modular exponentiation) still dominates timing,
+		/// preserving indistinguishability from real accounts.
 		/// </summary>
-		private const int MaxSrpPayloadBytes = 1024;
-
-		/// <summary>
-		/// Maximum allowed size in bytes for a client RSA public key during handshake.
-		/// A 2048-bit RSA key is 256-byte modulus + 3-byte exponent = 259 bytes.
-		/// 512 provides generous headroom while blocking multi-MB abuse payloads.
-		/// </summary>
-		private const int MaxRsaPublicKeyBytes = 512;
+		/// <remarks>
+		/// <para><b>Verifier correlation:</b> The verifier is static across all fake accounts.
+		/// Because SRP server ephemeral <c>B = kv + g^b</c> includes a random <c>b</c>, different
+		/// sessions produce different <c>B</c> values even with the same verifier. The static <c>v</c>
+		/// component is masked by the random term, making correlation impractical without solving DLP.</para>
+		/// <para><b>Salt uniqueness:</b> Per-username salts are derived via <see cref="DerivePerUsernameFakeSalt"/>
+		/// using HMAC-SHA256, so each non-existent username receives a distinct salt.</para>
+		/// </remarks>
+		private static readonly Lazy<(string Salt, string Verifier)> FakeSrpTuple =
+			new Lazy<(string, string)>(() =>
+			{
+				var client = new SecureRemotePassword.SrpClient(
+					SecureRemotePassword.SrpParameters.Create2048<System.Security.Cryptography.SHA512>());
+				string salt = client.GenerateSalt();
+				string priv = client.DerivePrivateKey(salt, "fake_user", "fake_password");
+				string verifier = client.DeriveVerifier(priv);
+				return (salt, verifier);
+			});
 
 		/// <summary>
 		/// Bounded channel for queuing SRP verify requests for async worker processing.
@@ -141,40 +155,7 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private System.Threading.Channels.Channel<SrpProofRequest<NetworkConnection>> proofChannel;
 
-		/// <summary>
-		/// Cancellation token source for signalling graceful shutdown of all async workers.
-		/// </summary>
-		private CancellationTokenSource workerCts;
 
-		/// <summary>
-		/// Thread-safe queue for marshalling network operations from async worker threads
-		/// back to the main Unity thread. Workers enqueue Actions, Update() drains them.
-		/// ConcurrentQueue avoids lock contention between network thread and worker threads.
-		/// </summary>
-		private readonly ConcurrentQueue<Action> mainThreadQueue = new ConcurrentQueue<Action>();
-
-		/// <summary>
-		/// Verify-stage in-flight gate keyed by ClientId.
-		/// Prevents duplicate SRP verify processing for the same connection.
-		/// </summary>
-		private readonly ConcurrentDictionary<int, byte> verifyInFlightByClientId = new ConcurrentDictionary<int, byte>();
-
-		/// <summary>
-		/// Proof-stage in-flight gate keyed by ClientId.
-		/// Prevents duplicate SRP proof processing for the same connection.
-		/// </summary>
-		private readonly ConcurrentDictionary<int, byte> proofInFlightByClientId = new ConcurrentDictionary<int, byte>();
-
-		/// <summary>
-		/// Tracks authentication start times for stale-auth TTL enforcement.
-		/// Key: ClientId, Value: UTC start timestamp.
-		/// </summary>
-		private readonly ConcurrentDictionary<int, DateTime> authStartTimeByClientId = new ConcurrentDictionary<int, DateTime>();
-
-		/// <summary>
-		/// Reverse map from ClientId to active connection for stale-auth cleanup.
-		/// </summary>
-		private readonly ConcurrentDictionary<int, NetworkConnection> authConnectionByClientId = new ConcurrentDictionary<int, NetworkConnection>();
 
 		/// <summary>
 		/// Per-account kick-request debounce map. Value is next UTC time at which a kick request may be persisted.
@@ -200,9 +181,23 @@ namespace FishMMO.Server.Implementation
 		private readonly LastSeenCacheTracker<int, string> connectionIpCache = new LastSeenCacheTracker<int, string>();
 
 		/// <summary>
-		/// Countdown timer (seconds) until the next stale-authentication sweep.
+		/// Typed reference to the SRP account manager. Cached on worker initialization
+		/// to avoid repeated casts from <see cref="IAccountManager{TConnection}"/>.
 		/// </summary>
-		private float nextAuthSweepSeconds = AuthSweepIntervalSeconds;
+		private ISrpAccountManager<NetworkConnection> srpAccountManager;
+
+		/// <summary>
+		/// HMAC key for deriving deterministic per-username fake SRP salts.
+		/// Each fake account receives a unique but repeatable salt derived via
+		/// HMAC-SHA512(fakeSaltKey, username), preventing attackers from detecting
+		/// salt reuse across different non-existent accounts.
+		/// </summary>
+		private byte[] fakeSaltKey;
+
+		/// <summary>
+		/// Volatile backing field for <see cref="TokenSigningKey"/>.
+		/// </summary>
+		private volatile byte[] _tokenSigningKey;
 
 		/// <summary>
 		/// Countdown timer (seconds) until the next kick-request debounce cleanup sweep.
@@ -215,49 +210,58 @@ namespace FishMMO.Server.Implementation
 		private float nextAuthRateLimitSweepSeconds = AuthRateLimitSweepIntervalSeconds;
 
 		/// <summary>
-		/// The server instance providing access to AccountManager and other infrastructure.
-		/// Setting this property initializes the bounded channels and starts async workers.
+		/// HMAC signing key for token generation. Set by LoginServerSystem on startup.
+		/// If null, token issuance is disabled.
+		/// <para><b>Thread safety:</b> Backed by a volatile field to ensure visibility
+		/// across the main thread (writer) and worker threads (readers).</para>
 		/// </summary>
-		public IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> Server { get; set; }
+		public byte[] TokenSigningKey
+		{
+			get => _tokenSigningKey;
+			set => _tokenSigningKey = value;
+		}
 
 		/// <summary>
-		/// Event triggered when server authentication completes for a client connection.
-		/// Subscribe to this to handle post-authentication logic.
+		/// LoginServer database ID for token generation. Set by LoginServerSystem on startup.
 		/// </summary>
-		public override event Action<NetworkConnection, bool> OnAuthenticationResult;
+		public long LoginServerId { get; set; }
 
 		/// <summary>
-		/// Event triggered when client authentication completes.
-		/// Used for custom client-side authentication result handling.
+		/// Token expiration duration in minutes. Defaults to 10 minutes.
 		/// </summary>
-		public event Action<NetworkConnection, bool> OnClientAuthenticationResult;
+		[SerializeField] private float tokenExpirationMinutes = 10f;
 
 		/// <summary>
-		/// Initializes the authenticator and registers broadcast handlers for client authentication steps.
-		/// Broadcast handlers are registered as unauthenticated so they can process login packets.
+		/// Registers SRP-specific broadcast handlers for client authentication steps.
 		/// </summary>
 		/// <param name="networkManager">The network manager instance.</param>
-		public override void InitializeOnce(NetworkManager networkManager)
+		protected override void RegisterProtocolHandlers(NetworkManager networkManager)
 		{
-			base.InitializeOnce(networkManager);
-
-			// Subscribe to remote connection state changes to clean up accounts on disconnect.
-			networkManager.ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
-
-			// Register handlers for client authentication broadcasts.
-			networkManager.ServerManager.RegisterBroadcast<ClientHandshake>(OnServerClientHandshakeReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpVerifyBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpProofBroadcast>(OnServerSrpProofBroadcastReceived, false);
 		}
 
 		/// <summary>
-		/// Initializes bounded channels and starts async workers for processing SRP requests.
-		/// Called after the Server reference is assigned and infrastructure is ready.
+		/// Creates SRP bounded channels and starts verify/proof async workers.
 		/// </summary>
-		public void InitializeWorkers()
+		/// <param name="cancellationToken">Token for signalling worker shutdown.</param>
+		protected override void InitializeWorkersCore(CancellationToken cancellationToken)
 		{
-			ShutdownWorkers();
+			if (!(Server.AccountManager is ISrpAccountManager<NetworkConnection> sam))
+				throw new InvalidOperationException($"{LogPrefix}: Server.AccountManager must implement ISrpAccountManager<NetworkConnection>. Actual type: {Server.AccountManager?.GetType().FullName ?? "null"}.");
+			srpAccountManager = sam;
 
+			// Generate per-username fake salt derivation key (HMAC-SHA512 optimal key length).
+			fakeSaltKey = CryptoHelper.GenerateKey(CryptoHelper.HmacSha512KeyLength);
+
+			// Force FakeSrpTuple initialization now to prevent first-use timing
+			// side-channel on the first non-existent account lookup.
+			_ = FakeSrpTuple.Value;
+
+			// DropWrite: under load, excess requests are silently discarded rather than
+			// back-pressuring the network thread. Handlers roll back AuthState on write
+			// failure so clients can retry immediately. SweepStaleAuthentication acts as
+			// the ultimate safety net for any stranded connections.
 			verifyChannel = System.Threading.Channels.Channel.CreateBounded<SrpVerifyRequest<NetworkConnection>>(new System.Threading.Channels.BoundedChannelOptions(VerifyChannelCapacity)
 			{
 				FullMode = System.Threading.Channels.BoundedChannelFullMode.DropWrite,
@@ -272,65 +276,60 @@ namespace FishMMO.Server.Implementation
 				SingleWriter = false
 			});
 
-			workerCts = new CancellationTokenSource();
-
 			for (int i = 0; i < VerifyWorkerCount; i++)
 			{
 				int workerId = i + 1;
-				_ = ProcessSrpVerifyRequestsAsync(workerCts.Token, workerId);
+				_ = ProcessSrpVerifyRequestsAsync(cancellationToken, workerId);
 			}
 
 			for (int i = 0; i < ProofWorkerCount; i++)
 			{
 				int workerId = i + 1;
-				_ = ProcessSrpProofRequestsAsync(workerCts.Token, workerId);
+				_ = ProcessSrpProofRequestsAsync(cancellationToken, workerId);
 			}
 
 			Log.Debug("ServerAuthenticator", $"Workers initialized (Verify={VerifyWorkerCount}, Proof={ProofWorkerCount})");
 		}
 
 		/// <summary>
-		/// Gracefully shuts down all async workers and disposes channel resources.
-		/// Drains any remaining queued main-thread actions before clearing channels.
+		/// Completes SRP channel writers and clears SRP-specific state.
+		/// Called before the base cancels the CTS and clears shared state.
 		/// </summary>
-		public void ShutdownWorkers()
+		protected override void ShutdownWorkersCore()
 		{
-			workerCts?.Cancel();
-			workerCts?.Dispose();
-			workerCts = null;
+			// Complete channel writers first to allow workers to drain gracefully
+			// before the cancellation token fires.
+			verifyChannel?.Writer.TryComplete();
+			proofChannel?.Writer.TryComplete();
+
 			verifyChannel = null;
 			proofChannel = null;
 
-			verifyInFlightByClientId.Clear();
-			proofInFlightByClientId.Clear();
-			authStartTimeByClientId.Clear();
-			authConnectionByClientId.Clear();
+			if (fakeSaltKey != null)
+			{
+				CryptographicOperations.ZeroMemory(fakeSaltKey);
+				fakeSaltKey = null;
+			}
+
 			kickRequestNextAllowedUtcByAccount.Clear();
 			ipAuthNextAllowedUtc.Clear();
 			accountVerifyNextAllowedUtc.Clear();
 			connectionIpCache.Clear();
-
-			// Drain remaining responses so clients get their final messages.
-			DrainMainThreadQueue(drainAll: true);
 		}
 
 		/// <summary>
-		/// Drains the main-thread response queue each frame. All network operations
-		/// (Broadcast, Disconnect, OnAuthentication) from async workers are marshalled
-		/// through this queue to ensure they execute on the main Unity thread.
+		/// Sweeps stale unauthenticated SRP/encryption state at the auth sweep interval.
 		/// </summary>
-		private void Update()
+		protected override void OnAuthSweep()
 		{
-			DrainMainThreadQueue(drainAll: false);
+			SweepStaleUnauthenticatedAccountState();
+		}
 
-			nextAuthSweepSeconds -= Time.deltaTime;
-			if (nextAuthSweepSeconds <= 0f)
-			{
-				nextAuthSweepSeconds = AuthSweepIntervalSeconds;
-				SweepStaleAuthentication();
-				SweepStaleUnauthenticatedAccountState();
-			}
-
+		/// <summary>
+		/// Runs additional periodic sweeps for kick debounce and auth rate limiting.
+		/// </summary>
+		protected override void OnUpdate()
+		{
 			nextKickDebounceSweepSeconds -= Time.deltaTime;
 			if (nextKickDebounceSweepSeconds <= 0f)
 			{
@@ -346,91 +345,21 @@ namespace FishMMO.Server.Implementation
 			}
 		}
 
-		/// <summary>
-		/// Drains queued actions without locks using ConcurrentQueue.
-		/// This reduces contention when many workers and the network thread enqueue simultaneously.
-		/// </summary>
-		private void DrainMainThreadQueue(bool drainAll)
-		{
-			int maxActions = drainAll ? int.MaxValue : MaxMainThreadActionsPerUpdate;
-			for (int i = 0; i < maxActions; i++)
-			{
-				if (!mainThreadQueue.TryDequeue(out Action action))
-				{
-					return;
-				}
-
-				action.Invoke();
-			}
-		}
-
-		/// <summary>
-		/// Thread-safe enqueue of an action to be executed on the main Unity thread.
-		/// </summary>
-		/// <param name="action">The action to execute on the main thread.</param>
-		private void EnqueueMainThread(Action action)
-		{
-			mainThreadQueue.Enqueue(action);
-		}
-
 		#region UDP Receiver Gates
 
-		/// <summary>
-		/// UDP gate: Handles the initial handshake broadcast from a client.
-		/// Sets up AES encryption for the connection. No channel needed — this is pure in-memory crypto
-		/// with no database or heavy SRP work, so it runs inline on the network thread.
-		/// </summary>
-		/// <param name="conn">The network connection.</param>
-		/// <param name="msg">The handshake message containing the client's RSA public key.</param>
-		/// <param name="channel">The network channel used.</param>
-		internal void OnServerClientHandshakeReceived(NetworkConnection conn, ClientHandshake msg, Channel channel)
-		{
-			/* If client is already authenticated this could be an attack. Connections
-			 * are removed when a client disconnects so there is no reason they should
-			 * already be considered authenticated. */
-			if (conn.IsAuthenticated ||
-				msg.PublicKey == null ||
-				msg.PublicKey.Length > MaxRsaPublicKeyBytes)
-			{
-				conn.Disconnect(true);
-				return;
-			}
-
-			// Ignore repeated handshake attempts while verify/proof is already in progress.
-			if (verifyInFlightByClientId.ContainsKey(conn.ClientId) || proofInFlightByClientId.ContainsKey(conn.ClientId))
-			{
-				return;
-			}
-
-			TrackAuthStart(conn);
-
-			// Generate encryption keys for the connection and store them in AccountManager.
-			Server.AccountManager.AddConnectionEncryptionData(conn, msg.PublicKey);
-
-			// Retrieve the generated encryption data for this connection.
-			if (Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
-			{
-				// Reconstruct the client's public key from the wire bytes.
-				var clientPublicKey = CryptoHelper.ImportPublicKey(msg.PublicKey);
-
-				// Encrypt the symmetric key and session prefix using the client's public key (OAEP-SHA256 via BouncyCastle).
-				byte[] encryptedSymmetricKey = CryptoHelper.EncryptRsaOaepSha256(clientPublicKey, encryptionData.SymmetricKey);
-				byte[] encryptedSessionPrefix = CryptoHelper.EncryptRsaOaepSha256(clientPublicKey, encryptionData.SessionPrefix);
-
-				// Send the encrypted symmetric key and session prefix to the client for secure communication.
-				ServerHandshake handshake = new ServerHandshake()
-				{
-					Key = encryptedSymmetricKey,
-					SessionPrefix = encryptedSessionPrefix,
-				};
-				NetworkManager.ServerManager.Broadcast(conn, handshake, false, Channel.Reliable);
-			}
-			else
-			{
-				Log.Warning("ServerAuthenticator", "Failed to generate encryption keys for connection.");
-				conn.Disconnect(true);
-			}
-		}
+		// ──────────────────────────────────────────────────────────────────
+		// UDP amplification mitigations (evaluated in order):
+		//   1. IsAuthenticated check — reject already-authenticated connections
+		//   2. Handshake completion gate — verify/proof require prior encryption setup
+		//   3. Per-IP debounce (IpAuthAttemptDebounceSeconds)
+		//   4. Per-account debounce (AccountVerifyDebounceSeconds)
+		//   5. AuthState gate (TryAdvanceAuthState / HasAuthState)
+		//   6. Bounded channel capacity (VerifyChannelCapacity / ProofChannelCapacity)
+		//   7. Max payload size (CryptoHelper.MaxSrpPayloadBytes / X25519PublicKeyLength)
+		//
+		// INVARIANT: Any AES-GCM authentication failure permanently invalidates
+		// the session — no retries, no partial continuation, no decryption oracle.
+		// ──────────────────────────────────────────────────────────────────
 
 		/// <summary>
 		/// UDP gate: Receives SRP verify broadcast, validates connection state, and enqueues
@@ -453,17 +382,16 @@ namespace FishMMO.Server.Implementation
 				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 				{
 					Result = ClientAuthenticationResult.ServerBusy,
-				}, false, Channel.Unreliable);
+				}, false, Channel.Reliable);
 				return;
 			}
 
-			// Connection-level in-flight lock: only one verify request at a time per connection.
-			if (!verifyInFlightByClientId.TryAdd(conn.ClientId, 0))
+			// Connection-level auth state gate: atomically advance Handshake → VerifyPending.
+			// Prevents duplicate SRP verify processing for the same connection.
+			if (!Server.AccountManager.TryAdvanceAuthState(conn, AuthState.Handshake, AuthState.VerifyPending))
 			{
 				return;
 			}
-
-			TrackAuthStart(conn);
 
 			if (!Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
@@ -473,10 +401,9 @@ namespace FishMMO.Server.Implementation
 			}
 
 			// Enqueue encrypted data for async processing — no decryption on network thread
-			if (msg.S == null || msg.S.Length > MaxSrpPayloadBytes ||
-				msg.PublicEphemeral == null || msg.PublicEphemeral.Length > MaxSrpPayloadBytes)
+			if (msg.S == null || msg.S.Length == 0 || msg.S.Length > CryptoHelper.MaxSrpPayloadBytes ||
+				msg.PublicEphemeral == null || msg.PublicEphemeral.Length == 0 || msg.PublicEphemeral.Length > CryptoHelper.MaxSrpPayloadBytes)
 			{
-				verifyInFlightByClientId.TryRemove(conn.ClientId, out _);
 				conn.Disconnect(true);
 				return;
 			}
@@ -485,13 +412,15 @@ namespace FishMMO.Server.Implementation
 				conn,
 				msg.S,
 				msg.PublicEphemeral,
-				encryptionData
+				encryptionData,
+				msg.Seq
 			);
 
 			if (verifyChannel == null || !verifyChannel.Writer.TryWrite(request))
 			{
-				verifyInFlightByClientId.TryRemove(conn.ClientId, out _);
-				// Channel full or not initialized — reject immediately
+				// DropWrite self-healing: roll back to Handshake so the client can
+				// retry verify without re-handshaking. TTL sweep is the ultimate safety net.
+				Server.AccountManager.TryAdvanceAuthState(conn, AuthState.VerifyPending, AuthState.Handshake);
 				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 				{
 					Result = ClientAuthenticationResult.ServerBusy,
@@ -514,30 +443,31 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			// Proof is only valid after verify has started.
-			if (!verifyInFlightByClientId.ContainsKey(conn.ClientId))
-			{
-				return;
-			}
-
-			// Only one proof in-flight per connection.
-			if (!proofInFlightByClientId.TryAdd(conn.ClientId, 0))
+			// Proof is only valid after verify has established SRP data (WaitingForProof).
+			// Atomically advance WaitingForProof → ProofPending to prevent duplicate proof processing.
+			//
+			// Defense-in-depth: also accept VerifyPending for a narrow scheduling edge case
+			// where proof arrives before the verify worker completes AddConnectionAccount.
+			// If this rare path fires, the proof worker will find SrpData == null and
+			// disconnect gracefully — strictly better than a silent timeout.
+			// Note: a theoretical TOCTOU exists between the two calls if the verify worker
+			// advances state in between, but the TTL sweep provides the ultimate safety net.
+			if (!Server.AccountManager.TryAdvanceAuthState(conn, AuthState.WaitingForProof, AuthState.ProofPending) &&
+				!Server.AccountManager.TryAdvanceAuthState(conn, AuthState.VerifyPending, AuthState.ProofPending))
 			{
 				return;
 			}
 
 			if (!Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
-				proofInFlightByClientId.TryRemove(conn.ClientId, out _);
 				PurgeConnectionAuthState(conn, disconnect: false);
 				conn.Disconnect(true);
 				return;
 			}
 
 			// Enqueue encrypted data for async processing — no SRP math on network thread
-			if (msg.Proof == null || msg.Proof.Length > MaxSrpPayloadBytes)
+			if (msg.Proof == null || msg.Proof.Length == 0 || msg.Proof.Length > CryptoHelper.MaxSrpPayloadBytes)
 			{
-				proofInFlightByClientId.TryRemove(conn.ClientId, out _);
 				conn.Disconnect(true);
 				return;
 			}
@@ -545,18 +475,19 @@ namespace FishMMO.Server.Implementation
 			var request = new SrpProofRequest<NetworkConnection>(
 				conn,
 				msg.Proof,
-				encryptionData
+				encryptionData,
+				msg.Seq
 			);
 
 			if (proofChannel == null || !proofChannel.Writer.TryWrite(request))
 			{
-				proofInFlightByClientId.TryRemove(conn.ClientId, out _);
-				// Channel full or not initialized — reject immediately
+				// DropWrite self-healing: roll back to WaitingForProof so the client can
+				// re-submit proof. TTL sweep is the ultimate safety net.
+				Server.AccountManager.TryAdvanceAuthState(conn, AuthState.ProofPending, AuthState.WaitingForProof);
 				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 				{
 					Result = ClientAuthenticationResult.ServerBusy,
 				}, false, Channel.Reliable);
-				conn.Disconnect(false);
 			}
 		}
 
@@ -575,8 +506,13 @@ namespace FishMMO.Server.Implementation
 			await Log.Debug("ServerAuthenticator", $"Verify worker {workerId} started");
 			try
 			{
-				await foreach (var request in verifyChannel.Reader.ReadAllAsync(cancellationToken))
+				// Rely on channel completion (TryComplete in ShutdownWorkers) for graceful exit.
+				// CancellationToken.None avoids a redundant cancellation race with completion.
+				await foreach (var request in verifyChannel.Reader.ReadAllAsync(CancellationToken.None))
 				{
+					if (cancellationToken.IsCancellationRequested)
+						break;
+
 					try
 					{
 						await ProcessSrpVerifyAsync(request);
@@ -587,10 +523,12 @@ namespace FishMMO.Server.Implementation
 					}
 				}
 			}
-			catch (OperationCanceledException)
+			catch (Exception ex) when (!(ex is OperationCanceledException))
 			{
-				await Log.Debug("ServerAuthenticator", $"Verify worker {workerId} cancelled");
+				await Log.Error("ServerAuthenticator", $"Verify worker {workerId} unexpected error: {ex}");
 			}
+
+			await Log.Debug("ServerAuthenticator", $"Verify worker {workerId} stopped");
 		}
 
 		/// <summary>
@@ -604,8 +542,13 @@ namespace FishMMO.Server.Implementation
 			await Log.Debug("ServerAuthenticator", $"Proof worker {workerId} started");
 			try
 			{
-				await foreach (var request in proofChannel.Reader.ReadAllAsync(cancellationToken))
+				// Rely on channel completion (TryComplete in ShutdownWorkers) for graceful exit.
+				// CancellationToken.None avoids a redundant cancellation race with completion.
+				await foreach (var request in proofChannel.Reader.ReadAllAsync(CancellationToken.None))
 				{
+					if (cancellationToken.IsCancellationRequested)
+						break;
+
 					try
 					{
 						await ProcessSrpProofAsync(request);
@@ -616,21 +559,52 @@ namespace FishMMO.Server.Implementation
 					}
 				}
 			}
-			catch (OperationCanceledException)
+			catch (Exception ex) when (!(ex is OperationCanceledException))
 			{
-				await Log.Debug("ServerAuthenticator", $"Proof worker {workerId} cancelled");
+				await Log.Error("ServerAuthenticator", $"Proof worker {workerId} unexpected error: {ex}");
 			}
+
+			await Log.Debug("ServerAuthenticator", $"Proof worker {workerId} stopped");
 		}
 
 		#endregion
 
 		#region Request Processing
 
+		// INVARIANT: Every CryptographicException catch in this region treats
+		// AES-GCM authentication failure as connection-fatal:
+		//   1. Log warning (no sensitive data)
+		//   2. Enqueue generic ClientAuthResultBroadcast failure
+		//   3. Disconnect
+		//   4. PurgeConnectionAuthState
+		// No retries, no fallback, no decryption oracle. Do not weaken.
+
+		// ── Design note — String zeroization ─────────────────────────────
+		//
+		// SRP values (username, verifier, salt, proof) are .NET immutable strings
+		// that cannot be deterministically zeroed. The SecureRemotePassword library
+		// and database boundary both require string parameters, so byte[] conversion
+		// is impractical. ServerSrpData.Clear() nulls all references so the GC can
+		// collect them. Intermediate decrypted byte[] buffers ARE zeroed below via
+		// CryptographicOperations.ZeroMemory.
+		//
+		// Proof decrypt ordering: ProcessSrpProofAsync decrypts the client proof
+		// BEFORE checking auth state. This is intentional — decrypting first keeps
+		// timing uniform regardless of state validity, preventing oracles.
+		// ──────────────────────────────────────────────────────────────────
+
 		/// <summary>
 		/// Processes a single SRP verify request asynchronously.
 		/// Decrypts credentials, checks online status, fetches account data, and initializes SRP state.
 		/// All network operations are marshalled to the main thread via the response queue.
 		/// </summary>
+		/// <remarks>
+		/// <para><b>Purge paths:</b> Every early-return error path calls
+		/// <see cref="BaseServerAuthenticator.PurgeConnectionAuthState"/> to clean up
+		/// TTL tracking, encryption data, and AccountManager state. The only exception
+		/// is the success path (<c>waitingForProof = true</c>), which returns without
+		/// purging so the proof worker can continue the flow.</para>
+		/// </remarks>
 		/// <param name="request">The SRP verify request with encrypted credentials.</param>
 		private async Task ProcessSrpVerifyAsync(SrpVerifyRequest<NetworkConnection> request)
 		{
@@ -638,54 +612,86 @@ namespace FishMMO.Server.Implementation
 			ClientAuthenticationResult result;
 			bool waitingForProof = false;
 
-			// Decrypt the username on worker thread (not network thread).
+			// Decrypt the username and public ephemeral on worker thread using explicit sequence numbers.
 			string username;
+			uint seq = request.Seq;
+
+			// Guard: seq == 0 prevents uint underflow in the seq - 1 computation below
+			// (uint 0 - 1 wraps to uint.MaxValue, producing an invalid sequence).
+			if (seq == 0)
+			{
+				await Log.Warning("ServerAuthenticator", "Invalid SRP verify sequence 0 received.");
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+				return;
+			}
+
 			try
 			{
-				byte[] decryptedRawUsername = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedUsername);
-				username = Encoding.UTF8.GetString(decryptedRawUsername);
-				// zero decrypted buffer
-				CryptographicOperations.ZeroMemory(decryptedRawUsername);
-			}
-			catch (CryptographicException ex)
-			{
-				await Log.Warning("ServerAuthenticator", $"AES decryption/authentication failed for SRP verify: {ex.Message}");
-				EnqueueMainThread(() =>
+				// ┌──────────────────────────────────────────────────────────────┐
+				// │ PROTOCOL RULE — SRP Verify two-sequence encoding:            │
+				// │   seq-1 : AES-GCM encrypted username                         │
+				// │   seq   : AES-GCM encrypted public ephemeral                 │
+				// │ Both sequences are consumed and nonce-bound independently.    │
+				// │ DO NOT reorder, collapse, or reuse — replay safety depends    │
+				// │ on each field having a unique (nonce, AAD) pair.              │
+				// └──────────────────────────────────────────────────────────────┘
+				uint seqUsername = seq - 1;
+				if (!request.EncryptionData.TryConsumeReceiveSequence(seqUsername))
 				{
-					if (conn.IsActive)
-					{
-						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
-						{
-							Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
-						}, false, Channel.Reliable);
-						conn.Disconnect(false);
-					}
-				});
-				PurgeConnectionAuthState(conn, disconnect: false);
+					await Log.Warning("ServerAuthenticator", "SRP verify username sequence out-of-order or duplicate.");
+					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+					return;
+				}
+
+				byte[] nonce1 = request.EncryptionData.BuildReceiveNonce(seqUsername);
+				byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerify, request.EncryptionData.AgreedVersion, seqUsername);
+				byte[] decryptedRawUsername = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce1, request.EncryptedUsername, aad1);
+				try
+				{
+					username = CryptoHelper.StrictUtf8.GetString(decryptedRawUsername);
+				}
+				catch (DecoderFallbackException)
+				{
+					CryptographicOperations.ZeroMemory(decryptedRawUsername);
+					throw new CryptographicException("Malformed UTF-8 in decrypted username.");
+				}
+				CryptographicOperations.ZeroMemory(decryptedRawUsername);
+
+				// Consume sequence for the public ephemeral and decrypt it below when needed.
+				if (!request.EncryptionData.TryConsumeReceiveSequence(seq))
+				{
+					await Log.Warning("ServerAuthenticator", "SRP verify public ephemeral sequence out-of-order or duplicate.");
+					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+					return;
+				}
+			}
+			catch (CryptographicException)
+			{
+				await Log.Warning("ServerAuthenticator", "AES decryption/authentication failed for SRP verify.");
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+				return;
+			}
+
+			// Reject oversized or empty usernames to prevent heavy DB lookups and dictionary churn.
+			// The encrypted payload is already bounded by MaxSrpPayloadBytes, but post-decrypt
+			// validation is a cheap safety net against encoding edge cases.
+			// Username is used as-is from client decryption. Database collation determines
+			// whether lookups are case-sensitive. If case-insensitive authentication is desired,
+			// normalize here (e.g., username = username.ToLowerInvariant()) and ensure the
+			// database stores usernames in the same canonical form.
+			if (!Authentication.IsAllowedUsername(username))
+			{
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
 
 			if (!TryBeginAccountVerifyAttempt(username))
 			{
-				EnqueueMainThread(() =>
-				{
-					if (conn.IsActive)
-					{
-						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
-						{
-							Result = ClientAuthenticationResult.ServerBusy,
-						}, false, Channel.Reliable);
-						conn.Disconnect(false);
-					}
-				});
-
-				PurgeConnectionAuthState(conn, disconnect: false);
+				RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
 				return;
 			}
 
 			if (Server.Database?.ServiceRegistry == null ||
-				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService) ||
-				!Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var kickRequestService) ||
 				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
 			{
 				result = ClientAuthenticationResult.ServerBusy;
@@ -694,136 +700,134 @@ namespace FishMMO.Server.Implementation
 			{
 				try
 				{
-					// Check if any characters are already online for this account.
-					DatabaseResult<IReadOnlyList<CharacterData>> charactersResult = await characterService.FetchManyAsync(username);
+					// Online check is deferred to proof processing (ProcessSrpProofAsync)
+					// to prevent account-existence enumeration. Before proof, both real and
+					// non-existent accounts proceed through indistinguishable SRP exchanges.
 
-					bool isOnline = false;
-					if (charactersResult.IsSuccess && charactersResult.Data != null)
+					// Decrypt the public ephemeral value (consumer sequence already advanced above).
+					string publicEphemeral;
+					try
 					{
-						foreach (CharacterData c in charactersResult.Data)
+						byte[] nonce2 = request.EncryptionData.BuildReceiveNonce(request.Seq);
+						byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerify, request.EncryptionData.AgreedVersion, request.Seq);
+						byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce2, request.EncryptedPublicEphemeral, aad2);
+						try
 						{
-							if (c.Online)
-							{
-								isOnline = true;
-								break;
-							}
+							publicEphemeral = CryptoHelper.StrictUtf8.GetString(decryptedRawPublicEphemeral);
 						}
+						catch (DecoderFallbackException)
+						{
+							CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
+							throw new CryptographicException("Malformed UTF-8 in decrypted public ephemeral.");
+						}
+						CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
+					}
+					catch (CryptographicException)
+					{
+						await Log.Warning("ServerAuthenticator", "AES decryption/authentication failed for public ephemeral.");
+						RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+						return;
 					}
 
-					if (isOnline)
+					// Fetch account for login from database.
+					DatabaseResult<Database.Data.AccountData> loginResult = await accountService.FetchForLoginAsync(username);
+
+					// Refresh TTL after potentially slow database fetch to prevent
+					// the stale-auth sweep from purging this connection mid-flow.
+					RefreshAuthTtl(conn);
+
+					// Prepare salt/verifier and access level. For non-existent or errored lookups
+					// generate a fake SRP verifier so clients cannot enumerate usernames by timing.
+					string salt;
+					string verifier;
+					AccessLevel accessLevel;
+
+					if (!loginResult.IsSuccess)
 					{
-						// Add a kick request for the online character (rate-limited per account).
-						if (TryBeginKickRequest(username))
-						{
-							await kickRequestService.PersistAsync(username);
-						}
-						result = ClientAuthenticationResult.AlreadyOnline;
+						// Derive a deterministic per-username fake salt so that different
+						// non-existent usernames receive distinct salts, matching the
+						// pattern of real accounts. The salt is AES-GCM encrypted before
+						// transmission so the value is unobservable on the wire. The SRP
+						// server session (modular exponentiation) still dominates timing,
+						// preserving indistinguishability from real accounts.
+						salt = DerivePerUsernameFakeSalt(username);
+						verifier = FakeSrpTuple.Value.Verifier;
+						accessLevel = AccessLevel.Player;
+						await Log.Debug("ServerAuthenticator", $"Using pre-computed fake SRP state for non-existent account '{username}' to avoid enumeration.");
 					}
 					else
 					{
-						// Decrypt the public ephemeral value on worker thread.
-						string publicEphemeral;
+						Database.Data.AccountData accountData = loginResult.Data;
+						salt = accountData.Salt;
+						verifier = accountData.Verifier;
+						accessLevel = (AccessLevel)accountData.AccessLevel;
+					}
+
+					result = ClientAuthenticationResult.SrpVerify;
+
+					// Populate SRP data on the existing AccountData (advances VerifyPending → WaitingForProof).
+					// Note: the SRP library validates A % N != 0 at proof time (DeriveSession),
+					// which prevents trivial shared secrets. Early validation here would require
+					// parsing big integers and is unnecessary given the library's guarantees.
+					if (!srpAccountManager.AddConnectionAccount(conn, username, publicEphemeral, salt, verifier, accessLevel))
+					{
+						// Connection was purged or state was not VerifyPending — discard.
+						RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+						return;
+					}
+
+					// Extract SRP response data inside the lock; encrypt outside to reduce lock hold time.
+					string srpSalt = null;
+					string srpPublicServerEphemeral = null;
+
+					if (Server.AccountManager.TryAdvanceAuthState(conn, AuthState.WaitingForProof, AuthState.WaitingForProof, (a) =>
+						{
+							srpSalt = a.SrpData.Salt;
+							srpPublicServerEphemeral = a.SrpData.ServerEphemeral.Public;
+							return true;
+						}))
+					{
+						// AES encryption runs outside the AccountManager lock.
+						byte[] encryptedSalt;
+						byte[] encryptedPublicServerEphemeral;
 						try
 						{
-							byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedPublicEphemeral);
-							publicEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
-							CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
+							// Acquire explicit send sequence and build nonce + AAD for each field
+							uint sendSeq1 = request.EncryptionData.NextSendSequence();
+							byte[] sendNonce1 = request.EncryptionData.BuildSendNonce(sendSeq1);
+							byte[] aadSend1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, request.EncryptionData.AgreedVersion, sendSeq1);
+							encryptedSalt = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce1, Encoding.UTF8.GetBytes(srpSalt), aadSend1);
+
+							uint sendSeq2 = request.EncryptionData.NextSendSequence();
+							byte[] sendNonce2 = request.EncryptionData.BuildSendNonce(sendSeq2);
+							byte[] aadSend2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, request.EncryptionData.AgreedVersion, sendSeq2);
+							encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce2, Encoding.UTF8.GetBytes(srpPublicServerEphemeral), aadSend2);
 						}
 						catch (CryptographicException ex)
 						{
-							await Log.Warning("ServerAuthenticator", $"AES decryption/authentication failed for public ephemeral: {ex.Message}");
-							EnqueueMainThread(() =>
-							{
-								if (conn.IsActive)
-								{
-									NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
-									{
-										Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
-									}, false, Channel.Reliable);
-									conn.Disconnect(false);
-								}
-							});
-							PurgeConnectionAuthState(conn, disconnect: false);
+							await Log.Error("ServerAuthenticator", $"AES encryption failed for SRP response: {ex.Message}");
+							RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 							return;
 						}
 
-						// Fetch account for login from database.
-						DatabaseResult<Database.Data.AccountData> loginResult = await accountService.FetchForLoginAsync(username);
-
-						if (!loginResult.IsSuccess)
+						waitingForProof = true;
+						// Marshal SRP verify response to main thread.
+						EnqueueMainThread(() =>
 						{
-							result = loginResult.ErrorCode == DatabaseErrorCodes.Forbidden
-								? ClientAuthenticationResult.Banned
-								: ClientAuthenticationResult.InvalidUsernameOrPassword;
-						}
-						else
-						{
-							Database.Data.AccountData accountData = loginResult.Data;
-							string salt = accountData.Salt;
-							string verifier = accountData.Verifier;
-							AccessLevel accessLevel = (AccessLevel)accountData.AccessLevel;
-
-							result = ClientAuthenticationResult.SrpVerify;
-
-							// Prepare account data for SRP verification (thread-safe AccountManager).
-							Server.AccountManager.AddConnectionAccount(conn, username, publicEphemeral, salt, verifier, accessLevel);
-
-							// Atomically transition SRP state. Encryption runs inside the lock
-							// (pure computation), but the Broadcast is enqueued for the main thread.
-							string srpSalt = null;
-							string srpPublicServerEphemeral = null;
-
-							if (Server.AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpVerify, (a) =>
-								{
-									// Extract SRP data inside the lock; encrypt outside to reduce lock hold time.
-									srpSalt = a.SrpData.Salt;
-									srpPublicServerEphemeral = a.SrpData.ServerEphemeral.Public;
-									return true;
-								}))
+							if (conn.IsActive)
 							{
-								// AES encryption runs outside the AccountManager lock.
-								byte[] encryptedSalt;
-								byte[] encryptedPublicServerEphemeral;
-								try
+								NetworkManager.ServerManager.Broadcast(conn, new SrpVerifyBroadcast()
 								{
-									encryptedSalt = CryptoHelper.EncryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextSendNonce(), Encoding.UTF8.GetBytes(srpSalt));
-									encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextSendNonce(), Encoding.UTF8.GetBytes(srpPublicServerEphemeral));
-								}
-								catch (CryptographicException ex)
-								{
-									await Log.Error("ServerAuthenticator", $"AES encryption failed for SRP response: {ex.Message}");
-									EnqueueMainThread(() =>
-									{
-										if (conn.IsActive)
-										{
-											NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
-											{
-												Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
-											}, false, Channel.Reliable);
-											conn.Disconnect(false);
-										}
-									});
-									PurgeConnectionAuthState(conn, disconnect: false);
-									return;
-								}
-
-								waitingForProof = true;
-								// Marshal SRP verify response to main thread.
-								EnqueueMainThread(() =>
-								{
-									if (conn.IsActive)
-									{
-										NetworkManager.ServerManager.Broadcast(conn, new SrpVerifyBroadcast()
-										{
-											S = encryptedSalt,
-											PublicEphemeral = encryptedPublicServerEphemeral,
-										}, false, Channel.Reliable);
-									}
-								});
-								return;
+									S = encryptedSalt,
+									PublicEphemeral = encryptedPublicServerEphemeral,
+								}, false, Channel.Reliable);
 							}
-						}
+						});
+						return;
 					}
+
+					// TryAdvanceAuthState failed — state was changed by a concurrent path.
+					result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 				}
 				catch (Exception ex)
 				{
@@ -861,41 +865,49 @@ namespace FishMMO.Server.Implementation
 		{
 			NetworkConnection conn = request.Connection;
 			int clientId = conn.ClientId;
-			bool authenticationSucceeded = false;
 
 			// Decrypt client proof on worker thread.
+			// Note: clientProof is a managed string and cannot be deterministically zeroed.
+			// See "Design note — String zeroization" above.
 			string clientProof;
 			try
 			{
-				byte[] decryptedClientProof = CryptoHelper.DecryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextReceiveNonce(), request.EncryptedClientProof);
-				clientProof = Encoding.UTF8.GetString(decryptedClientProof);
+				// Validate and consume explicit client->server sequence before decrypting.
+				if (!request.EncryptionData.TryConsumeReceiveSequence(request.Seq))
+				{
+					await Log.Warning("ServerAuthenticator", "SRP proof sequence out-of-order or duplicate.");
+					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+					return;
+				}
+
+				byte[] nonce = request.EncryptionData.BuildReceiveNonce(request.Seq);
+				byte[] aad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpProof, request.EncryptionData.AgreedVersion, request.Seq);
+				byte[] decryptedClientProof = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce, request.EncryptedClientProof, aad);
+				try
+				{
+					clientProof = CryptoHelper.StrictUtf8.GetString(decryptedClientProof);
+				}
+				catch (DecoderFallbackException)
+				{
+					CryptographicOperations.ZeroMemory(decryptedClientProof);
+					throw new CryptographicException("Malformed UTF-8 in decrypted client proof.");
+				}
 				CryptographicOperations.ZeroMemory(decryptedClientProof);
 			}
-			catch (CryptographicException ex)
+			catch (CryptographicException)
 			{
-				await Log.Warning("ServerAuthenticator", $"AES decryption/authentication failed for client proof: {ex.Message}");
-				EnqueueMainThread(() =>
-				{
-					if (conn.IsActive)
-					{
-						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
-						{
-							Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
-						}, false, Channel.Reliable);
-						conn.Disconnect(false);
-					}
-				});
-				PurgeConnectionAuthState(conn, disconnect: false);
+				await Log.Warning("ServerAuthenticator", "AES decryption/authentication failed for client proof.");
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
 
 			string serverProof = null;
 			string username = null;
 
-			// Atomically validate proof and advance SRP state.
-			bool proofValid = Server.AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpProof, (a) =>
+			// Atomically validate proof and advance auth state: ProofPending → SrpSuccess.
+			bool proofValid = Server.AccountManager.TryAdvanceAuthState(conn, AuthState.ProofPending, AuthState.SrpSuccess, (a) =>
 			{
-				if (a.SrpData.GetProof(clientProof, out string proof))
+				if (a.SrpData != null && a.SrpData.GetProof(clientProof, out string proof))
 				{
 					serverProof = proof;
 					username = a.SrpData.UserName;
@@ -906,50 +918,116 @@ namespace FishMMO.Server.Implementation
 
 			if (!proofValid || serverProof == null || username == null)
 			{
-				EnqueueMainThread(() =>
-				{
-					if (conn.IsActive)
-					{
-						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
-						{
-							Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
-						}, false, Channel.Reliable);
-						conn.Disconnect(false);
-					}
-				});
-				PurgeConnectionAuthState(conn, disconnect: false);
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
 
-			// Advance to SrpSuccess state.
-			if (!Server.AccountManager.TryUpdateSrpState(conn, SrpState.SrpProof, SrpState.SrpSuccess))
-			{
-				EnqueueMainThread(() =>
-				{
-					if (conn.IsActive)
-					{
-						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
-						{
-							Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
-						}, false, Channel.Reliable);
-						conn.Disconnect(false);
-					}
-				});
-				PurgeConnectionAuthState(conn, disconnect: false);
-				return;
-			}
+			// Refresh TTL after SRP proof validation which involves modular exponentiation.
+			RefreshAuthTtl(conn);
 
 			try
 			{
+				// ── Deferred online check ──────────────────────────────────────
+				// Performed after SRP proof to prevent account-existence enumeration.
+				// Before this point, real and non-existent accounts proceed through
+				// indistinguishable SRP exchanges. Only after the client proves
+				// knowledge of the password do we reveal online status.
+				//
+				// CAVEAT: The online flag lives on CharacterData. If the server crashes
+				// without cleanly logging characters out, stale Online=true flags may
+				// persist. Crash recovery should reset all Online flags on startup.
+				//
+				// PERFORMANCE NOTE: FetchManyAsync loads all characters for the account.
+				// For accounts with many characters this is a per-auth DoS vector.
+				// Consider adding a database-level "any online" flag on the account row
+				// or a stored procedure that short-circuits on the first Online=true.
+				bool isOnline = false;
+				if (Server.Database?.ServiceRegistry != null &&
+					Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					DatabaseResult<IReadOnlyList<CharacterData>> charactersResult = await characterService.FetchManyAsync(username);
+					if (charactersResult.IsSuccess && charactersResult.Data != null)
+					{
+						foreach (CharacterData c in charactersResult.Data)
+						{
+							if (c.Online)
+							{
+								isOnline = true;
+								break;
+							}
+						}
+					}
+				}
+
+				if (isOnline)
+				{
+					// Persist kick request for the online character (rate-limited per account).
+					if (TryBeginKickRequest(username) &&
+						Server.Database?.ServiceRegistry != null &&
+						Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var kickRequestService))
+					{
+						await kickRequestService.PersistAsync(username);
+					}
+				}
+
 				// Attempt to complete login authentication (virtual — overridden by WorldServer/SceneServer).
-				ClientAuthenticationResult result = await TryLoginAsync(ClientAuthenticationResult.LoginSuccess, username);
+				// Skip login for already-online accounts — they receive AlreadyOnline + kick request instead.
+				ClientAuthenticationResult result = isOnline
+					? ClientAuthenticationResult.AlreadyOnline
+					: await TryLoginAsync(ClientAuthenticationResult.LoginSuccess, username);
 
-				bool authenticated = result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
-								 result != ClientAuthenticationResult.ServerBusy;
-				authenticationSucceeded = authenticated;
+				// Refresh TTL after potentially slow database/login checks.
+				RefreshAuthTtl(conn);
 
+				// Inclusion list: only LoginSuccess is authenticated. All other results
+				// (including future new codes) default to unauthenticated.
+				bool authenticated = result == ClientAuthenticationResult.LoginSuccess;
+
+				// NOTE: Both server proof and token use SrpSuccess AAD type discriminator.
+				// This is safe because each has a unique sequence number → unique (nonce, AAD) pair.
 				// Encrypt server proof on worker thread.
-				byte[] encryptedServerProof = CryptoHelper.EncryptAES(request.EncryptionData.SymmetricKey, request.EncryptionData.NextSendNonce(), Encoding.UTF8.GetBytes(serverProof));
+				uint sendSeq = request.EncryptionData.NextSendSequence();
+				byte[] sendNonce = request.EncryptionData.BuildSendNonce(sendSeq);
+				byte[] aadSend = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpSuccess, request.EncryptionData.AgreedVersion, sendSeq);
+				byte[] encryptedServerProof = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce, Encoding.UTF8.GetBytes(serverProof), aadSend);
+
+				// Generate and encrypt auth token if signing key is available.
+				// Note: encryptedToken is ciphertext — not sensitive even if the lambda
+				// is held alive during main-thread queue backlog.
+				byte[] encryptedToken = null;
+				// Snapshot TokenSigningKey to prevent a race where ShutdownWorkers or key
+				// rotation zeroes the array between the null check and BuildAuthToken.
+				byte[] signingKeySnapshot = TokenSigningKey;
+				if (authenticated && signingKeySnapshot != null && signingKeySnapshot.Length >= CryptoHelper.HmacKeyLength)
+				{
+					try
+					{
+						DateTime expiresUtc = DateTime.UtcNow.AddMinutes(tokenExpirationMinutes);
+						byte[] rawToken = CryptoHelper.BuildAuthToken(username, LoginServerId, expiresUtc, signingKeySnapshot);
+
+						// Persist token hash to DB for revocation support.
+						string tokenHash = CryptoHelper.HashTokenHex(rawToken);
+						if (Server.Database?.ServiceRegistry != null &&
+							Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var authTokenService))
+						{
+							await authTokenService.IssueAsync(tokenHash, username, LoginServerId, expiresUtc);
+						}
+
+						// Encrypt token with session key.
+						uint tokenSeq = request.EncryptionData.NextSendSequence();
+						byte[] tokenNonce = request.EncryptionData.BuildSendNonce(tokenSeq);
+						byte[] tokenAad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpSuccess, request.EncryptionData.AgreedVersion, tokenSeq);
+						encryptedToken = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, tokenNonce, rawToken, tokenAad);
+
+						CryptographicOperations.ZeroMemory(rawToken);
+					}
+					catch (Exception tokenEx)
+					{
+						await Log.Warning("ServerAuthenticator", $"Token generation failed (non-fatal): {tokenEx.Message}");
+						// Token issuance failure is non-fatal — auth still succeeds.
+						encryptedToken = null;
+					}
+				}
 
 				// Marshal final broadcast + authentication events to main thread.
 				EnqueueMainThread(() =>
@@ -960,6 +1038,7 @@ namespace FishMMO.Server.Implementation
 						{
 							Proof = encryptedServerProof,
 							Result = result,
+							Token = encryptedToken,
 						};
 						NetworkManager.ServerManager.Broadcast(conn, resultMsg, false, Channel.Reliable);
 					}
@@ -968,10 +1047,17 @@ namespace FishMMO.Server.Implementation
 					 * It's important to call this after sending the broadcast so that the broadcast
 					 * makes it out to the client before the kick. */
 					OnAuthentication(conn, authenticated);
-					OnClientAuthenticationResult?.Invoke(conn, authenticated);
+					InvokeClientAuthenticationResult(conn, authenticated);
 
-					if (!authenticated)
+					if (authenticated)
 					{
+						// Advance to terminal Authenticated state and remove sensitive SRP material.
+						Server.AccountManager.TryAdvanceAuthState(conn, AuthState.SrpSuccess, AuthState.Authenticated);
+						srpAccountManager.ClearSrpState(conn);
+					}
+					else
+					{
+						// On failed authentication, remove all connection/account mappings and encryption state.
 						Server.AccountManager.RemoveConnectionAccount(conn);
 					}
 
@@ -987,56 +1073,58 @@ namespace FishMMO.Server.Implementation
 				});
 				PurgeConnectionAuthState(conn, disconnect: false);
 			}
-			finally
-			{
-				proofInFlightByClientId.TryRemove(clientId, out _);
-
-				if (!authenticationSucceeded)
-				{
-					verifyInFlightByClientId.TryRemove(clientId, out _);
-				}
-			}
 		}
 
 		#endregion
 
 		/// <summary>
-		/// Invokes the authentication result event for a connection.
+		/// Returns <see cref="ClientAuthenticationResult.LoginSuccess"/> for the SRP login flow.
+		/// Subclasses (WorldServer/SceneServer) override for additional server-type-specific checks.
 		/// </summary>
-		/// <param name="conn">The network connection.</param>
-		/// <param name="authenticated">True if authentication succeeded, false otherwise.</param>
-		public virtual void OnAuthentication(NetworkConnection conn, bool authenticated)
-		{
-			OnAuthenticationResult?.Invoke(conn, authenticated);
-		}
-
-		/// <summary>
-		/// Attempts to complete login authentication for a user. Override in subclasses for
-		/// server-type-specific logic (e.g., WorldServer checks player limit and selected character).
-		/// </summary>
-		/// <param name="result">Initial authentication result.</param>
-		/// <param name="username">Username to authenticate.</param>
-		/// <returns>Final authentication result.</returns>
-		internal virtual Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult result, string username)
+		internal override Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult result, string username)
 		{
 			return Task.FromResult(ClientAuthenticationResult.LoginSuccess);
 		}
 
 		/// <summary>
-		/// Handles remote connection state changes to clean up account data when a connection stops.
+		/// Derives a deterministic per-username fake SRP salt via HMAC-SHA512
+		/// so that each non-existent username receives a unique but repeatable salt.
+		/// This prevents attackers from detecting salt reuse across different fake accounts
+		/// if AES-GCM encryption were somehow compromised.
 		/// </summary>
-		/// <param name="conn">The network connection.</param>
-		/// <param name="args">Arguments describing the connection state change.</param>
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
+		/// <remarks>
+		/// <para><b>Key snapshot:</b> A local reference to <see cref="fakeSaltKey"/> is captured
+		/// to prevent a race with <see cref="ShutdownWorkersCore"/> zeroing the array mid-HMAC.</para>
+		/// <para><b>Format note:</b> The output is a 128-character lowercase hex string derived from
+		/// HMAC-SHA512, matching the length of real SRP salts produced by the SRP library with
+		/// SHA-512 parameters. This prevents ciphertext-size oracles from leaking account existence.</para>
+		/// </remarks>
+		/// <param name="username">The username to derive a fake salt for.</param>
+		/// <returns>Hex-encoded fake salt string, or the static fake salt if the key was already zeroed.</returns>
+		private string DerivePerUsernameFakeSalt(string username)
 		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped)
+			byte[] keySnapshot = fakeSaltKey;
+			if (keySnapshot == null || keySnapshot.Length < CryptoHelper.HmacSha512KeyLength)
 			{
-				if (conn != null)
-				{
-					connectionIpCache.Remove(conn.ClientId);
-				}
+				// Key already zeroed during shutdown — fall back to static fake salt.
+				return FakeSrpTuple.Value.Salt;
+			}
+			using (var hmac = new HMACSHA512(keySnapshot))
+			{
+				byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(username));
+				return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+			}
+		}
 
-				PurgeConnectionAuthState(conn, disconnect: false);
+		/// <summary>
+		/// Clears the connection IP cache during connection purge.
+		/// </summary>
+		/// <param name="conn">The connection being purged.</param>
+		protected override void OnPurgeConnectionState(NetworkConnection conn)
+		{
+			if (conn != null)
+			{
+				connectionIpCache.Remove(conn.ClientId);
 			}
 		}
 
@@ -1057,7 +1145,9 @@ namespace FishMMO.Server.Implementation
 				return cachedIp;
 			}
 
-			string ip = conn.GetAddress();
+			// Normalize to canonical form (collapses IPv4-mapped IPv6) to ensure
+			// consistent rate-limit and debounce identity with the base handshake layer.
+			string ip = NormalizeIp(conn.GetAddress());
 			if (string.IsNullOrWhiteSpace(ip))
 			{
 				return string.Empty;
@@ -1068,96 +1158,17 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Starts auth TTL tracking for a connection if not already tracked.
-		/// </summary>
-		/// <param name="conn">Connection entering the authentication flow.</param>
-		private void TrackAuthStart(NetworkConnection conn)
-		{
-			if (conn == null)
-			{
-				return;
-			}
-
-			authStartTimeByClientId.TryAdd(conn.ClientId, DateTime.UtcNow);
-			authConnectionByClientId[conn.ClientId] = conn;
-		}
-
-		/// <summary>
-		/// Clears transient per-connection authenticator gate and TTL tracking state.
-		/// </summary>
-		/// <param name="clientId">FishNet client ID.</param>
-		private void ClearTransientAuthState(int clientId)
-		{
-			verifyInFlightByClientId.TryRemove(clientId, out _);
-			proofInFlightByClientId.TryRemove(clientId, out _);
-			authStartTimeByClientId.TryRemove(clientId, out _);
-			authConnectionByClientId.TryRemove(clientId, out _);
-		}
-
-		/// <summary>
-		/// Purges all authenticator state for a connection and optionally disconnects it.
-		/// </summary>
-		/// <param name="conn">Connection to purge.</param>
-		/// <param name="disconnect">If true and active, disconnect the client after purge.</param>
-		private void PurgeConnectionAuthState(NetworkConnection conn, bool disconnect)
-		{
-			if (conn == null)
-			{
-				return;
-			}
-
-			ClearTransientAuthState(conn.ClientId);
-			connectionIpCache.Remove(conn.ClientId);
-			Server.AccountManager.RemoveConnectionAccount(conn);
-
-			if (disconnect && conn.IsActive)
-			{
-				conn.Disconnect(false);
-			}
-		}
-
-		/// <summary>
-		/// Disconnects and purges connections that exceeded the authentication TTL window
-		/// without completing SRP success.
-		/// </summary>
-		private void SweepStaleAuthentication()
-		{
-			if (authStartTimeByClientId.Count == 0)
-			{
-				return;
-			}
-
-			DateTime now = DateTime.UtcNow;
-			foreach (KeyValuePair<int, DateTime> kvp in authStartTimeByClientId)
-			{
-				if ((now - kvp.Value).TotalSeconds < AuthStaleTtlSeconds)
-				{
-					continue;
-				}
-
-				if (authConnectionByClientId.TryGetValue(kvp.Key, out NetworkConnection conn) && conn != null)
-				{
-					PurgeConnectionAuthState(conn, disconnect: true);
-				}
-				else
-				{
-					ClearTransientAuthState(kvp.Key);
-				}
-			}
-		}
-
-		/// <summary>
 		/// Sweeps stale unauthenticated account/encryption state held by AccountManager.
 		/// This is a backstop for SRP memory cleanup in case network disconnect events are delayed.
 		/// </summary>
 		private void SweepStaleUnauthenticatedAccountState()
 		{
-			if (Server?.AccountManager == null)
+			if (srpAccountManager == null)
 			{
 				return;
 			}
 
-			Server.AccountManager.SweepUnauthenticatedConnections(
+			srpAccountManager.SweepUnauthenticatedConnections(
 				TimeSpan.FromSeconds(AuthStaleTtlSeconds),
 				connection => connection != null && connection.IsAuthenticated,
 				AccountManagerSweepMaxScan,

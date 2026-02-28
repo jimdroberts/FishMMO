@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Authentication system implements SRP-6a (Secure Remote Password) authentication with a bounded-channel architecture designed for high-throughput, non-blocking operation. Broadcast handlers act as ultra-fast UDP receiver gates with zero blocking — all heavy crypto, database, and SRP work is offloaded to async workers via `System.Threading.Channels`. The system is split into transport-agnostic Core types and a FishNet-specific Implementation.
+The Authentication system implements server-side authentication with a bounded-channel architecture designed for high-throughput, non-blocking operation. It supports two authentication modes: **SRP-6a** (LoginServer) and **HMAC-signed token verification** (World/Scene servers). Both share a common abstract base class (`BaseServerAuthenticator`) that provides X25519 ECDH key exchange, main-thread marshalling, stale-auth TTL sweeps, and connection lifecycle management. Broadcast handlers act as ultra-fast UDP receiver gates with zero blocking — all heavy crypto, database, and SRP/token work is offloaded to async workers via `System.Threading.Channels`. The system is split into transport-agnostic Core types and a FishNet-specific Implementation.
 
 ## Directory Structure
 
@@ -18,11 +18,24 @@ Server/
 │   ├── LastSeenCacheTracker.cs                # Key/value cache tracker with TTL by last-seen
 │   └── ArrivalOrderTracker.cs                 # Oldest-first tracker for stale-connection sweeps
 │
-└── Implementation/Authentication/             # FishNet-specific authenticator
-    └── ServerAuthenticator.cs                 # Authenticator with bounded channels and async workers
+└── Implementation/Authentication/             # FishNet-specific authenticators
+    ├── BaseServerAuthenticator.cs             # Abstract base: X25519 handshake, main-thread queue, TTL sweeps
+    ├── ServerAuthenticator.cs                 # SRP-6a authenticator (LoginServer)
+    └── TokenServerAuthenticator.cs            # Token-based authenticator (World/Scene servers)
 
 Shared/Network/Authentication/                 # Broadcast message types (client ↔ server)
     └── AuthenticationBroadcasts.cs            # ClientHandshake, ServerHandshake, SrpVerify/Proof/Success, AuthResult
+```
+
+## Inheritance Hierarchy
+
+```
+Authenticator (FishNet)
+└── BaseServerAuthenticator              # Shared: handshake, main-thread queue, stale-auth sweeps, RejectAndPurge helper
+    ├── ServerAuthenticator              # SRP-6a pipeline (LoginServer)
+    └── TokenServerAuthenticator         # HMAC-signed token pipeline (World/Scene servers)
+        ├── WorldServerAuthenticator     # World-entry gate (player limit, selected character)
+        └── SceneServerAuthenticator     # Scene-entry pass-through
 ```
 
 ## Architecture
@@ -110,12 +123,12 @@ The client authenticator nulls `username` and `password` fields immediately afte
 
 ### Unified pre-proof failure responses
 
-All failure paths in `ProcessSrpVerifyAsync` follow a consistent pattern:
-1. Enqueue a `ClientAuthResultBroadcast` on `Channel.Reliable` to the main thread.
-2. Disconnect the client after the broadcast is sent.
-3. Purge all transient auth state.
+All failure paths in `ProcessSrpVerifyAsync` and `ProcessSrpProofAsync` use the shared `RejectAndPurge(conn, result)` helper defined in `BaseServerAuthenticator`. This helper atomically:
+1. Enqueues a `ClientAuthResultBroadcast` on `Channel.Reliable` to the main thread.
+2. Disconnects the client after the broadcast is sent.
+3. Purges all transient auth state via `PurgeConnectionAuthState`.
 
-This prevents information leakage through inconsistent error timing or channel differences.
+This prevents information leakage through inconsistent error timing or channel differences and eliminates repeated inline reject+purge boilerplate (DRY).
 
 ### Constant-time comparison
 
@@ -133,10 +146,10 @@ Every `CryptoHelper.DecryptAES` and `EncryptAES` call site is wrapped in `try/ca
 Client                              Server (Network Thread)
   │                                      │
   │── ClientHandshake ─────────────────► │  OnServerClientHandshakeReceived()
-  │   { PublicKey (RSA) }                │    • AddConnectionEncryptionData()
-  │                                      │    • Generate AES-256 key + 4-byte session prefix
-  │◄── ServerHandshake ──────────────── │    • RSA-OAEP-SHA256 encrypt key + prefix
-  │   { Key, SessionPrefix (encrypted) } │    • Broadcast response
+  │   { PublicKey (X25519) }             │    • AddConnectionEncryptionData()
+  │                                      │    • X25519 ECDH + HKDF-SHA256 → directional AES keys + session prefix
+  │◄── ServerHandshake ──────────────── │    • Cookie challenge for replay/spoof protection
+  │   { ServerPublicKey, Cookie }        │    • Broadcast response
 ```
 
 This phase runs inline because it is pure in-memory crypto — no database or SRP work.
@@ -153,7 +166,7 @@ All AES-GCM operations use a deterministic 12-byte nonce built from three compon
 └─────────────┴───────────┴────────────┴─────────────┘
 ```
 
-- **Session prefix**: 4 random bytes generated per connection, shared via RSA.
+- **Session prefix**: 4 random bytes generated per connection, derived via HKDF from the X25519 shared secret.
 - **Direction byte**: Distinguishes client→server and server→client nonces, preventing reflection attacks.
 - **Counter**: Monotonically incremented per encrypt/decrypt operation. Throws `CryptographicException` at `uint.MaxValue` to prevent nonce reuse.
 
@@ -210,8 +223,8 @@ In-flight gate maps are separate from channel capacity and provide per-connectio
 
 | Broadcast | Direction | Contents |
 |-----------|-----------|----------|
-| `ClientHandshake` | Client → Server | RSA public key |
-| `ServerHandshake` | Server → Client | RSA-OAEP-SHA256 encrypted AES key + session prefix |
+| `ClientHandshake` | Client → Server | X25519 public key |
+| `ServerHandshake` | Server → Client | X25519 public key + cookie challenge |
 | `SrpVerifyBroadcast` | Bidirectional | Encrypted salt + public ephemeral |
 | `SrpProofBroadcast` | Client → Server | Encrypted client proof |
 | `SrpSuccessBroadcast` | Server → Client | Encrypted server proof + auth result |
@@ -231,7 +244,7 @@ In-flight gate maps are separate from channel capacity and provide per-connectio
 
 ## Extensibility
 
-`TryLoginAsync` is a `virtual` method that returns `Task<ClientAuthenticationResult>`. Subclasses override it for server-type-specific logic:
+`TryLoginAsync` is defined as `internal virtual` on `BaseServerAuthenticator` and returns `Task<ClientAuthenticationResult>`. Subclasses override it for server-type-specific logic:
 
 - **LoginServer** — Default implementation returns `LoginSuccess`.
 - **WorldServer** — May check player limits, selected character, or world state.
@@ -240,7 +253,7 @@ In-flight gate maps are separate from channel capacity and provide per-connectio
 ## Cleanup
 
 - **Client Disconnect**: `ServerManager_OnRemoteConnectionState` fires when a connection stops, purging transient auth state and account data.
-- **Worker Shutdown**: `ShutdownWorkers()` cancels the `CancellationTokenSource`, drains remaining main-thread actions, and nulls channel references.
+- **Worker Shutdown**: `BaseServerAuthenticator.ShutdownWorkers()` calls `ShutdownWorkersCore()` (subclass: complete channel writers) before cancelling the `CancellationTokenSource`, draining remaining main-thread actions, and clearing shared state.
 - **Stale Auth Sweep**: periodic TTL sweep disconnects and purges half-open sessions that never reach SRP success.
 - **AccountManager Backstop Sweep**: `Update()` also invokes `AccountManager.SweepUnauthenticatedConnections(...)`, which uses oldest-first tracking to purge stale SRP/encryption state that may outlive delayed disconnect events.
 
@@ -248,11 +261,11 @@ In-flight gate maps are separate from channel capacity and provide per-connectio
 
 | Dependency | Purpose |
 |------------|---------|
-| `FishNet.Authenticating.Authenticator` | Base class providing `OnAuthenticationResult` and `InitializeOnce` |
+| `FishNet.Authenticating.Authenticator` | Ultimate base class; `BaseServerAuthenticator` provides `OnAuthenticationResult`, `InitializeOnce`, and shared infrastructure |
 | `FishNet.Connection.NetworkConnection` | Connection type used as `TConnection` |
 | `System.Threading.Channels` | Bounded async producer-consumer channels |
 | `SecureRemotePassword` | SRP-6a protocol library (2048-bit, SHA-512) |
-| `CryptoHelper` | AES-GCM encrypt/decrypt with AAD, RSA-OAEP-SHA256, nonce builder, constant-time compare |
+| `CryptoHelper` | AES-GCM encrypt/decrypt with AAD, X25519 ECDH + HKDF-SHA256, nonce builder, constant-time compare |
 | `IAccountManager<NetworkConnection>` | Thread-safe account/connection/SRP state management |
 | `ICharacterService` | Database: check if characters are already online |
 | `IKickRequestService` | Database: persist kick requests for already-online accounts |

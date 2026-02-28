@@ -196,7 +196,13 @@ namespace FishMMO.Server.Implementation
 			NetworkWrapper.AttachLoginAuthenticator(this);
 			NetworkWrapper.RegisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 
-			AccountManager = new AccountManager();
+			// Create the appropriate AccountManager subtype based on the authenticator.
+			// LoginServer uses SRP authentication → SrpAccountManager.
+			// World/Scene servers use token authentication → TokenAccountManager.
+			var authenticator = NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator();
+			AccountManager = authenticator is ServerAuthenticator
+				? (IAccountManager<NetworkConnection>)new SrpAccountManager()
+				: new TokenAccountManager();
 
 			// Initialize all registered runtime data containers
 			DataContainerRegistry = new RuntimeDataContainerRegistry();

@@ -1,18 +1,19 @@
 using System;
 using FishMMO.Shared;
-using FishMMO.Server.Core.Account.SRP;
 
 namespace FishMMO.Server.Core.Account
 {
 	/// <summary>
-	/// Defines an interface for managing account and connection data, including encryption and SRP authentication state.
-	/// This interface is generic and does not depend on any specific network implementation.
+	/// Base interface for managing account and connection data shared by all server types.
+	/// Contains encryption, account lookup, authentication state machine, and lifecycle methods
+	/// common to both SRP-based (Login) and token-based (World/Scene) authentication flows.
 	/// </summary>
 	/// <typeparam name="TConnection">The type representing a network connection.</typeparam>
 	public interface IAccountManager<TConnection>
 	{
 		/// <summary>
-		/// Adds encryption data for a connection.
+		/// Adds encryption data for a connection and creates initial <see cref="AccountData"/>
+		/// with <see cref="AuthState.Handshake"/>.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
 		/// <param name="publicKey">The public key for encryption.</param>
@@ -27,27 +28,10 @@ namespace FishMMO.Server.Core.Account
 		bool GetConnectionEncryptionData(TConnection connection, out ConnectionEncryptionData encryptionData);
 
 		/// <summary>
-		/// Adds or updates account data and mappings for a connection.
-		/// </summary>
-		/// <param name="connection">The network connection.</param>
-		/// <param name="accountName">The account name.</param>
-		/// <param name="publicClientEphemeral">The public ephemeral value from the client.</param>
-		/// <param name="salt">The salt for SRP.</param>
-		/// <param name="verifier">The verifier for SRP.</param>
-		/// <param name="accessLevel">The access level for the account.</param>
-		void AddConnectionAccount(TConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel);
-
-		/// <summary>
 		/// Removes all account mappings for a connection.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
 		void RemoveConnectionAccount(TConnection connection);
-
-		/// <summary>
-		/// Removes all connection mappings for an account name.
-		/// </summary>
-		/// <param name="accountName">The account name.</param>
-		void RemoveAccountConnection(string accountName);
 
 		/// <summary>
 		/// Gets the account data for a connection.
@@ -74,37 +58,47 @@ namespace FishMMO.Server.Core.Account
 		bool GetConnectionByAccountName(string accountName, out TConnection connection);
 
 		/// <summary>
-		/// Attempts to update the SRP state for a connection.
+		/// Atomically advances the authentication state for a connection.
+		/// Returns <c>false</c> if the current state does not match <paramref name="required"/>.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
-		/// <param name="requiredState">The required current SRP state.</param>
-		/// <param name="nextState">The next SRP state to set if the current state matches.</param>
-		/// <returns><c>true</c> if the state was updated; otherwise, <c>false</c>.</returns>
-		bool TryUpdateSrpState(TConnection connection, SrpState requiredState, SrpState nextState);
+		/// <param name="required">The expected current auth state (compare).</param>
+		/// <param name="next">The new auth state to set if current matches (swap).</param>
+		/// <returns><c>true</c> if the state was advanced; otherwise, <c>false</c>.</returns>
+		bool TryAdvanceAuthState(TConnection connection, AuthState required, AuthState next);
 
 		/// <summary>
-		/// Attempts to update the SRP state for a connection and invokes a callback on success.
+		/// Atomically advances the authentication state for a connection and invokes
+		/// a callback on success. The callback runs inside the lock and must not block
+		/// or re-enter the AccountManager.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
-		/// <param name="requiredState">The required current SRP state.</param>
-		/// <param name="nextState">The next SRP state to set if the current state matches.</param>
-		/// <param name="onSuccess">A callback to invoke if the state is updated; should return true to continue.</param>
-		/// <returns><c>true</c> if the state was updated and the callback (if provided) succeeded; otherwise, <c>false</c>.</returns>
-		bool TryUpdateSrpState(TConnection connection, SrpState requiredState, SrpState nextState, Func<AccountData, bool> onSuccess);
+		/// <param name="required">The expected current auth state (compare).</param>
+		/// <param name="next">The new auth state to set if current matches (swap).</param>
+		/// <param name="onSuccess">Callback invoked inside the lock if the transition succeeds.
+		/// Should return <c>true</c> to confirm the operation.</param>
+		/// <returns><c>true</c> if the state was advanced and the callback succeeded; otherwise, <c>false</c>.</returns>
+		bool TryAdvanceAuthState(TConnection connection, AuthState required, AuthState next, Func<AccountData, bool> onSuccess);
 
 		/// <summary>
-		/// Sweeps and removes stale unauthenticated connection state to bound SRP/encryption memory growth.
-		/// Authenticated connections are only untracked from the unauthenticated timer map.
+		/// Checks whether a connection has the specified authentication state.
 		/// </summary>
-		/// <param name="maxUnauthenticatedAge">Maximum allowed age for unauthenticated state.</param>
-		/// <param name="isAuthenticated">Connection authentication predicate.</param>
-		/// <param name="maxScan">Maximum tracked entries to evaluate this sweep.</param>
-		/// <param name="maxRemovals">Maximum stale entries to purge this sweep.</param>
-		/// <returns>Number of stale unauthenticated entries purged.</returns>
-		int SweepUnauthenticatedConnections(TimeSpan maxUnauthenticatedAge, Func<TConnection, bool> isAuthenticated, int maxScan, int maxRemovals);
+		/// <param name="connection">The network connection.</param>
+		/// <param name="state">The auth state to check for.</param>
+		/// <returns><c>true</c> if the connection has exactly the given state; otherwise, <c>false</c>.</returns>
+		bool HasAuthState(TConnection connection, AuthState state);
 
 		/// <summary>
-		/// Clears all stored account and connection data.
+		/// Checks whether a connection has progressed beyond <see cref="AuthState.Handshake"/>
+		/// (i.e., an authentication flow is actively in progress).
+		/// Used by handshake handlers to reject repeated handshakes during auth.
+		/// </summary>
+		/// <param name="connection">The network connection.</param>
+		/// <returns><c>true</c> if auth is in progress (state &gt; Handshake); otherwise, <c>false</c>.</returns>
+		bool IsAuthInProgress(TConnection connection);
+
+		/// <summary>
+		/// Zeroes all sensitive key material and clears all stored account and connection data.
 		/// </summary>
 		void Clear();
 	}

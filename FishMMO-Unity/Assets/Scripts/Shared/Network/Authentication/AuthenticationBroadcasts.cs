@@ -13,27 +13,61 @@ namespace FishMMO.Shared
 		public byte[] Salt;
 		/// <summary>SRP verifier for password authentication.</summary>
 		public byte[] Verifier;
+
+		/// <summary>Explicit message sequence number (client->server).</summary>
+		public uint Seq;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the client to initiate a handshake, containing the public key.
+	/// Broadcast sent by the client to initiate a handshake, containing the ephemeral
+	/// X25519 public key for ECDH key agreement and supported protocol version range.
 	/// </summary>
 	public struct ClientHandshake : IBroadcast
 	{
-		/// <summary>Client's public key for encryption handshake.</summary>
+		/// <summary>Client's ephemeral X25519 public key (32 bytes).</summary>
 		public byte[] PublicKey;
+
+		/// <summary>
+		/// Stateless cookie echoed from a prior <see cref="ServerHandshake"/> challenge.
+		/// Null on the initial handshake; set when retrying after a cookie challenge.
+		/// </summary>
+		public byte[] Cookie;
+
+		/// <summary>
+		/// Minimum protocol version supported by this client.
+		/// </summary>
+		public ushort MinVersion;
+
+		/// <summary>
+		/// Maximum protocol version supported by this client.
+		/// </summary>
+		public ushort MaxVersion;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the server to complete the handshake, containing the encrypted
-	/// symmetric key and session prefix for counter-based GCM nonce derivation.
+	/// Broadcast sent by the server to complete the handshake, containing the server's
+	/// X25519 public key for ECDH key agreement and the negotiated protocol version.
 	/// </summary>
 	public struct ServerHandshake : IBroadcast
 	{
-		/// <summary>Server's encryption key (RSA-encrypted AES-256 key).</summary>
-		public byte[] Key;
-		/// <summary>RSA-encrypted 4-byte session prefix for GCM nonce derivation.</summary>
-		public byte[] SessionPrefix;
+		/// <summary>
+		/// Server's ephemeral X25519 public key (32 bytes).
+		/// Null when this message is a cookie challenge (proof-of-reachability).
+		/// </summary>
+		public byte[] PublicKey;
+
+		/// <summary>
+		/// Stateless HMAC challenge cookie. The client must echo this in a subsequent
+		/// <see cref="ClientHandshake"/> to prove it can receive replies from the server.
+		/// Null when this message contains the final handshake response.
+		/// </summary>
+		public byte[] Cookie;
+
+		/// <summary>
+		/// Negotiated protocol version agreed during handshake.
+		/// Both sides use this version in AAD and HKDF labels for all subsequent messages.
+		/// </summary>
+		public ushort AgreedVersion;
 	}
 
 	/// <summary>
@@ -45,6 +79,9 @@ namespace FishMMO.Shared
 		public byte[] S;
 		/// <summary>SRP public ephemeral value.</summary>
 		public byte[] PublicEphemeral;
+
+		/// <summary>Explicit message sequence number (client->server).</summary>
+		public uint Seq;
 	}
 
 	/// <summary>
@@ -54,6 +91,9 @@ namespace FishMMO.Shared
 	{
 		/// <summary>SRP proof value for authentication.</summary>
 		public byte[] Proof;
+
+		/// <summary>Explicit message sequence number (client->server).</summary>
+		public uint Seq;
 	}
 
 	/// <summary>
@@ -65,6 +105,12 @@ namespace FishMMO.Shared
 		public byte[] Proof;
 		/// <summary>Result of client authentication.</summary>
 		public ClientAuthenticationResult Result;
+
+		/// <summary>Explicit message sequence number (server->client).</summary>
+		public uint Seq;
+
+		/// <summary>Encrypted signed auth token for World/Scene server authentication. Null if token issuance is not enabled.</summary>
+		public byte[] Token;
 	}
 
 	/// <summary>
@@ -74,5 +120,18 @@ namespace FishMMO.Shared
 	{
 		/// <summary>Result of client authentication.</summary>
 		public ClientAuthenticationResult Result;
+	}
+
+	/// <summary>
+	/// Broadcast sent by the client to authenticate with a World or Scene server using
+	/// a signed token issued by the LoginServer after SRP success.
+	/// </summary>
+	public struct TokenAuthBroadcast : IBroadcast
+	{
+		/// <summary>AES-GCM encrypted signed auth token.</summary>
+		public byte[] Token;
+
+		/// <summary>Explicit message sequence number (client->server).</summary>
+		public uint Seq;
 	}
 }
