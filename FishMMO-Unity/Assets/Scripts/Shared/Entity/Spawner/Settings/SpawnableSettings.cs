@@ -17,6 +17,12 @@ namespace FishMMO.Shared
 		public NetworkObject NetworkObject;
 
 		/// <summary>
+		/// The ScriptableObject associated with this spawnable, used for data lookup and configuration
+		/// (e.g. NPC template, item template, etc.). This is not used directly for spawning but can be referenced in spawn logic.
+		/// </summary>
+		public ScriptableObject ScriptableObject;
+
+		/// <summary>
 		/// The minimum respawn time (in seconds) for this object.
 		/// </summary>
 		public float MinimumRespawnTime;

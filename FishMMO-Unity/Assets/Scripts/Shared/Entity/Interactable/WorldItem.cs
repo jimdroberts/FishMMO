@@ -1,4 +1,6 @@
 ﻿using UnityEngine;
+using FishNet.Connection;
+using FishNet.Serializing;
 
 namespace FishMMO.Shared
 {
@@ -7,27 +9,51 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class WorldItem : Interactable
 	{
-		/// <summary>
-		/// The item template for this world item, defining its type and properties.
-		/// Set in the inspector or at runtime.
-		/// </summary>
+		// Change to a property with a private setter or public set
 		[SerializeField]
 		private BaseItemTemplate template;
+		public BaseItemTemplate Template
+		{
+			get => template;
+			set { template = value; OnTemplateChanged(); }
+		}
 
-		/// <summary>
-		/// The amount of items represented by this world item (e.g., stack size).
-		/// </summary>
 		public uint Amount;
 
-		/// <summary>
-		/// Gets the item template for this world item, used to access item data and display info.
-		/// </summary>
-		public BaseItemTemplate Template { get { return template; } }
+		public override string Title => template != null ? template.Name : "";
 
-		/// <summary>
-		/// Gets the display title for the world item. Returns an empty string, meaning no title is shown in UI by default.
-		/// Override this property in derived classes to provide a custom title.
-		/// </summary>
-		public override string Title { get { return ""; } }
+		// This handles the visual swap when a template is injected
+		private void OnTemplateChanged()
+		{
+			if (template == null) return;
+
+			MeshFilter mf = GetComponentInChildren<MeshFilter>();
+			if (mf != null && template.Mesh != null)
+			{
+				mf.sharedMesh = template.Mesh;
+			}
+			// Add logic here for Materials or Icons if needed
+		}
+
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			base.WritePayload(connection, writer);
+			// Write the Template ID so clients know which data to look up
+			writer.WriteInt32(template != null ? template.ID : -1);
+			writer.WriteUInt32(Amount);
+		}
+
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		{
+			base.ReadPayload(connection, reader);
+			int templateId = reader.ReadInt32();
+			Amount = reader.ReadUInt32();
+
+			// Use your existing Cache system to find the ScriptableObject by ID
+			if (templateId != -1)
+			{
+				Template = BaseItemTemplate.Get<BaseItemTemplate>(templateId);
+			}
+		}
 	}
 }

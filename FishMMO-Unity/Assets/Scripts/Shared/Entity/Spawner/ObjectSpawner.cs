@@ -447,6 +447,21 @@ namespace FishMMO.Shared
 					return;
 				}
 
+				// If the spawned object has a WorldItem component and the spawnable settings reference a BaseItemTemplate, inject the template reference and set up the visuals.
+				WorldItem worldItem = nob.GetComponent<WorldItem>();
+				if (worldItem != null && spawnableSettings.ScriptableObject is BaseItemTemplate itemTemplate)
+				{
+					worldItem.Template = itemTemplate;
+					worldItem.Amount = 1; // Pull from spawnableSettings or template if needed
+				}
+
+				/*NPC npc = nob.GetComponent<NPC>();
+				if (npc != null && spawnableSettings.Template is NPCTemplate npcTemplate)
+				{
+					// You can use the same pattern for NPCs to inject 
+					// unique stats or visual variants!
+				}*/
+
 				// Move the spawned object to the correct scene.
 				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(nob.gameObject, this.gameObject.scene);
 
