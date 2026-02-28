@@ -115,6 +115,11 @@ namespace FishMMO.Shared
 		/// Returns true if the character is currently inside an instance.
 		/// </summary>
 		bool IsInInstance();
+		/// <summary>
+		/// Returns true if the character is currently loaded in the scene and active.
+		/// </summary>
+		/// <returns></returns>
+		bool IsLoaded();
 
 		/// <summary>
 		/// The motor for kinematic character movement.

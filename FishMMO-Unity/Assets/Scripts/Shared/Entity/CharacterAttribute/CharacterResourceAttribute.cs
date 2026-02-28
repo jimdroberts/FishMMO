@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using UnityEngine.TextCore.Text;
 
 namespace FishMMO.Shared
 {
@@ -58,6 +59,7 @@ namespace FishMMO.Shared
 		/// Sets the current resource value directly. Optionally triggers attribute update.
 		/// </summary>
 		/// <param name="value">The new current value.</param>
+		/// <param name="clampFinalValue">If true, clamps the value to FinalValue. If false, only clamps to zero.</param>
 		/// <param name="updateInternal">If true, triggers attribute update event.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetCurrentValue(float value, bool updateInternal = true)
@@ -115,6 +117,7 @@ namespace FishMMO.Shared
 		/// Clamps a resource value to the valid range of [0, FinalValue].
 		/// </summary>
 		/// <param name="value">The resource value to clamp.</param>
+		/// <param name="clampFinalValue">If true, clamps the value to FinalValue. If false, only clamps to zero.</param>
 		/// <returns>The clamped resource value.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private float ClampCurrentValue(float value)
@@ -124,7 +127,14 @@ namespace FishMMO.Shared
 				return 0.0f;
 			}
 
-			if (value >= FinalValue)
+			// If the character isn't fully loaded yet, we want to allow setting current value above final value so that 
+			// it can be properly clamped once the character is loaded and controllers are active. This is necessary to 
+			// prevent issues with loading characters that have current resource values above their final values due to 
+			// buffs or other effects, which would otherwise get clamped down to final value during loading and then fail 
+			// to properly update when the character is fully loaded and the correct final value is set.
+			bool clampFinalValue = this.characterAttributeController.Character.Flags.IsFlagged(CharacterFlags.IsLoaded);
+
+			if (clampFinalValue && value >= FinalValue)
 			{
 				return FinalValue;
 			}

@@ -46,5 +46,9 @@
 		/// Character is currently inside an instance.
 		/// </summary>
 		IsInInstance,
+		/// <summary>
+		/// Character is currently loaded in the scene and active.
+		/// </summary>
+		IsLoaded,
 	}
 }

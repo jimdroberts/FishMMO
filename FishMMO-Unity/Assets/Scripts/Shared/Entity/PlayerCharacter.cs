@@ -148,6 +148,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool IsInInstance() { return Flags.IsFlagged(CharacterFlags.IsInInstance) && !string.IsNullOrWhiteSpace(InstanceSceneName); }
 		/// <summary>
+		/// Returns true if the character is currently loaded in the scene and active.
+		/// </summary>
+		public bool IsLoaded() { return Flags.IsFlagged(CharacterFlags.IsLoaded); }
+		/// <summary>
 		/// The last chat message sent by the character.
 		/// </summary>
 		public string LastChatMessage { get; set; }
@@ -217,6 +221,8 @@ namespace FishMMO.Shared
 			ModelIndex = reader.ReadInt32();
 			RaceName = reader.ReadStringAllocated();
 			SceneName = reader.ReadStringAllocated();
+			AccessLevel = (AccessLevel)reader.ReadUInt8Unpacked();
+			Flags = reader.ReadInt32();
 
 #if !UNITY_SERVER
 			ClientCharacters[ID] = this;
@@ -243,6 +249,8 @@ namespace FishMMO.Shared
 			writer.WriteInt32(ModelIndex);
 			writer.WriteString(RaceName);
 			writer.WriteString(SceneName);
+			writer.WriteUInt8Unpacked((byte)AccessLevel);
+			writer.WriteInt32(Flags);
 		}
 
 #if !UNITY_SERVER

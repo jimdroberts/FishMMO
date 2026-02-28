@@ -437,7 +437,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					if (attr.CurrentValue > 0)
 					{
-						attrController.SetResourceAttribute(attr.TemplateID, attr.Value, attr.CurrentValue);
+						attrController.SetResourceAttribute(attr.TemplateID, attr.Value, attr.CurrentValue, null);
 						if (attrController.ResourceAttributes.TryGetValue(attr.TemplateID, out var resAttr))
 						{
 							resAttr.Version = attr.Version;
@@ -770,6 +770,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Ensure the game object is active, pooled objects are disabled
 				character.GameObject.SetActive(true);
+
+				// Ensure the character is marked as loaded so that controllers can check this flag to prevent actions before the character is fully in the world
+				character.EnableFlags(CharacterFlags.IsLoaded);
 
 				// Spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn, scene);

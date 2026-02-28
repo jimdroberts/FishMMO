@@ -83,6 +83,17 @@ namespace FishMMO.Shared
 			Flags = characterFlags;
 		}
 
+		/// <summary>
+		/// Checks if the specified character flags are enabled.
+		/// </summary>
+		/// <param name="flags">Flags to check.</param>
+		/// <returns>True if the flags are enabled; otherwise, false.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool IsFlagged(CharacterFlags flags)
+		{
+			return Flags.IsFlagged(flags);
+		}
+
 #if !UNITY_SERVER
 		[SerializeField]
 		private Transform meshRoot;

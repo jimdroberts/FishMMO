@@ -62,6 +62,10 @@ namespace FishMMO.Shared
 		{
 			base.OnAwake();
 
+			// Set the loaded flag to allow controllers to check if the NPC is fully loaded and in the world. 
+			// This is important for proper attribute clamping and preventing actions before the NPC is fully initialized.
+			EnableFlags(CharacterFlags.IsLoaded);
+
 #if !UNITY_SERVER
 			// Remove (Clone) from the GameObject name for clarity in the editor.
 			GameObject.name = GameObject.name.Replace("(Clone)", "");
@@ -157,6 +161,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Despawn()
 		{
+			// Remove the loaded flag to prevent controllers from acting on the NPC while it's being despawned and removed from the world.
+			DisableFlags(CharacterFlags.IsLoaded);
+
 			ObjectSpawner?.Despawn(this);
 		}
 

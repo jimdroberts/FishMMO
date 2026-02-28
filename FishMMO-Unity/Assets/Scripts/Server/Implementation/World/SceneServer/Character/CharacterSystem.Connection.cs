@@ -155,6 +155,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Remove the character from an instance if it was in one.
 				character.DisableFlags(CharacterFlags.IsInInstance);
+				character.DisableFlags(CharacterFlags.IsLoaded);
 
 				// Save the character and fully release the session so the destination scene server can claim it
 				RemoveCharacterConnectionMapping(character.Owner, skipOnDisconnect: true);
@@ -270,6 +271,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					// Remove instance flag before disconnect so the save captures the correct state
 					playerCharacter.DisableFlags(CharacterFlags.IsInInstance);
+					playerCharacter.DisableFlags(CharacterFlags.IsLoaded);
 
 					// Disconnect to world server — reconnects to bind scene via World Server
 					playerCharacter.NetworkObject.Owner.Disconnect(false);

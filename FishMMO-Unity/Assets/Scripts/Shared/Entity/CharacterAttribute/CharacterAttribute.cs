@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Reference to the controller that manages this attribute, allowing for callbacks and interactions with the owning character or system.
 		/// </summary>
-		private ICharacterAttributeController characterAttributeController;
+		protected ICharacterAttributeController characterAttributeController;
 
 		/// <summary>
 		/// Version number for this attribute instance, used for client synchronization and updates.

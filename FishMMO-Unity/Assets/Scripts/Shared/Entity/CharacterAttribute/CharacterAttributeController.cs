@@ -240,6 +240,7 @@ namespace FishMMO.Shared
 		/// <param name="value">The new base value.</param>
 		/// <param name="currentValue">The new current depletable value.</param>
 		/// <param name="modifier">Optional external modifier value to set.</param>
+		/// <param name="clampFinalValue">If true, clamps the current value to the final value. If false, only clamps to zero.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetResourceAttribute(int id, int value, float currentValue, int? modifier = null)
 		{

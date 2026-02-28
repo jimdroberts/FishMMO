@@ -73,6 +73,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="flags">Flags to disable.</param>
 		void DisableFlags(CharacterFlags flags);
+		/// <summary>
+		/// Checks if the specified flags are enabled for the character.
+		/// </summary>
+		/// <param name="flags">Flags to check.</param>
+		/// <returns>True if the flags are enabled; otherwise, false.</returns>
+		bool IsFlagged(CharacterFlags flags);
 
 #if !UNITY_SERVER
 		/// <summary>
