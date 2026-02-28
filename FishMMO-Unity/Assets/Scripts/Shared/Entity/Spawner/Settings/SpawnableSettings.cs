@@ -6,21 +6,17 @@ using FishMMO.Logging;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Serializable settings for configuring a spawnable object, including respawn times, spawn chance, and Y offset for placement.
+	/// Base serializable settings for configuring a spawnable object. Supports polymorphic subclassing
+	/// via <see cref="SerializeReference"/> for type-specific data injection (e.g., items, NPCs).
+	/// Use the <see cref="SubclassSelector"/> attribute on the containing field/list for Inspector support.
 	/// </summary>
 	[Serializable]
 	public class SpawnableSettings
 	{
 		/// <summary>
-		/// The network object to be spawned.
+		/// The network object prefab to be spawned.
 		/// </summary>
 		public NetworkObject NetworkObject;
-
-		/// <summary>
-		/// The ScriptableObject associated with this spawnable, used for data lookup and configuration
-		/// (e.g. NPC template, item template, etc.). This is not used directly for spawning but can be referenced in spawn logic.
-		/// </summary>
-		public ScriptableObject ScriptableObject;
 
 		/// <summary>
 		/// The minimum respawn time (in seconds) for this object.
@@ -47,7 +43,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Validates the spawnable settings, ensuring the network object is spawnable and calculates YOffset from its collider.
 		/// </summary>
-		public void OnValidate()
+		public virtual void OnValidate()
 		{
 			if (NetworkObject == null)
 			{
@@ -74,6 +70,16 @@ namespace FishMMO.Shared
 					YOffset = radius;
 				}
 			}
+		}
+
+		/// <summary>
+		/// Called after the network object has been instantiated but before it is spawned on the network.
+		/// Override in subclasses to inject type-specific data into the spawned object.
+		/// </summary>
+		/// <param name="nob">The instantiated network object to configure.</param>
+		/// <param name="spawner">The spawner that created this object.</param>
+		public virtual void OnSpawned(NetworkObject nob, ObjectSpawner spawner)
+		{
 		}
 	}
 }

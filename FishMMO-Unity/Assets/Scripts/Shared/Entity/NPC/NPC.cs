@@ -85,11 +85,17 @@ namespace FishMMO.Shared
 			{
 				npcSeed = npcSeedGenerator.Next();
 				npcRNG = new System.Random(npcSeed);
-
-				// Generate NPC attributes based on the seed on the server.
-				// Clients will receive the attributes BaseValue and CurrentValue when CharacterAttributeController is synchronized.
-				AddNPCAttributes(true);
 			}
+		}
+
+		/// <summary>
+		/// Called when the server starts for this NPC. Applies attribute bonuses after any spawner overrides have been injected.
+		/// </summary>
+		public override void OnStartServer()
+		{
+			base.OnStartServer();
+
+			AddNPCAttributes(true);
 		}
 #endif
 
@@ -99,6 +105,24 @@ namespace FishMMO.Shared
 		public override void OnDestroying()
 		{
 			SceneObject.Unregister(this);
+		}
+
+		/// <summary>
+		/// Resets the NPC's state for object pool reuse. Clears RNG, spawner references, and client-side tracking.
+		/// </summary>
+		/// <param name="asServer">Whether the reset is performed on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+#if !UNITY_SERVER
+			ClientCharacters.Remove(ID);
+#endif
+
+			npcRNG = null;
+			npcSeed = 0;
+			ObjectSpawner = null;
+			SpawnableSettings = null;
 		}
 
 		/// <summary>
@@ -161,7 +185,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Despawn()
 		{
-			// Remove the loaded flag to prevent controllers from acting on the NPC while it's being despawned and removed from the world.
 			DisableFlags(CharacterFlags.IsLoaded);
 
 			ObjectSpawner?.Despawn(this);
@@ -172,72 +195,63 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void AddNPCAttributes(bool asServer)
 		{
-			if (AttributeBonuses != null &&
-				AttributeBonuses.Attributes != null &&
-				this.TryGet(out ICharacterAttributeController attributeController))
+			if (npcRNG == null ||
+				AttributeBonuses == null ||
+				AttributeBonuses.Attributes == null ||
+				!this.TryGet(out ICharacterAttributeController attributeController))
 			{
-				foreach (NPCAttribute attribute in AttributeBonuses.Attributes)
+				return;
+			}
+
+			foreach (NPCAttribute attribute in AttributeBonuses.Attributes)
+			{
+				int value;
+				if (attribute.IsRandom)
 				{
-					int value;
-					// Determine the attribute value, randomizing if specified.
-					if (attribute.IsRandom)
+					value = npcRNG.Next(attribute.Min, attribute.Max);
+				}
+				else
+				{
+					value = attribute.Max;
+				}
+
+				if (attributeController.TryGetAttribute(attribute.Template, out CharacterAttribute characterAttribute))
+				{
+					int old = characterAttribute.Value;
+
+					if (attribute.IsScalar)
 					{
-						value = npcRNG.Next(attribute.Min, attribute.Max);
+						int newValue = characterAttribute.Value.GetPercentOf(value);
+						characterAttribute.SetModifier(newValue - old);
 					}
 					else
 					{
-						value = attribute.Max;
+						characterAttribute.SetModifier(value - old);
 					}
+				}
+				else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
+				{
+					int old = characterResourceAttribute.Value;
 
-					// Apply the value to the appropriate attribute type.
-					if (attributeController.TryGetAttribute(attribute.Template, out CharacterAttribute characterAttribute))
+					if (attribute.IsScalar)
 					{
-						int old = characterAttribute.Value;
+						int newValue = characterResourceAttribute.Value.GetPercentOf(value);
+						int modifier = newValue - old;
 
-						if (attribute.IsScalar)
+						characterResourceAttribute.SetModifier(modifier);
+						if (asServer)
 						{
-							// Scale the value as a percent of the current attribute value.
-							int newValue = characterAttribute.Value.GetPercentOf(value);
-							characterAttribute.SetModifier(newValue - old);
-
-							//Log.Debug($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.FinalValue}");
-						}
-						else
-						{
-							characterAttribute.SetModifier(value - old);
-
-							//Log.Debug($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.FinalValue}");
+							characterResourceAttribute.SetCurrentValue(newValue);
 						}
 					}
-					else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
+					else
 					{
-						int old = characterResourceAttribute.Value;
+						int modifier = value - old;
 
-						if (attribute.IsScalar)
+						characterResourceAttribute.SetModifier(modifier);
+						if (asServer)
 						{
-							// Scale the value as a percent of the current resource value.
-							int newValue = characterResourceAttribute.Value.GetPercentOf(value);
-							int modifier = newValue - old;
-
-							characterResourceAttribute.SetModifier(modifier);
-							if (asServer)
-							{
-								characterResourceAttribute.SetCurrentValue(newValue);
-							}
-
-							//Log.Debug($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
-						}
-						else
-						{
-							int modifier = value - old;
-
-							characterResourceAttribute.SetModifier(modifier);
-							if (asServer)
-							{
-								characterResourceAttribute.SetCurrentValue(value);
-							}
-
-							//Log.Debug($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
+							characterResourceAttribute.SetCurrentValue(value);
 						}
 					}
 				}

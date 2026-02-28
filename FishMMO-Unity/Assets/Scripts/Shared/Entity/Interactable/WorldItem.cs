@@ -25,6 +25,7 @@ namespace FishMMO.Shared
 		// This handles the visual swap when a template is injected
 		private void OnTemplateChanged()
 		{
+#if !UNITY_SERVER
 			if (template == null) return;
 
 			MeshFilter mf = GetComponentInChildren<MeshFilter>();
@@ -33,11 +34,11 @@ namespace FishMMO.Shared
 				mf.sharedMesh = template.Mesh;
 			}
 			// Add logic here for Materials or Icons if needed
+#endif
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
-			base.WritePayload(connection, writer);
 			// Write the Template ID so clients know which data to look up
 			writer.WriteInt32(template != null ? template.ID : -1);
 			writer.WriteUInt32(Amount);
@@ -45,7 +46,6 @@ namespace FishMMO.Shared
 
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			base.ReadPayload(connection, reader);
 			int templateId = reader.ReadInt32();
 			Amount = reader.ReadUInt32();
 

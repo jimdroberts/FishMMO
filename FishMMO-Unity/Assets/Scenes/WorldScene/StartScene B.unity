@@ -2524,13 +2524,23 @@ MonoBehaviour:
   BoundingBoxSize: {x: 10.47, y: 15.56, z: 25.5}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - NetworkObject: {fileID: 7260598054390996014, guid: fe3425a466033e34ead49fcfc3204895,
-      type: 3}
-    MinimumRespawnTime: 15
-    MaximumRespawnTime: 30
-    SpawnChance: 0.5
-    YOffset: 0
+  - rid: 4754568208579821638
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
+  references:
+    version: 2
+    RefIds:
+    - rid: 4754568208579821638
+      type: {class: ItemSpawnableSettings, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: fe3425a466033e34ead49fcfc3204895,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        ItemTemplate: {fileID: 11400000, guid: f069d2a30c555ce42bb8079226fc8f14, type: 2}
+        MinimumAmount: 1
+        MaximumAmount: 1
 --- !u!114 &849065437
 MonoBehaviour:
   m_ObjectHideFlags: 0
