@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// A static utility class providing network-related helper methods, such as fetching the external IP address.
-	/// IP address and hostname validation is delegated to the <see cref="Constants.IsAddressValid(string)"/> method.
+	/// IP address and hostname validation is delegated to the <see cref="Authentication.IsAddressValid(string)"/> method.
 	/// </summary>
 	public static class NetHelper
 	{
@@ -49,7 +49,7 @@ namespace FishMMO.Shared
 					ipAddress = ipAddress.Replace("\r\n", "").Replace("\n", "").Trim();
 
 					// Validate the format of the received IP address.
-					if (Constants.IsAddressValid(ipAddress))
+					if (Authentication.IsAddressValid(ipAddress))
 					{
 						// Log the successful retrieval and the IP address.
 						Log.Debug("NetHelper", $"External IP: {ipAddress}");

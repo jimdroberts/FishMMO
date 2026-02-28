@@ -275,7 +275,7 @@ namespace FishMMO.Client
 				Authentication.IsAllowedUsername(username) &&
 				Authentication.IsAllowedPassword(password) &&
 				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress) &&
-				Constants.IsAddressValid(serverAddress.Address))
+				Authentication.IsAddressValid(serverAddress.Address))
 			{
 				HandshakeMSG.text = handshakeMessage;
 				Client.LoginAuthenticator.SetLoginCredentials(username, password, isRegistration);

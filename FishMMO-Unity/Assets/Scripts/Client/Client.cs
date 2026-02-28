@@ -606,7 +606,7 @@ namespace FishMMO.Client
 			}
 			if (reconnectsAttempted < MaxReconnectAttempts)
 			{
-				if (Constants.IsAddressValid(lastWorldAddress) && lastWorldPort != 0)
+				if (Authentication.IsAddressValid(lastWorldAddress) && lastWorldPort != 0)
 				{
 					++reconnectsAttempted;
 					OnReconnectAttempt?.Invoke(reconnectsAttempted, MaxReconnectAttempts);

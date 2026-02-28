@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -25,34 +24,6 @@ namespace FishMMO.Shared
 			typeof(BaseCondition).Name,
 			typeof(BaseAction).Name,
 		};
-
-		/// <summary>
-		/// Validates an IP Address or Hostname.
-		/// Supports path-based addresses (e.g., game.fishmmo.com/ws/7770)
-		/// by extracting the host portion before validation.
-		/// </summary>
-		public static bool IsAddressValid(string address)
-		{
-			if (string.IsNullOrWhiteSpace(address))
-				return false;
-
-			string host = address.Trim();
-
-			// If the address contains a path (e.g., game.fishmmo.com/ws/7770),
-			// extract only the host portion for validation.
-			int slashIndex = host.IndexOf('/');
-			if (slashIndex >= 0)
-			{
-				host = host.Substring(0, slashIndex);
-			}
-
-			// Uri.CheckHostName can validate DNS(HostName), IPv4, and IPv6
-			UriHostNameType hostNameType = Uri.CheckHostName(host);
-
-			return hostNameType == UriHostNameType.Dns ||
-				   hostNameType == UriHostNameType.IPv4 ||
-				   hostNameType == UriHostNameType.IPv6;
-		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static string GetWorkingDirectory()
