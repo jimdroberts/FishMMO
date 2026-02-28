@@ -11,6 +11,11 @@ namespace FishMMO.Shared
 	public class CharacterAttribute
 	{
 		/// <summary>
+		/// Reference to the controller that manages this attribute, allowing for callbacks and interactions with the owning character or system.
+		/// </summary>
+		private ICharacterAttributeController characterAttributeController;
+
+		/// <summary>
 		/// Version number for this attribute instance, used for client synchronization and updates.
 		/// Incremented whenever the attribute's state changes in a way that requires client updates (
 		/// e.g., value or modifier changes that affect the final value).
@@ -209,8 +214,9 @@ namespace FishMMO.Shared
 		/// <param name="templateID">The template ID to use.</param>
 		/// <param name="initialValue">The initial base value.</param>
 		/// <param name="initialModifier">The initial modifier value.</param>
-		public CharacterAttribute(int templateID, int initialValue, int initialModifier)
+		public CharacterAttribute(ICharacterAttributeController characterAttributeController, int templateID, int initialValue, int initialModifier)
 		{
+			this.characterAttributeController = characterAttributeController;
 			Template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(templateID);
 			value = initialValue;
 			externalModifier = initialModifier;
@@ -403,7 +409,7 @@ namespace FishMMO.Shared
 				{
 					if (children.TryGetValue(pair.Key.Name, out CharacterAttribute child))
 					{
-						formulaModifier += pair.Value.CalculateBonus(this, child);
+						formulaModifier += pair.Value.CalculateBonus(characterAttributeController, this, child);
 					}
 				}
 			}

@@ -33,7 +33,7 @@ namespace FishMMO.Shared
 		/// <param name="initialValue">The initial base value.</param>
 		/// <param name="currentValue">The starting current value.</param>
 		/// <param name="modifier">The initial modifier value.</param>
-		public CharacterResourceAttribute(int templateID, int initialValue, float currentValue, int modifier) : base(templateID, initialValue, modifier)
+		public CharacterResourceAttribute(ICharacterAttributeController characterAttributeController, int templateID, int initialValue, float currentValue, int modifier) : base(characterAttributeController, templateID, initialValue, modifier)
 		{
 			this.currentValue = ClampCurrentValue(currentValue);
 		}

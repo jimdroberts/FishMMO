@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	{
 		public float Percentage;
 
-		public override int CalculateBonus(CharacterAttribute self, CharacterAttribute bonusAttribute)
+		public override int CalculateBonus(ICharacterAttributeController controller, CharacterAttribute self, CharacterAttribute bonusAttribute)
 		{
 			return (int)(bonusAttribute.FinalValue * Percentage);
 		}
