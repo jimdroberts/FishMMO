@@ -1,10 +1,14 @@
+using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Represents a choice in a dialogue node, including text, next node, conditions, actions, and triggers.
+	/// Represents a player choice within a dialogue node. Serialized inline on DialogueNode.
+	/// Contains display text, conditions for availability, actions on selection, and a link to the next node.
 	/// </summary>
+	[Serializable]
 	public class DialogueChoice
 	{
 		/// <summary>
@@ -13,26 +17,21 @@ namespace FishMMO.Shared
 		public string Text;
 
 		/// <summary>
-		/// The ID of the next dialogue node to transition to if this choice is selected.
+		/// The ID of the next dialogue node to transition to when this choice is selected.
+		/// A value of -1 ends the dialogue.
 		/// </summary>
-		public int NextNodeId;
+		public int NextNodeId = -1;
 
 		/// <summary>
-		/// List of conditions that must be met for this choice to be available to the player.
-		/// Each condition is evaluated before displaying the choice.
+		/// Conditions that must be met for this choice to be visible to the player.
 		/// </summary>
+		[SerializeReference, SubclassSelector]
 		public List<BaseCondition> Conditions = new List<BaseCondition>();
 
 		/// <summary>
-		/// List of actions to execute when this choice is selected by the player.
-		/// Actions may include giving items, updating quest states, etc.
+		/// Actions executed when the player selects this choice.
 		/// </summary>
-		public List<BaseAction> Actions = new List<BaseAction>();
-
-		/// <summary>
-		/// List of triggers to execute when this choice is selected.
-		/// Triggers may activate events, scripts, or other game logic.
-		/// </summary>
-		public List<Trigger> Triggers = new List<Trigger>();
+		[SerializeReference, SubclassSelector]
+		public List<BaseAction> OnSelectActions = new List<BaseAction>();
 	}
 }

@@ -930,7 +930,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			if (!validatedAbility.MeetsRequirements(Character) ||
+			if (!validatedAbility.MeetsActivationConditions(Character) ||
 				!validatedAbility.HasResource(Character, BloodResourceConversionTemplate))
 			{
 				//Log.Debug("Not enough resources.");

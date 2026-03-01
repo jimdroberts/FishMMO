@@ -1,118 +1,282 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Controls NPC dialogue interactions, managing dialogue nodes and player choices.
+	/// Controls NPC dialogue interactions. Manages dialogue flow, condition evaluation,
+	/// action execution, and player choice handling. Drives the dialogue tree from a DialogueTemplate.
 	/// </summary>
 	public class NPCDialogueController : CharacterBehaviour
 	{
 		/// <summary>
-		/// Dictionary of all dialogue nodes for this NPC, keyed by node ID.
-		/// Used to manage dialogue flow and transitions.
+		/// The dialogue template asset defining the conversation tree for this NPC.
 		/// </summary>
-		private Dictionary<int, DialogueNode> nodes = new Dictionary<int, DialogueNode>();
+		[Tooltip("The dialogue template asset defining the conversation tree.")]
+		public DialogueTemplate Template;
 
 		/// <summary>
-		/// The ID of the current dialogue node being displayed or interacted with.
+		/// Cached node lookup built from the template.
+		/// </summary>
+		private Dictionary<int, DialogueNode> nodeMap;
+
+		/// <summary>
+		/// The ID of the current dialogue node.
 		/// </summary>
 		private int currentNodeId = -1;
 
 		/// <summary>
-		/// Gets the current dialogue node based on the currentNodeId.
-		/// Returns null if the node does not exist.
+		/// The player currently engaged in dialogue with this NPC.
 		/// </summary>
-		public DialogueNode CurrentNode => nodes.ContainsKey(currentNodeId) ? nodes[currentNodeId] : null;
+		private IPlayerCharacter currentPlayer;
 
 		/// <summary>
-		/// The event data associated with the current dialogue session (e.g., quest, context).
-		/// Used for evaluating conditions and executing actions/triggers.
+		/// Gets the current dialogue node, or null if none is active.
 		/// </summary>
-		public EventData CurrentEventData { get; set; }
-
-		/// <summary>
-		/// Starts a dialogue at the specified node, optionally providing event data for context.
-		/// Sets the current node and enters it, triggering any node entry logic.
-		/// </summary>
-		/// <param name="startNodeId">The node ID to start the dialogue at.</param>
-		/// <param name="eventData">Optional event data for the dialogue session.</param>
-		public void StartDialogue(int startNodeId, EventData eventData = null)
+		public DialogueNode CurrentNode
 		{
-			CurrentEventData = eventData;
-			currentNodeId = startNodeId;
-			EnterNode(currentNodeId);
+			get
+			{
+				if (nodeMap != null && nodeMap.TryGetValue(currentNodeId, out DialogueNode node))
+				{
+					return node;
+				}
+				return null;
+			}
 		}
 
 		/// <summary>
-		/// Chooses a dialogue option by index, evaluating conditions and executing actions/triggers.
-		/// If conditions are not met, the choice is not executed.
+		/// The event data for the current dialogue session.
 		/// </summary>
-		/// <param name="choiceIndex">Index of the choice to select.</param>
+		public DialogueEventData CurrentEventData { get; private set; }
+
+		/// <summary>
+		/// Fired whenever the dialogue state changes (node entered, dialogue ended, etc.).
+		/// </summary>
+		public event Action OnDialogueUpdated;
+
+		/// <summary>
+		/// Fired when the dialogue ends.
+		/// </summary>
+		public event Action OnDialogueEnded;
+
+		/// <summary>
+		/// Whether a dialogue session is currently active.
+		/// </summary>
+		public bool IsDialogueActive { get; private set; }
+
+		/// <summary>
+		/// Starts a dialogue session with the given player character.
+		/// </summary>
+		/// <param name="player">The player character initiating the dialogue.</param>
+		/// <returns>True if the dialogue started successfully; false otherwise.</returns>
+		public bool StartDialogue(IPlayerCharacter player)
+		{
+			if (Template == null || player == null)
+			{
+				Log.Warning("NPCDialogueController", $"Cannot start dialogue: Template or player is null.");
+				return false;
+			}
+
+			currentPlayer = player;
+			nodeMap = Template.BuildNodeMap();
+
+			CurrentEventData = new DialogueEventData(
+				player,
+				Character,
+				Template.StartNodeId
+			);
+
+			IsDialogueActive = true;
+
+			if (!EnterNode(Template.StartNodeId))
+			{
+				EndDialogue();
+				return false;
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Processes the player selecting a choice at the current node.
+		/// Evaluates choice conditions, executes choice actions, and transitions to the next node.
+		/// </summary>
+		/// <param name="choiceIndex">The index of the selected choice.</param>
 		public void Choose(int choiceIndex)
 		{
+			if (!IsDialogueActive)
+			{
+				return;
+			}
+
 			var node = CurrentNode;
 			if (node == null || choiceIndex < 0 || choiceIndex >= node.Choices.Count)
+			{
 				return;
+			}
+
 			var choice = node.Choices[choiceIndex];
-			// Check conditions for the selected choice
-			foreach (var cond in choice.Conditions)
+
+			// Evaluate choice conditions
+			if (choice.Conditions != null)
 			{
-				if (!cond.Evaluate(Character, CurrentEventData))
-					return;
+				foreach (var condition in choice.Conditions)
+				{
+					if (condition != null && !condition.Evaluate(currentPlayer, CurrentEventData))
+					{
+						Log.Debug("NPCDialogueController", $"Choice '{choice.Text}' conditions not met.");
+						return;
+					}
+				}
 			}
-			// Execute all actions for the selected choice
-			foreach (var act in choice.Actions)
+
+			// Execute on-exit actions for the current node
+			if (node.OnExitActions != null)
 			{
-				act.Execute(Character, CurrentEventData);
+				foreach (var action in node.OnExitActions)
+				{
+					if (action != null)
+					{
+						action.Execute(currentPlayer, CurrentEventData);
+					}
+				}
 			}
-			// Execute all triggers for the selected choice
-			foreach (var trig in choice.Triggers)
+
+			// Execute on-select actions for the choice
+			if (choice.OnSelectActions != null)
 			{
-				trig.Execute(CurrentEventData);
+				foreach (var action in choice.OnSelectActions)
+				{
+					if (action != null)
+					{
+						action.Execute(currentPlayer, CurrentEventData);
+					}
+				}
 			}
-			// Move to the next node as specified by the choice
-			EnterNode(choice.NextNodeId);
+
+			// Transition to the next node, or end dialogue if NextNodeId is -1
+			if (choice.NextNodeId < 0)
+			{
+				EndDialogue();
+			}
+			else
+			{
+				// Update event data with the new node and choice index
+				CurrentEventData = new DialogueEventData(
+					currentPlayer,
+					Character,
+					choice.NextNodeId,
+					choiceIndex
+				);
+
+				if (!EnterNode(choice.NextNodeId))
+				{
+					EndDialogue();
+				}
+			}
 		}
 
 		/// <summary>
-		/// Enters the specified dialogue node, evaluating node conditions and executing entry actions/triggers.
-		/// If conditions are not met, the node is not entered.
+		/// Ends the current dialogue session and cleans up state.
+		/// </summary>
+		public void EndDialogue()
+		{
+			IsDialogueActive = false;
+			currentNodeId = -1;
+			currentPlayer = null;
+			CurrentEventData = null;
+
+			OnDialogueEnded?.Invoke();
+			OnDialogueUpdated?.Invoke();
+		}
+
+		/// <summary>
+		/// Returns the list of available choices at the current node, filtered by conditions.
+		/// </summary>
+		/// <returns>List of (index, choice) pairs for choices whose conditions are met.</returns>
+		public List<(int Index, DialogueChoice Choice)> GetAvailableChoices()
+		{
+			var available = new List<(int, DialogueChoice)>();
+			var node = CurrentNode;
+			if (node == null || node.Choices == null)
+			{
+				return available;
+			}
+
+			for (int i = 0; i < node.Choices.Count; i++)
+			{
+				var choice = node.Choices[i];
+				if (choice == null)
+				{
+					continue;
+				}
+
+				bool conditionsMet = true;
+				if (choice.Conditions != null)
+				{
+					foreach (var condition in choice.Conditions)
+					{
+						if (condition != null && !condition.Evaluate(currentPlayer, CurrentEventData))
+						{
+							conditionsMet = false;
+							break;
+						}
+					}
+				}
+
+				if (conditionsMet)
+				{
+					available.Add((i, choice));
+				}
+			}
+
+			return available;
+		}
+
+		/// <summary>
+		/// Enters the specified dialogue node. Evaluates conditions and executes on-enter actions.
 		/// </summary>
 		/// <param name="nodeId">The node ID to enter.</param>
-		private void EnterNode(int nodeId)
+		/// <returns>True if the node was entered successfully; false if conditions failed or node not found.</returns>
+		private bool EnterNode(int nodeId)
 		{
-			if (!nodes.ContainsKey(nodeId))
-				return;
-			var node = nodes[nodeId];
-			// Check node conditions before entering
-			foreach (var cond in node.Conditions)
+			if (nodeMap == null || !nodeMap.TryGetValue(nodeId, out DialogueNode node))
 			{
-				if (!cond.Evaluate(Character, CurrentEventData))
-					return;
+				Log.Warning("NPCDialogueController", $"Node {nodeId} not found in dialogue '{Template?.Name}'.");
+				return false;
 			}
-			// Execute all triggers for node entry
-			foreach (var trig in node.OnEnterTriggers)
-			{
-				trig.Execute(CurrentEventData);
-			}
-			// Execute all actions for node entry
-			foreach (var act in node.OnEnterActions)
-			{
-				act.Execute(Character, CurrentEventData);
-			}
-			currentNodeId = nodeId;
-		}
 
-		/// <summary>
-		/// Adds a dialogue node to the controller, keyed by node ID.
-		/// If a node with the same ID exists, it is replaced.
-		/// </summary>
-		/// <param name="nodeId">The node ID to add or replace.</param>
-		/// <param name="node">The dialogue node to add.</param>
-		public void AddNode(int nodeId, DialogueNode node)
-		{
-			nodes[nodeId] = node;
+			// Evaluate node conditions
+			if (node.Conditions != null)
+			{
+				foreach (var condition in node.Conditions)
+				{
+					if (condition != null && !condition.Evaluate(currentPlayer, CurrentEventData))
+					{
+						Log.Debug("NPCDialogueController", $"Node {nodeId} conditions not met in dialogue '{Template?.Name}'.");
+						return false;
+					}
+				}
+			}
+
+			// Execute on-enter actions
+			if (node.OnEnterActions != null)
+			{
+				foreach (var action in node.OnEnterActions)
+				{
+					if (action != null)
+					{
+						action.Execute(currentPlayer, CurrentEventData);
+					}
+				}
+			}
+
+			currentNodeId = nodeId;
+			OnDialogueUpdated?.Invoke();
+			return true;
 		}
 	}
 }

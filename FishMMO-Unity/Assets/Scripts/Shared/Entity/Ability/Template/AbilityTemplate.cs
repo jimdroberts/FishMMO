@@ -113,7 +113,26 @@ namespace FishMMO.Shared
 		/// <returns>The tooltip string for the ability.</returns>
 		public override string Tooltip()
 		{
-			string tooltip = base.Tooltip(null);
+			return AppendType(base.Tooltip(null));
+		}
+
+		/// <summary>
+		/// Returns the combined tooltip string for the ability with additional events, including its type if set.
+		/// </summary>
+		/// <param name="combineList">List of tooltips to combine.</param>
+		/// <returns>The combined tooltip string for the ability.</returns>
+		public override string Tooltip(List<ITooltip> combineList)
+		{
+			return AppendType(base.Tooltip(combineList));
+		}
+
+		/// <summary>
+		/// Appends the ability type to the tooltip string if the type is not None.
+		/// </summary>
+		/// <param name="tooltip">The base tooltip string.</param>
+		/// <returns>The tooltip string with the ability type appended.</returns>
+		private string AppendType(string tooltip)
+		{
 			if (Type != AbilityType.None)
 			{
 				tooltip += RichText.Format($"\r\nType: {Type}", true, "f5ad6eFF", "120%");

@@ -51,6 +51,11 @@ namespace FishMMO.Shared
 		public System.Random RNG;
 
 		/// <summary>
+		/// Cached tick event data instance to avoid per-frame allocation.
+		/// </summary>
+		private AbilityTickEventData cachedTickEventData;
+
+		/// <summary>
 		/// Cached reference to the object's GameObject.
 		/// </summary>
 		public GameObject GameObject { get; private set; }
@@ -87,10 +92,18 @@ namespace FishMMO.Shared
 			// Dispatch OnTick events for this ability object
 			if (Ability?.OnTickEvents != null)
 			{
-				AbilityTickEventData tickEvent = new AbilityTickEventData(Caster, Transform, Time.deltaTime, this);
+				if (cachedTickEventData == null)
+				{
+					cachedTickEventData = new AbilityTickEventData(Caster, Transform, Time.deltaTime, this);
+				}
+				else
+				{
+					cachedTickEventData.DeltaTime = Time.deltaTime;
+				}
+
 				foreach (var trigger in Ability.OnTickEvents.Values)
 				{
-					trigger.Execute(tickEvent);
+					trigger.Execute(cachedTickEventData);
 				}
 			}
 

@@ -4,7 +4,9 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Abstract base class for ability events, providing common event fields, requirements, and tooltip logic.
+	/// Abstract base class for ability events. Extends <see cref="Trigger"/> to provide ECA-driven conditions and actions.
+	/// Ability requirements (resources, faction, archetype, attributes) are defined as ECA conditions on the inherited
+	/// <see cref="Trigger.Conditions"/> list or on the parent <see cref="BaseAbilityTemplate.ActivationConditions"/> list.
 	/// </summary>
 	public abstract class AbilityEvent : Trigger, ITooltip
 	{
@@ -15,49 +17,29 @@ namespace FishMMO.Shared
 		private Sprite icon;
 
 		/// <summary>
-		/// Time required to activate the event (in seconds).
+		/// Time required to activate the event (in seconds). Aggregated into the runtime ability.
 		/// </summary>
 		public float ActivationTime;
 
 		/// <summary>
-		/// Lifetime of the event effect (in seconds).
+		/// Lifetime of the event effect (in seconds). Aggregated into the runtime ability.
 		/// </summary>
 		public float LifeTime;
 
 		/// <summary>
-		/// Speed of the event effect (units per second).
+		/// Speed of the event effect (units per second). Aggregated into the runtime ability.
 		/// </summary>
 		public float Speed;
 
 		/// <summary>
-		/// Cooldown time for the event (in seconds).
+		/// Cooldown time for the event (in seconds). Aggregated into the runtime ability.
 		/// </summary>
 		public float Cooldown;
 
 		/// <summary>
-		/// Price or cost of the event (e.g., in-game currency).
+		/// Crafting price of the event (in-game currency cost to add this event during ability crafting).
 		/// </summary>
 		public int Price;
-
-		/// <summary>
-		/// Resources required to use the event (e.g., mana, stamina).
-		/// </summary>
-		public AbilityResourceDictionary Resources = new AbilityResourceDictionary();
-
-		/// <summary>
-		/// Attributes required to use the event (e.g., strength, intelligence).
-		/// </summary>
-		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
-
-		/// <summary>
-		/// Faction required to use the event.
-		/// </summary>
-		public FactionTemplate RequiredFaction;
-
-		/// <summary>
-		/// Archetype required to use the event.
-		/// </summary>
-		public ArchetypeTemplate RequiredArchetype;
 
 		/// <summary>
 		/// The name of the event (from the ScriptableObject name).

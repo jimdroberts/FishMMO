@@ -5,7 +5,9 @@ using System.Collections.Generic;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Abstract base ScriptableObject for ability templates, providing common fields and tooltip logic.
+	/// Abstract base ScriptableObject for ability templates, providing common fields, activation conditions, and tooltip logic.
+	/// Ability requirements (resources, faction, archetype, attributes) are defined as ECA conditions
+	/// on the <see cref="ActivationConditions"/> list rather than as hardcoded fields.
 	/// </summary>
 	public abstract class BaseAbilityTemplate : CachedScriptableObject<BaseAbilityTemplate>, ITooltip, ICachedObject
 	{
@@ -40,29 +42,20 @@ namespace FishMMO.Shared
 		public float Cooldown;
 
 		/// <summary>
-		/// Price or cost of the ability.
+		/// Crafting price of the ability (in-game currency).
 		/// </summary>
 		public int Price;
 
 		/// <summary>
-		/// Resources required to use the ability.
+		/// Conditions that must be met to activate this ability.
+		/// Use ECA conditions such as <see cref="HasResourceCondition"/>, <see cref="HasRequiredAttribute"/>,
+		/// <see cref="HasFactionCondition"/>, and <see cref="IsArchetypeCondition"/> to define activation requirements.
+		/// Resource conditions implementing <see cref="IResourceCost"/> are aggregated for total cost validation.
 		/// </summary>
-		public AbilityResourceDictionary Resources = new AbilityResourceDictionary();
-
-		/// <summary>
-		/// Attributes required to use the ability.
-		/// </summary>
-		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
-
-		/// <summary>
-		/// Faction required to use the ability.
-		/// </summary>
-		public FactionTemplate RequiredFaction;
-
-		/// <summary>
-		/// Archetype required to use the ability.
-		/// </summary>
-		public ArchetypeTemplate RequiredArchetype;
+		[Header("Activation Conditions")]
+		[Tooltip("Conditions that must be met to activate this ability (resource costs, attribute requirements, faction, archetype, etc.).")]
+		[SerializeReference, SubclassSelector]
+		public List<BaseCondition> ActivationConditions = new List<BaseCondition>();
 
 		/// <summary>
 		/// The name of the ability (from the ScriptableObject name).
@@ -100,7 +93,8 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Builds the primary tooltip string for the ability, including name, description, and stats.
+		/// Builds the primary tooltip string for the ability, including name, description, stats,
+		/// and requirement/cost information gathered from <see cref="ActivationConditions"/>.
 		/// </summary>
 		/// <param name="combineList">List of tooltips to combine.</param>
 		/// <returns>Formatted tooltip string.</returns>
@@ -123,61 +117,53 @@ namespace FishMMO.Shared
 				float cooldown = Cooldown;
 				float price = Price;
 
-				AbilityResourceDictionary resources = new AbilityResourceDictionary();
-				resources.CopyFrom(Resources);
-
-				AbilityResourceDictionary requirements = new AbilityResourceDictionary();
-				requirements.CopyFrom(RequiredAttributes);
-
-				if (combineList != null &&
-					combineList.Count > 0)
+				// Collect all conditions for tooltip display.
+				List<BaseCondition> allConditions = new List<BaseCondition>();
+				if (ActivationConditions != null)
 				{
-					foreach (BaseAbilityTemplate template in combineList)
+					allConditions.AddRange(ActivationConditions);
+				}
+
+				if (combineList != null && combineList.Count > 0)
+				{
+					foreach (ITooltip tooltip in combineList)
 					{
-						if (template == null)
+						if (tooltip == null)
 						{
 							continue;
 						}
 
-						string templateDescription = template.GetFormattedDescription();
+						string templateDescription = tooltip.GetFormattedDescription();
 						if (!string.IsNullOrWhiteSpace(templateDescription))
 						{
 							sb.Append(RichText.Format(templateDescription, true, "a66ef5FF"));
 						}
 
-						activationTime += template.ActivationTime;
-						lifeTime += template.LifeTime;
-						speed += template.Speed;
-						cooldown += template.Cooldown;
-						price += template.Price;
-
-						foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Resources)
+						if (tooltip is AbilityEvent abilityEvent)
 						{
-							if (!string.IsNullOrWhiteSpace(pair.Key.Name))
+							activationTime += abilityEvent.ActivationTime;
+							lifeTime += abilityEvent.LifeTime;
+							speed += abilityEvent.Speed;
+							cooldown += abilityEvent.Cooldown;
+							price += abilityEvent.Price;
+
+							// Gather event conditions for tooltip contributions.
+							if (abilityEvent.Conditions != null)
 							{
-								if (resources.ContainsKey(pair.Key))
-								{
-									resources[pair.Key] += pair.Value;
-								}
-								else
-								{
-									resources[pair.Key] = pair.Value;
-								}
+								allConditions.AddRange(abilityEvent.Conditions);
 							}
 						}
-
-						foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.RequiredAttributes)
+						else if (tooltip is BaseAbilityTemplate template)
 						{
-							if (!string.IsNullOrWhiteSpace(pair.Key.Name))
+							activationTime += template.ActivationTime;
+							lifeTime += template.LifeTime;
+							speed += template.Speed;
+							cooldown += template.Cooldown;
+							price += template.Price;
+
+							if (template.ActivationConditions != null)
 							{
-								if (requirements.ContainsKey(pair.Key))
-								{
-									requirements[pair.Key] += pair.Value;
-								}
-								else
-								{
-									requirements[pair.Key] = pair.Value;
-								}
+								allConditions.AddRange(template.ActivationConditions);
 							}
 						}
 					}
@@ -196,31 +182,40 @@ namespace FishMMO.Shared
 					sb.Append(RichText.Format("Cooldown", cooldown, true, "FFFFFFFF", "", "s"));
 				}
 
-				if (resources != null && resources.Count > 0)
-				{
-					//sb.Append("\r\n______________________________\r\n\r\n");
-					sb.Append("\r\n\r\n<color=#a66ef5>Resource Cost: </color>");
+				// Build resource cost and requirement sections from conditions.
+				bool hasResources = false;
+				bool hasRequirements = false;
 
-					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in resources)
+				foreach (BaseCondition condition in allConditions)
+				{
+					if (condition == null) continue;
+
+					if (condition is IResourceCost resourceCost &&
+						resourceCost.ResourceTemplate != null &&
+						resourceCost.ResourceAmount > 0)
 					{
-						if (!string.IsNullOrWhiteSpace(pair.Key.Name))
+						if (!hasResources)
 						{
-							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "", "", "120%"));
+							sb.Append("\r\n\r\n<color=#a66ef5>Resource Cost: </color>");
+							hasResources = true;
+						}
+						sb.Append(RichText.Format(resourceCost.ResourceTemplate.Name, resourceCost.ResourceAmount, true, "f5ad6eFF", "", "", "120%"));
+					}
+					else if (condition is ITooltipContributor contributor)
+					{
+						string contribution = contributor.GetTooltipContribution();
+						if (!string.IsNullOrWhiteSpace(contribution))
+						{
+							if (!hasRequirements)
+							{
+								sb.Append("\r\n\r\n<color=#a66ef5>Requirements: </color>");
+								hasRequirements = true;
+							}
+							sb.Append(contribution);
 						}
 					}
 				}
-				if (requirements != null && requirements.Count > 0)
-				{
-					sb.Append("\r\n\r\n<color=#a66ef5>Requirements: </color>");
 
-					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in requirements)
-					{
-						if (!string.IsNullOrWhiteSpace(pair.Key.Name))
-						{
-							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "", "", "120%"));
-						}
-					}
-				}
 				if (price > 0)
 				{
 					sb.AppendLine();

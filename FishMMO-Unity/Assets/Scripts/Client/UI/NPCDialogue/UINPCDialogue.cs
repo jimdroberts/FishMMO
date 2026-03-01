@@ -7,18 +7,26 @@ using FishMMO.Shared;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI component for displaying NPC dialogue and choices to the player.
+	/// UI component for displaying NPC dialogue and player choices.
+	/// Subscribes to NPCDialogueController events to refresh the display automatically.
 	/// </summary>
 	public class UINPCDialogue : UICharacterControl
 	{
 		/// <summary>
+		/// The text field for displaying the speaker name.
+		/// </summary>
+		public TextMeshProUGUI SpeakerNameText;
+
+		/// <summary>
 		/// The text field for displaying the NPC's dialogue.
 		/// </summary>
 		public TextMeshProUGUI DialogueText;
+
 		/// <summary>
 		/// The container for choice buttons.
 		/// </summary>
 		public Transform ChoicesContainer;
+
 		/// <summary>
 		/// The prefab used to instantiate choice buttons.
 		/// </summary>
@@ -30,65 +38,109 @@ namespace FishMMO.Client
 		private NPCDialogueController dialogueController;
 
 		/// <summary>
-		/// Sets the dialogue controller and refreshes the UI.
+		/// Opens the dialogue UI with the given controller and subscribes to updates.
 		/// </summary>
 		/// <param name="controller">The NPC dialogue controller to use.</param>
-		public void SetDialogueController(NPCDialogueController controller)
+		public void Open(NPCDialogueController controller)
 		{
+			if (dialogueController != null)
+			{
+				dialogueController.OnDialogueUpdated -= RefreshUI;
+				dialogueController.OnDialogueEnded -= Close;
+			}
+
 			dialogueController = controller;
+
+			if (dialogueController != null)
+			{
+				dialogueController.OnDialogueUpdated += RefreshUI;
+				dialogueController.OnDialogueEnded += Close;
+			}
+
+			gameObject.SetActive(true);
 			RefreshUI();
 		}
 
 		/// <summary>
-		/// Refreshes the dialogue UI, updating the text and available choices.
+		/// Closes the dialogue UI and unsubscribes from events.
+		/// </summary>
+		public void Close()
+		{
+			if (dialogueController != null)
+			{
+				dialogueController.OnDialogueUpdated -= RefreshUI;
+				dialogueController.OnDialogueEnded -= Close;
+				dialogueController = null;
+			}
+
+			gameObject.SetActive(false);
+		}
+
+		/// <summary>
+		/// Refreshes the dialogue UI, updating the speaker name, dialogue text, and available choices.
 		/// </summary>
 		public void RefreshUI()
 		{
 			if (dialogueController == null || DialogueText == null || ChoicesContainer == null || ChoiceButtonPrefab == null)
+			{
 				return;
+			}
+
 			var node = dialogueController.CurrentNode;
 			if (node == null)
+			{
 				return;
+			}
+
+			// Update speaker name
+			if (SpeakerNameText != null)
+			{
+				SpeakerNameText.text = !string.IsNullOrWhiteSpace(node.SpeakerName)
+					? node.SpeakerName
+					: dialogueController.Character?.Name ?? "???";
+			}
+
+			// Update dialogue text
 			DialogueText.text = node.Text;
+
 			// Clear old choices
 			foreach (Transform child in ChoicesContainer)
-				Destroy(child.gameObject);
-			// Add new choices (only those whose conditions are met)
-			for (int i = 0; i < node.Choices.Count; i++)
 			{
-				var choice = node.Choices[i];
-				bool available = true;
-				// Evaluate all conditions for this choice; if any fail, the choice is not available
-				if (choice.Conditions != null && choice.Conditions.Count > 0)
-				{
-					foreach (var cond in choice.Conditions)
-					{
-						if (cond != null && !cond.Evaluate(Character, dialogueController?.CurrentEventData))
-						{
-							available = false;
-							break;
-						}
-					}
-				}
-				if (!available)
-					continue;
-				// Instantiate a new button for the available choice
+				Destroy(child.gameObject);
+			}
+
+			// Add available choices (filtered by conditions)
+			var availableChoices = dialogueController.GetAvailableChoices();
+			for (int i = 0; i < availableChoices.Count; i++)
+			{
+				var (originalIndex, choice) = availableChoices[i];
 				var btn = Instantiate(ChoiceButtonPrefab, ChoicesContainer);
 				btn.GetComponentInChildren<TextMeshProUGUI>().text = choice.Text;
-				int idx = i;
-				btn.onClick.AddListener(() => OnChoiceSelected(idx));
+				int capturedIndex = originalIndex;
+				btn.onClick.AddListener(() => OnChoiceSelected(capturedIndex));
 				btn.gameObject.SetActive(true);
 			}
 		}
 
 		/// <summary>
-		/// Called when a choice is selected by the player.
+		/// Called when the player selects a choice.
 		/// </summary>
-		/// <param name="index">The index of the selected choice.</param>
+		/// <param name="index">The original index of the selected choice in the node's choice list.</param>
 		private void OnChoiceSelected(int index)
 		{
-			dialogueController.Choose(index);
-			RefreshUI();
+			if (dialogueController != null)
+			{
+				dialogueController.Choose(index);
+			}
+		}
+
+		private void OnDestroy()
+		{
+			if (dialogueController != null)
+			{
+				dialogueController.OnDialogueUpdated -= RefreshUI;
+				dialogueController.OnDialogueEnded -= Close;
+			}
 		}
 	}
 }

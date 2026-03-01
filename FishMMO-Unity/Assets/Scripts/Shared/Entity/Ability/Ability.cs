@@ -4,7 +4,9 @@ using System.Runtime.CompilerServices;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Represents an in-game ability instance, constructed from an <see cref="AbilityTemplate"/> and containing all runtime state, events, and resource requirements.
+	/// Represents an in-game ability instance, constructed from an <see cref="AbilityTemplate"/> and containing all runtime state and events.
+	/// Resource costs and requirements are determined by ECA conditions on the template's <see cref="BaseAbilityTemplate.ActivationConditions"/>
+	/// and each event's <see cref="Trigger.Conditions"/> via the <see cref="IResourceCost"/> interface.
 	/// </summary>
 	public class Ability
 	{
@@ -15,8 +17,6 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Version number for this ability instance, used for client synchronization and updates.
-		/// Incremented whenever the ability's state changes in a way that requires client updates (e.g., adding/removing events, changing modifiers).
-		/// Not incremented for changes that do not affect client state (e.g., internal cooldown tracking).
 		/// </summary>
 		public long Version;
 
@@ -61,16 +61,6 @@ namespace FishMMO.Shared
 		public string CachedTooltip { get; private set; }
 
 		/// <summary>
-		/// The total resources required to use this ability, including all modifiers.
-		/// </summary>
-		public AbilityResourceDictionary Resources { get; private set; }
-
-		/// <summary>
-		/// The total required attributes to use this ability, including all modifiers.
-		/// </summary>
-		public AbilityResourceDictionary RequiredAttributes { get; private set; }
-
-		/// <summary>
 		/// Optional override for the ability type, set by certain events.
 		/// </summary>
 		public AbilityTypeOverrideEventType TypeOverride { get; private set; }
@@ -111,20 +101,14 @@ namespace FishMMO.Shared
 		public Dictionary<int, Dictionary<int, AbilityObject>> Objects { get; set; }
 
 		/// <summary>
-		/// The total resource cost for this ability, summing all resource values.
+		/// Cached resource costs dictionary, invalidated when events are added or removed.
 		/// </summary>
-		public int TotalResourceCost
-		{
-			get
-			{
-				int totalCost = 0;
-				foreach (int cost in Resources.Values)
-				{
-					totalCost += cost;
-				}
-				return totalCost;
-			}
-		}
+		private Dictionary<CharacterAttributeTemplate, int> cachedResourceCosts;
+
+		/// <summary>
+		/// Whether the cached resource costs need to be recalculated.
+		/// </summary>
+		private bool resourceCostsDirty = true;
 
 		/// <summary>
 		/// Constructs an ability from a template and optional event list.
@@ -178,23 +162,54 @@ namespace FishMMO.Shared
 			AddEvents(Template.OnSpawnEvents);
 			AddEvents(Template.OnDestroyEvents);
 
-			// Add any additional events provided in the constructor.
+			// Add any additional events provided in the constructor (e.g., from crafting).
 			if (abilityEvents != null)
 			{
-				foreach (var eventId in abilityEvents)
+				foreach (int eventId in abilityEvents)
 				{
-					var abilityEvent = AbilityEvent.Get<AbilityEvent>(eventId);
-					if (abilityEvent != null && !AbilityEvents.ContainsKey(abilityEvent.ID))
-						AbilityEvents.Add(abilityEvent.ID, abilityEvent);
+					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(eventId);
+					AddEvent(abilityEvent);
 				}
 			}
 
-			// Apply all stat/resource/attribute modifiers from the template.
+			// Apply stat modifiers from the template.
 			AddTemplateModifiers(Template);
 		}
 
 		/// <summary>
-		/// Adds a list of ability events to the appropriate event dictionaries and applies their stat/resource/attribute modifiers.
+		/// Adds a single ability event to the appropriate event dictionaries and applies its stat modifiers.
+		/// </summary>
+		/// <param name="abilityEvent">The ability event to add.</param>
+		public void AddEvent(AbilityEvent abilityEvent)
+		{
+			if (abilityEvent == null || AbilityEvents.ContainsKey(abilityEvent.ID)) return;
+
+			AbilityEvents.Add(abilityEvent.ID, abilityEvent);
+			AddEventModifiers(abilityEvent);
+			resourceCostsDirty = true;
+
+			switch (abilityEvent)
+			{
+				case AbilityOnTickEvent tickEvent:
+					OnTickEvents[tickEvent.ID] = tickEvent;
+					break;
+				case AbilityOnHitEvent hitEvent:
+					OnHitEvents[hitEvent.ID] = hitEvent;
+					break;
+				case AbilityOnPreSpawnEvent preSpawnEvent:
+					OnPreSpawnEvents[preSpawnEvent.ID] = preSpawnEvent;
+					break;
+				case AbilityOnSpawnEvent spawnEvent:
+					OnSpawnEvents[spawnEvent.ID] = spawnEvent;
+					break;
+				case AbilityOnDestroyEvent destroyEvent:
+					OnDestroyEvents[destroyEvent.ID] = destroyEvent;
+					break;
+			}
+		}
+
+		/// <summary>
+		/// Adds a list of ability events to the appropriate event dictionaries and applies their stat modifiers.
 		/// </summary>
 		/// <typeparam name="T">The type of ability event.</typeparam>
 		/// <param name="abilityEvents">The list of events to add.</param>
@@ -202,7 +217,7 @@ namespace FishMMO.Shared
 		{
 			if (abilityEvents == null) return;
 
-			foreach (var abilityEvent in abilityEvents)
+			foreach (T abilityEvent in abilityEvents)
 			{
 				if (abilityEvent == null) continue;
 
@@ -253,101 +268,129 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Adds the stat/resource/attribute modifiers from an ability event to this ability.
+		/// Adds the stat modifiers from an ability event to this ability.
 		/// </summary>
 		/// <param name="abilityEvent">The event whose modifiers to add.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void AddEventModifiers(AbilityEvent abilityEvent)
 		{
-			AddStats(abilityEvent.ActivationTime, abilityEvent.LifeTime, abilityEvent.Cooldown, abilityEvent.Speed,
-				abilityEvent.Resources, abilityEvent.RequiredAttributes);
+			ActivationTime += abilityEvent.ActivationTime;
+			LifeTime += abilityEvent.LifeTime;
+			Cooldown += abilityEvent.Cooldown;
+			Speed += abilityEvent.Speed;
 		}
 
 		/// <summary>
-		/// Adds the stat/resource/attribute modifiers from a template to this ability.
+		/// Adds the stat modifiers from a template to this ability.
 		/// </summary>
 		/// <param name="template">The template whose modifiers to add.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void AddTemplateModifiers(AbilityTemplate template)
 		{
-			AddStats(template.ActivationTime, template.LifeTime, template.Cooldown, template.Speed,
-				template.Resources, template.RequiredAttributes);
+			ActivationTime += template.ActivationTime;
+			LifeTime += template.LifeTime;
+			Cooldown += template.Cooldown;
+			Speed += template.Speed;
 		}
 
 		/// <summary>
-		/// Adds stat/resource/attribute modifiers to this ability.
+		/// Aggregates all resource costs from the template's <see cref="BaseAbilityTemplate.ActivationConditions"/>
+		/// and each event's <see cref="Trigger.Conditions"/> by scanning for <see cref="IResourceCost"/> implementations.
 		/// </summary>
-		/// <param name="activationTime">Activation time to add.</param>
-		/// <param name="lifeTime">Lifetime to add.</param>
-		/// <param name="cooldown">Cooldown to add.</param>
-		/// <param name="speed">Speed to add.</param>
-		/// <param name="addResources">Resources to add.</param>
-		/// <param name="addRequiredAttributes">Required attributes to add.</param>
-		private void AddStats(float activationTime, float lifeTime, float cooldown, float speed,
-			IDictionary<CharacterAttributeTemplate, int> addResources,
-			IDictionary<CharacterAttributeTemplate, int> addRequiredAttributes)
+		/// <returns>A dictionary mapping resource attribute templates to their total required amounts.</returns>
+		public Dictionary<CharacterAttributeTemplate, int> GetResourceCosts()
 		{
-			ActivationTime += activationTime;
-			LifeTime += lifeTime;
-			Cooldown += cooldown;
-			Speed += speed;
-
-			if (Resources == null)
+			if (!resourceCostsDirty && cachedResourceCosts != null)
 			{
-				Resources = new AbilityResourceDictionary();
+				return cachedResourceCosts;
 			}
 
-			if (RequiredAttributes == null)
+			if (cachedResourceCosts == null)
 			{
-				RequiredAttributes = new AbilityResourceDictionary();
+				cachedResourceCosts = new Dictionary<CharacterAttributeTemplate, int>();
+			}
+			else
+			{
+				cachedResourceCosts.Clear();
 			}
 
-			if (addResources != null)
+			// Aggregate from template activation conditions.
+			CollectResourceCosts(Template?.ActivationConditions, cachedResourceCosts);
+
+			// Aggregate from each event's conditions.
+			foreach (AbilityEvent evt in AbilityEvents.Values)
 			{
-				foreach (var pair in addResources)
+				CollectResourceCosts(evt?.Conditions, cachedResourceCosts);
+			}
+
+			resourceCostsDirty = false;
+			return cachedResourceCosts;
+		}
+
+		/// <summary>
+		/// Scans a list of conditions for <see cref="IResourceCost"/> implementations and adds their costs to the dictionary.
+		/// </summary>
+		/// <param name="conditions">The conditions to scan.</param>
+		/// <param name="costs">The dictionary to accumulate costs into.</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static void CollectResourceCosts(List<BaseCondition> conditions, Dictionary<CharacterAttributeTemplate, int> costs)
+		{
+			if (conditions == null) return;
+
+			foreach (BaseCondition condition in conditions)
+			{
+				if (condition is IResourceCost resourceCost &&
+					resourceCost.ResourceTemplate != null &&
+					resourceCost.ResourceAmount > 0)
 				{
-					if (!Resources.ContainsKey(pair.Key))
+					if (costs.ContainsKey(resourceCost.ResourceTemplate))
 					{
-						Resources[pair.Key] = pair.Value;
+						costs[resourceCost.ResourceTemplate] += resourceCost.ResourceAmount;
 					}
 					else
 					{
-						Resources[pair.Key] += pair.Value;
-					}
-				}
-			}
-
-			if (addRequiredAttributes != null)
-			{
-				foreach (var pair in addRequiredAttributes)
-				{
-					if (!RequiredAttributes.ContainsKey(pair.Key))
-					{
-						RequiredAttributes[pair.Key] = pair.Value;
-					}
-					else
-					{
-						RequiredAttributes[pair.Key] += pair.Value;
+						costs[resourceCost.ResourceTemplate] = resourceCost.ResourceAmount;
 					}
 				}
 			}
 		}
 
 		/// <summary>
-		/// Checks if the given character meets all required attributes for this ability.
+		/// The total resource cost for this ability, summing all <see cref="IResourceCost"/> amounts.
+		/// </summary>
+		public int TotalResourceCost
+		{
+			get
+			{
+				int totalCost = 0;
+				Dictionary<CharacterAttributeTemplate, int> costs = GetResourceCosts();
+				foreach (int cost in costs.Values)
+				{
+					totalCost += cost;
+				}
+				return totalCost;
+			}
+		}
+
+		/// <summary>
+		/// Evaluates the template's activation conditions (excluding <see cref="IResourceCost"/> conditions, which are handled by <see cref="HasResource"/>).
+		/// Checks requirements such as faction, archetype, and attribute conditions.
 		/// </summary>
 		/// <param name="character">The character to check.</param>
-		/// <returns>True if requirements are met, false otherwise.</returns>
-		public bool MeetsRequirements(ICharacter character)
+		/// <returns>True if all non-resource activation conditions are met, false otherwise.</returns>
+		public bool MeetsActivationConditions(ICharacter character)
 		{
-			if (!character.TryGet(out ICharacterAttributeController attributeController))
+			if (Template?.ActivationConditions == null || Template.ActivationConditions.Count == 0) return true;
+
+			EventData checkData = new EventData(character);
+			foreach (BaseCondition condition in Template.ActivationConditions)
 			{
-				return false;
-			}
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in RequiredAttributes)
-			{
-				if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute requirement) ||
-					requirement.CurrentValue < pair.Value)
+				if (condition == null) continue;
+
+				// Skip resource cost conditions; those are handled by HasResource via aggregation.
+				if (condition is IResourceCost) continue;
+
+				if (!condition.Evaluate(character, checkData))
 				{
 					return false;
 				}
@@ -377,13 +420,13 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Removes an ability event by its event ID and updates all stat/resource/attribute modifiers accordingly.
+		/// Removes an ability event by its event ID and updates stat modifiers accordingly.
 		/// </summary>
 		/// <param name="eventID">The event ID to remove.</param>
 		/// <returns>True if the event was removed, false otherwise.</returns>
 		public bool RemoveAbilityEvent(int eventID)
 		{
-			if (AbilityEvents.TryGetValue(eventID, out var abilityEvent))
+			if (AbilityEvents.TryGetValue(eventID, out AbilityEvent abilityEvent))
 			{
 				AbilityEvents.Remove(eventID);
 				OnTickEvents.Remove(eventID);
@@ -397,27 +440,7 @@ namespace FishMMO.Shared
 				Cooldown -= abilityEvent.Cooldown;
 				Speed -= abilityEvent.Speed;
 
-				if (Resources != null)
-				{
-					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
-					{
-						if (Resources.ContainsKey(pair.Key))
-						{
-							Resources[pair.Key] -= pair.Value;
-						}
-					}
-				}
-
-				if (RequiredAttributes != null)
-				{
-					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.RequiredAttributes)
-					{
-						if (RequiredAttributes.ContainsKey(pair.Key))
-						{
-							RequiredAttributes[pair.Key] -= pair.Value;
-						}
-					}
-				}
+				resourceCostsDirty = true;
 				return true;
 			}
 			return false;
@@ -425,6 +448,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Checks if the given character has enough resources to use this ability.
+		/// Aggregates all <see cref="IResourceCost"/> conditions from the template and events.
 		/// </summary>
 		/// <param name="character">The character to check.</param>
 		/// <param name="resourceConversionTrigger">Optional event that allows resource conversion (e.g., health for mana).</param>
@@ -435,21 +459,31 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
+
+			Dictionary<CharacterAttributeTemplate, int> costs = GetResourceCosts();
+			if (costs.Count == 0) return true;
+
+			// Blood resource conversion: all costs are summed and checked against health.
 			if (resourceConversionTrigger != null && AbilityEvents.ContainsKey(resourceConversionTrigger.ID))
 			{
-				int totalCost = TotalResourceCost;
-				CharacterResourceAttribute resource;
-				if (!attributeController.TryGetHealthAttribute(out resource) ||
+				int totalCost = 0;
+				foreach (int cost in costs.Values)
+				{
+					totalCost += cost;
+				}
+
+				if (!attributeController.TryGetHealthAttribute(out CharacterResourceAttribute resource) ||
 					resource.CurrentValue < totalCost)
 				{
 					return false;
 				}
 				return true;
 			}
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
+
+			// Normal check: each resource is checked individually against its aggregated cost.
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in costs)
 			{
-				CharacterResourceAttribute resource;
-				if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) ||
+				if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute resource) ||
 					resource.CurrentValue < pair.Value)
 				{
 					return false;
@@ -460,6 +494,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Consumes the required resources from the given character to use this ability.
+		/// Aggregates all <see cref="IResourceCost"/> conditions from the template and events.
 		/// </summary>
 		/// <param name="character">The character using the ability.</param>
 		/// <param name="resourceConversionTrigger">Optional event that allows resource conversion (e.g., health for mana).</param>
@@ -469,21 +504,31 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
+			Dictionary<CharacterAttributeTemplate, int> costs = GetResourceCosts();
+			if (costs.Count == 0) return;
+
+			// Blood resource conversion: all costs are summed and consumed from health.
 			if (resourceConversionTrigger != null && AbilityEvents.ContainsKey(resourceConversionTrigger.ID))
 			{
-				int totalCost = TotalResourceCost;
-				CharacterResourceAttribute resource;
-				if (attributeController.TryGetHealthAttribute(out resource) &&
+				int totalCost = 0;
+				foreach (int cost in costs.Values)
+				{
+					totalCost += cost;
+				}
+
+				if (attributeController.TryGetHealthAttribute(out CharacterResourceAttribute resource) &&
 					resource.CurrentValue >= totalCost)
 				{
 					resource.Consume(totalCost);
 				}
 				return;
 			}
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
+
+			// Normal consumption: each resource is consumed individually.
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in costs)
 			{
-				CharacterResourceAttribute resource;
-				if (attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) &&
+				if (attributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute resource) &&
 					resource.CurrentValue >= pair.Value)
 				{
 					resource.Consume(pair.Value);
