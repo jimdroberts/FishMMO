@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
@@ -10,9 +11,11 @@ namespace FishMMO.Shared
 	public class ApplyBuffAction : BaseAction
 	{
 		/// <summary>
-		/// The number of stacks of the buff to apply to the target.
+		/// The value provider that determines the number of stacks to apply.
 		/// </summary>
-		public int Stacks;
+		[Tooltip("The value provider that determines the number of buff stacks to apply.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider StacksValue;
 
 		/// <summary>
 		/// The buff template to apply to the target.
@@ -20,24 +23,26 @@ namespace FishMMO.Shared
 		public BaseBuffTemplate BuffTemplate;
 
 		/// <summary>
-		/// Applies the specified buff to the target character, stacking it the specified number of times.
+		/// Applies the specified buff to the target character, stacking it the computed number of times.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target information.</param>
-		/// <remarks>
-		/// This method attempts to retrieve <see cref="CharacterHitEventData"/> from the event data. If successful, it applies the buff to the target's buff controller.
-		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			// Try to get the event data for a character hit. If not present, log a warning and exit.
+			if (StacksValue == null)
+			{
+				Log.Warning("ApplyBuffAction", "StacksValue provider is null.");
+				return;
+			}
+
 			if (eventData.TryGet(out CharacterHitEventData targetEventData))
 			{
-				// Try to get the buff controller from the target. If present, apply the buff the specified number of times.
 				if (targetEventData.Target.TryGet(out IBuffController buffController))
 				{
-					for (int i = 0; i < Stacks; ++i)
+					int stacks = StacksValue.GetValue(initiator, eventData);
+					for (int i = 0; i < stacks; ++i)
 					{
-						buffController.Apply(BuffTemplate); // Apply the buff for each stack.
+						buffController.Apply(BuffTemplate);
 					}
 				}
 			}

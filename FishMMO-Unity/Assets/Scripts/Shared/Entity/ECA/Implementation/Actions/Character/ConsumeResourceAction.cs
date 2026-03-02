@@ -18,10 +18,11 @@ namespace FishMMO.Shared
 		public CharacterAttributeTemplate ResourceTemplate;
 
 		/// <summary>
-		/// The amount of the resource to consume.
+		/// The value provider that determines how much of the resource to consume.
 		/// </summary>
-		[Tooltip("The amount of the resource to consume.")]
-		public int Amount = 1;
+		[Tooltip("The value provider that determines how much of the resource to consume.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider AmountValue;
 
 		/// <summary>
 		/// Executes the action, consuming the specified resource from the initiator or target character.
@@ -36,15 +37,22 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			if (AmountValue == null)
+			{
+				Log.Warning("ConsumeResourceAction", "AmountValue provider is null.");
+				return;
+			}
+
 			ICharacter characterToConsume = ResolveTarget(initiator, eventData);
 
 			if (characterToConsume == null) return;
 			if (!characterToConsume.TryGet(out ICharacterAttributeController attributeController)) return;
 
+			int amount = AmountValue.GetValue(initiator, eventData);
 			if (attributeController.TryGetResourceAttribute(ResourceTemplate.ID, out CharacterResourceAttribute resource) &&
-				resource.CurrentValue >= Amount)
+				resource.CurrentValue >= amount)
 			{
-				resource.Consume(Amount);
+				resource.Consume(amount);
 			}
 		}
 	}

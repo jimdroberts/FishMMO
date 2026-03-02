@@ -30,8 +30,10 @@ namespace FishMMO.Shared
 		public Ability Ability;
 		/// <summary>
 		/// The character who cast or owns this ability object.
+		/// May be a live <see cref="IPlayerCharacter"/> during normal play, or a
+		/// <see cref="SnapshotCharacter"/> phantom after the caster disconnects.
 		/// </summary>
-		public IPlayerCharacter Caster;
+		public ICharacter Caster;
 		/// <summary>
 		/// Cached reference to the object's Rigidbody, if present.
 		/// </summary>
@@ -44,11 +46,39 @@ namespace FishMMO.Shared
 		/// Remaining lifetime in seconds before the object is destroyed.
 		/// </summary>
 		public float RemainingLifeTime;
+		/// <summary>
+		/// The network tick at which this ability object was spawned.
+		/// Used by the rollback system to identify predicted objects that need to be destroyed on reconcile mismatch.
+		/// </summary>
+		public uint SpawnTick;
 
 		/// <summary>
 		/// Random number generator for ability effects.
 		/// </summary>
 		public System.Random RNG;
+
+		/// <summary>
+		/// Immutable snapshot of the ability data captured at spawn time.
+		/// Used as a fallback when the live <see cref="Ability"/> reference becomes null
+		/// (e.g., after the owning character disconnects and the ability is detached).
+		/// </summary>
+		public AbilityObjectSnapshot Snapshot;
+
+		/// <summary>
+		/// Effective speed for this ability object's movement effects.
+		/// Prefers the live Ability, falls back to the Snapshot.
+		/// </summary>
+		public float Speed => Ability != null ? Ability.Speed : (Snapshot != null ? Snapshot.Speed : 0f);
+
+		/// <summary>
+		/// Total configured lifetime. Prefers the live Ability, falls back to the Snapshot.
+		/// </summary>
+		public float TotalLifeTime => Ability != null ? Ability.LifeTime : (Snapshot != null ? Snapshot.LifeTime : 0f);
+
+		/// <summary>
+		/// OnHit events for collision dispatching. Prefers the live Ability, falls back to the Snapshot.
+		/// </summary>
+		public Dictionary<int, AbilityOnHitEvent> OnHitEvents => Ability != null ? Ability.OnHitEvents : Snapshot?.OnHitEvents;
 
 		/// <summary>
 		/// Cached tick event data instance to avoid per-frame allocation.
@@ -80,17 +110,32 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Unity Update callback. Handles ticking, event dispatch, and lifetime management.
+		/// Ability objects persist even if the caster disconnects or the Ability is detached.
+		/// They continue counting down lifetime but skip ECA events that require a live caster,
+		/// since <see cref="Trigger.Execute"/> rejects null initiators.
 		/// </summary>
 		void Update()
 		{
-			// Update remaining lifetime if the ability has a positive lifetime
-			if (Ability.LifeTime > 0.0f)
+			// If both the ability reference and snapshot are gone, this object is truly orphaned.
+			if (Ability == null && Snapshot == null)
+			{
+				DestroyAbilityObjectInternal();
+				return;
+			}
+
+			float totalLifeTime = TotalLifeTime;
+
+			// Update remaining lifetime if the ability has a positive lifetime.
+			if (totalLifeTime > 0.0f)
 			{
 				RemainingLifeTime -= Time.deltaTime;
 			}
 
-			// Dispatch OnTick events for this ability object
-			if (Ability?.OnTickEvents != null)
+			// Dispatch OnTick events only if the caster is still valid.
+			// If the caster disconnected, the object keeps existing but skips ECA dispatching
+			// since Trigger.Execute rejects null initiators.
+			var tickEvents = Ability?.OnTickEvents ?? Snapshot?.OnTickEvents;
+			if (tickEvents != null && Caster != null && Caster.IsSpawned)
 			{
 				if (cachedTickEventData == null)
 				{
@@ -101,20 +146,19 @@ namespace FishMMO.Shared
 					cachedTickEventData.DeltaTime = Time.deltaTime;
 				}
 
-				foreach (var trigger in Ability.OnTickEvents.Values)
+				foreach (var trigger in tickEvents.Values)
 				{
 					trigger.Execute(cachedTickEventData);
 				}
 			}
 
-			// If lifetime reaches 0, trigger destruction directly (or via a trigger for more control)
-			// For simplicity, destroy immediately if no trigger handles it
-			if (Ability.LifeTime > 0.0f && RemainingLifeTime < 0.0f)
+			// If lifetime expired, destroy.
+			if (totalLifeTime > 0.0f && RemainingLifeTime < 0.0f)
 			{
 				DestroyAbilityObjectInternal();
 				return;
 			}
-			else if (Ability.LifeTime <= 0.0f) // Immediately destroy if lifetime is 0
+			else if (totalLifeTime <= 0.0f)
 			{
 				DestroyAbilityObjectInternal();
 				return;
@@ -123,27 +167,33 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Unity OnCollisionEnter callback. Handles collision logic, event dispatch, and destruction.
+		/// If the caster has disconnected, collision events are skipped but hit counting still applies.
+		/// Uses the snapshot for the TargetTrigger reference when the live Ability is unavailable.
 		/// </summary>
 		/// <param name="collision">The collision data from Unity.</param>
 		void OnCollisionEnter(Collision collision)
 		{
-			ICharacter hitCharacter = collision.gameObject.GetComponent<ICharacter>();
+			// Resolve the target trigger from the live ability or the snapshot.
+			AbilityEvent targetTrigger = Ability?.Template?.TargetTrigger ?? Snapshot?.TargetTrigger;
 
-			// Guard against null or invalid ability
-			if (Ability == null || Ability.Template == null)
+			// If we have no trigger at all, the object has no collision logic. Destroy it.
+			if (Ability == null && Snapshot == null)
 			{
 				DestroyAbilityObjectInternal();
 				return;
 			}
 
-			if (Ability.Template.TargetTrigger != null)
+			// Only dispatch collision events if the caster is still valid.
+			// A disconnected caster means ECA actions (damage, buffs) cannot resolve an initiator,
+			// so we gracefully skip event dispatch while still consuming the hit.
+			if (targetTrigger != null && Caster != null && Caster.IsSpawned)
 			{
-				// Create an AbilityCollisionEventData for the collision
+				ICharacter hitCharacter = collision.gameObject.GetComponent<ICharacter>();
+
 				AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision);
-				// Add the CharacterHitEventData to the collision event (for damage, effects, etc)
 				collisionEvent.Add(new CharacterHitEventData(Caster, hitCharacter, RNG));
 
-				Ability.Template.TargetTrigger.Execute(collisionEvent);
+				targetTrigger.Execute(collisionEvent);
 			}
 
 			// Check if object should be destroyed after hits.
@@ -155,40 +205,44 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Destroys this ability object, dispatching OnDestroy events and cleaning up references.
+		/// Uses the snapshot for OnDestroy events when the live Ability is unavailable.
 		/// </summary>
-		/// <remarks>
-		/// Renamed to avoid confusion with MonoBehaviour.Destroy().
-		/// </remarks>
 		internal void DestroyAbilityObjectInternal()
 		{
-			// Log.Debug("Destroyed " + gameObject.name);
+			// Dispatch OnDestroy events if the caster is still valid.
+			var destroyEvents = Ability?.OnDestroyEvents ?? Snapshot?.OnDestroyEvents;
+			if (destroyEvents != null && Caster != null)
+			{
+				EventData destroyEvent = new EventData(Caster);
+				foreach (var trigger in destroyEvents.Values)
+				{
+					trigger.Execute(destroyEvent);
+				}
+			}
+
 			if (Ability != null)
 			{
-				// Dispatch OnDestroy Event if needed
-				if (Ability.OnDestroyEvents != null)
-				{
-					// You might need a specific EventData for destruction
-					// For example, AbilityDestroyEventData with `AbilityObject` reference
-					// For now, just pass a generic EventData if no specific data is needed
-					EventData destroyEvent = new EventData(Caster); // Or a new AbilityDestroyEventData(Caster, this);
-					foreach (var trigger in Ability.OnDestroyEvents.Values)
-					{
-						trigger.Execute(destroyEvent);
-					}
-				}
-
 				Ability.RemoveAbilityObject(ContainerID, ID);
 				Ability = null;
 			}
+
+			cachedTickEventData = null;
 			Caster = null;
+			Snapshot = null;
+			GameObject.SetActive(false);
 			Destroy(GameObject);
-			GameObject.SetActive(false); // Destroy takes a frame, deactivate immediately
 		}
 
 		/// <summary>
 		/// Handles primary spawn functionality for all ability objects. Returns true if successful.
 		/// </summary>
-		public static void Spawn(Ability ability, IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed)
+		/// <param name="ability">The ability to spawn.</param>
+		/// <param name="caster">The player character casting the ability.</param>
+		/// <param name="abilitySpawner">The transform used as the spawn origin.</param>
+		/// <param name="targetInfo">The targeting information for the ability.</param>
+		/// <param name="seed">The deterministic RNG seed.</param>
+		/// <param name="spawnTick">The network tick at which this object is being spawned, used for rollback.</param>
+		public static void Spawn(Ability ability, IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed, uint spawnTick)
 		{
 			AbilityTemplate template = ability.Template;
 			if (template == null)
@@ -242,6 +296,8 @@ namespace FishMMO.Shared
 			abilityObject.HitCount = template.HitCount;
 			abilityObject.RemainingLifeTime = ability.LifeTime;
 			abilityObject.RNG = new System.Random(seed);
+			abilityObject.SpawnTick = spawnTick;
+			abilityObject.Snapshot = new AbilityObjectSnapshot(ability);
 
 			if (ability.Objects == null)
 			{
@@ -288,6 +344,16 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Positions and rotates the ability object transform based on the spawn target type.
+		/// Reads camera data from the caster's KCCController, which is guaranteed fresh because
+		/// AbilityController runs on OnPostTick after KCCPlayer processes on OnTick.
+		/// </summary>
+		/// <param name="caster">The player character casting the ability.</param>
+		/// <param name="ability">The ability being spawned.</param>
+		/// <param name="abilitySpawner">The transform acting as the spawn origin.</param>
+		/// <param name="targetInfo">The targeting information.</param>
+		/// <param name="abilityTransform">The transform of the spawned ability object to position.</param>
 		public static void SetAbilitySpawnPosition(IPlayerCharacter caster, Ability ability, Transform abilitySpawner, TargetInfo targetInfo, Transform abilityTransform)
 		{
 			switch (ability.Template.AbilitySpawnTarget)
@@ -333,19 +399,16 @@ namespace FishMMO.Shared
 					break;
 				case AbilitySpawnTarget.Camera:
 					{
-						// Get the camera's forward vector
-						Vector3 cameraForward = caster.CharacterController.VirtualCameraRotation * Vector3.forward;
+						Vector3 cameraPosition = caster.CharacterController.VirtualCameraPosition;
+						Quaternion cameraRotation = caster.CharacterController.VirtualCameraRotation;
+						Vector3 cameraForward = cameraRotation * Vector3.forward;
 
-						// TODO Should this value be adjust so it's in front of the player?
-						Vector3 spawnPosition = caster.CharacterController.VirtualCameraPosition + cameraForward;
+						Vector3 spawnPosition = cameraPosition + cameraForward;
 
-						// Get a target position far from the camera position
-						Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * ability.Range;
+						Vector3 farTargetPosition = cameraPosition + cameraForward * ability.Range;
 
-						// Calculate the look direction towards the far target position
 						Vector3 lookDirection = (farTargetPosition - spawnPosition).normalized;
 
-						// Calculate the rotation to align with the look direction
 						Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
 
 						abilityTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
@@ -356,16 +419,14 @@ namespace FishMMO.Shared
 					break;
 				case AbilitySpawnTarget.SpawnerWithCameraRotation:
 					{
-						// Get the camera's forward vector
-						Vector3 cameraForward = caster.CharacterController.VirtualCameraRotation * Vector3.forward;
+						Vector3 cameraPosition = caster.CharacterController.VirtualCameraPosition;
+						Quaternion cameraRotation = caster.CharacterController.VirtualCameraRotation;
+						Vector3 cameraForward = cameraRotation * Vector3.forward;
 
-						// Get a target position far from the camera position
-						Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * ability.Range;
+						Vector3 farTargetPosition = cameraPosition + cameraForward * ability.Range;
 
-						// Calculate the look direction towards the far target position
 						Vector3 lookDirection = (farTargetPosition - abilitySpawner.position).normalized;
 
-						// Calculate the rotation to align with the look direction
 						Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
 
 						abilityTransform.SetPositionAndRotation(abilitySpawner.position, spawnRotation);

@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using System.Collections;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -11,32 +12,35 @@ namespace FishMMO.Shared
 	public class KnockbackHitAction : BaseAction
 	{
 		/// <summary>
-		/// The initial force applied to the target for the knockback effect.
+		/// The value provider that determines the initial knockback force applied to the target.
 		/// </summary>
-		public float Force;
+		[Tooltip("The value provider that determines the initial knockback force.")]
+		[SerializeReference, SubclassSelector]
+		public IFloatValueProvider ForceValue;
 
 		/// <summary>
 		/// Applies a knockback effect to the target character if they are not immortal.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target and ability information.</param>
-		/// <remarks>
-		/// This method attempts to retrieve <see cref="CharacterHitEventData"/> and <see cref="AbilityCollisionEventData"/> from the event data. If successful, it applies a smooth knockback coroutine to the target.
-		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			// Check if the event data contains a valid target character and that the target is not immortal.
+			if (ForceValue == null)
+			{
+				Log.Warning("KnockbackHitAction", "ForceValue provider is null.");
+				return;
+			}
+
 			if (eventData.TryGet(out CharacterHitEventData targetEventData) &&
 				targetEventData.Target is BaseCharacter character &&
 				character.TryGet(out ICharacterDamageController defenderDamageController) &&
 				!defenderDamageController.Immortal)
 			{
-				// If the event data contains ability collision info, use the ability's forward direction for knockback.
 				if (eventData.TryGet(out AbilityCollisionEventData abilityEventData) && abilityEventData.AbilityObject != null)
 				{
 					Vector3 knockbackDirection = abilityEventData.AbilityObject.Transform.forward;
-					// Start a coroutine to smoothly apply knockback over time.
-					character.StartCoroutine(SmoothKnockback(character.Transform, knockbackDirection, Force));
+					float force = ForceValue.GetValue(initiator, eventData);
+					character.StartCoroutine(SmoothKnockback(character.Transform, knockbackDirection, force));
 				}
 			}
 		}

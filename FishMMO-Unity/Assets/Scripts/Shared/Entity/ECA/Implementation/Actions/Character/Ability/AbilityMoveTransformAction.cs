@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 		{
 			if (eventData.TryGet(out AbilityTickEventData tickData) && tickData.Target != null)
 			{
-				tickData.Target.position += tickData.Target.rotation * MoveDirection * tickData.AbilityObject.Ability.Speed * tickData.DeltaTime;
+				tickData.Target.position += tickData.Target.rotation * MoveDirection * tickData.AbilityObject.Speed * tickData.DeltaTime;
 			}
 			else
 			{

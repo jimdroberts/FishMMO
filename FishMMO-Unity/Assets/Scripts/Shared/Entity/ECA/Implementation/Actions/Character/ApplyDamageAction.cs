@@ -5,16 +5,17 @@ using FishMMO.Logging;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Action that applies a specified amount of damage to a target character, using a given damage attribute type.
+	/// Action that applies damage to a target character using a configurable value provider and a given damage attribute type.
 	/// </summary>
 	[Serializable]
 	public class ApplyDamageAction : BaseAction
 	{
 		/// <summary>
-		/// The base amount of damage to apply to the target.
+		/// The value provider that determines the amount of damage to apply.
 		/// </summary>
-		[Tooltip("The base amount of damage to apply.")]
-		public int DamageAmount;
+		[Tooltip("The value provider that determines the amount of damage to apply.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider DamageValue;
 
 		/// <summary>
 		/// The attribute template associated with this damage type (e.g., 'Physical', 'Fire').
@@ -24,24 +25,27 @@ namespace FishMMO.Shared
 		public DamageAttributeTemplate DamageAttributeTemplate;
 
 		/// <summary>
-		/// Applies damage to the target character using the specified amount and attribute template.
+		/// Applies damage to the target character using the computed value and attribute template.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target information.</param>
-		/// <remarks>
-		/// This method attempts to retrieve <see cref="CharacterHitEventData"/> from the event data. If successful, it applies damage to the target's damage controller.
-		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+			if (DamageValue == null)
+			{
+				Log.Warning("DamageAction", "DamageValue provider is null.");
+				return;
+			}
+
 			// Try to get the event data for a character hit. If not present, log a warning and exit.
 			if (eventData.TryGet(out CharacterHitEventData targetEventData))
 			{
 				// Try to get the damage controller from the target. If present, apply the damage.
 				if (targetEventData.Target.TryGet(out ICharacterDamageController defenderDamageController))
 				{
-					defenderDamageController.Damage(initiator, DamageAmount, DamageAttributeTemplate);
-					// Log the damage event for debugging purposes.
-					Log.Debug("DamageAction", $"Initiator '{initiator.Name}' dealt {DamageAmount} damage to target '{targetEventData.Target.Name}'.");
+					int amount = DamageValue.GetValue(initiator, eventData);
+					defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
+					Log.Debug("DamageAction", $"Initiator '{initiator.Name}' dealt {amount} damage to target '{targetEventData.Target.Name}'.");
 				}
 			}
 			else

@@ -538,15 +538,156 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Removes an ability object from the cache by container and object ID.
+		/// If the container becomes empty after removal, it is also removed.
 		/// </summary>
 		/// <param name="containerID">The container ID.</param>
 		/// <param name="objectID">The object ID to remove.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveAbilityObject(int containerID, int objectID)
 		{
-			if (Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> container))
+			if (Objects != null &&
+				Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> container))
 			{
 				container.Remove(objectID);
+
+				if (container.Count == 0)
+				{
+					Objects.Remove(containerID);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Destroys all spawned ability objects for this ability and clears the Objects dictionary.
+		/// Call this when the owning character disconnects, dies, or is otherwise cleaned up.
+		/// </summary>
+		public void DestroyAllAbilityObjects()
+		{
+			if (Objects == null)
+			{
+				return;
+			}
+
+			foreach (Dictionary<int, AbilityObject> container in Objects.Values)
+			{
+				foreach (AbilityObject obj in container.Values)
+				{
+					if (obj != null && obj.GameObject != null)
+					{
+						obj.Ability = null;
+						obj.Caster = null;
+						obj.GameObject.SetActive(false);
+						UnityEngine.Object.Destroy(obj.GameObject);
+					}
+				}
+			}
+			Objects.Clear();
+		}
+
+		/// <summary>
+		/// Detaches all spawned ability objects from this ability without destroying them.
+		/// The objects continue to exist in the world using their <see cref="AbilityObjectSnapshot"/>
+		/// for data-driven behavior. The <see cref="AbilityObject.Ability"/> and <see cref="AbilityObject.Caster"/>
+		/// references are nulled out, and the Objects dictionary is cleared.
+		/// Call this when the owning character disconnects or dies to allow in-flight
+		/// projectiles to persist visually while gracefully degrading ECA events.
+		/// </summary>
+		public void DetachAllAbilityObjects()
+		{
+			if (Objects == null)
+			{
+				return;
+			}
+
+			// Create a single phantom caster to replace the live caster reference in all detached objects,
+			// preserving identity and attribute data for stat-scaled calculations while gracefully degrading other behaviour lookups.
+			SnapshotCharacter phantomCaster = null;
+
+			foreach (Dictionary<int, AbilityObject> container in Objects.Values)
+			{
+				foreach (AbilityObject obj in container.Values)
+				{
+					if (obj != null)
+					{
+						// Create the phantom caster on demand when we encounter the first object that needs it.
+						if (phantomCaster == null)
+						{
+							phantomCaster = AbilityObjectSnapshot.CreatePhantomCaster(obj.Caster, obj.Transform);
+						}
+						
+						// Replace the live caster with a phantom that preserves identity
+						// and attribute data for stat-scaled calculations.
+						obj.Caster = phantomCaster;
+						obj.Ability = null;
+					}
+				}
+			}
+			Objects.Clear();
+		}
+
+		/// <summary>
+		/// Destroys all spawned ability objects whose <see cref="AbilityObject.SpawnTick"/> is greater than
+		/// the specified tick. Used during reconcile rollback to remove client-predicted objects
+		/// that the server has not confirmed.
+		/// </summary>
+		/// <param name="tick">The reconcile tick. Objects spawned after this tick are destroyed.</param>
+		public void DestroyAbilityObjectsAfterTick(uint tick)
+		{
+			if (Objects == null)
+			{
+				return;
+			}
+
+			List<int> emptyContainers = null;
+
+			foreach (KeyValuePair<int, Dictionary<int, AbilityObject>> containerEntry in Objects)
+			{
+				List<int> toRemove = null;
+
+				foreach (KeyValuePair<int, AbilityObject> objEntry in containerEntry.Value)
+				{
+					if (objEntry.Value != null && objEntry.Value.SpawnTick > tick)
+					{
+						if (objEntry.Value.GameObject != null)
+						{
+							objEntry.Value.Ability = null;
+							objEntry.Value.Caster = null;
+							objEntry.Value.GameObject.SetActive(false);
+							UnityEngine.Object.Destroy(objEntry.Value.GameObject);
+						}
+
+						if (toRemove == null)
+						{
+							toRemove = new List<int>();
+						}
+						toRemove.Add(objEntry.Key);
+					}
+				}
+
+				if (toRemove != null)
+				{
+					foreach (int key in toRemove)
+					{
+						containerEntry.Value.Remove(key);
+					}
+				}
+
+				if (containerEntry.Value.Count == 0)
+				{
+					if (emptyContainers == null)
+					{
+						emptyContainers = new List<int>();
+					}
+					emptyContainers.Add(containerEntry.Key);
+				}
+			}
+
+			if (emptyContainers != null)
+			{
+				foreach (int key in emptyContainers)
+				{
+					Objects.Remove(key);
+				}
 			}
 		}
 

@@ -138,6 +138,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived, true);
+
+			DisplayDialogueAction.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
 			merchantRequestDebounceMilliseconds = Mathf.Max(0, merchantRequestDebounceMilliseconds);
@@ -177,6 +180,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived);
+
+			DisplayDialogueAction.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
 		}
 
 		protected override void OnUpdate(float deltaTime)
@@ -212,6 +218,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			MerchantPurchase = 2,
 			AbilityCraft = 3,
 			DungeonFinder = 4,
+			DialogueChoice = 5,
 		}
 
 		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
@@ -227,6 +234,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				IngressOperation.MerchantPurchase => merchantRequestDebounceMilliseconds,
 				IngressOperation.AbilityCraft => abilityCraftDebounceMilliseconds,
 				IngressOperation.DungeonFinder => dungeonFinderDebounceMilliseconds,
+				IngressOperation.DialogueChoice => interactableRequestDebounceMilliseconds,
 				_ => interactableRequestDebounceMilliseconds,
 			};
 			return runtimeData.IngressGuard.TryBegin(connectionId, (byte)operation, debounce, out guardKey);

@@ -12,10 +12,11 @@ namespace FishMMO.Shared
 	public class AbilitySpawnMultiplyAction : BaseAction
 	{
 		/// <summary>
-		/// The number of times to spawn (duplicate) the ability object. Must be >= 1.
+		/// The value provider that determines how many times to spawn (duplicate) the ability object.
 		/// </summary>
-		[Tooltip("How many times to multiply the ability object.")]
-		public int SpawnCount = 1;
+		[Tooltip("The value provider that determines how many times to multiply the ability object.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider SpawnCountValue;
 
 		/// <summary>
 		/// Spawns multiple copies of the initial ability object, each with the same properties as the original.
@@ -24,31 +25,36 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing ability spawn information. Must be of type <see cref="AbilitySpawnEventData"/>.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			// Try to get the spawn event data. If not present, log a warning and exit.
+			if (SpawnCountValue == null)
+			{
+				Log.Warning("AbilitySpawnMultiplyAction", "SpawnCountValue provider is null.");
+				return;
+			}
+
 			if (!eventData.TryGet(out AbilitySpawnEventData spawnEventData))
 			{
 				Log.Warning("AbilitySpawnMultiplyAction", "EventData is not AbilitySpawnEventData.");
 				return;
 			}
-			// Validate that the initial ability object exists.
+
 			if (spawnEventData.InitialAbilityObject == null)
 			{
 				Log.Warning("AbilitySpawnMultiplyAction", "AbilityObject is null in AbilitySpawnEventData.");
 				return;
 			}
-			// Reference to the original ability object to duplicate.
+
 			var initialObject = spawnEventData.InitialAbilityObject;
 			var caster = initialObject.Caster;
 			var ability = initialObject.Ability;
 			var targetInfo = spawnEventData.TargetInfo;
 			var nextID = spawnEventData.CurrentAbilityObjectID;
-			// Loop to create the specified number of copies.
-			for (int i = 0; i < SpawnCount; ++i)
+
+			int spawnCount = SpawnCountValue.GetValue(initiator, eventData);
+			for (int i = 0; i < spawnCount; ++i)
 			{
-				// Instantiate a new GameObject based on the original.
 				GameObject go = UnityEngine.Object.Instantiate(initialObject.gameObject);
-				go.SetActive(false); // Prevents initialization logic from running immediately.
-									 // Try to get the AbilityObject component, or add it if missing.
+				go.SetActive(false);
+
 				var abilityObject = go.GetComponent<AbilityObject>();
 				if (abilityObject == null)
 				{
@@ -61,9 +67,11 @@ namespace FishMMO.Shared
 				abilityObject.HitCount = initialObject.HitCount;
 				abilityObject.RemainingLifeTime = initialObject.RemainingLifeTime;
 				abilityObject.RNG = initialObject.RNG;
-				// Set the position and rotation to match the original.
+				abilityObject.SpawnTick = initialObject.SpawnTick;
+				abilityObject.Snapshot = initialObject.Snapshot;
+
 				go.transform.SetPositionAndRotation(initialObject.transform.position, initialObject.transform.rotation);
-				// Register the new ability object in the spawned objects dictionary with a unique ID.
+
 				spawnEventData.SpawnedAbilityObjects[++nextID.Value] = abilityObject;
 			}
 		}

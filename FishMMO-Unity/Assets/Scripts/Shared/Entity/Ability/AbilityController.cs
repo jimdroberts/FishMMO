@@ -210,7 +210,7 @@ namespace FishMMO.Shared
 
 			if (base.TimeManager != null)
 			{
-				base.TimeManager.OnTick += TimeManager_OnTick;
+				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
 			}
 		}
 
@@ -220,7 +220,7 @@ namespace FishMMO.Shared
 
 			if (base.TimeManager != null)
 			{
-				base.TimeManager.OnTick -= TimeManager_OnTick;
+				base.TimeManager.OnPostTick -= TimeManager_OnPostTick;
 			}
 		}
 
@@ -231,6 +231,14 @@ namespace FishMMO.Shared
 			queuedAbilityID = NO_ABILITY;
 			Cancel();
 
+			// Detach all spawned ability objects before clearing references.
+			// This allows in-flight projectiles to persist visually using their snapshots
+			// instead of being immediately destroyed when the character disconnects.
+			foreach (Ability ability in KnownAbilities.Values)
+			{
+				ability.DetachAllAbilityObjects();
+			}
+
 			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
 			KnownAbilityEvents.Clear();
@@ -240,7 +248,6 @@ namespace FishMMO.Shared
 			KnownAbilityOnSpawnEvents.Clear();
 			KnownAbilityOnDestroyEvents.Clear();
 
-			// Reset the Ability Seed Generator to null
 			abilitySeedGenerator = null;
 		}
 
@@ -488,9 +495,11 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called on each network tick to replicate input and reconcile state.
+		/// Called after each network tick to replicate input and reconcile state.
+		/// Runs on OnPostTick so that KCCPlayer has already processed on OnTick,
+		/// guaranteeing VirtualCameraPosition/VirtualCameraRotation are fresh.
 		/// </summary>
-		private void TimeManager_OnTick()
+		private void TimeManager_OnPostTick()
 		{
 			Replicate(HandleCharacterInput());
 			CreateReconcile();
@@ -498,6 +507,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Creates and sends a reconcile state for the ability controller to synchronize client/server state.
+		/// Includes the current RNG seed so the client can detect prediction mismatches.
 		/// </summary>
 		public override void CreateReconcile()
 		{
@@ -508,6 +518,7 @@ namespace FishMMO.Shared
 				{
 					state = new AbilityReconcileData(currentAbilityID,
 													 remainingTime,
+													 currentSeed,
 													 attributeController.GetResourceState());
 				}
 				Reconcile(state);
@@ -601,7 +612,6 @@ namespace FishMMO.Shared
 			AbilityActivationReplicateData activationEventData = new AbilityActivationReplicateData(activationFlags,
 																									 queuedAbilityID,
 																									 heldKey);
-			// Clear the locally queued data
 			queuedAbilityID = NO_ABILITY;
 
 			return activationEventData;
@@ -714,15 +724,16 @@ namespace FishMMO.Shared
 							if (PlayerCharacter != null &&
 								Character.TryGet(out ITargetController t))
 							{
-								// Get target info
-								TargetInfo targetInfo = t.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
-																		   PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
+								// Read camera from KCCController. Guaranteed fresh because AbilityController runs on OnPostTick after KCCPlayer processes on OnTick.
+								Vector3 cameraPosition = PlayerCharacter.CharacterController.VirtualCameraPosition;
+								Quaternion cameraRotation = PlayerCharacter.CharacterController.VirtualCameraRotation;
+
+								TargetInfo targetInfo = t.UpdateTarget(cameraPosition,
+																		   cameraRotation * Vector3.forward,
 																		   validatedAbility.Range);
 
-								// Spawn the ability object
-								AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed);
+								AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
 
-								// Generate a new seed
 								currentSeed = abilitySeedGenerator.Next();
 
 								//Log.Debug($"3 New Ability Seed {currentSeed}");
@@ -757,15 +768,16 @@ namespace FishMMO.Shared
 				if (PlayerCharacter != null &&
 					Character.TryGet(out ITargetController tc))
 				{
-					// Get target info
-					TargetInfo targetInfo = tc.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
-														   PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
+					// Read camera from KCCController. Guaranteed fresh because AbilityController runs on OnPostTick after KCCPlayer processes on OnTick.
+					Vector3 cameraPosition = PlayerCharacter.CharacterController.VirtualCameraPosition;
+					Quaternion cameraRotation = PlayerCharacter.CharacterController.VirtualCameraRotation;
+
+					TargetInfo targetInfo = tc.UpdateTarget(cameraPosition,
+														   cameraRotation * Vector3.forward,
 														   validatedAbility.Range);
 
-					// Spawn the ability object
-					AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed);
+					AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
 
-					// Generate a new seed
 					currentSeed = abilitySeedGenerator.Next();
 
 					//Log.Debug($"5 New Ability Seed {currentSeed}");
@@ -790,6 +802,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Reconciles the ability controller's state from the server, applying ability and resource state.
+		/// Detects prediction mismatches via seed comparison and destroys erroneously predicted ability objects.
 		/// </summary>
 		/// <param name="rd">The reconcile data from the server.</param>
 		/// <param name="channel">The network channel.</param>
@@ -797,8 +810,22 @@ namespace FishMMO.Shared
 		private void Reconcile(AbilityReconcileData rd, Channel channel = Channel.Unreliable)
 		{
 			//Log.Debug($"Reconciled: {rd.GetTick()}");
+
+			// Detect prediction mismatch: if the server's seed differs from the client's,
+			// the client mispredicted an ability activation. Destroy any ability objects
+			// spawned after the reconcile tick since they will be replayed.
+			if (rd.Seed != currentSeed)
+			{
+				uint reconcileTick = rd.GetTick();
+				foreach (Ability ability in KnownAbilities.Values)
+				{
+					ability.DestroyAbilityObjectsAfterTick(reconcileTick);
+				}
+			}
+
 			currentAbilityID = rd.AbilityID;
 			remainingTime = rd.RemainingTime;
+			currentSeed = rd.Seed;
 
 			if (Character.TryGet(out ICharacterAttributeController attributeController))
 			{

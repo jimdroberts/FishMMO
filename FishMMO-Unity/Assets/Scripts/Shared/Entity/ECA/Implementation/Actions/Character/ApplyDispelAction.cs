@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
@@ -10,9 +11,11 @@ namespace FishMMO.Shared
 	public class ApplyDispelAction : BaseAction
 	{
 		/// <summary>
-		/// The number of buffs and/or debuffs to remove from the target.
+		/// The value provider that determines the number of buffs and/or debuffs to remove.
 		/// </summary>
-		public byte AmountToRemove;
+		[Tooltip("The value provider that determines the number of buffs/debuffs to remove.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider AmountToRemoveValue;
 
 		/// <summary>
 		/// Whether to include debuffs in the dispel operation.
@@ -25,23 +28,24 @@ namespace FishMMO.Shared
 		public bool IncludeBuffs;
 
 		/// <summary>
-		/// Removes a specified number of buffs and/or debuffs from the target character.
+		/// Removes a computed number of buffs and/or debuffs from the target character.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target information.</param>
-		/// <remarks>
-		/// This method attempts to retrieve <see cref="CharacterHitEventData"/> from the event data. If successful, it removes random buffs/debuffs from the target's buff controller.
-		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			// Try to get the event data for a character hit. If not present, log a warning and exit.
+			if (AmountToRemoveValue == null)
+			{
+				Log.Warning("ApplyDispelAction", "AmountToRemoveValue provider is null.");
+				return;
+			}
+
 			if (eventData.TryGet(out CharacterHitEventData targetEventData))
 			{
-				// Try to get the buff controller from the target. If present, remove random buffs/debuffs.
 				if (targetEventData.Target.TryGet(out IBuffController defenderBuffController))
 				{
-					// Remove up to AmountToRemove buffs/debuffs, as long as there are any left.
-					for (int i = 0; i < AmountToRemove && defenderBuffController.Buffs.Count > 0; ++i)
+					int amountToRemove = AmountToRemoveValue.GetValue(initiator, eventData);
+					for (int i = 0; i < amountToRemove && defenderBuffController.Buffs.Count > 0; ++i)
 					{
 						defenderBuffController.RemoveRandom(targetEventData.RNG, IncludeBuffs, IncludeDebuffs);
 					}

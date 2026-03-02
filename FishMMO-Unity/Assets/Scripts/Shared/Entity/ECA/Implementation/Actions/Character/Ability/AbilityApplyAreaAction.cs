@@ -11,22 +11,24 @@ namespace FishMMO.Shared
 	public class AbilityApplyAreaAction : BaseAction
 	{
 		/// <summary>
-		/// Radius of the area effect.
+		/// The value provider that determines the radius of the area effect.
 		/// </summary>
-		[Tooltip("Radius of the area effect.")]
-		public float Radius = 5f;
+		[Tooltip("The value provider that determines the radius of the area effect.")]
+		[SerializeReference, SubclassSelector]
+		public IFloatValueProvider RadiusValue;
 
 		/// <summary>
-		/// Maximum number of hits to process in the area.
+		/// The value provider that determines the maximum number of hits to process in the area.
 		/// </summary>
-		[Tooltip("Maximum number of hits to process in the area.")]
-		public int MaxHits = 5;
+		[Tooltip("The value provider that determines the maximum number of hits.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider MaxHitsValue;
 
 		/// <summary>
 		/// Layer mask to filter targets in the area.
 		/// </summary>
 		[Tooltip("Layer mask to filter targets in the area.")]
-		public LayerMask TargetLayerMask = ~0; // All layers by default
+		public LayerMask TargetLayerMask = ~0;
 
 		[NonSerialized]
 		private Collider[] hits;
@@ -38,22 +40,37 @@ namespace FishMMO.Shared
 		/// <param name="eventData">Event data containing context for the action.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+			if (RadiusValue == null || MaxHitsValue == null)
+			{
+				Log.Warning("AbilityApplyAreaAction", "RadiusValue or MaxHitsValue provider is null.");
+				return;
+			}
+
 			if (eventData.TryGet(out AbilityCollisionEventData abilityEventData))
 			{
 				AbilityObject abilityObject = abilityEventData.AbilityObject;
 
 				if (abilityObject != null)
 				{
-					// Lazily initialize the hits array.
-					if (hits == null || hits.Length != MaxHits)
+					int maxHits = MaxHitsValue.GetValue(initiator, eventData);
+					float radius = RadiusValue.GetValue(initiator, eventData);
+
+					if (hits == null || hits.Length != maxHits)
 					{
-						hits = new Collider[MaxHits];
+						hits = new Collider[maxHits];
 					}
 
 					PhysicsScene physicsScene = abilityObject.GameObject.scene.GetPhysicsScene();
 
 					Vector3 center = abilityObject.Transform.position;
-					int hitCount = physicsScene.OverlapSphere(center, Radius, hits, TargetLayerMask, QueryTriggerInteraction.UseGlobal);
+					int hitCount = physicsScene.OverlapSphere(center, radius, hits, TargetLayerMask, QueryTriggerInteraction.UseGlobal);
+					var onHitEvents = abilityObject.OnHitEvents;
+					if (onHitEvents == null)
+					{
+						Log.Warning("AbilityApplyAreaAction", "No OnHitEvents available.");
+						return;
+					}
+
 					for (int i = 0; i < hitCount; i++)
 					{
 						var hit = hits[i];
@@ -65,7 +82,7 @@ namespace FishMMO.Shared
 							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(initiator, targetCharacter, abilityObject);
 							collisionEvent.Add(new CharacterHitEventData(initiator, targetCharacter, abilityObject.RNG));
 
-							foreach (var trigger in abilityObject.Ability.OnHitEvents.Values)
+							foreach (var trigger in onHitEvents.Values)
 							{
 								trigger?.Execute(collisionEvent);
 							}

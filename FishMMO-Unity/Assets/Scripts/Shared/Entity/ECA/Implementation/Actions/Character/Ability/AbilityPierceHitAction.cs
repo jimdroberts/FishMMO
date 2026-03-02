@@ -6,17 +6,18 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Action that increases the hit count of an ability object, allowing it to persist through additional hits (pierce).
-	/// Each execution adds <see cref="PierceCount"/> to the ability object's remaining hit count,
+	/// Each execution adds the computed pierce count to the ability object's remaining hit count,
 	/// effectively letting the projectile pass through targets instead of being destroyed on impact.
 	/// </summary>
 	[Serializable]
 	public sealed class AbilityPierceHitAction : BaseAction
 	{
 		/// <summary>
-		/// The number of additional hits to grant the ability object per execution.
+		/// The value provider that determines the number of additional hits to grant the ability object per execution.
 		/// </summary>
-		[Tooltip("The number of additional hits to grant the ability object, allowing it to pierce through targets.")]
-		public int PierceCount = 1;
+		[Tooltip("The value provider that determines the number of additional hits to grant the ability object.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider PierceCountValue;
 
 		/// <summary>
 		/// Executes the pierce action, increasing the ability object's remaining hit count.
@@ -25,13 +26,19 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing ability collision information.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+			if (PierceCountValue == null)
+			{
+				Log.Warning("AbilityPierceHitAction", "PierceCountValue provider is null.");
+				return;
+			}
+
 			if (eventData.TryGet(out AbilityCollisionEventData hitEventData))
 			{
 				AbilityObject abilityObject = hitEventData.AbilityObject;
 
 				if (abilityObject != null)
 				{
-					abilityObject.HitCount += PierceCount;
+					abilityObject.HitCount += PierceCountValue.GetValue(initiator, eventData);
 				}
 				else
 				{

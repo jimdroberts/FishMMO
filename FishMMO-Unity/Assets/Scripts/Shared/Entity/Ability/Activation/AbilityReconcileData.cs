@@ -4,6 +4,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Reconcile data for ability state, used for network prediction reconciliation.
+	/// Includes the current RNG seed so the client can detect prediction mismatches
+	/// and roll back erroneously spawned ability objects.
 	/// </summary>
 	public struct AbilityReconcileData : IReconcileData
 	{
@@ -18,6 +20,12 @@ namespace FishMMO.Shared
 		public float RemainingTime;
 
 		/// <summary>
+		/// The current deterministic RNG seed for ability spawning.
+		/// Used by the client to detect prediction mismatches and roll back predicted ability objects.
+		/// </summary>
+		public int Seed;
+
+		/// <summary>
 		/// The resource state associated with the ability.
 		/// </summary>
 		public CharacterAttributeResourceState ResourceState;
@@ -27,11 +35,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="abilityID">Ability ID.</param>
 		/// <param name="remainingTime">Remaining time.</param>
+		/// <param name="seed">Current RNG seed.</param>
 		/// <param name="resourceState">Resource state.</param>
-		public AbilityReconcileData(long abilityID, float remainingTime, CharacterAttributeResourceState resourceState)
+		public AbilityReconcileData(long abilityID, float remainingTime, int seed, CharacterAttributeResourceState resourceState)
 		{
 			AbilityID = abilityID;
 			RemainingTime = remainingTime;
+			Seed = seed;
 			ResourceState = resourceState;
 
 			_tick = 0;

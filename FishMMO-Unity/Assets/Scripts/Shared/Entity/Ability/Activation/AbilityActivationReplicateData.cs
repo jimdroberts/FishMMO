@@ -5,6 +5,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Replicate data for ability activation, used for network prediction.
+	/// Camera data is not included here to save bandwidth; instead, AbilityController reads from
+	/// KCCController.VirtualCameraPosition/VirtualCameraRotation which is guaranteed fresh via OnPostTick ordering.
 	/// </summary>
 	public struct AbilityActivationReplicateData : IReplicateData
 	{

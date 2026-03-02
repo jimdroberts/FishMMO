@@ -22,7 +22,14 @@ namespace FishMMO.Shared
 
 				if (abilityObject != null)
 				{
-					foreach (var action in abilityObject.Ability.OnHitEvents.Values)
+					var onHitEvents = abilityObject.OnHitEvents;
+					if (onHitEvents == null)
+					{
+						Log.Warning("AbilityApplyTargetAction", "No OnHitEvents available.");
+						return;
+					}
+
+					foreach (var action in onHitEvents.Values)
 					{
 						action?.Execute(abilityEventData);
 					}
