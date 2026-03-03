@@ -4,6 +4,7 @@ using FishMMO.Shared;
 using System.Collections.Generic;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
 using FishMMO.Logging;
 using UnityEngine;
 

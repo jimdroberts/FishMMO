@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {

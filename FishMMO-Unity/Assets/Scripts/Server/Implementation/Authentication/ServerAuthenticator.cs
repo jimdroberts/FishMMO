@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database;
@@ -154,8 +154,6 @@ namespace FishMMO.Server.Implementation
 		/// Bounded channel for queuing SRP proof requests for async worker processing.
 		/// </summary>
 		private System.Threading.Channels.Channel<SrpProofRequest<NetworkConnection>> proofChannel;
-
-
 
 		/// <summary>
 		/// Per-account kick-request debounce map. Value is next UTC time at which a kick request may be persisted.

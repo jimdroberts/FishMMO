@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.IO;

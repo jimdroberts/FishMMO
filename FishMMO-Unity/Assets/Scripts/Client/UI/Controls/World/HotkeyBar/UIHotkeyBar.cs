@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using FishNet.Transporting;
 
 namespace FishMMO.Client
@@ -258,20 +260,59 @@ namespace FishMMO.Client
 			if (Character == null || hotkeys == null || hotkeys.Count < 1)
 				return;
 
+			if (PlayerInputHandler.MouseMode || UIManager.InputControlHasFocus())
+				return;
+
 			for (int i = 0; i < hotkeys.Count; ++i)
 			{
 				UIHotkeyGroup group = hotkeys[i];
 				if (group == null || group.Button == null) continue;
 
-				string keyMap = GetHotkeyIndexKeyMap(i);
-				if (string.IsNullOrWhiteSpace(keyMap)) return;
-
-				// If the key is pressed, activate the hotkey
-				if (InputManager.GetKey(keyMap))
+				if (IsHotkeyPressed(i))
 				{
 					group.Button.Activate();
 					return;
 				}
+			}
+		}
+
+		/// <summary>
+		/// Checks whether the hotkey at the given index is currently pressed using the new Input System.
+		/// </summary>
+		/// <param name="hotkeyIndex">The hotkey index.</param>
+		/// <returns>True if the corresponding input is pressed; otherwise, false.</returns>
+		private static bool IsHotkeyPressed(int hotkeyIndex)
+		{
+			if (PlayerInputHandler.Controls == null) return false;
+
+			switch (hotkeyIndex)
+			{
+				case 0:
+					return Mouse.current != null && Mouse.current.leftButton.isPressed;
+				case 1:
+					return Mouse.current != null && Mouse.current.rightButton.isPressed;
+				case 2:
+					return PlayerInputHandler.Controls.Player.Hotkey1.IsPressed();
+				case 3:
+					return PlayerInputHandler.Controls.Player.Hotkey2.IsPressed();
+				case 4:
+					return PlayerInputHandler.Controls.Player.Hotkey3.IsPressed();
+				case 5:
+					return PlayerInputHandler.Controls.Player.Hotkey4.IsPressed();
+				case 6:
+					return PlayerInputHandler.Controls.Player.Hotkey5.IsPressed();
+				case 7:
+					return PlayerInputHandler.Controls.Player.Hotkey6.IsPressed();
+				case 8:
+					return PlayerInputHandler.Controls.Player.Hotkey7.IsPressed();
+				case 9:
+					return PlayerInputHandler.Controls.Player.Hotkey8.IsPressed();
+				case 10:
+					return PlayerInputHandler.Controls.Player.Hotkey9.IsPressed();
+				case 11:
+					return PlayerInputHandler.Controls.Player.Hotkey0.IsPressed();
+				default:
+					return false;
 			}
 		}
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;

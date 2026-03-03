@@ -1,5 +1,6 @@
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using FishMMO.Logging;
 using System.Collections.Generic;
 

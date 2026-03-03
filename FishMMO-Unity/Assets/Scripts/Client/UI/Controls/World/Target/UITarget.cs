@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;

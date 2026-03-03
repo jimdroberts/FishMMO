@@ -1,6 +1,7 @@
 using UnityEngine.UI;
 using TMPro;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using FishNet.Transporting;
 
 namespace FishMMO.Client

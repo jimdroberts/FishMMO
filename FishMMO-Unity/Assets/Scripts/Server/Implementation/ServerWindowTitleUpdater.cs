@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Transporting;
 using FishNet.Transporting.Multipass;
 #if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
@@ -8,7 +8,6 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using Cysharp.Text;
 using System.Runtime.CompilerServices;
-using FishMMO.Shared;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.WorldServer;
 

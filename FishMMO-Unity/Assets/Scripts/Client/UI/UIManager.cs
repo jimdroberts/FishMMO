@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using System.Runtime.CompilerServices;
 
 namespace FishMMO.Client
@@ -191,7 +192,7 @@ namespace FishMMO.Client
 			{
 				result.ToggleVisibility();
 			}
-			InputManager.ResetForcedMouseMode();
+			PlayerInputHandler.ResetForcedMouseMode();
 		}
 
 		/// <summary>

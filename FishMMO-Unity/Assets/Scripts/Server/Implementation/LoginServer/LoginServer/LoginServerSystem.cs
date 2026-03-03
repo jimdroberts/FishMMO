@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using FishMMO.Database;
@@ -194,8 +194,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 			}
 		}
-
-
 
 		/// <summary>
 		/// Periodic callback that sends a heartbeat pulse to the database.

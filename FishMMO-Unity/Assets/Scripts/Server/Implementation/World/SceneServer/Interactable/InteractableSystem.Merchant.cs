@@ -3,7 +3,7 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
-using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System.Collections.Generic;
 using System.Linq;

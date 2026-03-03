@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Implementation.World.SceneServer.Character;

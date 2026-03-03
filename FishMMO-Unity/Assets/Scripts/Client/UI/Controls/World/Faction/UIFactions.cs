@@ -1,5 +1,6 @@
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using System.Collections.Generic;
 
 namespace FishMMO.Client

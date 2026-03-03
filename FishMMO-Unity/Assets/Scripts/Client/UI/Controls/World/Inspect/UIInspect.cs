@@ -1,5 +1,6 @@
 #if !UNITY_SERVER
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;

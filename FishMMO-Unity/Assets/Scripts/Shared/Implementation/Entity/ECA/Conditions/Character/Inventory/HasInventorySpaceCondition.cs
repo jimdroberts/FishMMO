@@ -1,0 +1,44 @@
+using System;
+using FishMMO.Logging;
+using FishMMO.Shared.Core;
+
+namespace FishMMO.Shared
+{
+	/// <summary>
+	/// Condition that checks if a character has at least a specified number of free inventory slots.
+	/// </summary>
+	[Serializable]
+	public class HasInventorySpaceCondition : BaseCondition
+	{
+		/// <summary>
+		/// The minimum number of free inventory slots required for the condition to pass.
+		/// </summary>
+		public int RequiredSlots = 1;
+
+		/// <summary>
+		/// Evaluates whether the character (or event target) has at least the required number of free inventory slots.
+		/// </summary>
+		/// <param name="initiator">The character to check, or the fallback if no event target is present.</param>
+		/// <param name="eventData">Optional event data that may provide a different character to check.</param>
+		/// <returns>True if the character has enough free inventory slots; otherwise, false.</returns>
+		public override bool Evaluate(ICharacter initiator, EventData eventData)
+		{
+			// Determine which character to check: use the event target if available, otherwise use the initiator.
+			ICharacter characterToCheck = ResolveTarget(initiator, eventData);
+			if (characterToCheck == null)
+			{
+				Log.Warning("HasInventorySpaceCondition", "Character does not exist.");
+				return false;
+			}
+			// Check if the character has an inventory controller.
+			if (!characterToCheck.TryGet(out IInventoryController inventoryController))
+			{
+				Log.Warning("HasInventorySpaceCondition", "Character does not have an IInventoryController.");
+				return false;
+			}
+			// Check if the inventory has the required free slots.
+			return inventoryController.FreeSlots() >= RequiredSlots;
+		}
+
+	}
+}

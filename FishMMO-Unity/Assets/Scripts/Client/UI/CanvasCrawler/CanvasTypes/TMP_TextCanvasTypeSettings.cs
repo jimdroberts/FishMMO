@@ -1,4 +1,4 @@
-﻿using FishMMO.Shared;
+using FishMMO.Shared;
 using TMPro;
 
 namespace FishMMO.Client

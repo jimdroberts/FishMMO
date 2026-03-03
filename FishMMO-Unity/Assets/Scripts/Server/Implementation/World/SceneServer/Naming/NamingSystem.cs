@@ -2,13 +2,13 @@
 using FishNet.Connection;
 using FishNet.Transporting;
 using System;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
 using FishMMO.Shared;
 using FishMMO.Logging;
 

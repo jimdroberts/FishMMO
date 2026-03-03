@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;

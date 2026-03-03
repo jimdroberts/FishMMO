@@ -1,4 +1,4 @@
-﻿using FishMMO.Shared;
+using FishMMO.Shared;
 using FishMMO.Server.Core.Account.SRP;
 
 namespace FishMMO.Server.Core.Account

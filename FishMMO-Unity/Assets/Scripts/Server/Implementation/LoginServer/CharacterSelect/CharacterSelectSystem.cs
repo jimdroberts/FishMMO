@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;

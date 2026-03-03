@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {

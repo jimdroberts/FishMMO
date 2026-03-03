@@ -639,6 +639,17 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
+                    ""id"": ""a3c45d90-1e6f-43bf-8c3a-d4e5f6a7b8c9"",
+                    ""path"": ""<Keyboard>/slash"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""Chat"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""d1e25b82-2d5f-42ae-9b2f-76a08620857b"",
                     ""path"": ""<Keyboard>/1"",
                     ""interactions"": """",

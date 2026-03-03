@@ -1,6 +1,6 @@
-﻿using System;
-using FishMMO.Server.Core.World.SceneServer;
+using System;
 using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {

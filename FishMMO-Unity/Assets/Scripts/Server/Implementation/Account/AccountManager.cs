@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using System;
 using System.Collections.Generic;
 using FishMMO.Server.Core.Account;

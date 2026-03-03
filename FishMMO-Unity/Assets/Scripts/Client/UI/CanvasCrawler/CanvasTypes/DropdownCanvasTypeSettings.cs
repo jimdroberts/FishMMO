@@ -1,4 +1,4 @@
-﻿using FishMMO.Shared;
+using FishMMO.Shared;
 using UnityEngine;
 using UnityEngine.UI;
 

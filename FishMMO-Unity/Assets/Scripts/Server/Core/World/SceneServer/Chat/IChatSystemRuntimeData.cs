@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {

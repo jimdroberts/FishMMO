@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -148,7 +148,7 @@ namespace FishMMO.Client
 					if (CloseOnEscape)
 					{
 						UIManager.RegisterCloseOnEscapeUI(this);
-						InputManager.MouseMode = true;
+						PlayerInputHandler.MouseMode = true;
 					}
 					if (FocusOnSelect)
 					{

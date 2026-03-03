@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Core.Account

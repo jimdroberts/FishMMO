@@ -1,4 +1,5 @@
 ﻿using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using FishNet.Transporting;
 using UnityEngine.UI;
 
@@ -202,7 +203,7 @@ namespace FishMMO.Client
 						if (!UIManager.ControlHasFocus() &&
 							Character.TryGet(out IAbilityController abilityController))
 						{
-							abilityController.Activate(ReferenceID, InputManager.GetKeyCode(KeyMap));
+							abilityController.Activate(ReferenceID, true);
 						}
 						break;
 					default:

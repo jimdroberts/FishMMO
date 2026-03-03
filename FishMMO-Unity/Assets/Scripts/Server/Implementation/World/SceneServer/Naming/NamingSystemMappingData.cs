@@ -1,7 +1,7 @@
 using System;
 using FishMMO.Server.Core;
-using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Server.Core.Collections;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {

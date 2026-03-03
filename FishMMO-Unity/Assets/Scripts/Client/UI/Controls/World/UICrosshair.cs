@@ -17,7 +17,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
-			InputManager.OnToggleMouseMode += OnToggleMouseMode;
+			PlayerInputHandler.OnToggleMouseMode += OnToggleMouseMode;
 		}
 
 		/// <summary>
@@ -25,7 +25,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnDestroying()
 		{
-			InputManager.OnToggleMouseMode -= OnToggleMouseMode;
+			PlayerInputHandler.OnToggleMouseMode -= OnToggleMouseMode;
 		}
 
 		/// <summary>

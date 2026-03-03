@@ -64,7 +64,7 @@ namespace FishMMO.Client
 				Show();
 
 				// Enable mouse mode for user interaction during reconnect.
-				InputManager.MouseMode = true;
+				PlayerInputHandler.MouseMode = true;
 			}
 			else
 			{

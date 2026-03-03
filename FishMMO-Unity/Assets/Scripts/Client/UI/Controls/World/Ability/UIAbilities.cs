@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using System.Collections.Generic;
 
 namespace FishMMO.Client
@@ -76,8 +77,7 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out IAbilityController abilityController))
 			{
-				// Only allow manipulation if mouse mode is not active.
-				abilityController.OnCanManipulate += () => { return !InputManager.MouseMode; };
+				abilityController.OnCanManipulate += CanManipulateAbility;
 				abilityController.OnAddAbility += AddAbility;
 				abilityController.OnAddKnownAbility += AddKnownAbility;
 				abilityController.OnAddKnownAbilityEvent += AddKnownAbilityEvent;
@@ -91,12 +91,20 @@ namespace FishMMO.Client
 		{
 			if (Character.TryGet(out IAbilityController abilityController))
 			{
-				abilityController.OnCanManipulate -= () => { return !InputManager.MouseMode; };
+				abilityController.OnCanManipulate -= CanManipulateAbility;
 				abilityController.OnAddAbility -= AddAbility;
 				abilityController.OnAddKnownAbility -= AddKnownAbility;
 				abilityController.OnAddKnownAbilityEvent -= AddKnownAbilityEvent;
 			}
 			ClearAllSlots();
+		}
+
+		/// <summary>
+		/// Returns whether ability manipulation is allowed. Manipulation is blocked when mouse mode is active.
+		/// </summary>
+		private bool CanManipulateAbility()
+		{
+			return !PlayerInputHandler.MouseMode;
 		}
 
 		/// <summary>

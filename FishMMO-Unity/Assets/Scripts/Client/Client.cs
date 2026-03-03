@@ -7,6 +7,7 @@ using FishNet.Transporting.Tugboat;
 using FishNet.Transporting.Bayou;
 using FishNet.Managing.Scened;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using FishMMO.Logging;
 using System.Collections;
 using System.Collections.Generic;
@@ -348,7 +349,7 @@ namespace FishMMO.Client
 		void OnDestroy()
 		{
 #if UNITY_EDITOR
-			InputManager.MouseMode = true;
+			PlayerInputHandler.MouseMode = true;
 #endif
 
 #if !UNITY_EDITOR
@@ -447,7 +448,7 @@ namespace FishMMO.Client
 			OnQuitToLogin?.Invoke();
 
 #if UNITY_EDITOR
-			InputManager.MouseMode = true;
+			PlayerInputHandler.MouseMode = true;
 #endif
 		}
 
@@ -942,15 +943,15 @@ namespace FishMMO.Client
 			// Assign UI Character
 			UIManager.SetCharacter(character);
 
-			LocalInputController localInputController = character.GameObject.GetComponent<LocalInputController>();
-			if (localInputController == null)
+			PlayerInputController playerInputController = character.GameObject.GetComponent<PlayerInputController>();
+			if (playerInputController == null)
 			{
-				localInputController = character.GameObject.AddComponent<LocalInputController>();
+				playerInputController = character.GameObject.AddComponent<PlayerInputController>();
 			}
-			localInputController.Initialize(character);
+			playerInputController.Initialize(character);
 
 			// Disable Mouse Mode by default, the character should be controllable as soon as we enter the scene.
-			InputManager.MouseMode = false;
+			PlayerInputHandler.MouseMode = false;
 		}
 
 		/// <summary>
@@ -959,12 +960,12 @@ namespace FishMMO.Client
 		public void Character_OnStopLocalClient(IPlayerCharacter character)
 		{
 			// Enable the mouse
-			InputManager.MouseMode = true;
+			PlayerInputHandler.MouseMode = true;
 
-			LocalInputController localInputController = character.GameObject.GetComponent<LocalInputController>();
-			if (localInputController != null)
+			PlayerInputController playerInputController = character.GameObject.GetComponent<PlayerInputController>();
+			if (playerInputController != null)
 			{
-				localInputController.Deinitialize();
+				playerInputController.Deinitialize();
 			}
 
 			// Clear the UI Character

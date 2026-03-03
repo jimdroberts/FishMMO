@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
@@ -178,27 +179,29 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (InputManager.GetKeyDown("Chat") ||
-				InputManager.GetKeyDown("Chat2"))
+			if (PlayerInputHandler.Controls == null ||
+				!PlayerInputHandler.Controls.Player.Chat.triggered)
 			{
-				if (InputManager.MouseMode &&
-					!InputField.isFocused)
-				{
-					InputField.OnSelect(new BaseEventData(EventSystem.current)
-					{
-						selectedObject = InputField.gameObject,
-					});
-				}
-				else
-				{
-					InputField.OnSelect(new BaseEventData(EventSystem.current)
-					{
-						selectedObject = InputField.gameObject,
-					});
+				return;
+			}
 
-					// enable mouse mode
-					InputManager.MouseMode = true;
-				}
+			if (PlayerInputHandler.MouseMode &&
+				!InputField.isFocused)
+			{
+				InputField.OnSelect(new BaseEventData(EventSystem.current)
+				{
+					selectedObject = InputField.gameObject,
+				});
+			}
+			else
+			{
+				InputField.OnSelect(new BaseEventData(EventSystem.current)
+				{
+					selectedObject = InputField.gameObject,
+				});
+
+				// enable mouse mode
+				PlayerInputHandler.MouseMode = true;
 			}
 		}
 
@@ -240,8 +243,8 @@ namespace FishMMO.Client
 		/// <param name="input">The submitted chat text.</param>
 		public void OnSubmit(string input)
 		{
-			if (!InputManager.GetKeyDown("Chat") &&
-				!InputManager.GetKeyDown("Chat2"))
+			if (PlayerInputHandler.Controls == null ||
+				!PlayerInputHandler.Controls.Player.Chat.triggered)
 			{
 				return;
 			}
@@ -251,7 +254,6 @@ namespace FishMMO.Client
 				return;
 			}
 
-			// remove Rich Text Tags if any exist
 			// Remove Rich Text Tags if any exist
 			input = ChatHelper.Sanitize(input);
 

@@ -97,7 +97,7 @@ namespace FishMMO.Client
 			MouseMode = true; // Start with mouse visible and unlocked
 
 			// Subscribe to the ToggleMouseMode action
-			playerControls.Player.ToggleMouseMode.performed += ctx => ToggleMouseMode(true);
+			playerControls.Player.ToggleMouseMode.performed += OnToggleMouseModePerformed;
 		}
 
 		private void OnEnable()
@@ -115,7 +115,7 @@ namespace FishMMO.Client
 
 		private void OnDestroy()
 		{
-			playerControls.Player.ToggleMouseMode.performed -= ctx => ToggleMouseMode(true);
+			playerControls.Player.ToggleMouseMode.performed -= OnToggleMouseModePerformed;
 			playerControls?.Dispose(); // Dispose of the input actions when no longer needed
 			Controls = null; // Clear static reference
 		}
@@ -139,19 +139,6 @@ namespace FishMMO.Client
 		{
 			ForcedMouseMode = forceMouseMode;
 			MouseMode = !MouseMode;
-
-			// When mouse mode is disabled (locked), enable player input and disable UI input.
-			// When mouse mode is enabled (unlocked), enable UI input and disable player input.
-			if (MouseMode) // If mouse is visible/unlocked (UI mode)
-			{
-				Controls.Player.Disable();
-				Controls.UI.Enable();
-			}
-			else // If mouse is hidden/locked (Game mode)
-			{
-				Controls.UI.Disable();
-				Controls.Player.Enable();
-			}
 		}
 
 #if UNITY_EDITOR
@@ -244,6 +231,14 @@ namespace FishMMO.Client
 			// This is a simplified example.
 			action.ApplyBindingOverride(bindingIndex, newBinding);
 			SaveBindingOverrides(); // Save after remapping
+		}
+
+		/// <summary>
+		/// Named callback for the ToggleMouseMode input action. Toggles mouse mode with force flag.
+		/// </summary>
+		private void OnToggleMouseModePerformed(InputAction.CallbackContext context)
+		{
+			ToggleMouseMode(true);
 		}
 	}
 }

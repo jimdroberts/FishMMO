@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using FishMMO.Shared;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
 using FishNet.Connection;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable

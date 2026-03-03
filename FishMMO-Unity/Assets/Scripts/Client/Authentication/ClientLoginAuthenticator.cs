@@ -1,4 +1,4 @@
-﻿using FishNet.Authenticating;
+using FishNet.Authenticating;
 using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;

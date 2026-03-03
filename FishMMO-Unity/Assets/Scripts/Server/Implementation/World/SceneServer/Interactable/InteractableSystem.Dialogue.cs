@@ -2,7 +2,7 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
-using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
 using System.Collections.Generic;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable

@@ -3,6 +3,7 @@ using UnityEngine;
 using TMPro;
 using System.Collections.Generic;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using FishMMO.Logging;
 
 namespace FishMMO.Client

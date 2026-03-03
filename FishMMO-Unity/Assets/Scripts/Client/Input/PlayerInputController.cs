@@ -1,6 +1,7 @@
 using FishNet.Transporting;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using FishMMO.Logging;
 using KinematicCharacterController;
 using UnityEngine.InputSystem;
@@ -9,6 +10,10 @@ using System;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Handles player input using the new Unity Input System and converts it to character actions.
+	/// Subscribes to input action callbacks and manages UI toggles, movement, camera, and context menus.
+	/// </summary>
 	public class PlayerInputController : MonoBehaviour
 	{
 #if !UNITY_SERVER
@@ -20,28 +25,28 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Indicates if a jump input has been queued for processing.
 		/// </summary>
-		private bool _jumpQueued = false;
+		private bool jumpQueued = false;
 		/// <summary>
 		/// Indicates if crouch input is currently active.
 		/// </summary>
-		private bool _crouchInputActive = false;
+		private bool crouchInputActive = false;
 		/// <summary>
 		/// Indicates if sprint input is currently active.
 		/// </summary>
-		private bool _sprintInputActive = false;
+		private bool sprintInputActive = false;
 
 		/// <summary>
 		/// Current movement input vector from the Input System.
 		/// </summary>
-		private Vector2 _moveInput;
+		private Vector2 moveInput;
 		/// <summary>
 		/// Current look input vector from the Input System.
 		/// </summary>
-		private Vector2 _lookInput;
+		private Vector2 lookInput;
 		/// <summary>
 		/// Current mouse scroll input value (y component).
 		/// </summary>
-		private float _mouseScrollInput;
+		private float mouseScrollInput;
 
 		/// <summary>
 		/// Initializes the input controller for the specified player character.
@@ -62,7 +67,6 @@ namespace FishMMO.Client
 				Character.KCCPlayer.OnHandleCharacterInput += KCCPlayer_OnHandleCharacterInput;
 			}
 
-			// Subscribe to Input Actions events
 			SubscribeToInputActions();
 		}
 
@@ -81,7 +85,6 @@ namespace FishMMO.Client
 				Character.KCCPlayer.OnHandleCharacterInput -= KCCPlayer_OnHandleCharacterInput;
 			}
 
-			// Unsubscribe from Input Actions events
 			UnsubscribeFromInputActions();
 		}
 
@@ -96,53 +99,40 @@ namespace FishMMO.Client
 				return;
 			}
 
-			// Player Actions
-			PlayerInputHandler.Controls.Player.Move.performed += ctx => _moveInput = ctx.ReadValue<Vector2>();
-			PlayerInputHandler.Controls.Player.Move.canceled += ctx => _moveInput = Vector2.zero;
+			// Player continuous input
+			PlayerInputHandler.Controls.Player.Move.performed += OnMovePerformed;
+			PlayerInputHandler.Controls.Player.Move.canceled += OnMoveCanceled;
 
-			PlayerInputHandler.Controls.Player.Look.performed += ctx => _lookInput = ctx.ReadValue<Vector2>();
-			PlayerInputHandler.Controls.Player.Look.canceled += ctx => _lookInput = Vector2.zero;
+			PlayerInputHandler.Controls.Player.Look.performed += OnLookPerformed;
+			PlayerInputHandler.Controls.Player.Look.canceled += OnLookCanceled;
 
-			// Mouse Scroll is handled in PlayerControls.UI (or custom action if preferred)
-			// For camera scroll, we'll listen to UI.ScrollWheel
-			PlayerInputHandler.Controls.UI.ScrollWheel.performed += ctx => _mouseScrollInput = ctx.ReadValue<Vector2>().y;
-			PlayerInputHandler.Controls.UI.ScrollWheel.canceled += ctx => _mouseScrollInput = 0f;
+			PlayerInputHandler.Controls.UI.ScrollWheel.performed += OnScrollWheelPerformed;
+			PlayerInputHandler.Controls.UI.ScrollWheel.canceled += OnScrollWheelCanceled;
 
-			PlayerInputHandler.Controls.Player.Jump.performed += ctx => _jumpQueued = true;
-			PlayerInputHandler.Controls.Player.Crouch.performed += ctx => _crouchInputActive = true;
-			PlayerInputHandler.Controls.Player.Crouch.canceled += ctx => _crouchInputActive = false;
-			PlayerInputHandler.Controls.Player.Sprint.performed += ctx => _sprintInputActive = true;
-			PlayerInputHandler.Controls.Player.Sprint.canceled += ctx => _sprintInputActive = false;
+			PlayerInputHandler.Controls.Player.Jump.performed += OnJumpPerformed;
+			PlayerInputHandler.Controls.Player.Crouch.performed += OnCrouchPerformed;
+			PlayerInputHandler.Controls.Player.Crouch.canceled += OnCrouchCanceled;
+			PlayerInputHandler.Controls.Player.Sprint.performed += OnSprintPerformed;
+			PlayerInputHandler.Controls.Player.Sprint.canceled += OnSprintCanceled;
 
+			// Player action callbacks
 			PlayerInputHandler.Controls.Player.Interact.performed += OnInteractPerformed;
 			PlayerInputHandler.Controls.Player.ToggleFirstPerson.performed += OnToggleFirstPersonPerformed;
 			PlayerInputHandler.Controls.Player.Cancel.performed += OnCancelPerformed;
 			PlayerInputHandler.Controls.Player.CloseLastUI.performed += OnCloseLastUIPerformed;
 			PlayerInputHandler.Controls.Player.Chat.performed += OnChatPerformed;
 
-			// UI/Menu Toggles
-			PlayerInputHandler.Controls.Player.Inventory.performed += ctx => UIManager.ToggleVisibility("UIInventory");
-			PlayerInputHandler.Controls.Player.Abilities.performed += ctx => UIManager.ToggleVisibility("UIAbilities");
+			// UI/Menu toggles
+			PlayerInputHandler.Controls.Player.Inventory.performed += OnInventoryPerformed;
+			PlayerInputHandler.Controls.Player.Abilities.performed += OnAbilitiesPerformed;
 			PlayerInputHandler.Controls.Player.Equipment.performed += OnEquipmentPerformed;
-			PlayerInputHandler.Controls.Player.Guild.performed += ctx => UIManager.ToggleVisibility("UIGuild");
-			PlayerInputHandler.Controls.Player.Party.performed += ctx => UIManager.ToggleVisibility("UIParty");
-			PlayerInputHandler.Controls.Player.Friends.performed += ctx => UIManager.ToggleVisibility("UIFriendList");
-			PlayerInputHandler.Controls.Player.Achievements.performed += ctx => UIManager.ToggleVisibility("UIAchievements");
-			PlayerInputHandler.Controls.Player.Factions.performed += ctx => UIManager.ToggleVisibility("UIFactions");
-			PlayerInputHandler.Controls.Player.Minimap.performed += ctx => UIManager.ToggleVisibility("UIMinimap");
-			PlayerInputHandler.Controls.Player.Menu.performed += ctx => UIManager.ToggleVisibility("UIMenu");
-
-			// Hotkeys
-			PlayerInputHandler.Controls.Player.Hotkey1.performed += ctx => HandleHotkeyInput(1);
-			PlayerInputHandler.Controls.Player.Hotkey2.performed += ctx => HandleHotkeyInput(2);
-			PlayerInputHandler.Controls.Player.Hotkey3.performed += ctx => HandleHotkeyInput(3);
-			PlayerInputHandler.Controls.Player.Hotkey4.performed += ctx => HandleHotkeyInput(4);
-			PlayerInputHandler.Controls.Player.Hotkey5.performed += ctx => HandleHotkeyInput(5);
-			PlayerInputHandler.Controls.Player.Hotkey6.performed += ctx => HandleHotkeyInput(6);
-			PlayerInputHandler.Controls.Player.Hotkey7.performed += ctx => HandleHotkeyInput(7);
-			PlayerInputHandler.Controls.Player.Hotkey8.performed += ctx => HandleHotkeyInput(8);
-			PlayerInputHandler.Controls.Player.Hotkey9.performed += ctx => HandleHotkeyInput(9);
-			PlayerInputHandler.Controls.Player.Hotkey0.performed += ctx => HandleHotkeyInput(0);
+			PlayerInputHandler.Controls.Player.Guild.performed += OnGuildPerformed;
+			PlayerInputHandler.Controls.Player.Party.performed += OnPartyPerformed;
+			PlayerInputHandler.Controls.Player.Friends.performed += OnFriendsPerformed;
+			PlayerInputHandler.Controls.Player.Achievements.performed += OnAchievementsPerformed;
+			PlayerInputHandler.Controls.Player.Factions.performed += OnFactionsPerformed;
+			PlayerInputHandler.Controls.Player.Minimap.performed += OnMinimapPerformed;
+			PlayerInputHandler.Controls.Player.Menu.performed += OnMenuPerformed;
 		}
 
 		/// <summary>
@@ -152,48 +142,40 @@ namespace FishMMO.Client
 		{
 			if (PlayerInputHandler.Controls == null) return;
 
-			PlayerInputHandler.Controls.Player.Move.performed -= ctx => _moveInput = ctx.ReadValue<Vector2>();
-			PlayerInputHandler.Controls.Player.Move.canceled -= ctx => _moveInput = Vector2.zero;
+			// Player continuous input
+			PlayerInputHandler.Controls.Player.Move.performed -= OnMovePerformed;
+			PlayerInputHandler.Controls.Player.Move.canceled -= OnMoveCanceled;
 
-			PlayerInputHandler.Controls.Player.Look.performed -= ctx => _lookInput = ctx.ReadValue<Vector2>();
-			PlayerInputHandler.Controls.Player.Look.canceled -= ctx => _lookInput = Vector2.zero;
+			PlayerInputHandler.Controls.Player.Look.performed -= OnLookPerformed;
+			PlayerInputHandler.Controls.Player.Look.canceled -= OnLookCanceled;
 
-			PlayerInputHandler.Controls.UI.ScrollWheel.performed -= ctx => _mouseScrollInput = ctx.ReadValue<Vector2>().y;
-			PlayerInputHandler.Controls.UI.ScrollWheel.canceled -= ctx => _mouseScrollInput = 0f;
+			PlayerInputHandler.Controls.UI.ScrollWheel.performed -= OnScrollWheelPerformed;
+			PlayerInputHandler.Controls.UI.ScrollWheel.canceled -= OnScrollWheelCanceled;
 
-			PlayerInputHandler.Controls.Player.Jump.performed -= ctx => _jumpQueued = true;
-			PlayerInputHandler.Controls.Player.Crouch.performed -= ctx => _crouchInputActive = true;
-			PlayerInputHandler.Controls.Player.Crouch.canceled -= ctx => _crouchInputActive = false;
-			PlayerInputHandler.Controls.Player.Sprint.performed -= ctx => _sprintInputActive = true;
-			PlayerInputHandler.Controls.Player.Sprint.canceled -= ctx => _sprintInputActive = false;
+			PlayerInputHandler.Controls.Player.Jump.performed -= OnJumpPerformed;
+			PlayerInputHandler.Controls.Player.Crouch.performed -= OnCrouchPerformed;
+			PlayerInputHandler.Controls.Player.Crouch.canceled -= OnCrouchCanceled;
+			PlayerInputHandler.Controls.Player.Sprint.performed -= OnSprintPerformed;
+			PlayerInputHandler.Controls.Player.Sprint.canceled -= OnSprintCanceled;
 
+			// Player action callbacks
 			PlayerInputHandler.Controls.Player.Interact.performed -= OnInteractPerformed;
 			PlayerInputHandler.Controls.Player.ToggleFirstPerson.performed -= OnToggleFirstPersonPerformed;
 			PlayerInputHandler.Controls.Player.Cancel.performed -= OnCancelPerformed;
 			PlayerInputHandler.Controls.Player.CloseLastUI.performed -= OnCloseLastUIPerformed;
 			PlayerInputHandler.Controls.Player.Chat.performed -= OnChatPerformed;
 
-			PlayerInputHandler.Controls.Player.Inventory.performed -= ctx => UIManager.ToggleVisibility("UIInventory");
-			PlayerInputHandler.Controls.Player.Abilities.performed -= ctx => UIManager.ToggleVisibility("UIAbilities");
+			// UI/Menu toggles
+			PlayerInputHandler.Controls.Player.Inventory.performed -= OnInventoryPerformed;
+			PlayerInputHandler.Controls.Player.Abilities.performed -= OnAbilitiesPerformed;
 			PlayerInputHandler.Controls.Player.Equipment.performed -= OnEquipmentPerformed;
-			PlayerInputHandler.Controls.Player.Guild.performed -= ctx => UIManager.ToggleVisibility("UIGuild");
-			PlayerInputHandler.Controls.Player.Party.performed -= ctx => UIManager.ToggleVisibility("UIParty");
-			PlayerInputHandler.Controls.Player.Friends.performed -= ctx => UIManager.ToggleVisibility("UIFriendList");
-			PlayerInputHandler.Controls.Player.Achievements.performed -= ctx => UIManager.ToggleVisibility("UIAchievements");
-			PlayerInputHandler.Controls.Player.Factions.performed -= ctx => UIManager.ToggleVisibility("UIFactions");
-			PlayerInputHandler.Controls.Player.Minimap.performed -= ctx => UIManager.ToggleVisibility("UIMinimap");
-			PlayerInputHandler.Controls.Player.Menu.performed -= ctx => UIManager.ToggleVisibility("UIMenu");
-
-			PlayerInputHandler.Controls.Player.Hotkey1.performed -= ctx => HandleHotkeyInput(1);
-			PlayerInputHandler.Controls.Player.Hotkey2.performed -= ctx => HandleHotkeyInput(2);
-			PlayerInputHandler.Controls.Player.Hotkey3.performed -= ctx => HandleHotkeyInput(3);
-			PlayerInputHandler.Controls.Player.Hotkey4.performed -= ctx => HandleHotkeyInput(4);
-			PlayerInputHandler.Controls.Player.Hotkey5.performed -= ctx => HandleHotkeyInput(5);
-			PlayerInputHandler.Controls.Player.Hotkey6.performed -= ctx => HandleHotkeyInput(6);
-			PlayerInputHandler.Controls.Player.Hotkey7.performed -= ctx => HandleHotkeyInput(7);
-			PlayerInputHandler.Controls.Player.Hotkey8.performed -= ctx => HandleHotkeyInput(8);
-			PlayerInputHandler.Controls.Player.Hotkey9.performed -= ctx => HandleHotkeyInput(9);
-			PlayerInputHandler.Controls.Player.Hotkey0.performed -= ctx => HandleHotkeyInput(0);
+			PlayerInputHandler.Controls.Player.Guild.performed -= OnGuildPerformed;
+			PlayerInputHandler.Controls.Player.Party.performed -= OnPartyPerformed;
+			PlayerInputHandler.Controls.Player.Friends.performed -= OnFriendsPerformed;
+			PlayerInputHandler.Controls.Player.Achievements.performed -= OnAchievementsPerformed;
+			PlayerInputHandler.Controls.Player.Factions.performed -= OnFactionsPerformed;
+			PlayerInputHandler.Controls.Player.Minimap.performed -= OnMinimapPerformed;
+			PlayerInputHandler.Controls.Player.Menu.performed -= OnMenuPerformed;
 		}
 
 		/// <summary>
@@ -243,8 +225,6 @@ namespace FishMMO.Client
 					return false;
 				}
 			}
-			// Input for player actions should only be processed if the game is in "MouseMode == false" (cursor hidden/locked)
-			// and no UI input field has focus.
 			return !PlayerInputHandler.MouseMode && !UIManager.InputControlHasFocus();
 		}
 
@@ -260,12 +240,11 @@ namespace FishMMO.Client
 
 			if (!CanUpdateInput())
 			{
-				// Reset input states if input is not allowed
-				_jumpQueued = false;
-				_crouchInputActive = false;
-				_sprintInputActive = false;
-				_moveInput = Vector2.zero;
-				_lookInput = Vector2.zero;
+				jumpQueued = false;
+				crouchInputActive = false;
+				sprintInputActive = false;
+				moveInput = Vector2.zero;
+				lookInput = Vector2.zero;
 
 				return new KCCInputReplicateData(0.0f,
 												 0.0f,
@@ -274,30 +253,29 @@ namespace FishMMO.Client
 												 Character.KCCPlayer.CharacterCamera.Transform.rotation);
 			}
 
-			if (_jumpQueued)
+			if (jumpQueued)
 			{
 				moveFlags.EnableBit(KCCMoveFlags.Jump);
-				_jumpQueued = false; // Consume the jump input
+				jumpQueued = false;
 			}
-			if (_crouchInputActive)
+			if (crouchInputActive)
 			{
 				moveFlags.EnableBit(KCCMoveFlags.Crouch);
 			}
-			if (_sprintInputActive)
+			if (sprintInputActive)
 			{
 				moveFlags.EnableBit(KCCMoveFlags.Sprint);
 			}
 
-			// KCCInputReplicateData expects vertical and horizontal, which align with Move.y and Move.x
-			return new KCCInputReplicateData(_moveInput.y,
-											 _moveInput.x,
+			return new KCCInputReplicateData(moveInput.y,
+											 moveInput.x,
 											 moveFlags,
 											 Character.KCCPlayer.CharacterCamera.Transform.position,
 											 Character.KCCPlayer.CharacterCamera.Transform.rotation);
 		}
 
 		/// <summary>
-		/// Unity event called every frame. Handles right-click context menu for player targets.
+		/// Unity event called every frame. Handles right-click context menu and auto-dismiss logic.
 		/// </summary>
 		private void Update()
 		{
@@ -307,6 +285,7 @@ namespace FishMMO.Client
 			}
 
 			HandleRightClickContextMenu();
+			HandleAutoDismiss();
 		}
 
 		/// <summary>
@@ -328,7 +307,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private void HandleCameraInput()
 		{
-			// Handle rotating the camera along with physics movers
 			if (Character.Motor != null && Character.KCCPlayer.CharacterCamera.RotateWithPhysicsMover && Character.Motor.AttachedRigidbody != null)
 			{
 				PhysicsMover mover = Character.Motor.AttachedRigidbody.GetComponent<PhysicsMover>();
@@ -341,21 +319,30 @@ namespace FishMMO.Client
 
 			if (CanUpdateInput())
 			{
-				// Create the look input vector for the camera from _lookInput
-				Vector3 lookInputVector = new Vector3(_lookInput.x, _lookInput.y, 0f);
+				Vector3 lookInputVector = new Vector3(lookInput.x, lookInput.y, 0f);
 
-				// Apply inputs to the camera
-				// Note: MouseScrollWheel is now a Vector2, so we take the y component for zoom
-				Character.KCCPlayer.UpdateCamera(-_mouseScrollInput, lookInputVector);
-
+				Character.KCCPlayer.UpdateCamera(-mouseScrollInput, lookInputVector);
 				Character.KCCPlayer.SetOrientationMethod(Character.KCCPlayer.CharacterController.OrientationMethod);
 			}
 			else
 			{
-				// Reset camera input if not allowed
-				_lookInput = Vector2.zero;
-				_mouseScrollInput = 0f;
+				lookInput = Vector2.zero;
+				mouseScrollInput = 0f;
 				Character.KCCPlayer.UpdateCamera(0.0f, Vector3.zero);
+			}
+		}
+
+		/// <summary>
+		/// Automatically dismisses mouse mode when forced mouse mode is inactive and no UI panels remain open.
+		/// </summary>
+		private void HandleAutoDismiss()
+		{
+			if (!PlayerInputHandler.ForcedMouseMode && !UIManager.CloseNext(true))
+			{
+				if (PlayerInputHandler.MouseMode)
+				{
+					PlayerInputHandler.ToggleMouseMode();
+				}
 			}
 		}
 
@@ -435,12 +422,69 @@ namespace FishMMO.Client
 			contextMenu.Open(entries);
 		}
 
+		// --- Continuous Input Callbacks ---
+
+		private void OnMovePerformed(InputAction.CallbackContext context)
+		{
+			moveInput = context.ReadValue<Vector2>();
+		}
+
+		private void OnMoveCanceled(InputAction.CallbackContext context)
+		{
+			moveInput = Vector2.zero;
+		}
+
+		private void OnLookPerformed(InputAction.CallbackContext context)
+		{
+			lookInput = context.ReadValue<Vector2>();
+		}
+
+		private void OnLookCanceled(InputAction.CallbackContext context)
+		{
+			lookInput = Vector2.zero;
+		}
+
+		private void OnScrollWheelPerformed(InputAction.CallbackContext context)
+		{
+			mouseScrollInput = context.ReadValue<Vector2>().y;
+		}
+
+		private void OnScrollWheelCanceled(InputAction.CallbackContext context)
+		{
+			mouseScrollInput = 0f;
+		}
+
+		private void OnJumpPerformed(InputAction.CallbackContext context)
+		{
+			jumpQueued = true;
+		}
+
+		private void OnCrouchPerformed(InputAction.CallbackContext context)
+		{
+			crouchInputActive = true;
+		}
+
+		private void OnCrouchCanceled(InputAction.CallbackContext context)
+		{
+			crouchInputActive = false;
+		}
+
+		private void OnSprintPerformed(InputAction.CallbackContext context)
+		{
+			sprintInputActive = true;
+		}
+
+		private void OnSprintCanceled(InputAction.CallbackContext context)
+		{
+			sprintInputActive = false;
+		}
+
 		// --- Action Callbacks ---
+
 		/// <summary>
 		/// Callback for when the Interact input action is performed.
 		/// Attempts to interact with the current target if possible.
 		/// </summary>
-		/// <param name="context">Input action callback context.</param>
 		private void OnInteractPerformed(InputAction.CallbackContext context)
 		{
 			if (!CanUpdateInput() || UIManager.ControlHasFocus()) return;
@@ -464,9 +508,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Callback for toggling first-person camera mode.
-		/// Switches between first-person and default camera distance.
 		/// </summary>
-		/// <param name="context">Input action callback context.</param>
 		private void OnToggleFirstPersonPerformed(InputAction.CallbackContext context)
 		{
 			if (!CanUpdateInput()) return;
@@ -477,7 +519,6 @@ namespace FishMMO.Client
 		/// Callback for cancel input action.
 		/// Interrupts the current ability if possible.
 		/// </summary>
-		/// <param name="context">Input action callback context.</param>
 		private void OnCancelPerformed(InputAction.CallbackContext context)
 		{
 			if (Character.TryGet(out IAbilityController abilityController))
@@ -490,14 +531,12 @@ namespace FishMMO.Client
 		/// Callback for closing the last UI element.
 		/// If no UI can be closed and mouse mode is active, toggles mouse mode off.
 		/// </summary>
-		/// <param name="context">Input action callback context.</param>
 		private void OnCloseLastUIPerformed(InputAction.CallbackContext context)
 		{
 			if (!UIManager.CloseNext())
 			{
 				if (PlayerInputHandler.MouseMode)
 				{
-					// If no UI can be closed and mouse mode is active, toggle out of mouse mode
 					PlayerInputHandler.ToggleMouseMode();
 				}
 			}
@@ -505,21 +544,20 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Callback for chat input action.
-		/// Intended to activate chat UI (implementation may vary).
+		/// Activates the chat input field and enables mouse mode if not already active.
 		/// </summary>
-		/// <param name="context">Input action callback context.</param>
 		private void OnChatPerformed(InputAction.CallbackContext context)
 		{
-			// You might want to explicitly activate the chat UI here
-			// This is just an example, the specific UIManager method might vary.
-			// UIManager.ActivateChatInput();
+			if (UIManager.TryGet("UIChat", out UIChat uiChat))
+			{
+				uiChat.EnableChatInput();
+			}
 		}
 
 		/// <summary>
 		/// Callback for equipment input action.
 		/// Shows the equipment UI and sets the equipment view camera.
 		/// </summary>
-		/// <param name="context">Input action callback context.</param>
 		private void OnEquipmentPerformed(InputAction.CallbackContext context)
 		{
 			if (UIManager.TryGet("UIEquipment", out UIEquipment uiEquipment))
@@ -529,15 +567,51 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Handles hotkey input for abilities or items.
-		/// </summary>
-		/// <param name="hotkeyNumber">The hotkey number pressed (1-9, 0).</param>
-		private void HandleHotkeyInput(int hotkeyNumber)
+		// --- UI Toggle Callbacks ---
+
+		private void OnInventoryPerformed(InputAction.CallbackContext context)
 		{
-			// Implement your hotkey logic here, e.g., using an ability, consuming an item.
-			// Example: Character.UseAbility(hotkeyNumber);
-			Log.Debug("PlayerInputController", $"Hotkey {hotkeyNumber} pressed!");
+			UIManager.ToggleVisibility("UIInventory");
+		}
+
+		private void OnAbilitiesPerformed(InputAction.CallbackContext context)
+		{
+			UIManager.ToggleVisibility("UIAbilities");
+		}
+
+		private void OnGuildPerformed(InputAction.CallbackContext context)
+		{
+			UIManager.ToggleVisibility("UIGuild");
+		}
+
+		private void OnPartyPerformed(InputAction.CallbackContext context)
+		{
+			UIManager.ToggleVisibility("UIParty");
+		}
+
+		private void OnFriendsPerformed(InputAction.CallbackContext context)
+		{
+			UIManager.ToggleVisibility("UIFriendList");
+		}
+
+		private void OnAchievementsPerformed(InputAction.CallbackContext context)
+		{
+			UIManager.ToggleVisibility("UIAchievements");
+		}
+
+		private void OnFactionsPerformed(InputAction.CallbackContext context)
+		{
+			UIManager.ToggleVisibility("UIFactions");
+		}
+
+		private void OnMinimapPerformed(InputAction.CallbackContext context)
+		{
+			UIManager.ToggleVisibility("UIMinimap");
+		}
+
+		private void OnMenuPerformed(InputAction.CallbackContext context)
+		{
+			UIManager.ToggleVisibility("UIMenu");
 		}
 #endif
 	}

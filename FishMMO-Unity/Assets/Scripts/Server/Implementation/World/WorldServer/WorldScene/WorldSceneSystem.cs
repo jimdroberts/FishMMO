@@ -1,10 +1,8 @@
 using FishNet.Connection;
 using FishNet.Managing.Server;
-using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
