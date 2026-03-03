@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -10,8 +11,16 @@ namespace FishMMO.Shared
 	/// Displays a custom title and color in the UI.
 	/// </summary>
 	[RequireComponent(typeof(SceneObjectNamer))]
-	public class Banker : Interactable
+	public class Banker : Interactable, IBanker
 	{
+		/// <summary>
+		/// Achievement to increment when a player uses this banker.
+		/// </summary>
+		public AchievementTemplate AchievementTemplate;
+
+		/// <inheritdoc />
+		AchievementTemplate IBanker.AchievementTemplate => AchievementTemplate;
+
 		/// <summary>
 		/// The display title for the banker, shown in the UI.
 		/// </summary>

@@ -1,9 +1,9 @@
 using System;
 using System.Reflection;
 using UnityEngine;
-using FishMMO.Shared;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Connection;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable

@@ -6,6 +6,8 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// The UIMinimap class handles the minimap UI element, including its camera and rendering settings.
+	/// The minimap camera renders objects on the Minimap layer from a fixed overhead position.
+	/// Attach <see cref="MinimapIcon"/> to any object that should appear on the minimap.
 	/// </summary>
 	public class UIMinimap : UICharacterControl
 	{
@@ -13,6 +15,13 @@ namespace FishMMO.Client
 		/// The camera used to render the minimap view.
 		/// </summary>
 		public Camera MinimapCamera;
+
+		/// <summary>
+		/// Additional layers the minimap camera should render besides the Minimap layer.
+		/// Assign Ground, Water, or other environment layers here in the Inspector.
+		/// </summary>
+		[Tooltip("Additional layers the minimap camera should render besides the Minimap layer (e.g. Ground, Water).")]
+		public LayerMask AdditionalLayers;
 
 		/// <summary>
 		/// Stores the original global fog state before minimap rendering.
@@ -40,6 +49,10 @@ namespace FishMMO.Client
 			// Set clear flags to solid color to prevent skybox or previous frames from showing
 			MinimapCamera.clearFlags = CameraClearFlags.SolidColor;
 			MinimapCamera.backgroundColor = Color.black;
+
+			// Configure culling mask: always include the Minimap layer, plus any additional layers
+			int minimapLayer = LayerMask.GetMask(MinimapIcon.MINIMAP_LAYER);
+			MinimapCamera.cullingMask = minimapLayer | AdditionalLayers.value;
 		}
 
 		/// <summary>

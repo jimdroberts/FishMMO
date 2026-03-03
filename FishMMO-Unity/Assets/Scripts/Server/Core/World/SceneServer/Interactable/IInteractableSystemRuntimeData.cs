@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace FishMMO.Server.Core.World.SceneServer
@@ -9,8 +8,8 @@ namespace FishMMO.Server.Core.World.SceneServer
 	/// </summary>
 	public interface IInteractableSystemRuntimeData : IRuntimeDataContainer
 	{
-		Dictionary<Type, FishMMO.Server.Implementation.World.SceneServer.Interactable.IInteractableHandler> InteractableHandlers { get; }
+		Dictionary<Type, IInteractableHandler> InteractableHandlers { get; }
 
-		FishMMO.Server.Core.IngressGuard IngressGuard { get; }
+		IngressGuard IngressGuard { get; }
 	}
 }

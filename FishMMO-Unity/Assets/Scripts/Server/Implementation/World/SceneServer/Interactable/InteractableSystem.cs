@@ -21,7 +21,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	[RequiresDataContainer(typeof(InteractableSystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(InteractableSystemRuntimeData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
-	public partial class InteractableSystem : ServerBehaviour
+	public partial class InteractableSystem : ServerBehaviour, IInteractableSystem
 	{
 		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
@@ -32,29 +32,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
 
 		/// <summary>
-		/// Minimum milliseconds between merchant requests per character.
+		/// Global interaction cooldown in milliseconds. After any interaction,
+		/// the player cannot perform another interaction of any type until this cooldown expires.
+		/// All interaction types share a single per-connection IngressGuard key.
 		/// </summary>
 		[Header("Request Protection")]
-		[Tooltip("Minimum milliseconds between merchant purchase requests per character")]
-		[SerializeField] private int merchantRequestDebounceMilliseconds = 1000;
-
-		/// <summary>
-		/// Minimum milliseconds between dungeon finder requests per character.
-		/// </summary>
-		[Tooltip("Minimum milliseconds between dungeon finder requests per character")]
-		[SerializeField] private int dungeonFinderDebounceMilliseconds = 1000;
-
-		/// <summary>
-		/// Minimum milliseconds between generic interactable requests per character.
-		/// </summary>
-		[Tooltip("Minimum milliseconds between generic interactable requests per character")]
-		[SerializeField] private int interactableRequestDebounceMilliseconds = 1000;
-
-		/// <summary>
-		/// Minimum milliseconds between ability craft requests per character.
-		/// </summary>
-		[Tooltip("Minimum milliseconds between ability craft requests per character")]
-		[SerializeField] private int abilityCraftDebounceMilliseconds = 1000;
+		[Tooltip("Global interaction cooldown in milliseconds. Players can only interact with one thing at a time.")]
+		[SerializeField] private int interactionDebounceMilliseconds = 1000;
 
 		/// <summary>
 		/// Interval between debounce-tracker cleanup sweeps.
@@ -139,14 +123,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<MailFetchBroadcast>(OnServerMailFetchBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived, true);
 
-			DisplayDialogueAction.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
+			IDialogueInteractable.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
-			merchantRequestDebounceMilliseconds = Mathf.Max(0, merchantRequestDebounceMilliseconds);
-			dungeonFinderDebounceMilliseconds = Mathf.Max(0, dungeonFinderDebounceMilliseconds);
-			interactableRequestDebounceMilliseconds = Mathf.Max(0, interactableRequestDebounceMilliseconds);
-			abilityCraftDebounceMilliseconds = Mathf.Max(0, abilityCraftDebounceMilliseconds);
+			interactionDebounceMilliseconds = Mathf.Max(0, interactionDebounceMilliseconds);
 			debounceSweepIntervalSeconds = Mathf.Max(0.25f, debounceSweepIntervalSeconds);
 			debounceEntryTtlSeconds = Mathf.Max(1.0f, debounceEntryTtlSeconds);
 			debounceSweepMaxRemovals = Mathf.Max(1, debounceSweepMaxRemovals);
@@ -181,8 +166,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<MailFetchBroadcast>(OnServerMailFetchBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived);
 
-			DisplayDialogueAction.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
+			IDialogueInteractable.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
+
+			// Dialogue session cleanup
+			activeDialogueSessions.Clear();
+			characterDialogueChoices.Clear();
 		}
 
 		protected override void OnUpdate(float deltaTime)
@@ -212,32 +205,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			return TryEnqueueMainThread<IInteractableSystemMainThreadQueueData>(action);
 		}
 
-		private enum IngressOperation : byte
-		{
-			Interact = 1,
-			MerchantPurchase = 2,
-			AbilityCraft = 3,
-			DungeonFinder = 4,
-			DialogueChoice = 5,
-		}
-
-		private bool TryBeginIngressGuard(int connectionId, IngressOperation operation, out long guardKey)
+		private bool TryBeginIngressGuard(int connectionId, out long guardKey)
 		{
 			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
 			{
 				guardKey = 0;
 				return false;
 			}
-			int debounce = operation switch
-			{
-				IngressOperation.Interact => interactableRequestDebounceMilliseconds,
-				IngressOperation.MerchantPurchase => merchantRequestDebounceMilliseconds,
-				IngressOperation.AbilityCraft => abilityCraftDebounceMilliseconds,
-				IngressOperation.DungeonFinder => dungeonFinderDebounceMilliseconds,
-				IngressOperation.DialogueChoice => interactableRequestDebounceMilliseconds,
-				_ => interactableRequestDebounceMilliseconds,
-			};
-			return runtimeData.IngressGuard.TryBegin(connectionId, (byte)operation, debounce, out guardKey);
+			return runtimeData.IngressGuard.TryBegin(connectionId, 0, interactionDebounceMilliseconds, out guardKey);
 		}
 
 		private void EndIngressGuard(long guardKey)
@@ -340,7 +315,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>
 		/// Retrieves the interactable handler for a given type.
 		/// </summary>
-		public IInteractableHandler GetInteractableHandler<T>()
+		public IInteractableHandler GetInteractableHandler<T>() where T : IInteractable
 		{
 			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
 			{
@@ -369,8 +344,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Attempts to add items to a characters inventory controller and broadcasts the update to the client.
 		/// DB persistence is fire-and-forget async.
 		/// </summary>
-		public bool SendNewItemBroadcast(NetworkConnection conn, ICharacter character, IInventoryController inventoryController, Item newItem)
+		public bool SendNewItemBroadcast<T>(T conn, ICharacter character, IInventoryController inventoryController, Item newItem)
 		{
+			if (conn is not NetworkConnection networkConn)
+			{
+				Log.Error("InteractableSystem", "Invalid connection type passed to SendNewItemBroadcast");
+				return false;
+			}
+
 			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
 			List<CharacterInventoryData> itemsToSave = new List<CharacterInventoryData>();
 
@@ -415,7 +396,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// tell the client they have new items
 			if (modifiedItemBroadcasts.Count > 0)
 			{
-				Server.NetworkWrapper.Broadcast(conn, new InventorySetMultipleItemsBroadcast()
+				Server.NetworkWrapper.Broadcast(networkConn, new InventorySetMultipleItemsBroadcast()
 				{
 					Items = modifiedItemBroadcasts,
 				}, true, Channel.Reliable);
@@ -490,7 +471,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Interact, out long guardKey))
+			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
 				return;
 			}

@@ -101,6 +101,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		/// <summary>
+		/// Achievement to increment when a player creates a guild.
+		/// </summary>
+		[Header("Achievements")]
+		public AchievementTemplate GuildCreateAchievementTemplate;
+
+		/// <summary>
+		/// Achievement to increment when a player joins a guild.
+		/// </summary>
+		public AchievementTemplate GuildJoinAchievementTemplate;
+
+		/// <summary>
 		/// Operation keys used by guild ingress guards.
 		/// </summary>
 		private enum IngressOperation : byte
@@ -848,6 +859,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						Rank = gc.Rank,
 						Location = sceneName,
 					}, true, Channel.Reliable);
+
+					// Increment achievement for creating a guild
+					if (GuildCreateAchievementTemplate != null)
+					{
+						IPlayerCharacter pc = conn.FirstObject.GetComponent<IPlayerCharacter>();
+						if (pc != null && pc.TryGet(out IAchievementController achievementController))
+						{
+							achievementController.Increment(GuildCreateAchievementTemplate, 1);
+						}
+					}
 				});
 			}
 			catch (Exception ex)
@@ -1101,6 +1122,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						Rank = GuildRank.Member,
 						Location = sceneName,
 					}, true, Channel.Reliable);
+
+					// Increment achievement for joining a guild
+					if (GuildJoinAchievementTemplate != null)
+					{
+						IPlayerCharacter pc = conn.FirstObject.GetComponent<IPlayerCharacter>();
+						if (pc != null && pc.TryGet(out IAchievementController achievementController))
+						{
+							achievementController.Increment(GuildJoinAchievementTemplate, 1);
+						}
+					}
 				});
 			}
 			catch (Exception ex)

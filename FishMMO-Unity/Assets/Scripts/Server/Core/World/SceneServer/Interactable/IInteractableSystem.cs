@@ -8,7 +8,9 @@ namespace FishMMO.Server.Core.World.SceneServer
 	/// </summary>
 	public interface IInteractableSystem : IServerBehaviour
 	{
-		bool SendNewItemBroadcast(object dbContext, object conn, ICharacter character, IInventoryController inventoryController, Item newItem);
+		void OnInteractNPC(IPlayerCharacter character, IInteractable interactable);
+		void StartDialogueSession(IPlayerCharacter character, ISceneObject sceneObject, IDialogueInteractable dialogue);
+		bool SendNewItemBroadcast<T>(T conn, ICharacter character, IInventoryController inventoryController, Item newItem);
 		void RegisterInteractableHandler<T>(IInteractableHandler handler) where T : IInteractable;
 		bool UnregisterInteractableHandler<T>() where T : IInteractable;
 		IInteractableHandler GetInteractableHandler<T>() where T : IInteractable;

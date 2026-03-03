@@ -1,5 +1,6 @@
+using FishMMO.Server.Core.World.SceneServer;
 #if !UNITY_SERVER
-using UnityEngine.UI;
+using UnityEngine;
 #endif
 
 namespace FishMMO.Shared
@@ -7,7 +8,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Interactable representing a dungeon entrance. Displays a title and optional image in the UI.
 	/// </summary>
-	public class DungeonEntrance : Interactable
+	public class DungeonEntrance : Interactable, IDungeonEntrance
 	{
 		/// <summary>
 		/// The display title for the dungeon entrance, shown in the UI.
@@ -18,13 +19,24 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The image representing the dungeon entrance in the UI (client only).
 		/// </summary>
-		public Image DungeonImage;
+		public Sprite DungeonImage;
 #endif
 
 		/// <summary>
 		/// The name of the dungeon associated with this entrance.
 		/// </summary>
 		public string DungeonName;
+
+		/// <summary>
+		/// Achievement to increment when a player enters this dungeon.
+		/// </summary>
+		public AchievementTemplate AchievementTemplate;
+
+		/// <inheritdoc />
+		string IDungeonEntrance.DungeonName => DungeonName;
+
+		/// <inheritdoc />
+		AchievementTemplate IDungeonEntrance.AchievementTemplate => AchievementTemplate;
 
 		/// <summary>
 		/// Gets the display title for the dungeon entrance.

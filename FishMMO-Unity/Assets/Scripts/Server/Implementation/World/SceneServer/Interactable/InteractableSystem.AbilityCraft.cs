@@ -41,13 +41,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
-
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AbilityCraft, out long guardKey))
+			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
 				return;
 			}
@@ -156,6 +150,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					};
 
 					Server.NetworkWrapper.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
+
+					// Increment achievement for crafting an ability
+					IAbilityCrafter abilityCrafter = interactable as IAbilityCrafter;
+					if (abilityCrafter != null &&
+						abilityCrafter.AchievementTemplate != null &&
+						character.TryGet(out IAchievementController achievementController))
+					{
+						achievementController.Increment(abilityCrafter.AchievementTemplate, 1);
+					}
 				}
 			}
 			finally

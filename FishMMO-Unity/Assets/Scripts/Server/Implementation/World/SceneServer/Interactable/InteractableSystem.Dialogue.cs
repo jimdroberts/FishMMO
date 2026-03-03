@@ -2,6 +2,7 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
+using FishMMO.Server.Core.World.SceneServer;
 using System.Collections.Generic;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
@@ -10,9 +11,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// Server-authoritative dialogue session management.
 	/// Tracks active dialogue sessions per character, validates client choices,
 	/// evaluates ECA conditions/actions, and maintains per-character choice bitmasks.
+	/// All dictionaries are bounded to prevent unbounded memory growth.
 	/// </summary>
 	public partial class InteractableSystem
 	{
+		/// <summary>
+		/// Maximum concurrent dialogue sessions. Prevents unbounded dictionary growth if sessions are never ended.
+		/// </summary>
+		private const int MaxActiveDialogueSessions = 2048;
+
+		/// <summary>
+		/// Maximum number of characters with cached dialogue choices. Prevents unbounded memory growth.
+		/// </summary>
+		private const int MaxCachedChoiceCharacters = 4096;
 		/// <summary>
 		/// Represents an active dialogue session for a single character.
 		/// </summary>
@@ -46,7 +57,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="character">The player character starting the dialogue.</param>
 		/// <param name="sceneObject">The scene object hosting the interactable.</param>
 		/// <param name="dialogue">The dialogue interactable.</param>
-		public void StartDialogueSession(IPlayerCharacter character, ISceneObject sceneObject, DialogueInteractable dialogue)
+		public void StartDialogueSession(IPlayerCharacter character, ISceneObject sceneObject, IDialogueInteractable dialogue)
 		{
 			StartDialogueSessionInternal(character, sceneObject != null ? sceneObject.ID : 0, dialogue.Template, dialogue);
 		}
@@ -65,7 +76,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Core dialogue session startup. Evaluates start node conditions, creates the session,
 		/// and broadcasts <see cref="DialogueStartBroadcast"/> to the client.
 		/// </summary>
-		private void StartDialogueSessionInternal(IPlayerCharacter character, long interactableID, DialogueTemplate template, DialogueInteractable dialogue)
+		private void StartDialogueSessionInternal(IPlayerCharacter character, long interactableID, DialogueTemplate template, IDialogueInteractable dialogue)
 		{
 			if (character == null || template == null)
 			{
@@ -75,6 +86,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// End any existing session for this character
 			EndDialogueSession(character);
 
+			// Bounded capacity check
+			if (activeDialogueSessions.Count >= MaxActiveDialogueSessions)
+			{
+				Log.Warning("InteractableSystem", $"Active dialogue sessions at capacity ({MaxActiveDialogueSessions}). Rejecting new session.");
+				return;
+			}
+
 			DialogueNode startNode = template.GetNode(template.StartNodeId);
 			if (startNode == null)
 			{
@@ -83,7 +101,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// Evaluate start node conditions
-			ICharacter speaker = dialogue != null ? dialogue.GetComponent<ICharacter>() : null;
+			ICharacter speaker = dialogue != null ? dialogue.Transform.GetComponent<ICharacter>() : null;
 			DialogueEventData eventData = new DialogueEventData(
 				character,
 				speaker,
@@ -139,7 +157,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DialogueChoice, out long guardKey))
+			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
 				return;
 			}
@@ -163,6 +181,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (template == null)
 				{
 					EndDialogueSession(character);
+					return;
+				}
+
+				// Validate scene
+				if (worldSceneDetailsCache == null ||
+					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
+				{
+					EndDialogueSessionWithBroadcast(character);
 					return;
 				}
 
@@ -221,7 +247,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				int bitIndex = template.GetChoiceBitIndex(session.CurrentNodeId, msg.ChoiceIndex);
 				if (bitIndex >= 0 && bitIndex < DialogueTemplate.MaxTrackedChoices)
 				{
-					session.ChoicesMade = (short)(session.ChoicesMade | (1 << bitIndex));
+					// Cast to ushort to avoid sign-extension warnings
+					session.ChoicesMade = (short)((ushort)session.ChoicesMade | (ushort)(1 << bitIndex));
 				}
 
 				// Transition to next node or end dialogue
@@ -337,6 +364,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			if (!characterDialogueChoices.TryGetValue(characterId, out Dictionary<int, short> templateChoices))
 			{
+				// Bounded capacity check
+				if (characterDialogueChoices.Count >= MaxCachedChoiceCharacters)
+				{
+					Log.Warning("InteractableSystem", $"Cached dialogue choices at capacity ({MaxCachedChoiceCharacters}). Dropping oldest entry.");
+					// Remove one arbitrary entry to make room
+					using (var enumerator = characterDialogueChoices.GetEnumerator())
+					{
+						if (enumerator.MoveNext())
+						{
+							characterDialogueChoices.Remove(enumerator.Current.Key);
+						}
+					}
+				}
 				templateChoices = new Dictionary<int, short>();
 				characterDialogueChoices[characterId] = templateChoices;
 			}

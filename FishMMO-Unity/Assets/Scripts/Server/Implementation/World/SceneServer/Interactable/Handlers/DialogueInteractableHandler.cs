@@ -1,6 +1,6 @@
 using FishMMO.Shared;
 using FishMMO.Server.Core;
-using FishNet.Transporting;
+using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Connection;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
@@ -33,17 +33,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="interactable">The dialogue interactable being interacted with.</param>
 		/// <param name="character">The player character initiating the dialogue.</param>
 		/// <param name="sceneObject">The scene object associated with the interactable.</param>
-		/// <param name="serverInstance">The interactable system managing sessions.</param>
-		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
+		/// <param name="interactableSystem">The interactable system managing sessions.</param>
+		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, IInteractableSystem interactableSystem)
 		{
-			DialogueInteractable dialogue = interactable as DialogueInteractable;
+			IDialogueInteractable dialogue = interactable as IDialogueInteractable;
 			if (dialogue == null || dialogue.Template == null)
 			{
 				return;
 			}
 
-			serverInstance.StartDialogueSession(character, sceneObject, dialogue);
-			serverInstance.OnInteractNPC(character, interactable);
+			interactableSystem.StartDialogueSession(character, sceneObject, dialogue);
+			interactableSystem.OnInteractNPC(character, interactable);
 		}
 	}
 }

@@ -60,6 +60,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
+		[Header("Achievements")]
+		public AchievementTemplate FriendAddAchievementTemplate;
+
 		/// <summary>
 		/// Operation codes used for ingress guards.
 		/// </summary>
@@ -332,6 +335,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						CharacterID = friendCharacterID,
 						Online = friendOnline,
 					}, true, Channel.Reliable);
+
+					// Increment achievement for adding a friend
+					if (FriendAddAchievementTemplate != null)
+					{
+						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+						if (character != null && character.TryGet(out IAchievementController achievementController))
+						{
+							achievementController.Increment(FriendAddAchievementTemplate, 1);
+						}
+					}
 				});
 			}
 			catch (Exception ex)

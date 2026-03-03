@@ -26,8 +26,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="interactable">The interactable object (should be a bindstone).</param>
 		/// <param name="character">The player character interacting with the bindstone.</param>
 		/// <param name="sceneObject">The scene object associated with the interaction.</param>
-		/// <param name="serverInstance">The server instance managing interactables.</param>
-		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
+		/// <param name="interactableSystem">The interactable system managing interactables.</param>
+		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, IInteractableSystem interactableSystem)
 		{
 			if (character == null)
 			{
@@ -50,6 +50,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			character.BindPosition = character.Motor.Transform.position;
 			character.BindScene = character.SceneName;
+
+			// Increment achievement
+			IBindstone bindstone = interactable as IBindstone;
+			if (bindstone != null &&
+				bindstone.AchievementTemplate != null &&
+				character.TryGet(out IAchievementController achievementController))
+			{
+				achievementController.Increment(bindstone.AchievementTemplate, 1);
+			}
 		}
 	}
 }

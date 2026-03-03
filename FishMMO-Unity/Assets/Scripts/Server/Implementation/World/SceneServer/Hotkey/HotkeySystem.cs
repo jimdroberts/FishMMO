@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
-using System;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.SceneServer

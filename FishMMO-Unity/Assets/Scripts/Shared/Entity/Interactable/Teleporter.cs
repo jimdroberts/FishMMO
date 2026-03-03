@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -6,12 +7,23 @@ namespace FishMMO.Shared
 	/// Represents a teleporter interactable that can transport players to a target location.
 	/// Inherits from Interactable and provides a target Transform for teleportation.
 	/// </summary>
-	public class Teleporter : Interactable
+	public class Teleporter : Interactable, ITeleporter
 	{
 		/// <summary>
 		/// The target location to which players will be teleported.
 		/// </summary>
 		public Transform Target;
+
+		/// <summary>
+		/// Achievement to increment when a player uses this teleporter.
+		/// </summary>
+		public AchievementTemplate AchievementTemplate;
+
+		/// <inheritdoc />
+		Transform ITeleporter.Target => Target;
+
+		/// <inheritdoc />
+		AchievementTemplate ITeleporter.AchievementTemplate => AchievementTemplate;
 
 		/// <summary>
 		/// Gets the display title for this teleporter, used in UI elements.

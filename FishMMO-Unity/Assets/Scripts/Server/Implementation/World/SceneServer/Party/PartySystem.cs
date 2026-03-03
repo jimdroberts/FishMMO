@@ -109,6 +109,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
+		[Header("Achievements")]
+		public AchievementTemplate PartyCreateAchievementTemplate;
+		public AchievementTemplate PartyJoinAchievementTemplate;
+
 		/// <summary>
 		/// Operation keys used by party ingress guards.
 		/// </summary>
@@ -842,6 +846,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						PartyID = newPartyID,
 						Location = sceneName,
 					}, true, Channel.Reliable);
+
+					// Increment achievement for creating a party
+					if (PartyCreateAchievementTemplate != null)
+					{
+						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+						if (character != null && character.TryGet(out IAchievementController achievementController))
+						{
+							achievementController.Increment(PartyCreateAchievementTemplate, 1);
+						}
+					}
 				});
 			}
 			catch (Exception ex)
@@ -1104,6 +1118,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						Rank = PartyRank.Member,
 						HealthPCT = healthPCT,
 					}, true, Channel.Reliable);
+
+					// Increment achievement for joining a party
+					if (PartyJoinAchievementTemplate != null)
+					{
+						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+						if (character != null && character.TryGet(out IAchievementController achievementController))
+						{
+							achievementController.Increment(PartyJoinAchievementTemplate, 1);
+						}
+					}
 				});
 			}
 			catch (Exception ex)

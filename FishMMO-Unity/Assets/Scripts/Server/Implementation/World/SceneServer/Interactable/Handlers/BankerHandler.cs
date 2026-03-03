@@ -1,5 +1,6 @@
 using FishMMO.Shared;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Transporting;
 using FishNet.Connection;
 
@@ -25,8 +26,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="interactable">The interactable object (should be a banker).</param>
 		/// <param name="character">The player character interacting with the banker.</param>
 		/// <param name="sceneObject">The scene object associated with the interaction.</param>
-		/// <param name="serverInstance">The server instance managing interactables.</param>
-		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
+		/// <param name="interactableSystem">The interactable system managing interactables.</param>
+		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, IInteractableSystem interactableSystem)
 		{
 			if (character.TryGet(out IBankController bankController))
 			{
@@ -35,7 +36,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				server.NetworkWrapper.Broadcast(character.Owner, new BankerBroadcast(), true, Channel.Reliable);
 
 				// Tell the NPC to look at the interacting character
-				serverInstance.OnInteractNPC(character, interactable);
+				interactableSystem.OnInteractNPC(character, interactable);
+
+				// Increment achievement
+				IBanker banker = interactable as IBanker;
+				if (banker != null &&
+					banker.AchievementTemplate != null &&
+					character.TryGet(out IAchievementController achievementController))
+				{
+					achievementController.Increment(banker.AchievementTemplate, 1);
+				}
 			}
 		}
 	}

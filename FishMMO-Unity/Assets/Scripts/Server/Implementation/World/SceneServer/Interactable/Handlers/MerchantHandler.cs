@@ -1,5 +1,6 @@
 using FishMMO.Shared;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Transporting;
 using FishNet.Connection;
 
@@ -25,10 +26,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="interactable">The interactable object (should be a Merchant).</param>
 		/// <param name="character">The player character interacting with the merchant.</param>
 		/// <param name="sceneObject">The scene object associated with the interaction.</param>
-		/// <param name="serverInstance">The server instance managing interactables.</param>
-		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
+		/// <param name="interactableSystem">The interactable system managing interactables.</param>
+		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, IInteractableSystem interactableSystem)
 		{
-			Merchant merchant = interactable as Merchant;
+			IMerchant merchant = interactable as IMerchant;
 			if (merchant == null)
 			{
 				return;
@@ -39,7 +40,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				TemplateID = merchant.Template.ID,
 			}, true, Channel.Reliable);
 
-			serverInstance.OnInteractNPC(character, interactable);
+			interactableSystem.OnInteractNPC(character, interactable);
 		}
 	}
 }

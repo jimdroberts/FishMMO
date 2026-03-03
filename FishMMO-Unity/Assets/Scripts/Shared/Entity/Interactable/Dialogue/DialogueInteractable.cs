@@ -1,3 +1,4 @@
+using FishMMO.Server.Core.World.SceneServer;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -7,12 +8,15 @@ namespace FishMMO.Shared
 	/// Uses a <see cref="DialogueTemplate"/> to define the conversation tree.
 	/// </summary>
 	[RequireComponent(typeof(SceneObjectNamer))]
-	public class DialogueInteractable : Interactable
+	public class DialogueInteractable : Interactable, IDialogueInteractable
 	{
 		/// <summary>
 		/// The template defining the conversation tree for this dialogue interactable.
 		/// </summary>
 		public DialogueTemplate Template;
+
+		/// <inheritdoc />
+		DialogueTemplate IDialogueInteractable.Template => Template;
 
 		/// <summary>
 		/// The display title for this interactable, shown in the UI.

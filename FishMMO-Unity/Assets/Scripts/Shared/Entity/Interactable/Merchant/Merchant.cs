@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -7,12 +8,23 @@ namespace FishMMO.Shared
 	/// Inherits from Interactable and uses a MerchantTemplate for configuration.
 	/// </summary>
 	[RequireComponent(typeof(SceneObjectNamer))]
-	public class Merchant : Interactable
+	public class Merchant : Interactable, IMerchant
 	{
 		/// <summary>
 		/// The template containing merchant configuration, such as inventory and description.
 		/// </summary>
 		public MerchantTemplate Template;
+
+		/// <summary>
+		/// Achievement to increment when a player purchases from this merchant.
+		/// </summary>
+		public AchievementTemplate AchievementTemplate;
+
+		/// <inheritdoc />
+		MerchantTemplate IMerchant.Template => Template;
+
+		/// <inheritdoc />
+		AchievementTemplate IMerchant.AchievementTemplate => AchievementTemplate;
 
 		/// <summary>
 		/// The display title for this merchant, shown in the UI. Defaults to "Merchant" but can be set from the template.

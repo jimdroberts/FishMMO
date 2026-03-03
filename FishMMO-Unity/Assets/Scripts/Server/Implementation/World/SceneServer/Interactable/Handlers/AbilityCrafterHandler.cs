@@ -1,5 +1,6 @@
 using FishMMO.Shared;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Transporting;
 using FishNet.Connection;
 
@@ -25,8 +26,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="interactable">The interactable object (should be an ability crafter).</param>
 		/// <param name="character">The player character interacting with the ability crafter.</param>
 		/// <param name="sceneObject">The scene object associated with the interaction.</param>
-		/// <param name="serverInstance">The server instance managing interactables.</param>
-		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
+		/// <param name="interactableSystem">The interactable system managing interactables.</param>
+		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, IInteractableSystem interactableSystem)
 		{
 			server.NetworkWrapper.Broadcast(character.Owner, new AbilityCrafterBroadcast()
 			{
@@ -34,7 +35,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}, true, Channel.Reliable);
 
 			// Tell the NPC to look at the interacting character
-			serverInstance.OnInteractNPC(character, interactable);
+			interactableSystem.OnInteractNPC(character, interactable);
 		}
 	}
 }

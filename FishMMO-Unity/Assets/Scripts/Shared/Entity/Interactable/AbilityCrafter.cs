@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -10,8 +11,16 @@ namespace FishMMO.Shared
 	/// Displays a custom title and color in the UI.
 	/// </summary>
 	[RequireComponent(typeof(SceneObjectNamer))]
-	public class AbilityCrafter : Interactable
+	public class AbilityCrafter : Interactable, IAbilityCrafter
 	{
+		/// <summary>
+		/// Achievement to increment when a player crafts an ability at this crafter.
+		/// </summary>
+		public AchievementTemplate AchievementTemplate;
+
+		/// <inheritdoc />
+		AchievementTemplate IAbilityCrafter.AchievementTemplate => AchievementTemplate;
+
 		/// <summary>
 		/// The display title for the ability crafter, shown in the UI.
 		/// </summary>

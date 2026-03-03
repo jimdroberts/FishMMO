@@ -38,14 +38,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
-
 			// Acquire ingress guard for dungeon finder
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DungeonFinder, out long guardKey))
+			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
 				return;
 			}
@@ -60,7 +54,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				// Validate Dungeon Entrance
-				DungeonEntrance dungeonEntrance = sceneObject.GameObject.GetComponent<DungeonEntrance>();
+				IDungeonEntrance dungeonEntrance = sceneObject.GameObject.GetComponent<IDungeonEntrance>();
 				if (dungeonEntrance == null ||
 					!dungeonEntrance.InRange(character.Transform))
 				{
@@ -92,6 +86,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				string dungeonName = dungeonEntrance.DungeonName;
 
 				CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
+
+				// Increment achievement for entering a dungeon
+				if (dungeonEntrance.AchievementTemplate != null &&
+					character.TryGet(out IAchievementController achievementController))
+				{
+					achievementController.Increment(dungeonEntrance.AchievementTemplate, 1);
+				}
 
 				// Fire-and-forget: process dungeon instance assignment asynchronously.
 				// The async task's own finally block will release the guard on completion.

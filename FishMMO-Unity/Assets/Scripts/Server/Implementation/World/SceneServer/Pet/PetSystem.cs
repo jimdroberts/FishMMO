@@ -65,6 +65,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
+		[Header("Achievements")]
+		public AchievementTemplate PetSummonAchievementTemplate;
+
 		/// <summary>
 		/// Operation codes used by pet ingress guards.
 		/// </summary>
@@ -508,6 +511,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Server.NetworkWrapper.Broadcast(broadcastTarget, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
+
+			// Increment achievement for summoning a pet
+			if (PetSummonAchievementTemplate != null &&
+				owner.TryGet(out IAchievementController achievementController))
+			{
+				achievementController.Increment(PetSummonAchievementTemplate, 1);
+			}
+
 			return true;
 		}
 

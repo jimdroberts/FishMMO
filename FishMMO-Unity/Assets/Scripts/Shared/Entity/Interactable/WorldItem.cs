@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using FishMMO.Server.Core.World.SceneServer;
+using UnityEngine;
 using FishNet.Connection;
 using FishNet.Serializing;
 
@@ -7,7 +8,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Represents an item that exists in the world and can be interacted with or picked up by players.
 	/// </summary>
-	public class WorldItem : Interactable
+	public class WorldItem : Interactable, IWorldItem
 	{
 		// Change to a property with a private setter or public set
 		[SerializeField]
@@ -19,6 +20,17 @@ namespace FishMMO.Shared
 		}
 
 		public uint Amount;
+
+		/// <summary>
+		/// Achievement to increment when a player picks up this world item.
+		/// </summary>
+		public AchievementTemplate AchievementTemplate;
+
+		/// <inheritdoc />
+		uint IWorldItem.Amount { get => Amount; set => Amount = value; }
+
+		/// <inheritdoc />
+		AchievementTemplate IWorldItem.AchievementTemplate => AchievementTemplate;
 
 		public override string Title => template != null ? template.Name : "";
 

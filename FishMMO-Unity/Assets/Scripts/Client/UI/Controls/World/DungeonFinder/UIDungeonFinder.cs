@@ -1,6 +1,5 @@
 #if !UNITY_SERVER
 using UnityEngine;
-using UnityEngine.UI;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -21,7 +20,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The image representing the dungeon entrance.
 		/// </summary>
-		public Image DungeonImage;
+		public Sprite DungeonImage;
 
 		/// <summary>
 		/// The label displaying the dungeon description or name.

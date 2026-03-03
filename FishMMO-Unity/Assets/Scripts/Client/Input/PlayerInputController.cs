@@ -4,6 +4,8 @@ using FishMMO.Shared;
 using FishMMO.Logging;
 using KinematicCharacterController;
 using UnityEngine.InputSystem;
+using System.Collections.Generic;
+using System;
 
 namespace FishMMO.Client
 {
@@ -295,6 +297,19 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Unity event called every frame. Handles right-click context menu for player targets.
+		/// </summary>
+		private void Update()
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			HandleRightClickContextMenu();
+		}
+
+		/// <summary>
 		/// Unity event called every frame after all Update functions have been called.
 		/// Handles camera input for the player character.
 		/// </summary>
@@ -342,6 +357,82 @@ namespace FishMMO.Client
 				_mouseScrollInput = 0f;
 				Character.KCCPlayer.UpdateCamera(0.0f, Vector3.zero);
 			}
+		}
+
+		/// <summary>
+		/// Checks for right-click input while in MouseMode. If the current target is another player character
+		/// within range, opens a context menu with interaction options.
+		/// </summary>
+		private void HandleRightClickContextMenu()
+		{
+			if (!PlayerInputHandler.MouseMode)
+			{
+				return;
+			}
+
+			Mouse mouse = Mouse.current;
+			if (mouse == null || !mouse.rightButton.wasPressedThisFrame)
+			{
+				return;
+			}
+
+			if (!Character.TryGet(out ITargetController targetController))
+			{
+				return;
+			}
+
+			Transform target = targetController.Current.Target;
+			if (target == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter targetPlayer = target.GetComponent<IPlayerCharacter>();
+			if (targetPlayer == null || targetPlayer.NetworkObject.IsOwner)
+			{
+				return;
+			}
+
+			long targetCharacterID = targetPlayer.ID;
+
+			if (!UIManager.TryGet("UIContextMenu", out UIContextMenu contextMenu))
+			{
+				return;
+			}
+
+			IPlayerCharacter capturedTarget = targetPlayer;
+
+			List<(string label, Action callback)> entries = new List<(string label, Action callback)>()
+			{
+				("Inspect", () =>
+				{
+					if (UIManager.TryGet("UIInspect", out UIInspect uiInspect))
+					{
+						uiInspect.Inspect(capturedTarget);
+					}
+				}),
+				("Add Friend", () =>
+				{
+					Client.Broadcast(new FriendAddNewBroadcast()
+					{
+						CharacterID = targetCharacterID,
+					}, Channel.Reliable);
+				}),
+				("Invite to Party", () =>
+				{
+					Client.Broadcast(new PartyInviteBroadcast()
+					{
+						InviterCharacterID = Character.ID,
+						TargetCharacterID = targetCharacterID,
+					}, Channel.Reliable);
+				}),
+				("Trade", () =>
+				{
+					Log.Debug("PlayerInputController", "Trade is not yet implemented.");
+				}),
+			};
+
+			contextMenu.Open(entries);
 		}
 
 		// --- Action Callbacks ---

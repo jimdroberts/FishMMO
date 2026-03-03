@@ -1,5 +1,6 @@
 using FishMMO.Shared;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Connection;
 using UnityEngine;
 
@@ -25,15 +26,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="interactable">The interactable object (should be a Teleporter).</param>
 		/// <param name="character">The player character interacting with the teleporter.</param>
 		/// <param name="sceneObject">The scene object associated with the interaction.</param>
-		/// <param name="serverInstance">The server instance managing interactables.</param>
-		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
+		/// <param name="interactableSystem">The interactable system managing interactables.</param>
+		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, IInteractableSystem interactableSystem)
 		{
 			if (character.IsTeleporting)
 			{
 				return;
 			}
 
-			Teleporter teleporter = interactable as Teleporter;
+			ITeleporter teleporter = interactable as ITeleporter;
 			if (teleporter == null)
 			{
 				return;
@@ -43,10 +44,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				// move the character
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.Target.position, teleporter.Target.rotation, Vector3.zero);
-				return;
+			}
+			else
+			{
+				character.Teleport(sceneObject.GameObject.name);
 			}
 
-			character.Teleport(sceneObject.GameObject.name);
+			// Increment achievement
+			if (teleporter.AchievementTemplate != null &&
+				character.TryGet(out IAchievementController achievementController))
+			{
+				achievementController.Increment(teleporter.AchievementTemplate, 1);
+			}
 		}
 	}
 }

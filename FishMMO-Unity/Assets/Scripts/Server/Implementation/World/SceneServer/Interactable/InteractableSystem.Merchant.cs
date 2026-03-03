@@ -36,13 +36,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
-
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.MerchantPurchase, out long guardKey))
+			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
 				return;
 			}
@@ -78,7 +72,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					return;
 				}
-				Merchant merchant = interactable as Merchant;
+				IMerchant merchant = interactable as IMerchant;
 				if (merchant == null ||
 					merchantTemplate.ID != merchant.Template.ID)
 				{
@@ -138,6 +132,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						}
 						break;
 					default: return;
+				}
+
+				// Increment achievement for any merchant interaction
+				if (merchant != null &&
+					merchant.AchievementTemplate != null &&
+					character.TryGet(out IAchievementController achievementController))
+				{
+					achievementController.Increment(merchant.AchievementTemplate, 1);
 				}
 			}
 			finally

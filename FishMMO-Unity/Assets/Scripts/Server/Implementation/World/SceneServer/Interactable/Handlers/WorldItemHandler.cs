@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using FishMMO.Shared;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Connection;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
@@ -12,10 +13,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	public class WorldItemHandler : IInteractableHandler
 	{
 		/// <summary>
-		/// Tracks world item instance IDs currently being processed to prevent
+		/// Tracks world item scene object IDs currently being processed to prevent
 		/// concurrent pickup of the same item (S3: item duplication exploit prevention).
 		/// </summary>
-		private static readonly ConcurrentDictionary<int, byte> processingItems = new ConcurrentDictionary<int, byte>();
+		private static readonly ConcurrentDictionary<long, byte> processingItems = new ConcurrentDictionary<long, byte>();
 
 		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;
 
@@ -31,10 +32,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="interactable">The interactable object (should be a WorldItem).</param>
 		/// <param name="character">The player character interacting with the item.</param>
 		/// <param name="sceneObject">The scene object associated with the interaction.</param>
-		/// <param name="serverInstance">The server instance managing interactables.</param>
-		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
+		/// <param name="interactableSystem">The interactable system managing interactables.</param>
+		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, IInteractableSystem interactableSystem)
 		{
-			WorldItem worldItem = interactable as WorldItem;
+			IWorldItem worldItem = interactable as IWorldItem;
 			if (worldItem == null || worldItem.Template == null)
 			{
 				return;
@@ -42,7 +43,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			// Per-object concurrency guard — prevent two players from picking up
 			// the same world item simultaneously (item duplication exploit).
-			int objectId = worldItem.GetInstanceID();
+			long objectId = sceneObject.ID;
 			if (!processingItems.TryAdd(objectId, 0))
 			{
 				return; // Another interaction is already processing this item
@@ -63,8 +64,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						return;
 					}
 
-					if (serverInstance.SendNewItemBroadcast(character.Owner, character, inventoryController, newItem))
+					if (interactableSystem.SendNewItemBroadcast(character.Owner, character, inventoryController, newItem))
 					{
+						// Increment achievement
+						if (worldItem.AchievementTemplate != null &&
+							character.TryGet(out IAchievementController achievementController))
+						{
+							achievementController.Increment(worldItem.AchievementTemplate, 1);
+						}
+
 						if (newItem.IsStackable &&
 							newItem.Stackable.Amount > 1)
 						{
