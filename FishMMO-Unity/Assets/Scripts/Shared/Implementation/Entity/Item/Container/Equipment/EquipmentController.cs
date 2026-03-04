@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 			if (Items == null ||
 				Items.Count < 1)
 			{
-				writer.WriteUInt32(0);
+				writer.WriteInt32(0);
 				return;
 			}
 
@@ -214,22 +214,6 @@ namespace FishMMO.Shared
 #endif
 
 		/// <summary>
-		/// Determines if the equipment can be manipulated (e.g., items moved or swapped).
-		/// Always returns true unless base logic restricts manipulation.
-		/// </summary>
-		/// <returns>True if manipulation is allowed, false otherwise.</returns>
-		public override bool CanManipulate()
-		{
-			if (!base.CanManipulate())
-			{
-				return false;
-			}
-
-			// Additional character state checks could be added here if needed.
-			return true;
-		}
-
-		/// <summary>
 		/// Activates the item in the specified equipment slot, typically triggering its use effect.
 		/// Only activates if the character is alive and the item exists in the slot.
 		/// </summary>
@@ -244,7 +228,7 @@ namespace FishMMO.Shared
 			}
 			if (TryGetItem(index, out Item item))
 			{
-				Log.Debug("EquipmentController", $"Using item in slot[" + index + "]");
+				Log.Debug("EquipmentController", $"Using item in slot[{index}]");
 				//items[index].OnUseItem();
 			}
 		}
@@ -267,9 +251,9 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			EquippableItemTemplate Equippable = item.Template as EquippableItemTemplate;
+			EquippableItemTemplate equippable = item.Template as EquippableItemTemplate;
 			// Make sure the slot type matches so we aren't equipping things in incorrect places.
-			if (Equippable == null || toSlot != Equippable.Slot)
+			if (equippable == null || toSlot != equippable.Slot)
 			{
 				return false;
 			}
@@ -286,6 +270,8 @@ namespace FishMMO.Shared
 					// Swap the items.
 					if (!container.SetItemSlot(previousItem, inventoryIndex))
 					{
+						// Re-equip the previous item to maintain consistent state.
+						previousItem.Equippable.Equip(Character);
 						return false;
 					}
 				}

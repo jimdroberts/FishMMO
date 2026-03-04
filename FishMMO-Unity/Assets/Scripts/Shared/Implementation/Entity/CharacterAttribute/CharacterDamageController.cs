@@ -216,47 +216,6 @@ namespace FishMMO.Shared
 			}
 
 			ICharacterDamageController.OnKilled?.Invoke(killer, Character);
-
-			//handle kill rewards
-
-			/*if (Character.TryGet(out IQuestController questController))
-			{
-				//questController.OnKill(Entity);
-			}
-			if (Character.TryGet(out IAchievementController achievementController) &&
-				KillAchievementTemplate != null &&
-				KilledAchievementTemplate != null)
-			{
-				foreach (AchievementTemplate achievement in KilledAchievementTemplates)
-				{
-					achievement.OnGainValue.Invoke(Character, killer, 1);
-				}
-			}
-
-			//KILLER
-			CharacterAttributeController killerAttributes = killer.GetComponent<CharacterAttributeController>();
-			if (killerAttributes != null)
-			{
-			}
-			QuestController killersQuests = killer.GetComponent<QuestController>();
-			if (killersQuests != null)
-			{
-				//killersQuests.OnKill(Entity);
-			}
-			if (OnKillAchievements != null && OnKillAchievements.Count > 0)
-			{
-				AchievementController achievements = killer.GetComponent<AchievementController>();
-				if (achievements != null)
-				{
-					foreach (AchievementTemplate achievement in OnKillAchievements)
-					{
-						achievement.OnGainValue.Invoke(killer, Character, 1);
-					}
-				}
-			}
-
-			Destroy(this.gameObject);
-			this.gameObject.SetActive(false);*/
 		}
 
 		public void Heal(ICharacter healer, int amount, bool ignoreAchievements = false)
@@ -287,7 +246,7 @@ namespace FishMMO.Shared
 
 		public void CompleteHeal()
 		{
-			if (ResourceInstance != null)
+			if (ResourceInstance != null && ResourceInstance.CurrentValue > 0.0f)
 			{
 				float toHeal = ResourceInstance.FinalValue - ResourceInstance.CurrentValue;
 				ResourceInstance.Gain(toHeal);

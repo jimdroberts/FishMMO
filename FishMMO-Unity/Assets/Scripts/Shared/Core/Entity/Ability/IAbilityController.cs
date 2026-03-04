@@ -1,12 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// Interface for ability controllers, managing ability activation, events, and known abilities.
+	/// Interface for ability controllers, managing ability activation and state.
+	/// Inherits from IAbilityKnowledgeController for known ability/event management.
+	/// Consumers that only need to query or modify known abilities should depend on
+	/// IAbilityKnowledgeController instead for better interface segregation.
 	/// </summary>
-	public interface IAbilityController : ICharacterBehaviour
+	public interface IAbilityController : IAbilityKnowledgeController
 	{
 		/// <summary>
 		/// Event triggered to check if manipulation is allowed.
@@ -29,51 +31,7 @@ namespace FishMMO.Shared.Core
 		/// Event triggered to reset the UI.
 		/// </summary>
 		event Action OnReset;
-		/// <summary>
-		/// Event triggered when a new ability is added.
-		/// </summary>
-		event Action<Ability> OnAddAbility;
-		/// <summary>
-		/// Event triggered when a new base ability is added.
-		/// </summary>
-		event Action<BaseAbilityTemplate> OnAddKnownAbility;
-		/// <summary>
-		/// Event triggered when a new ability event is added.
-		/// </summary>
-		event Action<AbilityEvent> OnAddKnownAbilityEvent;
 
-		/// <summary>
-		/// Dictionary of known abilities by ID.
-		/// </summary>
-		Dictionary<long, Ability> KnownAbilities { get; }
-		/// <summary>
-		/// Set of known base ability IDs.
-		/// </summary>
-		HashSet<int> KnownBaseAbilities { get; }
-		/// <summary>
-		/// Set of known ability event IDs.
-		/// </summary>
-		HashSet<int> KnownAbilityEvents { get; }
-		/// <summary>
-		/// Set of known OnTick event IDs.
-		/// </summary>
-		HashSet<int> KnownAbilityOnTickEvents { get; }
-		/// <summary>
-		/// Set of known OnHit event IDs.
-		/// </summary>
-		HashSet<int> KnownAbilityOnHitEvents { get; }
-		/// <summary>
-		/// Set of known OnPreSpawn event IDs.
-		/// </summary>
-		HashSet<int> KnownAbilityOnPreSpawnEvents { get; }
-		/// <summary>
-		/// Set of known OnSpawn event IDs.
-		/// </summary>
-		HashSet<int> KnownAbilityOnSpawnEvents { get; }
-		/// <summary>
-		/// Set of known OnDestroy event IDs.
-		/// </summary>
-		HashSet<int> KnownAbilityOnDestroyEvents { get; }
 		/// <summary>
 		/// True if an ability is currently activating.
 		/// </summary>
@@ -94,11 +52,6 @@ namespace FishMMO.Shared.Core
 		/// <param name="referenceID">The ability reference ID.</param>
 		/// <param name="isHeld">Whether the activation key is held.</param>
 		void Activate(long referenceID, bool isHeld);
-		/// <summary>
-		/// Removes an ability by reference ID.
-		/// </summary>
-		/// <param name="referenceID">The ability reference ID.</param>
-		void RemoveAbility(int referenceID);
 		/// <summary>
 		/// Returns true if manipulation is allowed.
 		/// </summary>
@@ -121,36 +74,5 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <param name="attribute">The attribute to check.</param>
 		float CalculateSpeedReduction(CharacterAttributeTemplate attribute);
-		/// <summary>
-		/// Returns true if the controller knows the specified ability.
-		/// </summary>
-		/// <param name="abilityID">The ability ID.</param>
-		bool KnowsAbility(int abilityID);
-		/// <summary>
-		/// Learns the specified base abilities.
-		/// </summary>
-		/// <param name="abilityTemplates">The list of base ability templates.</param>
-		bool LearnBaseAbilities(List<BaseAbilityTemplate> abilityTemplates = null);
-		/// <summary>
-		/// Returns true if the controller knows the specified ability event.
-		/// </summary>
-		/// <param name="eventID">The event ID.</param>
-		bool KnowsAbilityEvent(int eventID);
-		/// <summary>
-		/// Learns the specified ability events.
-		/// </summary>
-		/// <param name="abilityEvents">The list of ability events.</param>
-		bool LearnAbilityEvents(List<AbilityEvent> abilityEvents = null);
-		/// <summary>
-		/// Returns true if the controller knows the specified learned ability.
-		/// </summary>
-		/// <param name="templateID">The template ID.</param>
-		bool KnowsLearnedAbility(int templateID);
-		/// <summary>
-		/// Learns the specified ability, with optional cooldown.
-		/// </summary>
-		/// <param name="ability">The ability to learn.</param>
-		/// <param name="remainingCooldown">The remaining cooldown time.</param>
-		void LearnAbility(Ability ability, float remainingCooldown = 0.0f);
 	}
 }

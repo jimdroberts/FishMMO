@@ -22,15 +22,16 @@ Server/
 │   └── ArrivalOrderTracker.cs                 # Oldest-first tracker for stale-connection sweeps
 │
 └── Implementation/Authentication/             # FishNet-specific authenticators
+    ├── IServerAuthenticator.cs                # Interface: Server ref + worker lifecycle
     ├── BaseServerAuthenticator.cs             # Abstract base: X25519 handshake, main-thread queue, TTL sweeps, RejectAndPurge
     ├── ServerAuthenticator.cs                 # SRP-6a authenticator (LoginServer)
     └── TokenServerAuthenticator.cs            # Token-based authenticator (World/Scene servers)
 
 Shared/
-├── Network/Authentication/
+├── Implementation/Network/Authentication/
 │   └── AuthenticationBroadcasts.cs            # ClientHandshake, ServerHandshake, SrpVerify/Proof/Success, AuthResult
 │
-└── Tools/Extensions/Crypto/
+└── Implementation/Tools/Extensions/Crypto/
     └── CryptoHelper.cs                        # AES-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, nonce builder
 ```
 

@@ -15,6 +15,7 @@ The system is designed to keep item state deterministic by:
 ```text
 CharacterInventory/
 ├── CharacterInventorySystem.cs     # SceneServer implementation and async persistence orchestration
+├── CharacterInventorySystemRuntimeData.cs # Runtime state container
 └── README.md                       # System documentation
 ```
 

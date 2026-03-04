@@ -14,6 +14,8 @@ The subsystem uses a split execution model:
 ```text
 Naming/
 ├── NamingSystem.cs                 # Naming/reverse-naming handlers, cache checks, async DB lookup orchestration
+├── NamingSystemMappingData.cs      # Character name ↔ ID mapping data container
+├── NamingSystemRuntimeData.cs      # Runtime state container
 ├── NamingSystemMainThreadQueueData.cs # Per-system main-thread action queue container
 └── README.md                       # System documentation
 ```

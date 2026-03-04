@@ -284,33 +284,37 @@ Server/Core/Collections/
 
 ```
 Server/Implementation/Authentication/
-├── BaseServerAuthenticator.cs                 # 1021 lines — shared infrastructure
-├── ServerAuthenticator.cs                     # 1265 lines — SRP-6a with bounded channels
-└── TokenServerAuthenticator.cs                # 432 lines — token auth with bounded channel
+├── IServerAuthenticator.cs                     # Interface: Server ref + worker lifecycle
+├── BaseServerAuthenticator.cs                 # 1020 lines — shared infrastructure
+├── ServerAuthenticator.cs                     # 1262 lines — SRP-6a with bounded channels
+└── TokenServerAuthenticator.cs                # 431 lines — token auth with bounded channel
 
 Server/Implementation/World/WorldServer/Authentication/
-└── WorldServerAuthenticator.cs                # 123 lines — world-entry admission gate
+└── WorldServerAuthenticator.cs                # 121 lines — world-entry admission gate
+
+Server/Implementation/World/SceneServer/Authentication/
+└── SceneServerAuthenticator.cs                # 27 lines — scene-entry pass-through
 
 Server/Implementation/LoginServer/AccountCreation/
-└── AccountCreationSystem.cs                   # 844 lines — async account creation pipeline
+└── AccountCreationSystem.cs                   # 843 lines — async account creation pipeline
 ```
 
 ### Client Types
 
 ```
 Client/Authentication/
-├── ClientLoginAuthenticator.cs                # 750 lines — client-side SRP + account creation flow
+├── ClientLoginAuthenticator.cs                # 749 lines — client-side SRP + account creation flow
 └── ClientSrpData.cs                           # Client SRP state (ephemeral, proof, verify)
 ```
 
 ### Shared Types
 
 ```
-Shared/Network/Authentication/
+Shared/Implementation/Network/Authentication/
 └── AuthenticationBroadcasts.cs                # All broadcast message types
 
-Shared/Tools/Extensions/Crypto/
-└── CryptoHelper.cs                            # 1006 lines — AES-GCM, X25519, HKDF, StrictUtf8, nonce builder
+Shared/Implementation/Tools/Extensions/Crypto/
+└── CryptoHelper.cs                            # 1001 lines — AES-GCM, X25519, HKDF, StrictUtf8, nonce builder
 
 FishMMO-SharedUtility/
 └── Authentication.cs                          # Centralized validation rules (cross-project)

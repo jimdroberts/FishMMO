@@ -22,8 +22,8 @@ Buff/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Network/Character/BuffBroadcasts.cs   # FishNet broadcast structs for buff add/remove
-Shared/Entity/BaseCharacter.cs               # Client-side character cache used for observer routing
+Shared/Implementation/Network/Character/BuffBroadcasts.cs   # FishNet broadcast structs for buff add/remove
+Shared/Implementation/Entity/BaseCharacter.cs               # Client-side character cache used for observer routing
 ```
 
 ## Inheritance Hierarchies

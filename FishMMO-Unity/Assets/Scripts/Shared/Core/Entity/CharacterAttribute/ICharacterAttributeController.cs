@@ -73,27 +73,6 @@ namespace FishMMO.Shared.Core
 		bool TryGetStaminaAttribute(out CharacterResourceAttribute stamina);
 
 		/// <summary>
-		/// Gets the current health percentage (CurrentValue / FinalValue).
-		/// Returns 0.0 if the attribute is missing or FinalValue is zero.
-		/// </summary>
-		/// <returns>Current health percentage as a float in the range [0.0, 1.0].</returns>
-		float GetHealthResourceAttributeCurrentPercentage();
-
-		/// <summary>
-		/// Gets the current mana percentage (CurrentValue / FinalValue).
-		/// Returns 0.0 if the attribute is missing or FinalValue is zero.
-		/// </summary>
-		/// <returns>Current mana percentage as a float in the range [0.0, 1.0].</returns>
-		float GetManaResourceAttributeCurrentPercentage();
-
-		/// <summary>
-		/// Gets the current stamina percentage (CurrentValue / FinalValue).
-		/// Returns 0.0 if the attribute is missing or FinalValue is zero.
-		/// </summary>
-		/// <returns>Current stamina percentage as a float in the range [0.0, 1.0].</returns>
-		float GetStaminaResourceAttributeCurrentPercentage();
-
-		/// <summary>
 		/// Tries to get a resource attribute by template reference.
 		/// </summary>
 		/// <param name="template">Resource attribute template to look up.</param>

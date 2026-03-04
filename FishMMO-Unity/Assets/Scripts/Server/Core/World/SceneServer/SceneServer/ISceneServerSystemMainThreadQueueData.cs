@@ -1,5 +1,3 @@
-using FishMMO.Server.Core;
-
 namespace FishMMO.Server.Core.World.SceneServer
 {
 	/// <summary>

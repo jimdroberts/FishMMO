@@ -23,10 +23,10 @@ Faction/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Network/Character/FactionBroadcasts.cs                            # FishNet broadcast structs for faction updates
+Shared/Implementation/Network/Character/FactionBroadcasts.cs            # FishNet broadcast structs for faction updates
 Server/Implementation/World/SceneServer/Faction/FactionSystem.cs         # Server-side faction update handling + DB persistence
-Shared/Entity/CharacterAttribute/CharacterDamageController.cs            # Calls AdjustFaction() on kill events
-Shared/Entity/BaseCharacter.cs                                           # Client-side character cache used for observer routing
+Shared/Implementation/Entity/CharacterAttribute/CharacterDamageController.cs  # Calls AdjustFaction() on kill events
+Shared/Implementation/Entity/BaseCharacter.cs                            # Client-side character cache used for observer routing
 Client/UI/Controls/World/Faction/UIFactions.cs                           # Faction UI panel
 ```
 

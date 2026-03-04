@@ -49,10 +49,7 @@ namespace FishMMO.Shared
 		/// <param name="friendID">The ID of the friend to add.</param>
 		public void AddFriend(long friendID)
 		{
-			if (!Friends.Contains(friendID))
-			{
-				Friends.Add(friendID);
-			}
+			Friends.Add(friendID);
 		}
 
 #if !UNITY_SERVER
@@ -96,10 +93,8 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel.</param>
 		public void OnClientFriendAddBroadcastReceived(FriendAddBroadcast msg, Channel channel)
 		{
-			if (!Friends.Contains(msg.CharacterID))
+			if (Friends.Add(msg.CharacterID))
 			{
-				Friends.Add(msg.CharacterID);
-
 				OnAddFriend?.Invoke(msg.CharacterID, msg.Online);
 			}
 		}
@@ -113,10 +108,8 @@ namespace FishMMO.Shared
 		{
 			foreach (FriendAddBroadcast friend in msg.Friends)
 			{
-				if (!Friends.Contains(friend.CharacterID))
+				if (Friends.Add(friend.CharacterID))
 				{
-					Friends.Add(friend.CharacterID);
-
 					OnAddFriend?.Invoke(friend.CharacterID, friend.Online);
 				}
 			}

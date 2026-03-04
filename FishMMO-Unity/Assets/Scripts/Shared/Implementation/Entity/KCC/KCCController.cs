@@ -68,23 +68,22 @@ namespace FishMMO.Shared
 
 		public KCCCharacterState CurrentCharacterState { get; private set; }
 
-		private Collider[] _probedColliders = new Collider[8];
+		private Collider[] probedColliders = new Collider[8];
 
-		private Animator _animator = null;
+		private Animator animator = null;
 
 		// Current frame input state
-		private Vector3 _moveInputVector;
-		private Vector3 _lookInputVector;
-		// Quang: add camera rotation field for smooth rotate
-		private Quaternion _cameraRotation;
-		private bool _crouchInputDown = false;
-		private bool _jumpRequested = false;
-		private bool _sprintInputDown = false;
+		private Vector3 moveInputVector;
+		private Vector3 lookInputVector;
+		private Quaternion cameraRotation;
+		private bool crouchInputDown = false;
+		private bool jumpRequested = false;
+		private bool sprintInputDown = false;
 
 		// Multi Frame State, this needs to be synchronized
-		private float _timeSinceJumpRequested = float.MaxValue;
-		private float _timeSinceLastAbleToJump = 0f;
-		private bool _isCrouching = false;
+		private float timeSinceJumpRequested = float.MaxValue;
+		private float timeSinceLastAbleToJump = 0f;
+		private bool isCrouching = false;
 
 		public Vector3 VirtualCameraPosition { get; private set; }
 		public Quaternion VirtualCameraRotation { get; private set; }
@@ -95,13 +94,13 @@ namespace FishMMO.Shared
 			// Handle initial state
 			TransitionToState(KCCCharacterState.Default);
 
-			_animator = GetComponentInChildren<Animator>();
+			animator = GetComponentInChildren<Animator>();
 		}
 
 		private void OnEnable()
 		{
-			_moveInputVector = Vector3.zero;
-			_lookInputVector = Vector3.zero;
+			moveInputVector = Vector3.zero;
+			lookInputVector = Vector3.zero;
 		}
 
 		/// <summary>
@@ -146,10 +145,10 @@ namespace FishMMO.Shared
 		public void ApplyState(KinematicCharacterMotorState state)
 		{
 			// Take any state needed for the controller here
-			_isCrouching = state.IsCrouching;
-			_jumpRequested = state.JumpRequested;
-			_timeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
-			_timeSinceJumpRequested = state.TimeSinceJumpRequested;
+			isCrouching = state.IsCrouching;
+			jumpRequested = state.JumpRequested;
+			timeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
+			timeSinceJumpRequested = state.TimeSinceJumpRequested;
 
 			Motor.ApplyState(state);
 		}
@@ -159,10 +158,10 @@ namespace FishMMO.Shared
 			KinematicCharacterMotorState baseState = Motor.GetState();
 
 			// Apply state from controller here.
-			baseState.IsCrouching = _isCrouching;
-			baseState.JumpRequested = _jumpRequested;
-			baseState.TimeSinceLastAbleToJump = _timeSinceLastAbleToJump;
-			baseState.TimeSinceJumpRequested = _timeSinceJumpRequested;
+			baseState.IsCrouching = isCrouching;
+			baseState.JumpRequested = jumpRequested;
+			baseState.TimeSinceLastAbleToJump = timeSinceLastAbleToJump;
+			baseState.TimeSinceJumpRequested = timeSinceJumpRequested;
 
 			return baseState;
 		}
@@ -193,30 +192,30 @@ namespace FishMMO.Shared
 				case KCCCharacterState.Default:
 					{
 						// Move and look inputs
-						_moveInputVector = cameraPlanarRotation * moveInputVector;
+						moveInputVector = cameraPlanarRotation * moveInputVector;
 
 						switch (OrientationMethod)
 						{
 							case OrientationMethod.TowardsCamera:
-								_lookInputVector = cameraPlanarDirection;
+								lookInputVector = cameraPlanarDirection;
 								break;
 							case OrientationMethod.TowardsMovement:
-								_lookInputVector = _moveInputVector.normalized;
+								lookInputVector = moveInputVector.normalized;
 								break;
 						}
 
 						// Jumping input
 						if (inputs.MoveFlags.IsFlagged(KCCMoveFlags.Jump))
 						{
-							_timeSinceJumpRequested = 0f;
-							_jumpRequested = true;
+							timeSinceJumpRequested = 0f;
+							jumpRequested = true;
 						}
 
 						// Crouching input
-						_crouchInputDown = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Crouch);
+						crouchInputDown = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Crouch);
 
 						// Sprinting input
-						_sprintInputDown = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Sprint);
+						sprintInputDown = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Sprint);
 
 						break;
 					}
@@ -228,8 +227,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void SetInputs(ref AICharacterInputs inputs)
 		{
-			_moveInputVector = inputs.MoveVector;
-			_lookInputVector = inputs.LookVector;
+			moveInputVector = inputs.MoveVector;
+			lookInputVector = inputs.LookVector;
 		}
 
 		/// <summary>
@@ -251,15 +250,9 @@ namespace FishMMO.Shared
 			{
 				case KCCCharacterState.Default:
 					{
-						if (_lookInputVector.sqrMagnitude > 0f && OrientationSharpness > 0f)
+						if (lookInputVector.sqrMagnitude > 0f && OrientationSharpness > 0f)
 						{
-							// Smoothly interpolate from current to target look direction
-							//Vector3 smoothedLookInputDirection = Vector3.Slerp(Motor.CharacterForward, _lookInputVector, 1 - Mathf.Exp(-OrientationSharpness * deltaTime)).normalized;
-
-							// Set the current rotation (which will be used by the KinematicCharacterMotor)
-							//currentRotation = Quaternion.LookRotation(smoothedLookInputDirection, Motor.CharacterUp);
-
-							float targetRotationY = Mathf.Atan2(_lookInputVector.x, _lookInputVector.z) * Mathf.Rad2Deg + _cameraRotation.eulerAngles.y;
+							float targetRotationY = Mathf.Atan2(lookInputVector.x, lookInputVector.z) * Mathf.Rad2Deg + cameraRotation.eulerAngles.y;
 
 							Quaternion targetQuarternion = Quaternion.Euler(0.0f, targetRotationY, 0.0f);
 
@@ -320,7 +313,7 @@ namespace FishMMO.Shared
 					{
 						AbilityType abilityType = AbilityType.None;
 
-						float moveInputMagnitude = _moveInputVector.sqrMagnitude;
+						float moveInputMagnitude = moveInputVector.sqrMagnitude;
 
 						// Determine ability state
 						if (Character.TryGet(out IAbilityController abilityController))
@@ -331,180 +324,16 @@ namespace FishMMO.Shared
 						// Ground movement
 						if (Motor.GroundingStatus.IsStableOnGround)
 						{
-							float currentVelocityMagnitude = currentVelocity.magnitude;
-
-							Vector3 effectiveGroundNormal = Motor.GroundingStatus.GroundNormal;
-
-							// Reorient velocity on slope
-							currentVelocity = Motor.GetDirectionTangentToSurface(currentVelocity, effectiveGroundNormal) * currentVelocityMagnitude;
-
-							// Calculate target velocity
-							Vector3 inputRight = Vector3.Cross(_moveInputVector, Motor.CharacterUp);
-							Vector3 reorientedInput = Vector3.Cross(effectiveGroundNormal, inputRight).normalized * _moveInputVector.magnitude;
-
-							float targetSpeed = Constants.Character.RunSpeed;
-
-							if (Character.TryGet(out ICharacterAttributeController attributeController))
-							{
-								if (_isCrouching)
-								{
-									targetSpeed = Constants.Character.CrouchSpeed;
-								}
-								else if (_sprintInputDown &&
-										 SprintSpeedTemplate != null &&
-										 moveInputMagnitude > 0f &&
-										 attributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
-										 attributeController.TryGetAttribute(SprintSpeedTemplate, out CharacterAttribute sprintSpeedModifier))
-								{
-									float currentStaminaCost = Constants.Character.SprintStaminaCost * deltaTime;
-
-									if (stamina.CurrentValue >= currentStaminaCost)
-									{
-										stamina.Consume(currentStaminaCost);
-										targetSpeed = Constants.Character.SprintSpeed * sprintSpeedModifier.FinalValueAsPct;
-									}
-								}
-								else if (MoveSpeedTemplate != null &&
-										 attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
-								{
-									targetSpeed = Constants.Character.RunSpeed * moveSpeedModifier.FinalValueAsPct;
-								}
-
-								/*if (_swimming &&
-									SwimSpeedTemplate != null &&
-									attributeController.TryGetAttribute(SwimSpeedTemplate, out CharacterAttribute swimSpeed))
-								{
-
-								}*/
-							}
-							else
-							{
-								if (_isCrouching)
-								{
-									targetSpeed = Constants.Character.CrouchSpeed;
-								}
-								else if (_sprintInputDown)
-								{
-									targetSpeed = Constants.Character.SprintSpeed;
-								}
-							}
-
-							Vector3 targetMovementVelocity = reorientedInput * targetSpeed;
-
-							// Smooth movement Velocity
-							currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, StableMovementSharpness * deltaTime);
+							UpdateGroundMovement(ref currentVelocity, moveInputMagnitude, deltaTime);
 						}
 						// Air movement
 						else
 						{
-							// Add move input
-							if (moveInputMagnitude > 0f)
-							{
-								Vector3 addedVelocity = _moveInputVector * AirAccelerationSpeed * deltaTime;
-
-								Vector3 currentVelocityOnInputsPlane = Vector3.ProjectOnPlane(currentVelocity, Motor.CharacterUp);
-
-								// Limit air velocity from inputs
-								if (currentVelocityOnInputsPlane.magnitude < MaxAirMoveSpeed)
-								{
-									// clamp addedVel to make total vel not exceed max vel on inputs plane
-									Vector3 newTotal = Vector3.ClampMagnitude(currentVelocityOnInputsPlane + addedVelocity, MaxAirMoveSpeed);
-									addedVelocity = newTotal - currentVelocityOnInputsPlane;
-								}
-								else
-								{
-									// Make sure added vel doesn't go in the direction of the already-exceeding velocity
-									if (Vector3.Dot(currentVelocityOnInputsPlane, addedVelocity) > 0f)
-									{
-										addedVelocity = Vector3.ProjectOnPlane(addedVelocity, currentVelocityOnInputsPlane.normalized);
-									}
-								}
-
-								// Prevent air-climbing sloped walls
-								if (Motor.GroundingStatus.FoundAnyGround)
-								{
-									if (Vector3.Dot(currentVelocity + addedVelocity, addedVelocity) > 0f)
-									{
-										Vector3 perpenticularObstructionNormal = Vector3.Cross(Vector3.Cross(Motor.CharacterUp, Motor.GroundingStatus.GroundNormal), Motor.CharacterUp).normalized;
-										addedVelocity = Vector3.ProjectOnPlane(addedVelocity, perpenticularObstructionNormal);
-									}
-								}
-
-								// Apply added velocity
-								currentVelocity += addedVelocity;
-							}
-
-							// Find the gravity attribute in the characters attribute controller
-							if (Character.TryGet(out ICharacterAttributeController attributeController))
-							{
-								// Gravity is not applied while an aerial attack is activating
-								if (abilityType != AbilityType.AerialPhysical &&
-									abilityType != AbilityType.AerialMagic &&
-									GravityTemplate != null &&
-									attributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
-								{
-									currentVelocity += Constants.Character.Gravity * gravityModifier.FinalValueAsPct * deltaTime;
-								}
-
-								// Fast Fall
-								if (_isCrouching &&
-									FastFallSpeedTemplate != null &&
-									attributeController.TryGetAttribute(FastFallSpeedTemplate, out CharacterAttribute fastFallModifier))
-								{
-									currentVelocity.y += Constants.Character.Gravity.y * fastFallModifier.FinalValueAsPct * deltaTime;
-								}
-							}
-							else
-							{
-								// Default Gravity
-								currentVelocity += Constants.Character.Gravity * deltaTime;
-							}
-
-							// Drag
-							currentVelocity *= (1f / (1f + (Drag * deltaTime)));
+							UpdateAirMovement(ref currentVelocity, abilityType, moveInputMagnitude, deltaTime);
 						}
 
 						// Handle jumping
-						_timeSinceJumpRequested += deltaTime;
-						if (_jumpRequested)
-						{
-							// See if we actually are allowed to jump
-							if (Character.TryGet(out ICharacterAttributeController attributeController) &&
-								attributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
-								stamina.CurrentValue >= Constants.Character.JumpStaminaCost &&
-								abilityType == AbilityType.None &&
-								(AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) &&
-								_timeSinceLastAbleToJump <= JumpPostGroundingGraceTime)
-							{
-								// Calculate jump direction before ungrounding
-								Vector3 jumpDirection = Motor.CharacterUp;
-								if (Motor.GroundingStatus.FoundAnyGround && !Motor.GroundingStatus.IsStableOnGround)
-								{
-									jumpDirection = Motor.GroundingStatus.GroundNormal;
-								}
-
-								// Makes the character skip ground probing/snapping on its next update. 
-								// If this line weren't here, the character would remain snapped to the ground when trying to jump. Try commenting this line out and see.
-								Motor.ForceUnground();
-
-								// Add to the return velocity and reset jump state
-								float jumpSpeed = Constants.Character.JumpUpSpeed;
-								if (JumpSpeedTemplate != null &&
-									attributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
-								{
-									jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;
-								}
-								currentVelocity += (jumpDirection * jumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
-								currentVelocity += (_moveInputVector * JumpScalableForwardSpeed);
-
-								// Consume stamina when jumping
-								stamina.Consume(Constants.Character.JumpStaminaCost);
-
-								_jumpRequested = false;
-
-								IsJumping = true;
-							}
-						}
+						HandleJumping(ref currentVelocity, abilityType, deltaTime);
 
 						// Gravity is reset when using aerial abilities
 						if (abilityType == AbilityType.AerialPhysical ||
@@ -513,14 +342,191 @@ namespace FishMMO.Shared
 							currentVelocity.y = 0.0f;
 						}
 
-						// Take into account additive velocity
-						//if (_internalVelocityAdd.sqrMagnitude > 0f)
-						//{
-						//    currentVelocity += _internalVelocityAdd;
-						//    _internalVelocityAdd = Vector3.zero;
-						//}
 						break;
 					}
+			}
+		}
+
+		/// <summary>
+		/// Handles ground-based movement including walking, sprinting, and crouching speed calculations.
+		/// </summary>
+		private void UpdateGroundMovement(ref Vector3 currentVelocity, float moveInputMagnitude, float deltaTime)
+		{
+			float currentVelocityMagnitude = currentVelocity.magnitude;
+
+			Vector3 effectiveGroundNormal = Motor.GroundingStatus.GroundNormal;
+
+			// Reorient velocity on slope
+			currentVelocity = Motor.GetDirectionTangentToSurface(currentVelocity, effectiveGroundNormal) * currentVelocityMagnitude;
+
+			// Calculate target velocity
+			Vector3 inputRight = Vector3.Cross(moveInputVector, Motor.CharacterUp);
+			Vector3 reorientedInput = Vector3.Cross(effectiveGroundNormal, inputRight).normalized * moveInputVector.magnitude;
+
+			float targetSpeed = Constants.Character.RunSpeed;
+
+			if (Character.TryGet(out ICharacterAttributeController attributeController))
+			{
+				if (isCrouching)
+				{
+					targetSpeed = Constants.Character.CrouchSpeed;
+				}
+				else if (sprintInputDown &&
+						 SprintSpeedTemplate != null &&
+						 moveInputMagnitude > 0f &&
+						 attributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
+						 attributeController.TryGetAttribute(SprintSpeedTemplate, out CharacterAttribute sprintSpeedModifier))
+				{
+					float currentStaminaCost = Constants.Character.SprintStaminaCost * deltaTime;
+
+					if (stamina.CurrentValue >= currentStaminaCost)
+					{
+						stamina.Consume(currentStaminaCost);
+						targetSpeed = Constants.Character.SprintSpeed * sprintSpeedModifier.FinalValueAsPct;
+					}
+				}
+				else if (MoveSpeedTemplate != null &&
+						 attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
+				{
+					targetSpeed = Constants.Character.RunSpeed * moveSpeedModifier.FinalValueAsPct;
+				}
+
+
+			}
+			else
+			{
+				if (isCrouching)
+				{
+					targetSpeed = Constants.Character.CrouchSpeed;
+				}
+				else if (sprintInputDown)
+				{
+					targetSpeed = Constants.Character.SprintSpeed;
+				}
+			}
+
+			Vector3 targetMovementVelocity = reorientedInput * targetSpeed;
+
+			// Smooth movement Velocity
+			currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, StableMovementSharpness * deltaTime);
+		}
+
+		/// <summary>
+		/// Handles air-based movement including air acceleration, gravity, fast fall, and drag.
+		/// </summary>
+		private void UpdateAirMovement(ref Vector3 currentVelocity, AbilityType abilityType, float moveInputMagnitude, float deltaTime)
+		{
+			// Add move input
+			if (moveInputMagnitude > 0f)
+			{
+				Vector3 addedVelocity = moveInputVector * AirAccelerationSpeed * deltaTime;
+
+				Vector3 currentVelocityOnInputsPlane = Vector3.ProjectOnPlane(currentVelocity, Motor.CharacterUp);
+
+				// Limit air velocity from inputs
+				if (currentVelocityOnInputsPlane.magnitude < MaxAirMoveSpeed)
+				{
+					// clamp addedVel to make total vel not exceed max vel on inputs plane
+					Vector3 newTotal = Vector3.ClampMagnitude(currentVelocityOnInputsPlane + addedVelocity, MaxAirMoveSpeed);
+					addedVelocity = newTotal - currentVelocityOnInputsPlane;
+				}
+				else
+				{
+					// Make sure added vel doesn't go in the direction of the already-exceeding velocity
+					if (Vector3.Dot(currentVelocityOnInputsPlane, addedVelocity) > 0f)
+					{
+						addedVelocity = Vector3.ProjectOnPlane(addedVelocity, currentVelocityOnInputsPlane.normalized);
+					}
+				}
+
+				// Prevent air-climbing sloped walls
+				if (Motor.GroundingStatus.FoundAnyGround)
+				{
+					if (Vector3.Dot(currentVelocity + addedVelocity, addedVelocity) > 0f)
+					{
+						Vector3 perpenticularObstructionNormal = Vector3.Cross(Vector3.Cross(Motor.CharacterUp, Motor.GroundingStatus.GroundNormal), Motor.CharacterUp).normalized;
+						addedVelocity = Vector3.ProjectOnPlane(addedVelocity, perpenticularObstructionNormal);
+					}
+				}
+
+				// Apply added velocity
+				currentVelocity += addedVelocity;
+			}
+
+			// Find the gravity attribute in the characters attribute controller
+			if (Character.TryGet(out ICharacterAttributeController attributeController))
+			{
+				// Gravity is not applied while an aerial attack is activating
+				if (abilityType != AbilityType.AerialPhysical &&
+					abilityType != AbilityType.AerialMagic &&
+					GravityTemplate != null &&
+					attributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
+				{
+					currentVelocity += Constants.Character.Gravity * gravityModifier.FinalValueAsPct * deltaTime;
+				}
+
+				// Fast Fall
+				if (isCrouching &&
+					FastFallSpeedTemplate != null &&
+					attributeController.TryGetAttribute(FastFallSpeedTemplate, out CharacterAttribute fastFallModifier))
+				{
+					currentVelocity.y += Constants.Character.Gravity.y * fastFallModifier.FinalValueAsPct * deltaTime;
+				}
+			}
+			else
+			{
+				// Default Gravity
+				currentVelocity += Constants.Character.Gravity * deltaTime;
+			}
+
+			// Drag
+			currentVelocity *= (1f / (1f + (Drag * deltaTime)));
+		}
+
+		/// <summary>
+		/// Handles jump requests including stamina consumption, ground grace period, and jump force application.
+		/// </summary>
+		private void HandleJumping(ref Vector3 currentVelocity, AbilityType abilityType, float deltaTime)
+		{
+			timeSinceJumpRequested += deltaTime;
+			if (jumpRequested)
+			{
+				// See if we actually are allowed to jump
+				if (Character.TryGet(out ICharacterAttributeController attributeController) &&
+					attributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
+					stamina.CurrentValue >= Constants.Character.JumpStaminaCost &&
+					abilityType == AbilityType.None &&
+					(AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) &&
+					timeSinceLastAbleToJump <= JumpPostGroundingGraceTime)
+				{
+					// Calculate jump direction before ungrounding
+					Vector3 jumpDirection = Motor.CharacterUp;
+					if (Motor.GroundingStatus.FoundAnyGround && !Motor.GroundingStatus.IsStableOnGround)
+					{
+						jumpDirection = Motor.GroundingStatus.GroundNormal;
+					}
+
+					// Makes the character skip ground probing/snapping on its next update. 
+					// If this line weren't here, the character would remain snapped to the ground when trying to jump. Try commenting this line out and see.
+					Motor.ForceUnground();
+
+					// Add to the return velocity and reset jump state
+					float jumpSpeed = Constants.Character.JumpUpSpeed;
+					if (JumpSpeedTemplate != null &&
+						attributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
+					{
+						jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;
+					}
+					currentVelocity += (jumpDirection * jumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
+					currentVelocity += (moveInputVector * JumpScalableForwardSpeed);
+
+					// Consume stamina when jumping
+					stamina.Consume(Constants.Character.JumpStaminaCost);
+
+					jumpRequested = false;
+
+					IsJumping = true;
+				}
 			}
 		}
 
@@ -536,37 +542,37 @@ namespace FishMMO.Shared
 					{
 						// Handle jump-related values
 						{
-							if (_jumpRequested && _timeSinceJumpRequested > JumpPreGroundingGraceTime)
+							if (jumpRequested && timeSinceJumpRequested > JumpPreGroundingGraceTime)
 							{
-								_jumpRequested = false;
+								jumpRequested = false;
 							}
 
 							if (AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround)
 							{
 								// If we're on a ground surface, reset jumping values
-								_timeSinceLastAbleToJump = 0f;
+								timeSinceLastAbleToJump = 0f;
 							}
 							else
 							{
 								// Keep track of time since we were last able to jump (for grace period)
-								_timeSinceLastAbleToJump += deltaTime;
+								timeSinceLastAbleToJump += deltaTime;
 							}
 						}
 
 						// Handle uncrouching
-						if (!_isCrouching && _crouchInputDown)
+						if (!isCrouching && crouchInputDown)
 						{
-							_isCrouching = true;
+							isCrouching = true;
 							Motor.SetCapsuleDimensions(Motor.Capsule.radius, CrouchedCapsuleHeight, CapsuleBaseOffset / (FullCapsuleHeight / CrouchedCapsuleHeight));
 						}
-						else if (_isCrouching && !_crouchInputDown)
+						else if (isCrouching && !crouchInputDown)
 						{
 							// Do an overlap test with the character's standing height to see if there are any obstructions
 							Motor.SetCapsuleDimensions(Motor.Capsule.radius, FullCapsuleHeight, CapsuleBaseOffset);
 							if (Motor.CharacterOverlap(
 								Motor.TransientPosition,
 								Motor.TransientRotation,
-								_probedColliders,
+								probedColliders,
 								Motor.CollidableLayers,
 								QueryTriggerInteraction.Ignore) > 0)
 							{
@@ -579,19 +585,14 @@ namespace FishMMO.Shared
 							else
 							{
 								// If no obstructions, uncrouch
-								_isCrouching = false;
+								isCrouching = false;
 							}
 						}
 
-						if (_animator != null)
+						if (animator != null)
 						{
-							_animator.SetBool("Crouching", _isCrouching);
-							_animator.SetBool("OnGround", Motor.GroundingStatus.FoundAnyGround);
-
-							/*if (!_isCrouching && !IsJumping && Motor.GroundingStatus.FoundAnyGround)
-							{
-								_animator.SetBool("Running", (_moveInputVector.sqrMagnitude > 0));
-							}*/
+							animator.SetBool("Crouching", isCrouching);
+							animator.SetBool("OnGround", Motor.GroundingStatus.FoundAnyGround);
 						}
 						break;
 					}

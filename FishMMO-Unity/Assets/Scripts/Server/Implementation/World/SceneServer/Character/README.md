@@ -8,8 +8,13 @@ The Character system is the scene-server authority for player character lifecycl
 
 ```
 Character/
-├── CharacterSystem.cs                    # Character lifecycle orchestration, persistence, scene validation, social sync
+├── CharacterSystem.cs                    # Character lifecycle orchestration, persistence, scene validation
+├── CharacterSystem.Connection.cs         # Partial: connection/disconnection handlers
+├── CharacterSystem.Loading.cs            # Partial: character loading and spawning
+├── CharacterSystem.Saving.cs             # Partial: periodic and on-demand character persistence
+├── CharacterSystem.Social.cs             # Partial: social sync (guild, party, friend)
 ├── CharacterMappingData.cs               # Runtime mapping caches (connection, ID, name, world, waiting load, session tokens)
+├── CharacterSystemRuntimeData.cs         # Runtime state container
 ├── CharacterSystemMainThreadQueueData.cs # Per-system main-thread queue container
 └── README.md
 ```

@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using FishMMO.Server.Core.Account;
 using FishMMO.Server.Core.Collections;
-using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation
 {

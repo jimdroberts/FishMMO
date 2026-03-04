@@ -12,8 +12,8 @@ Client/Authentication/
 └── ClientSrpData.cs              # Client SRP state (ephemeral, proof, session verify)
 
 Related:
-├── Shared/Tools/Extensions/Crypto/CryptoHelper.cs   # AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, nonce builder
-├── Shared/Network/Authentication/                     # Broadcast message types (ClientHandshake, ServerHandshake, etc.)
+├── Shared/Implementation/Tools/Extensions/Crypto/CryptoHelper.cs   # AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, nonce builder
+├── Shared/Implementation/Network/Authentication/                     # Broadcast message types (ClientHandshake, ServerHandshake, etc.)
 └── FishMMO-SharedUtility/Authentication.cs            # Centralized validation rules (IsAllowedUsername, IsAllowedPassword)
 ```
 

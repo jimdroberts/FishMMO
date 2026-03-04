@@ -17,6 +17,7 @@ Implementation/
 ├── ServerComponentRegistry.cs        # Runtime-data-container registration orchestration
 ├── FishNetNetworkWrapper.cs          # FishNet adapter implementing network wrapper interface
 ├── INetworkManagerWrapper.cs         # Network abstraction used by core/implementation
+├── MainThreadQueueHelper.cs          # Queues work onto the main Unity thread
 ├── ServerAddressProvider.cs          # Local/public server address resolution
 ├── PeriodicCallbackData.cs           # Periodic callback timing state
 ├── PhysicsTicker.cs                  # Physics tick integration

@@ -83,7 +83,16 @@ namespace FishMMO.Shared
 				//Log.Debug($"{key} is off cooldown.");
 				RemoveCooldown(key);
 			}
-			keysToRemove.Clear();
+
+			// Prevent unbounded list growth: if capacity greatly exceeds typical usage, reset.
+			if (keysToRemove.Capacity > 32)
+			{
+				keysToRemove = new List<long>();
+			}
+			else
+			{
+				keysToRemove.Clear();
+			}
 		}
 
 		/// <summary>

@@ -15,7 +15,7 @@ Friend/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Network/Character/FriendBroadcasts.cs                                   # FishNet broadcast structs for friend add/remove
+Shared/Implementation/Network/Character/FriendBroadcasts.cs                     # FishNet broadcast structs for friend add/remove
 Server/Implementation/World/SceneServer/Friend/FriendSystem.cs                 # Server-side friend management, validation, and DB persistence
 Server/Implementation/World/SceneServer/Friend/FriendSystemMainThreadQueueData.cs  # Main-thread queue for marshalling async DB results
 Server/Implementation/World/SceneServer/Character/CharacterSystem.cs           # Loads friend list from DB on character load

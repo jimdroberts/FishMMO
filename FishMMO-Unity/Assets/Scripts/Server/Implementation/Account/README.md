@@ -10,6 +10,8 @@ The Account system manages the server-side lifecycle of player connections, incl
 Server/
 ├── Core/Account/                              # Transport-agnostic interfaces and data types
 │   ├── IAccountManager.cs                     # Generic interface for account/connection management
+│   ├── ISrpAccountManager.cs                  # SRP-specific account management interface
+│   ├── ITokenAccountManager.cs                # Token-specific account management interface
 │   ├── AccountData.cs                         # Access level + auth state + SRP data container
 │   ├── ConnectionEncryptionData.cs            # X25519 public key, directional AES keys, nonce contexts
 │   └── SRP/
@@ -20,7 +22,9 @@ Server/
 │   └── ArrivalOrderTracker.cs                 # Shared oldest-first tracking utility for TTL sweeps
 │
 └── Implementation/Account/                    # FishNet-specific implementation
-    └── AccountManager.cs                      # Thread-safe IAccountManager<NetworkConnection>
+    ├── AccountManager.cs                      # Thread-safe IAccountManager<NetworkConnection>
+    ├── SrpAccountManager.cs                   # SRP-specific account management (LoginServer)
+    └── TokenAccountManager.cs                 # Token-specific account management (World/Scene)
 ```
 
 ## Architecture

@@ -304,7 +304,7 @@ namespace FishMMO.Shared
 			BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(msg.TemplateID);
 			if (baseAbilityTemplate != null)
 			{
-				LearnBaseAbilities(new List<BaseAbilityTemplate>() { baseAbilityTemplate });
+				LearnBaseAbility(baseAbilityTemplate);
 
 				OnAddKnownAbility?.Invoke(baseAbilityTemplate);
 			}
@@ -337,7 +337,7 @@ namespace FishMMO.Shared
 			AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(msg.TemplateID);
 			if (abilityEvent != null)
 			{
-				LearnAbilityEvents(new List<AbilityEvent>() { abilityEvent });
+				LearnAbilityEvent(abilityEvent);
 
 				OnAddKnownAbilityEvent?.Invoke(abilityEvent);
 			}
@@ -875,7 +875,7 @@ namespace FishMMO.Shared
 			}
 
 			// Don't activate spells when hovering over UI controls.
-			if (!(OnCanManipulate == null ? true : (bool)OnCanManipulate?.Invoke()))
+			if (OnCanManipulate != null && !OnCanManipulate.Invoke())
 			{
 				//Log.Debug("Cannot activate");
 				return;
@@ -1000,7 +1000,7 @@ namespace FishMMO.Shared
 		/// Removes the ability with the given reference ID from the known abilities set.
 		/// </summary>
 		/// <param name="referenceID">The ability reference ID to remove.</param>
-		public void RemoveAbility(int referenceID)
+		public void RemoveAbility(long referenceID)
 		{
 			KnownAbilities.Remove(referenceID);
 		}
@@ -1016,14 +1016,6 @@ namespace FishMMO.Shared
 				!Character.IsSpawned)
 				return false;
 
-			/*if (!character.IsSafeZone &&
-				  (character.State == CharacterState.Idle ||
-				  character.State == CharacterState.Moving) &&
-				  character.State != CharacterState.UsingObject &&
-				  character.State != CharacterState.IsFrozen &&
-				  character.State != CharacterState.IsStunned &&
-				  character.State != CharacterState.IsMesmerized) return true;
-			*/
 			return true;
 		}
 
@@ -1059,6 +1051,25 @@ namespace FishMMO.Shared
 						KnownBaseAbilities.Add(template.ID);
 					}
 				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Adds a single base ability template to the known base abilities set without allocating a list.
+		/// </summary>
+		/// <param name="template">The base ability template to learn.</param>
+		/// <returns>True if the template was learned, false if input is null.</returns>
+		public bool LearnBaseAbility(BaseAbilityTemplate template)
+		{
+			if (template == null)
+			{
+				return false;
+			}
+
+			if (!KnownBaseAbilities.Contains(template.ID))
+			{
+				KnownBaseAbilities.Add(template.ID);
 			}
 			return true;
 		}
@@ -1110,6 +1121,42 @@ namespace FishMMO.Shared
 						KnownAbilityOnDestroyEvents.Add(abilityEvent.ID);
 						break;
 				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Adds a single ability event to the known event sets without allocating a list.
+		/// </summary>
+		/// <param name="abilityEvent">The ability event to learn.</param>
+		/// <returns>True if the event was learned, false if input is null.</returns>
+		public bool LearnAbilityEvent(AbilityEvent abilityEvent)
+		{
+			if (abilityEvent == null)
+			{
+				return false;
+			}
+
+			KnownAbilityEvents.Add(abilityEvent.ID);
+
+			// Categorize the event by its specific type for fast lookup.
+			switch (abilityEvent)
+			{
+				case AbilityOnTickEvent _:
+					KnownAbilityOnTickEvents.Add(abilityEvent.ID);
+					break;
+				case AbilityOnHitEvent _:
+					KnownAbilityOnHitEvents.Add(abilityEvent.ID);
+					break;
+				case AbilityOnPreSpawnEvent _:
+					KnownAbilityOnPreSpawnEvents.Add(abilityEvent.ID);
+					break;
+				case AbilityOnSpawnEvent _:
+					KnownAbilityOnSpawnEvents.Add(abilityEvent.ID);
+					break;
+				case AbilityOnDestroyEvent _:
+					KnownAbilityOnDestroyEvents.Add(abilityEvent.ID);
+					break;
 			}
 			return true;
 		}

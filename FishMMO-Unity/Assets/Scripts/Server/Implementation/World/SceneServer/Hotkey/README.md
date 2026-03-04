@@ -14,6 +14,7 @@ This subsystem is intentionally lightweight:
 ```text
 Hotkey/
 ├── HotkeySystem.cs   # Network handlers and hotkey validation/application logic
+├── HotkeySystemRuntimeData.cs # Runtime state container
 └── README.md         # System documentation
 ```
 

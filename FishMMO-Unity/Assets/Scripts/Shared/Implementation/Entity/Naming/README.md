@@ -16,9 +16,9 @@ Naming/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Entity/Interactable/Banker.cs          # [RequireComponent(typeof(SceneObjectNamer))]
-Shared/Entity/Interactable/Merchant.cs        # [RequireComponent(typeof(SceneObjectNamer))]
-Shared/Entity/Interactable/AbilityCrafter.cs  # [RequireComponent(typeof(SceneObjectNamer))]
+Shared/Implementation/Entity/Interactable/Banker.cs          # [RequireComponent(typeof(SceneObjectNamer))]
+Shared/Implementation/Entity/Interactable/Merchant.cs        # [RequireComponent(typeof(SceneObjectNamer))]
+Shared/Implementation/Entity/Interactable/AbilityCrafter.cs  # [RequireComponent(typeof(SceneObjectNamer))]
 Client/UI/Controls/World/Target/UITarget.cs   # Reads SceneObjectNamer for target display name
 Shared/Constants.cs                           # Registers NameCache type name for caching
 ```

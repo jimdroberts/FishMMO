@@ -14,6 +14,7 @@ The design separates responsibilities across execution contexts:
 ```text
 Friend/
 ├── FriendSystem.cs                  # Friend add/remove orchestration and async persistence dispatch
+├── FriendSystemRuntimeData.cs       # Runtime state container
 ├── FriendSystemMainThreadQueueData.cs # Per-system main-thread action queue container
 └── README.md                        # System documentation
 ```

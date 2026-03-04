@@ -17,8 +17,8 @@ Archetype/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Network/Character/ArchetypeBroadcasts.cs   # FishNet broadcast structs for owner + observer archetype updates
-Shared/Entity/BaseCharacter.cs                     # Client-side character cache (ClientCharacters) used for observer routing
+Shared/Implementation/Network/Character/ArchetypeBroadcasts.cs   # FishNet broadcast structs for owner + observer archetype updates
+Shared/Implementation/Entity/BaseCharacter.cs                     # Client-side character cache (ClientCharacters) used for observer routing
 ```
 
 ## Inheritance Hierarchies

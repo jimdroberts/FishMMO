@@ -1,5 +1,4 @@
 using System;
-using FishMMO.Shared;
 
 namespace FishMMO.Server.Core.Account
 {

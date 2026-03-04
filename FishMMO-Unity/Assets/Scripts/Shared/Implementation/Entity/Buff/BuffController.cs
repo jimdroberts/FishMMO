@@ -68,10 +68,6 @@ namespace FishMMO.Shared
 			writer.WriteInt32(Buffs.Count);
 			foreach (Buff buff in buffs.Values)
 			{
-				if (buff == null)
-				{
-					continue;
-				}
 				writer.WriteInt32(buff.Template.ID);
 				writer.WriteSingle(buff.RemainingTime);
 				writer.WriteSingle(buff.TickTime);

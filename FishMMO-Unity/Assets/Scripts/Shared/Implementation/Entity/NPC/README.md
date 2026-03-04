@@ -11,7 +11,10 @@ NPC/
 ├── NPC.cs                          # Core NPC class (BaseCharacter + ISpawnable)
 ├── AI/
 │   ├── AIController.cs             # NavMeshAgent-based AI state machine controller
-│   ├── IAIController.cs            # AI controller interface
+│   ├── IAIController.cs            # Composite AI controller interface (inherits IAINavigation, IAIStateMachine, IAIWaypoints)
+│   ├── IAINavigation.cs            # Navigation sub-interface (Agent, speeds, movement)
+│   ├── IAIStateMachine.cs          # State machine sub-interface (state transitions, updates)
+│   ├── IAIWaypoints.cs             # Waypoints sub-interface (waypoint list, current index)
 │   ├── BaseAIState.cs              # Abstract ScriptableObject base for all AI states
 │   ├── AgentAvoidancePriority.cs   # Enum for NavMesh agent avoidance levels
 │   └── States/
@@ -65,7 +68,7 @@ CachedScriptableObject<BaseAIState>
 
 ```
 CharacterBehaviour
-├── AIController   : IAIController
+├── AIController   : IAIController (inherits IAINavigation, IAIStateMachine, IAIWaypoints)
 └── PetController  : IPetController
 ```
 

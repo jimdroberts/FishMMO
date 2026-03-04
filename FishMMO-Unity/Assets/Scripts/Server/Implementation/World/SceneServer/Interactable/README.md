@@ -14,11 +14,35 @@ It is designed with:
 ```text
 Interactable/
 ├── README.md                                  # This document
+├── HandlesInteractableAttribute.cs            # Attribute for handler-to-interactable type mapping
 ├── IInteractableHandler.cs                    # Interaction handler contract
 ├── IInteractableHandlerInitializer.cs         # Handler registration contract
 ├── InteractableHandlerInitializer.cs          # Default handler registration ScriptableObject
 ├── InteractableSystem.cs                      # Main SceneServer interactable subsystem
-└── InteractableSystemMainThreadQueueData.cs   # Main-thread action queue container
+├── InteractableSystem.AbilityCraft.cs         # Partial: ability craft broadcast handling
+├── InteractableSystem.Container.cs            # Partial: container interaction handling
+├── InteractableSystem.Dialogue.cs             # Partial: dialogue interaction handling
+├── InteractableSystem.DungeonFinder.cs        # Partial: dungeon finder broadcast handling
+├── InteractableSystem.Mailbox.cs              # Partial: mailbox interaction handling
+├── InteractableSystem.Merchant.cs             # Partial: merchant purchase broadcast handling
+├── InteractableSystemMainThreadQueueData.cs   # Main-thread action queue container
+├── InteractableSystemRuntimeData.cs           # Runtime state (IngressGuard, handler registry)
+└── Handlers/                                  # Concrete IInteractableHandler implementations
+    ├── AbilityCrafterHandler.cs               # Ability crafter interaction handler
+    ├── BankerHandler.cs                       # Banker interaction handler
+    ├── BindstoneHandler.cs                    # Bindstone interaction handler
+    ├── DialogueInteractableHandler.cs         # Dialogue interaction handler
+    ├── DungeonEntranceHandler.cs              # Dungeon entrance interaction handler
+    ├── MerchantHandler.cs                     # Merchant interaction handler
+    ├── TeleporterHandler.cs                   # Teleporter interaction handler
+    ├── WorldItemHandler.cs                    # World item interaction handler
+    ├── CapturePoint/                          # Capture point handler(s)
+    ├── Container/                             # Container handler(s)
+    ├── GatheringNode/                         # Gathering node handler(s)
+    ├── LoreObject/                            # Lore object handler(s)
+    ├── Mailbox/                               # Mailbox handler(s)
+    ├── Shrine/                                # Shrine handler(s)
+    └── Switch/                                # Switch handler(s)
 ```
 
 ## Core Responsibilities

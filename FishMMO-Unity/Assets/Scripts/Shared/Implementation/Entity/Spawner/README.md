@@ -11,7 +11,10 @@ Spawner/
 ├── ISpawnable.cs              # Interface for entities managed by an ObjectSpawner
 ├── ObjectSpawnType.cs          # Enum for spawn selection strategy (Linear, Random, Weighted)
 ├── ObjectSpawner.cs            # Core spawner component (NetworkBehaviour)
-├── SpawnableSettings.cs        # Per-object spawn configuration (respawn times, chance, offset)
+├── Settings/
+│   ├── SpawnableSettings.cs        # Per-object spawn configuration (respawn times, chance, offset)
+│   ├── ItemSpawnableSettings.cs    # Item-specific spawnable settings
+│   └── NPCSpawnableSettings.cs     # NPC-specific spawnable settings
 └── Condition/
     ├── BaseRespawnCondition.cs          # Abstract base for respawn conditions
     └── Types/

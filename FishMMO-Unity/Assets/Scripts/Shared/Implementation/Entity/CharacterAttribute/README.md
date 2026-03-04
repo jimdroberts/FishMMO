@@ -14,6 +14,7 @@ CharacterAttribute/
 ├── CharacterDamageController.cs           # Damage, heal, and kill logic
 ├── CharacterAttributeResourceState.cs     # Snapshot struct for reconciliation
 ├── ICharacterAttributeController.cs       # Attribute controller interface
+├── ICharacterAttributeControllerExtensions.cs # Extension methods (health/mana/stamina percentage queries)
 ├── ICharacterDamageController.cs          # Damage controller interface
 └── Template/
     ├── CharacterAttributeTemplate.cs          # ScriptableObject blueprint

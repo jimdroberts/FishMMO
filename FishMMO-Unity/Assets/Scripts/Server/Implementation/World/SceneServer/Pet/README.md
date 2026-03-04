@@ -14,6 +14,7 @@ The subsystem separates execution responsibilities:
 ```text
 Pet/
 ├── PetSystem.cs                   # Pet lifecycle orchestration, broadcast handlers, and async persistence
+├── PetSystemRuntimeData.cs        # Runtime state container
 ├── PetSystemMainThreadQueueData.cs # Per-system main-thread action queue container
 └── README.md                      # System documentation
 ```

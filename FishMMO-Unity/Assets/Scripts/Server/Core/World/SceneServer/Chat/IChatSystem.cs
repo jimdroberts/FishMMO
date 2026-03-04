@@ -1,4 +1,3 @@
-using FishMMO.Shared;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Server.Core.World.SceneServer

@@ -47,9 +47,9 @@ Item/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Network/Character/InventoryBroadcasts.cs          # Inventory broadcast structs
-Shared/Network/Character/EquipmentBroadcasts.cs          # Equipment broadcast structs
-Shared/Network/Character/BankBroadcasts.cs               # Bank broadcast structs
+Shared/Implementation/Network/Character/InventoryBroadcasts.cs          # Inventory broadcast structs
+Shared/Implementation/Network/Character/EquipmentBroadcasts.cs          # Equipment broadcast structs
+Shared/Implementation/Network/Character/BankBroadcasts.cs               # Bank broadcast structs
 Server/Implementation/World/SceneServer/Character/CharacterSystem.cs  # Loads items from DB on character connect
 ```
 

@@ -18,7 +18,7 @@ Related shared/auth core pieces:
 - `Server/Implementation/Authentication/TokenServerAuthenticator.cs` (token-based auth pipeline)
 - `Server/Core/World/WorldServer/WorldServer/IWorldServerSystemRuntimeData.cs`
 - `Server/Core/World/WorldServer/WorldScene/IWorldSceneMappingData.cs`
-- `Shared/Network/Authentication/ClientAuthenticationResult.cs`
+- `Shared/Implementation/Network/Authentication/ClientAuthenticationResult.cs`
 
 ## Inheritance Hierarchy
 

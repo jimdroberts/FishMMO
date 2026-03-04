@@ -14,6 +14,10 @@ The implementation is split into:
 ```text
 Chat/
 ├── ChatSystem.cs                      # Main chat orchestration, parsing, routing, and persistence dispatch
+├── ChatSystem.GroupChat.cs             # Partial: group/party chat handling
+├── ChatSystem.LocalChat.cs             # Partial: local/proximity chat handling
+├── ChatSystem.TellChat.cs              # Partial: private tell/whisper chat handling
+├── ChatSystem.WorldChat.cs             # Partial: world/global chat handling
 ├── ChatSystemRuntimeData.cs           # Polling cursor state (last fetch time and position)
 ├── ChatSystemMainThreadQueueData.cs   # Per-system main-thread action queue container
 └── README.md                          # System documentation

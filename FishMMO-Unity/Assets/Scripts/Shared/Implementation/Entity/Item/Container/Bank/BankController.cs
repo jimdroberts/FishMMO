@@ -1,5 +1,5 @@
-﻿using FishNet.Transporting;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
+using FishNet.Transporting;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -38,6 +38,8 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
+			Currency = 0;
+			LastInteractableID = 0;
 			Clear();
 		}
 
@@ -155,22 +157,6 @@ namespace FishMMO.Shared
 			}
 		}
 #endif
-
-		/// <summary>
-		/// Determines if the bank can be manipulated (e.g., items moved or swapped).
-		/// Always returns true unless base logic restricts manipulation.
-		/// </summary>
-		/// <returns>True if manipulation is allowed, false otherwise.</returns>
-		public override bool CanManipulate()
-		{
-			if (!base.CanManipulate())
-			{
-				return false;
-			}
-
-			// Additional character state checks could be added here if needed.
-			return true;
-		}
 
 		/// <summary>
 		/// Determines if two item slots can be swapped, preventing swaps within the same bank slot.

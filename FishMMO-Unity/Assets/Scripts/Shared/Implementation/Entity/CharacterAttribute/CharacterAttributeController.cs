@@ -293,54 +293,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Gets the current health percentage as a value in the range [0.0, 1.0].
-		/// Returns 0.0 if the attribute is missing or FinalValue is zero.
-		/// </summary>
-		/// <returns>Current health percentage.</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public float GetHealthResourceAttributeCurrentPercentage()
-		{
-			if (ResourceAttributes.TryGetValue(HealthResourceTemplate.ID, out CharacterResourceAttribute attribute) &&
-				attribute.FinalValue > 0)
-			{
-				return attribute.CurrentValue / attribute.FinalValue;
-			}
-			return 0.0f;
-		}
-
-		/// <summary>
-		/// Gets the current mana percentage as a value in the range [0.0, 1.0].
-		/// Returns 0.0 if the attribute is missing or FinalValue is zero.
-		/// </summary>
-		/// <returns>Current mana percentage.</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public float GetManaResourceAttributeCurrentPercentage()
-		{
-			if (ResourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute attribute) &&
-				attribute.FinalValue > 0)
-			{
-				return attribute.CurrentValue / attribute.FinalValue;
-			}
-			return 0.0f;
-		}
-
-		/// <summary>
-		/// Gets the current stamina percentage as a value in the range [0.0, 1.0].
-		/// Returns 0.0 if the attribute is missing or FinalValue is zero.
-		/// </summary>
-		/// <returns>Current stamina percentage.</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public float GetStaminaResourceAttributeCurrentPercentage()
-		{
-			if (ResourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute attribute) &&
-				attribute.FinalValue > 0)
-			{
-				return attribute.CurrentValue / attribute.FinalValue;
-			}
-			return 0.0f;
-		}
-
-		/// <summary>
 		/// Attempts to retrieve the health resource attribute.
 		/// </summary>
 		/// <param name="health">The found health resource attribute, or null.</param>

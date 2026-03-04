@@ -2,7 +2,6 @@
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -172,7 +171,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg, Channel channel)
 		{
-			var newIds = msg.Members.Select(x => x.CharacterID).ToHashSet();
+			HashSet<long> newIds = new HashSet<long>(msg.Members.Count);
+			for (int i = 0; i < msg.Members.Count; i++)
+			{
+				newIds.Add(msg.Members[i].CharacterID);
+			}
 
 			OnValidateGuildMembers?.Invoke(newIds);
 
@@ -192,6 +195,7 @@ namespace FishMMO.Shared
 				return;
 			}
 			ID = 0;
+			Rank = GuildRank.None;
 			OnLeaveGuild?.Invoke();
 		}
 

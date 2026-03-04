@@ -16,7 +16,7 @@ Party/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Network/Character/
+Shared/Implementation/Network/Character/
 └── PartyBroadcasts.cs     # All party broadcast structs (Create, Invite, Add, Leave, Remove, ChangeRank)
 
 Server/Implementation/World/SceneServer/Party/

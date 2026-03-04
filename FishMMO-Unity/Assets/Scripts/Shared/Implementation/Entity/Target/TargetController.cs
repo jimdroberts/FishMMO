@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 					}
 
 					// Invoke change target event.
-					OnChangeTarget?.Invoke(Current.Target != null ? Current.Target : null);
+					OnChangeTarget?.Invoke(Current.Target);
 				}
 				else
 				{
@@ -143,10 +143,10 @@ namespace FishMMO.Shared
 					Vector3 newRayOrigin = hit.point + direction.normalized * 0.1f;
 #if !UNITY_SERVER
 					ray = new Ray(newRayOrigin, direction);
-					Physics.Raycast(ray, out hit, (distance - hit.distance).Min(0.0f), LayerMask);
+					Physics.Raycast(ray, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
 #else
 					if (PlayerCharacter != null)
-						PlayerCharacter.Motor.PhysicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Min(0.0f), LayerMask);
+						PlayerCharacter.Motor.PhysicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
 #endif
 				}
 				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);

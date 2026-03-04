@@ -17,7 +17,7 @@ Guild/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Network/Character/GuildBroadcasts.cs                                           # FishNet broadcast structs for all guild operations
+Shared/Implementation/Network/Character/GuildBroadcasts.cs                             # FishNet broadcast structs for all guild operations
 Server/Core/World/SceneServer/Guild/IGuildSystemRuntimeData.cs                        # Interface for guild runtime state (invitations, fetch time)
 Server/Core/World/SceneServer/Guild/IGuildCharacterMappingData.cs                     # Interface for guild↔character mapping data
 Server/Core/World/SceneServer/Guild/IGuildSystemMainThreadQueueData.cs                # Per-system main-thread queue interface

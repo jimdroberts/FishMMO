@@ -47,20 +47,25 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Unity Update loop. (Implementation for quest updates can be added here.)
-		/// </summary>
-		void Update()
-		{
-			// Quest update logic can be implemented here.
-		}
-
-		/// <summary>
-		/// Acquires (accepts) a new quest for the character. (Implementation needed)
+		/// Acquires (accepts) a new quest for the character.
 		/// </summary>
 		/// <param name="quest">The quest template to acquire.</param>
 		public void Acquire(QuestTemplate quest)
 		{
-			// Implementation for quest acquisition should be added here.
+			if (quest == null)
+			{
+				return;
+			}
+
+			string questName = quest.name;
+			if (quests.ContainsKey(questName))
+			{
+				return;
+			}
+
+			QuestInstance instance = new QuestInstance();
+			instance.template = quest;
+			quests.Add(questName, instance);
 		}
 	}
 }

@@ -1,7 +1,6 @@
 ﻿using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -141,7 +140,11 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPartyAddMultipleBroadcastReceived(PartyAddMultipleBroadcast msg, Channel channel)
 		{
-			var newIds = msg.Members.Select(x => x.CharacterID).ToHashSet();
+			HashSet<long> newIds = new HashSet<long>(msg.Members.Count);
+			for (int i = 0; i < msg.Members.Count; i++)
+			{
+				newIds.Add(msg.Members[i].CharacterID);
+			}
 
 			OnValidatePartyMembers?.Invoke(newIds);
 

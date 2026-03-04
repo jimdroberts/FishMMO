@@ -21,9 +21,9 @@ Achievement/
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Network/Character/AchievementBroadcasts.cs                              # FishNet broadcast structs for achievement updates
+Shared/Implementation/Network/Character/AchievementBroadcasts.cs              # FishNet broadcast structs for achievement updates
 Server/Implementation/World/SceneServer/Achievement/AchievementSystem.cs       # Server-side achievement tracking, rewards, and DB persistence
-Shared/Entity/CharacterAttribute/CharacterDamageController.cs                  # Calls Increment() for damage, kill, and heal achievements
+Shared/Implementation/Entity/CharacterAttribute/CharacterDamageController.cs   # Calls Increment() for damage, kill, and heal achievements
 Client/Client.cs                                                               # Client-side OnCompleteAchievement handler
 Client/UI/Controls/World/Achievement/UIAchievements.cs                         # Achievement UI panel
 ```

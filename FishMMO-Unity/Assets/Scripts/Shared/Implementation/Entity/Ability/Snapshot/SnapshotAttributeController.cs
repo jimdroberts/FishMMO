@@ -102,15 +102,6 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public bool TryGetStaminaAttribute(out CharacterResourceAttribute stamina) { stamina = null; return false; }
 
-		/// <inheritdoc/>
-		public float GetHealthResourceAttributeCurrentPercentage() => 0f;
-
-		/// <inheritdoc/>
-		public float GetManaResourceAttributeCurrentPercentage() => 0f;
-
-		/// <inheritdoc/>
-		public float GetStaminaResourceAttributeCurrentPercentage() => 0f;
-
 		// --- Mutating methods are no-ops on a snapshot. ---
 
 		/// <inheritdoc/>

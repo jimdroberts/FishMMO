@@ -13,7 +13,6 @@ AccountCreation/
 ├── AccountCreationSystem.cs                     # Stateless ServerBehaviour logic and worker orchestration
 ├── AccountCreationSystemRuntimeData.cs          # Metrics, connection caches, cleanup timer
 ├── AccountCreationSystemMappingData.cs          # Per-IP rate/failure trackers (DoS/rate-limiting)
-├── AccountCreationSystemQueueData.cs            # Bounded Channel + CancellationTokenSource for async queue
 ├── AccountCreationSystemMainThreadQueueData.cs  # Per-system main-thread action queue container
 └── README.md
 ```
@@ -23,7 +22,6 @@ Related core contracts live in `Server/Core/LoginServer/AccountCreation/`:
 - `IAccountCreationSystem<TConnection>`
 - `IAccountCreationSystemRuntimeData`
 - `IAccountCreationSystemMappingData`
-- `IAccountCreationSystemQueueData<TConnection>`
 - `IAccountCreationSystemMainThreadQueueData`
 - `AccountCreationRequest<TConnection>`
 
@@ -42,7 +40,6 @@ ServerBehaviour
 RuntimeDataContainer
 ├── AccountCreationSystemRuntimeData         : IAccountCreationSystemRuntimeData
 ├── AccountCreationSystemMappingData         : IAccountCreationSystemMappingData
-├── AccountCreationSystemQueueData           : IAccountCreationSystemQueueData<NetworkConnection>
 └── MainThreadQueueData (abstract)
     └── SystemMainThreadQueueData (abstract)
         └── AccountCreationSystemMainThreadQueueData : IAccountCreationSystemMainThreadQueueData
@@ -83,27 +80,6 @@ Thread-safe per-IP rate limiting and DoS protection data. Implements `IAccountCr
 - `InitializeOnce()` — creates empty concurrent dictionaries.
 - `Clear()` — clears dictionaries without nulling (may be accessed from other threads).
 - `Deinitialize()` — clears and nulls references.
-
-### `AccountCreationSystemQueueData`
-
-Bounded async request channel and cancellation management. Implements `IAccountCreationSystemQueueData<NetworkConnection>`.
-
-| Property | Type | Purpose |
-|----------|------|---------|
-| `RequestChannel` | `Channel<AccountCreationRequest<NetworkConnection>>` | Bounded channel (capacity 1000, DropWrite on overflow) |
-| `CancellationTokenSource` | `CancellationTokenSource` | Shutdown signal for async worker threads |
-| `PendingCount` | `int` | Current number of pending requests in the channel |
-
-**Channel Configuration:**
-- Capacity: 1000
-- `FullMode`: `DropWrite` — callers can detect rejection immediately under pressure
-- `SingleReader`: false (multiple workers can read)
-- `SingleWriter`: false (multiple network threads can write)
-
-**Lifecycle:**
-- `InitializeOnce()` — creates bounded channel and cancellation token.
-- `Clear()` — no-op (channel/CTS disposal only on deinitialize).
-- `Deinitialize()` — cancels token, disposes CTS, nulls channel.
 
 ### `AccountCreationSystemMainThreadQueueData`
 
