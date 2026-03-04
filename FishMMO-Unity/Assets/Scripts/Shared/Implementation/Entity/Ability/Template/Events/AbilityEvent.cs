@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -53,31 +52,25 @@ namespace FishMMO.Shared
 		public Sprite Icon { get { return this.icon; } }
 
 		/// <summary>
-		/// Returns the formatted description for the ability event.
-		/// </summary>
-		/// <returns>A string describing the ability event.</returns>
-		public string GetFormattedDescription()
-		{
-			return "Ability Event: " + Name;
-		}
-
-		/// <summary>
 		/// Returns the tooltip string for the ability event.
 		/// </summary>
 		/// <returns>The tooltip string for the ability event.</returns>
 		public string Tooltip()
 		{
-			return GetFormattedDescription();
+			using (var builder = new TooltipBuilder())
+			{
+				BuildTooltip(builder);
+				return builder.Build();
+			}
 		}
 
 		/// <summary>
-		/// Returns the tooltip string for the ability event, optionally combining with other tooltips.
+		/// Populates the tooltip builder with this ability event's tooltip lines.
 		/// </summary>
-		/// <param name="combineList">List of tooltips to combine.</param>
-		/// <returns>The tooltip string for the ability event.</returns>
-		public string Tooltip(List<ITooltip> combineList)
+		/// <param name="builder">The tooltip builder to populate.</param>
+		public virtual void BuildTooltip(TooltipBuilder builder)
 		{
-			return GetFormattedDescription();
+			builder.AddLine("Ability Event: " + Name, 0, TooltipColors.Title);
 		}
 	}
 }

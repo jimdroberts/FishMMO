@@ -1,5 +1,4 @@
-﻿using Cysharp.Text;
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
 
@@ -7,9 +6,9 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Abstract base class for item templates, providing common properties and tooltip logic for all items.
-	/// Implements ITooltip and ICachedObject for UI and caching support.
+	/// Implements ITooltip for UI display and ICachedObject for template caching.
 	/// </summary>
-	public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>, ITooltip, ICachedObject
+	public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>, ITooltip
 	{
 		/// <summary>
 		/// Indicates if the item can be identified (e.g., has hidden stats).
@@ -73,35 +72,26 @@ namespace FishMMO.Shared
 		/// <returns>The formatted tooltip string.</returns>
 		public virtual string Tooltip()
 		{
-			using (var sb = ZString.CreateStringBuilder())
+			using (var builder = new TooltipBuilder())
 			{
-				sb.Append(RichText.Format(Name, false, "f5ad6e", "120%"));
-				sb.Append("\r\n______________________________\r\n");
-				if (Price > 0)
-				{
-					sb.Append(RichText.Format("Price", Price, true, "a66ef5FF"));
-				}
-				return sb.ToString();
+				BuildTooltip(builder);
+				return builder.Build();
 			}
 		}
 
 		/// <summary>
-		/// Returns the formatted tooltip string for this item, optionally combining with other tooltips.
+		/// Populates the tooltip builder with this item's tooltip lines.
+		/// Override in derived types to add additional lines.
 		/// </summary>
-		/// <param name="combineList">A list of other tooltips to combine (not used in base implementation).</param>
-		/// <returns>The formatted tooltip string.</returns>
-		public virtual string Tooltip(List<ITooltip> combineList)
+		/// <param name="builder">The tooltip builder to populate.</param>
+		public virtual void BuildTooltip(TooltipBuilder builder)
 		{
-			return Tooltip();
-		}
-
-		/// <summary>
-		/// Returns a formatted description string for the item. Override to provide custom descriptions.
-		/// </summary>
-		/// <returns>The formatted description string.</returns>
-		public virtual string GetFormattedDescription()
-		{
-			return "";
+			builder.AddLine(Name, 0, TooltipColors.Title, false, "120%");
+			builder.AddSeparator(10);
+			if (Price > 0)
+			{
+				builder.AddLine($"Price: {Price}", 80, TooltipColors.Label);
+			}
 		}
 	}
 }

@@ -86,7 +86,7 @@ namespace FishMMO.Shared
 		{
 			if (Template != null && RequiredValue > 0)
 			{
-				return RichText.Format(Template.Name, RequiredValue, true, "f5ad6eFF", "", "", "120%");
+				return $"{Template.Name}: {RequiredValue}";
 			}
 			return null;
 		}

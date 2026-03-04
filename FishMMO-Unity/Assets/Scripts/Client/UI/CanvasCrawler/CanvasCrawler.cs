@@ -4,151 +4,196 @@ using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
 using TMPro;
-using UnityEngine.UIElements;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Crawls a Canvas hierarchy and applies a unified UI theme from a configuration file to all supported UI components.
+	/// Theme settings (colors, layout, scroll, font, transitions) are parsed once into a <see cref="UITheme"/>
+	/// and reused across all handlers. Supports runtime re-crawling when theme settings change.
+	/// </summary>
 	public class CanvasCrawler : MonoBehaviour
 	{
 		/// <summary>
-		/// The configuration object for UI settings.
-		/// </summary>
-		public static Configuration Configuration;
-
-		/// <summary>
 		/// Maps UI component types to their canvas settings handlers.
 		/// </summary>
-		public static Dictionary<Type, BaseCanvasTypeSettings> CanvasSettingsMap = new Dictionary<Type, BaseCanvasTypeSettings>()
+		private static readonly Dictionary<Type, BaseCanvasTypeSettings> CanvasSettingsMap = new Dictionary<Type, BaseCanvasTypeSettings>()
 		{
-			{ typeof(UnityEngine.UI.Button), new ButtonCanvasTypeSettings() },
-			{ typeof(UnityEngine.UI.Image), new ImageCanvasTypeSettings() },
-			{ typeof(RawImage), new RawImageCanvasTypeSettings() },
-			{ typeof(Text), new TextCanvasTypeSettings() },
-			{ typeof(UnityEngine.UI.Toggle), new ToggleCanvasTypeSettings() },
-			{ typeof(UnityEngine.UI.Slider), new SliderCanvasTypeSettings() },
-			{ typeof(Scrollbar), new ScrollbarCanvasTypeSettings() },
-			{ typeof(Dropdown), new DropdownCanvasTypeSettings() },
-			{ typeof(InputField), new InputFieldCanvasTypeSettings() },
-			{ typeof(Mask), new MaskCanvasTypeSettings() },
-			{ typeof(VerticalLayoutGroup), new VerticalLayoutGroupCanvasTypeSettings() },
-			{ typeof(HorizontalLayoutGroup), new HorizontalLayoutGroupCanvasTypeSettings() },
-			{ typeof(TMP_InputField), new TMP_InputFieldCanvasTypeSettings() },
-			{ typeof(TMP_Text), new TMP_TextCanvasTypeSettings() },
+			{ typeof(Button), new SelectableCanvasTypeSettings(applySelectedColor: true) },
+			{ typeof(Toggle), new SelectableCanvasTypeSettings() },
+			{ typeof(Slider), new SelectableCanvasTypeSettings() },
+			{ typeof(Scrollbar), new SelectableCanvasTypeSettings() },
+			{ typeof(Dropdown), new SelectableCanvasTypeSettings() },
+			{ typeof(InputField), new SelectableCanvasTypeSettings() },
+			{ typeof(TMP_InputField), new SelectableCanvasTypeSettings(applySelectedColor: true) },
+			{ typeof(TMP_Dropdown), new SelectableCanvasTypeSettings(applySelectedColor: true) },
+			{ typeof(Image), new ImageCanvasTypeSettings() },
+			{ typeof(Text), new TextGraphicCanvasTypeSettings() },
+			{ typeof(TMP_Text), new TextGraphicCanvasTypeSettings() },
+			{ typeof(VerticalLayoutGroup), new LayoutGroupCanvasTypeSettings() },
+			{ typeof(HorizontalLayoutGroup), new LayoutGroupCanvasTypeSettings() },
+			{ typeof(GridLayoutGroup), new GridLayoutGroupCanvasTypeSettings() },
+			{ typeof(ScrollRect), new ScrollRectCanvasTypeSettings() },
 		};
+
+		/// <summary>
+		/// Cached theme parsed from configuration. Null until first Awake.
+		/// </summary>
+		private static UITheme theme;
 
 		/// <summary>
 		/// The canvas component to crawl and apply settings to.
 		/// </summary>
-		public Canvas Canvas;
+		[SerializeField]
+		private Canvas canvas;
 
 		/// <summary>
-		/// Unity Awake method. Initializes the canvas and configuration.
+		/// Initializes the canvas reference and loads or creates the UI configuration.
 		/// </summary>
-		void Awake()
+		private void Awake()
 		{
-			if (Canvas == null)
+			if (canvas == null)
 			{
-				Canvas = GetComponent<Canvas>();
-
-				// If no Canvas is found, throw an exception to prevent further errors.
-				if (Canvas == null)
+				canvas = GetComponent<Canvas>();
+				if (canvas == null)
 				{
 					throw new UnityException("Unable to find a Canvas on the gameObject.");
 				}
 			}
 
-			if (Configuration == null)
+			if (theme == null)
 			{
-				// Initialize configuration with working directory
-				Configuration = new Configuration(Constants.GetWorkingDirectory());
-				if (!Configuration.Load("UIConfiguration"))
-				{
-					// If loading fails, set default color values and save a new configuration file
-					Configuration.Set("PrimaryColorR", "44");
-					Configuration.Set("PrimaryColorG", "44");
-					Configuration.Set("PrimaryColorB", "44");
-					Configuration.Set("PrimaryColorA", "235");
-
-					Configuration.Set("SecondaryColorR", "80");
-					Configuration.Set("SecondaryColorG", "80");
-					Configuration.Set("SecondaryColorB", "80");
-					Configuration.Set("SecondaryColorA", "235");
-
-					Configuration.Set("HighlightColorR", "128");
-					Configuration.Set("HighlightColorG", "128");
-					Configuration.Set("HighlightColorB", "128");
-					Configuration.Set("HighlightColorA", "250");
-
-					Configuration.Set("BackgroundColorR", "128");
-					Configuration.Set("BackgroundColorG", "128");
-					Configuration.Set("BackgroundColorB", "128");
-					Configuration.Set("BackgroundColorA", "235");
-
-					Configuration.Set("TextColorR", "186");
-					Configuration.Set("TextColorG", "186");
-					Configuration.Set("TextColorB", "186");
-					Configuration.Set("TextColorA", "255");
-
-					Configuration.Set("HealthColorR", "207");
-					Configuration.Set("HealthColorG", "76");
-					Configuration.Set("HealthColorB", "76");
-					Configuration.Set("HealthColorA", "255");
-
-					Configuration.Set("ManaColorR", "87");
-					Configuration.Set("ManaColorG", "119");
-					Configuration.Set("ManaColorB", "222");
-					Configuration.Set("ManaColorA", "255");
-
-					Configuration.Set("StaminaColorR", "83");
-					Configuration.Set("StaminaColorG", "176");
-					Configuration.Set("StaminaColorB", "59");
-					Configuration.Set("StaminaColorA", "255");
-
-					Configuration.Set("CrosshairColorR", "255");
-					Configuration.Set("CrosshairColorG", "255");
-					Configuration.Set("CrosshairColorB", "255");
-					Configuration.Set("CrosshairColorA", "255");
-
-#if !UNITY_EDITOR
-				   Configuration.Save();
-#endif
-				}
+				LoadTheme();
 			}
 		}
 
 		/// <summary>
-		/// Unity Start method. Begins crawling the canvas for UI components.
+		/// Begins crawling the canvas to apply the theme to all child UI components.
 		/// </summary>
-		void Start()
+		private void Start()
 		{
-			Crawl(Canvas);
+			Crawl(canvas, theme);
 		}
 
 		/// <summary>
-		/// Crawls the given canvas, finds all child game objects, and applies settings to supported UI components.
+		/// Loads or reloads the UI configuration and rebuilds the theme.
+		/// Call this at runtime to apply updated configuration values.
 		/// </summary>
-		/// <param name="canvas">The canvas to crawl.</param>
-		public static void Crawl(Canvas canvas)
+		public static void LoadTheme()
 		{
-			// Find all child game objects in the canvas
-			List<GameObject> gobs = canvas.transform.FindAllChildGameObjects();
-
-			foreach (GameObject go in gobs)
+			Configuration configuration = new Configuration(Constants.GetWorkingDirectory());
+			if (!configuration.Load("UIConfiguration"))
 			{
-				// Skip objects with "Ignore" in their name
-				if (go.name.Contains("Ignore"))
+				InitializeDefaultConfiguration(configuration);
+#if !UNITY_EDITOR
+				configuration.Save();
+#endif
+			}
+			theme = new UITheme(configuration);
+		}
+
+		/// <summary>
+		/// Returns the currently loaded theme, or null if not yet initialized.
+		/// </summary>
+		public static UITheme GetTheme()
+		{
+			return theme;
+		}
+
+		/// <summary>
+		/// Reloads the configuration from disk and re-crawls this canvas.
+		/// Useful for applying settings changes from an options menu at runtime.
+		/// </summary>
+		public void Recrawl()
+		{
+			LoadTheme();
+			Crawl(canvas, theme);
+		}
+
+		/// <summary>
+		/// Crawls all child game objects of the given canvas and applies settings from registered handlers.
+		/// Objects with "Ignore" in their name are skipped.
+		/// </summary>
+		/// <param name="targetCanvas">The canvas to crawl.</param>
+		/// <param name="uiTheme">The pre-parsed UI theme to apply.</param>
+		public static void Crawl(Canvas targetCanvas, UITheme uiTheme)
+		{
+			List<GameObject> gameObjects = targetCanvas.transform.FindAllChildGameObjects();
+
+			foreach (GameObject go in gameObjects)
+			{
+				if (go.name.Contains("Ignore", StringComparison.Ordinal))
 				{
 					continue;
 				}
-				// For each supported UI type, apply its settings if present on the game object
+
 				foreach (KeyValuePair<Type, BaseCanvasTypeSettings> pair in CanvasSettingsMap)
 				{
-					var type = go.GetComponent(pair.Key);
-					if (type == null) continue;
+					Component component = go.GetComponent(pair.Key);
+					if (component == null) continue;
 
-					pair.Value.ApplySettings(type, Configuration);
+					pair.Value.ApplySettings(component, uiTheme);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Populates configuration with default values for all theme settings.
+		/// </summary>
+		/// <param name="config">The configuration to populate.</param>
+		private static void InitializeDefaultConfiguration(Configuration config)
+		{
+			SetColorConfig(config, "Primary", 44, 44, 44, 235);
+			SetColorConfig(config, "Secondary", 80, 80, 80, 235);
+			SetColorConfig(config, "Highlight", 128, 128, 128, 250);
+			SetColorConfig(config, "Background", 128, 128, 128, 235);
+			SetColorConfig(config, "Text", 186, 186, 186, 255);
+			SetColorConfig(config, "Health", 207, 76, 76, 255);
+			SetColorConfig(config, "Mana", 87, 119, 222, 255);
+			SetColorConfig(config, "Stamina", 83, 176, 59, 255);
+			SetColorConfig(config, "Crosshair", 255, 255, 255, 255);
+
+			config.Set("LayoutSpacing", "4");
+			config.Set("PaddingLeft", "4");
+			config.Set("PaddingRight", "4");
+			config.Set("PaddingTop", "4");
+			config.Set("PaddingBottom", "4");
+
+			config.Set("GridSpacingX", "4");
+			config.Set("GridSpacingY", "4");
+			config.Set("GridPaddingLeft", "4");
+			config.Set("GridPaddingRight", "4");
+			config.Set("GridPaddingTop", "4");
+			config.Set("GridPaddingBottom", "4");
+
+			config.Set("ScrollSensitivity", "10");
+			config.Set("ScrollMovementType", "2");
+			config.Set("ScrollElasticity", "0.1");
+			config.Set("ScrollInertia", "true");
+			config.Set("ScrollDecelerationRate", "0.135");
+
+			config.Set("SelectableFadeDuration", "0.1");
+
+			config.Set("FontSize", "0");
+			config.Set("FontSizeMin", "0");
+			config.Set("FontSizeMax", "0");
+		}
+
+		/// <summary>
+		/// Writes a single color's RGBA components to configuration.
+		/// </summary>
+		/// <param name="config">The configuration to write to.</param>
+		/// <param name="name">The color name prefix.</param>
+		/// <param name="r">Red channel (0-255).</param>
+		/// <param name="g">Green channel (0-255).</param>
+		/// <param name="b">Blue channel (0-255).</param>
+		/// <param name="a">Alpha channel (0-255).</param>
+		private static void SetColorConfig(Configuration config, string name, byte r, byte g, byte b, byte a)
+		{
+			config.Set($"{name}ColorR", r.ToString());
+			config.Set($"{name}ColorG", g.ToString());
+			config.Set($"{name}ColorB", b.ToString());
+			config.Set($"{name}ColorA", a.ToString());
 		}
 	}
 }

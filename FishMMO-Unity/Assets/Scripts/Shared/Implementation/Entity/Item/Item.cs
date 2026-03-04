@@ -1,5 +1,5 @@
 ﻿using System;
-using Cysharp.Text;
+using UnityEngine;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -7,8 +7,9 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Represents an item instance in the game, including stackable, equippable, and generated properties.
 	/// Handles initialization, attribute management, and tooltip generation.
+	/// Implements <see cref="ITooltip"/> for consistent UI tooltip display.
 	/// </summary>
-	public class Item
+	public class Item : ITooltip
 	{
 		/// <summary>
 		/// The item generator responsible for random attributes and generation logic.
@@ -42,8 +43,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Version number for this item instance, used for client synchronization and updates.
-		/// Incremented whenever the item's state changes in a way that requires client updates (e.g., stack amount changes, equippable state changes, generator attribute changes).
-		/// Not incremented for changes that do not affect client state (e.g., internal tracking of time that doesn't meet the next update threshold).
+		/// Incremented whenever the item's state changes in a way that requires client updates.
 		/// </summary>
 		public long Version;
 
@@ -51,6 +51,16 @@ namespace FishMMO.Shared
 		/// The slot index this item is currently assigned to.
 		/// </summary>
 		public int Slot;
+
+		/// <summary>
+		/// Gets the icon sprite from the item template.
+		/// </summary>
+		public Sprite Icon { get { return Template?.Icon; } }
+
+		/// <summary>
+		/// Gets the display name from the item template.
+		/// </summary>
+		public string Name { get { return Template?.Name; } }
 
 		/// <summary>
 		/// Returns true if the item has a generator (is randomly generated).
@@ -249,27 +259,23 @@ namespace FishMMO.Shared
 		/// <returns>The formatted tooltip string.</returns>
 		public string Tooltip()
 		{
-			string tooltip = "";
-			var sb = ZString.CreateStringBuilder();
-			try
+			using (var builder = new TooltipBuilder())
 			{
-				sb.Append("<color=#a66ef5>ID: ");
-				sb.Append(ID);
-				sb.AppendLine();
-				sb.Append("Slot: ");
-				sb.Append(Slot);
-				sb.Append("</color>");
-				sb.AppendLine();
-				sb.Append(Template.Tooltip());
-				sb.AppendLine();
-				Generator?.Tooltip(ref sb);
-				tooltip = sb.ToString();
+				BuildTooltip(builder);
+				return builder.Build();
 			}
-			finally
-			{
-				sb.Dispose();
-			}
-			return tooltip;
+		}
+
+		/// <summary>
+		/// Populates the tooltip builder with this item's tooltip lines.
+		/// </summary>
+		/// <param name="builder">The tooltip builder to populate.</param>
+		public void BuildTooltip(TooltipBuilder builder)
+		{
+			builder.AddLine($"ID: {ID}", 5, TooltipColors.Label);
+			builder.AddLine($"Slot: {Slot}", 6, TooltipColors.Label);
+			Template?.BuildTooltip(builder);
+			Generator?.BuildTooltip(builder);
 		}
 
 		/// <summary>

@@ -1,6 +1,5 @@
-﻿using Cysharp.Text;
+﻿using System.Collections.Generic;
 using UnityEngine;
-using System.Collections.Generic;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -10,7 +9,7 @@ namespace FishMMO.Shared
 	/// Ability requirements (resources, faction, archetype, attributes) are defined as ECA conditions
 	/// on the <see cref="ActivationConditions"/> list rather than as hardcoded fields.
 	/// </summary>
-	public abstract class BaseAbilityTemplate : CachedScriptableObject<BaseAbilityTemplate>, ITooltip, ICachedObject
+	public abstract class BaseAbilityTemplate : CachedScriptableObject<BaseAbilityTemplate>, ITooltip
 	{
 		/// <summary>
 		/// The icon representing the ability.
@@ -73,156 +72,137 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual string Tooltip()
 		{
-			return PrimaryTooltip(null);
-		}
-
-		/// <summary>
-		/// Returns the tooltip string for the ability, optionally combining with other tooltips.
-		/// </summary>
-		/// <param name="combineList">List of tooltips to combine.</param>
-		public virtual string Tooltip(List<ITooltip> combineList)
-		{
-			return PrimaryTooltip(combineList);
-		}
-
-		/// <summary>
-		/// Returns the formatted description for the ability.
-		/// </summary>
-		public virtual string GetFormattedDescription()
-		{
-			return Description;
-		}
-
-		/// <summary>
-		/// Builds the primary tooltip string for the ability, including name, description, stats,
-		/// and requirement/cost information gathered from <see cref="ActivationConditions"/>.
-		/// </summary>
-		/// <param name="combineList">List of tooltips to combine.</param>
-		/// <returns>Formatted tooltip string.</returns>
-		private string PrimaryTooltip(List<ITooltip> combineList)
-		{
-			using (var sb = ZString.CreateStringBuilder())
+			using (var builder = new TooltipBuilder())
 			{
-				sb.Append(RichText.Format(Name, true, "f5ad6e", "140%"));
+				BuildTooltip(builder);
+				return builder.Build();
+			}
+		}
 
-				string description = GetFormattedDescription();
-				if (!string.IsNullOrWhiteSpace(description))
+		/// <summary>
+		/// Populates the tooltip builder with this ability's tooltip lines.
+		/// Includes name, description, stats, conditions, and price.
+		/// When a combine list is provided, aggregates stats and descriptions from combined events/templates.
+		/// </summary>
+		/// <param name="builder">The tooltip builder to populate.</param>
+		/// <param name="combineList">Optional list of tooltips to combine (for ability crafting).</param>
+		public virtual void BuildTooltip(TooltipBuilder builder, List<ITooltip> combineList = null)
+		{
+			builder.AddLine(Name, 0, TooltipColors.Title, false, "140%");
+
+			if (!string.IsNullOrWhiteSpace(Description))
+			{
+				builder.AddLine(Description, 10, TooltipColors.Label);
+			}
+
+			float activationTime = ActivationTime;
+			float lifeTime = LifeTime;
+			float speed = Speed;
+			float cooldown = Cooldown;
+			float price = Price;
+
+			if (combineList != null && combineList.Count > 0)
+			{
+				foreach (ITooltip tooltip in combineList)
 				{
-					sb.AppendLine();
-					sb.Append(RichText.Format(description, true, "a66ef5FF"));
-				}
+					if (tooltip == null) continue;
 
-				float activationTime = ActivationTime;
-				float lifeTime = LifeTime;
-				float speed = Speed;
-				float cooldown = Cooldown;
-				float price = Price;
-
-				// Collect all conditions for tooltip display.
-				List<BaseCondition> allConditions = new List<BaseCondition>();
-				if (ActivationConditions != null)
-				{
-					allConditions.AddRange(ActivationConditions);
-				}
-
-				if (combineList != null && combineList.Count > 0)
-				{
-					foreach (ITooltip tooltip in combineList)
+					if (tooltip is AbilityEvent abilityEvent)
 					{
-						if (tooltip == null)
+						builder.AddLine("Ability Event: " + abilityEvent.Name, 15, TooltipColors.Label);
+						activationTime += abilityEvent.ActivationTime;
+						lifeTime += abilityEvent.LifeTime;
+						speed += abilityEvent.Speed;
+						cooldown += abilityEvent.Cooldown;
+						price += abilityEvent.Price;
+					}
+					else if (tooltip is BaseAbilityTemplate template)
+					{
+						if (!string.IsNullOrWhiteSpace(template.Description))
 						{
-							continue;
+							builder.AddLine(template.Description, 15, TooltipColors.Label);
 						}
-
-						string templateDescription = tooltip.GetFormattedDescription();
-						if (!string.IsNullOrWhiteSpace(templateDescription))
-						{
-							sb.Append(RichText.Format(templateDescription, true, "a66ef5FF"));
-						}
-
-						if (tooltip is AbilityEvent abilityEvent)
-						{
-							activationTime += abilityEvent.ActivationTime;
-							lifeTime += abilityEvent.LifeTime;
-							speed += abilityEvent.Speed;
-							cooldown += abilityEvent.Cooldown;
-							price += abilityEvent.Price;
-
-							// Gather event conditions for tooltip contributions.
-							if (abilityEvent.Conditions != null)
-							{
-								allConditions.AddRange(abilityEvent.Conditions);
-							}
-						}
-						else if (tooltip is BaseAbilityTemplate template)
-						{
-							activationTime += template.ActivationTime;
-							lifeTime += template.LifeTime;
-							speed += template.Speed;
-							cooldown += template.Cooldown;
-							price += template.Price;
-
-							if (template.ActivationConditions != null)
-							{
-								allConditions.AddRange(template.ActivationConditions);
-							}
-						}
+						activationTime += template.ActivationTime;
+						lifeTime += template.LifeTime;
+						speed += template.Speed;
+						cooldown += template.Cooldown;
+						price += template.Price;
 					}
 				}
+			}
 
-				if (activationTime > 0 ||
-					lifeTime > 0 ||
-					cooldown > 0 ||
-					speed > 0)
+			if (activationTime > 0) builder.AddLine($"Activation Time: {activationTime}s", 30, TooltipColors.Stat);
+			if (lifeTime > 0) builder.AddLine($"Life Time: {lifeTime}s", 31, TooltipColors.Stat);
+			if (speed > 0) builder.AddLine($"Speed: {speed}m/s", 32, TooltipColors.Stat);
+			if (speed > 0 && lifeTime > 0) builder.AddLine($"Range: {speed * lifeTime}m", 33, TooltipColors.Stat);
+			if (cooldown > 0) builder.AddLine($"Cooldown: {cooldown}s", 34, TooltipColors.Stat);
+
+			// Append resource cost and requirement sections from all condition sources.
+			bool hasResources = false;
+			bool hasRequirements = false;
+
+			AppendConditionLines(builder, ActivationConditions, ref hasResources, ref hasRequirements);
+
+			if (combineList != null)
+			{
+				foreach (ITooltip tooltip in combineList)
 				{
-					sb.AppendLine();
-					sb.Append(RichText.Format("Activation Time", activationTime, true, "FFFFFFFF", "", "s"));
-					sb.Append(RichText.Format("Life Time", lifeTime, true, "FFFFFFFF", "", "s"));
-					sb.Append(RichText.Format("Speed", speed, true, "FFFFFFFF", "", "m/s"));
-					sb.Append(RichText.Format("Range", speed * lifeTime, true, "FFFFFFFF", "", "m"));
-					sb.Append(RichText.Format("Cooldown", cooldown, true, "FFFFFFFF", "", "s"));
-				}
-
-				// Build resource cost and requirement sections from conditions.
-				bool hasResources = false;
-				bool hasRequirements = false;
-
-				foreach (BaseCondition condition in allConditions)
-				{
-					if (condition == null) continue;
-
-					if (condition is IResourceCost resourceCost &&
-						resourceCost.ResourceTemplate != null &&
-						resourceCost.ResourceAmount > 0)
+					if (tooltip is AbilityEvent abilityEvent && abilityEvent.Conditions != null)
 					{
-						if (!hasResources)
-						{
-							sb.Append("\r\n\r\n<color=#a66ef5>Resource Cost: </color>");
-							hasResources = true;
-						}
-						sb.Append(RichText.Format(resourceCost.ResourceTemplate.Name, resourceCost.ResourceAmount, true, "f5ad6eFF", "", "", "120%"));
+						AppendConditionLines(builder, abilityEvent.Conditions, ref hasResources, ref hasRequirements);
 					}
-					else if (condition is ITooltipContributor contributor)
+					else if (tooltip is BaseAbilityTemplate template && template.ActivationConditions != null)
 					{
-						string contribution = contributor.GetTooltipContribution();
-						if (!string.IsNullOrWhiteSpace(contribution))
-						{
-							if (!hasRequirements)
-							{
-								sb.Append("\r\n\r\n<color=#a66ef5>Requirements: </color>");
-								hasRequirements = true;
-							}
-							sb.Append(contribution);
-						}
+						AppendConditionLines(builder, template.ActivationConditions, ref hasResources, ref hasRequirements);
 					}
 				}
+			}
 
-				if (price > 0)
+			if (price > 0)
+			{
+				builder.AddLine($"Price: {price}", 80, TooltipColors.Stat);
+			}
+		}
+
+		/// <summary>
+		/// Appends resource cost and requirement tooltip lines from a list of conditions to the builder.
+		/// </summary>
+		/// <param name="builder">The tooltip builder to populate.</param>
+		/// <param name="conditions">The conditions to process.</param>
+		/// <param name="hasResources">Tracks whether the resource cost header has been written.</param>
+		/// <param name="hasRequirements">Tracks whether the requirements header has been written.</param>
+		private static void AppendConditionLines(TooltipBuilder builder, List<BaseCondition> conditions, ref bool hasResources, ref bool hasRequirements)
+		{
+			if (conditions == null) return;
+
+			foreach (BaseCondition condition in conditions)
+			{
+				if (condition == null) continue;
+
+				if (condition is IResourceCost resourceCost &&
+					resourceCost.ResourceTemplate != null &&
+					resourceCost.ResourceAmount > 0)
 				{
-					sb.AppendLine();
-					sb.Append(RichText.Format("Price", price, true, "FFFFFFFF"));
+					if (!hasResources)
+					{
+						builder.AddLine("Resource Cost:", 50, TooltipColors.Label);
+						hasResources = true;
+					}
+					builder.AddLine($"{resourceCost.ResourceTemplate.Name}: {resourceCost.ResourceAmount}", 51, TooltipColors.Title, false, "120%");
 				}
-				return sb.ToString();
+				else if (condition is ITooltipContributor contributor)
+				{
+					string contribution = contributor.GetTooltipContribution();
+					if (!string.IsNullOrWhiteSpace(contribution))
+					{
+						if (!hasRequirements)
+						{
+							builder.AddLine("Requirements:", 60, TooltipColors.Label);
+							hasRequirements = true;
+						}
+						builder.AddLine(contribution, 61, TooltipColors.Title, false, "120%");
+					}
+				}
 			}
 		}
 	}

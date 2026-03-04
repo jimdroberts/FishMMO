@@ -38,11 +38,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public string GetTooltipContribution()
 		{
-			if (FactionTemplate != null)
-			{
-				return RichText.Format(FactionTemplate.Name, true, "f5ad6eFF", "120%");
-			}
-			return null;
+			return FactionTemplate?.Name;
 		}
 	}
 }

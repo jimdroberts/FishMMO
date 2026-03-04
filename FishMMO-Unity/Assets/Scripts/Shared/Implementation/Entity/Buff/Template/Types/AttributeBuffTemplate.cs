@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Cysharp.Text;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -19,20 +18,16 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Appends a secondary tooltip describing the bonus attributes granted by this buff.
 		/// </summary>
-		/// <param name="stringBuilder">The string builder to append to.</param>
-		public override void SecondaryTooltip(Utf16ValueStringBuilder stringBuilder)
+		/// <param name="builder">The tooltip builder to populate.</param>
+		public override void SecondaryTooltip(TooltipBuilder builder)
 		{
-			if (BonusAttributes != null &&
-					BonusAttributes.Count > 0)
-			{
-				stringBuilder.AppendLine();
-				stringBuilder.Append(RichText.Format("Bonus Attributes", true, "f5ad6e", "140%"));
+			if (BonusAttributes == null || BonusAttributes.Count < 1) return;
 
-				foreach (BuffAttributeTemplate buffAttribute in BonusAttributes)
-				{
-					// Show each bonus attribute and its value in the tooltip
-					stringBuilder.Append(RichText.Format(buffAttribute.Template.Name, buffAttribute.Value, true, "FFFFFFFF", "", "s"));
-				}
+			builder.AddLine("Bonus Attributes", 20, TooltipColors.Title, false, "140%");
+			for (int i = 0; i < BonusAttributes.Count; i++)
+			{
+				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
+				builder.AddLine($"{buffAttribute.Template.Name}: {buffAttribute.Value}s", 21 + i, TooltipColors.Stat);
 			}
 		}
 

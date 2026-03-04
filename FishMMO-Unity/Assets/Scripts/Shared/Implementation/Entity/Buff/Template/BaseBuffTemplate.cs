@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using UnityEngine;
-using Cysharp.Text;
+﻿using UnityEngine;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -71,55 +69,37 @@ namespace FishMMO.Shared
 		public Sprite Icon { get { return this.icon; } }
 
 		/// <summary>
-		/// Returns the tooltip string for this buff (primary tooltip only).
+		/// Returns the tooltip string for this buff, including name, description, and secondary details.
 		/// </summary>
 		public virtual string Tooltip()
 		{
-			return PrimaryTooltip(null);
-		}
-
-		/// <summary>
-		/// Returns the tooltip string for this buff, optionally combining with other tooltips.
-		/// </summary>
-		/// <param name="combineList">Optional list of other tooltips to combine with.</param>
-		public virtual string Tooltip(List<ITooltip> combineList)
-		{
-			return PrimaryTooltip(combineList);
-		}
-
-		/// <summary>
-		/// Returns the formatted description for this buff, used in tooltips.
-		/// </summary>
-		public virtual string GetFormattedDescription()
-		{
-			return Description;
-		}
-
-		/// <summary>
-		/// Builds the primary tooltip string for this buff, including name, description, and secondary tooltip.
-		/// </summary>
-		/// <param name="combineList">Optional list of other tooltips to combine with.</param>
-		private string PrimaryTooltip(List<ITooltip> combineList)
-		{
-			using (var sb = ZString.CreateStringBuilder())
+			using (var builder = new TooltipBuilder())
 			{
-				sb.Append(RichText.Format(Name, true, "f5ad6e", "140%"));
-
-				if (!string.IsNullOrWhiteSpace(Description))
-				{
-					sb.AppendLine();
-					sb.Append(RichText.Format(GetFormattedDescription(), true, "a66ef5FF"));
-				}
-				SecondaryTooltip(sb);
-				return sb.ToString();
+				BuildTooltip(builder);
+				return builder.Build();
 			}
+		}
+
+		/// <summary>
+		/// Populates the tooltip builder with this buff's tooltip lines.
+		/// Override in derived classes to add additional lines.
+		/// </summary>
+		/// <param name="builder">The tooltip builder to populate.</param>
+		public virtual void BuildTooltip(TooltipBuilder builder)
+		{
+			builder.AddLine(Name, 0, TooltipColors.Title, false, "140%");
+			if (!string.IsNullOrWhiteSpace(Description))
+			{
+				builder.AddLine(Description, 10, TooltipColors.Label);
+			}
+			SecondaryTooltip(builder);
 		}
 
 		/// <summary>
 		/// Appends additional information to the tooltip (e.g., secondary effects). Override in derived classes.
 		/// </summary>
-		/// <param name="stringBuilder">The string builder to append to.</param>
-		public virtual void SecondaryTooltip(Utf16ValueStringBuilder stringBuilder) { }
+		/// <param name="builder">The tooltip builder to populate.</param>
+		public virtual void SecondaryTooltip(TooltipBuilder builder) { }
 
 		/// <summary>
 		/// Instantiates the FXPrefab on the target when the buff is applied (client-side only).

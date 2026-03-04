@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// ScriptableObject template for defining an ability, including prefabs, triggers, event lists, and requirements.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Ability", menuName = "FishMMO/Character/Ability/Ability", order = 1)]
-	public class AbilityTemplate : BaseAbilityTemplate, ITooltip
+	public class AbilityTemplate : BaseAbilityTemplate
 	{
 		/// <summary>
 		/// The prefab for the ability object (visual or functional representation).
@@ -109,36 +109,31 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the tooltip string for the ability, including its type if set.
+		/// Returns the tooltip string for the ability, including type if set.
 		/// </summary>
 		/// <returns>The tooltip string for the ability.</returns>
 		public override string Tooltip()
 		{
-			return AppendType(base.Tooltip(null));
+			return TooltipWithEvents(null);
 		}
 
 		/// <summary>
-		/// Returns the combined tooltip string for the ability with additional events, including its type if set.
+		/// Returns a tooltip string composed with optional event tooltips, including type if set.
+		/// Used by ability crafting to preview the composed ability tooltip.
 		/// </summary>
-		/// <param name="combineList">List of tooltips to combine.</param>
-		/// <returns>The combined tooltip string for the ability.</returns>
-		public override string Tooltip(List<ITooltip> combineList)
+		/// <param name="combineList">Optional list of event tooltips to combine.</param>
+		/// <returns>The composed tooltip string.</returns>
+		public string TooltipWithEvents(List<ITooltip> combineList)
 		{
-			return AppendType(base.Tooltip(combineList));
-		}
-
-		/// <summary>
-		/// Appends the ability type to the tooltip string if the type is not None.
-		/// </summary>
-		/// <param name="tooltip">The base tooltip string.</param>
-		/// <returns>The tooltip string with the ability type appended.</returns>
-		private string AppendType(string tooltip)
-		{
-			if (Type != AbilityType.None)
+			using (var builder = new TooltipBuilder())
 			{
-				tooltip += RichText.Format($"\r\nType: {Type}", true, "f5ad6eFF", "120%");
+				BuildTooltip(builder, combineList);
+				if (Type != AbilityType.None)
+				{
+					builder.AddLine($"Type: {Type}", 90, TooltipColors.Title, false, "120%");
+				}
+				return builder.Build();
 			}
-			return tooltip;
 		}
 	}
 }

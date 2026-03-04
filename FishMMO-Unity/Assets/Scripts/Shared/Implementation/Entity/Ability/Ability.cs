@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using UnityEngine;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -8,8 +9,9 @@ namespace FishMMO.Shared
 	/// Represents an in-game ability instance, constructed from an <see cref="AbilityTemplate"/> and containing all runtime state and events.
 	/// Resource costs and requirements are determined by ECA conditions on the template's <see cref="BaseAbilityTemplate.ActivationConditions"/>
 	/// and each event's <see cref="Trigger.Conditions"/> via the <see cref="IResourceCost"/> interface.
+	/// Implements <see cref="ITooltip"/> for consistent UI tooltip display.
 	/// </summary>
-	public class Ability
+	public class Ability : ITooltip
 	{
 		/// <summary>
 		/// Unique identifier for this ability instance.
@@ -50,6 +52,11 @@ namespace FishMMO.Shared
 		/// The template from which this ability was constructed.
 		/// </summary>
 		public AbilityTemplate Template { get; private set; }
+
+		/// <summary>
+		/// Gets the icon sprite from the ability template.
+		/// </summary>
+		public Sprite Icon { get { return Template?.Icon; } }
 
 		/// <summary>
 		/// The display name of the ability.
@@ -694,6 +701,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Returns the tooltip string for this ability, using the template and type override if present.
+		/// Caches the result to avoid repeated string allocations.
 		/// </summary>
 		/// <returns>Formatted tooltip string for the ability.</returns>
 		public string Tooltip()
@@ -703,15 +711,15 @@ namespace FishMMO.Shared
 				return CachedTooltip;
 			}
 
-			CachedTooltip = Template.Tooltip(null);
-
-			if (TypeOverride != null)
+			using (var builder = new TooltipBuilder())
 			{
-				CachedTooltip += RichText.Format($"\r\nType: {TypeOverride.OverrideAbilityType}", true, "f5ad6eFF", "120%");
-			}
-			else
-			{
-				CachedTooltip += RichText.Format($"\r\nType: {Template.Type}", true, "f5ad6eFF", "120%");
+				Template.BuildTooltip(builder);
+				AbilityType abilityType = TypeOverride != null ? TypeOverride.OverrideAbilityType : Template.Type;
+				if (abilityType != AbilityType.None)
+				{
+					builder.AddLine($"Type: {abilityType}", 90, TooltipColors.Title, false, "120%");
+				}
+				CachedTooltip = builder.Build();
 			}
 
 			return CachedTooltip;

@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Manages a pool of reusable <see cref="Cached3DLabel"/> instances for efficient 3D text display in world space.
+	/// </summary>
 	public class LabelMaker : MonoBehaviour
 	{
 		/// <summary>
@@ -10,75 +13,120 @@ namespace FishMMO.Client
 		/// </summary>
 		private static LabelMaker instance;
 		/// <summary>
-		/// Internal accessor for the singleton instance.
+		/// Singleton instance accessor.
 		/// </summary>
-		internal static LabelMaker Instance
-		{
-			get
-			{
-				return instance;
-			}
-		}
+		internal static LabelMaker Instance => instance;
+
 		/// <summary>
 		/// Pool of cached 3D labels for reuse.
 		/// </summary>
-		private Queue<Cached3DLabel> pool = new Queue<Cached3DLabel>();
+		private readonly Queue<Cached3DLabel> pool = new Queue<Cached3DLabel>();
 
 		/// <summary>
 		/// Prefab used to instantiate new 3D labels.
 		/// </summary>
-		public Cached3DLabel LabelPrefab3D;
+		[SerializeField]
+		private Cached3DLabel labelPrefab;
 
 		/// <summary>
-		/// Unity Awake method. Initializes the singleton instance and sets the object name.
+		/// Initial number of labels to pre-instantiate into the pool on startup.
+		/// </summary>
+		[SerializeField]
+		[Min(0)]
+		private int preWarmCount;
+
+		/// <summary>
+		/// Maximum number of labels allowed in the pool. Zero means unlimited.
+		/// </summary>
+		[SerializeField]
+		[Min(0)]
+		private int maxPoolSize;
+
+		/// <summary>
+		/// Initializes the singleton instance and pre-warms the pool.
 		/// </summary>
 		void Awake()
 		{
 			if (instance != null)
 			{
-				Destroy(this.gameObject);
+				Destroy(gameObject);
 				return;
 			}
 			instance = this;
+			gameObject.name = nameof(LabelMaker);
+			PreWarm();
+		}
 
-			gameObject.name = typeof(LabelMaker).Name;
+		/// <summary>
+		/// Clears the pool and releases the singleton reference on destruction.
+		/// </summary>
+		void OnDestroy()
+		{
+			ClearCache();
+			if (instance == this)
+			{
+				instance = null;
+			}
+		}
+
+		/// <summary>
+		/// Pre-instantiates labels into the pool for immediate availability.
+		/// </summary>
+		private void PreWarm()
+		{
+			if (labelPrefab == null) return;
+
+			for (int i = 0; i < preWarmCount; ++i)
+			{
+				Cached3DLabel label = Instantiate(labelPrefab);
+				label.gameObject.SetActive(false);
+				pool.Enqueue(label);
+			}
 		}
 
 		/// <summary>
 		/// Retrieves a label from the pool or instantiates a new one if the pool is empty.
+		/// Skips any pool entries that have been externally destroyed.
 		/// </summary>
 		/// <param name="label">The dequeued or newly instantiated label.</param>
 		/// <returns>True if a label is provided, false otherwise.</returns>
 		public bool Dequeue(out Cached3DLabel label)
 		{
-			if (LabelPrefab3D != null && pool != null)
+			if (labelPrefab == null)
 			{
-				if (!pool.TryDequeue(out label))
-				{
-					label = Instantiate(LabelPrefab3D);
-					label.gameObject.SetActive(true);
-				}
-				return true;
+				label = null;
+				return false;
 			}
-			label = null;
-			return false;
+
+			while (pool.TryDequeue(out label))
+			{
+				if (label != null)
+				{
+					return true;
+				}
+			}
+
+			label = Instantiate(labelPrefab);
+			return true;
 		}
 
 		/// <summary>
-		/// Returns a label to the pool for reuse, or destroys it if the pool is unavailable.
+		/// Returns a label to the pool for reuse, or destroys it if the pool has reached maximum capacity.
 		/// </summary>
 		/// <param name="label">The label to enqueue.</param>
 		public void Enqueue(Cached3DLabel label)
 		{
-			if (pool != null)
-			{
-				label.gameObject.SetActive(false);
-				pool.Enqueue(label);
-			}
-			else
+			if (label == null) return;
+
+			label.gameObject.SetActive(false);
+
+			if (maxPoolSize > 0 && pool.Count >= maxPoolSize)
 			{
 				Destroy(label.gameObject);
+				return;
 			}
+
+			pool.Enqueue(label);
 		}
 
 		/// <summary>
@@ -86,14 +134,12 @@ namespace FishMMO.Client
 		/// </summary>
 		public void ClearCache()
 		{
-			if (pool == null ||
-				pool.Count < 1)
-			{
-				return;
-			}
 			while (pool.TryDequeue(out Cached3DLabel label))
 			{
-				Destroy(label.gameObject);
+				if (label != null)
+				{
+					Destroy(label.gameObject);
+				}
 			}
 		}
 
@@ -103,13 +149,15 @@ namespace FishMMO.Client
 		/// <param name="text">Text to display.</param>
 		/// <param name="position">World position for the label.</param>
 		/// <param name="color">Text color.</param>
-		/// <param name="fontSize">Font size.</param>
-		/// <param name="persistTime">Time to persist the label.</param>
-		/// <param name="manualCache">Whether to manually cache the label after use.</param>
-		/// <returns>The displayed label, or null if unavailable.</returns>
+		/// <param name="fontSize">Font size in Unity units.</param>
+		/// <param name="persistTime">Duration in seconds before the label is automatically cached. Ignored if manualCache is true.</param>
+		/// <param name="manualCache">If true, the label must be cached manually via <see cref="Cache"/>.</param>
+		/// <returns>The displayed label, or null if the instance is unavailable.</returns>
 		public static Cached3DLabel Display3D(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
 		{
-			if (LabelMaker.Instance.Dequeue(out Cached3DLabel label))
+			if (instance == null) return null;
+
+			if (instance.Dequeue(out Cached3DLabel label))
 			{
 				label.Initialize(text, position, color, fontSize, persistTime, manualCache);
 				return label;
@@ -118,17 +166,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Caches the given label for reuse.
+		/// Returns the given label to the pool for reuse.
 		/// </summary>
 		/// <param name="label">The label to cache.</param>
 		public static void Cache(Cached3DLabel label)
 		{
-			if (label == null)
-			{
-				return;
-			}
+			if (label == null || instance == null) return;
 
-			LabelMaker.Instance.Enqueue(label);
+			instance.Enqueue(label);
 		}
 
 		/// <summary>
@@ -136,7 +181,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public static void Clear()
 		{
-			LabelMaker.Instance.ClearCache();
+			if (instance == null) return;
+
+			instance.ClearCache();
 		}
 	}
 }

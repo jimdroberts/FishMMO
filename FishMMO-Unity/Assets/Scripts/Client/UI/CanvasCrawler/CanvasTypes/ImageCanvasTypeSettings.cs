@@ -1,77 +1,67 @@
-using FishMMO.Shared;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Canvas type settings handler for Unity's Image component.
+	/// Applies themed color settings to Image components based on naming conventions.
+	/// Supports special handling for Background, Crosshair, UI, Health, Mana, and Stamina images.
 	/// </summary>
-	public class ImageCanvasTypeSettings : BaseCanvasTypeSettings
+	public sealed class ImageCanvasTypeSettings : BaseCanvasTypeSettings
 	{
 		/// <summary>
-		/// Applies color settings from configuration to the Image component.
+		/// Applies color settings to the Image component.
+		/// Images with sprites are colored by name convention; resource bar images override with their specific colors.
 		/// </summary>
-		/// <param name="component">The component to apply settings to (should be Image).</param>
-		/// <param name="configuration">The configuration object containing UI settings.</param>
-		public override void ApplySettings(object component, Configuration configuration)
+		/// <param name="component">The UI component (must be an Image).</param>
+		/// <param name="theme">The pre-parsed UI theme.</param>
+		public override void ApplySettings(Component component, UITheme theme)
 		{
-			// Attempt to cast the component to Image
-			Image image = component as Image;
-			if (image == null)
-			{
-				// If the cast fails, exit without applying settings
-				return;
-			}
-			// If the image has a sprite, apply color logic based on name
+			if (component is not Image image) return;
+
 			if (image.sprite != null)
 			{
-				// Skip cursor images
-				if (image.name.Contains("Cursor"))
+				if (image.name.Contains("Cursor", StringComparison.Ordinal))
 				{
 					return;
 				}
-				// If the sprite or object is named "Background", use primary color
-				else if (image.sprite.name.Equals("Background"))
+
+				if (image.sprite.name.Equals("Background", StringComparison.Ordinal) ||
+					image.name.Equals("Background", StringComparison.Ordinal))
 				{
-					image.color = ParseColor("Primary", configuration);
+					image.color = theme.Primary;
 				}
-				else if (image.name.Equals("Background"))
+				else if (image.name.Contains("Crosshair", StringComparison.Ordinal))
 				{
-					image.color = ParseColor("Primary", configuration);
+					image.color = theme.Crosshair;
 				}
-				// If the image is a crosshair, use crosshair color
-				else if (image.name.Contains("Crosshair"))
+				else if (image.name.Contains("UI", StringComparison.Ordinal))
 				{
-					image.color = ParseColor("Crosshair", configuration);
-				}
-				// If the image is part of UI, use primary color
-				else if (image.name.Contains("UI"))
-				{
-					image.color = ParseColor("Primary", configuration);
+					image.color = theme.Primary;
 				}
 				else
 				{
-					// Make the sprite fully bright for all other cases
 					image.color = Color.white;
 				}
 			}
 
-			// Overrides for health, mana, and stamina images (unless part of UI)
-			if (image.name.Contains("Health") &&
-				!image.name.Contains("UI"))
+			if (image.name.Contains("UI", StringComparison.Ordinal))
 			{
-				image.color = ParseColor("Health", configuration);
+				return;
 			}
-			else if (image.name.Contains("Mana") &&
-				!image.name.Contains("UI"))
+
+			if (image.name.Contains("Health", StringComparison.Ordinal))
 			{
-				image.color = ParseColor("Mana", configuration);
+				image.color = theme.Health;
 			}
-			else if (image.name.Contains("Stamina") &&
-				!image.name.Contains("UI"))
+			else if (image.name.Contains("Mana", StringComparison.Ordinal))
 			{
-				image.color = ParseColor("Stamina", configuration);
+				image.color = theme.Mana;
+			}
+			else if (image.name.Contains("Stamina", StringComparison.Ordinal))
+			{
+				image.color = theme.Stamina;
 			}
 		}
 	}

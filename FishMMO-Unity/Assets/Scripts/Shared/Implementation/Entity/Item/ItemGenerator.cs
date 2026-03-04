@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using Cysharp.Text;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -68,27 +67,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Appends generator information and all generated attributes to the provided tooltip string builder.
+		/// Populates the tooltip builder with generator information and all generated attributes.
+		/// Uses <see cref="TooltipColors"/> for consistent formatting.
 		/// </summary>
-		/// <param name="sb">The string builder to append to.</param>
-		public void Tooltip(ref Utf16ValueStringBuilder sb)
+		/// <param name="builder">The tooltip builder to populate.</param>
+		public void BuildTooltip(TooltipBuilder builder)
 		{
-			sb.Append("<color=#a66ef5>Seed: ");
-			sb.Append(Seed);
-			sb.Append("</color>");
+			builder.AddLine($"Seed: {Seed}", 40, TooltipColors.Label);
 			if (attributes.Count > 0)
 			{
-				sb.AppendLine();
-				sb.Append("<size=125%><color=#a66ef5>Attributes:</color></size>");
-				sb.AppendLine();
+				builder.AddLine("Attributes", 50, TooltipColors.Label, false, "125%");
+				int i = 0;
 				foreach (ItemAttribute attribute in attributes.Values)
 				{
-					sb.Append("<size=110%>");
-					sb.Append(attribute.Template.Name);
-					sb.Append(": <color=#32a879>");
-					sb.Append(attribute.value);
-					sb.Append("</color></size>");
-					sb.AppendLine();
+					builder.AddLine($"{attribute.Template.Name}: <color={TooltipColors.Value}>{attribute.value}</color>", 51 + i, null, false, "110%");
+					i++;
 				}
 			}
 		}

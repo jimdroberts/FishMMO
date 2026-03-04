@@ -244,7 +244,14 @@ namespace FishMMO.Client
 						price += abilityEvent.Price;
 					}
 				}
-				AbilityDescription.text = MainEntry.Tooltip.Tooltip(tooltips);
+				if (MainEntry.Tooltip is AbilityTemplate abilityTemplate)
+				{
+					AbilityDescription.text = abilityTemplate.TooltipWithEvents(tooltips);
+				}
+				else
+				{
+					AbilityDescription.text = MainEntry.Tooltip.Tooltip();
+				}
 			}
 			else
 			{

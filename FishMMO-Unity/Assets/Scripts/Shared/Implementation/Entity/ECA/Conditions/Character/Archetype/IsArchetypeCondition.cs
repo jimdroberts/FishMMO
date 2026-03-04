@@ -52,11 +52,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public string GetTooltipContribution()
 		{
-			if (ArchetypeTemplate != null)
-			{
-				return RichText.Format(ArchetypeTemplate.Name, true, "f5ad6eFF", "120%");
-			}
-			return null;
+			return ArchetypeTemplate?.Name;
 		}
 	}
 }

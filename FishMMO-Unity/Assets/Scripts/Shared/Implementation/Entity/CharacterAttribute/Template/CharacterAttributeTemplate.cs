@@ -1,5 +1,4 @@
 ﻿using System;
-using Cysharp.Text;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -87,52 +86,34 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Builds a rich text tooltip string describing this attribute, including name, description, and value ranges.
+		/// Uses <see cref="TooltipColors"/> for consistent formatting.
 		/// </summary>
 		/// <returns>Formatted tooltip string for UI display.</returns>
 		public string Tooltip()
 		{
-			using (var sb = ZString.CreateStringBuilder())
+			using (var builder = new TooltipBuilder())
 			{
-				// Add the attribute name in styled text if present
 				if (!string.IsNullOrWhiteSpace(Name))
 				{
-					sb.Append("<size=120%><color=#f5ad6e>");
-					sb.Append(Name);
-					sb.Append("</color></size>");
+					builder.AddLine(Name, 0, TooltipColors.Title, false, "120%");
 				}
-				// Add the description if present
 				if (!string.IsNullOrWhiteSpace(Description))
 				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Description: ");
-					sb.Append(Description);
-					sb.Append("</color>");
+					builder.AddLine($"Description: {Description}", 10, TooltipColors.Label);
 				}
-				// Show initial value if greater than 0
 				if (InitialValue > 0)
 				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Initial Value: ");
-					sb.Append(InitialValue);
-					sb.Append("</color>");
+					builder.AddLine($"Initial Value: {InitialValue}", 20, TooltipColors.Label);
 				}
-				// Show min value if greater than 0
 				if (MinValue > 0)
 				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Min Value: ");
-					sb.Append(MinValue);
-					sb.Append("</color>");
+					builder.AddLine($"Min Value: {MinValue}", 30, TooltipColors.Label);
 				}
-				// Show max value if greater than 0
 				if (MaxValue > 0)
 				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Max Value: ");
-					sb.Append(MaxValue);
-					sb.Append("</color>");
+					builder.AddLine($"Max Value: {MaxValue}", 40, TooltipColors.Label);
 				}
-				return sb.ToString();
+				return builder.Build();
 			}
 		}
 	}
