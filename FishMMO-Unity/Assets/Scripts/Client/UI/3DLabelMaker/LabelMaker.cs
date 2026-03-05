@@ -152,14 +152,15 @@ namespace FishMMO.Client
 		/// <param name="fontSize">Font size in Unity units.</param>
 		/// <param name="persistTime">Duration in seconds before the label is automatically cached. Ignored if manualCache is true.</param>
 		/// <param name="manualCache">If true, the label must be cached manually via <see cref="Cache"/>.</param>
+		/// <param name="effectFlags">Bit-flag field of <see cref="LabelEffect"/> values. 0 for no effects.</param>
 		/// <returns>The displayed label, or null if the instance is unavailable.</returns>
-		public static Cached3DLabel Display3D(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
+		public static Cached3DLabel Display3D(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache, int effectFlags = 0)
 		{
 			if (instance == null) return null;
 
 			if (instance.Dequeue(out Cached3DLabel label))
 			{
-				label.Initialize(text, position, color, fontSize, persistTime, manualCache);
+				label.Initialize(text, position, color, fontSize, persistTime, manualCache, effectFlags);
 				return label;
 			}
 			return null;

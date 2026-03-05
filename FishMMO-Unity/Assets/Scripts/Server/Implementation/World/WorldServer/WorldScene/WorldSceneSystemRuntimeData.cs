@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using FishMMO.Database.Data;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.WorldServer;
@@ -46,6 +47,29 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		public Dictionary<int, DateTime> WaitingQueueEnteredUtcByClientId { get; set; }
 
 		/// <summary>
+		/// Cache of <c>FetchAvailableAsync</c> results keyed by scene name.
+		/// Entries expire after a configurable TTL to reduce database polling.
+		/// </summary>
+		public TimedCache<string, IReadOnlyList<SceneData>> AvailableSceneCache { get; set; }
+
+		/// <summary>
+		/// Cache of scene server addresses keyed by scene server ID.
+		/// Addresses change infrequently, so a longer TTL is appropriate.
+		/// </summary>
+		public TimedCache<long, (string Address, ushort Port)> SceneServerAddressCache { get; set; }
+
+		/// <summary>
+		/// Cached total character count across all scenes for this world server.
+		/// Used by <c>UpdateConnectionCountAsync</c> to avoid re-fetching all scene rows every cycle.
+		/// </summary>
+		public int CachedSceneCharacterCount { get; set; }
+
+		/// <summary>
+		/// UTC timestamp of the last <see cref="CachedSceneCharacterCount"/> update.
+		/// </summary>
+		public DateTime CachedSceneCharacterCountUtc { get; set; }
+
+		/// <summary>
 		/// Reference to the world server authenticator for login/authentication events.
 		/// </summary>
 		public WorldServerAuthenticator LoginAuthenticator { get; set; }
@@ -68,6 +92,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			NextWaitQueueUpdate = 0.0f;
 			InstanceLookupDebounce = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 			WaitingQueueEnteredUtcByClientId = new Dictionary<int, DateTime>();
+			AvailableSceneCache = new TimedCache<string, IReadOnlyList<SceneData>>(StringComparer.OrdinalIgnoreCase);
+			SceneServerAddressCache = new TimedCache<long, (string, ushort)>();
+			CachedSceneCharacterCount = 0;
+			CachedSceneCharacterCountUtc = DateTime.MinValue;
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -84,6 +112,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			NextWaitQueueUpdate = 0.0f;
 			InstanceLookupDebounce?.Clear();
 			WaitingQueueEnteredUtcByClientId?.Clear();
+			AvailableSceneCache?.Clear();
+			SceneServerAddressCache?.Clear();
+			CachedSceneCharacterCount = 0;
+			CachedSceneCharacterCountUtc = DateTime.MinValue;
 		}
 
 		/// <summary>
@@ -94,6 +126,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			Clear();
 			InstanceLookupDebounce = null;
 			WaitingQueueEnteredUtcByClientId = null;
+			AvailableSceneCache?.Clear();
+			AvailableSceneCache = null;
+			SceneServerAddressCache?.Clear();
+			SceneServerAddressCache = null;
 		}
 	}
 }

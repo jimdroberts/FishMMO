@@ -863,6 +863,51 @@ namespace FishMMO.Database.Npgsql.Services
 			return result;
 		}
 
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<CharacterData>>> FetchSelectedCharactersByAccountsAsync(
+			List<string> accounts,
+			int maxBatchSize = 1000,
+			CancellationToken cancellationToken = default)
+		{
+			if (accounts == null || accounts.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<CharacterData>>.Success(Array.Empty<CharacterData>());
+			}
+
+			if (maxBatchSize < 500) maxBatchSize = 500;
+			else if (maxBatchSize > 2500) maxBatchSize = 2500;
+
+			var allResults = new List<CharacterData>(accounts.Count);
+
+			for (int offset = 0; offset < accounts.Count; offset += maxBatchSize)
+			{
+				var batchCount = Math.Min(maxBatchSize, accounts.Count - offset);
+				var batch = accounts.GetRange(offset, batchCount);
+
+				var result = await ExecuteReadAsync(async dbContext =>
+				{
+					var batchArray = batch.ToArray();
+					return await dbContext.Characters
+						.AsNoTracking()
+						.Where(c => batchArray.Contains(c.Account) && c.Selected && !c.Deleted)
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+				}, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+				if (!result.IsSuccess)
+				{
+					return DatabaseResult<IReadOnlyList<CharacterData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				}
+
+				foreach (var entity in result.Data)
+				{
+					allResults.Add(MapEntityToData(entity));
+				}
+			}
+
+			return DatabaseResult<IReadOnlyList<CharacterData>>.Success(allResults);
+		}
+
 		/// <summary>
 		/// Maps a CharacterEntity to CharacterData DTO.
 		/// </summary>

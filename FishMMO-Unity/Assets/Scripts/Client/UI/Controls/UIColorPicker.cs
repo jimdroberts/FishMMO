@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -51,6 +52,13 @@ namespace FishMMO.Client
 		/// Initial color for the picker.
 		/// </summary>
 		public Color InitialColor = Color.red;
+
+		/// <summary>
+		/// Callback invoked whenever the selected color changes.
+		/// Consumers should assign this before calling <see cref="Show"/> to receive updates.
+		/// </summary>
+		public Action<Color> OnColorChanged;
+
 		/// <summary>
 		/// Cached HSV sprites for each hue value.
 		/// </summary>
@@ -231,6 +239,8 @@ namespace FishMMO.Client
 			GBackground.sprite = TextureToSprite(TinyColor.GenerateGreenSpectrum(Current.color.r, Current.color.b, Current.color.a, SLIDER_BACKGROUND_WIDTH, SLIDER_BACKGROUND_HEIGHT));
 			BBackground.sprite = TextureToSprite(TinyColor.GenerateBlueSpectrum(Current.color.r, Current.color.g, Current.color.a, SLIDER_BACKGROUND_WIDTH, SLIDER_BACKGROUND_HEIGHT));
 			SetCursor();
+
+			OnColorChanged?.Invoke(Current.color);
 		}
 
 		/// <summary>

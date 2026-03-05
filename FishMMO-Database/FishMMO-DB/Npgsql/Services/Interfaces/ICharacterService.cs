@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
@@ -178,5 +179,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 		Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Retrieves the selected character for each of the specified accounts in batches.
+		/// </summary>
+		/// <param name="accounts">List of account names to query.</param>
+		/// <param name="maxBatchSize">Maximum number of accounts per database round-trip (500–2500).</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>A list of selected CharacterData, one per account that has a selected character.</returns>
+		Task<DatabaseResult<IReadOnlyList<CharacterData>>> FetchSelectedCharactersByAccountsAsync(List<string> accounts, int maxBatchSize = 1000, CancellationToken cancellationToken = default);
 	}
 }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
@@ -90,5 +91,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </remarks>
 		Task<DatabaseResult> DeleteAsync(long serverId, CancellationToken cancellationToken = default);
 
+		/// <summary>
+		/// Retrieves multiple scene servers by their IDs in batches.
+		/// </summary>
+		/// <param name="serverIds">List of server IDs to query.</param>
+		/// <param name="maxBatchSize">Maximum number of IDs per database round-trip (500–1000).</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>A list of SceneServerData for each found server.</returns>
+		Task<DatabaseResult<IReadOnlyList<SceneServerData>>> FetchSceneServersByIDsAsync(List<long> serverIds, int maxBatchSize = 500, CancellationToken cancellationToken = default);
 	}
 }

@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -151,6 +153,51 @@ namespace FishMMO.Database.Npgsql.Services
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<SceneServerData>>> FetchSceneServersByIDsAsync(
+			List<long> serverIds,
+			int maxBatchSize = 500,
+			CancellationToken cancellationToken = default)
+		{
+			if (serverIds == null || serverIds.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<SceneServerData>>.Success(Array.Empty<SceneServerData>());
+			}
+
+			if (maxBatchSize < 500) maxBatchSize = 500;
+			else if (maxBatchSize > 1000) maxBatchSize = 1000;
+
+			var allResults = new List<SceneServerData>(serverIds.Count);
+
+			for (int offset = 0; offset < serverIds.Count; offset += maxBatchSize)
+			{
+				var batchCount = Math.Min(maxBatchSize, serverIds.Count - offset);
+				var batch = serverIds.GetRange(offset, batchCount);
+
+				var result = await ExecuteReadAsync(async dbContext =>
+				{
+					var batchArray = batch.ToArray();
+					return await dbContext.SceneServers
+						.AsNoTracking()
+						.Where(s => batchArray.Contains(s.ID))
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+				}, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+				if (!result.IsSuccess)
+				{
+					return DatabaseResult<IReadOnlyList<SceneServerData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				}
+
+				foreach (var entity in result.Data)
+				{
+					allResults.Add(MapEntityToDto(entity));
+				}
+			}
+
+			return DatabaseResult<IReadOnlyList<SceneServerData>>.Success(allResults);
 		}
 
 		/// <summary>

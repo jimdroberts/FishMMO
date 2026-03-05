@@ -37,7 +37,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Indicates whether the scene is stale (no characters present).
 		/// </summary>
-		public bool StalePulse { get { return CharacterCount < 1; } }
+		public bool StalePulse => CharacterCount < 1;
 		/// <summary>
 		/// The time when the last character exited the scene.
 		/// </summary>

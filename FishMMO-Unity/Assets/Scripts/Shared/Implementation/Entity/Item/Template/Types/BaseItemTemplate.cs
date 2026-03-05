@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// Abstract base class for item templates, providing common properties and tooltip logic for all items.
 	/// Implements ITooltip for UI display and ICachedObject for template caching.
 	/// </summary>
-	public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>, ITooltip
+	public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>, ICachedObject, ITooltip
 	{
 		/// <summary>
 		/// Indicates if the item can be identified (e.g., has hidden stats).

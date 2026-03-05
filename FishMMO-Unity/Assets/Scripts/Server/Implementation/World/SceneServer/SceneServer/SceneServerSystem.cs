@@ -514,10 +514,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Send server heartbeat pulse
 				await sceneServerService.PulseAsync(serverID, characterCount, isLocked);
 
-				// Send scene heartbeat pulses
-				foreach (var (Handle, CharCount, StalePulse, TimeSinceLastExit) in scenePulseData)
+				// Send scene heartbeat pulses (batched)
+				if (scenePulseData.Count > 0)
 				{
-					await sceneService.PulseAsync(Handle, CharCount);
+					var pulses = new List<(int sceneHandle, int characterCount)>(scenePulseData.Count);
+					foreach (var (Handle, CharCount, StalePulse, TimeSinceLastExit) in scenePulseData)
+					{
+						pulses.Add((Handle, CharCount));
+					}
+					await sceneService.PulseBatchAsync(pulses);
 				}
 
 				// Process pending scenes

@@ -427,6 +427,61 @@ namespace FishMMO.Database.Npgsql.Services
 			return result;
 		}
 
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> PulseBatchAsync(
+			List<(int sceneHandle, int characterCount)> pulses,
+			int maxBatchSize = 1000,
+			CancellationToken cancellationToken = default)
+		{
+			if (pulses == null || pulses.Count == 0)
+			{
+				return DatabaseResult<int>.Success(0);
+			}
+
+			if (maxBatchSize < 500) maxBatchSize = 500;
+			else if (maxBatchSize > 2500) maxBatchSize = 2500;
+
+			int totalRowsAffected = 0;
+
+			for (int offset = 0; offset < pulses.Count; offset += maxBatchSize)
+			{
+				var batchCount = Math.Min(maxBatchSize, pulses.Count - offset);
+
+				// Build parallel arrays for PostgreSQL unnest.
+				var handles = new int[batchCount];
+				var counts = new int[batchCount];
+				for (int i = 0; i < batchCount; i++)
+				{
+					var (handle, count) = pulses[offset + i];
+					handles[i] = handle;
+					counts[i] = count;
+				}
+
+				var result = await ExecuteWriteAsync(async dbContext =>
+				{
+					// Use unnest to efficiently join an array of values into an UPDATE.
+					var sql = $@"UPDATE {TableName} AS t
+						SET character_count = batch.new_count
+						FROM unnest({{0}}::int[], {{1}}::int[]) AS batch(handle, new_count)
+						WHERE t.scene_handle = batch.handle";
+
+					return await dbContext.Database.ExecuteSqlRawAsync(
+						sql,
+						new object[] { handles, counts },
+						cancellationToken).ConfigureAwait(false);
+				}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+				if (!result.IsSuccess)
+				{
+					return DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				}
+
+				totalRowsAffected += result.Data;
+			}
+
+			return DatabaseResult<int>.Success(totalRowsAffected);
+		}
+
 		/// <summary>
 		/// Maps SceneEntity to SceneData DTO.
 		/// </summary>

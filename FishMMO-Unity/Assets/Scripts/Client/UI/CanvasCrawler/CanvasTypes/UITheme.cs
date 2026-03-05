@@ -37,6 +37,18 @@ namespace FishMMO.Client
 		/// <summary>Crosshair color.</summary>
 		public readonly Color Crosshair;
 
+		/// <summary>Tooltip title/header color.</summary>
+		public readonly Color TooltipTitle;
+
+		/// <summary>Tooltip label/description color.</summary>
+		public readonly Color TooltipLabel;
+
+		/// <summary>Tooltip value/positive-number color.</summary>
+		public readonly Color TooltipValue;
+
+		/// <summary>Tooltip stat/general-number color.</summary>
+		public readonly Color TooltipStat;
+
 		/// <summary>Spacing between elements in layout groups (pixels).</summary>
 		public readonly float LayoutSpacing;
 
@@ -100,6 +112,11 @@ namespace FishMMO.Client
 			Mana = ParseColor("Mana", configuration);
 			Stamina = ParseColor("Stamina", configuration);
 			Crosshair = ParseColor("Crosshair", configuration);
+
+			TooltipTitle = ParseColor("TooltipTitle", configuration);
+			TooltipLabel = ParseColor("TooltipLabel", configuration);
+			TooltipValue = ParseColor("TooltipValue", configuration);
+			TooltipStat = ParseColor("TooltipStat", configuration);
 
 			configuration.TryGetFloat("LayoutSpacing", out float spacing, 4f);
 			LayoutSpacing = spacing;

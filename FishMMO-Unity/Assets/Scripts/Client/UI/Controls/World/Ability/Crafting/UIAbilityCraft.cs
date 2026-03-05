@@ -167,7 +167,7 @@ namespace FishMMO.Client
 					{
 						templates.RemoveAll(t => t is AbilityTypeOverrideEventType);
 					}
-					templates.Remove(button.Tooltip);
+					templates.Remove(button.Tooltip as ICachedObject);
 				}
 
 				uiSelector.Open(templates, (i) =>
@@ -244,9 +244,9 @@ namespace FishMMO.Client
 						price += abilityEvent.Price;
 					}
 				}
-				if (MainEntry.Tooltip is AbilityTemplate abilityTemplate)
+				if (MainEntry.Tooltip is AbilityTemplate mainAbilityTemplate)
 				{
-					AbilityDescription.text = abilityTemplate.TooltipWithEvents(tooltips);
+					AbilityDescription.text = mainAbilityTemplate.TooltipWithEvents(tooltips);
 				}
 				else
 				{

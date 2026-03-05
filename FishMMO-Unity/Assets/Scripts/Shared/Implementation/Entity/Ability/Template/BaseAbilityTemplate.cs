@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	/// Ability requirements (resources, faction, archetype, attributes) are defined as ECA conditions
 	/// on the <see cref="ActivationConditions"/> list rather than as hardcoded fields.
 	/// </summary>
-	public abstract class BaseAbilityTemplate : CachedScriptableObject<BaseAbilityTemplate>, ITooltip
+	public abstract class BaseAbilityTemplate : CachedScriptableObject<BaseAbilityTemplate>, ICachedObject, ITooltip
 	{
 		/// <summary>
 		/// The icon representing the ability.

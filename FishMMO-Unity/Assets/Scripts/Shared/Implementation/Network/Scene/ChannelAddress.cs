@@ -3,17 +3,21 @@ using System;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Serializable struct representing a network channel address, including IP, port, and scene handle.
-	/// Used for network communication and scene management.
+	/// Serializable struct representing a scene channel, including server connection info, scene identity, and population.
+	/// Used for channel selection and network communication.
 	/// </summary>
 	[Serializable]
 	public struct ChannelAddress
 	{
-		/// <summary>IP address or hostname of the channel.</summary>
+		/// <summary>IP address or hostname of the scene server hosting this channel.</summary>
 		public string Address;
-		/// <summary>Port number for the channel.</summary>
+		/// <summary>Port number for the scene server hosting this channel.</summary>
 		public ushort Port;
-		/// <summary>Handle or identifier for the associated scene.</summary>
+		/// <summary>Handle identifying the specific scene instance for this channel.</summary>
 		public int SceneHandle;
+		/// <summary>Name of the scene this channel belongs to.</summary>
+		public string SceneName;
+		/// <summary>Current number of characters in this channel.</summary>
+		public int CharacterCount;
 	}
 }

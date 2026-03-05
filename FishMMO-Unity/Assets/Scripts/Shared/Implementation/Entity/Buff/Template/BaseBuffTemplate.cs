@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Abstract base class for all buff templates, defining shared properties, tooltip logic, and effect hooks.
 	/// </summary>
-	public abstract class BaseBuffTemplate : CachedScriptableObject<BaseBuffTemplate>, ITooltip
+	public abstract class BaseBuffTemplate : CachedScriptableObject<BaseBuffTemplate>, ICachedObject, ITooltip
 	{
 		/// <summary>
 		/// The visual effect prefab to instantiate when the buff is applied.

@@ -90,6 +90,14 @@ namespace FishMMO.Client
 #endif
 			}
 			theme = new UITheme(configuration);
+
+			// Sync tooltip rich text colors from theme so all tooltips reflect the configuration.
+			TooltipColors.Initialize(
+				"#" + TinyColor.FromUnityColor(theme.TooltipTitle).ToHex(),
+				"#" + TinyColor.FromUnityColor(theme.TooltipLabel).ToHex(),
+				"#" + TinyColor.FromUnityColor(theme.TooltipValue).ToHex(),
+				"#" + TinyColor.FromUnityColor(theme.TooltipStat).ToHex()
+			);
 		}
 
 		/// <summary>
@@ -152,6 +160,12 @@ namespace FishMMO.Client
 			SetColorConfig(config, "Mana", 87, 119, 222, 255);
 			SetColorConfig(config, "Stamina", 83, 176, 59, 255);
 			SetColorConfig(config, "Crosshair", 255, 255, 255, 255);
+
+			// Tooltip colors
+			SetColorConfig(config, "TooltipTitle", 245, 173, 110, 255);   // #f5ad6eFF
+			SetColorConfig(config, "TooltipLabel", 166, 110, 245, 255);   // #a66ef5FF
+			SetColorConfig(config, "TooltipValue", 50, 168, 121, 255);    // #32a879FF
+			SetColorConfig(config, "TooltipStat", 255, 255, 255, 255);    // #FFFFFFFF
 
 			config.Set("LayoutSpacing", "4");
 			config.Set("PaddingLeft", "4");

@@ -24,10 +24,15 @@ namespace FishMMO.Shared
 		{
 			if (value == 0.0f) return "";
 
-			using (var sb = ZString.CreateStringBuilder())
+			var sb = ZString.CreateStringBuilder();
+			try
 			{
 				AppendTo(ref sb, valueName, value, appendLine, hexColor, appendPrefix, appendSuffix, size);
 				return sb.ToString();
+			}
+			finally
+			{
+				sb.Dispose();
 			}
 		}
 
@@ -44,10 +49,15 @@ namespace FishMMO.Shared
 		{
 			if (string.IsNullOrWhiteSpace(value)) return "";
 
-			using (var sb = ZString.CreateStringBuilder())
+			var sb = ZString.CreateStringBuilder();
+			try
 			{
 				AppendTo(ref sb, value, appendLine, hexColor, size);
 				return sb.ToString();
+			}
+			finally
+			{
+				sb.Dispose();
 			}
 		}
 

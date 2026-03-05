@@ -16,6 +16,11 @@ These trackers are transport-agnostic and can be used from both Core and Impleme
   - For caches where entries expire by inactivity (`last-seen`).
   - Supports `TryGetAndTouch(...)`, `Upsert(...)`, and bounded `SweepExpired(...)`.
 
+- `TimedCache<TKey, TValue>`
+  - Write-through TTL cache where entries expire after a fixed duration from storage.
+  - Reads do NOT extend the lifetime (unlike `LastSeenCacheTracker`).
+  - Supports `TryGet(...)`, `Set(...)`, `Invalidate(...)`, and bounded `SweepExpired(...)`.
+
 - `ArrivalOrderTracker<TKey>`
   - For oldest-first stale-entry processing with O(1) `TrackIfMissing(...)` / `Remove(...)`.
   - Useful when first-seen ordering drives TTL purge semantics.
@@ -28,6 +33,12 @@ These trackers are transport-agnostic and can be used from both Core and Impleme
 
 - `WorldSceneSystem`
   - `ExpiringKeyTracker<string>` for instance-lookup debounce.
+  - `TimedCache<string, List<SceneData>>` for available-scene-instance result cache.
+  - `TimedCache<long, (string, ushort)>` for scene-server address cache.
+
+- `SceneChannelSystem`
+  - `TimedCache<string, List<SceneData>>` for available-scene-instance result cache.
+  - `TimedCache<long, (string, ushort)>` for scene-server address cache.
 
 - `AccountManager`
   - `ArrivalOrderTracker<NetworkConnection>` for unauthenticated SRP/encryption stale-state sweeps.

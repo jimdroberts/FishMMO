@@ -81,4 +81,12 @@ namespace FishMMO.Shared
 		/// <summary>Selected channel address for the scene.</summary>
 		public ChannelAddress Channel;
 	}
+
+	/// <summary>
+	/// Broadcast requesting the list of available scene channels from the server.
+	/// Sent by the client to request an updated channel list for the current scene.
+	/// </summary>
+	public struct RequestSceneChannelListBroadcast : IBroadcast
+	{
+	}
 }

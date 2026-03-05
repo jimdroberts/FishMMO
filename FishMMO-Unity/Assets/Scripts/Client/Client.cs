@@ -1066,52 +1066,11 @@ namespace FishMMO.Client
 
 			displayPos.y += colliderHeight;
 
-			// Display damage label above the character.
-			Cached3DLabel label = LabelMaker.Display3D(amount.ToString(), displayPos, damageAttribute.DisplayColor, 2.0f, 1.0f, false);
-
-			// Start the move coroutine if provided
-			if (label != null)
-			{
-				label.StartCoroutine(MoveLabelUpwardAndRandomly(label, 1.0f));
-			}
-		}
-
-		/// <summary>
-		/// Coroutine to move a damage label upward and randomly for a short duration, simulating a floating effect.
-		/// </summary>
-		/// <param name="label">The label to move.</param>
-		/// <param name="duration">How long the label should move.</param>
-		/// <param name="gravity">Gravity applied to the label's movement (default -4.0f).</param>
-		/// <returns>Coroutine enumerator.</returns>
-		public static IEnumerator MoveLabelUpwardAndRandomly(Cached3DLabel label, float duration, float gravity = -4.0f)
-		{
-			Vector3 initialPosition = label.transform.position;
-			// Pick a random direction for the label to float, always moving up initially.
-			Vector3 randomDirection = new Vector3(
-				UnityEngine.Random.Range(-1f, 1f),  // Random X direction
-				1f,                                 // Always moving up initially
-				UnityEngine.Random.Range(-1f, 1f)   // Random Z direction
-			).normalized;
-
-			Vector3 velocity = randomDirection * 2f; // Initial velocity in the random direction
-			float elapsedTime = 0f;
-
-			while (elapsedTime < duration)
-			{
-				float t = elapsedTime / duration;
-
-				// Apply gravity (simulating gravity by modifying the Y component of the velocity)
-				velocity.y += gravity * Time.deltaTime;
-
-				// Update position based on the velocity
-				label.transform.position += velocity * Time.deltaTime;
-
-				elapsedTime += Time.deltaTime;
-				yield return null;
-			}
-
-			// Ensure it reaches the final position, just in case the gravity had too much effect
-			label.transform.position = initialPosition + randomDirection * 2f;
+			// Display damage label above the character with float-random and fade-out effects.
+			int damageEffects = 0;
+			damageEffects.EnableBit(LabelEffect.FloatRandom);
+			damageEffects.EnableBit(LabelEffect.FadeOut);
+			LabelMaker.Display3D(amount.ToString(), displayPos, damageAttribute.DisplayColor, 2.0f, 1.0f, false, damageEffects);
 		}
 
 		/// <summary>
@@ -1137,7 +1096,10 @@ namespace FishMMO.Client
 			{
 				displayPos.y += playerCharacter.CharacterController.FullCapsuleHeight;
 			}
-			LabelMaker.Display3D(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false);
+			int healEffects = 0;
+			healEffects.EnableBit(LabelEffect.FloatUp);
+			healEffects.EnableBit(LabelEffect.FadeOut);
+			LabelMaker.Display3D(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false, healEffects);
 		}
 
 		/// <summary>
@@ -1164,7 +1126,11 @@ namespace FishMMO.Client
 			{
 				displayPos.y += playerCharacter.CharacterController.FullCapsuleHeight;
 			}
-			LabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, displayPos, Color.yellow, 2.0f, 4.0f, false);
+			int achieveEffects = 0;
+			achieveEffects.EnableBit(LabelEffect.FadeIn);
+			achieveEffects.EnableBit(LabelEffect.FadeOut);
+			achieveEffects.EnableBit(LabelEffect.Bounce);
+			LabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, displayPos, Color.yellow, 2.0f, 4.0f, false, achieveEffects);
 		}
 		#endregion
 

@@ -201,5 +201,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			string sceneName,
 			int maxClients,
 			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Updates the character count for multiple scenes in a single batched operation.
+		/// </summary>
+		/// <param name="pulses">List of (sceneHandle, characterCount) pairs to update.</param>
+		/// <param name="maxBatchSize">Maximum number of scenes per database round-trip (500–2500).</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The total number of rows affected across all batches.</returns>
+		Task<DatabaseResult<int>> PulseBatchAsync(List<(int sceneHandle, int characterCount)> pulses, int maxBatchSize = 1000, CancellationToken cancellationToken = default);
 	}
 }
