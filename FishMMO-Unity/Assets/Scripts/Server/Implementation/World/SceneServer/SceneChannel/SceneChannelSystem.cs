@@ -697,6 +697,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				bool targetValid = false;
 				foreach (SceneData sd in availableScenes)
 				{
+					if (sd.CharacterCount >= maxClients)
+					{
+						continue;
+					}
 					if (sd.SceneHandle == targetHandle && (SceneType)sd.SceneType == SceneType.OpenWorld)
 					{
 						targetValid = true;
