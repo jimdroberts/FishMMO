@@ -801,3 +801,300 @@ Sweeps occur on a timer (`EnemySweepRate`, default 1.5s) and are skipped when al
 | **Target System**     | `ITargetController.UpdateTarget()` provides aim info for NPC ability spawning     |
 | **Pet System**        | `PetIdleState` uses `Pet.PetOwner` for follow behavior                            |
 | **Buff System**       | NPCs receive buffs that modify attributes, affecting combat                       |
+| **NPCGroup**          | Group coordinator provides shared target, role assignments, combat status          |
+| **BossScript**        | Phased encounter logic with timed mechanics, spawned adds, and overrides          |
+| **AI LOD**            | `AILodSettings` throttles update frequency by distance from nearest player        |
+| **Behavior Tree**     | `AIBehaviorTree` provides high-level decision layer above the state machine       |
+
+---
+
+## Behavior Tree System
+
+The behavior tree provides a high-level decision-making layer that sits **above** the state machine. While the state machine handles execution (how to move, how to attack), the behavior tree decides **what to do** — selecting states, evaluating world conditions, and coordinating complex behaviors that span multiple states.
+
+### AIBehaviorTree
+
+**Menu:** *FishMMO > Character > NPC > AI > Behavior Tree*
+
+| Field      | Type             | Default | Description                                    |
+|------------|------------------|---------|------------------------------------------------|
+| `Root`     | `AIBehaviorNode` | —       | Root node of the tree (typically a Selector)   |
+| `TickRate` | `float`          | `0.5`   | Seconds between tree evaluations               |
+
+The tree is a **shared ScriptableObject** — all NPCs referencing the same asset share the instance. No mutable state is stored on the tree or its nodes; all per-NPC state lives on `AIController`.
+
+### Node Types
+
+#### Composite Nodes
+
+| Node          | Behavior                                                                      |
+|---------------|-------------------------------------------------------------------------------|
+| `AISelector`  | OR logic — evaluates children left-to-right, returns first `Success`. If all fail, returns `Failure`. |
+| `AISequence`  | AND logic — evaluates children in order. Returns `Failure` on first failure. Returns `Success` only if all succeed. |
+
+#### Decorator Nodes
+
+| Node          | Behavior                                                                      |
+|---------------|-------------------------------------------------------------------------------|
+| `AIInverter`  | Inverts child result: `Success` ↔ `Failure`. `Running` passes through.       |
+| `AIRepeater`  | Repeats child `RepeatCount` times. `RepeatCount = 0` means infinite (always returns `Running`). |
+
+#### Leaf Nodes
+
+| Node                      | Behavior                                                               |
+|---------------------------|------------------------------------------------------------------------|
+| `AIConditionNode`         | Evaluates an `AIAbilityCondition` asset. Reuses the same conditions as the ability rotation system. |
+| `AIStateTransitionNode`   | Calls `controller.ChangeState(TargetState)`. Returns `Success`.        |
+| `AIHasTargetNode`         | Returns `Success` if `controller.Target != null`.                      |
+| `AIIsDeadNode`            | Returns `Success` if the NPC is dead (`ICharacterDamageController.IsAlive == false`). |
+| `AIGroupInCombatNode`     | Returns `Success` if `controller.Group != null && Group.IsInCombat`.   |
+| `AIAdoptGroupTargetNode`  | Copies `Group.GroupTarget` to `controller.Target`. Returns `Success` if target adopted. |
+
+### AINodeResult
+
+| Value     | Meaning                                                        |
+|-----------|----------------------------------------------------------------|
+| `Success` | Node completed successfully                                    |
+| `Failure` | Node failed its condition or action                            |
+| `Running` | Node is still in progress (e.g., repeater mid-iteration)       |
+
+### Integration with State Machine
+
+When `AIController` has a `BehaviorTree` assigned:
+
+1. The tree is evaluated on its own `TickRate` timer (separate from state update timers).
+2. If `Root.Evaluate()` returns `Success`, the tree produced a meaningful decision (e.g., a state transition). The state machine's `UpdateCurrentState()` is **skipped** for that tick.
+3. If the tree returns `Failure` or `Running`, the state machine runs normally.
+
+This means the behavior tree acts as an **override layer** — it can choose to intervene or defer to the existing state logic.
+
+### Setup Example
+
+A basic combat behavior tree for a melee NPC:
+
+```
+Selector (root)
+├── Sequence: "Dead Check"
+│   ├── AIIsDeadNode
+│   └── AIStateTransitionNode → IdleState
+├── Sequence: "Combat"
+│   ├── AIHasTargetNode
+│   └── AIStateTransitionNode → MeleeAttackingState
+└── Sequence: "Idle"
+    └── AIStateTransitionNode → WanderState
+```
+
+1. Create node assets via their respective Create Asset menus.
+2. Wire children into composite nodes via the Inspector.
+3. Create an `AIBehaviorTree` asset and assign the root `Selector`.
+4. Assign the tree to `AIController.BehaviorTree`.
+
+---
+
+## AI LOD System
+
+AI LOD (Level of Detail) throttles NPC update frequency based on distance from the nearest player. This enables servers to support **5,000+ NPCs** by reducing work on distant NPCs that no player can meaningfully observe.
+
+### AILodSettings
+
+**Menu:** *FishMMO > Character > NPC > AI > LOD Settings*
+
+| Field               | Type    | Default  | Description                                        |
+|---------------------|---------|----------|----------------------------------------------------|
+| `ActiveDistanceSqr` | `float` | `1600`   | ≤ 40m — full update rate                           |
+| `NearbyDistanceSqr` | `float` | `10000`  | ≤ 100m — moderate throttle                         |
+| `FarDistanceSqr`    | `float` | `90000`  | ≤ 300m — heavy throttle                            |
+| `ActiveStagger`     | `int`   | `3`      | Frame modulus for Active tier                      |
+| `NearbyStagger`     | `int`   | `6`      | Frame modulus for Nearby tier                      |
+| `FarStagger`        | `int`   | `15`     | Frame modulus for Far tier                         |
+| `ReevaluateInterval`| `float` | `2.0`    | Seconds between LOD tier re-evaluation             |
+
+### AILodTier
+
+| Tier       | Distance        | Stagger (default) | Behavior                              |
+|------------|-----------------|-------------------|---------------------------------------|
+| `Active`   | ≤ 40m           | Every 3rd frame   | Full AI: BT, state machine, abilities |
+| `Nearby`   | ≤ 100m          | Every 6th frame   | Reduced AI updates                    |
+| `Far`      | ≤ 300m          | Every 15th frame  | Minimal AI updates                    |
+| `Dormant`  | > 300m (or no observers) | **Skip entirely** | No AI updates at all        |
+
+### Distance Calculation
+
+LOD distance is calculated using **FishNet `NetworkObject.Observers`**:
+
+1. Every `ReevaluateInterval` seconds, `AIController.EvaluateLodTier()` iterates all current observers (connected clients who can see this NPC).
+2. For each observer, it finds their first owned object (typically their player character) and calculates the squared distance.
+3. The **nearest** observer's distance determines the LOD tier.
+4. If there are **no observers**, the NPC is immediately `Dormant`.
+
+This approach avoids expensive spatial queries — FishNet already tracks which clients observe which objects.
+
+### Setup
+
+1. Create an `AILodSettings` asset.
+2. Assign it to `AIController.LodSettings`.
+3. Tune distance thresholds based on your game's world scale.
+
+Without `LodSettings`, a simple 1-in-3 frame stagger is applied as a default fallback.
+
+---
+
+## Group AI System
+
+The Group AI system enables **pack behavior** — groups of NPCs that coordinate their actions, share targets, and fill tactical roles (tank, healer, DPS, support).
+
+### NPCGroupRole
+
+| Role      | Typical Behavior                                               |
+|-----------|----------------------------------------------------------------|
+| `None`    | Default, no special role behavior                              |
+| `Tank`    | Engages enemies first, holds aggro                             |
+| `Healer`  | Prioritizes healing group members                              |
+| `DPS`     | Focuses damage on the group's shared target                    |
+| `Support` | Applies buffs, crowd control, utility                          |
+
+### NPCGroup
+
+A `MonoBehaviour` placed on an empty GameObject near the NPC spawn area. It acts as a **coordinator** for a group of NPCs.
+
+| Field            | Type                    | Default | Description                                  |
+|------------------|-------------------------|---------|----------------------------------------------|
+| `Members`        | `List<NPCGroupMember>`  | —       | NPCs and their roles                         |
+| `FocusTargeting` | `bool`                  | `true`  | DPS share the tank's target                  |
+
+#### Runtime Properties
+
+| Property              | Type              | Description                                         |
+|-----------------------|-------------------|-----------------------------------------------------|
+| `GroupTarget`         | `Transform`       | Shared enemy target for the whole group              |
+| `IsInCombat`          | `bool`            | True if any member is alive with a target            |
+| `AliveMemberCount`    | `int`             | Number of alive group members                        |
+| `LowestHealthMember`  | `AIController`    | Group member with the lowest HP%                     |
+| `LowestHealthPercent` | `float`           | HP% of the lowest-health member                      |
+
+#### Key Methods
+
+| Method                    | Description                                                        |
+|---------------------------|--------------------------------------------------------------------|
+| `AlertGroup(enemy)`       | Called when any member detects an enemy. Sets group target and alerts all members. Tank acquires the target; DPS adopt it if `FocusTargeting` is on. |
+| `GetMemberByRole(role)`   | Returns the first alive member with the given role.                |
+| `EvaluateGroupState()`    | Runs every 0.5s. Updates `IsInCombat`, `LowestHealthMember`, `AliveMemberCount`. |
+
+### NPCGroupMember
+
+A `[Serializable]` class pairing an `AIController` reference with an `NPCGroupRole`.
+
+### Behavior Tree Integration
+
+Two BT leaf nodes enable group-aware decisions:
+
+- **`AIGroupInCombatNode`** — Returns `Success` if `controller.Group.IsInCombat`. Use this in a behavior tree to trigger combat states when any group member is fighting.
+- **`AIAdoptGroupTargetNode`** — Sets `controller.Target` and `controller.LookTarget` to the group's shared target. Use this so DPS/healers automatically engage the same enemy.
+
+### Setup Example
+
+1. Create an empty GameObject in the scene where the NPC pack spawns.
+2. Add an `NPCGroup` component.
+3. Drag each NPC's `AIController` into the `Members` list and assign roles.
+4. The group auto-registers members on `Start()` and sets their `Group`/`GroupRole`.
+5. When any member detects an enemy, `AlertGroup()` notifies the entire pack.
+
+---
+
+## Boss Script System
+
+The Boss Script system enables **phased boss encounters** with timed mechanics, add spawning, ability/rotation/BT overrides per phase, and automatic reset on leash.
+
+### BossScript
+
+**Menu:** *FishMMO > Character > NPC > AI > Boss Script*
+
+A ScriptableObject defining the entire boss encounter.
+
+| Field            | Type                       | Default | Description                            |
+|------------------|----------------------------|---------|----------------------------------------|
+| `Phases`         | `List<BossPhase>`          | —       | Ordered phases (highest HP threshold first) |
+| `TimedMechanics` | `List<BossTimedMechanic>`  | —       | Interval-based mechanics active across phases |
+| `ResetOnLeash`   | `bool`                     | `true`  | Reset to phase 0 when NPC leashes home |
+
+### BossPhase
+
+A `[Serializable]` class defining a single phase of the encounter.
+
+| Field                  | Type                | Default | Description                                          |
+|------------------------|---------------------|---------|------------------------------------------------------|
+| `HealthThreshold`      | `float` (0-1)       | —       | Phase activates when HP ≤ this threshold             |
+| `OverrideBehaviorTree` | `AIBehaviorTree`    | —       | Optional BT override for this phase                  |
+| `OverrideState`        | `BaseAIState`       | —       | Optional state to force-transition to on phase entry |
+| `OverrideRotation`     | `AIAbilityRotation` | —       | Optional ability rotation override for this phase    |
+| `SpawnOnEnter`         | `GameObject[]`      | —       | Prefabs to spawn (adds) when entering this phase     |
+| `SpawnOffsets`         | `Vector3[]`         | —       | World-space offsets for spawned adds                  |
+| `PhaseAnnouncement`    | `string`            | —       | Chat message broadcast on phase transition           |
+
+### BossTimedMechanic
+
+A `[Serializable]` class defining an interval-based mechanic.
+
+| Field              | Type           | Default | Description                                             |
+|--------------------|----------------|---------|---------------------------------------------------------|
+| `Interval`         | `float`        | —       | Seconds between activations                             |
+| `AbilityTemplateID`| `int`          | `-1`    | Ability to force-activate (if ≥ 0)                      |
+| `SpawnPrefabs`     | `GameObject[]` | —       | Prefabs to spawn each interval                          |
+| `SpawnOffsets`     | `Vector3[]`    | —       | World-space offsets for spawned prefabs                  |
+| `ActivePhases`     | `int[]`        | —       | Phase indices where this mechanic is active (empty = all)|
+
+### BossScriptState
+
+A **plain C# class** (not a ScriptableObject) that holds per-NPC mutable runtime state for boss encounters. Created by `AIController.InitializeOnce()` when a `BossScript` is assigned.
+
+| Property            | Type      | Description                                        |
+|---------------------|-----------|----------------------------------------------------|
+| `CurrentPhaseIndex` | `int`     | Index into `BossScript.Phases`                     |
+| Mechanic timers     | `float[]` | Countdown timers for each `BossTimedMechanic`      |
+
+#### Key Methods
+
+| Method                        | Description                                                              |
+|-------------------------------|--------------------------------------------------------------------------|
+| `EvaluatePhases(controller)`  | Checks NPC HP% against phase thresholds. Triggers `TransitionToPhase()` on change. |
+| `TickMechanics(controller, dt)`| Decrements mechanic timers. Fires `ExecuteMechanic()` when timer ≤ 0.   |
+| `Reset()`                     | Resets to phase 0 and reinitializes all mechanic timers.                 |
+
+#### Phase Transition
+
+When a phase changes (`TransitionToPhase()`):
+
+1. Overrides `controller.BehaviorTree` if `OverrideBehaviorTree` is set.
+2. Overrides `controller.AbilityRotation` if `OverrideRotation` is set.
+3. Calls `controller.ChangeState(OverrideState)` if `OverrideState` is set.
+4. Spawns all `SpawnOnEnter` prefabs at the NPC's position + offsets using `NetworkManager.ServerManager.Spawn()`.
+5. Broadcasts `PhaseAnnouncement` to all observers (TODO: integrate with chat system).
+
+#### Timed Mechanic Execution
+
+When a mechanic timer fires (`ExecuteMechanic()`):
+
+1. Force-activates the ability with `AbilityTemplateID` via `IAbilityController.Activate()`.
+2. Spawns any `SpawnPrefabs` at the NPC's position + offsets.
+
+### Setup Example
+
+A two-phase boss with an enrage at 30% health:
+
+1. **Create BossScript:** `DragonBoss.asset`
+   - Phase 0: `HealthThreshold = 1.0` (full HP — normal phase)
+   - Phase 1: `HealthThreshold = 0.3` (30% — enrage phase)
+     - `OverrideRotation` → `EnrageRotation.asset` (faster, harder-hitting abilities)
+     - `SpawnOnEnter` → `[DragonAdd.prefab, DragonAdd.prefab]` (two adds spawn)
+     - `SpawnOffsets` → `[(-3,0,0), (3,0,0)]`
+     - `PhaseAnnouncement` → `"The Dragon roars with fury!"`
+   - Timed Mechanic: `Interval = 15`, `AbilityTemplateID = 42` (fire breath), `ActivePhases = [0, 1]`
+
+2. **Assign** `DragonBoss.asset` to `AIController.BossScript`.
+
+3. At runtime:
+   - `AIController.InitializeOnce()` creates a `BossScriptState`.
+   - Every frame, `BossScriptState.EvaluatePhases()` checks HP.
+   - When HP drops to 30%, phase transitions: rotation swaps, two adds spawn, announcement broadcasts.
+   - Every 15 seconds, the fire breath ability force-activates.
+   - If the boss leashes, `BossScriptState.Reset()` restores phase 0.
