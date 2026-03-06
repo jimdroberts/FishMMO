@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using FishNet.Component.Transforming;
 using FishNet.Observing;
 using FishNet.Connection;
@@ -44,6 +45,15 @@ namespace FishMMO.Shared
 		/// Database of attribute bonuses for this NPC.
 		/// </summary>
 		public NPCAttributeDatabase AttributeBonuses;
+
+		/// <summary>
+		/// Ability templates this NPC can use. Populated in the inspector.
+		/// Each template is learned as an <see cref="Ability"/> instance during
+		/// <see cref="OnStartServer"/>, before clients receive the spawn payload.
+		/// </summary>
+		[Header("Abilities")]
+		[Tooltip("Ability templates this NPC knows. Learned on server start.")]
+		public List<AbilityTemplate> Abilities = new List<AbilityTemplate>();
 
 		/// <summary>
 		/// Reference to the spawner that created this NPC.
@@ -98,6 +108,7 @@ namespace FishMMO.Shared
 			base.OnStartServer();
 
 			AddNPCAttributes(true);
+			LearnNPCAbilities();
 		}
 #endif
 
@@ -191,6 +202,41 @@ namespace FishMMO.Shared
 
 			ObjectSpawner?.Despawn(this);
 		}
+
+#if UNITY_SERVER
+		/// <summary>
+		/// Creates <see cref="Ability"/> instances from the inspector-configured
+		/// <see cref="Abilities"/> list and teaches them to the NPC's <see cref="AbilityController"/>.
+		/// Uses the template's <see cref="AbilityTemplate.ID"/> as the ability instance ID so that
+		/// cooldown tracking, activation, and network serialization all work correctly.
+		/// Called during <see cref="OnStartServer"/> before <c>WritePayload</c> broadcasts to clients.
+		/// </summary>
+		private void LearnNPCAbilities()
+		{
+			if (Abilities == null || Abilities.Count < 1)
+			{
+				return;
+			}
+			if (!this.TryGet(out IAbilityController abilityController))
+			{
+				return;
+			}
+
+			for (int i = 0; i < Abilities.Count; i++)
+			{
+				AbilityTemplate template = Abilities[i];
+				if (template == null)
+				{
+					continue;
+				}
+
+				// Use the template ID as the ability instance ID.
+				// NPCs don't craft abilities so there's no DB-assigned ID.
+				Ability ability = new Ability((long)template.ID, template);
+				abilityController.LearnAbility(ability);
+			}
+		}
+#endif
 
 		/// <summary>
 		/// Applies attribute bonuses to this NPC using the attribute database and random generator.
