@@ -267,11 +267,12 @@ namespace FishMMO.Client
 				{
 					if (MessageRateLimit > 0)
 					{
-						if (Character.NextChatMessageTime > DateTime.UtcNow)
+						long nowTicks = DateTime.UtcNow.Ticks;
+						if (Character.NextChatMessageTicks > nowTicks)
 						{
 							return;
 						}
-						Character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(MessageRateLimit);
+						Character.NextChatMessageTicks = nowTicks + (long)(MessageRateLimit * TimeSpan.TicksPerMillisecond);
 					}
 					if (!AllowRepeatMessages)
 					{

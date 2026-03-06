@@ -146,9 +146,22 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		string LastChatMessage { get; set; }
 		/// <summary>
-		/// The next time the character is allowed to send a chat message.
+		/// The next time the character is allowed to send a chat message, stored as UTC ticks.
+		/// Avoids DateTime allocation on every message comparison.
 		/// </summary>
-		DateTime NextChatMessageTime { get; set; }
+		long NextChatMessageTicks { get; set; }
+		/// <summary>
+		/// Current number of chat tokens available in the token bucket (double for precision on long-uptime servers).
+		/// Consumed on each sent message; refilled at a configurable rate.
+		/// Server-side anti-spam: when below 1.0 the message is silently dropped.
+		/// </summary>
+		double ChatTokens { get; set; }
+		/// <summary>
+		/// UTC ticks of the last token bucket refill.
+		/// Used to calculate how many tokens to add based on elapsed time.
+		/// Stored as ticks to avoid per-message DateTime allocation.
+		/// </summary>
+		long ChatTokenLastRefillTicks { get; set; }
 		/// <summary>
 		/// The next time the character is allowed to interact with objects.
 		/// </summary>

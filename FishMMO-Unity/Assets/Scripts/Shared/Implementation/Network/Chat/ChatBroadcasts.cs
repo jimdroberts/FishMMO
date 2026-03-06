@@ -14,5 +14,10 @@ namespace FishMMO.Shared
 		public long SenderID;
 		/// <summary>Text content of the chat message.</summary>
 		public string Text;
+		/// <summary>
+		/// Server-side UTC receive timestamp as ticks. Stamped at the network boundary
+		/// for legal audit persistence. Not set by clients; ignored on the wire inbound.
+		/// </summary>
+		public long ReceivedUtcTicks;
 	}
 }

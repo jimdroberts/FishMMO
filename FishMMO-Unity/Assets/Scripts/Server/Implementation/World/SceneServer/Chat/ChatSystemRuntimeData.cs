@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using FishNet.Connection;
+using FishMMO.Database.Data.Enums;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
@@ -32,7 +34,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public List<NetworkConnection> ConnectionBroadcastBuffer { get; private set; }
 
 		/// <inheritdoc/>
-		public Dictionary<ChatChannel, ChatCommand> ChannelCommandMap { get; set; }
+		public Dictionary<Shared.ChatChannel, ChatCommand> ChannelCommandMap { get; set; }
+
+		/// <inheritdoc/>
+		public ConcurrentQueue<(NetworkConnection Connection, ChatBroadcast Message)> IncomingChatQueue { get; private set; }
+
+		private int incomingQueueSize;
+
+		/// <inheritdoc/>
+		public int IncomingQueueSize => Volatile.Read(ref incomingQueueSize);
+
+		/// <inheritdoc/>
+		public int IncrementIncomingQueueSize() => Interlocked.Increment(ref incomingQueueSize);
+
+		/// <inheritdoc/>
+		public int DecrementIncomingQueueSize() => Interlocked.Decrement(ref incomingQueueSize);
+
+		/// <inheritdoc/>
+		public ConcurrentQueue<PendingChatPersist> PendingPersistQueue { get; private set; }
+
+		/// <inheritdoc/>
+		public List<(long characterId, string characterName, string accountName, long worldServerId, long sceneServerId, FishMMO.Database.Data.Enums.ChatChannel channel, string message, DateTime serverReceivedTime)> PersistBatchBuffer { get; private set; }
+
+		/// <inheritdoc/>
+		public bool IsShuttingDown { get; set; }
+
+		/// <inheritdoc/>
+		public Dictionary<long, List<ChatBroadcast>> OutboundWorldBroadcastBuffer { get; private set; }
+
+		/// <inheritdoc/>
+		public List<long> OutboundWorldFlushKeyBuffer { get; private set; }
 
 		private int messagePumpInFlight;
 
@@ -57,7 +88,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			LastFetchPosition = 0;
 			CharacterBroadcastBuffer = new List<IPlayerCharacter>();
 			ConnectionBroadcastBuffer = new List<NetworkConnection>();
-			ChannelCommandMap = new Dictionary<ChatChannel, ChatCommand>();
+			ChannelCommandMap = new Dictionary<Shared.ChatChannel, ChatCommand>();
+			IncomingChatQueue = new ConcurrentQueue<(NetworkConnection, ChatBroadcast)>();
+			Interlocked.Exchange(ref incomingQueueSize, 0);
+			PendingPersistQueue = new ConcurrentQueue<PendingChatPersist>();
+			PersistBatchBuffer = new List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)>();
+			IsShuttingDown = false;
+			OutboundWorldBroadcastBuffer = new Dictionary<long, List<ChatBroadcast>>();
+			OutboundWorldFlushKeyBuffer = new List<long>();
 			Interlocked.Exchange(ref messagePumpInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -72,6 +110,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterBroadcastBuffer?.Clear();
 			ConnectionBroadcastBuffer?.Clear();
 			ChannelCommandMap?.Clear();
+			// ConcurrentQueues: drain instead of nulling — they may be in use from another thread.
+			if (IncomingChatQueue != null)
+			{
+				while (IncomingChatQueue.TryDequeue(out _)) { }
+			}
+			Interlocked.Exchange(ref incomingQueueSize, 0);
+			if (PendingPersistQueue != null)
+			{
+				while (PendingPersistQueue.TryDequeue(out _)) { }
+			}
+			PersistBatchBuffer?.Clear();
+			IsShuttingDown = false;
+			OutboundWorldBroadcastBuffer?.Clear();
+			OutboundWorldFlushKeyBuffer?.Clear();
 			Interlocked.Exchange(ref messagePumpInFlight, 0);
 		}
 
@@ -84,6 +136,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterBroadcastBuffer = null;
 			ConnectionBroadcastBuffer = null;
 			ChannelCommandMap = null;
+			IncomingChatQueue = null;
+			PendingPersistQueue = null;
+			PersistBatchBuffer = null;
+			OutboundWorldBroadcastBuffer = null;
+			OutboundWorldFlushKeyBuffer = null;
 		}
 	}
 }

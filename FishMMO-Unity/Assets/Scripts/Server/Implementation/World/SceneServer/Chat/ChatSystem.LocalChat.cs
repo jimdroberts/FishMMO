@@ -32,9 +32,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
 				{
 					// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the set.
+					// Manual loop avoids boxing the HashSet struct enumerator.
 					var buffer = chatData.ConnectionBroadcastBuffer;
 					buffer.Clear();
-					buffer.AddRange(connections);
+					foreach (var conn in connections)
+					{
+						buffer.Add(conn);
+					}
 					for (int i = 0; i < buffer.Count; i++)
 					{
 						Server.NetworkWrapper.Broadcast(buffer[i], msg, true, Channel.Reliable);
@@ -56,9 +60,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
 			{
 				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the set.
+				// Manual loop avoids boxing the HashSet struct enumerator.
 				var buffer = chatData.ConnectionBroadcastBuffer;
 				buffer.Clear();
-				buffer.AddRange(sender.Observers);
+				foreach (var conn in sender.Observers)
+				{
+					buffer.Add(conn);
+				}
 				for (int i = 0; i < buffer.Count; i++)
 				{
 					Server.NetworkWrapper.Broadcast(buffer[i], msg, true, Channel.Reliable);

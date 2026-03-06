@@ -41,11 +41,83 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
 
 		/// <summary>
+		/// Maximum number of inbound chat messages dequeued from the lock-free
+		/// incoming queue and processed per frame. Prevents network spikes
+		/// from monopolising the main thread.
+		/// </summary>
+		[Tooltip("Max incoming chat messages processed from the lock-free queue per frame")]
+		[SerializeField] private int maxIncomingChatsPerFrame = 500;
+
+		/// <summary>
+		/// Hard cap on the incoming chat queue size. If a client enqueues a message
+		/// while the queue already has this many entries, the connection is kicked
+		/// to prevent memory exhaustion from a flood attack.
+		/// </summary>
+		[Tooltip("Maximum pending incoming chat messages before the sender is kicked (DoS protection)")]
+		[SerializeField] private int maxIncomingQueueSize = 10000;
+
+		/// <summary>
 		/// Internal message rate limit tracker.
 		/// </summary>
 		[SerializeField]
 		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
 		private float messageRateLimit = 500.0f;
+
+		/// <summary>
+		/// Token bucket capacity — maximum burst of messages a player can send before throttling.
+		/// </summary>
+		[Header("Token Bucket Anti-Spam")]
+		[Tooltip("Maximum number of chat tokens a player can accumulate (burst capacity)")]
+		[SerializeField] private int chatTokenBucketCapacity = 5;
+
+		/// <summary>
+		/// Tokens refilled per second. At the default 1.0, a player regains one message
+		/// permit per second after exhausting the burst capacity.
+		/// </summary>
+		[Tooltip("Tokens refilled per second (1.0 = one message permit per second)")]
+		[SerializeField] private float chatTokenRefillRate = 1.0f;
+
+		/// <summary>
+		/// Interval in seconds between batch DB persistence flushes.
+		/// Messages are queued in a lock-free queue and flushed periodically
+		/// to reduce per-message DB round-trips.
+		/// </summary>
+		[Header("Batch DB Persistence")]
+		[Tooltip("Seconds between batch DB persistence flushes")]
+		[SerializeField] private float persistFlushIntervalSeconds = 0.1f;
+
+		/// <summary>
+		/// Maximum number of messages drained from the persist queue per flush.
+		/// Caps the DB batch size to prevent a single flush from spiking the database
+		/// when tens of thousands of messages have accumulated (e.g., after a stall).
+		/// Overflow stays in the queue for the next flush cycle.
+		/// </summary>
+		[Tooltip("Maximum messages written to the database per flush (overflow carries to next flush)")]
+		[SerializeField] private int maxPersistBatchSize = 2000;
+
+		/// <summary>
+		/// Interval in seconds between outbound World/Trade broadcast flushes.
+		/// Buffered messages are batched per-world and sent in a single burst,
+		/// reducing per-message network overhead for large channels.
+		/// </summary>
+		[Header("Outbound Broadcast Batching")]
+		[Tooltip("Seconds between outbound World/Trade broadcast flushes (0.05 = 50ms)")]
+		[SerializeField] private float outboundBatchIntervalSeconds = 0.05f;
+
+		/// <summary>
+		/// Maximum number of buffered World/Trade messages sent to each recipient per flush.
+		/// Prevents a single flush from generating excessive network traffic.
+		/// </summary>
+		[Tooltip("Maximum buffered World/Trade messages sent per recipient per flush")]
+		[SerializeField] private int maxOutboundBatchSize = 10;
+
+		/// <summary>
+		/// Hard cap on the total number of buffered World/Trade messages per world ID.
+		/// If a flush stalls or drains too slowly, oldest messages are dropped once this limit is hit.
+		/// Prevents unbounded memory growth in <see cref="IChatSystemRuntimeData.OutboundWorldBroadcastBuffer"/>.
+		/// </summary>
+		[Tooltip("Maximum buffered World/Trade messages per world (oldest dropped when exceeded)")]
+		[SerializeField] private int maxBufferedWorldMessages = 200;
 		/// <summary>
 		/// Maximum allowed chat message length.
 		/// </summary>
@@ -132,9 +204,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(MessagePumpRate, OnPeriodicMessagePump);
+				periodicSystem.RegisterPeriodicCallback(persistFlushIntervalSeconds, OnPeriodicPersistFlush);
+				periodicSystem.RegisterPeriodicCallback(outboundBatchIntervalSeconds, OnPeriodicOutboundFlush);
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
+			maxIncomingChatsPerFrame = Mathf.Max(1, maxIncomingChatsPerFrame);
+			maxIncomingQueueSize = Mathf.Max(100, maxIncomingQueueSize);
+			chatTokenBucketCapacity = Mathf.Max(1, chatTokenBucketCapacity);
+			chatTokenRefillRate = Mathf.Max(0.01f, chatTokenRefillRate);
+			persistFlushIntervalSeconds = Mathf.Max(0.01f, persistFlushIntervalSeconds);
+			maxPersistBatchSize = Mathf.Max(1, maxPersistBatchSize);
+			outboundBatchIntervalSeconds = Mathf.Max(0.01f, outboundBatchIntervalSeconds);
+			maxOutboundBatchSize = Mathf.Max(1, maxOutboundBatchSize);
+			maxBufferedWorldMessages = Mathf.Max(1, maxBufferedWorldMessages);
 
 			Log.Debug("ChatSystem", $"Initialized (MessagePumpRate={MessagePumpRate}s, FetchCount={MessageFetchCount})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -151,6 +234,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Flush any remaining outbound World/Trade broadcast buffers.
+			FlushOutboundBroadcastBuffers();
+
+			// Signal shutdown so async flush paths exit early and don't race with the sync flush.
+			if (Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData shutdownData))
+			{
+				shutdownData.IsShuttingDown = true;
+			}
+
+			// Flush any remaining pending persist entries before shutdown.
+			FlushPersistQueueSync();
+
+			// Drain any remaining incoming chat queue entries
+			DrainIncomingChatQueue(drainAll: true);
+
 			// Drain any remaining queued main-thread actions
 			DrainMainThreadQueue(drainAll: true);
 
@@ -161,6 +259,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicMessagePump);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPersistFlush);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutboundFlush);
 			}
 		}
 
@@ -194,11 +294,57 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Drains the main-thread queue each frame.
+		/// Each frame: drain the lock-free incoming chat queue, then the main-thread action queue.
 		/// </summary>
 		protected override void OnUpdate(float deltaTime)
 		{
+			DrainIncomingChatQueue(drainAll: false);
 			DrainMainThreadQueue(drainAll: false);
+		}
+
+		/// <summary>
+		/// Drains up to <see cref="maxIncomingChatsPerFrame"/> entries from the lock-free
+		/// <see cref="IChatSystemRuntimeData.IncomingChatQueue"/> and passes each to
+		/// <see cref="ProcessNewChatMessage"/>. When <paramref name="drainAll"/> is true
+		/// (shutdown), all remaining entries are processed.
+		/// </summary>
+		private void DrainIncomingChatQueue(bool drainAll)
+		{
+			if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData))
+			{
+				return;
+			}
+
+			var queue = runtimeData.IncomingChatQueue;
+			if (queue == null)
+			{
+				return;
+			}
+
+			int budget = drainAll ? int.MaxValue : maxIncomingChatsPerFrame;
+			int processed = 0;
+
+			while (processed < budget && queue.TryDequeue(out var entry))
+			{
+				runtimeData.DecrementIncomingQueueSize();
+				processed++;
+
+				// Connection may have disconnected between enqueue and dequeue — skip stale entries.
+				if (entry.Connection == null || !entry.Connection.IsActive)
+				{
+					continue;
+				}
+
+				if (entry.Connection.FirstObject != null)
+				{
+					IPlayerCharacter sender = entry.Connection.FirstObject.GetComponent<IPlayerCharacter>();
+					ProcessNewChatMessage(entry.Connection, sender, entry.Message);
+				}
+				else
+				{
+					entry.Connection.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+				}
+			}
 		}
 
 		/// <summary>
@@ -230,8 +376,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>Asynchronous fetch-and-process task.</returns>
 		private async Task FetchAndProcessChatMessagesAsync()
 		{
+			bool handedOffToMainThread = false;
 			try
 			{
+				// Shutdown guard: abort if server is no longer running.
+				if (Server == null || Server.ServerState != ConnectionState.Started)
+				{
+					return;
+				}
 				if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> _))
 				{
 					return;
@@ -268,7 +420,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ChatData latest = messages[messages.Count - 1];
 
 				// Marshal processing to main thread — Broadcasts must run on main thread
-				if (!TryEnqueueMainThread(() =>
+				if (TryEnqueueMainThread(() =>
 				{
 					try
 					{
@@ -283,20 +435,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					finally
 					{
-						// C2 fix: clear pump flag AFTER cursor update, preventing re-fetch of same rows.
+						// Clear pump flag AFTER cursor update, preventing re-fetch of same rows.
 						ClearMessagePumpFlag();
 					}
 				}))
 				{
-					// Enqueue failed — clear flag immediately so pump can retry next interval.
-					ClearMessagePumpFlag();
+					handedOffToMainThread = true;
 				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("ChatSystem", $"Error fetching chat messages: {ex}");
-				// C3 fix: null-conditional on Server to prevent NRE during shutdown.
-				ClearMessagePumpFlag();
+			}
+			finally
+			{
+				// Safety net: if the main-thread callback didn't take ownership of the flag,
+				// clear it here so the pump doesn't deadlock on early returns or failures.
+				if (!handedOffToMainThread)
+				{
+					ClearMessagePumpFlag();
+				}
 			}
 		}
 
@@ -320,6 +478,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				else if (ChatHelper.ChatChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
 				{
+					// sender is intentionally null for pump-sourced messages:
+					// async handlers use null to suppress persistence (already persisted)
+					// and skip sender-specific operations (connection relay, etc.).
 					sayCommand.Func?.Invoke(null, new ChatBroadcast()
 					{
 						Channel = channel,
@@ -360,14 +521,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (conn.FirstObject != null)
+			// Stamp the exact server receipt time for legal audit / subpoena compliance.
+			// Travels inside the struct so no shared mutable state between same-frame messages.
+			msg.ReceivedUtcTicks = DateTime.UtcNow.Ticks;
+
+			// Enqueue into the lock-free incoming queue for main-thread draining.
+			// This decouples the network callback from game-logic processing,
+			// preventing network spikes from freezing gameplay.
+			if (Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) &&
+				runtimeData.IncomingChatQueue != null)
 			{
-				IPlayerCharacter sender = conn.FirstObject.GetComponent<IPlayerCharacter>();
-				ProcessNewChatMessage(conn, sender, msg);
-			}
-			else
-			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+				// DoS protection: atomically increment the counter (O(1)) and check
+				// against the hard cap. If over limit, decrement back and kick.
+				// Replaces ConcurrentQueue.Count which is O(N).
+				int newSize = runtimeData.IncrementIncomingQueueSize();
+				if (newSize > maxIncomingQueueSize)
+				{
+					runtimeData.DecrementIncomingQueueSize();
+					conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
+					return;
+				}
+
+				runtimeData.IncomingChatQueue.Enqueue((conn, msg));
 			}
 		}
 
@@ -376,7 +551,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="conn">Network connection of the sender.</param>
 		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
+		/// <param name="msg">Chat broadcast message (ReceivedUtcTicks already stamped at the network boundary).</param>
 		private void ProcessNewChatMessage(NetworkConnection conn, IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// validate message length
@@ -388,14 +563,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// we rate limit client chat, the message is ignored
+			// Use ticks directly from the broadcast struct — avoids DateTime allocation per message.
+			long receivedTicks = msg.ReceivedUtcTicks;
+
+			// --- Token Bucket Anti-Spam ---
+			// Refill tokens based on elapsed time since last refill, then consume one.
+			// If the bucket is empty the message is silently dropped.
+			if (chatTokenBucketCapacity > 0 && chatTokenRefillRate > 0f)
+			{
+				double elapsedSeconds = (receivedTicks - sender.ChatTokenLastRefillTicks) / (double)TimeSpan.TicksPerSecond;
+				if (elapsedSeconds > 0)
+				{
+					sender.ChatTokens += elapsedSeconds * chatTokenRefillRate;
+					if (sender.ChatTokens > chatTokenBucketCapacity)
+					{
+						sender.ChatTokens = chatTokenBucketCapacity;
+					}
+					sender.ChatTokenLastRefillTicks = receivedTicks;
+				}
+
+				if (sender.ChatTokens < 1.0)
+				{
+					return; // throttled — bucket empty
+				}
+
+				sender.ChatTokens -= 1.0;
+			}
+
+			// Legacy per-message cooldown (kept as secondary gate alongside the token bucket).
 			if (MessageRateLimit > 0)
 			{
-				if (sender.NextChatMessageTime > DateTime.UtcNow)
+				if (sender.NextChatMessageTicks > receivedTicks)
 				{
 					return;
 				}
-				sender.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(MessageRateLimit);
+				sender.NextChatMessageTicks = receivedTicks + (long)(MessageRateLimit * TimeSpan.TicksPerMillisecond);
 			}
 			// we spam limit client chat, the message is ignored
 			if (!AllowRepeatMessages)
@@ -408,8 +610,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				sender.LastChatMessage = msg.Text;
 			}
 
-			// remove Rich Text Tags if any exist
-			msg.Text = ChatHelper.Sanitize(msg.Text);
+			// Remove Rich Text Tags only if any might exist (avoids allocation when text is clean).
+			if (msg.Text.IndexOf('<') >= 0)
+			{
+				msg.Text = ChatHelper.Sanitize(msg.Text);
+			}
 
 			string cmd = ChatHelper.GetCommandAndTrim(ref msg.Text);
 
@@ -470,49 +675,269 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (commandDetails.Func.Invoke(sender, msg))
 				{
-					// write the parsed message to the database (fire-and-forget async)
-					TryEnqueueAsyncWork(() => PersistChatMessageAsync(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, msg.Channel, msg.Text), sender.ID);
+					// Enqueue for batch DB persistence instead of per-message async write.
+					EnqueuePersist(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, msg.Channel, msg.Text, receivedTicks);
 				}
 			}
 		}
 
 		/// <summary>
-		/// Asynchronously persists a chat message to the database.
+		/// Enqueues a chat message for batch DB persistence.
+		/// Thread-safe — can be called from main thread or async paths.
 		/// </summary>
-		/// <param name="characterId">The character ID of the sender.</param>
-		/// <param name="characterName">The character name of the sender.</param>
-		/// <param name="accountName">The account name of the sender.</param>
-		/// <param name="worldServerId">The world server ID.</param>
-		/// <param name="channel">The chat channel.</param>
-		/// <param name="message">The message text.</param>
-		private async Task PersistChatMessageAsync(long characterId, string characterName, string accountName, long worldServerId, ChatChannel channel, string message)
+		private void EnqueuePersist(long characterId, string characterName, string accountName, long worldServerId, ChatChannel channel, string message, long receivedTicks)
 		{
-			try
+			if (Server?.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) == true &&
+				runtimeData.PendingPersistQueue != null)
 			{
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IChatService>(out var chatService))
-				{
-					return;
-				}
-
-				long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ? runtimeData.ID : 0;
-
-				await chatService.PersistAsync(
+				runtimeData.PendingPersistQueue.Enqueue(new PendingChatPersist(
 					characterId,
 					characterName ?? string.Empty,
 					accountName ?? string.Empty,
 					worldServerId,
-					sceneServerID,
-					(FishMMO.Database.Data.Enums.ChatChannel)(byte)channel,
+					channel,
 					message,
-					DateTime.UtcNow);
+					receivedTicks));
+			}
+		}
+
+		/// <summary>
+		/// Periodic callback that dispatches <see cref="FlushPersistQueueAsync"/> onto the async worker.
+		/// </summary>
+		private void OnPeriodicPersistFlush(float deltaTime)
+		{
+			if (!Initialized ||
+				Server == null ||
+				Server.ServerState != ConnectionState.Started)
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) ||
+				runtimeData.PendingPersistQueue == null ||
+				runtimeData.PendingPersistQueue.IsEmpty)
+			{
+				return;
+			}
+
+			TryEnqueueAsyncWork(() => FlushPersistQueueAsync());
+		}
+
+		/// <summary>
+		/// Drains the <see cref="IChatSystemRuntimeData.PendingPersistQueue"/> and writes all entries
+		/// to the database in a single batch via <c>PersistBatchAsync</c>.
+		/// Runs on a background thread via the async worker.
+		/// </summary>
+		private async Task FlushPersistQueueAsync()
+		{
+			try
+			{
+				if (Server == null || Server.ServerState != ConnectionState.Started)
+				{
+					return;
+				}
+				if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) ||
+					runtimeData.PendingPersistQueue == null)
+				{
+					return;
+				}
+
+				// Shutdown race guard: the sync flush in OnDeinitialize owns the queue now.
+				if (runtimeData.IsShuttingDown)
+				{
+					return;
+				}
+
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IChatService>(out var chatService))
+				{
+					return;
+				}
+
+				long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var sceneRuntimeData)
+					? sceneRuntimeData.ID : 0;
+
+				// Reuse the persistent batch buffer to avoid per-flush allocation.
+				var batch = runtimeData.PersistBatchBuffer;
+				batch.Clear();
+
+				while (batch.Count < maxPersistBatchSize && runtimeData.PendingPersistQueue.TryDequeue(out PendingChatPersist entry))
+				{
+					batch.Add((
+						entry.CharacterId,
+						entry.CharacterName,
+						entry.AccountName,
+						entry.WorldServerId,
+						sceneServerID,
+						(FishMMO.Database.Data.Enums.ChatChannel)(byte)entry.Channel,
+						entry.Message,
+						new DateTime(entry.ReceivedTicks, DateTimeKind.Utc)));
+				}
+
+				if (batch.Count < 1)
+				{
+					return;
+				}
+
+				await chatService.PersistBatchAsync(batch);
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("ChatSystem", $"Error persisting chat message (CharID={characterId}): {ex}");
+				await Log.Error("ChatSystem", $"Error in FlushPersistQueueAsync: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Synchronous shutdown helper: drains the persist queue into a blocking batch write.
+		/// Called from <see cref="OnDeinitialize"/> to flush any remaining messages before the
+		/// server shuts down.
+		/// </summary>
+		private void FlushPersistQueueSync()
+		{
+			try
+			{
+				if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) ||
+					runtimeData.PendingPersistQueue == null ||
+					runtimeData.PendingPersistQueue.IsEmpty)
+				{
+					return;
+				}
+				if (Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IChatService>(out var chatService))
+				{
+					return;
+				}
+
+				long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var sceneRuntimeData)
+					? sceneRuntimeData.ID : 0;
+
+				// Reuse the persistent batch buffer to avoid shutdown allocation.
+				var batch = runtimeData.PersistBatchBuffer;
+				batch.Clear();
+
+				while (runtimeData.PendingPersistQueue.TryDequeue(out PendingChatPersist entry))
+				{
+					batch.Add((
+						entry.CharacterId,
+						entry.CharacterName,
+						entry.AccountName,
+						entry.WorldServerId,
+						sceneServerID,
+						(FishMMO.Database.Data.Enums.ChatChannel)(byte)entry.Channel,
+						entry.Message,
+						new DateTime(entry.ReceivedTicks, DateTimeKind.Utc)));
+				}
+
+				if (batch.Count > 0)
+				{
+					chatService.PersistBatchAsync(batch).GetAwaiter().GetResult();
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("ChatSystem", $"Error in FlushPersistQueueSync: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Periodic callback that flushes buffered World/Trade outbound broadcasts.
+		/// Called from the periodic update system at <see cref="outboundBatchIntervalSeconds"/>.
+		/// </summary>
+		private void OnPeriodicOutboundFlush(float deltaTime)
+		{
+			if (!Initialized ||
+				Server == null ||
+				Server.ServerState != ConnectionState.Started)
+			{
+				return;
+			}
+
+			FlushOutboundBroadcastBuffers();
+		}
+
+		/// <summary>
+		/// Flushes all buffered outbound World/Trade broadcasts to their recipients.
+		/// For each world ID, sends up to <see cref="maxOutboundBatchSize"/> messages per recipient per flush.
+		/// Must be called on the main thread.
+		/// </summary>
+		private void FlushOutboundBroadcastBuffers()
+		{
+			if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData))
+			{
+				return;
+			}
+
+			var buffer = runtimeData.OutboundWorldBroadcastBuffer;
+			if (buffer == null || buffer.Count < 1)
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+			{
+				return;
+			}
+
+			// Collect keys into reusable buffer to avoid modifying dictionary during iteration.
+			var keyBuffer = runtimeData.OutboundWorldFlushKeyBuffer;
+			keyBuffer.Clear();
+			foreach (var kvp in buffer)
+			{
+				keyBuffer.Add(kvp.Key);
+			}
+
+			var characterBroadcastBuffer = runtimeData.CharacterBroadcastBuffer;
+
+			for (int k = 0; k < keyBuffer.Count; k++)
+			{
+				long worldID = keyBuffer[k];
+				if (!buffer.TryGetValue(worldID, out var messages) || messages.Count < 1)
+				{
+					continue;
+				}
+
+				// Cap messages sent per flush to prevent huge network bursts.
+				int sendCount = Math.Min(messages.Count, maxOutboundBatchSize);
+
+				if (mappingData.CharactersByWorld.TryGetValue(worldID, out var characters))
+				{
+					// Defensive copy into reusable buffer.
+					// Manual loop avoids boxing the Dictionary.ValueCollection struct enumerator
+					// that AddRange(IEnumerable<T>) would cause.
+					characterBroadcastBuffer.Clear();
+					foreach (var character in characters.Values)
+					{
+						characterBroadcastBuffer.Add(character);
+					}
+
+					for (int m = 0; m < sendCount; m++)
+					{
+						for (int c = 0; c < characterBroadcastBuffer.Count; c++)
+						{
+							Server.NetworkWrapper.Broadcast(characterBroadcastBuffer[c].Owner, messages[m], true, Channel.Reliable);
+						}
+					}
+				}
+
+				// Remove sent messages; keep overflow for next flush.
+				if (sendCount >= messages.Count)
+				{
+					messages.Clear();
+				}
+				else
+				{
+					messages.RemoveRange(0, sendCount);
+				}
+			}
+
+			// Remove empty world entries to keep dictionary tidy.
+			for (int k = keyBuffer.Count - 1; k >= 0; k--)
+			{
+				long worldID = keyBuffer[k];
+				if (buffer.TryGetValue(worldID, out var remaining) && remaining.Count < 1)
+				{
+					buffer.Remove(worldID);
+				}
 			}
 		}
 
@@ -555,9 +980,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
 			{
 				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
+				// Manual loop avoids boxing the Dictionary.ValueCollection struct enumerator.
 				var buffer = chatData.CharacterBroadcastBuffer;
 				buffer.Clear();
-				buffer.AddRange(characters.Values);
+				foreach (var character in characters.Values)
+				{
+					buffer.Add(character);
+				}
 				for (int i = 0; i < buffer.Count; i++)
 				{
 					Server.NetworkWrapper.Broadcast(buffer[i].Owner, newMsg, true, Channel.Reliable);

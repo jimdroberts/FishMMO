@@ -46,8 +46,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
+			// Capture the receive timestamp ticks from the broadcast struct (stamped at the network boundary).
+			long receivedTicks = msg.ReceivedUtcTicks;
+
 			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist), senderID);
+			TryEnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
@@ -63,8 +66,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="characterName">Sender character name used for persistence.</param>
 		/// <param name="accountName">Sender account name used for persistence.</param>
 		/// <param name="worldServerId">Sender world server identifier.</param>
+		/// <param name="receivedTicks">UTC ticks when the server received the message, for legal audit persistence.</param>
 		/// <returns>Asynchronous party chat processing task.</returns>
-		private async Task OnPartyChatAsync(long partyID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist)
+		private async Task OnPartyChatAsync(long partyID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist, long receivedTicks)
 		{
 			try
 			{
@@ -109,8 +113,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Only persist for live player messages — pump-sourced messages are already persisted.
 				if (persist)
 				{
-					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
-					await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, partyID + " " + trimmed);
+					// Enqueue for batch DB persistence instead of per-message async write.
+					EnqueuePersist(characterId, characterName, accountName, worldServerId, channel, partyID + " " + trimmed, receivedTicks);
 				}
 			}
 			catch (Exception ex)
@@ -149,8 +153,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
+			// Capture the receive timestamp ticks from the broadcast struct (stamped at the network boundary).
+			long receivedTicks = msg.ReceivedUtcTicks;
+
 			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist), senderID);
+			TryEnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
@@ -166,8 +173,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="characterName">Sender character name used for persistence.</param>
 		/// <param name="accountName">Sender account name used for persistence.</param>
 		/// <param name="worldServerId">Sender world server identifier.</param>
+		/// <param name="receivedTicks">UTC ticks when the server received the message, for legal audit persistence.</param>
 		/// <returns>Asynchronous guild chat processing task.</returns>
-		private async Task OnGuildChatAsync(long guildID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist)
+		private async Task OnGuildChatAsync(long guildID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist, long receivedTicks)
 		{
 			try
 			{
@@ -212,8 +220,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Only persist for live player messages — pump-sourced messages are already persisted.
 				if (persist)
 				{
-					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
-					await PersistChatMessageAsync(characterId, characterName, accountName, worldServerId, channel, guildID + " " + trimmed);
+					// Enqueue for batch DB persistence instead of per-message async write.
+					EnqueuePersist(characterId, characterName, accountName, worldServerId, channel, guildID + " " + trimmed, receivedTicks);
 				}
 			}
 			catch (Exception ex)

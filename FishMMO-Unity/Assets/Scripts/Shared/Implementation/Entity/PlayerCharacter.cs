@@ -157,9 +157,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		public string LastChatMessage { get; set; }
 		/// <summary>
-		/// The next UTC time the character can send a chat message.
+		/// The next UTC ticks when the character can send a chat message.
 		/// </summary>
-		public DateTime NextChatMessageTime { get; set; }
+		public long NextChatMessageTicks { get; set; }
+		/// <summary>
+		/// Current number of chat tokens available in the token bucket (double for precision on long-uptime servers).
+		/// Server-side anti-spam: consumed per message, refilled at a configurable rate.
+		/// </summary>
+		public double ChatTokens { get; set; }
+		/// <summary>
+		/// UTC ticks of the last token bucket refill.
+		/// </summary>
+		public long ChatTokenLastRefillTicks { get; set; }
 		/// <summary>
 		/// The next UTC time the character can interact.
 		/// </summary>
@@ -189,7 +198,10 @@ namespace FishMMO.Shared
 			#endregion
 
 			// Initialize chat and interaction timers to current UTC time.
-			NextChatMessageTime = DateTime.UtcNow;
+			long nowTicks = DateTime.UtcNow.Ticks;
+			NextChatMessageTicks = nowTicks;
+			ChatTokens = double.MaxValue; // Filled to max; server overrides with actual capacity on first message.
+			ChatTokenLastRefillTicks = nowTicks;
 			NextInteractTime = DateTime.UtcNow;
 		}
 
@@ -307,7 +319,10 @@ namespace FishMMO.Shared
 
 			TeleporterName = "";
 			LastChatMessage = "";
-			NextChatMessageTime = DateTime.UtcNow;
+			long nowTicks = DateTime.UtcNow.Ticks;
+			NextChatMessageTicks = nowTicks;
+			ChatTokens = double.MaxValue;
+			ChatTokenLastRefillTicks = nowTicks;
 			NextInteractTime = DateTime.UtcNow;
 			InstanceSceneName = null;
 			InstanceSceneHandle = 0;

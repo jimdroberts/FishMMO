@@ -66,8 +66,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string accountName = sender?.Account ?? string.Empty;
 			long worldServerID = sender != null ? sender.WorldServerID : 0;
 
+			// Capture the receive timestamp ticks from the broadcast struct (stamped at the network boundary).
+			long receivedTicks = msg.ReceivedUtcTicks;
+
 			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID, persist), senderID);
+			TryEnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
@@ -83,8 +86,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="characterName">Sender character name used for persistence.</param>
 		/// <param name="accountName">Sender account name used for persistence.</param>
 		/// <param name="worldServerId">Sender world server identifier.</param>
+		/// <param name="receivedTicks">UTC ticks when the server received the message, for legal audit persistence.</param>
 		/// <returns>Asynchronous tell chat processing task.</returns>
-		private async Task OnTellChatAsync(NetworkConnection senderConn, long senderID, ChatChannel channel, string targetName, string trimmed, string characterName, string accountName, long worldServerId, bool persist)
+		private async Task OnTellChatAsync(NetworkConnection senderConn, long senderID, ChatChannel channel, string targetName, string trimmed, string characterName, string accountName, long worldServerId, bool persist, long receivedTicks)
 		{
 			try
 			{
@@ -167,8 +171,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Only persist for live player messages — pump-sourced messages are already persisted.
 				if (persist)
 				{
-					// C4 fix: persist the full prefixed text so cross-server pump can re-route.
-					await PersistChatMessageAsync(senderID, characterName, accountName, worldServerId, channel, targetName + " " + trimmed);
+					// Enqueue for batch DB persistence instead of per-message async write.
+					EnqueuePersist(senderID, characterName, accountName, worldServerId, channel, targetName + " " + trimmed, receivedTicks);
 				}
 			}
 			catch (Exception ex)

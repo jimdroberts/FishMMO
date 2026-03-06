@@ -102,6 +102,81 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistBatchAsync(
+			List<(long characterId, string characterName, string accountName, long worldServerId, long sceneServerId, ChatChannel channel, string message, DateTime serverReceivedTime)> messages,
+			int maxBatchSize = 1000,
+			CancellationToken cancellationToken = default)
+		{
+			if (messages == null || messages.Count == 0)
+			{
+				return DatabaseResult.Success();
+			}
+
+			if (maxBatchSize < 500) maxBatchSize = 500;
+			else if (maxBatchSize > 2500) maxBatchSize = 2500;
+
+			// Pre-validate all messages before writing any.
+			for (int i = 0; i < messages.Count; i++)
+			{
+				var m = messages[i];
+				if (m.characterId <= 0)
+					return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, $"Message at index {i}: CharacterId must be greater than 0.");
+				if (!Enum.IsDefined(typeof(ChatChannel), m.channel))
+					return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, $"Message at index {i}: Invalid chat channel.");
+				if (m.worldServerId <= 0 || m.sceneServerId <= 0 || string.IsNullOrWhiteSpace(m.message))
+					return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, $"Message at index {i}: World server ID, scene server ID must be greater than zero and message must not be empty.");
+				if (m.message.Length > MaxMessageLength)
+					return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, $"Message at index {i}: Message exceeds maximum length.");
+			}
+
+			for (int offset = 0; offset < messages.Count; offset += maxBatchSize)
+			{
+				var batchCount = Math.Min(maxBatchSize, messages.Count - offset);
+
+				var result = await ExecuteWriteAsync(async dbContext =>
+				{
+					var now = DateTime.UtcNow;
+					var entities = new ChatEntity[batchCount];
+
+					for (int i = 0; i < batchCount; i++)
+					{
+						var m = messages[offset + i];
+
+						var charName = string.IsNullOrWhiteSpace(m.characterName) ? string.Empty : m.characterName;
+						if (charName.Length > MaxAuditNameLength)
+							charName = charName.Substring(0, MaxAuditNameLength);
+
+						var acctName = string.IsNullOrWhiteSpace(m.accountName) ? string.Empty : m.accountName;
+						if (acctName.Length > MaxAuditAccountLength)
+							acctName = acctName.Substring(0, MaxAuditAccountLength);
+
+						entities[i] = new ChatEntity
+						{
+							CharacterID = m.characterId,
+							CharacterName = charName,
+							AccountName = acctName,
+							WorldServerID = m.worldServerId,
+							SceneServerID = m.sceneServerId,
+							ServerReceivedTime = m.serverReceivedTime,
+							TimeCreated = now,
+							Channel = (byte)m.channel,
+							Message = m.message
+						};
+					}
+
+					await dbContext.Chat.AddRangeAsync(entities, cancellationToken).ConfigureAwait(false);
+				}, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+				if (!result.IsSuccess)
+				{
+					return result;
+				}
+			}
+
+			return DatabaseResult.Success();
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult<List<ChatData>>> FetchAsync(
 			DateTime lastFetch,
 			long lastPosition,

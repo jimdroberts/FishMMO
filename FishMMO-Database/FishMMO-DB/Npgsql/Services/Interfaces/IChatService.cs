@@ -88,5 +88,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			int amount,
 			long sceneServerId,
 			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Persists multiple chat messages in batches.
+		/// </summary>
+		/// <param name="messages">List of chat messages to persist. Each tuple contains:
+		/// (characterId, characterName, accountName, worldServerId, sceneServerId, channel, message, serverReceivedTime).</param>
+		/// <param name="maxBatchSize">Maximum number of messages per database round-trip (500–2500).</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
+		Task<DatabaseResult> PersistBatchAsync(
+			List<(long characterId, string characterName, string accountName, long worldServerId, long sceneServerId, ChatChannel channel, string message, DateTime serverReceivedTime)> messages,
+			int maxBatchSize = 1000,
+			CancellationToken cancellationToken = default);
 	}
 }
