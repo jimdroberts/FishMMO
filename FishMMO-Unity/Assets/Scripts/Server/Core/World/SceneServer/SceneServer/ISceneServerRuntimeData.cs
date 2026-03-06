@@ -31,19 +31,15 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void EndPulse();
 
 		/// <summary>
-		/// Tracks UTC enqueue timestamps for pending scene load requests.
-		/// </summary>
-		Dictionary<long, DateTime> PendingSceneEnqueueUtcBySceneId { get; }
-
-		/// <summary>
 		/// Next UTC timestamp when pending-scene cleanup is allowed.
 		/// </summary>
 		DateTime NextPendingSceneSweepUtc { get; set; }
 
 		/// <summary>
-		/// Reusable buffer for scene pulse payload data. Only used from the main thread.
+		/// Reusable buffer for scene pulse payload data (Handle, CharacterCount).
+		/// Only used from the main thread. Snapshotted before passing to async.
 		/// </summary>
-		List<(int Handle, int CharacterCount, bool StalePulse, double TimeSinceLastExit)> ScenePulseDataBuffer { get; }
+		List<(int Handle, int CharacterCount)> ScenePulseDataBuffer { get; }
 
 		/// <summary>
 		/// Reusable buffer for scene handles queued for unloading. Only used from the main thread.
@@ -64,5 +60,10 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Reusable buffer for expired pending scene IDs during cleanup sweeps. Only used from the main thread.
 		/// </summary>
 		List<long> ExpiredSceneIdsBuffer { get; }
+
+		/// <summary>
+		/// Reusable buffer for scene handles during unload iteration. Only used from the main thread.
+		/// </summary>
+		List<int> UnloadedHandlesBuffer { get; }
 	}
 }

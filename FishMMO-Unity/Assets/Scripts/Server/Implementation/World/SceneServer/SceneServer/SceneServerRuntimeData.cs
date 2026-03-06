@@ -37,13 +37,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <inheritdoc/>
-		public Dictionary<long, DateTime> PendingSceneEnqueueUtcBySceneId { get; private set; }
-
-		/// <inheritdoc/>
 		public DateTime NextPendingSceneSweepUtc { get; set; }
 
 		/// <inheritdoc/>
-		public List<(int Handle, int CharacterCount, bool StalePulse, double TimeSinceLastExit)> ScenePulseDataBuffer { get; private set; }
+		public List<(int Handle, int CharacterCount)> ScenePulseDataBuffer { get; private set; }
 
 		/// <inheritdoc/>
 		public List<int> ScenesToUnloadBuffer { get; private set; }
@@ -57,18 +54,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <inheritdoc/>
 		public List<long> ExpiredSceneIdsBuffer { get; private set; }
 
+		/// <inheritdoc/>
+		public List<int> UnloadedHandlesBuffer { get; private set; }
+
 		/// <summary>
 		/// Initializes the scene server runtime data container.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			PendingSceneEnqueueUtcBySceneId = new Dictionary<long, DateTime>();
 			NextPendingSceneSweepUtc = DateTime.UtcNow;
-			ScenePulseDataBuffer = new List<(int, int, bool, double)>();
+			ScenePulseDataBuffer = new List<(int, int)>();
 			ScenesToUnloadBuffer = new List<int>();
 			SceneGroupValuesBuffer = new List<Dictionary<int, ISceneInstanceDetails>>();
 			SceneDetailsValuesBuffer = new List<ISceneInstanceDetails>();
 			ExpiredSceneIdsBuffer = new List<long>();
+			UnloadedHandlesBuffer = new List<int>();
 			Interlocked.Exchange(ref pulseInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -81,13 +81,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ID = 0;
 			IsLocked = false;
 			Interlocked.Exchange(ref pulseInFlight, 0);
-			PendingSceneEnqueueUtcBySceneId?.Clear();
 			NextPendingSceneSweepUtc = DateTime.UtcNow;
 			ScenePulseDataBuffer?.Clear();
 			ScenesToUnloadBuffer?.Clear();
 			SceneGroupValuesBuffer?.Clear();
 			SceneDetailsValuesBuffer?.Clear();
 			ExpiredSceneIdsBuffer?.Clear();
+			UnloadedHandlesBuffer?.Clear();
 		}
 
 		/// <summary>
@@ -96,12 +96,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		protected override void OnDeinitialize()
 		{
 			Clear();
-			PendingSceneEnqueueUtcBySceneId = null;
 			ScenePulseDataBuffer = null;
 			ScenesToUnloadBuffer = null;
 			SceneGroupValuesBuffer = null;
 			SceneDetailsValuesBuffer = null;
 			ExpiredSceneIdsBuffer = null;
+			UnloadedHandlesBuffer = null;
 		}
 	}
 }

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using FishMMO.Database.Data;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 
@@ -22,9 +21,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public Dictionary<int, string> SceneNameByHandle { get; private set; }
 
 		/// <summary>
-		/// Tracks pending scene load requests by scene ID.
+		/// Flat O(1) lookup from scene handle to instance details.
+		/// Kept in sync with the nested WorldScenes dictionary.
 		/// </summary>
-		public Dictionary<long, SceneData> PendingScenes { get; private set; }
+		public Dictionary<int, ISceneInstanceDetails> SceneInstanceByHandle { get; private set; }
+
+		/// <summary>
+		/// Tracks pending scene load requests by scene ID.
+		/// Each entry combines the SceneData with its enqueue timestamp.
+		/// </summary>
+		public Dictionary<long, PendingSceneInfo> PendingScenes { get; private set; }
 
 		/// <summary>
 		/// Initializes the scene instance mapping data container.
@@ -33,7 +39,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>>();
 			SceneNameByHandle = new Dictionary<int, string>();
-			PendingScenes = new Dictionary<long, SceneData>();
+			SceneInstanceByHandle = new Dictionary<int, ISceneInstanceDetails>();
+			PendingScenes = new Dictionary<long, PendingSceneInfo>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -44,6 +51,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			WorldScenes?.Clear();
 			SceneNameByHandle?.Clear();
+			SceneInstanceByHandle?.Clear();
 			PendingScenes?.Clear();
 		}
 

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using FishMMO.Database.Data;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
@@ -20,8 +19,16 @@ namespace FishMMO.Server.Core.World.SceneServer
 		Dictionary<int, string> SceneNameByHandle { get; }
 
 		/// <summary>
-		/// Tracks pending scene load requests by scene ID.
+		/// Flat O(1) lookup from scene handle to instance details.
+		/// Kept in sync with the nested WorldScenes dictionary.
 		/// </summary>
-		Dictionary<long, SceneData> PendingScenes { get; }
+		Dictionary<int, ISceneInstanceDetails> SceneInstanceByHandle { get; }
+
+		/// <summary>
+		/// Tracks pending scene load requests by scene ID.
+		/// Each entry combines the SceneData with its enqueue timestamp
+		/// for TTL expiration, eliminating dual-map sync risk.
+		/// </summary>
+		Dictionary<long, PendingSceneInfo> PendingScenes { get; }
 	}
 }
