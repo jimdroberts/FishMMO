@@ -24,14 +24,6 @@ namespace FishMMO.Shared
 		public float RotationSpeed = 5.0f;
 
 		/// <summary>
-		/// Current angle in the orbit (radians).
-		/// WARNING: This field is stored on a ScriptableObject, which is shared across all NPCs using the same asset.
-		/// If multiple NPCs use the same OrbitState asset simultaneously, they will interfere with each other's orbit angle.
-		/// Consider moving per-NPC state data into the AIController or a runtime dictionary keyed by controller instance.
-		/// </summary>
-		private float currentAngle;
-
-		/// <summary>
 		/// Called when entering the Orbit state. Initializes orbit angle and checks for target.
 		/// </summary>
 		/// <param name="controller">The AI controller.</param>
@@ -44,8 +36,8 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Initialize the current angle
-			currentAngle = 0.0f;
+			// Reset the per-NPC orbit angle.
+			controller.OrbitAngle = 0.0f;
 		}
 
 		/// <summary>
@@ -78,10 +70,11 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Calculate the new position around the target using polar coordinates
-			currentAngle += OrbitSpeed * Time.deltaTime;
-			float x = Mathf.Cos(currentAngle) * OrbitRadius;
-			float z = Mathf.Sin(currentAngle) * OrbitRadius;
+			// Calculate the new position around the target using polar coordinates.
+			// The angle is stored on the controller (per-NPC) to avoid shared SO state.
+			controller.OrbitAngle += OrbitSpeed * Time.deltaTime;
+			float x = Mathf.Cos(controller.OrbitAngle) * OrbitRadius;
+			float z = Mathf.Sin(controller.OrbitAngle) * OrbitRadius;
 			Vector3 offset = new Vector3(x, 0, z);
 			Vector3 targetPosition = controller.Target.position + offset;
 

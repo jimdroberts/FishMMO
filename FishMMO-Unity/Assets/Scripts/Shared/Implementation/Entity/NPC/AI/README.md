@@ -10,12 +10,19 @@ States are **shared ScriptableObject assets** — every NPC referencing the same
 
 ```
 AI/
+├── AIAbilityRotation.cs        # Condition/sequence-based ability rotation asset
 ├── AIController.cs             # Core AI controller (NavMeshAgent, state machine, virtual camera)
 ├── AgentAvoidancePriority.cs   # Enum for NavMesh agent avoidance levels
 ├── AggressionController.cs     # Per-NPC threat table (plain C# class)
 ├── AggressionEntry.cs          # Single-character threat data
 ├── AggressionState.cs          # Owns AggressionController + global event subscriptions
 ├── BaseAIState.cs              # Abstract ScriptableObject base for all AI states
+├── Conditions/
+│   ├── AIAbilityCondition.cs   # Abstract base for rotation conditions
+│   ├── AIBuffCondition.cs      # Check buff/debuff presence on self or target
+│   ├── AIDistanceCondition.cs  # Check distance to target
+│   ├── AIHealthCondition.cs    # Check health % of self or target
+│   └── AIRandomCondition.cs    # Random chance condition
 └── States/
     ├── BaseAttackingState.cs       # Base combat state (target picking, range, abilities)
     ├── CasterAttackingState.cs     # Caster NPC combat (max range, retreat, cooldown reposition)
@@ -72,6 +79,21 @@ AggressionState          (plain C# — owns controller + event subscriptions)
     └── AggressionEntry  (plain C# — per-character threat data)
 ```
 
+### Ability Rotation / Conditions
+
+```
+ScriptableObject
+├── AIAbilityRotation    (ordered list of entries, Priority or Sequence mode)
+└── AIAbilityCondition   (abstract)
+    ├── AIHealthCondition
+    ├── AIBuffCondition
+    ├── AIDistanceCondition
+    └── AIRandomCondition
+
+[Serializable] class
+└── AIAbilityRotationEntry  (template ID + list of conditions)
+```
+
 ## AIController
 
 `AIController` is the central brain attached to every NPC prefab. It is a `CharacterBehaviour` implementing `IAIController` (which composes `IAINavigation`, `IAIStateMachine`, and `IAIWaypoints`).
@@ -88,6 +110,7 @@ AggressionState          (plain C# — owns controller + event subscriptions)
 | `RetreatState`              | `BaseAIState`            | —        | Flee state                                                   |
 | `AttackingState`            | `BaseAIState`            | —        | Combat state                                                 |
 | `DeadState`                 | `BaseAIState`            | —        | Death state                                                  |
+| `AbilityRotation`           | `AIAbilityRotation`      | —        | Optional condition/sequence ability rotation (see below)     |
 | `AvoidancePriority`         | `AgentAvoidancePriority` | `Medium` | NavMeshAgent avoidance priority                              |
 | `EnemySweepRate`            | `float`                  | `1.5`    | Seconds between enemy detection sweeps                       |
 | `AggressionDamageWeight`    | `float`                  | `1.0`    | Threat points per 1 damage taken                             |
@@ -111,6 +134,8 @@ AggressionState          (plain C# — owns controller + event subscriptions)
 | `Aggression`             | `AggressionController`| Convenience accessor for `AggressionState.Controller`    |
 | `VirtualCameraPosition`  | `Vector3`             | Eye-level position for ability aiming                    |
 | `VirtualCameraRotation`  | `Quaternion`          | Rotation from eye toward target center                   |
+| `OrbitAngle`             | `float`               | Per-NPC orbit angle for OrbitState                       |
+| `RotationIndex`          | `int`                 | Per-NPC index for Sequence-mode ability rotation         |
 | `PhysicsScene`           | `PhysicsScene`        | Scene physics for overlap/raycast queries                |
 
 ### Update Loop
@@ -126,12 +151,16 @@ The `AIController.Update()` method runs every frame (server-only) in this order:
 
 ### Ability Selection
 
-`PickBestAbility(float preferredMaxRange)` iterates all known abilities and scores them:
+`PickBestAbility(float preferredMaxRange)` is the central ability chooser. When an `AbilityRotation` asset is assigned, it is evaluated **first**:
 
-- **In-range abilities** (range² ≥ distance²): score = `1000 + cooldown` (longer cooldown = typically stronger).
-- **Out-of-range abilities**: score = `range` (fallback).
-- A random jitter of 0-50 is added to prevent deterministic choices.
-- Abilities on cooldown or lacking resources are skipped.
+1. **Rotation pass** — `AIAbilityRotation.Evaluate()` checks each entry's conditions against the current combat context. If an entry matches and its ability is usable (off cooldown, meets activation conditions), that ability is returned immediately.
+2. **Fallback** — If no rotation entry matches and `FallbackToDefault` is true (or no rotation is assigned), the default scoring logic runs:
+   - **In-range abilities** (range² ≥ distance²): score = `1000 + cooldown` (longer cooldown = typically stronger).
+   - **Out-of-range abilities**: score = `range` (fallback).
+   - A random jitter of 0-50 is added to prevent deterministic choices.
+   - Abilities on cooldown or lacking resources are skipped.
+
+This means designers can set up precise condition-based rotations while still getting sensible default behaviour for any gaps in the rotation.
 
 ### Virtual Camera
 
@@ -307,7 +336,7 @@ Circle-strafes around the current target at a configurable radius and speed.
 - **UpdateState:** Increments angle, computes position on a circle around the target, NavMesh-samples, sets destination. Slerps rotation toward target.
 - **Exit:** No-op.
 
-> **⚠ Note:** The internal angle counter is stored on the ScriptableObject. If multiple NPCs share the same asset, they will share the angle. For per-NPC orbit tracking, consider storing the angle on the `AIController`.
+The orbit angle is stored per-NPC on `AIController.OrbitAngle` to avoid the shared ScriptableObject mutable-state problem.
 
 ### GetBehindState
 
@@ -458,6 +487,112 @@ Healer NPCs that prioritize keeping allies alive before dealing damage. Scans fo
    - If out of range: moves toward the ally.
 4. **Damage fallback:** When no ally needs healing, behaves like a caster — picks the best damage ability (non-heal), kites if uncomfortable, retreats if too close.
 5. **Ability classification:** Abilities whose `Template.ID` appears in `HealAbilityTemplateIDs` are treated as heals. All others are damage. The list is converted to a `HashSet<int>` on first use for O(1) lookup.
+
+## Ability Rotation System
+
+The ability rotation system gives designers fine-grained control over which abilities an NPC uses and when. It replaces or supplements the default scoring-based picker with condition-driven, ordered ability selection.
+
+### AIAbilityRotation
+
+**Menu:** *FishMMO > Character > NPC > AI > Ability Rotation*
+
+| Field              | Type                           | Default    | Description                                      |
+|--------------------|--------------------------------|------------|--------------------------------------------------|
+| `Mode`             | `AIRotationMode`               | `Priority` | Evaluation strategy (see below)                  |
+| `Entries`          | `List<AIAbilityRotationEntry>` | —          | Ordered ability entries with conditions           |
+| `FallbackToDefault`| `bool`                         | `true`     | Use default scorer when no entry matches          |
+
+#### Evaluation Modes
+
+| Mode       | Behavior                                                                                       |
+|------------|------------------------------------------------------------------------------------------------|
+| `Priority` | Entries are evaluated top-to-bottom. The **first** entry whose conditions all pass and whose ability is usable is selected. Ideal for conditional logic ("if health ≤ 40%, heal; else fireball"). |
+| `Sequence` | Advances through entries in order after each successful use. If the next-in-sequence entry can't be used, wraps around and tries remaining entries. Ideal for structured rotations ("Fireball → Frost Bolt → Pyroblast → repeat"). The current position is stored per-NPC in `AIController.RotationIndex`. |
+
+### AIAbilityRotationEntry
+
+Each entry is a `[Serializable]` class pairing an ability template with conditions:
+
+| Field              | Type                        | Description                                              |
+|--------------------|-----------------------------|----------------------------------------------------------|
+| `AbilityTemplateID`| `int`                       | Template ID of the ability to use                        |
+| `Conditions`       | `List<AIAbilityCondition>`  | All must pass (AND logic). Empty = unconditional.        |
+
+The system finds the matching `Ability` instance from `IAbilityController.KnownAbilities` by template ID, then verifies it is off cooldown and meets activation conditions before returning it.
+
+### Conditions
+
+Conditions are ScriptableObject assets that can be shared across multiple rotations.
+
+#### AIHealthCondition
+
+**Menu:** *FishMMO > Character > NPC > AI > Conditions > Health Condition*
+
+Checks a character's health percentage against a threshold.
+
+| Field       | Type                 | Default       | Description                        |
+|-------------|----------------------|---------------|------------------------------------|
+| `Subject`   | `ConditionSubject`   | `Self`        | Which character to check           |
+| `Operator`  | `ComparisonOperator` | `LessOrEqual` | Comparison operation               |
+| `Threshold` | `float` (0-1)       | `0.5`         | Health % threshold                 |
+
+**Examples:** "Self health ≤ 40%" → use a heal. "Target health ≤ 20%" → use an execute.
+
+#### AIBuffCondition
+
+**Menu:** *FishMMO > Character > NPC > AI > Conditions > Buff Condition*
+
+Checks whether a character has (or lacks) a specific buff or debuff.
+
+| Field            | Type               | Default  | Description                              |
+|------------------|--------------------|----------|------------------------------------------|
+| `Subject`        | `ConditionSubject` | `Target` | Which character to check                 |
+| `BuffTemplateID` | `int`              | —        | Template ID of the buff/debuff           |
+| `RequirePresent` | `bool`             | `true`   | True = must have, False = must lack      |
+
+**Examples:** "Target missing debuff 7" → apply a DoT. "Self has buff 42" → skip re-applying.
+
+#### AIDistanceCondition
+
+**Menu:** *FishMMO > Character > NPC > AI > Conditions > Distance Condition*
+
+Checks the distance between the NPC and its target.
+
+| Field      | Type                 | Default       | Description                 |
+|------------|----------------------|---------------|-----------------------------|
+| `Operator` | `ComparisonOperator` | `LessOrEqual` | Comparison operation        |
+| `Distance` | `float`              | `5`           | Threshold in world units    |
+
+**Examples:** "Distance ≤ 3" → use melee cleave. "Distance ≥ 15" → use snipe.
+
+#### AIRandomCondition
+
+**Menu:** *FishMMO > Character > NPC > AI > Conditions > Random Condition*
+
+Passes with a configurable random probability.
+
+| Field    | Type           | Default | Description                           |
+|----------|----------------|---------|---------------------------------------|
+| `Chance` | `float` (0-1)  | `0.5`   | Probability of passing each evaluation|
+
+**Example:** Attach to a special attack entry with `Chance = 0.2` for 20% variety.
+
+### Setup Example
+
+To create a boss NPC that heals at low health, applies a debuff when the target doesn't have it, and otherwise uses a fireball rotation:
+
+1. **Create conditions:**
+   - `SelfHealthLow40.asset` — `AIHealthCondition` with `Subject = Self`, `Operator = LessOrEqual`, `Threshold = 0.4`
+   - `TargetMissingPoison.asset` — `AIBuffCondition` with `Subject = Target`, `BuffTemplateID = 7`, `RequirePresent = false`
+
+2. **Create rotation:** `BossRotation.asset` — `AIAbilityRotation` with `Mode = Priority`, `FallbackToDefault = true`:
+   - Entry 0: `AbilityTemplateID = 10` (Heal), Conditions: `[SelfHealthLow40]`
+   - Entry 1: `AbilityTemplateID = 7` (Poison), Conditions: `[TargetMissingPoison]`
+   - Entry 2: `AbilityTemplateID = 3` (Fireball), Conditions: `[]` (unconditional fallback)
+
+3. **Assign** the rotation to the NPC's `AIController.AbilityRotation` field.
+
+Result: The boss heals when below 40%, applies poison when the target doesn't have it, and otherwise fireballs. If all three are on cooldown, the default scorer picks whatever is available.
 
 ## Ability Activation Pipeline (AI)
 

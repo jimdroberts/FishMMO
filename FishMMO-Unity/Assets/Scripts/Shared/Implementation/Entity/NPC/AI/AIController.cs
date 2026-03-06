@@ -69,6 +69,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		public BaseAIState DeadState;
 
+		[Header("Ability Rotation")]
+		/// <summary>
+		/// Optional ability rotation asset. When assigned, <see cref="PickBestAbility"/> evaluates
+		/// the rotation first. If no entry matches and <see cref="AIAbilityRotation.FallbackToDefault"/>
+		/// is true, the default scoring-based picker runs as a fallback.
+		/// </summary>
+		[Tooltip("Optional ability rotation for condition/sequence-based ability selection.")]
+		public AIAbilityRotation AbilityRotation;
+
 		[Header("Aggression / Threat")]
 		/// <summary>
 		/// Points awarded per 1 point of damage dealt to this NPC.
@@ -223,6 +232,21 @@ namespace FishMMO.Shared
 		private float nextEnemySweepUpdate = 0.0f;
 		private List<BaseAIState> movementStates = new List<BaseAIState>();
 
+		/// <summary>
+		/// Per-NPC orbit angle (radians) used by <see cref="OrbitState"/>.
+		/// Stored here instead of on the ScriptableObject to avoid the shared-instance
+		/// mutable state problem.
+		/// </summary>
+		[System.NonSerialized]
+		public float OrbitAngle;
+
+		/// <summary>
+		/// Per-NPC rotation index used by <see cref="AIAbilityRotation"/> in Sequence mode.
+		/// Tracks which entry in the rotation to try next.
+		/// </summary>
+		[System.NonSerialized]
+		public int RotationIndex;
+
 #if UNITY_EDITOR
 		/// <summary>
 		/// Draws gizmos in the editor to visualize agent radius and home position.
@@ -358,6 +382,8 @@ namespace FishMMO.Shared
 			LookTarget = null;
 			VirtualCameraPosition = Vector3.zero;
 			VirtualCameraRotation = Quaternion.identity;
+			OrbitAngle = 0f;
+			RotationIndex = 0;
 			AggressionState?.Clear();
 		}
 
@@ -538,6 +564,12 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Selects the best ability to use against the current target from the NPC's known abilities.
+		/// <para>
+		/// When an <see cref="AbilityRotation"/> is assigned, it is evaluated first. If it returns
+		/// an ability, that ability is used. If no rotation entry matches and
+		/// <see cref="AIAbilityRotation.FallbackToDefault"/> is true, the default scoring-based
+		/// picker runs as a fallback.
+		/// </para>
 		/// Prefers abilities whose range covers the current distance. Among those, picks one at random
 		/// weighted toward longer-cooldown (typically stronger) abilities. Returns null if no ability
 		/// is usable (all on cooldown, out of resources, or no abilities known).
@@ -553,6 +585,28 @@ namespace FishMMO.Shared
 			if (!Character.TryGet(out ICharacterDamageController damageController) || !damageController.IsAlive)
 				return null;
 
+			// --- Rotation-based selection (designer-driven) ---
+			if (AbilityRotation != null)
+			{
+				// Resolve the target character for condition evaluation.
+				ICharacter targetCharacter = Target != null ? Target.GetComponent<ICharacter>() : null;
+
+				Ability rotationPick = AbilityRotation.Evaluate(
+					this,
+					abilityController,
+					cooldownController,
+					Character,
+					targetCharacter);
+
+				if (rotationPick != null)
+					return rotationPick;
+
+				// Rotation produced no match — check if we should fall back.
+				if (!AbilityRotation.FallbackToDefault)
+					return null;
+			}
+
+			// --- Default scoring-based selection ---
 			float sqrDist = GetSqrDistanceToTarget();
 
 			Ability bestAbility = null;
