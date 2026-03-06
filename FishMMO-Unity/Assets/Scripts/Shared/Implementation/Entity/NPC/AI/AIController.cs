@@ -79,6 +79,16 @@ namespace FishMMO.Shared
 		[Tooltip("Optional ability rotation for condition/sequence-based ability selection.")]
 		public AIAbilityRotation AbilityRotation;
 
+		[Header("Combat Personality")]
+		/// <summary>
+		/// Optional combat personality that biases ability selection via per-category score multipliers.
+		/// When assigned, <see cref="PickBestAbility"/> applies the personality's weight and bonus
+		/// to each ability's score. Two NPCs with the same abilities but different personalities
+		/// will favour different abilities in combat.
+		/// </summary>
+		[Tooltip("Optional combat personality for data-driven ability preference.")]
+		public AICombatPersonality Personality;
+
 		[Header("Behavior Tree")]
 		/// <summary>
 		/// Optional behavior tree that provides high-level decision making above the state machine.
@@ -389,6 +399,10 @@ namespace FishMMO.Shared
 				AggressionStaleTimeout,
 				AggressionVarietyChance);
 
+			// Wire event-driven combat entry: when the NPC takes damage for the first time,
+			// enter combat immediately instead of waiting for the next physics sweep.
+			AggressionState.OnCombatInitiated = OnThreatReceived;
+
 			if (Agent == null)
 			{
 				Agent = GetComponent<NavMeshAgent>();
@@ -488,39 +502,102 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Unity Update loop. Handles enemy sweeping, leash checks, state updates, virtual camera, aggression decay, and facing look target.
+		/// Unity Update loop. Applies LOD-based tick scheduling and dispatches to
+		/// tier-appropriate update pipelines for behavior simplification.
+		/// <para>
+		/// <b>Tick scheduling:</b> Each LOD tier has a frame stagger modulus that spreads
+		/// NPC updates evenly across frames (e.g., Active: every 3rd frame ≈ 50ms at 60 FPS).
+		/// Dormant NPCs use a dedicated high-modulus gate so even their wake-up check is cheap.
+		/// </para>
+		/// <para>
+		/// <b>Behavior simplification:</b>
+		/// <list type="bullet">
+		///   <item><b>Active</b> — Full pipeline: sweep, leash, BT, boss, state machine, virtual camera, aggression, facing.</item>
+		///   <item><b>Nearby</b> — Simplified: no enemy sweep (event-driven), no BT, no boss scripts. Combat still works via state machine.</item>
+		///   <item><b>Far</b> — Minimal: no combat AI, no sweep, no aggression. Only wander/idle/return home.</item>
+		///   <item><b>Dormant</b> — Suspended: only periodic LOD re-evaluation to wake up when a player approaches.</item>
+		/// </list>
+		/// </para>
 		/// </summary>
 		void Update()
 		{
-			// --- AI LOD Stagger ---
-			// When LodSettings are assigned, use distance-based tiers.
-			// Otherwise fall back to the simple 1-in-3 frame stagger.
 			if (LodSettings != null)
 			{
-				// Periodically re-evaluate the LOD tier.
-				lodReevaluateTimer -= Time.deltaTime;
-				if (lodReevaluateTimer <= 0f)
+				// --- Dormant Quick Bail ---
+				// Dormant NPCs only need periodic LOD re-evaluation to wake up.
+				// Use a dedicated high-modulus gate to minimize per-frame overhead.
+				// At 60 FPS with DormantCheckModulus=120, a dormant NPC only runs
+				// this check ~once every 2 seconds.
+				if (currentLodTier == AILodTier.Dormant)
 				{
+					if ((Time.frameCount + staggerID) % LodSettings.DormantCheckModulus != 0)
+						return;
+
 					currentLodTier = EvaluateLodTier();
+					if (currentLodTier == AILodTier.Dormant)
+						return;
+
+					// Woke up — reset the LOD timer and fall through to normal processing.
 					lodReevaluateTimer = LodSettings.ReevaluateInterval;
 				}
 
-				if (currentLodTier == AILodTier.Dormant)
-					return;
+				// --- LOD Re-evaluation (non-dormant tiers) ---
+				lodReevaluateTimer -= Time.deltaTime;
+				if (lodReevaluateTimer <= 0f)
+				{
+					AILodTier previousTier = currentLodTier;
+					currentLodTier = EvaluateLodTier();
+					lodReevaluateTimer = LodSettings.ReevaluateInterval;
 
+					// Handle tier transitions (e.g., disengage combat when going to Far).
+					if (previousTier != currentLodTier)
+					{
+						OnLodTierChanged(previousTier, currentLodTier);
+					}
+
+					// If we just transitioned to Dormant, bail immediately.
+					if (currentLodTier == AILodTier.Dormant)
+						return;
+				}
+
+				// --- Frame Stagger Gate ---
+				// Spreads NPC updates evenly across frames to avoid spikes.
+				// Active: mod 3 ≈ 50ms, Nearby: mod 12 ≈ 200ms, Far: mod 60 ≈ 1s.
 				int modulus = LodSettings.GetStaggerModulus(currentLodTier);
 				if ((Time.frameCount + staggerID) % modulus != 0)
 					return;
 			}
 			else
 			{
-				// Simple stagger: only 1 in 3 frames per NPC.
+				// No LOD settings — simple 1-in-3 frame stagger.
 				if ((Time.frameCount + staggerID) % 3 != 0)
 					return;
 			}
 
 			float dt = Time.deltaTime;
 
+			// --- Dispatch to tier-appropriate update pipeline ---
+			switch (currentLodTier)
+			{
+				case AILodTier.Active:
+					UpdateActive(dt);
+					break;
+				case AILodTier.Nearby:
+					UpdateNearby(dt);
+					break;
+				case AILodTier.Far:
+					UpdateFar(dt);
+					break;
+			}
+		}
+
+		/// <summary>
+		/// Full AI pipeline for Active tier NPCs (close to players).
+		/// Runs all subsystems: enemy sweep, leash, behavior tree, boss scripts,
+		/// state machine, virtual camera, aggression decay, and facing.
+		/// </summary>
+		private void UpdateActive(float dt)
+		{
 			SweepForEnemies();
 			CheckLeash();
 
@@ -545,25 +622,121 @@ namespace FishMMO.Shared
 			}
 
 			// --- State Machine (execution layer) ---
-			// If the behavior tree already produced a state transition this tick,
-			// skip the state machine's own update to avoid conflicting decisions.
 			if (!btHandled)
 			{
 				UpdateCurrentState();
 			}
 
 			UpdateVirtualCamera();
+			TickAggression(dt);
+			FaceLookTarget();
+		}
 
-			// Throttle aggression decay to fixed intervals instead of every frame.
-			aggressionTickTimer -= dt;
-			if (aggressionTickTimer <= 0f)
+		/// <summary>
+		/// Simplified pipeline for Nearby tier NPCs (within medium range of players).
+		/// Skips: enemy sweep (relies on event-driven <see cref="OnThreatReceived"/>),
+		/// behavior tree, and boss scripts.
+		/// Runs: leash, state machine, virtual camera, aggression decay, facing.
+		/// Combat still functions via the state machine and event-driven damage entry.
+		/// </summary>
+		private void UpdateNearby(float dt)
+		{
+			CheckLeash();
+			UpdateCurrentState();
+			UpdateVirtualCamera();
+			TickAggression(dt);
+			FaceLookTarget();
+		}
+
+		/// <summary>
+		/// Minimal pipeline for Far tier NPCs (far from all players).
+		/// No combat AI, no enemy sweep, no boss scripts, no aggression, no virtual camera.
+		/// Only runs: leash check and basic state machine (wander/idle/return home).
+		/// If the NPC is in a combat state, it transitions to idle.
+		/// </summary>
+		private void UpdateFar(float dt)
+		{
+			// Far tier NPCs should not be in combat — disengage if they are.
+			if (CurrentState is BaseAttackingState)
 			{
-				const float AGGRESSION_TICK_INTERVAL = 0.5f;
-				AggressionState?.Tick(AGGRESSION_TICK_INTERVAL);
-				aggressionTickTimer = AGGRESSION_TICK_INTERVAL;
+				TransitionToIdleState();
+				return;
 			}
 
-			FaceLookTarget();
+			CheckLeash();
+			UpdateCurrentState();
+		}
+
+		/// <summary>
+		/// Handles LOD tier transitions. Cleans up combat state when transitioning to
+		/// lower tiers, and restores readiness when transitioning to higher tiers.
+		/// <para>
+		/// Transitioning to <see cref="AILodTier.Far"/> or <see cref="AILodTier.Dormant"/>:
+		/// interrupts abilities, heals to full, clears aggression, and transitions to idle.
+		/// This acts as a soft-leash reset — if no players are nearby, the NPC shouldn't
+		/// remain in a damaged/combat state.
+		/// </para>
+		/// </summary>
+		private void OnLodTierChanged(AILodTier previousTier, AILodTier newTier)
+		{
+			// Transitioning to Far or Dormant — full combat disengage.
+			if (newTier >= AILodTier.Far && CurrentState is BaseAttackingState)
+			{
+				// Interrupt any active ability.
+				if (Character.TryGet(out IAbilityController abilityController))
+				{
+					abilityController.Interrupt(null);
+				}
+
+				// Heal to full — no players are close enough to notice.
+				if (Character.TryGet(out ICharacterDamageController damageController))
+				{
+					damageController.CompleteHeal();
+				}
+
+				// Clear threat table.
+				AggressionState?.Clear();
+
+				// Reset boss script phases.
+				if (BossState != null && BossScript != null && BossScript.ResetOnLeash)
+				{
+					BossState.Reset();
+				}
+
+				TransitionToIdleState();
+			}
+		}
+
+		/// <summary>
+		/// Event-driven combat entry. Called by <see cref="AggressionState"/> when the
+		/// NPC receives its first threat event (damage from a player/NPC). Immediately
+		/// transitions to combat without waiting for the next <see cref="SweepForEnemies"/>
+		/// physics poll.
+		/// <para>
+		/// This eliminates the biggest polling cost for non-Active NPCs: thousands of
+		/// per-NPC physics OverlapSphere calls every <see cref="EnemySweepRate"/> seconds.
+		/// Nearby/Far tier NPCs rely entirely on this event to detect combat.
+		/// Active tier NPCs still run SweepForEnemies for proactive (hostile faction) detection.
+		/// </para>
+		/// </summary>
+		/// <param name="attacker">The character that generated the first threat event.</param>
+		public void OnThreatReceived(ICharacter attacker)
+		{
+			if (attacker == null || AttackingState == null)
+				return;
+
+			// Already in combat or returning home — don't interrupt.
+			if (CurrentState == AttackingState || CurrentState == ReturnHomeState)
+				return;
+
+			// Verify the attacker is alive.
+			if (!attacker.TryGet(out ICharacterDamageController dmg) || !dmg.IsAlive)
+				return;
+
+			// Enter combat immediately.
+			Target = attacker.Transform;
+			LookTarget = attacker.Transform;
+			ChangeState(AttackingState);
 		}
 
 		/// <summary>
@@ -672,6 +845,22 @@ namespace FishMMO.Shared
 				nextUpdate = CurrentState.GetUpdateRate();
 			}
 			nextUpdate -= Time.deltaTime;
+		}
+
+		/// <summary>
+		/// Throttles aggression decay to fixed 0.5s intervals instead of every tick.
+		/// Called by <see cref="UpdateActive"/> and <see cref="UpdateNearby"/> but
+		/// NOT by <see cref="UpdateFar"/> (Far tier NPCs have no threat table).
+		/// </summary>
+		private void TickAggression(float dt)
+		{
+			aggressionTickTimer -= dt;
+			if (aggressionTickTimer <= 0f)
+			{
+				const float AGGRESSION_TICK_INTERVAL = 0.5f;
+				AggressionState?.Tick(AGGRESSION_TICK_INTERVAL);
+				aggressionTickTimer = AGGRESSION_TICK_INTERVAL;
+			}
 		}
 
 		/// <summary>
@@ -826,6 +1015,15 @@ namespace FishMMO.Shared
 			// --- Default scoring-based selection ---
 			float sqrDist = GetSqrDistanceToTarget();
 
+			// Pre-compute health percentage for personality bonuses.
+			float healthPercent = 1f;
+			if (Personality != null && damageController.ResourceInstance != null &&
+				damageController.ResourceInstance.FinalValue > 0f)
+			{
+				healthPercent = damageController.ResourceInstance.CurrentValue /
+								damageController.ResourceInstance.FinalValue;
+			}
+
 			Ability bestAbility = null;
 			float bestScore = float.MinValue;
 
@@ -856,6 +1054,16 @@ namespace FishMMO.Shared
 				{
 					// Out of range: low score, still a fallback.
 					score = abilityRange;
+				}
+
+				// --- Personality-weighted scoring ---
+				// Apply the personality's category weight as a multiplier, then add
+				// any health-dependent bonus. This makes two NPCs with the same abilities
+				// but different personalities favour different ability categories.
+				if (Personality != null)
+				{
+					score *= Personality.GetWeight(ability);
+					score += Personality.GetBonusScore(ability, healthPercent);
 				}
 
 				// Add small random jitter so the NPC doesn't always pick the same ability.

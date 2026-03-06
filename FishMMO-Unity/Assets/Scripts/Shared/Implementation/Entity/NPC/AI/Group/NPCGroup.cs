@@ -33,6 +33,21 @@ namespace FishMMO.Shared
 		[Tooltip("When true, all DPS members share the tank's target.")]
 		public bool FocusTargeting = true;
 
+		[Header("Pack Tactics")]
+		[Tooltip("How the group coordinates spatial positioning around the target during combat.")]
+		public PackTactic Tactic = PackTactic.None;
+
+		[Tooltip("Base orbit radius for pack tactic positioning (meters from target).")]
+		public float TacticOrbitRadius = 5f;
+
+		[Tooltip("Degrees per second the Kite tactic rotates the group ring.")]
+		public float KiteRotationSpeed = 30f;
+
+		/// <summary>
+		/// Running angle offset (radians) for the Kite tactic's slow rotation.
+		/// </summary>
+		private float kiteAngleOffset;
+
 		/// <summary>
 		/// The group's shared combat target. Typically set by the tank or by whichever
 		/// member first enters combat.
@@ -222,6 +237,150 @@ namespace FishMMO.Shared
 			if (FocusTargeting && tankTarget != null)
 			{
 				GroupTarget = tankTarget;
+			}
+
+			// Assign tactical orbit angles when in combat.
+			if (IsInCombat && Tactic != PackTactic.None)
+			{
+				AssignTacticalPositions();
+			}
+		}
+
+		/// <summary>
+		/// Assigns each alive member's <see cref="AIController.OrbitAngle"/> based on the
+		/// current <see cref="Tactic"/>. Called every <see cref="EVALUATE_INTERVAL"/> while
+		/// in combat.
+		/// </summary>
+		private void AssignTacticalPositions()
+		{
+			if (AliveMemberCount < 1)
+				return;
+
+			switch (Tactic)
+			{
+				case PackTactic.Surround:
+					AssignSurround();
+					break;
+				case PackTactic.Flank:
+					AssignFlank();
+					break;
+				case PackTactic.FocusFire:
+					AssignFocusFire();
+					break;
+				case PackTactic.Kite:
+					AssignKite();
+					break;
+			}
+		}
+
+		/// <summary>
+		/// Surround: spread members evenly in a 360° ring around the target.
+		/// </summary>
+		private void AssignSurround()
+		{
+			float angleStep = (Mathf.PI * 2f) / AliveMemberCount;
+			int aliveIndex = 0;
+
+			for (int i = 0; i < members.Count; i++)
+			{
+				NPCGroupMember member = members[i];
+				if (member?.Controller == null) continue;
+				if (!IsMemberAlive(member.Controller)) continue;
+
+				member.Controller.OrbitAngle = angleStep * aliveIndex;
+				aliveIndex++;
+			}
+		}
+
+		/// <summary>
+		/// Flank: tank faces the front (angle 0), all other members get angles in the
+		/// rear 180° arc (π ± spread). Creates a pincer formation.
+		/// </summary>
+		private void AssignFlank()
+		{
+			int nonTankAlive = 0;
+			for (int i = 0; i < members.Count; i++)
+			{
+				NPCGroupMember m = members[i];
+				if (m?.Controller == null || !IsMemberAlive(m.Controller)) continue;
+				if (m.Role != NPCGroupRole.Tank)
+					nonTankAlive++;
+			}
+
+			// Spread the non-tank members across the rear 180° arc.
+			float rearSpread = nonTankAlive > 1
+				? Mathf.PI / (nonTankAlive - 1)
+				: 0f;
+			float rearStart = Mathf.PI * 0.5f; // Start at 90° (right side of rear)
+
+			int flankIndex = 0;
+
+			for (int i = 0; i < members.Count; i++)
+			{
+				NPCGroupMember member = members[i];
+				if (member?.Controller == null || !IsMemberAlive(member.Controller)) continue;
+
+				if (member.Role == NPCGroupRole.Tank)
+				{
+					// Tank faces the target head-on.
+					member.Controller.OrbitAngle = 0f;
+				}
+				else
+				{
+					// Position behind the target.
+					member.Controller.OrbitAngle = rearStart + (rearSpread * flankIndex);
+					flankIndex++;
+				}
+			}
+		}
+
+		/// <summary>
+		/// FocusFire: all members cluster on the same side with tight angular spread.
+		/// </summary>
+		private void AssignFocusFire()
+		{
+			// Tight 30° spread centered on angle 0.
+			const float CLUSTER_SPREAD = 0.52f; // ~30 degrees in radians
+			float angleStep = AliveMemberCount > 1
+				? CLUSTER_SPREAD / (AliveMemberCount - 1)
+				: 0f;
+			float startAngle = -CLUSTER_SPREAD * 0.5f;
+
+			int aliveIndex = 0;
+
+			for (int i = 0; i < members.Count; i++)
+			{
+				NPCGroupMember member = members[i];
+				if (member?.Controller == null) continue;
+				if (!IsMemberAlive(member.Controller)) continue;
+
+				member.Controller.OrbitAngle = startAngle + (angleStep * aliveIndex);
+				aliveIndex++;
+			}
+		}
+
+		/// <summary>
+		/// Kite: spread evenly like Surround, but the entire ring slowly rotates each tick.
+		/// </summary>
+		private void AssignKite()
+		{
+			kiteAngleOffset += KiteRotationSpeed * Mathf.Deg2Rad * EVALUATE_INTERVAL;
+
+			// Keep the offset in [0, 2π) to prevent float drift over long sessions.
+			if (kiteAngleOffset > Mathf.PI * 2f)
+				kiteAngleOffset -= Mathf.PI * 2f;
+
+			float angleStep = (Mathf.PI * 2f) / AliveMemberCount;
+			int aliveIndex = 0;
+
+			for (int i = 0; i < members.Count; i++)
+			{
+				NPCGroupMember member = members[i];
+				if (member?.Controller == null) continue;
+				if (!IsMemberAlive(member.Controller)) continue;
+
+				member.Controller.OrbitAngle = kiteAngleOffset + (angleStep * aliveIndex);
+				aliveIndex++;
 			}
 		}
 

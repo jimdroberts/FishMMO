@@ -28,13 +28,24 @@ namespace FishMMO.Shared
 	/// observer determines the tier.
 	/// </para>
 	/// <para>
-	/// <b>Default thresholds:</b>
+	/// <b>Tick scheduling:</b> Each tier has a frame stagger modulus that spreads NPC updates
+	/// evenly across frames. At 60 FPS the approximate update intervals are:
 	/// <list type="table">
-	///   <listheader><term>Tier</term><description>Distance / Update Interval</description></listheader>
-	///   <item><term>Active</term><description>&lt; 40 m → every frame (stagger only)</description></item>
-	///   <item><term>Nearby</term><description>&lt; 100 m → 0.2 s</description></item>
-	///   <item><term>Far</term><description>&lt; 300 m → 1.0 s</description></item>
-	///   <item><term>Dormant</term><description>≥ 300 m or no observers → suspended</description></item>
+	///   <listheader><term>Tier</term><description>Modulus → Approx. Interval</description></listheader>
+	///   <item><term>Active</term><description>3 → ~50 ms (full AI pipeline)</description></item>
+	///   <item><term>Nearby</term><description>12 → ~200 ms (simplified — no BT, no boss, no sweep)</description></item>
+	///   <item><term>Far</term><description>60 → ~1 s (minimal — no combat, wander/idle only)</description></item>
+	///   <item><term>Dormant</term><description>120 → ~2 s (wake-up check only)</description></item>
+	/// </list>
+	/// </para>
+	/// <para>
+	/// <b>Behavior simplification:</b> Lower tiers run progressively simpler AI:
+	/// <list type="table">
+	///   <listheader><term>Tier</term><description>Systems Running</description></listheader>
+	///   <item><term>Active</term><description>BehaviorTree, StateMachine, Abilities, Threat, GroupAI, BossScripts, EnemySweep</description></item>
+	///   <item><term>Nearby</term><description>StateMachine, Abilities, Threat, GroupAI (no BT, no BossScript, no EnemySweep — relies on event-driven combat entry)</description></item>
+	///   <item><term>Far</term><description>StateMachine only (wander/idle/return home — no combat, no threat, no sweep)</description></item>
+	///   <item><term>Dormant</term><description>Disabled — only periodic LOD re-evaluation to wake up when a player approaches</description></item>
 	/// </list>
 	/// </para>
 	/// </summary>
@@ -52,17 +63,21 @@ namespace FishMMO.Shared
 		public float FarDistanceSqr = 90000f; // 300m
 
 		[Header("Frame Stagger Modulus")]
-		[Tooltip("Active tier stagger. 1 = every frame, 2 = every other, 3 = every third.")]
+		[Tooltip("Active tier stagger. At 60 FPS: 3 ≈ 50ms. Full AI pipeline runs on these frames.")]
 		[Min(1)]
 		public int ActiveStaggerModulus = 3;
 
-		[Tooltip("Nearby tier stagger modulus.")]
+		[Tooltip("Nearby tier stagger modulus. At 60 FPS: 12 ≈ 200ms. Simplified AI (no BT, no boss, no sweep).")]
 		[Min(1)]
-		public int NearbyStaggerModulus = 6;
+		public int NearbyStaggerModulus = 12;
 
-		[Tooltip("Far tier stagger modulus.")]
+		[Tooltip("Far tier stagger modulus. At 60 FPS: 60 ≈ 1s. Minimal AI (wander/idle only, no combat).")]
 		[Min(1)]
-		public int FarStaggerModulus = 15;
+		public int FarStaggerModulus = 60;
+
+		[Tooltip("Dormant tier stagger modulus. At 60 FPS: 120 ≈ 2s. Only LOD re-evaluation to wake up.")]
+		[Min(1)]
+		public int DormantCheckModulus = 120;
 
 		[Header("Re-evaluation")]
 		[Tooltip("Seconds between LOD tier re-evaluation. Lower = more responsive but more expensive.")]

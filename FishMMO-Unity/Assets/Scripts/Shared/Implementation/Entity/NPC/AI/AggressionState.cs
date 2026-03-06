@@ -11,6 +11,13 @@ namespace FishMMO.Shared
 	/// navigation and state management. One instance per NPC — plain C# class, not a
 	/// MonoBehaviour or ScriptableObject.
 	/// </para>
+	/// <para>
+	/// <b>Event-driven combat entry:</b> When the threat table transitions from empty
+	/// to non-empty (first damage received), the <see cref="OnCombatInitiated"/> callback
+	/// is invoked. <see cref="AIController"/> wires this to
+	/// <see cref="AIController.OnThreatReceived"/> so the NPC enters combat immediately
+	/// instead of waiting for the next physics sweep.
+	/// </para>
 	/// </summary>
 	public class AggressionState
 	{
@@ -30,6 +37,14 @@ namespace FishMMO.Shared
 		/// on the ScriptableObject state to avoid the shared-instance mutable state problem.
 		/// </summary>
 		public float TargetReevaluationTimer;
+
+		/// <summary>
+		/// Callback invoked when the threat table transitions from empty to non-empty.
+		/// Set by <see cref="AIController"/> during initialization to enable event-driven
+		/// combat entry. The parameter is the attacker who generated the first threat event.
+		/// This replaces the need for constant physics sweep polling to detect combat.
+		/// </summary>
+		public System.Action<ICharacter> OnCombatInitiated;
 
 		/// <summary>
 		/// Creates a new aggression state, initialises the threat table, and subscribes
@@ -101,6 +116,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called by the global OnDamaged event. If this NPC is the defender, record aggression
 		/// from the attacker so threat-based targeting can prioritize them.
+		/// When the threat table was previously empty (first hit), invokes
+		/// <see cref="OnCombatInitiated"/> for event-driven combat entry.
 		/// </summary>
 		private void OnCharacterDamaged(ICharacter attacker, ICharacter defender, int amount, DamageAttributeTemplate damageAttribute)
 		{
@@ -108,7 +125,16 @@ namespace FishMMO.Shared
 			if (defender != character || attacker == null || attacker == character)
 				return;
 
+			// Check if the threat table is empty BEFORE recording — first hit triggers combat.
+			bool wasEmpty = Controller == null || !Controller.HasAggression;
+
 			Controller?.RecordDamage(attacker.ID, amount);
+
+			// First threat event → notify the controller to enter combat immediately.
+			if (wasEmpty)
+			{
+				OnCombatInitiated?.Invoke(attacker);
+			}
 		}
 
 		/// <summary>

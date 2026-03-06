@@ -76,7 +76,8 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called every frame to update the attacking state. Handles death, target loss, and attack logic.
+		/// Called every frame to update the attacking state. Handles death, personality-driven
+		/// retreat, target loss, and attack logic.
 		/// </summary>
 		/// <param name="controller">The AI controller.</param>
 		/// <param name="deltaTime">Frame time.</param>
@@ -89,6 +90,25 @@ namespace FishMMO.Shared
 				// If AI is dead, stop attacking
 				controller.TransitionToIdleState(); // Or a specific 'Dead' state
 				return;
+			}
+
+			// --- Personality-driven retreat ---
+			// If the NPC has a combat personality with a retreat threshold and health
+			// has dropped below it, transition to the retreat state if available.
+			if (controller.Personality != null && controller.RetreatState != null)
+			{
+				float healthPct = 1f;
+				if (damageController.ResourceInstance != null &&
+					damageController.ResourceInstance.FinalValue > 0f)
+				{
+					healthPct = damageController.ResourceInstance.CurrentValue /
+								damageController.ResourceInstance.FinalValue;
+				}
+				if (controller.Personality.ShouldRetreat(healthPct))
+				{
+					controller.ChangeState(controller.RetreatState);
+					return;
+				}
 			}
 
 			// Check if the target is lost or inactive
@@ -128,8 +148,18 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Picks a valid target from the provided list using the aggression table for intelligent
-		/// threat-based selection. Falls back to first-alive selection when no aggression data exists.
+		/// Picks a valid target from the provided list using role-based group logic and the
+		/// aggression table for intelligent threat-based selection. Falls back to first-alive
+		/// selection when no aggression data exists.
+		/// <para>
+		/// <b>Role-based targeting (when in a group):</b>
+		/// <list type="bullet">
+		///   <item><b>Tank</b> — picks the highest-threat target from the aggression table.</item>
+		///   <item><b>DPS / Support</b> — uses the group's shared <see cref="NPCGroup.GroupTarget"/>.</item>
+		///   <item><b>Healer</b> — handled by <see cref="HealerAttackingState"/>, falls through to default.</item>
+		///   <item><b>None</b> — uses default aggression/first-alive logic.</item>
+		/// </list>
+		/// </para>
 		/// Sets controller's target and look target.
 		/// </summary>
 		/// <param name="controller">The AI controller.</param>
@@ -138,8 +168,14 @@ namespace FishMMO.Shared
 		{
 			ICharacter target = null;
 
-			// Use aggression-based picking if the table has data.
-			if (controller.Aggression != null && controller.Aggression.HasAggression)
+			// --- Role-based group targeting ---
+			if (controller.Group != null && controller.GroupRole != NPCGroupRole.None)
+			{
+				target = PickRoleBasedTarget(controller, targets);
+			}
+
+			// --- Aggression-based fallback ---
+			if (target == null && controller.Aggression != null && controller.Aggression.HasAggression)
 			{
 				target = controller.Aggression.PickTarget(targets, controller.NpcRNG);
 			}
@@ -170,6 +206,65 @@ namespace FishMMO.Shared
 				// No valid target found, transition out of attacking state
 				controller.TransitionToRandomMovementState();
 			}
+		}
+
+		/// <summary>
+		/// Selects a target based on the controller's <see cref="NPCGroupRole"/>.
+		/// Returns null if the role doesn't produce a valid target (caller falls through
+		/// to default logic).
+		/// </summary>
+		/// <param name="controller">The AI controller with group and role info.</param>
+		/// <param name="targets">Available targets from the sweep.</param>
+		/// <returns>A role-appropriate target, or null.</returns>
+		protected virtual ICharacter PickRoleBasedTarget(AIController controller, List<ICharacter> targets)
+		{
+			switch (controller.GroupRole)
+			{
+				case NPCGroupRole.Tank:
+					// Tank: always target the highest-threat entry.
+					return PickHighestThreatTarget(controller, targets);
+
+				case NPCGroupRole.DPS:
+				case NPCGroupRole.Support:
+					// DPS/Support: follow the group's shared target when available.
+					return PickGroupSharedTarget(controller);
+
+				// Healer role is handled by HealerAttackingState — fall through to default.
+				default:
+					return null;
+			}
+		}
+
+		/// <summary>
+		/// Returns the highest-threat target that is alive and present in the sweep results.
+		/// Used by Tank role to maintain aggro on the most dangerous enemy.
+		/// </summary>
+		private static ICharacter PickHighestThreatTarget(AIController controller, List<ICharacter> targets)
+		{
+			if (controller.Aggression == null || !controller.Aggression.HasAggression)
+				return null;
+
+			// PickTarget already selects by highest aggression — use it directly.
+			return controller.Aggression.PickTarget(targets, controller.NpcRNG);
+		}
+
+		/// <summary>
+		/// Returns the group's shared target if it is still alive and active.
+		/// Used by DPS and Support roles to focus fire with the group.
+		/// </summary>
+		private static ICharacter PickGroupSharedTarget(AIController controller)
+		{
+			if (controller.Group == null || controller.Group.GroupTarget == null)
+				return null;
+
+			ICharacter groupTarget = controller.Group.GroupTarget.GetComponent<ICharacter>();
+			if (groupTarget == null || !groupTarget.GameObject.activeSelf)
+				return null;
+
+			if (!groupTarget.TryGet(out ICharacterDamageController dmg) || !dmg.IsAlive)
+				return null;
+
+			return groupTarget;
 		}
 
 		/// <summary>
