@@ -230,6 +230,7 @@ ScriptableObject
 | `AggressionDecayRate`       | `float`                  | `3.0`    | Threat decay per second                                      |
 | `AggressionStaleTimeout`    | `float`                  | `30.0`   | Seconds before stale entries are pruned                      |
 | `AggressionVarietyChance`   | `float`                  | `0.15`   | Chance (0-1) to pick secondary threat target                 |
+| `RepathInterval`            | `float`                  | `0.5`    | Min seconds between `NavMeshAgent.SetDestination` calls      |
 | `eyeTransform`              | `Transform`              | —        | Origin for vision checks and virtual camera                  |
 
 ### Runtime Properties
@@ -304,6 +305,8 @@ Update()
    - **Out-of-range abilities**: score = `range` (fallback).
    - A random jitter of 0-50 is added to prevent deterministic choices.
    - Abilities on cooldown or lacking resources are skipped.
+
+**Ability Caching:** Both `PickBestAbility` and `HasAbilityInRange` iterate a **flat cached `List<Ability>`** instead of the dictionary's enumerator. `RebuildAbilityCacheIfDirty()` rebuilds this list only when `KnownAbilities.Count` changes (learning/unlearning an ability), avoiding per-tick dictionary enumeration and enumerator allocation for hundreds of NPCs.
 
 This means designers can set up precise condition-based rotations while still getting sensible default behaviour for any gaps in the rotation.
 
@@ -1023,6 +1026,60 @@ Previously, **every** NPC ran `SweepForEnemies()` (a `PhysicsScene.OverlapSphere
 | Dormant  | No events processed (NPC is suspended) |
 
 Active tier NPCs still run physics sweeps for **proactive** detection (hostile-faction NPCs that should aggro on proximity). Nearby tier NPCs rely **entirely** on damage events — they only enter combat when actually hit.
+
+---
+
+## Performance Optimizations
+
+Beyond the LOD system, two micro-optimizations reduce per-tick work for large NPC populations:
+
+### Ability Cache
+
+**Problem:** `PickBestAbility()` and `HasAbilityInRange()` previously iterated `IAbilityController.KnownAbilities` — a `Dictionary<int, Ability>`. `foreach` over a dictionary allocates an enumerator struct each call, and dictionary iteration has poor cache locality. With 200+ active NPCs each picking abilities multiple times per second, this adds up.
+
+**Solution:** `AIController` maintains a flat `List<Ability> cachedAbilities` that mirrors the dictionary values. A dirty check (`lastKnownAbilityCount`) triggers `RebuildAbilityCacheIfDirty()` only when abilities are learned or unlearned.
+
+| Component                 | Details                                                    |
+|---------------------------|------------------------------------------------------------|
+| `cachedAbilities`         | `List<Ability>(8)` — pre-allocated flat ability list       |
+| `lastKnownAbilityCount`   | `int` — tracks dictionary count for dirty detection        |
+| `RebuildAbilityCacheIfDirty()` | Rebuilds list when count changes; skips null entries   |
+
+**Benefits:**
+- Zero enumerator allocation per tick (flat `for (int i = ...)` loop).
+- Better CPU cache locality (contiguous array vs. hash bucket traversal).
+- Rebuild cost amortized — only fires when abilities change (rare event).
+
+### Pathfinding Throttle
+
+**Problem:** States like `BaseAttackingState.MoveTowardTarget()`, `OrbitState`, and `HealerAttackingState.MoveTowardAlly()` call `NavMeshAgent.SetDestination()` every tick while chasing a moving target. Each call triggers a full A* pathfinding recalculation on the NavMesh, which is expensive. With hundreds of NPCs in combat, this creates significant NavMesh contention.
+
+**Solution:** `AIController.SetThrottledDestination(Vector3)` wraps `Agent.SetDestination()` behind a cooldown timer. States that chase moving targets call this instead of `Agent.SetDestination()` directly.
+
+| Component                | Details                                                       |
+|--------------------------|---------------------------------------------------------------|
+| `RepathInterval`         | `float` (default `0.5s`) — min seconds between repath calls   |
+| `repathCooldown`         | `float` — timer decremented in `UpdateActive`/`UpdateNearby`  |
+| `SetThrottledDestination()` | Returns `bool`, only calls `SetDestination` when cooldown ≤ 0 |
+
+**States using throttled pathing:**
+- `BaseAttackingState.MoveTowardTarget()` — chasing combat target
+- `BaseAttackingState.RetreatFromTarget()` — kiting away from target
+- `OrbitState.UpdateState()` — circle-strafing around target
+- `HealerAttackingState.MoveTowardAlly()` — chasing ally to heal
+- `RetreatState` — ongoing retreat recalculation
+- `PetIdleState` — following owner
+
+**States keeping direct `SetDestination`:**
+- `GetBehindState.Enter()` — one-shot flanking destination
+- `RetreatState.Enter()` — one-shot initial retreat position
+- `AIController.Target` setter — one-shot on target change
+- Waypoint navigation — one-shot per waypoint
+
+**Benefits:**
+- At 0.5s interval, a 200-NPC combat goes from ~12,000 → ~400 SetDestination calls/second.
+- NavMeshAgent continues moving along its last-computed path between repathing — movement remains smooth.
+- `[MethodImpl(AggressiveInlining)]` keeps the hot path (cooldown check) zero-cost when skipping.
 
 ---
 

@@ -9,12 +9,15 @@ The Ability system is a server-authoritative, template-driven framework for abil
 ```
 Ability/
 ├── Ability.cs                          # Runtime ability instance (event dictionaries, resource costs, stat aggregation)
-├── AbilityActivationFlags.cs           # Enum: IsActualData, Interrupt
-├── AbilityController.cs                # Per-entity controller (CharacterBehaviour, IAbilityController, Replicate/Reconcile)
+├── AbilityActivationFlags.cs           # Enum bit positions: IsActualData, Interrupt, IsHeld, IsConsumable, IsMount
+├── AbilityController.cs                # Core partial (fields, lifecycle, CSP Replicate/Reconcile pipeline)
+├── AbilityController.Activation.cs     # Activation partial (start, process, spawn, validate, cancel, consumable)
+├── AbilityController.Knowledge.cs      # Knowledge partial (Learn/Knows methods, event dictionaries)
+├── AbilityController.Networking.cs     # Network partial (broadcast handlers, ReadPayload/WritePayload)
 ├── AbilityObject.cs                    # Spawned ability object (MonoBehaviour, lifetime/collision/tick management)
 ├── AbilityObjectSnapshot.cs            # Immutable snapshot for detached ability objects
 ├── Activation/
-│   ├── AbilityActivationReplicateData.cs   # IReplicateData: ActivationFlags, QueuedAbilityID, IsHeld
+│   ├── AbilityActivationReplicateData.cs   # IReplicateData: ActivationFlags (int), QueuedAbilityID (long)
 │   └── AbilityReconcileData.cs             # IReconcileData: AbilityID, RemainingTime, Seed, ResourceState
 ├── Cooldown/
 │   ├── CooldownController.cs           # Per-entity cooldown manager (CharacterBehaviour, ICooldownController)
@@ -53,6 +56,10 @@ Ability                                 # Plain C# class (no MonoBehaviour)
 ```
 CharacterBehaviour
 ├── AbilityController   : IAbilityController (extends IAbilityKnowledgeController)
+│   ├── AbilityController.cs            # Core: fields, lifecycle, Replicate/Reconcile
+│   ├── AbilityController.Activation.cs # Activation logic, consumable, interrupt, release
+│   ├── AbilityController.Knowledge.cs  # Learn/Knows methods, event tracking
+│   └── AbilityController.Networking.cs # Broadcasts, ReadPayload/WritePayload
 └── CooldownController  : ICooldownController
 ```
 
@@ -94,9 +101,12 @@ ICharacterAttributeController
 ### Enums
 
 ```
-AbilityActivationFlags : int
-├── IsActualData = 1    # Marks the replicate data as real (not default)
-└── Interrupt    = 2    # Queues an interrupt of the current ability
+AbilityActivationFlags : int    # Bit positions in an int, manipulated via IntBitExtensions
+├── IsActualData = 0    # Marks the replicate data as real (not default)
+├── Interrupt    = 1    # Queues an interrupt of the current ability
+├── IsHeld       = 2    # Activation key is held (charged/channeled abilities)
+├── IsConsumable = 3    # Activation is for a consumable item
+└── IsMount      = 4    # Activation is for a mount
 
 AbilitySpawnTarget : byte
 ├── Self = 0                        # Apply directly to caster
@@ -126,11 +136,12 @@ Learn Ability (server grants template + events)
 Queue Activation (player presses hotbar key)
         │
         ▼
-  ┌─────────────────────────────────────┐
-  │  AbilityController.Replicate()      │
-  │  (IReplicateData: QueuedAbilityID,  │
-  │   IsHeld, ActivationFlags)          │
-  └─────────────────┬───────────────────┘
+  ┌──────────────────────────────────────────────────┐
+  │  AbilityController.Replicate()                   │
+  │  (IReplicateData: QueuedAbilityID,               │
+  │   ActivationFlags — encodes IsActualData,        │
+  │   Interrupt, IsHeld, IsConsumable, IsMount)       │
+  └─────────────────────────┬────────────────────────┘
                     │
                     ▼
         Validate CanManipulate()
@@ -172,9 +183,8 @@ The `AbilityController` uses FishNet's **Replicate/Reconcile** prediction model 
 
 | Field              | Type   | Description                                        |
 |--------------------|--------|----------------------------------------------------|
-| `ActivationFlags`  | `int`  | Bit flags: `IsActualData`, `Interrupt`             |
-| `QueuedAbilityID`  | `long` | The ability ID the player wants to activate        |
-| `IsHeld`           | `bool` | Whether the activation key is held (for charged/channeled abilities) |
+| `ActivationFlags`  | `int`  | Bit flags: `IsActualData`, `Interrupt`, `IsHeld`, `IsConsumable`, `IsMount` |
+| `QueuedAbilityID`  | `long` | The ability or consumable template ID to activate  |
 
 ### Reconcile Data (`AbilityReconcileData`)
 
@@ -191,7 +201,22 @@ The server generates a seed via `playerSeedGenerator` and sends it in reconcile 
 
 ## AbilityController
 
-The `AbilityController` (`CharacterBehaviour`, `IAbilityController`) manages all ability state for a character.
+The `AbilityController` (`CharacterBehaviour`, `IAbilityController`) manages all ability state for a character. It is split into four **partial classes** for SOLID compliance:
+
+| Partial File                        | Responsibility                                                      |
+|-------------------------------------|---------------------------------------------------------------------|
+| `AbilityController.cs`              | Core fields, lifecycle (`OnAwake`, `ResetState`), CSP Replicate/Reconcile pipeline |
+| `AbilityController.Activation.cs`   | `Activate()`, `Interrupt()`, `Release()`, `ActivateConsumable()`, `CanManipulate()`, ability start/process/spawn/validate/cancel |
+| `AbilityController.Knowledge.cs`    | `Learn*()` / `Knows*()` methods, knowledge dictionaries and events  |
+| `AbilityController.Networking.cs`   | Client broadcast handlers, `ReadPayload()` / `WritePayload()`       |
+
+### Input Flags
+
+Local input state is stored in a single `int inputFlags` field using `AbilityActivationFlags` bit positions and manipulated via `IntBitExtensions` (`EnableBit`, `DisableBit`, `IsFlagged`). Each tick, `HandleCharacterInput()` copies `inputFlags` into the replicate data and clears one-shot flags (`Interrupt`, `IsConsumable`, `IsMount`), while persistent flags (`IsHeld`) remain until explicitly released.
+
+### Consumable Activation
+
+`ActivateConsumable(Item)` queues a consumable through the same Replicate/Reconcile pipeline as normal abilities. It sets the `IsConsumable` flag and stores the consumable template ID as `queuedAbilityID`, ensuring server-authoritative validation and prediction support.
 
 ### Key Fields
 

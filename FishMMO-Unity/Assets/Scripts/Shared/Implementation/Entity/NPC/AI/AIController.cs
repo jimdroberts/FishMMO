@@ -153,6 +153,15 @@ namespace FishMMO.Shared
 		[Tooltip("Chance to pick a non-top-threat target for variety.")]
 		public float AggressionVarietyChance = 0.15f;
 
+		[Header("Pathfinding")]
+		/// <summary>
+		/// Minimum seconds between <see cref="Agent"/>.<see cref="NavMeshAgent.SetDestination"/> calls
+		/// made through <see cref="SetThrottledDestination"/>. Prevents path recalculation spam
+		/// when a moving target causes frequent repathing.
+		/// </summary>
+		[Tooltip("Minimum seconds between NavMeshAgent.SetDestination calls via SetThrottledDestination.")]
+		public float RepathInterval = 0.5f;
+
 		/// <summary>
 		/// The aggression (threat) state for this NPC. Manages the threat table, event
 		/// subscriptions, and target re-evaluation timer. One instance per NPC — not shared.
@@ -276,6 +285,15 @@ namespace FishMMO.Shared
 		private int staggerID;
 		private List<BaseAIState> movementStates = new List<BaseAIState>();
 		private List<ICharacter> sweepResults = new List<ICharacter>(10);
+
+		// --- Ability cache ---
+		// Flat list rebuilt from IAbilityController.KnownAbilities when count changes.
+		// Avoids dictionary enumeration overhead in PickBestAbility / HasAbilityInRange.
+		private readonly List<Ability> cachedAbilities = new List<Ability>(8);
+		private int lastKnownAbilityCount = -1;
+
+		// --- Repath throttle ---
+		private float repathCooldown;
 
 		/// <summary>
 		/// Reusable buffer for collecting targets during combat state updates.
@@ -499,6 +517,9 @@ namespace FishMMO.Shared
 			GroupRole = NPCGroupRole.None;
 			BossState?.Reset();
 			AggressionState?.Clear();
+			cachedAbilities.Clear();
+			lastKnownAbilityCount = -1;
+			repathCooldown = 0f;
 		}
 
 		/// <summary>
@@ -598,6 +619,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void UpdateActive(float dt)
 		{
+			repathCooldown -= dt;
 			SweepForEnemies();
 			CheckLeash();
 
@@ -641,6 +663,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void UpdateNearby(float dt)
 		{
+			repathCooldown -= dt;
 			CheckLeash();
 			UpdateCurrentState();
 			UpdateVirtualCamera();
@@ -888,6 +911,50 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Throttled destination setter. Only calls <see cref="NavMeshAgent.SetDestination"/>
+		/// if enough time has elapsed since the last repath (controlled by <see cref="RepathInterval"/>).
+		/// Use this for ongoing movement toward a moving target (chase, orbit, retreat) to prevent
+		/// path recalculation spam. For one-time destinations (waypoint arrival, warp), use
+		/// <see cref="NavMeshAgent.SetDestination"/> directly.
+		/// </summary>
+		/// <param name="position">The world position to navigate toward.</param>
+		/// <returns>True if the destination was updated, false if throttled.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool SetThrottledDestination(Vector3 position)
+		{
+			if (repathCooldown > 0f)
+				return false;
+			if (!Agent.isOnNavMesh)
+				return false;
+
+			Agent.SetDestination(position);
+			repathCooldown = RepathInterval;
+			return true;
+		}
+
+		/// <summary>
+		/// Rebuilds the cached ability list from <see cref="IAbilityController.KnownAbilities"/>
+		/// if the ability count has changed. This replaces dictionary enumeration with flat list
+		/// iteration in <see cref="PickBestAbility"/> and <see cref="HasAbilityInRange"/>.
+		/// </summary>
+		private void RebuildAbilityCacheIfDirty(IAbilityController abilityController)
+		{
+			int currentCount = abilityController.KnownAbilities.Count;
+			if (currentCount == lastKnownAbilityCount)
+				return;
+
+			cachedAbilities.Clear();
+			foreach (var kvp in abilityController.KnownAbilities)
+			{
+				if (kvp.Value != null && kvp.Value.Template != null)
+				{
+					cachedAbilities.Add(kvp.Value);
+				}
+			}
+			lastKnownAbilityCount = currentCount;
+		}
+
+		/// <summary>
 		/// Evaluates the AI LOD tier based on the nearest observer's distance.
 		/// Uses the FishNet <c>NetworkObject.Observers</c> collection to find player connections,
 		/// then checks the squared distance to each observer's character.
@@ -1018,6 +1085,9 @@ namespace FishMMO.Shared
 					return null;
 			}
 
+			// --- Rebuild ability cache if abilities changed ---
+			RebuildAbilityCacheIfDirty(abilityController);
+
 			// --- Default scoring-based selection ---
 			float sqrDist = GetSqrDistanceToTarget();
 
@@ -1033,11 +1103,9 @@ namespace FishMMO.Shared
 			Ability bestAbility = null;
 			float bestScore = float.MinValue;
 
-			foreach (var kvp in abilityController.KnownAbilities)
+			for (int i = 0; i < cachedAbilities.Count; i++)
 			{
-				Ability ability = kvp.Value;
-				if (ability == null || ability.Template == null)
-					continue;
+				Ability ability = cachedAbilities[i];
 
 				// Skip abilities on cooldown.
 				if (cooldownController.IsOnCooldown(ability.ID))
@@ -1102,13 +1170,13 @@ namespace FishMMO.Shared
 			if (!Character.TryGet(out ICooldownController cooldownController))
 				return false;
 
+			RebuildAbilityCacheIfDirty(abilityController);
+
 			float sqrMinRange = minRange * minRange;
 
-			foreach (var kvp in abilityController.KnownAbilities)
+			for (int i = 0; i < cachedAbilities.Count; i++)
 			{
-				Ability ability = kvp.Value;
-				if (ability == null || ability.Template == null)
-					continue;
+				Ability ability = cachedAbilities[i];
 				if (cooldownController.IsOnCooldown(ability.ID))
 					continue;
 				if (!ability.MeetsActivationConditions(Character))

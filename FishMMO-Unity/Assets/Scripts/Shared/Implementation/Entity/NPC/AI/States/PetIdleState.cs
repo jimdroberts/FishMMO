@@ -74,7 +74,7 @@ namespace FishMMO.Shared
 					NavMeshHit hit;
 					if (NavMesh.SamplePosition(nearestPosition, out hit, 5.0f, NavMesh.AllAreas))
 					{
-						controller.Agent.SetDestination(hit.position);
+						controller.SetThrottledDestination(hit.position);
 					}
 				}
 			}

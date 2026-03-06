@@ -5,14 +5,14 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Represents a single instance of a buff applied to a character, tracking time, stacks, and template.
+	/// All state is deterministic — timing advances via explicit deltaTime, not frame-dependent values.
 	/// </summary>
 	public class Buff
 	{
 		/// <summary>
-		/// Version number for this buff instance, used for client synchronization and updates.
-		/// Incremented whenever the buff's state changes in a way that requires client updates (
-		/// e.g., remaining time changes, stacks added/removed).
-		/// Not incremented for changes that do not affect client state (e.g., internal tracking of time that doesn't meet the next tick).
+		/// Version number for this buff instance, used for database state-driven safety on updates.
+		/// Incremented whenever the buff's state changes in a way that requires persistence
+		/// (e.g., stacks added/removed, remaining time checkpointed).
 		/// </summary>
 		public long Version;
 
@@ -32,46 +32,32 @@ namespace FishMMO.Shared
 		public int Stacks;
 
 		/// <summary>
+		/// The number of ticks that have fired for this buff instance.
+		/// Used by cumulative tick templates to track total applied modifiers for clean reversal.
+		/// Serialized in payload for deterministic restoration.
+		/// </summary>
+		public int TickCount;
+
+		/// <summary>
 		/// The template that defines this buff's behavior and properties.
 		/// </summary>
 		public BaseBuffTemplate Template { get; private set; }
 
 		/// <summary>
-		/// Creates a new buff instance from a template ID, using the template's default duration and tick rate.
+		/// Creates a new buff instance from a template ID with optional overrides for timing and stacks.
 		/// </summary>
 		/// <param name="templateID">The template ID for the buff.</param>
-		public Buff(int templateID)
+		/// <param name="remainingTime">Override remaining time, or -1 to use the template default.</param>
+		/// <param name="tickTime">Override tick time, or -1 to use the template default.</param>
+		/// <param name="stacks">The initial stack count.</param>
+		/// <param name="tickCount">The number of ticks that have already fired (for restoration).</param>
+		public Buff(int templateID, float remainingTime = -1f, float tickTime = -1f, int stacks = 0, int tickCount = 0)
 		{
 			Template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
-			TickTime = Template.TickRate;
-			RemainingTime = Template.Duration;
-		}
-
-		/// <summary>
-		/// Creates a new buff instance from a template ID and a specific remaining time.
-		/// </summary>
-		/// <param name="templateID">The template ID for the buff.</param>
-		/// <param name="remainingTime">The remaining time for the buff.</param>
-		public Buff(int templateID, float remainingTime)
-		{
-			Template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
-			TickTime = Template.TickRate;
-			RemainingTime = remainingTime;
-		}
-
-		/// <summary>
-		/// Creates a new buff instance from a template ID, remaining time, tick time, and stack count.
-		/// </summary>
-		/// <param name="templateID">The template ID for the buff.</param>
-		/// <param name="remainingTime">The remaining time for the buff.</param>
-		/// <param name="tickTime">The remaining time until the next tick.</param>
-		/// <param name="stacks">The number of stacks for the buff.</param>
-		public Buff(int templateID, float remainingTime, float tickTime, int stacks)
-		{
-			Template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
-			TickTime = tickTime;
-			RemainingTime = remainingTime;
+			RemainingTime = remainingTime < 0f ? Template.Duration : remainingTime;
+			TickTime = tickTime < 0f ? Template.TickRate : tickTime;
 			Stacks = stacks;
+			TickCount = tickCount;
 		}
 
 		/// <summary>
@@ -85,16 +71,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Adds time to the remaining duration of the buff.
-		/// </summary>
-		/// <param name="time">The amount of time to add (seconds).</param>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void AddTime(float time)
-		{
-			RemainingTime += time;
-		}
-
-		/// <summary>
 		/// Subtracts time from the remaining tick time for the buff.
 		/// </summary>
 		/// <param name="time">The amount of time to subtract (seconds).</param>
@@ -102,16 +78,6 @@ namespace FishMMO.Shared
 		public void SubtractTickTime(float time)
 		{
 			TickTime -= time;
-		}
-
-		/// <summary>
-		/// Adds time to the remaining tick time for the buff.
-		/// </summary>
-		/// <param name="time">The amount of time to add (seconds).</param>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void AddTickTime(float time)
-		{
-			TickTime += time;
 		}
 
 		/// <summary>

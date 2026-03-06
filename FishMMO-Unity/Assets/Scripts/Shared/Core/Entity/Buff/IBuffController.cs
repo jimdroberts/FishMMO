@@ -9,11 +9,6 @@ namespace FishMMO.Shared.Core
 	public interface IBuffController : ICharacterBehaviour
 	{
 		/// <summary>
-		/// Static event triggered when time is added to a buff.
-		/// </summary>
-		static Action<Buff> OnAddTime;
-
-		/// <summary>
 		/// Static event triggered when time is subtracted from a buff.
 		/// </summary>
 		static Action<Buff> OnSubtractTime;
@@ -44,6 +39,13 @@ namespace FishMMO.Shared.Core
 		Dictionary<int, Buff> Buffs { get; }
 
 		/// <summary>
+		/// Deterministic tick that advances all buff timers by the given delta.
+		/// Use this for CSP instead of relying on Unity's Update.
+		/// </summary>
+		/// <param name="deltaTime">The time step to advance (seconds).</param>
+		void Tick(float deltaTime);
+
+		/// <summary>
 		/// Applies a buff to the character by template, creating a new instance if needed and handling stacking.
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
@@ -62,7 +64,7 @@ namespace FishMMO.Shared.Core
 		void Remove(int buffID);
 
 		/// <summary>
-		/// Removes a random buff or debuff from the character, with options to include buffs and/or debuffs.
+		/// Removes a random non-permanent buff or debuff, filtered by inclusion flags.
 		/// </summary>
 		/// <param name="rng">The random number generator to use.</param>
 		/// <param name="includeBuffs">Whether to include buffs in the selection.</param>

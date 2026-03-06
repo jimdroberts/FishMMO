@@ -42,7 +42,7 @@ namespace FishMMO.Shared
 			if (NavMesh.SamplePosition(retreatPosition, out hit, RetreatDistance, NavMesh.AllAreas))
 			{
 				// Set the agent's destination to the valid retreat position.
-				controller.Agent.SetDestination(hit.position);
+				controller.SetThrottledDestination(hit.position);
 			}
 		}
 
@@ -88,7 +88,7 @@ namespace FishMMO.Shared
 					NavMeshHit hit;
 					if (NavMesh.SamplePosition(retreatPosition, out hit, RetreatDistance, NavMesh.AllAreas))
 					{
-						controller.Agent.SetDestination(hit.position);
+						controller.SetThrottledDestination(hit.position);
 					}
 				}
 			}

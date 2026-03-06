@@ -622,7 +622,7 @@ namespace FishMMO.Shared
 						{
 							phantomCaster = AbilityObjectSnapshot.CreatePhantomCaster(obj.Caster, obj.Transform);
 						}
-						
+
 						// Replace the live caster with a phantom that preserves identity
 						// and attribute data for stat-scaled calculations.
 						obj.Caster = phantomCaster;

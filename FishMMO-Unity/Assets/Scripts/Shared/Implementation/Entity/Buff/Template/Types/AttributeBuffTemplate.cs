@@ -6,6 +6,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Buff template that grants bonus attributes to a character while active.
+	/// Applies additive modifiers on apply/stack and removes them symmetrically on remove/unstack.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Attribute Buff Template", menuName = "FishMMO/Character/Buff/Attribute Buff", order = 1)]
 	public class AttributeBuffTemplate : BaseBuffTemplate
@@ -27,7 +28,8 @@ namespace FishMMO.Shared
 			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
 				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
-				builder.AddLine($"{buffAttribute.Template.Name}: {buffAttribute.Value}s", 21 + i, TooltipColors.Stat);
+				if (buffAttribute?.Template == null) continue;
+				builder.AddLine($"{buffAttribute.Template.Name}: {buffAttribute.Value}", 21 + i, TooltipColors.Stat);
 			}
 		}
 
@@ -38,38 +40,7 @@ namespace FishMMO.Shared
 		/// <param name="target">The character receiving the buff.</param>
 		public override void OnApply(Buff buff, ICharacter target)
 		{
-			if (buff == null)
-			{
-				return;
-			}
-			if (target == null)
-			{
-				return;
-			}
-			if (!target.TryGet(out ICharacterAttributeController attributeController))
-			{
-				return;
-			}
-			foreach (BuffAttributeTemplate buffAttribute in BonusAttributes)
-			{
-				if (buffAttribute == null)
-				{
-					continue;
-				}
-				if (buffAttribute.Template == null)
-				{
-					continue;
-				}
-				// Try to apply to a regular attribute first, then to a resource attribute if not found
-				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
-				{
-					characterAttribute.AddModifier(buffAttribute.Value);
-				}
-				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
-				{
-					characterResourceAttribute.AddModifier(buffAttribute.Value);
-				}
-			}
+			ApplyModifiers(target, 1);
 		}
 
 		/// <summary>
@@ -79,68 +50,35 @@ namespace FishMMO.Shared
 		/// <param name="target">The character losing the buff.</param>
 		public override void OnRemove(Buff buff, ICharacter target)
 		{
-			if (buff == null)
+			ApplyModifiers(target, -1);
+		}
+
+		/// <summary>
+		/// Applies or removes attribute modifiers based on a sign multiplier.
+		/// Positive sign adds modifiers, negative sign removes them.
+		/// </summary>
+		/// <param name="target">The character to modify.</param>
+		/// <param name="sign">+1 to apply, -1 to remove.</param>
+		private void ApplyModifiers(ICharacter target, int sign)
+		{
+			if (target == null || BonusAttributes == null) return;
+			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
+
+			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
-				return;
-			}
-			if (target == null)
-			{
-				return;
-			}
-			if (!target.TryGet(out ICharacterAttributeController attributeController))
-			{
-				return;
-			}
-			foreach (BuffAttributeTemplate buffAttribute in BonusAttributes)
-			{
-				if (buffAttribute == null)
-				{
-					continue;
-				}
-				if (buffAttribute.Template == null)
-				{
-					continue;
-				}
-				// Remove from regular attribute first, then from resource attribute if not found
+				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
+				if (buffAttribute?.Template == null) continue;
+
+				int modifier = buffAttribute.Value * sign;
 				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(-buffAttribute.Value);
+					characterAttribute.AddModifier(modifier);
 				}
 				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(-buffAttribute.Value);
+					characterResourceAttribute.AddModifier(modifier);
 				}
 			}
-		}
-
-		/// <summary>
-		/// Applies the bonus attributes again when a stack is added (delegates to OnApply).
-		/// </summary>
-		/// <param name="buff">The buff instance being stacked.</param>
-		/// <param name="target">The character receiving the stack.</param>
-		public override void OnApplyStack(Buff buff, ICharacter target)
-		{
-			OnApply(buff, target);
-		}
-
-		/// <summary>
-		/// Removes the bonus attributes again when a stack is removed (delegates to OnRemove).
-		/// </summary>
-		/// <param name="buff">The buff instance being unstacked.</param>
-		/// <param name="target">The character losing the stack.</param>
-		public override void OnRemoveStack(Buff buff, ICharacter target)
-		{
-			OnRemove(buff, target);
-		}
-
-		/// <summary>
-		/// Called on each tick while the buff is active. No operation for attribute buffs.
-		/// </summary>
-		/// <param name="buff">The buff instance.</param>
-		/// <param name="target">The character affected.</param>
-		public override void OnTick(Buff buff, ICharacter target)
-		{
-			// No periodic effect for attribute buffs.
 		}
 	}
 }

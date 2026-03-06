@@ -15,26 +15,19 @@ namespace FishMMO.Shared
 		public int ActivationFlags;
 
 		/// <summary>
-		/// The ID of the queued ability.
+		/// The ID of the queued ability or consumable template.
 		/// </summary>
 		public long QueuedAbilityID;
 
 		/// <summary>
-		/// Whether a key is held during activation.
-		/// </summary>
-		public bool IsHeld;
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="AbilityActivationReplicateData"/> struct.
 		/// </summary>
-		/// <param name="activationFlags">Activation flags.</param>
-		/// <param name="queuedAbilityID">Queued ability ID.</param>
-		/// <param name="isHeld">Whether a key is held.</param>
-		public AbilityActivationReplicateData(int activationFlags, long queuedAbilityID, bool isHeld)
+		/// <param name="activationFlags">Activation flags (IsHeld, IsConsumable, etc. are encoded here).</param>
+		/// <param name="queuedAbilityID">Queued ability or consumable template ID.</param>
+		public AbilityActivationReplicateData(int activationFlags, long queuedAbilityID)
 		{
 			ActivationFlags = activationFlags;
 			QueuedAbilityID = queuedAbilityID;
-			IsHeld = isHeld;
 
 			_tick = 0;
 		}

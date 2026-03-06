@@ -5,6 +5,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Abstract base class for all buff templates, defining shared properties, tooltip logic, and effect hooks.
+	/// Stack and tick hooks are virtual with sensible defaults: stacking delegates to apply/remove,
+	/// and ticking is a no-op. Derived classes only override what they need (OCP).
 	/// </summary>
 	public abstract class BaseBuffTemplate : CachedScriptableObject<BaseBuffTemplate>, ICachedObject, ITooltip
 	{
@@ -35,11 +37,6 @@ namespace FishMMO.Shared
 		public float TickRate;
 
 		/// <summary>
-		/// The number of times this buff can be used or triggered.
-		/// </summary>
-		public uint UseCount;
-
-		/// <summary>
 		/// The maximum number of stacks this buff can have.
 		/// </summary>
 		public uint MaxStacks;
@@ -53,10 +50,6 @@ namespace FishMMO.Shared
 		/// True if this buff is a debuff (negative effect).
 		/// </summary>
 		public bool IsDebuff;
-
-		//public AudioClip OnApplySounds;
-		//public AudioClip OnTickSounds;
-		//public AudioClip OnRemoveSounds;
 
 		/// <summary>
 		/// The name of this buff template (from the ScriptableObject's name).
@@ -108,19 +101,14 @@ namespace FishMMO.Shared
 		/// <param name="target">The character receiving the buff.</param>
 		public virtual void OnApplyFX(Buff buff, ICharacter target)
 		{
-			if (buff == null)
-			{
-				return;
-			}
-			if (target == null)
+			if (buff == null || target == null)
 			{
 				return;
 			}
 #if !UNITY_SERVER
 			if (FXPrefab != null)
 			{
-				// Instantiate the FXPrefab as a child of the character's mesh root or transform
-				GameObject fxPrefab = Instantiate(FXPrefab, target.MeshRoot != null ? target.MeshRoot : target.Transform);
+				Instantiate(FXPrefab, target.MeshRoot != null ? target.MeshRoot : target.Transform);
 			}
 #endif
 		}
@@ -140,24 +128,33 @@ namespace FishMMO.Shared
 		public abstract void OnRemove(Buff buff, ICharacter target);
 
 		/// <summary>
-		/// Called when a stack of the buff is applied. Must be implemented by derived classes.
+		/// Called when a stack of the buff is applied. Defaults to delegating to OnApply.
+		/// Override in derived classes for custom stacking behavior.
 		/// </summary>
 		/// <param name="buff">The buff instance being stacked.</param>
 		/// <param name="target">The character receiving the stack.</param>
-		public abstract void OnApplyStack(Buff buff, ICharacter target);
+		public virtual void OnApplyStack(Buff buff, ICharacter target)
+		{
+			OnApply(buff, target);
+		}
 
 		/// <summary>
-		/// Called when a stack of the buff is removed. Must be implemented by derived classes.
+		/// Called when a stack of the buff is removed. Defaults to delegating to OnRemove.
+		/// Override in derived classes for custom unstacking behavior.
 		/// </summary>
 		/// <param name="buff">The buff instance being unstacked.</param>
 		/// <param name="target">The character losing the stack.</param>
-		public abstract void OnRemoveStack(Buff buff, ICharacter target);
+		public virtual void OnRemoveStack(Buff buff, ICharacter target)
+		{
+			OnRemove(buff, target);
+		}
 
 		/// <summary>
-		/// Called on each tick while the buff is active. Must be implemented by derived classes.
+		/// Called on each tick while the buff is active. No-op by default.
+		/// Override in derived classes for periodic effects (HoT, DoT, etc.).
 		/// </summary>
 		/// <param name="buff">The buff instance.</param>
 		/// <param name="target">The character affected.</param>
-		public abstract void OnTick(Buff buff, ICharacter target);
+		public virtual void OnTick(Buff buff, ICharacter target) { }
 	}
 }

@@ -53,6 +53,11 @@ namespace FishMMO.Shared.Core
 		/// <param name="isHeld">Whether the activation key is held.</param>
 		void Activate(long referenceID, bool isHeld);
 		/// <summary>
+		/// Queues a consumable item for activation through the replicate pipeline.
+		/// </summary>
+		/// <param name="item">The consumable item to activate.</param>
+		void ActivateConsumable(Item item);
+		/// <summary>
 		/// Returns true if manipulation is allowed.
 		/// </summary>
 		bool CanManipulate();

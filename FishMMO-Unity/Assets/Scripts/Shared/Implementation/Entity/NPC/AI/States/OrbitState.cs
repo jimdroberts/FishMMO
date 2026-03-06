@@ -82,7 +82,7 @@ namespace FishMMO.Shared
 			NavMeshHit hit;
 			if (NavMesh.SamplePosition(targetPosition, out hit, OrbitRadius, NavMesh.AllAreas))
 			{
-				controller.Agent.SetDestination(hit.position);
+				controller.SetThrottledDestination(hit.position);
 			}
 
 			// Rotate the AI to face the target smoothly
