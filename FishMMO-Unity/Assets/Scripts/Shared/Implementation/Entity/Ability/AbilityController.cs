@@ -636,6 +636,37 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			HandlePrediction(ref activationData, state);
+
+			float deltaTime = (float)base.TimeManager.TickDelta;
+
+			RegenerateAttributes(deltaTime);
+
+			// If we have an interrupt queued
+			if (ProcessInterrupt(activationData))
+			{
+				return;
+			}
+
+			// If we aren't activating anything, try to start a new ability
+			if (!IsActivating)
+			{
+				if (!TryStartAbility(activationData))
+				{
+					return;
+				}
+			}
+
+			// Process the active ability (casting, channeling, spawning)
+			ProcessActiveAbility(activationData, state, deltaTime);
+		}
+
+		/// <summary>
+		/// Handles prediction state for non-owner clients. Predicts held state for future ticks
+		/// and tracks the last created data for reconciliation.
+		/// </summary>
+		private void HandlePrediction(ref AbilityActivationReplicateData activationData, ReplicateState state)
+		{
 			if (!base.IsServerStarted && !base.IsOwner)
 			{
 				// Predict held state
@@ -655,149 +686,229 @@ namespace FishMMO.Shared
 					lastCreatedData = activationData;
 				}
 			}
+		}
 
-			float deltaTime = (float)base.TimeManager.TickDelta;
-
+		/// <summary>
+		/// Regenerates character attributes (mana, stamina, etc.) each tick.
+		/// </summary>
+		private void RegenerateAttributes(float deltaTime)
+		{
 			if (Character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				attributeController.Regenerate(deltaTime);
 			}
+		}
 
-			// If we have an interrupt queued
+		/// <summary>
+		/// Processes an interrupt flag from the activation data. Returns true if an interrupt
+		/// was processed and the caller should return immediately.
+		/// </summary>
+		private bool ProcessInterrupt(AbilityActivationReplicateData activationData)
+		{
 			if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.Interrupt))
 			{
 				Log.Debug("AbilityController", "Interrupting");
 				OnInterrupt?.Invoke();
 				Cancel();
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Attempts to start a new ability from the queued activation data. Sets the current
+		/// ability, remaining time, and held state. Returns true if an ability was started.
+		/// </summary>
+		private bool TryStartAbility(AbilityActivationReplicateData activationData)
+		{
+			if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
+			{
+				//Log.Debug($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
+				currentAbilityID = newAbility.ID;
+				remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
+				isHeld = activationData.IsHeld;
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Processes the currently active ability each tick. Handles the activation countdown,
+		/// held/channeled ability updates, charged ability hold, and final ability spawning.
+		/// </summary>
+		private void ProcessActiveAbility(AbilityActivationReplicateData activationData, ReplicateState state, float deltaTime)
+		{
+			if (!IsActivating || !CanActivate(currentAbilityID, out Ability validatedAbility))
+			{
 				return;
 			}
 
-			// If we aren't activating anything
-			if (!IsActivating)
+			if (remainingTime > 0.0f)
 			{
-				// Try to activate the queued ability
-				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
-				{
-					//Log.Debug($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
-					currentAbilityID = newAbility.ID;
-					remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
+				UpdateActivation(activationData, state, validatedAbility, deltaTime);
+				return;
+			}
 
-					isHeld = activationData.IsHeld;
-				}
-				else
+			// Return immediately if we are charging our attack
+			if (ChargedTemplate != null &&
+				validatedAbility.HasAbilityEvent(ChargedTemplate.ID) &&
+				isHeld &&
+				activationData.IsHeld)
+			{
+				return;
+			}
+
+			// Activation complete — spawn the ability and finish
+			FinishAbility(validatedAbility, activationData);
+		}
+
+		/// <summary>
+		/// Updates an ability that is still activating (remainingTime > 0). Handles UI updates,
+		/// held ability release checks, and channeled ability spawning during activation.
+		/// </summary>
+		private void UpdateActivation(AbilityActivationReplicateData activationData, ReplicateState state, Ability validatedAbility, float deltaTime)
+		{
+			//Log.Debug($"2 Activating {validatedAbility.ID} State: {state}");
+
+			// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
+			if (state.IsTickedCreated())
+			{
+				OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
+			}
+
+			// Handle held ability updates
+			if (isHeld)
+			{
+				// The Held ability hotkey was released or the character can no longer activate the ability
+				if (!activationData.IsHeld)
 				{
+					// Add ability to cooldowns
+					AddCooldown(validatedAbility);
+
+					// Reset ability data
+					Cancel();
 					return;
+				}
+
+				// Channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
+				if (ChanneledTemplate != null &&
+					validatedAbility.HasAbilityEvent(ChanneledTemplate.ID))
+				{
+					SpawnChanneledAbility(validatedAbility, activationData);
 				}
 			}
 
-			// Process ability activation
-			if (IsActivating && CanActivate(currentAbilityID, out Ability validatedAbility))
+			remainingTime -= deltaTime;
+		}
+
+		/// <summary>
+		/// Spawns a channeled ability object during activation (e.g., beam effects, continuous damage).
+		/// Handles both PC and NPC targeting paths.
+		/// </summary>
+		private void SpawnChanneledAbility(Ability validatedAbility, AbilityActivationReplicateData activationData)
+		{
+			// Handle PC targetting and ability spawning
+			if (PlayerCharacter != null &&
+				Character.TryGet(out ITargetController t))
 			{
-				if (remainingTime > 0.0f)
-				{
-					//Log.Debug($"2 Activating {validatedAbility.ID} State: {state}");
+				// Read camera from KCCController. Guaranteed fresh because AbilityController runs on OnPostTick after KCCPlayer processes on OnTick.
+				Vector3 cameraPosition = PlayerCharacter.CharacterController.VirtualCameraPosition;
+				Quaternion cameraRotation = PlayerCharacter.CharacterController.VirtualCameraRotation;
 
-					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
-					if (state.IsTickedCreated())
-					{
-						OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
-					}
-
-					// Handle held ability updates
-					if (isHeld)
-					{
-						// The Held ability hotkey was released or the character can no longer activate the ability
-						if (!activationData.IsHeld)
-						{
-							// Add ability to cooldowns
-							AddCooldown(validatedAbility);
-
-							// Reset ability data
-							Cancel();
-							return;
-						}
-
-						// Channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
-						if (ChanneledTemplate != null &&
-							validatedAbility.HasAbilityEvent(ChanneledTemplate.ID))
-						{
-							// Handle PC targetting and ability spawning
-							if (PlayerCharacter != null &&
-								Character.TryGet(out ITargetController t))
-							{
-								// Read camera from KCCController. Guaranteed fresh because AbilityController runs on OnPostTick after KCCPlayer processes on OnTick.
-								Vector3 cameraPosition = PlayerCharacter.CharacterController.VirtualCameraPosition;
-								Quaternion cameraRotation = PlayerCharacter.CharacterController.VirtualCameraRotation;
-
-								TargetInfo targetInfo = t.UpdateTarget(cameraPosition,
-																		   cameraRotation * Vector3.forward,
-																		   validatedAbility.Range);
-
-								AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
-
-								currentSeed = abilitySeedGenerator.Next();
-
-								//Log.Debug($"3 New Ability Seed {currentSeed}");
-
-								// Channeled abilities consume resources during activation
-
-								//Log.Debug($"4 Consumed On Tick: {activationData.GetTick()} State: {state}");
-								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
-							}
-							// Handle NPC targetting and ability spawning
-							else
-							{
-
-							}
-						}
-					}
-
-					remainingTime -= deltaTime;
-					return;
-				}
-
-				// Return immediately if we are charging our attack
-				if (ChargedTemplate != null &&
-					validatedAbility.HasAbilityEvent(ChargedTemplate.ID) &&
-					isHeld &&
-					activationData.IsHeld)
-				{
-					return;
-				}
-
-				// Handle PC targetting and ability spawning
-				if (PlayerCharacter != null &&
-					Character.TryGet(out ITargetController tc))
-				{
-					// Read camera from KCCController. Guaranteed fresh because AbilityController runs on OnPostTick after KCCPlayer processes on OnTick.
-					Vector3 cameraPosition = PlayerCharacter.CharacterController.VirtualCameraPosition;
-					Quaternion cameraRotation = PlayerCharacter.CharacterController.VirtualCameraRotation;
-
-					TargetInfo targetInfo = tc.UpdateTarget(cameraPosition,
+				TargetInfo targetInfo = t.UpdateTarget(cameraPosition,
 														   cameraRotation * Vector3.forward,
 														   validatedAbility.Range);
 
-					AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
+				AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
+
+				currentSeed = abilitySeedGenerator.Next();
+
+				//Log.Debug($"3 New Ability Seed {currentSeed}");
+
+				// Channeled abilities consume resources during activation
+
+				//Log.Debug($"4 Consumed On Tick: {activationData.GetTick()} State: {state}");
+				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
+			}
+			// Handle NPC targetting and ability spawning
+			else if (Character.TryGet(out IAIController channelAI))
+			{
+				AIController channelAIController = channelAI as AIController;
+				if (channelAIController != null && Character.TryGet(out ITargetController channelTC))
+				{
+					TargetInfo targetInfo = channelTC.UpdateTarget(
+						channelAIController.VirtualCameraPosition,
+						channelAIController.VirtualCameraRotation * Vector3.forward,
+						validatedAbility.Range);
+
+					AbilityObject.SpawnNPC(validatedAbility, Character, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
 
 					currentSeed = abilitySeedGenerator.Next();
 
-					//Log.Debug($"5 New Ability Seed {currentSeed}");
+					// Channeled abilities consume resources during activation
+					validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
 				}
-				// Handle NPC targetting and ability spawning
-				else
+			}
+		}
+
+		/// <summary>
+		/// Completes an ability activation: spawns the final ability object, consumes resources,
+		/// adds cooldown, and resets ability state.
+		/// </summary>
+		private void FinishAbility(Ability validatedAbility, AbilityActivationReplicateData activationData)
+		{
+			SpawnAbilityObject(validatedAbility, activationData);
+
+			// Consume resources
+			//Log.Debug($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
+			validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
+
+			// Add ability to cooldowns
+			AddCooldown(validatedAbility);
+
+			// Reset ability data
+			Cancel();
+		}
+
+		/// <summary>
+		/// Spawns the final ability object on activation completion. Handles both PC (camera-based)
+		/// and NPC (virtual-camera-based) targeting paths.
+		/// </summary>
+		private void SpawnAbilityObject(Ability validatedAbility, AbilityActivationReplicateData activationData)
+		{
+			// Handle PC targetting and ability spawning
+			if (PlayerCharacter != null &&
+				Character.TryGet(out ITargetController tc))
+			{
+				// Read camera from KCCController. Guaranteed fresh because AbilityController runs on OnPostTick after KCCPlayer processes on OnTick.
+				Vector3 cameraPosition = PlayerCharacter.CharacterController.VirtualCameraPosition;
+				Quaternion cameraRotation = PlayerCharacter.CharacterController.VirtualCameraRotation;
+
+				TargetInfo targetInfo = tc.UpdateTarget(cameraPosition,
+													   cameraRotation * Vector3.forward,
+													   validatedAbility.Range);
+
+				AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
+
+				currentSeed = abilitySeedGenerator.Next();
+
+				//Log.Debug($"5 New Ability Seed {currentSeed}");
+			}
+			// Handle NPC targetting and ability spawning
+			else if (Character.TryGet(out IAIController spawnAI))
+			{
+				AIController spawnAIController = spawnAI as AIController;
+				if (spawnAIController != null && Character.TryGet(out ITargetController npcTC))
 				{
+					TargetInfo targetInfo = npcTC.UpdateTarget(
+						spawnAIController.VirtualCameraPosition,
+						spawnAIController.VirtualCameraRotation * Vector3.forward,
+						validatedAbility.Range);
 
+					AbilityObject.SpawnNPC(validatedAbility, Character, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
+
+					currentSeed = abilitySeedGenerator.Next();
 				}
-
-				// Consume resources
-				//Log.Debug($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
-				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
-
-				// Add ability to cooldowns
-				AddCooldown(validatedAbility);
-
-				// Reset ability data
-				Cancel();
 			}
 		}
 
@@ -860,6 +971,39 @@ namespace FishMMO.Shared
 		public void Interrupt(ICharacter attacker)
 		{
 			interruptQueued = true;
+		}
+
+		/// <summary>
+		/// Releases the held state for the current ability. For charged abilities this
+		/// triggers the release (fire). For channeled abilities this stops the channel early.
+		/// </summary>
+		public void Release()
+		{
+			isHeld = false;
+		}
+
+		/// <summary>
+		/// The remaining activation time for the current ability, or 0 if no ability is active.
+		/// </summary>
+		public float RemainingActivationTime => remainingTime;
+
+		/// <summary>
+		/// Returns true if the given ability requires held input (channeled or charged).
+		/// AI should pass the result as the isHeld parameter when calling Activate().
+		/// </summary>
+		/// <param name="abilityID">The ability ID to check.</param>
+		public bool RequiresHeld(long abilityID)
+		{
+			if (!KnownAbilities.TryGetValue(abilityID, out Ability ability))
+				return false;
+
+			if (ChanneledTemplate != null && ability.HasAbilityEvent(ChanneledTemplate.ID))
+				return true;
+
+			if (ChargedTemplate != null && ability.HasAbilityEvent(ChargedTemplate.ID))
+				return true;
+
+			return false;
 		}
 
 		/// <summary>

@@ -8,7 +8,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Controls AI navigation, state transitions, and behavior for NPCs using NavMeshAgent.
-	/// Handles movement, enemy detection, leash logic, waypoints, and state management.
+	/// Handles movement, enemy detection, leash logic, waypoints, state management, and
+	/// provides a virtual camera for aiming abilities at targets during combat.
 	/// </summary>
 	[RequireComponent(typeof(NavMeshAgent))]
 	public class AIController : CharacterBehaviour, IAIController
@@ -68,6 +69,65 @@ namespace FishMMO.Shared
 		/// </summary>
 		public BaseAIState DeadState;
 
+		[Header("Aggression / Threat")]
+		/// <summary>
+		/// Points awarded per 1 point of damage dealt to this NPC.
+		/// </summary>
+		[Tooltip("Aggression points per 1 damage taken.")]
+		public float AggressionDamageWeight = 1.0f;
+
+		/// <summary>
+		/// Points awarded per 1 point of healing an enemy of the NPC witnesses.
+		/// </summary>
+		[Tooltip("Aggression points per 1 healing witnessed on a combat participant.")]
+		public float AggressionHealingWeight = 0.6f;
+
+		/// <summary>
+		/// Flat points added per hit, regardless of damage amount.
+		/// </summary>
+		[Tooltip("Flat aggression per hit.")]
+		public float AggressionHitBonus = 5.0f;
+
+		/// <summary>
+		/// Points per second that each entry decays when no new events occur.
+		/// </summary>
+		[Tooltip("Aggression decay per second.")]
+		public float AggressionDecayRate = 3.0f;
+
+		/// <summary>
+		/// Seconds after last event before an entry is removed entirely.
+		/// </summary>
+		[Tooltip("Seconds before a stale aggression entry is pruned.")]
+		public float AggressionStaleTimeout = 30.0f;
+
+		/// <summary>
+		/// Chance (0-1) that target selection ignores the top-threat target and picks a secondary one.
+		/// </summary>
+		[Range(0f, 1f)]
+		[Tooltip("Chance to pick a non-top-threat target for variety.")]
+		public float AggressionVarietyChance = 0.15f;
+
+		/// <summary>
+		/// The aggression (threat) state for this NPC. Manages the threat table, event
+		/// subscriptions, and target re-evaluation timer. One instance per NPC — not shared.
+		/// </summary>
+		public AggressionState AggressionState { get; private set; }
+
+		/// <summary>
+		/// Convenience accessor for the underlying aggression controller.
+		/// </summary>
+		public AggressionController Aggression => AggressionState?.Controller;
+
+		/// <summary>
+		/// Per-NPC timer for mid-combat target re-evaluation. Delegates to
+		/// <see cref="AggressionState.TargetReevaluationTimer"/>.
+		/// </summary>
+		public float TargetReevaluationTimer
+		{
+			get => AggressionState != null ? AggressionState.TargetReevaluationTimer : 0f;
+			set { if (AggressionState != null) AggressionState.TargetReevaluationTimer = value; }
+		}
+
 		[SerializeField]
 		private Transform eyeTransform;
 
@@ -85,6 +145,20 @@ namespace FishMMO.Shared
 		/// If true, the AI will randomize its movement state.
 		/// </summary>
 		public bool RandomizeState;
+
+		/// <summary>
+		/// Virtual camera position used by the ability system to aim projectiles.
+		/// Computed from the eye transform, aimed toward the current target's center.
+		/// Mirrors the role of KCCController.VirtualCameraPosition for player characters.
+		/// </summary>
+		public Vector3 VirtualCameraPosition { get; private set; }
+
+		/// <summary>
+		/// Virtual camera rotation used by the ability system to aim projectiles.
+		/// Points from the eye transform toward the current target's center.
+		/// Mirrors the role of KCCController.VirtualCameraRotation for player characters.
+		/// </summary>
+		public Quaternion VirtualCameraRotation { get; private set; }
 
 		//public List<AIState> AllowedRandomStates;
 
@@ -196,6 +270,16 @@ namespace FishMMO.Shared
 		{
 			base.InitializeOnce();
 
+			// Initialize the per-NPC aggression state with serialized tuning values.
+			AggressionState = new AggressionState(
+				Character,
+				AggressionDamageWeight,
+				AggressionHealingWeight,
+				AggressionHitBonus,
+				AggressionDecayRate,
+				AggressionStaleTimeout,
+				AggressionVarietyChance);
+
 			if (Agent == null)
 			{
 				Agent = GetComponent<NavMeshAgent>();
@@ -221,6 +305,16 @@ namespace FishMMO.Shared
 			{
 				movementStates.Add(IdleState);
 			}
+		}
+
+		/// <summary>
+		/// Unsubscribes from global events on destroy to prevent memory leaks.
+		/// </summary>
+		public override void OnDestroying()
+		{
+			AggressionState?.Destroy();
+
+			base.OnDestroying();
 		}
 
 		/// <summary>
@@ -252,7 +346,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Resets the controller's state, clearing home, target, and look target.
+		/// Resets the controller's state, clearing home, target, look target, and virtual camera.
 		/// </summary>
 		/// <param name="asServer">Whether the reset is performed on the server.</param>
 		public override void ResetState(bool asServer)
@@ -262,16 +356,21 @@ namespace FishMMO.Shared
 			Home = Vector3.zero;
 			Target = null;
 			LookTarget = null;
+			VirtualCameraPosition = Vector3.zero;
+			VirtualCameraRotation = Quaternion.identity;
+			AggressionState?.Clear();
 		}
 
 		/// <summary>
-		/// Unity Update loop. Handles enemy sweeping, leash checks, state updates, and facing look target.
+		/// Unity Update loop. Handles enemy sweeping, leash checks, state updates, virtual camera, aggression decay, and facing look target.
 		/// </summary>
 		void Update()
 		{
 			SweepForEnemies();
 			CheckLeash();
 			UpdateCurrentState();
+			UpdateVirtualCamera();
+			AggressionState?.Tick(Time.deltaTime);
 			FaceLookTarget();
 		}
 
@@ -319,6 +418,12 @@ namespace FishMMO.Shared
 				// Warp back to home if leash is greatly exceeded.
 				if (distanceToHome > CurrentState.MaxLeashRange * CurrentState.MaxLeashRange)
 				{
+					// Cancel any active ability before warping.
+					if (Character.TryGet(out IAbilityController abilityController))
+					{
+						abilityController.Interrupt(null);
+					}
+
 					// Heal on returning home.
 					if (Character.TryGet(out ICharacterDamageController characterDamageController))
 					{
@@ -329,6 +434,10 @@ namespace FishMMO.Shared
 					{
 						Character.Transform.position = Home;
 					}
+
+					// Clear aggression on full leash reset.
+					AggressionState?.Clear();
+
 					return;
 				}
 				// If leash is exceeded but not critical, transition to return home state.
@@ -382,6 +491,142 @@ namespace FishMMO.Shared
 		public void Resume()
 		{
 			Agent.isStopped = false;
+		}
+
+		/// <summary>
+		/// Updates the virtual camera position and rotation to aim from the eye
+		/// transform toward the current target. When no target is present, the
+		/// camera simply looks along the character's forward direction.
+		/// Called every frame so the ability system always has fresh aim data.
+		/// </summary>
+		private void UpdateVirtualCamera()
+		{
+			VirtualCameraPosition = EyeTransform.position;
+
+			if (Target != null)
+			{
+				// Aim at the center of the target's collider for accuracy.
+				Vector3 targetPoint = Target.position;
+				ICharacter targetCharacter = Target.GetComponent<ICharacter>();
+				if (targetCharacter != null && targetCharacter.Collider != null)
+				{
+					targetPoint = targetCharacter.Collider.bounds.center;
+				}
+
+				Vector3 direction = (targetPoint - VirtualCameraPosition).normalized;
+				if (direction.sqrMagnitude > 0.0001f)
+				{
+					VirtualCameraRotation = Quaternion.LookRotation(direction);
+				}
+			}
+			else
+			{
+				VirtualCameraRotation = Character.Transform.rotation;
+			}
+		}
+
+		/// <summary>
+		/// Returns the squared distance from this NPC to its current target.
+		/// Returns float.MaxValue if there is no target.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public float GetSqrDistanceToTarget()
+		{
+			if (Target == null) return float.MaxValue;
+			return (Target.position - Character.Transform.position).sqrMagnitude;
+		}
+
+		/// <summary>
+		/// Selects the best ability to use against the current target from the NPC's known abilities.
+		/// Prefers abilities whose range covers the current distance. Among those, picks one at random
+		/// weighted toward longer-cooldown (typically stronger) abilities. Returns null if no ability
+		/// is usable (all on cooldown, out of resources, or no abilities known).
+		/// </summary>
+		/// <param name="preferredMaxRange">Maximum desired range. Abilities with range beyond this are still considered but deprioritized.</param>
+		/// <returns>The chosen ability, or null if nothing is available.</returns>
+		public Ability PickBestAbility(float preferredMaxRange = float.MaxValue)
+		{
+			if (!Character.TryGet(out IAbilityController abilityController))
+				return null;
+			if (!Character.TryGet(out ICooldownController cooldownController))
+				return null;
+			if (!Character.TryGet(out ICharacterDamageController damageController) || !damageController.IsAlive)
+				return null;
+
+			float sqrDist = GetSqrDistanceToTarget();
+
+			Ability bestAbility = null;
+			float bestScore = float.MinValue;
+
+			foreach (var kvp in abilityController.KnownAbilities)
+			{
+				Ability ability = kvp.Value;
+				if (ability == null || ability.Template == null)
+					continue;
+
+				// Skip abilities on cooldown.
+				if (cooldownController.IsOnCooldown(ability.ID))
+					continue;
+
+				// Skip abilities the character can't afford.
+				if (!ability.MeetsActivationConditions(Character))
+					continue;
+
+				float abilityRange = ability.Range;
+
+				// Score: prefer abilities that can reach the target.
+				float score = 0f;
+				if (abilityRange * abilityRange >= sqrDist)
+				{
+					// In range: strong bonus. Tiebreak by cooldown (longer cooldown = stronger ability).
+					score = 1000f + ability.Cooldown;
+				}
+				else
+				{
+					// Out of range: low score, still a fallback.
+					score = abilityRange;
+				}
+
+				// Add small random jitter so the NPC doesn't always pick the same ability.
+				score += Random.Range(0f, 50f);
+
+				if (score > bestScore)
+				{
+					bestScore = score;
+					bestAbility = ability;
+				}
+			}
+
+			return bestAbility;
+		}
+
+		/// <summary>
+		/// Returns true if the NPC has at least one ability with range >= the given distance
+		/// that is off cooldown and meets activation conditions.
+		/// </summary>
+		/// <param name="minRange">Minimum ability range required.</param>
+		public bool HasAbilityInRange(float minRange)
+		{
+			if (!Character.TryGet(out IAbilityController abilityController))
+				return false;
+			if (!Character.TryGet(out ICooldownController cooldownController))
+				return false;
+
+			float sqrMinRange = minRange * minRange;
+
+			foreach (var kvp in abilityController.KnownAbilities)
+			{
+				Ability ability = kvp.Value;
+				if (ability == null || ability.Template == null)
+					continue;
+				if (cooldownController.IsOnCooldown(ability.ID))
+					continue;
+				if (!ability.MeetsActivationConditions(Character))
+					continue;
+				if (ability.Range * ability.Range >= sqrMinRange)
+					return true;
+			}
+			return false;
 		}
 
 		/// <summary>

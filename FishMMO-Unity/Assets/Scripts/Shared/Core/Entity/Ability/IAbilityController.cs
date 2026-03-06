@@ -74,5 +74,23 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <param name="attribute">The attribute to check.</param>
 		float CalculateSpeedReduction(CharacterAttributeTemplate attribute);
+
+		/// <summary>
+		/// Returns true if the ability requires held input (channeled or charged).
+		/// AI should pass the result as the isHeld parameter when calling Activate().
+		/// </summary>
+		/// <param name="abilityID">The ability ID to check.</param>
+		bool RequiresHeld(long abilityID);
+
+		/// <summary>
+		/// Releases the held state for the current ability. For charged abilities this
+		/// triggers the release (fire). For channeled abilities this stops the channel early.
+		/// </summary>
+		void Release();
+
+		/// <summary>
+		/// The remaining activation time for the current ability, or 0 if no ability is active.
+		/// </summary>
+		float RemainingActivationTime { get; }
 	}
 }

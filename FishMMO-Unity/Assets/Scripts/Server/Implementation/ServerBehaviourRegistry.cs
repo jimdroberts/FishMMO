@@ -12,7 +12,7 @@ namespace FishMMO.Server.Implementation
 	/// </summary>
 	public class ServerBehaviourRegistry : 
 		ServerComponentRegistry<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>,
-		IServerComponentRegistry<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>
+		IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>
 	{
 		/// <summary>
 		/// Registry name for logging purposes.

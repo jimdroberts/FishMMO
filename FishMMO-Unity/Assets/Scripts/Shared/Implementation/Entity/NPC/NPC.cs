@@ -11,6 +11,7 @@ namespace FishMMO.Shared
 	/// Represents a non-player character (NPC) in the game. Handles attribute generation, network payloads, and spawning logic.
 	/// </summary>
 	[RequireComponent(typeof(AIController))]
+	[RequireComponent(typeof(AbilityController))]
 	[RequireComponent(typeof(BuffController))]
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(CharacterDamageController))]

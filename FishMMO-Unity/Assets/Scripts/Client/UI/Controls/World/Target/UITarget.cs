@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using TMPro;
@@ -22,9 +23,29 @@ namespace FishMMO.Client
 		public CharacterAttributeTemplate HealthAttribute;
 
 		/// <summary>
+		/// The parent RectTransform for displaying the target's buff and debuff icons.
+		/// Assign a horizontal layout group container in the inspector beneath the health bar.
+		/// </summary>
+		public RectTransform TargetBuffParent;
+		/// <summary>
+		/// The prefab used to instantiate individual buff/debuff icons for the target.
+		/// </summary>
+		public UIBuffGroup TargetBuffPrefab;
+
+		/// <summary>
 		/// Cached 3D label for displaying overhead information about the target.
 		/// </summary>
 		private Cached3DLabel targetLabel;
+
+		/// <summary>
+		/// Dictionary tracking currently displayed buff/debuff icons by template ID.
+		/// </summary>
+		private readonly Dictionary<int, UIBuffGroup> targetBuffs = new Dictionary<int, UIBuffGroup>();
+
+		/// <summary>
+		/// Reusable set for reconciliation — holds template IDs that may need removal.
+		/// </summary>
+		private readonly HashSet<int> staleBuffKeys = new HashSet<int>();
 
 		/// <summary>
 		/// Called after the character is set. Subscribes to target controller events.
@@ -73,6 +94,7 @@ namespace FishMMO.Client
 			}
 
 			ICharacterAttributeController characterAttributeController = target.GetComponent<ICharacterAttributeController>();
+			IBuffController buffController = target.GetComponent<IBuffController>();
 			IInteractable interactable = target.GetComponent<IInteractable>();
 			ICharacter character = target.GetComponent<ICharacter>();
 			SceneTeleporter teleporter = target.GetComponent<SceneTeleporter>();
@@ -118,6 +140,9 @@ namespace FishMMO.Client
 			{
 				HealthSlider.value = 0;
 			}
+
+			// Refresh the target's buff/debuff icons.
+			RefreshTargetBuffs(buffController);
 
 			// Make the UI visible
 			Show();
@@ -185,7 +210,105 @@ namespace FishMMO.Client
 				targetLabel = null;
 			}
 
+			ClearTargetBuffs();
+
 			Hide();
+		}
+
+		/// <summary>
+		/// Reconciles the displayed buff/debuff icons with the target's current IBuffController state.
+		/// Adds new icons for buffs that appeared, updates duration sliders on existing ones,
+		/// and destroys icons for buffs that expired or were removed.
+		/// </summary>
+		/// <param name="buffController">The target's buff controller, or null if the target has none.</param>
+		private void RefreshTargetBuffs(IBuffController buffController)
+		{
+			if (TargetBuffParent == null || TargetBuffPrefab == null)
+				return;
+
+			if (buffController == null || buffController.Buffs == null || buffController.Buffs.Count == 0)
+			{
+				ClearTargetBuffs();
+				return;
+			}
+
+			// Mark all existing entries as stale candidates.
+			staleBuffKeys.Clear();
+			foreach (var key in targetBuffs.Keys)
+			{
+				staleBuffKeys.Add(key);
+			}
+
+			// Reconcile with current buff state.
+			foreach (var kvp in buffController.Buffs)
+			{
+				var buff = kvp.Value;
+				if (buff == null || buff.Template == null)
+					continue;
+
+				// Still active — not stale.
+				staleBuffKeys.Remove(kvp.Key);
+
+				if (targetBuffs.TryGetValue(kvp.Key, out UIBuffGroup existing))
+				{
+					// Update duration slider for an existing entry.
+					if (existing.DurationSlider != null && buff.Template.Duration > 0f)
+					{
+						existing.DurationSlider.value = buff.RemainingTime / buff.Template.Duration;
+					}
+				}
+				else
+				{
+					// Instantiate a new icon for this buff/debuff.
+					UIBuffGroup group = Instantiate(TargetBuffPrefab, TargetBuffParent);
+					if (group.Icon != null)
+					{
+						group.Icon.sprite = buff.Template.Icon;
+					}
+					if (group.ButtonText != null)
+					{
+						group.ButtonText.text = buff.Template.Name;
+					}
+					if (group.TooltipButton != null)
+					{
+						group.TooltipButton.Initialize(buff.Template.ID, null, null, buff.Template);
+					}
+					if (group.DurationSlider != null && buff.Template.Duration > 0f)
+					{
+						group.DurationSlider.value = buff.RemainingTime / buff.Template.Duration;
+					}
+					group.gameObject.SetActive(true);
+					targetBuffs.Add(kvp.Key, group);
+				}
+			}
+
+			// Remove stale entries that are no longer active on the target.
+			foreach (var staleKey in staleBuffKeys)
+			{
+				if (targetBuffs.TryGetValue(staleKey, out UIBuffGroup staleGroup))
+				{
+					Destroy(staleGroup.gameObject);
+					targetBuffs.Remove(staleKey);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Destroys all target buff/debuff icons and clears tracking state.
+		/// </summary>
+		private void ClearTargetBuffs()
+		{
+			if (targetBuffs.Count == 0)
+				return;
+
+			foreach (var group in targetBuffs.Values)
+			{
+				if (group != null)
+				{
+					Destroy(group.gameObject);
+				}
+			}
+			targetBuffs.Clear();
 		}
 
 		/// <summary>

@@ -23,6 +23,12 @@ namespace FishMMO.Server.Implementation
 		public Action<float> Callback;
 
 		/// <summary>
+		/// Cached display name for logging, avoiding repeated reflection on
+		/// <c>Callback.Method.DeclaringType</c> and <c>Callback.Method.Name</c>.
+		/// </summary>
+		public readonly string CallbackName;
+
+		/// <summary>
 		/// Initializes a new instance of PeriodicCallbackData.
 		/// </summary>
 		/// <param name="interval">The interval in seconds.</param>
@@ -32,6 +38,7 @@ namespace FishMMO.Server.Implementation
 			Interval = interval;
 			TimeRemaining = interval;
 			Callback = callback;
+			CallbackName = $"{callback.Method.DeclaringType?.Name}.{callback.Method.Name}";
 		}
 	}
 }

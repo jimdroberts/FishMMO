@@ -65,7 +65,7 @@ MonoBehaviour
 
 ### Behaviour Updates
 
-`LateUpdate()` calls `UpdateServerBehaviours(deltaTime)` and invokes `OnLateUpdate(deltaTime)` only for initialized, non-null behaviours.
+`LateUpdate()` calls `UpdateServerBehaviours(deltaTime)` which snapshots `serverBehaviours` into a reusable scratch list before dispatch. This prevents `InvalidOperationException` if a behaviour's `OnLateUpdate` registers or unregisters behaviours. Only initialized, non-null behaviours are invoked.
 
 ### Periodic Callbacks
 
@@ -74,7 +74,11 @@ MonoBehaviour
 - `UnregisterPeriodicCallback(callback)`
 - `UpdateCallbackInterval(callback, newInterval)`
 
-Callbacks are stored in a dictionary and dispatched when `TimeRemaining <= 0`, then reset to their interval.
+Callbacks are stored in a dictionary. Each frame, `UpdatePeriodicCallbacks` decrements timers and collects ready callbacks into a reusable scratch list. The `foreach` over the dictionary completes before any callback is invoked, so callbacks are free to call `Register`/`Unregister` during dispatch without dictionary mutation during enumeration.
+
+Callbacks receive `data.Interval` (not frame `deltaTime`) so the argument is always the registered period. After invocation, `TimeRemaining` resets to the full interval — no catch-up loop, which is appropriate for DB heartbeats and server-tick work.
+
+`PeriodicCallbackData` caches a `CallbackName` string at construction time so log messages never pay repeated reflection cost on `Callback.Method`. All log paths use the cached name exclusively.
 
 ## Connection State Handling
 
@@ -83,10 +87,12 @@ Callbacks are stored in a dictionary and dispatched when `TimeRemaining <= 0`, t
 ## Data Container Discovery
 
 `DiscoverAndCreateDataContainers()` scans `ServerBehaviour` instances for `RequiresDataContainerAttribute`:
+- clears `dataContainers` first to prevent accumulation if Unity domain reload is disabled,
 - deduplicates container types,
 - validates constructability through `RuntimeDataContainerFactory`,
 - groups by initialization priority,
-- creates and stores containers in priority order.
+- creates and stores containers in priority order,
+- uses `is RuntimeDataContainer` pattern-match instead of a direct cast for factory return safety.
 
 ## Shutdown Flow
 
@@ -116,3 +122,11 @@ Shutdown sequence:
 - Event handler callbacks use cached delegates to support reliable unsubscribe.
 - Cleanup is guarded for null-safe shutdown and only executed once.
 - Registry unregistration runs independently from `Initialized` flags to avoid skip-on-shutdown edge cases.
+- Periodic callback enumeration completes before invocation, so callbacks can safely register/unregister.
+- Behaviour dispatch snapshots the list to avoid mutation during `OnLateUpdate`.
+- Periodic callbacks receive `data.Interval`, not frame `deltaTime`, so the argument is always meaningful.
+- `PeriodicCallbackData.CallbackName` caches the reflection-derived display name at construction time; no runtime reflection in any log path.
+- `RegisterPeriodicCallback` uses `TryGetValue` instead of `ContainsKey` + double-indexer to save a hash lookup.
+- Container factory results use `is` pattern-match instead of direct cast for future-safe type checking.
+- `dataContainers.Clear()` at start of discovery prevents accumulation when Unity domain reload is disabled.
+- `ServerBehaviourRegistry` implements `IServerBehaviourRegistry` directly, enabling clean assignment without `as` cast.

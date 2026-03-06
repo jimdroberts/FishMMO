@@ -436,5 +436,200 @@ namespace FishMMO.Shared
 					break;
 			}
 		}
+
+		/// <summary>
+		/// Spawns an ability object for an NPC (non-player character) caster.
+		/// Uses the NPC's AIController virtual camera for aim direction.
+		/// </summary>
+		/// <param name="ability">The ability to spawn.</param>
+		/// <param name="caster">The NPC character casting the ability.</param>
+		/// <param name="abilitySpawner">The transform used as the spawn origin.</param>
+		/// <param name="targetInfo">The targeting information for the ability.</param>
+		/// <param name="seed">The deterministic RNG seed.</param>
+		/// <param name="spawnTick">The network tick at which this object is being spawned.</param>
+		public static void SpawnNPC(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed, uint spawnTick)
+		{
+			AbilityTemplate template = ability.Template;
+			if (template == null)
+			{
+				return;
+			}
+
+			if (template.RequiresTarget && targetInfo.Target == null)
+			{
+				return;
+			}
+
+			// NPCs cannot summon pets via abilities.
+			if (template is PetAbilityTemplate)
+			{
+				return;
+			}
+
+			// Self target abilities apply immediately.
+			if (template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
+			{
+				if (template.TargetTrigger != null)
+				{
+					AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster);
+					collisionEvent.Add(new CharacterHitEventData(caster, caster, new System.Random(seed)));
+					template.TargetTrigger.Execute(collisionEvent);
+				}
+				return;
+			}
+
+			if (template.AbilityObjectPrefab == null)
+			{
+				return;
+			}
+
+			GameObject go = Instantiate(template.AbilityObjectPrefab);
+			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
+			SetAbilitySpawnPositionNPC(caster, ability, abilitySpawner, targetInfo, go.transform);
+			go.SetActive(false);
+
+			AbilityObject abilityObject = go.GetComponent<AbilityObject>();
+			if (abilityObject == null)
+			{
+				abilityObject = go.AddComponent<AbilityObject>();
+			}
+			abilityObject.ID = 0;
+			abilityObject.Ability = ability;
+			abilityObject.Caster = caster;
+			abilityObject.HitCount = template.HitCount;
+			abilityObject.RemainingLifeTime = ability.LifeTime;
+			abilityObject.RNG = new System.Random(seed);
+			abilityObject.SpawnTick = spawnTick;
+			abilityObject.Snapshot = new AbilityObjectSnapshot(ability);
+
+			if (ability.Objects == null)
+			{
+				ability.Objects = new Dictionary<int, Dictionary<int, AbilityObject>>();
+			}
+
+			Dictionary<int, AbilityObject> spawnedAbilityObjects = new Dictionary<int, AbilityObject>();
+			int containerID;
+			do
+			{
+				containerID = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+			} while (ability.Objects.ContainsKey(containerID));
+
+			ability.Objects.Add(containerID, spawnedAbilityObjects);
+			abilityObject.ContainerID = containerID;
+			spawnedAbilityObjects[abilityObject.ID] = abilityObject;
+
+			RefWrapper<int> nextChildID = new RefWrapper<int>(0);
+
+			if (ability.OnPreSpawnEvents != null)
+			{
+				AbilitySpawnEventData preSpawnEvent = new AbilitySpawnEventData(caster, ability, abilitySpawner, targetInfo, seed, abilityObject, nextChildID, spawnedAbilityObjects);
+				foreach (var trigger in ability.OnPreSpawnEvents.Values)
+				{
+					trigger.Execute(preSpawnEvent);
+				}
+			}
+
+			if (ability.OnSpawnEvents != null)
+			{
+				AbilitySpawnEventData spawnEvent = new AbilitySpawnEventData(caster, ability, abilitySpawner, targetInfo, seed, abilityObject, nextChildID, spawnedAbilityObjects);
+				foreach (var trigger in ability.OnSpawnEvents.Values)
+				{
+					trigger.Execute(spawnEvent);
+				}
+			}
+
+			foreach (AbilityObject obj in spawnedAbilityObjects.Values)
+			{
+				obj.GameObject.SetActive(true);
+			}
+		}
+
+		/// <summary>
+		/// Positions and rotates the ability object transform for an NPC caster.
+		/// Uses the NPC's AIController virtual camera for Camera and SpawnerWithCameraRotation modes.
+		/// </summary>
+		/// <param name="caster">The NPC character casting the ability.</param>
+		/// <param name="ability">The ability being spawned.</param>
+		/// <param name="abilitySpawner">The transform acting as the spawn origin.</param>
+		/// <param name="targetInfo">The targeting information.</param>
+		/// <param name="abilityTransform">The transform of the spawned ability object to position.</param>
+		public static void SetAbilitySpawnPositionNPC(ICharacter caster, Ability ability, Transform abilitySpawner, TargetInfo targetInfo, Transform abilityTransform)
+		{
+			// Resolve virtual camera from AIController if available.
+			Vector3 cameraPosition = caster.Transform.position;
+			Quaternion cameraRotation = caster.Transform.rotation;
+			if (caster.TryGet(out IAIController aiController))
+			{
+				AIController ai = aiController as AIController;
+				if (ai != null)
+				{
+					cameraPosition = ai.VirtualCameraPosition;
+					cameraRotation = ai.VirtualCameraRotation;
+				}
+			}
+			Vector3 cameraForward = cameraRotation * Vector3.forward;
+
+			switch (ability.Template.AbilitySpawnTarget)
+			{
+				case AbilitySpawnTarget.Self:
+				case AbilitySpawnTarget.PointBlank:
+					abilityTransform.SetPositionAndRotation(caster.Transform.position, caster.Transform.rotation);
+					break;
+				case AbilitySpawnTarget.Target:
+					if (targetInfo.HitPosition != Vector3.zero)
+					{
+						abilityTransform.SetPositionAndRotation(targetInfo.HitPosition, caster.Transform.rotation);
+					}
+					else if (targetInfo.Target != null)
+					{
+						abilityTransform.SetPositionAndRotation(targetInfo.Target.position, caster.Transform.rotation);
+					}
+					break;
+				case AbilitySpawnTarget.Forward:
+					{
+						float distance = 0.0f;
+						float height = 0.0f;
+						Collider collider = ability.Template.AbilityObjectPrefab.GetComponent<Collider>();
+						if (collider != null)
+						{
+							if (caster.Collider != null)
+							{
+								distance += caster.Collider.bounds.extents.z;
+								height += caster.Collider.bounds.extents.y;
+							}
+							distance += collider.bounds.extents.z;
+							height += collider.bounds.extents.y;
+						}
+						Vector3 positionOffset = caster.Transform.forward * distance;
+						positionOffset.y += height;
+
+						Vector3 spawnPosition = caster.Transform.position + positionOffset;
+						abilityTransform.SetPositionAndRotation(spawnPosition, caster.Transform.rotation);
+					}
+					break;
+				case AbilitySpawnTarget.Camera:
+					{
+						Vector3 spawnPosition = cameraPosition + cameraForward;
+						Vector3 farTargetPosition = cameraPosition + cameraForward * ability.Range;
+						Vector3 lookDirection = (farTargetPosition - spawnPosition).normalized;
+						Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
+						abilityTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
+					}
+					break;
+				case AbilitySpawnTarget.Spawner:
+					abilityTransform.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
+					break;
+				case AbilitySpawnTarget.SpawnerWithCameraRotation:
+					{
+						Vector3 farTargetPosition = cameraPosition + cameraForward * ability.Range;
+						Vector3 lookDirection = (farTargetPosition - abilitySpawner.position).normalized;
+						Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
+						abilityTransform.SetPositionAndRotation(abilitySpawner.position, spawnRotation);
+					}
+					break;
+				default:
+					break;
+			}
+		}
 	}
 }

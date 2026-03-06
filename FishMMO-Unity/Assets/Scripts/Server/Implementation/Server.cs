@@ -116,6 +116,12 @@ namespace FishMMO.Server.Implementation
 		private readonly List<PeriodicCallbackData> readyCallbacks = new List<PeriodicCallbackData>();
 
 		/// <summary>
+		/// Reusable snapshot of server behaviours, taken before dispatch to avoid
+		/// list mutation if a behaviour registers or unregisters during OnLateUpdate.
+		/// </summary>
+		private readonly List<ServerBehaviour> behaviourSnapshot = new List<ServerBehaviour>();
+
+		/// <summary>
 		/// Cached server-initialized log callback for login server initialization.
 		/// </summary>
 		private static readonly Action loginServerInitializedLogHandler = () => Log.Debug("Server", "LoginServer initialized.");
@@ -211,7 +217,7 @@ namespace FishMMO.Server.Implementation
 			DataContainerRegistry.InitializeAll(this);
 
 			// Initialize all registered server behaviours
-			BehaviourRegistry = new ServerBehaviourRegistry() as IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>;
+			BehaviourRegistry = new ServerBehaviourRegistry();
 			RegisterAllBehaviours();
 			BehaviourRegistry.InitializeAll(this);
 
@@ -274,9 +280,16 @@ namespace FishMMO.Server.Implementation
 			if (serverBehaviours == null)
 				return;
 
+			// Snapshot to avoid list mutation if OnLateUpdate registers or unregisters behaviours.
+			behaviourSnapshot.Clear();
 			for (int i = 0; i < serverBehaviours.Count; i++)
 			{
-				var behaviour = serverBehaviours[i];
+				behaviourSnapshot.Add(serverBehaviours[i]);
+			}
+
+			for (int i = 0; i < behaviourSnapshot.Count; i++)
+			{
+				var behaviour = behaviourSnapshot[i];
 				if (behaviour != null && behaviour.Initialized)
 				{
 					behaviour.OnLateUpdate(deltaTime);
@@ -286,6 +299,10 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Processes and dispatches periodic callbacks that are ready to execute.
+		/// The foreach over the dictionary is safe because the invoke loop only
+		/// mutates TimeRemaining on existing entries, not the dictionary itself.
+		/// If a callback calls Register/Unregister, the dictionary is not being
+		/// enumerated at that point — enumeration finishes before invocation starts.
 		/// </summary>
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		private void UpdatePeriodicCallbacks(float deltaTime)
@@ -300,24 +317,24 @@ namespace FishMMO.Server.Implementation
 				var data = kvp.Value;
 				data.TimeRemaining -= deltaTime;
 
-				if (data.TimeRemaining <= 0)
+				if (data.TimeRemaining <= 0f)
 				{
 					readyCallbacks.Add(data);
 				}
 			}
 
-			// Invoke callbacks that are ready
-			foreach (var data in readyCallbacks)
+			for (int i = 0; i < readyCallbacks.Count; i++)
 			{
+				var data = readyCallbacks[i];
 				try
 				{
-					data.Callback?.Invoke(deltaTime);
-					data.TimeRemaining = data.Interval; // Reset timer
+					data.Callback?.Invoke(data.Interval);
 				}
 				catch (Exception ex)
 				{
-					Log.Error("Server", $"Error invoking periodic callback {data.Callback.Method.DeclaringType?.Name}.{data.Callback.Method.Name}: {ex.Message}");
+					Log.Error("Server", $"Error invoking periodic callback {data.CallbackName}: {ex.Message}");
 				}
+				data.TimeRemaining = data.Interval;
 			}
 		}
 
@@ -402,6 +419,9 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void DiscoverAndCreateDataContainers()
 		{
+			// Clear to prevent accumulation if Unity domain reload is disabled.
+			dataContainers.Clear();
+
 			var factory = new RuntimeDataContainerFactory();
 			var containerTypes = new HashSet<Type>(); // Prevent duplicates
 			var containersByPriority = new SortedDictionary<int, List<Type>>();
@@ -443,8 +463,15 @@ namespace FishMMO.Server.Implementation
 				foreach (var containerType in priorityGroup)
 				{
 					var container = factory.CreateContainer(containerType);
-					dataContainers.Add((RuntimeDataContainer)container);
-					Log.Debug("Server", $"Auto-created RuntimeDataContainer: {containerType.Name}");
+					if (container is RuntimeDataContainer rdc)
+					{
+						dataContainers.Add(rdc);
+						Log.Debug("Server", $"Auto-created RuntimeDataContainer: {containerType.Name}");
+					}
+					else
+					{
+						Log.Warning("Server", $"Factory returned non-RuntimeDataContainer for type {containerType.Name}. Skipping.");
+					}
 				}
 			}
 		}
@@ -574,16 +601,17 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			if (periodicCallbacks.ContainsKey(callback))
+			if (periodicCallbacks.TryGetValue(callback, out var existing))
 			{
-				Log.Warning("Server", $"Periodic callback {callback.Method.DeclaringType?.Name}.{callback.Method.Name} is already registered. Updating interval.");
-				periodicCallbacks[callback].Interval = interval;
-				periodicCallbacks[callback].TimeRemaining = interval;
+				Log.Warning("Server", $"Periodic callback {existing.CallbackName} is already registered. Updating interval.");
+				existing.Interval = interval;
+				existing.TimeRemaining = interval;
 				return;
 			}
 
-			periodicCallbacks[callback] = new PeriodicCallbackData(interval, callback);
-			Log.Debug("Server", $"Registered periodic callback: {callback.Method.DeclaringType?.Name}.{callback.Method.Name} (interval: {interval}s)");
+			var entry = new PeriodicCallbackData(interval, callback);
+			periodicCallbacks[callback] = entry;
+			Log.Debug("Server", $"Registered periodic callback: {entry.CallbackName} (interval: {interval}s)");
 		}
 
 		/// <summary>
@@ -598,13 +626,18 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
+			// Resolve name before removal so the log message is meaningful.
+			string name = periodicCallbacks.TryGetValue(callback, out var data)
+				? data.CallbackName
+				: $"{callback.Method.DeclaringType?.Name}.{callback.Method.Name}";
+
 			if (periodicCallbacks.Remove(callback))
 			{
-				Log.Debug("Server", $"Unregistered periodic callback: {callback.Method.DeclaringType?.Name}.{callback.Method.Name}");
+				Log.Debug("Server", $"Unregistered periodic callback: {name}");
 			}
 			else
 			{
-				Log.Warning("Server", $"Attempted to unregister non-existent periodic callback: {callback.Method.DeclaringType?.Name}.{callback.Method.Name}");
+				Log.Warning("Server", $"Attempted to unregister non-existent periodic callback: {name}");
 			}
 		}
 
@@ -631,11 +664,11 @@ namespace FishMMO.Server.Implementation
 			{
 				data.Interval = newInterval;
 				data.TimeRemaining = newInterval;
-				Log.Debug("Server", $"Updated periodic callback interval: {callback.Method.DeclaringType?.Name}.{callback.Method.Name} (new interval: {newInterval}s)");
+				Log.Debug("Server", $"Updated periodic callback interval: {data.CallbackName} (new interval: {newInterval}s)");
 			}
 			else
 			{
-				Log.Warning("Server", $"Attempted to update interval for non-existent periodic callback: {callback.Method.DeclaringType?.Name}.{callback.Method.Name}");
+				Log.Warning("Server", $"Attempted to update interval for non-existent periodic callback.");
 			}
 		}
 
