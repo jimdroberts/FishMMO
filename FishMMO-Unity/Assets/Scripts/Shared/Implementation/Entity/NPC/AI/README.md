@@ -2,9 +2,28 @@
 
 ## Overview
 
-The AI system is a server-authoritative, ScriptableObject-based state machine that drives all NPC behavior in FishMMO. Each NPC has an `AIController` (a `CharacterBehaviour` / `NetworkBehaviour`) that manages a `NavMeshAgent`, a pluggable set of `BaseAIState` assets, an aggression (threat) table, and a virtual camera for aiming abilities at targets. All AI logic runs exclusively on the server — clients receive only the results via network synchronization.
+The AI system is a server-authoritative, multi-layered architecture that drives all NPC behavior in FishMMO. It combines four layers — a **behavior tree** (decision making), a **state machine** (movement/combat execution), an **ability selector** (combat logic), and an optional **boss script** (unique boss mechanics) — coordinated by a central `AIController`.
 
-States are **shared ScriptableObject assets** — every NPC referencing the same asset shares the same instance. This means **no mutable per-NPC data may be stored on the state itself**. Per-NPC runtime data (timers, targets, aggression) lives on the `AIController` or its owned helper classes (`AggressionState`, `AggressionController`).
+Each NPC has an `AIController` (a `CharacterBehaviour` / `NetworkBehaviour`) that manages a `NavMeshAgent`, a pluggable set of `BaseAIState` assets, an aggression (threat) table, AI LOD throttling, group awareness, and a virtual camera for aiming abilities at targets. All AI logic runs exclusively on the server — clients receive only the results via network synchronization.
+
+States are **shared ScriptableObject assets** — every NPC referencing the same asset shares the same instance. This means **no mutable per-NPC data may be stored on the state itself**. Per-NPC runtime data (timers, targets, aggression, boss phase) lives on the `AIController` or its owned helper classes (`AggressionState`, `AggressionController`, `BossScriptState`).
+
+### Architecture Layers
+
+```
+NPC Brain (AIController)
+ ├─ Behavior Tree       ← high-level decisions ("what should I do?")
+ │
+ ├─ State Machine       ← movement/combat modes ("how do I do it?")
+ │
+ ├─ Ability Selector    ← rotation + scoring ("which ability?")
+ │
+ ├─ Boss Script         ← phased mechanics ("special encounter logic")
+ │
+ ├─ AI LOD              ← distance-based throttling ("how often to think?")
+ │
+ └─ Group AI            ← pack coordination ("what is my team doing?")
+```
 
 ## Directory Structure
 
@@ -12,31 +31,55 @@ States are **shared ScriptableObject assets** — every NPC referencing the same
 AI/
 ├── AIAbilityRotation.cs        # Condition/sequence-based ability rotation asset
 ├── AIController.cs             # Core AI controller (NavMeshAgent, state machine, virtual camera)
+├── AILodSettings.cs            # AI LOD distance-based update throttling settings
 ├── AgentAvoidancePriority.cs   # Enum for NavMesh agent avoidance levels
 ├── AggressionController.cs     # Per-NPC threat table (plain C# class)
 ├── AggressionEntry.cs          # Single-character threat data
 ├── AggressionState.cs          # Owns AggressionController + global event subscriptions
 ├── BaseAIState.cs              # Abstract ScriptableObject base for all AI states
+├── BehaviorTree/
+│   ├── AIBehaviorNode.cs       # Abstract base for all BT nodes
+│   ├── AIBehaviorTree.cs       # Root container ScriptableObject
+│   ├── AICompositeNode.cs      # Base for composite nodes (Selector, Sequence)
+│   ├── AISelector.cs           # OR node — tries children until one succeeds
+│   ├── AISequence.cs           # AND node — runs children in order, fails on first failure
+│   ├── AIInverter.cs           # Decorator — inverts child result
+│   ├── AIRepeater.cs           # Decorator — repeats child N times
+│   ├── AIConditionNode.cs      # Leaf — evaluates an AIAbilityCondition
+│   ├── AIStateTransitionNode.cs# Leaf — transitions to a BaseAIState
+│   ├── AIHasTargetNode.cs      # Leaf — checks if NPC has a target
+│   ├── AIIsDeadNode.cs         # Leaf — checks if NPC is dead
+│   ├── AIGroupInCombatNode.cs  # Leaf — checks if group is in combat
+│   └── AIAdoptGroupTargetNode.cs # Leaf — sets NPC target to group target
+├── Boss/
+│   ├── BossPhase.cs            # Single boss phase definition
+│   ├── BossScript.cs           # ScriptableObject defining phases + timed mechanics
+│   ├── BossTimedMechanic.cs    # Interval-based ability/spawn mechanic
+│   └── BossScriptState.cs      # Per-NPC runtime boss state (plain C# class)
 ├── Conditions/
-│   ├── AIAbilityCondition.cs   # Abstract base for rotation conditions
+│   ├── AIAbilityCondition.cs   # Abstract base for rotation/BT conditions
 │   ├── AIBuffCondition.cs      # Check buff/debuff presence on self or target
 │   ├── AIDistanceCondition.cs  # Check distance to target
 │   ├── AIHealthCondition.cs    # Check health % of self or target
 │   └── AIRandomCondition.cs    # Random chance condition
+├── Group/
+│   ├── NPCGroupRole.cs         # Enum: Tank, Healer, DPS, Support
+│   ├── NPCGroupMember.cs       # Associates an AIController with a role
+│   └── NPCGroup.cs             # Group coordinator MonoBehaviour
 └── States/
-    ├── BaseAttackingState.cs       # Base combat state (target picking, range, abilities)
-    ├── CasterAttackingState.cs     # Caster NPC combat (max range, retreat, cooldown reposition)
-    ├── GetBehindState.cs           # Flanking movement behind a target
-    ├── HealerAttackingState.cs     # Healer NPC combat (heal allies, fallback to damage)
-    ├── IdleState.cs                # Idle / wait with randomized update rate
-    ├── MeleeAttackingState.cs      # Melee NPC combat (close range, orbit/flank variety)
-    ├── OrbitState.cs               # Circle-strafe around a target
-    ├── PatrolState.cs              # Waypoint-based patrol movement
-    ├── PetIdleState.cs             # Pet follow-owner idle behavior
-    ├── RangedAttackingState.cs     # Ranged NPC combat (kiting, strafing)
-    ├── RetreatState.cs             # Flee from target to safe distance
-    ├── ReturnHomeState.cs          # Return to home position with healing
-    └── WanderState.cs              # Random wandering within a radius
+    ├── BaseAttackingState.cs       # Base combat state
+    ├── CasterAttackingState.cs     # Caster NPC combat
+    ├── GetBehindState.cs           # Flanking movement
+    ├── HealerAttackingState.cs     # Healer NPC combat
+    ├── IdleState.cs                # Idle with randomized update rate
+    ├── MeleeAttackingState.cs      # Melee NPC combat
+    ├── OrbitState.cs               # Circle-strafe
+    ├── PatrolState.cs              # Waypoint patrol
+    ├── PetIdleState.cs             # Pet follow-owner
+    ├── RangedAttackingState.cs     # Ranged NPC combat
+    ├── RetreatState.cs             # Flee from target
+    ├── ReturnHomeState.cs          # Return home with healing
+    └── WanderState.cs              # Random wandering
 ```
 
 ## Inheritance Hierarchies
@@ -79,6 +122,55 @@ AggressionState          (plain C# — owns controller + event subscriptions)
     └── AggressionEntry  (plain C# — per-character threat data)
 ```
 
+### Behavior Tree (ScriptableObjects)
+
+```
+ScriptableObject
+├── AIBehaviorTree       (root container — references root node, tick rate)
+└── AIBehaviorNode       (abstract base)
+    ├── AICompositeNode  (abstract — has Children[])
+    │   ├── AISelector   (OR — first child to succeed wins)
+    │   └── AISequence   (AND — all children must succeed)
+    ├── AIInverter       (decorator — inverts child result)
+    ├── AIRepeater       (decorator — repeats child N times)
+    ├── AIConditionNode  (leaf — evaluates an AIAbilityCondition)
+    ├── AIStateTransitionNode (leaf — transitions to a BaseAIState)
+    ├── AIHasTargetNode  (leaf — Success if target exists)
+    ├── AIIsDeadNode     (leaf — Success if NPC is dead)
+    ├── AIGroupInCombatNode   (leaf — Success if group is fighting)
+    └── AIAdoptGroupTargetNode (leaf — adopts group's shared target)
+```
+
+### Boss Script
+
+```
+ScriptableObject
+└── BossScript           (phases + timed mechanics definition)
+    ├── BossPhase        ([Serializable] — HP threshold, overrides, spawns)
+    └── BossTimedMechanic ([Serializable] — interval abilities/spawns)
+
+BossScriptState          (plain C# — per-NPC runtime state, phase index, timers)
+```
+
+### Group AI
+
+```
+MonoBehaviour
+└── NPCGroup             (group coordinator — shared target, roles, combat status)
+    └── NPCGroupMember   ([Serializable] — AIController + NPCGroupRole)
+
+enum NPCGroupRole        (None, Tank, Healer, DPS, Support)
+```
+
+### AI LOD
+
+```
+ScriptableObject
+└── AILodSettings        (distance thresholds, stagger moduli, re-evaluate interval)
+
+enum AILodTier           (Active, Nearby, Far, Dormant)
+```
+
 ### Ability Rotation / Conditions
 
 ```
@@ -111,6 +203,9 @@ ScriptableObject
 | `AttackingState`            | `BaseAIState`            | —        | Combat state                                                 |
 | `DeadState`                 | `BaseAIState`            | —        | Death state                                                  |
 | `AbilityRotation`           | `AIAbilityRotation`      | —        | Optional condition/sequence ability rotation (see below)     |
+| `BehaviorTree`              | `AIBehaviorTree`         | —        | Optional behavior tree for high-level decision making        |
+| `LodSettings`               | `AILodSettings`          | —        | Optional LOD settings for distance-based AI throttling       |
+| `BossScript`                | `BossScript`             | —        | Optional boss script for phased encounters                   |
 | `AvoidancePriority`         | `AgentAvoidancePriority` | `Medium` | NavMeshAgent avoidance priority                              |
 | `EnemySweepRate`            | `float`                  | `1.5`    | Seconds between enemy detection sweeps                       |
 | `AggressionDamageWeight`    | `float`                  | `1.0`    | Threat points per 1 damage taken                             |
@@ -137,17 +232,50 @@ ScriptableObject
 | `OrbitAngle`             | `float`               | Per-NPC orbit angle for OrbitState                       |
 | `RotationIndex`          | `int`                 | Per-NPC index for Sequence-mode ability rotation         |
 | `PhysicsScene`           | `PhysicsScene`        | Scene physics for overlap/raycast queries                |
+| `Group`                  | `NPCGroup`            | NPC group this controller belongs to (set by NPCGroup)   |
+| `GroupRole`              | `NPCGroupRole`        | This NPC's role within its group (Tank/Healer/DPS/etc.)  |
+| `BossState`              | `BossScriptState`     | Runtime boss phase/mechanic state (null if no BossScript)|
+| `CurrentLodTier`         | `AILodTier`           | Current LOD tier (Active/Nearby/Far/Dormant)             |
+| `NpcRNG`                 | `System.Random`       | Seeded RNG from NPC for deterministic behavior           |
 
 ### Update Loop
 
-The `AIController.Update()` method runs every frame (server-only) in this order:
+The `AIController.Update()` method runs every frame (server-only) with multi-layered throttling:
 
-1. **`SweepForEnemies()`** — Timer-based enemy detection. Skipped if already attacking or returning home.
-2. **`CheckLeash()`** — Distance check to home. Warps + heals + interrupts abilities on max leash; transitions to `ReturnHomeState` on min leash.
-3. **`UpdateCurrentState()`** — Calls `CurrentState.UpdateState()` on a per-state timer.
-4. **`UpdateVirtualCamera()`** — Points the virtual camera from the eye transform toward the target's collider center.
-5. **`AggressionState.Tick()`** — Decays threat entries and prunes stale ones.
-6. **`FaceLookTarget()`** — Smoothly rotates the NPC toward `LookTarget`.
+**1. AI LOD Stagger** — When `LodSettings` is assigned, the NPC's LOD tier is re-evaluated periodically based on nearest observer distance. Each tier has a different frame stagger modulus. `Dormant` NPCs skip the entire update. Without `LodSettings`, a simple 1-in-3 frame stagger is used.
+
+**2. Enemy Sweep** — `SweepForEnemies()` — Timer-based enemy detection. Skipped if already attacking or returning home.
+
+**3. Leash Check** — `CheckLeash()` — Distance check to home. Warps + heals on max leash; transitions to `ReturnHomeState` on min leash. Resets boss phases if `BossScript.ResetOnLeash` is true.
+
+**4. Behavior Tree** — If a `BehaviorTree` is assigned, it is evaluated on its own tick rate. If the tree returns `Success` (produced a state transition), the state machine's own `UpdateState` is **skipped** for that tick to avoid conflicting decisions.
+
+**5. Boss Script** — If a `BossScript` is assigned, phase transitions are evaluated against current HP, and timed mechanics are ticked.
+
+**6. State Machine** — `UpdateCurrentState()` — Calls `CurrentState.UpdateState()` on a per-state timer. Skipped if the behavior tree already handled this tick.
+
+**7. Virtual Camera** — `UpdateVirtualCamera()` — Aims from eye transform toward target center.
+
+**8. Aggression Decay** — `AggressionState.Tick()` — Throttled to 0.5s intervals.
+
+**9. Face Target** — `FaceLookTarget()` — Smooth rotation toward `LookTarget`.
+
+```
+Update()
+ │
+ ├─ AI LOD stagger check ── Dormant? → return
+ │
+ ├─ SweepForEnemies()
+ ├─ CheckLeash()
+ │
+ ├─ BehaviorTree.Evaluate()  ── Success? → skip state update
+ ├─ BossScript (phases + mechanics)
+ ├─ UpdateCurrentState()      ── only if BT didn't handle
+ │
+ ├─ UpdateVirtualCamera()
+ ├─ AggressionState.Tick()    ── throttled 0.5s
+ └─ FaceLookTarget()
+```
 
 ### Ability Selection
 

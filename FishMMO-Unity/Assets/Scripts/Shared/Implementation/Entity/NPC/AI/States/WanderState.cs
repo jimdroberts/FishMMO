@@ -83,7 +83,8 @@ namespace FishMMO.Shared
 					 (!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f))
 			{
 				// Randomly decide whether to transition to idle or continue wandering.
-				float randomChance = Random.Range(0f, 1f); // Random value between 0 and 1
+				System.Random rng = controller.NpcRNG;
+				float randomChance = rng != null ? (float)rng.NextDouble() : Random.Range(0f, 1f);
 				float transitionThreshold = 0.5f; // Probability threshold (e.g., 50%)
 
 				if (randomChance <= transitionThreshold)

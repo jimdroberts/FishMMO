@@ -270,6 +270,7 @@ namespace FishMMO.Shared
 			if (!controller.Character.TryGet(out ICooldownController cooldownController))
 				return null;
 
+			System.Random rng = controller.NpcRNG;
 			float sqrDist = (ally.Transform.position - controller.Character.Transform.position).sqrMagnitude;
 
 			Ability best = null;
@@ -293,7 +294,7 @@ namespace FishMMO.Shared
 					score = ability.Range;
 				}
 
-				score += Random.Range(0f, 30f);
+				score += rng != null ? (float)(rng.NextDouble() * 30.0) : Random.Range(0f, 30f);
 
 				if (score > bestScore)
 				{
@@ -313,6 +314,7 @@ namespace FishMMO.Shared
 			if (!controller.Character.TryGet(out ICooldownController cooldownController))
 				return null;
 
+			System.Random rng = controller.NpcRNG;
 			float sqrDist = controller.GetSqrDistanceToTarget();
 
 			Ability best = null;
@@ -336,7 +338,7 @@ namespace FishMMO.Shared
 					score = ability.Range;
 				}
 
-				score += Random.Range(0f, 50f);
+				score += rng != null ? (float)(rng.NextDouble() * 50.0) : Random.Range(0f, 50f);
 
 				if (score > bestScore)
 				{

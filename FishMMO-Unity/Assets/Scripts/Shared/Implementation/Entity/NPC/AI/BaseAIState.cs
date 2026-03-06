@@ -109,19 +109,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sweeps for nearby enemies using physics overlap checks and faction logic. Returns true if any enemies are detected with line of sight.
+		/// Sweeps for nearby enemies using physics overlap checks and faction logic.
+		/// Populates the provided list with detected enemies. Returns true if any enemies are detected with line of sight.
 		/// </summary>
 		/// <param name="controller">The AI controller managing this NPC.</param>
-		/// <param name="detectedEnemies">List of detected enemy characters.</param>
+		/// <param name="detectedEnemies">Reusable list to populate with detected enemy characters. Cleared before use.</param>
 		/// <returns>True if any enemies are detected, false otherwise.</returns>
-		public virtual bool SweepForEnemies(AIController controller, out List<ICharacter> detectedEnemies)
+		public virtual bool SweepForEnemies(AIController controller, List<ICharacter> detectedEnemies)
 		{
+			detectedEnemies.Clear();
+
 			if (controller.Character == null ||
 				controller.AttackingState == null ||
 				!controller.Character.TryGet(out IFactionController ourFactionController) ||
 				controller.Observers.Count < 1)
 			{
-				detectedEnemies = null;
 				return false;
 			}
 
@@ -129,7 +131,6 @@ namespace FishMMO.Shared
 			if (controller.Character.TryGet(out ICharacterDamageController damageController) &&
 				!damageController.IsAlive)
 			{
-				detectedEnemies = null;
 				return false;
 			}
 
@@ -140,8 +141,6 @@ namespace FishMMO.Shared
 					controller.SweepHits,
 					EnemyLayers,
 					QueryTriggerInteraction.Ignore);
-
-			detectedEnemies = new List<ICharacter>();
 
 			for (int i = 0; i < overlapCount && i < controller.SweepHits.Length; ++i)
 			{

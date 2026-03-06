@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.AI;
+using FishNet.Connection;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -77,6 +78,32 @@ namespace FishMMO.Shared
 		/// </summary>
 		[Tooltip("Optional ability rotation for condition/sequence-based ability selection.")]
 		public AIAbilityRotation AbilityRotation;
+
+		[Header("Behavior Tree")]
+		/// <summary>
+		/// Optional behavior tree that provides high-level decision making above the state machine.
+		/// When assigned, the tree is evaluated each tick before the current state's UpdateState.
+		/// If the tree produces a state transition (returns Success), UpdateState is skipped that tick.
+		/// </summary>
+		[Tooltip("Optional behavior tree for high-level decision making.")]
+		public AIBehaviorTree BehaviorTree;
+
+		[Header("AI LOD")]
+		/// <summary>
+		/// Optional LOD settings for distance-based update throttling.
+		/// When assigned, replaces the fixed 1-in-3 stagger with distance-based tiers:
+		/// Active (nearby players), Nearby, Far, and Dormant (no observers).
+		/// </summary>
+		[Tooltip("Optional LOD settings for distance-based AI throttling.")]
+		public AILodSettings LodSettings;
+
+		[Header("Boss Script")]
+		/// <summary>
+		/// Optional boss script defining phased encounters and timed mechanics.
+		/// When assigned, the controller evaluates phase transitions and mechanic timers each tick.
+		/// </summary>
+		[Tooltip("Optional boss script for phased encounters.")]
+		public BossScript BossScript;
 
 		[Header("Aggression / Threat")]
 		/// <summary>
@@ -190,6 +217,9 @@ namespace FishMMO.Shared
 			get { return target; }
 			set
 			{
+				if (target == value)
+					return;
+
 				target = value;
 				if (value != null)
 				{
@@ -230,7 +260,37 @@ namespace FishMMO.Shared
 		private float nextUpdate = 0.0f;
 		private float nextLeashUpdate = 0.0f;
 		private float nextEnemySweepUpdate = 0.0f;
+		private float aggressionTickTimer = 0.0f;
+		private float cachedTargetHalfHeight = 0.0f;
+		private Transform cachedTargetHeightSource;
+		private int staggerID;
 		private List<BaseAIState> movementStates = new List<BaseAIState>();
+		private List<ICharacter> sweepResults = new List<ICharacter>(10);
+		private float behaviorTreeTimer;
+		private float lodReevaluateTimer;
+		private AILodTier currentLodTier = AILodTier.Active;
+
+		/// <summary>
+		/// The NPC group this controller belongs to. Set by <see cref="NPCGroup"/>.
+		/// </summary>
+		[System.NonSerialized]
+		public NPCGroup Group;
+
+		/// <summary>
+		/// This NPC's role within its group. Set by <see cref="NPCGroup"/>.
+		/// </summary>
+		[System.NonSerialized]
+		public NPCGroupRole GroupRole;
+
+		/// <summary>
+		/// Runtime state for the boss script. Null when no <see cref="BossScript"/> is assigned.
+		/// </summary>
+		public BossScriptState BossState { get; private set; }
+
+		/// <summary>
+		/// Current AI LOD tier. Determines how frequently this NPC's brain ticks.
+		/// </summary>
+		public AILodTier CurrentLodTier => currentLodTier;
 
 		/// <summary>
 		/// Per-NPC orbit angle (radians) used by <see cref="OrbitState"/>.
@@ -247,6 +307,21 @@ namespace FishMMO.Shared
 		[System.NonSerialized]
 		public int RotationIndex;
 
+		/// <summary>
+		/// The seeded RNG from the owning <see cref="NPC"/>.
+		/// All AI randomisation should use this instead of <c>UnityEngine.Random</c>
+		/// so that NPC behaviour is fully deterministic given the same seed.
+		/// Returns null for non-NPC characters.
+		/// </summary>
+		public System.Random NpcRNG
+		{
+			get
+			{
+				NPC npc = Character as NPC;
+				return npc?.RNG;
+			}
+		}
+
 #if UNITY_EDITOR
 		/// <summary>
 		/// Draws gizmos in the editor to visualize agent radius and home position.
@@ -260,7 +335,7 @@ namespace FishMMO.Shared
 			Gizmos.color = Color.red;
 			Gizmos.DrawWireSphere(transform.position, Agent.radius);
 
-			if (Home != null)
+			if (Home != Vector3.zero)
 			{
 				if (WanderState != null && WanderState is WanderState wanderState)
 				{
@@ -293,6 +368,9 @@ namespace FishMMO.Shared
 		public override void InitializeOnce()
 		{
 			base.InitializeOnce();
+
+			// Derive a stagger ID so NPCs spread their updates across frames.
+			staggerID = Mathf.Abs((int)(Character.ID % int.MaxValue));
 
 			// Initialize the per-NPC aggression state with serialized tuning values.
 			AggressionState = new AggressionState(
@@ -328,6 +406,12 @@ namespace FishMMO.Shared
 			if (IdleState != null)
 			{
 				movementStates.Add(IdleState);
+			}
+
+			// Initialize boss script runtime state if a boss script is assigned.
+			if (BossScript != null)
+			{
+				BossState = new BossScriptState(BossScript);
 			}
 		}
 
@@ -384,6 +468,15 @@ namespace FishMMO.Shared
 			VirtualCameraRotation = Quaternion.identity;
 			OrbitAngle = 0f;
 			RotationIndex = 0;
+			aggressionTickTimer = 0f;
+			cachedTargetHalfHeight = 0f;
+			cachedTargetHeightSource = null;
+			behaviorTreeTimer = 0f;
+			lodReevaluateTimer = 0f;
+			currentLodTier = AILodTier.Active;
+			Group = null;
+			GroupRole = NPCGroupRole.None;
+			BossState?.Reset();
 			AggressionState?.Clear();
 		}
 
@@ -392,11 +485,77 @@ namespace FishMMO.Shared
 		/// </summary>
 		void Update()
 		{
+			// --- AI LOD Stagger ---
+			// When LodSettings are assigned, use distance-based tiers.
+			// Otherwise fall back to the simple 1-in-3 frame stagger.
+			if (LodSettings != null)
+			{
+				// Periodically re-evaluate the LOD tier.
+				lodReevaluateTimer -= Time.deltaTime;
+				if (lodReevaluateTimer <= 0f)
+				{
+					currentLodTier = EvaluateLodTier();
+					lodReevaluateTimer = LodSettings.ReevaluateInterval;
+				}
+
+				if (currentLodTier == AILodTier.Dormant)
+					return;
+
+				int modulus = LodSettings.GetStaggerModulus(currentLodTier);
+				if ((Time.frameCount + staggerID) % modulus != 0)
+					return;
+			}
+			else
+			{
+				// Simple stagger: only 1 in 3 frames per NPC.
+				if ((Time.frameCount + staggerID) % 3 != 0)
+					return;
+			}
+
+			float dt = Time.deltaTime;
+
 			SweepForEnemies();
 			CheckLeash();
-			UpdateCurrentState();
+
+			// --- Behavior Tree (decision layer) ---
+			bool btHandled = false;
+			if (BehaviorTree != null)
+			{
+				behaviorTreeTimer -= dt;
+				if (behaviorTreeTimer <= 0f)
+				{
+					AINodeResult btResult = BehaviorTree.Evaluate(this);
+					btHandled = (btResult == AINodeResult.Success);
+					behaviorTreeTimer = BehaviorTree.TickRate;
+				}
+			}
+
+			// --- Boss Script (phase & mechanic evaluation) ---
+			if (BossState != null)
+			{
+				BossState.EvaluatePhases(this);
+				BossState.TickMechanics(this, dt);
+			}
+
+			// --- State Machine (execution layer) ---
+			// If the behavior tree already produced a state transition this tick,
+			// skip the state machine's own update to avoid conflicting decisions.
+			if (!btHandled)
+			{
+				UpdateCurrentState();
+			}
+
 			UpdateVirtualCamera();
-			AggressionState?.Tick(Time.deltaTime);
+
+			// Throttle aggression decay to fixed intervals instead of every frame.
+			aggressionTickTimer -= dt;
+			if (aggressionTickTimer <= 0f)
+			{
+				const float AGGRESSION_TICK_INTERVAL = 0.5f;
+				AggressionState?.Tick(AGGRESSION_TICK_INTERVAL);
+				aggressionTickTimer = AGGRESSION_TICK_INTERVAL;
+			}
+
 			FaceLookTarget();
 		}
 
@@ -415,9 +574,10 @@ namespace FishMMO.Shared
 			if (nextEnemySweepUpdate < 0.0f)
 			{
 				// Check for nearby enemies if not in combat.
-				if (AttackingState.SweepForEnemies(this, out List<ICharacter> enemies))
+				sweepResults.Clear();
+				if (AttackingState.SweepForEnemies(this, sweepResults))
 				{
-					ChangeState(AttackingState, enemies);
+					ChangeState(AttackingState, sweepResults);
 				}
 				nextEnemySweepUpdate = EnemySweepRate;
 			}
@@ -463,6 +623,12 @@ namespace FishMMO.Shared
 
 					// Clear aggression on full leash reset.
 					AggressionState?.Clear();
+
+					// Reset boss script phases on leash.
+					if (BossState != null && BossScript != null && BossScript.ResetOnLeash)
+					{
+						BossState.Reset();
+					}
 
 					return;
 				}
@@ -520,6 +686,43 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Evaluates the AI LOD tier based on the nearest observer's distance.
+		/// Uses the FishNet <c>NetworkObject.Observers</c> collection to find player connections,
+		/// then checks the squared distance to each observer's character.
+		/// Returns <see cref="AILodTier.Dormant"/> when no observers exist.
+		/// </summary>
+		private AILodTier EvaluateLodTier()
+		{
+			if (LodSettings == null)
+				return AILodTier.Active;
+
+			// No observers → dormant.
+			if (Observers.Count < 1)
+				return AILodTier.Dormant;
+
+			// Find the nearest observer's squared distance.
+			float nearestSqrDist = float.MaxValue;
+			Vector3 npcPos = Character.Transform.position;
+
+			foreach (var conn in Observers)
+			{
+				// Each observer connection has objects — find the one closest.
+				foreach (var nob in conn.Objects)
+				{
+					if (nob == null || nob.transform == null) continue;
+
+					float sqrDist = (nob.transform.position - npcPos).sqrMagnitude;
+					if (sqrDist < nearestSqrDist)
+					{
+						nearestSqrDist = sqrDist;
+					}
+				}
+			}
+
+			return LodSettings.GetTier(nearestSqrDist);
+		}
+
+		/// <summary>
 		/// Updates the virtual camera position and rotation to aim from the eye
 		/// transform toward the current target. When no target is present, the
 		/// camera simply looks along the character's forward direction.
@@ -531,13 +734,20 @@ namespace FishMMO.Shared
 
 			if (Target != null)
 			{
-				// Aim at the center of the target's collider for accuracy.
-				Vector3 targetPoint = Target.position;
-				ICharacter targetCharacter = Target.GetComponent<ICharacter>();
-				if (targetCharacter != null && targetCharacter.Collider != null)
+				// Cache the target's collider half-height to avoid querying bounds every frame.
+				if (cachedTargetHeightSource != Target)
 				{
-					targetPoint = targetCharacter.Collider.bounds.center;
+					cachedTargetHeightSource = Target;
+					cachedTargetHalfHeight = 0f;
+
+					ICharacter targetCharacter = Target.GetComponent<ICharacter>();
+					if (targetCharacter != null && targetCharacter.Collider != null)
+					{
+						cachedTargetHalfHeight = targetCharacter.Collider.bounds.extents.y;
+					}
 				}
+
+				Vector3 targetPoint = Target.position + Vector3.up * cachedTargetHalfHeight;
 
 				Vector3 direction = (targetPoint - VirtualCameraPosition).normalized;
 				if (direction.sqrMagnitude > 0.0001f)
@@ -642,7 +852,12 @@ namespace FishMMO.Shared
 				}
 
 				// Add small random jitter so the NPC doesn't always pick the same ability.
-				score += Random.Range(0f, 50f);
+				// Uses the seeded NPC RNG for deterministic behaviour.
+				System.Random rng = NpcRNG;
+				if (rng != null)
+					score += (float)rng.NextDouble() * 50f;
+				else
+					score += Random.Range(0f, 50f);
 
 				if (score > bestScore)
 				{
@@ -716,6 +931,12 @@ namespace FishMMO.Shared
 				if (targets != null)
 				{
 					attackingState.PickTarget(this, targets);
+				}
+
+				// Alert the NPC group when entering combat.
+				if (Group != null && Target != null)
+				{
+					Group.AlertGroup(Target);
 				}
 			}
 			else

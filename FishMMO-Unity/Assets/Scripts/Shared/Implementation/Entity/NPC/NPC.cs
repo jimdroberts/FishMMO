@@ -32,6 +32,13 @@ namespace FishMMO.Shared
 		private System.Random npcRNG;
 
 		/// <summary>
+		/// Exposes the seeded RNG for deterministic AI decisions.
+		/// All AI subsystems should use this instead of <see cref="UnityEngine.Random"/>
+		/// so that behaviour is reproducible given the same seed.
+		/// </summary>
+		public System.Random RNG => npcRNG;
+
+		/// <summary>
 		/// The seed used for RNG, synchronized over the network.
 		/// </summary>
 		private int npcSeed = 0;

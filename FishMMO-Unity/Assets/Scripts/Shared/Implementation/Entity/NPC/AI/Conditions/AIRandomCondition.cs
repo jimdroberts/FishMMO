@@ -22,7 +22,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override bool Evaluate(AIController controller, ICharacter self, ICharacter target)
 		{
-			return Random.value <= Chance;
+			System.Random rng = controller.NpcRNG;
+			float roll = rng != null ? (float)rng.NextDouble() : Random.value;
+			return roll <= Chance;
 		}
 	}
 }

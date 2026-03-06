@@ -181,7 +181,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="candidates">List of potential target characters.</param>
 		/// <returns>The chosen target, or null if no valid candidates exist.</returns>
-		public ICharacter PickTarget(List<ICharacter> candidates)
+		public ICharacter PickTarget(List<ICharacter> candidates, System.Random rng = null)
 		{
 			if (candidates == null || candidates.Count == 0) return null;
 
@@ -218,7 +218,8 @@ namespace FishMMO.Shared
 			}
 
 			// Occasionally pick the second-highest threat for variety.
-			if (secondTarget != null && Random.value < TargetVarietyChance)
+			float roll = rng != null ? (float)rng.NextDouble() : Random.value;
+			if (secondTarget != null && roll < TargetVarietyChance)
 			{
 				return secondTarget;
 			}

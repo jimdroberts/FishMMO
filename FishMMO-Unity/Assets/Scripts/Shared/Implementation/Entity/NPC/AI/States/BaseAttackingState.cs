@@ -96,8 +96,9 @@ namespace FishMMO.Shared
 				!controller.Target.gameObject.activeSelf)
 			{
 				// If the target is lost... Check again for nearby enemies
+				List<ICharacter> enemies = new List<ICharacter>();
 				if (controller.AttackingState != null &&
-					SweepForEnemies(controller, out List<ICharacter> enemies))
+					SweepForEnemies(controller, enemies))
 				{
 					controller.ChangeState(controller.AttackingState, enemies);
 					return;
@@ -143,7 +144,7 @@ namespace FishMMO.Shared
 			// Use aggression-based picking if the table has data.
 			if (controller.Aggression != null && controller.Aggression.HasAggression)
 			{
-				target = controller.Aggression.PickTarget(targets);
+				target = controller.Aggression.PickTarget(targets, controller.NpcRNG);
 			}
 
 			// Fallback: pick the first alive candidate.
