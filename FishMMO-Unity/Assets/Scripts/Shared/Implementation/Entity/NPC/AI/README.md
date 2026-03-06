@@ -30,13 +30,16 @@ NPC Brain (AIController)
 ```
 AI/
 ├── AIAbilityRotation.cs        # Condition/sequence-based ability rotation asset
+├── AICombatPersonality.cs      # Data-driven combat personality (per-category ability weights)
 ├── AIController.cs             # Core AI controller (NavMeshAgent, state machine, virtual camera)
 ├── AILodSettings.cs            # AI LOD distance-based update throttling settings
+├── AIUtility.cs                # Shared helper methods for AI systems
 ├── AgentAvoidancePriority.cs   # Enum for NavMesh agent avoidance levels
 ├── AggressionController.cs     # Per-NPC threat table (plain C# class)
 ├── AggressionEntry.cs          # Single-character threat data
-├── AggressionState.cs          # Owns AggressionController + global event subscriptions
+├── AggressionState.cs          # Owns AggressionController + global event subscriptions + OnCombatInitiated
 ├── BaseAIState.cs              # Abstract ScriptableObject base for all AI states
+├── PackTactic.cs               # Enum for group spatial positioning tactics
 ├── BehaviorTree/
 │   ├── AIBehaviorNode.cs       # Abstract base for all BT nodes
 │   ├── AIBehaviorTree.cs       # Root container ScriptableObject
@@ -65,7 +68,8 @@ AI/
 ├── Group/
 │   ├── NPCGroupRole.cs         # Enum: Tank, Healer, DPS, Support
 │   ├── NPCGroupMember.cs       # Associates an AIController with a role
-│   └── NPCGroup.cs             # Group coordinator MonoBehaviour
+│   ├── NPCGroup.cs             # Group coordinator MonoBehaviour (pack tactics)
+│   └── PackTactic.cs           # Enum: Surround, Flank, FocusFire, Kite
 └── States/
     ├── BaseAttackingState.cs       # Base combat state
     ├── CasterAttackingState.cs     # Caster NPC combat
@@ -156,10 +160,21 @@ BossScriptState          (plain C# — per-NPC runtime state, phase index, timer
 
 ```
 MonoBehaviour
-└── NPCGroup             (group coordinator — shared target, roles, combat status)
+└── NPCGroup             (group coordinator — shared target, roles, pack tactics, combat status)
     └── NPCGroupMember   ([Serializable] — AIController + NPCGroupRole)
 
 enum NPCGroupRole        (None, Tank, Healer, DPS, Support)
+enum PackTactic          (None, Surround, Flank, FocusFire, Kite)
+```
+
+### Combat Personality
+
+```
+ScriptableObject
+└── AICombatPersonality  (per-category ability weights, retreat threshold, combat style)
+
+enum NPCCombatStyle      (Balanced, Aggressive, Defensive, Cautious, Berserker)
+enum AbilityCategory     (Unknown, Melee, Ranged, AOE, Support)
 ```
 
 ### AI LOD
@@ -203,6 +218,7 @@ ScriptableObject
 | `AttackingState`            | `BaseAIState`            | —        | Combat state                                                 |
 | `DeadState`                 | `BaseAIState`            | —        | Death state                                                  |
 | `AbilityRotation`           | `AIAbilityRotation`      | —        | Optional condition/sequence ability rotation (see below)     |
+| `Personality`               | `AICombatPersonality`    | —        | Optional combat personality for ability score biasing        |
 | `BehaviorTree`              | `AIBehaviorTree`         | —        | Optional behavior tree for high-level decision making        |
 | `LodSettings`               | `AILodSettings`          | —        | Optional LOD settings for distance-based AI throttling       |
 | `BossScript`                | `BossScript`             | —        | Optional boss script for phased encounters                   |
@@ -238,44 +254,45 @@ ScriptableObject
 | `CurrentLodTier`         | `AILodTier`           | Current LOD tier (Active/Nearby/Far/Dormant)             |
 | `NpcRNG`                 | `System.Random`       | Seeded RNG from NPC for deterministic behavior           |
 
-### Update Loop
+### Update Loop — Tier-Dispatched Architecture
 
-The `AIController.Update()` method runs every frame (server-only) with multi-layered throttling:
+`AIController.Update()` runs every frame (server-only) with a **tier-dispatched** architecture. Instead of one monolithic pipeline, each LOD tier runs only the subsystems it needs:
 
-**1. AI LOD Stagger** — When `LodSettings` is assigned, the NPC's LOD tier is re-evaluated periodically based on nearest observer distance. Each tier has a different frame stagger modulus. `Dormant` NPCs skip the entire update. Without `LodSettings`, a simple 1-in-3 frame stagger is used.
+**1. Dormant Quick Bail** — Dormant NPCs execute a single `DormantCheckModulus` gate (~2s at 60fps). Only a LOD re-evaluation runs; all other logic is skipped entirely.
 
-**2. Enemy Sweep** — `SweepForEnemies()` — Timer-based enemy detection. Skipped if already attacking or returning home.
+**2. LOD Re-evaluation** — Periodically recalculates the NPC's LOD tier from the nearest observer's distance. On tier transitions, `OnLodTierChanged()` fires to clean up state (e.g., disengage combat when going to Far/Dormant).
 
-**3. Leash Check** — `CheckLeash()` — Distance check to home. Warps + heals on max leash; transitions to `ReturnHomeState` on min leash. Resets boss phases if `BossScript.ResetOnLeash` is true.
+**3. Frame Stagger** — `(npcID + Time.frameCount) % staggerModulus` spreads NPC updates evenly across frames. Active ≈ 50ms, Nearby ≈ 200ms, Far ≈ 1s.
 
-**4. Behavior Tree** — If a `BehaviorTree` is assigned, it is evaluated on its own tick rate. If the tree returns `Success` (produced a state transition), the state machine's own `UpdateState` is **skipped** for that tick to avoid conflicting decisions.
+**4. Tier Dispatch** — After the stagger gate, `Update()` dispatches to a tier-specific method:
 
-**5. Boss Script** — If a `BossScript` is assigned, phase transitions are evaluated against current HP, and timed mechanics are ticked.
-
-**6. State Machine** — `UpdateCurrentState()` — Calls `CurrentState.UpdateState()` on a per-state timer. Skipped if the behavior tree already handled this tick.
-
-**7. Virtual Camera** — `UpdateVirtualCamera()` — Aims from eye transform toward target center.
-
-**8. Aggression Decay** — `AggressionState.Tick()` — Throttled to 0.5s intervals.
-
-**9. Face Target** — `FaceLookTarget()` — Smooth rotation toward `LookTarget`.
+| Tier | Method | Systems Running |
+|------|--------|-----------------|
+| **Active** | `UpdateActive(dt)` | SweepForEnemies, CheckLeash, BehaviorTree, BossScript, StateMachine, VirtualCamera, Aggression, FaceTarget |
+| **Nearby** | `UpdateNearby(dt)` | CheckLeash, StateMachine, VirtualCamera, Aggression, FaceTarget |
+| **Far** | `UpdateFar(dt)` | CheckLeash, StateMachine (forces idle if in combat, clears aggression) |
+| **Dormant** | *(skipped)* | LOD re-evaluation only |
 
 ```
 Update()
  │
- ├─ AI LOD stagger check ── Dormant? → return
+ ├─ Dormant? → DormantCheckModulus gate → LOD re-eval only → return
  │
- ├─ SweepForEnemies()
- ├─ CheckLeash()
+ ├─ LOD re-evaluation (periodic)
+ │   └─ OnLodTierChanged(prev, new) → cleanup on downgrade
  │
- ├─ BehaviorTree.Evaluate()  ── Success? → skip state update
- ├─ BossScript (phases + mechanics)
- ├─ UpdateCurrentState()      ── only if BT didn't handle
+ ├─ Frame stagger gate → skip if not this NPC's frame
  │
- ├─ UpdateVirtualCamera()
- ├─ AggressionState.Tick()    ── throttled 0.5s
- └─ FaceLookTarget()
+ └─ Tier dispatch:
+     ├─ Active:  SweepForEnemies → CheckLeash → BT → Boss → StateMachine → Camera → Aggression → Face
+     ├─ Nearby:  CheckLeash → StateMachine → Camera → Aggression → Face
+     └─ Far:     Force idle if attacking → CheckLeash → StateMachine
 ```
+
+**Key differences from a flat pipeline:**
+- **Nearby** tier skips `SweepForEnemies`, `BehaviorTree`, and `BossScript`. Combat entry relies entirely on the event-driven `OnThreatReceived` callback (see Event-Driven AI section below).
+- **Far** tier runs no combat at all — if the NPC is in an attacking state, it immediately clears aggression, transitions to idle, and only processes leash + basic state machine (wander/idle/return home).
+- **Dormant** tier runs zero game logic — only a low-frequency LOD re-evaluation to detect approaching players.
 
 ### Ability Selection
 
@@ -750,14 +767,21 @@ NPCs activate abilities through the same `AbilityController.Activate()` pipeline
 
 ## Leash System
 
-`AIController.CheckLeash()` prevents NPCs from being kited indefinitely:
+`AIController.CheckLeash()` prevents NPCs from being kited indefinitely. **Aggression is always cleared on leash** to prevent pingpong — without this the threat table could immediately pull the NPC back into combat after arriving home.
 
 | Condition                        | Action                                                    |
 |----------------------------------|-----------------------------------------------------------|
-| Distance² > `MaxLeashRange²`    | Interrupt active ability → full heal → warp home → clear aggression |
-| Distance² > `MinLeashRange²`    | Transition to `ReturnHomeState`                           |
+| Distance² > `MaxLeashRange²`    | Interrupt ability → full heal → warp home → **clear aggression** → reset boss |
+| Distance² > `MinLeashRange²`    | **Clear aggression** → transition to `ReturnHomeState`    |
 | `LeashUpdateRate ≤ 0`           | Skip leash check                                         |
 | Already in `ReturnHomeState`    | Skip leash check                                         |
+
+Additional leash-adjacent paths that also clear aggression:
+
+| Path                             | Action                                                    |
+|----------------------------------|-----------------------------------------------------------|
+| `OnLodTierChanged` → Far/Dormant | Interrupt ability → full heal → **clear aggression** → reset boss → idle |
+| `UpdateFar` (combat disengage)   | **Clear aggression** → transition to idle                 |
 
 Leash parameters (`MinLeashRange`, `MaxLeashRange`, `LeashUpdateRate`) are defined **per-state** on `BaseAIState`, allowing different leash behavior for different states (e.g., tighter leash while wandering, looser while attacking).
 
@@ -893,30 +917,65 @@ Selector (root)
 
 ## AI LOD System
 
-AI LOD (Level of Detail) throttles NPC update frequency based on distance from the nearest player. This enables servers to support **5,000+ NPCs** by reducing work on distant NPCs that no player can meaningfully observe.
+AI LOD (Level of Detail) is a **three-pronged performance system** that combines tick scheduling, behavior simplification, and event-driven combat entry. Together these enable servers to support **10,000+ NPCs** by dramatically reducing per-frame work on distant NPCs.
 
 ### AILodSettings
 
 **Menu:** *FishMMO > Character > NPC > AI > LOD Settings*
 
-| Field               | Type    | Default  | Description                                        |
-|---------------------|---------|----------|----------------------------------------------------|
-| `ActiveDistanceSqr` | `float` | `1600`   | ≤ 40m — full update rate                           |
-| `NearbyDistanceSqr` | `float` | `10000`  | ≤ 100m — moderate throttle                         |
-| `FarDistanceSqr`    | `float` | `90000`  | ≤ 300m — heavy throttle                            |
-| `ActiveStagger`     | `int`   | `3`      | Frame modulus for Active tier                      |
-| `NearbyStagger`     | `int`   | `6`      | Frame modulus for Nearby tier                      |
-| `FarStagger`        | `int`   | `15`     | Frame modulus for Far tier                         |
-| `ReevaluateInterval`| `float` | `2.0`    | Seconds between LOD tier re-evaluation             |
+| Field                  | Type    | Default  | Description                                        |
+|------------------------|---------|----------|----------------------------------------------------|
+| `ActiveDistanceSqr`    | `float` | `1600`   | ≤ 40m — full update rate                           |
+| `NearbyDistanceSqr`    | `float` | `10000`  | ≤ 100m — moderate throttle                         |
+| `FarDistanceSqr`       | `float` | `90000`  | ≤ 300m — heavy throttle                            |
+| `ActiveStaggerModulus`  | `int`   | `3`      | Frame modulus for Active tier (~50ms at 60fps)     |
+| `NearbyStaggerModulus`  | `int`   | `12`     | Frame modulus for Nearby tier (~200ms at 60fps)    |
+| `FarStaggerModulus`     | `int`   | `60`     | Frame modulus for Far tier (~1s at 60fps)          |
+| `DormantCheckModulus`   | `int`   | `120`    | Frame modulus for Dormant wake-up (~2s at 60fps)   |
+| `ReevaluateInterval`   | `float` | `2.0`    | Seconds between LOD tier re-evaluation             |
 
 ### AILodTier
 
-| Tier       | Distance        | Stagger (default) | Behavior                              |
-|------------|-----------------|-------------------|---------------------------------------|
-| `Active`   | ≤ 40m           | Every 3rd frame   | Full AI: BT, state machine, abilities |
-| `Nearby`   | ≤ 100m          | Every 6th frame   | Reduced AI updates                    |
-| `Far`      | ≤ 300m          | Every 15th frame  | Minimal AI updates                    |
-| `Dormant`  | > 300m (or no observers) | **Skip entirely** | No AI updates at all        |
+| Tier       | Distance               | Stagger (default) | Approx. Interval | Pipeline |
+|------------|------------------------|--------------------|-------------------|----------|
+| `Active`   | ≤ 40m                  | Every 3rd frame    | ~50ms             | **Full:** BT, StateMachine, Abilities, Threat, BossScripts, EnemySweep, Camera, Facing |
+| `Nearby`   | ≤ 100m                 | Every 12th frame   | ~200ms            | **Simplified:** StateMachine, Abilities, Threat, Camera, Facing (no BT, no boss, no sweep) |
+| `Far`      | ≤ 300m                 | Every 60th frame   | ~1s               | **Minimal:** StateMachine only (wander/idle/return home — no combat, no threat) |
+| `Dormant`  | > 300m (or no observers) | Every 120th frame | ~2s               | **Disabled:** LOD re-evaluation only |
+
+### Tick Scheduling
+
+Frame stagger uses `(npcID + Time.frameCount) % staggerModulus == 0` to distribute NPC updates evenly across frames. The NPC's `NetworkObject.ObjectId` provides a unique per-NPC hash so that 10,000 NPCs don't all tick on the same frame.
+
+**Expected load at 10k NPCs (60fps):**
+
+| Tier     | ~% of NPCs | Count  | Ticks/Frame | Per-NPC Cost      |
+|----------|-----------|--------|-------------|-------------------|
+| Active   | ~5%       | 500    | ~167        | Full pipeline     |
+| Nearby   | ~15%      | 1,500  | ~125        | Simplified        |
+| Far      | ~20%      | 2,000  | ~33         | Minimal           |
+| Dormant  | ~60%      | 6,000  | ~50         | 1 integer compare |
+
+### Behavior Simplification
+
+Each tier runs a progressively simpler subset of the AI pipeline:
+
+- **Active (`UpdateActive`)** — Full AI: sweep for enemies, check leash, evaluate behavior tree, tick boss scripts, run state machine, update virtual camera, tick aggression decay, face look target.
+- **Nearby (`UpdateNearby`)** — No enemy sweep (relies on event-driven `OnThreatReceived`), no behavior tree, no boss scripts. Combat still functions via the state machine.
+- **Far (`UpdateFar`)** — No combat at all. If the NPC is in an attacking state, aggression is cleared and it transitions to idle. Only leash check + basic state machine (wander/idle/return home).
+- **Dormant** — Zero game logic. Only a `DormantCheckModulus`-gated LOD re-evaluation to detect approaching players.
+
+### LOD Tier Transitions (`OnLodTierChanged`)
+
+When an NPC transitions **down** to Far or Dormant while in combat:
+
+1. Interrupts any active ability.
+2. Heals to full (no players nearby to notice).
+3. Clears the aggression/threat table.
+4. Resets boss script phases (if `ResetOnLeash`).
+5. Transitions to idle state.
+
+This acts as a soft-leash reset — if no players are close enough to observe, the NPC shouldn't remain damaged or in combat.
 
 ### Distance Calculation
 
@@ -939,9 +998,131 @@ Without `LodSettings`, a simple 1-in-3 frame stagger is applied as a default fal
 
 ---
 
+## Event-Driven AI
+
+The event-driven AI system replaces expensive per-frame polling with zero-cost event callbacks. This is the single biggest performance win for non-Active NPCs.
+
+### Problem: Polling Is Expensive
+
+Previously, **every** NPC ran `SweepForEnemies()` (a `PhysicsScene.OverlapSphere()`) every `EnemySweepRate` seconds, regardless of distance. For 10,000 NPCs this meant thousands of physics queries per second, most of which returned nothing.
+
+### Solution: `OnCombatInitiated` Callback
+
+`AggressionState` already subscribes to global `ICharacterDamageController.OnDamaged` events to record threat. The event-driven system piggybacks on this existing subscription:
+
+1. **`AggressionState.OnCombatInitiated`** — A `System.Action<ICharacter>` callback that fires when the NPC's threat table transitions from **empty to non-empty** (i.e., the first damage event from any source).
+2. **`AIController.OnThreatReceived(attacker)`** — Wired to `OnCombatInitiated` during `InitializeOnce()`. When called, immediately verifies the attacker is alive, sets `Target` and `LookTarget`, and transitions to the attacking state — all without waiting for the next physics sweep.
+
+### Tier Integration
+
+| Tier     | Enemy Detection Method |
+|----------|----------------------|
+| Active   | `SweepForEnemies()` (proactive) **+** `OnThreatReceived` (reactive) |
+| Nearby   | `OnThreatReceived` only (no sweep) |
+| Far      | `OnThreatReceived` fires but `UpdateFar` immediately disengages → no combat |
+| Dormant  | No events processed (NPC is suspended) |
+
+Active tier NPCs still run physics sweeps for **proactive** detection (hostile-faction NPCs that should aggro on proximity). Nearby tier NPCs rely **entirely** on damage events — they only enter combat when actually hit.
+
+---
+
+## Combat Personality System
+
+The combat personality system makes two NPCs with identical ability sets behave differently in combat by applying **data-driven score biases** to ability selection.
+
+### AICombatPersonality
+
+**Menu:** *FishMMO > Character > NPC > AI > Combat Personality*
+
+| Field                     | Type              | Default     | Description                                         |
+|---------------------------|-------------------|-------------|-----------------------------------------------------|
+| `Style`                   | `NPCCombatStyle`  | `Balanced`  | Broad combat archetype (affects retreat behavior)    |
+| `MeleeWeight`             | `float` (0-5)     | `1.0`       | Score multiplier for melee-classified abilities      |
+| `RangedWeight`            | `float` (0-5)     | `1.0`       | Score multiplier for ranged-classified abilities     |
+| `AOEWeight`               | `float` (0-5)     | `1.0`       | Score multiplier for AOE-classified abilities        |
+| `SupportWeight`           | `float` (0-5)     | `1.0`       | Score multiplier for support/self-buff abilities     |
+| `MeleeRangeThreshold`     | `float`            | `4.0`       | Abilities with range ≤ this are considered melee     |
+| `AOEHitCountThreshold`    | `int`              | `1`         | Abilities with HitCount > this are considered AOE    |
+| `RetreatHealthThreshold`  | `float` (0-1)      | `0`         | Health % below which NPC considers retreating        |
+| `HealthyAggressionBonus`  | `float`            | `0`         | Bonus score on offensive abilities when healthy      |
+| `LowHealthSupportBonus`   | `float`            | `100`       | Bonus score on support abilities when hurt           |
+
+### NPCCombatStyle
+
+| Style        | Behavior                                              |
+|--------------|-------------------------------------------------------|
+| `Balanced`   | No strong bias — default approach                     |
+| `Aggressive` | Prefers closing to melee, high-pressure attacks       |
+| `Defensive`  | Prefers distance, kiting, control abilities            |
+| `Cautious`   | Avoids risk, retreats earlier, favours safe abilities |
+| `Berserker`  | All-out damage, ignores self-preservation, never retreats |
+
+### AbilityCategory
+
+Abilities are classified at runtime from template data:
+
+| Category   | Classification Rule                                                     |
+|------------|-------------------------------------------------------------------------|
+| `Melee`    | `SpawnTarget == PointBlank` OR `range ≤ MeleeRangeThreshold`           |
+| `Ranged`   | `range > MeleeRangeThreshold` (and not AOE/Support)                    |
+| `AOE`      | `HitCount > AOEHitCountThreshold` OR `GroundedPhysical`/`GroundedMagic` |
+| `Support`  | `SpawnTarget == Self`                                                   |
+
+### Integration with PickBestAbility
+
+When `AIController.Personality` is assigned, `PickBestAbility()` applies:
+1. **Weight multiplier** — Each ability's base score is multiplied by the personality's weight for its category.
+2. **Bonus score** — `GetBonusScore()` adds `HealthyAggressionBonus` to offensive abilities when healthy, or `LowHealthSupportBonus` to support abilities when hurt.
+3. **Retreat check** — `ShouldRetreat()` triggers retreat state transitions when health drops below threshold (Berserker style ignores this).
+
+### Setup Example
+
+An aggressive melee warrior personality:
+- `Style = Aggressive`, `MeleeWeight = 2.5`, `RangedWeight = 0.5`, `AOEWeight = 1.5`
+- `RetreatHealthThreshold = 0` (never retreats), `HealthyAggressionBonus = 50`
+- Result: Strongly prefers melee and AOE abilities, ignores ranged options, pushes damage hard.
+
+A cautious healer personality:
+- `Style = Cautious`, `SupportWeight = 3.0`, `MeleeWeight = 0.2`
+- `RetreatHealthThreshold = 0.5`, `LowHealthSupportBonus = 200`
+- Result: Heavily favors heals/buffs, avoids melee, retreats at 50% health.
+
+---
+
+## Pack Tactics
+
+The Pack Tactic system extends `NPCGroup` with coordinated spatial positioning during combat. Each group can be assigned a `PackTactic` that controls how members position themselves around the target.
+
+### PackTactic Enum
+
+| Tactic       | Behavior                                                                    |
+|--------------|-----------------------------------------------------------------------------|
+| `None`       | No coordinated positioning — members act independently                     |
+| `Surround`   | Members spread evenly in a ring (360° / alive-member-count)                |
+| `Flank`      | Tank holds front, DPS/support position behind the target (rear 180° arc)   |
+| `FocusFire`  | All members converge from the same direction (tightly clustered angles)    |
+| `Kite`       | Members maintain max distance, orbit angles rotate slowly (swirling pattern)|
+
+### How It Works
+
+1. `NPCGroup` assigns each member's `AIController.OrbitAngle` based on the active tactic and the member's index among alive members.
+2. Combat states (especially `OrbitState`) read `OrbitAngle` to determine their position around the target.
+3. Pack tactic assignment updates when group state is re-evaluated (`EvaluateGroupState()` every 0.5s).
+
+### Tactic × Role Interaction
+
+| Tactic     | Tank Behavior          | DPS Behavior             | Healer Behavior        |
+|------------|------------------------|--------------------------|------------------------|
+| Surround   | Part of the ring       | Part of the ring         | Part of the ring       |
+| Flank      | Faces target head-on   | Rear 180° arc positions  | Rear 180° arc          |
+| FocusFire  | Same angle as group    | Same angle as group      | Same angle as group    |
+| Kite       | Orbits at range        | Orbits at range          | Orbits at range        |
+
+---
+
 ## Group AI System
 
-The Group AI system enables **pack behavior** — groups of NPCs that coordinate their actions, share targets, and fill tactical roles (tank, healer, DPS, support).
+The Group AI system enables **pack behavior** — groups of NPCs that coordinate their actions, share targets, fill tactical roles (tank, healer, DPS, support), and execute pack tactics (surround, flank, focus fire, kite).
 
 ### NPCGroupRole
 
@@ -961,6 +1142,7 @@ A `MonoBehaviour` placed on an empty GameObject near the NPC spawn area. It acts
 |------------------|-------------------------|---------|----------------------------------------------|
 | `Members`        | `List<NPCGroupMember>`  | —       | NPCs and their roles                         |
 | `FocusTargeting` | `bool`                  | `true`  | DPS share the tank's target                  |
+| `Tactic`         | `PackTactic`            | `None`  | Coordinated spatial positioning tactic       |
 
 #### Runtime Properties
 

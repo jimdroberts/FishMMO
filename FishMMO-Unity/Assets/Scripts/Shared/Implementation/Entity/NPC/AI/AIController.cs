@@ -659,6 +659,7 @@ namespace FishMMO.Shared
 			// Far tier NPCs should not be in combat — disengage if they are.
 			if (CurrentState is BaseAttackingState)
 			{
+				AggressionState?.Clear();
 				TransitionToIdleState();
 				return;
 			}
@@ -815,6 +816,11 @@ namespace FishMMO.Shared
 				// If leash is exceeded but not critical, transition to return home state.
 				else if (distanceToHome > CurrentState.MinLeashRange * CurrentState.MinLeashRange)
 				{
+					// Clear aggression to prevent pingpong — without this the threat
+					// table persists and event-driven combat can immediately pull the
+					// NPC back into attacking after it arrives home.
+					AggressionState?.Clear();
+
 					ChangeState(ReturnHomeState);
 				}
 

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {

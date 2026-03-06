@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Logging;
 using FishNet.Managing;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
