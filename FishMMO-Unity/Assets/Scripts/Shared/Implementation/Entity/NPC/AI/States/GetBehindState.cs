@@ -1,6 +1,5 @@
 ﻿using UnityEngine;
 using UnityEngine.AI;
-using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -33,7 +32,7 @@ namespace FishMMO.Shared
 			}
 
 			// Calculate the position behind the target
-			Vector3 behindPosition = CalculateBehindPosition(controller.Character.Transform.position, controller.Target.position, controller.Target.forward);
+			Vector3 behindPosition = CalculateBehindPosition(controller.Target.position, controller.Target.forward);
 
 			// Set the destination using NavMesh sampling
 			NavMeshHit hit;
@@ -68,7 +67,7 @@ namespace FishMMO.Shared
 			// Rotate to face the target smoothly
 			Vector3 directionToTarget = (controller.Target.position - controller.Character.Transform.position).normalized;
 			Quaternion targetRotation = Quaternion.LookRotation(directionToTarget);
-			controller.Character.Transform.rotation = Quaternion.Slerp(controller.Character.Transform.rotation, targetRotation, RotationSpeed * Time.deltaTime);
+			controller.Character.Transform.rotation = Quaternion.Slerp(controller.Character.Transform.rotation, targetRotation, RotationSpeed * deltaTime);
 
 			// Check if we reached the destination
 			if (!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f)
@@ -81,17 +80,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Calculates the position behind the target based on its forward direction and desired distance.
 		/// </summary>
-		/// <param name="aiPosition">Current AI position.</param>
 		/// <param name="targetPosition">Target's position.</param>
 		/// <param name="targetForward">Target's forward direction.</param>
 		/// <returns>Position behind the target.</returns>
-		private Vector3 CalculateBehindPosition(Vector3 aiPosition, Vector3 targetPosition, Vector3 targetForward)
+		private Vector3 CalculateBehindPosition(Vector3 targetPosition, Vector3 targetForward)
 		{
-			// Move in the direction opposite to where the target is facing
-			Vector3 behindDirection = -targetForward;
-			Vector3 behindPosition = targetPosition + behindDirection * BehindDistance;
-
-			return behindPosition;
+			return targetPosition - targetForward * BehindDistance;
 		}
 	}
 }

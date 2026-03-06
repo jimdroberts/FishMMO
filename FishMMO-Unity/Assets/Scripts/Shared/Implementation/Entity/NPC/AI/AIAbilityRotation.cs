@@ -190,7 +190,7 @@ namespace FishMMO.Shared
 			}
 
 			// Find the matching ability instance by template ID.
-			Ability ability = FindAbilityByTemplate(abilityController, entry.AbilityTemplateID);
+			Ability ability = AIUtility.FindAbilityByTemplate(abilityController, entry.AbilityTemplateID);
 			if (ability == null)
 				return null;
 
@@ -204,18 +204,5 @@ namespace FishMMO.Shared
 			return ability;
 		}
 
-		/// <summary>
-		/// Finds the first ability instance whose template matches the given ID.
-		/// </summary>
-		private static Ability FindAbilityByTemplate(IAbilityController abilityController, int templateID)
-		{
-			foreach (var kvp in abilityController.KnownAbilities)
-			{
-				Ability ability = kvp.Value;
-				if (ability != null && ability.Template != null && ability.Template.ID == templateID)
-					return ability;
-			}
-			return null;
-		}
 	}
 }

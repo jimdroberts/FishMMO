@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.AI;
-using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -72,7 +71,7 @@ namespace FishMMO.Shared
 
 			// Calculate the new position around the target using polar coordinates.
 			// The angle is stored on the controller (per-NPC) to avoid shared SO state.
-			controller.OrbitAngle += OrbitSpeed * Time.deltaTime;
+			controller.OrbitAngle += OrbitSpeed * deltaTime;
 			float x = Mathf.Cos(controller.OrbitAngle) * OrbitRadius;
 			float z = Mathf.Sin(controller.OrbitAngle) * OrbitRadius;
 			Vector3 offset = new Vector3(x, 0, z);
@@ -88,7 +87,7 @@ namespace FishMMO.Shared
 			// Rotate the AI to face the target smoothly
 			Vector3 directionToTarget = (controller.Target.position - controller.Character.Transform.position).normalized;
 			Quaternion targetRotation = Quaternion.LookRotation(directionToTarget);
-			controller.Character.Transform.rotation = Quaternion.Slerp(controller.Character.Transform.rotation, targetRotation, RotationSpeed * Time.deltaTime);
+			controller.Character.Transform.rotation = Quaternion.Slerp(controller.Character.Transform.rotation, targetRotation, RotationSpeed * deltaTime);
 		}
 	}
 }

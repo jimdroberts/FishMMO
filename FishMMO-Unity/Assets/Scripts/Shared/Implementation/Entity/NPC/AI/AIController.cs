@@ -266,6 +266,13 @@ namespace FishMMO.Shared
 		private int staggerID;
 		private List<BaseAIState> movementStates = new List<BaseAIState>();
 		private List<ICharacter> sweepResults = new List<ICharacter>(10);
+
+		/// <summary>
+		/// Reusable buffer for collecting targets during combat state updates.
+		/// Used by attacking states to avoid per-frame GC allocations.
+		/// </summary>
+		public List<ICharacter> CombatTargetBuffer { get; } = new List<ICharacter>(10);
+
 		private float behaviorTreeTimer;
 		private float lodReevaluateTimer;
 		private AILodTier currentLodTier = AILodTier.Active;

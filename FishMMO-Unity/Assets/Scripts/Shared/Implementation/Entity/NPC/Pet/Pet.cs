@@ -27,9 +27,10 @@ namespace FishMMO.Shared
 		public ICharacter PetOwner;
 
 		/// <summary>
-		/// The list of ability IDs that this pet has learned.
+		/// The list of ability template IDs that this pet has learned.
+		/// Named PetAbilityIDs to avoid shadowing <see cref="NPC.Abilities"/> (List&lt;AbilityTemplate&gt;).
 		/// </summary>
-		public List<int> Abilities { get; set; }
+		public List<int> PetAbilityIDs { get; set; }
 
 		/// <summary>
 		/// Called when the pet is awakened. Initializes the abilities list.
@@ -37,7 +38,7 @@ namespace FishMMO.Shared
 		public override void OnAwake()
 		{
 			base.OnAwake();
-			Abilities = new List<int>();
+			PetAbilityIDs = new List<int>();
 		}
 
 		/// <summary>
@@ -53,7 +54,7 @@ namespace FishMMO.Shared
 #endif
 
 			PetOwner = null;
-			Abilities.Clear();
+			PetAbilityIDs.Clear();
 		}
 
 		/// <summary>
@@ -84,12 +85,16 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Allows the pet to learn a set of abilities. (Implementation needed)
+		/// Copies the given ability IDs into this pet's <see cref="PetAbilityIDs"/>.
 		/// </summary>
-		/// <param name="abilities">List of ability IDs to learn.</param>
+		/// <param name="abilities">List of ability template IDs to learn.</param>
 		public void LearnAbilities(List<int> abilities)
 		{
-			// Implementation for learning abilities should be added here.
+			if (abilities == null)
+				return;
+
+			PetAbilityIDs.Clear();
+			PetAbilityIDs.AddRange(abilities);
 		}
 	}
 }

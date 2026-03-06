@@ -71,16 +71,8 @@ namespace FishMMO.Shared
 			float meleeRange = (controller.Agent.radius * 2.0f).Min(1.0f);
 
 			// If currently casting, stop and wait. Auto-release charged abilities.
-			if (abilityController.IsActivating || abilityController.AbilityQueued)
-			{
-				controller.Agent.isStopped = true;
-
-				if (abilityController.IsActivating && abilityController.RemainingActivationTime <= 0f)
-				{
-					abilityController.Release();
-				}
+			if (HandleActivationInProgress(controller, abilityController))
 				return;
-			}
 
 			// Occasionally introduce movement variety instead of a straight attack.
 			System.Random rng = controller.NpcRNG;
@@ -123,16 +115,6 @@ namespace FishMMO.Shared
 				// Close the gap.
 				MoveTowardTarget(controller, abilityRange * 0.8f);
 			}
-		}
-
-		/// <summary>
-		/// Performs a melee attack. Stops the agent and activates the ability.
-		/// </summary>
-		public override void PerformAttack(AIController controller, IAbilityController abilityController, Ability ability, ICharacter targetCharacter, float distance)
-		{
-			controller.Agent.isStopped = true;
-			bool held = abilityController.RequiresHeld(ability.ID);
-			abilityController.Activate(ability.ID, held);
 		}
 
 		/// <summary>

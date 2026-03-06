@@ -157,7 +157,9 @@ namespace FishMMO.Shared
 					{
 						bool lineOfSight = HasLineOfSight(controller, def);
 
+#if UNITY_EDITOR
 						Log.Debug("BaseAIState", $"{controller.gameObject.name} Enemy Detected: {def.GameObject.name} | Line of Sight: {lineOfSight}");
+#endif
 
 						if (lineOfSight)
 						{

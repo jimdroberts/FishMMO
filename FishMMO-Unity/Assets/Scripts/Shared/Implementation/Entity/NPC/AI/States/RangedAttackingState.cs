@@ -72,16 +72,8 @@ namespace FishMMO.Shared
 			float distance = Mathf.Sqrt(controller.GetSqrDistanceToTarget());
 
 			// If currently casting, hold position. Auto-release charged abilities.
-			if (abilityController.IsActivating || abilityController.AbilityQueued)
-			{
-				controller.Agent.isStopped = true;
-
-				if (abilityController.IsActivating && abilityController.RemainingActivationTime <= 0f)
-				{
-					abilityController.Release();
-				}
+			if (HandleActivationInProgress(controller, abilityController))
 				return;
-			}
 
 			// Emergency retreat — target is dangerously close.
 			if (MinComfortDistance > 0f && distance < MinComfortDistance * EmergencyRetreatThreshold)
@@ -143,16 +135,6 @@ namespace FishMMO.Shared
 				float targetDistance = Mathf.Min(abilityRange * 0.85f, PreferredDistance);
 				MoveTowardTarget(controller, targetDistance);
 			}
-		}
-
-		/// <summary>
-		/// Performs a ranged attack. Stops the agent and activates the ability.
-		/// </summary>
-		public override void PerformAttack(AIController controller, IAbilityController abilityController, Ability ability, ICharacter targetCharacter, float distance)
-		{
-			controller.Agent.isStopped = true;
-			bool held = abilityController.RequiresHeld(ability.ID);
-			abilityController.Activate(ability.ID, held);
 		}
 
 		/// <summary>

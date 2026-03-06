@@ -363,7 +363,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Capture immutable data for the async path
 			long characterID = petController.Character.ID;
 			int templateID = petController.Pet.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
-			List<int> abilities = petController.Pet.Abilities != null ? new List<int>(petController.Pet.Abilities) : new List<int>();
+			List<int> abilities = petController.Pet.PetAbilityIDs != null ? new List<int>(petController.Pet.PetAbilityIDs) : new List<int>();
 
 			if (petController.Pet != null &&
 				petController.Pet.NetworkObject.IsSpawned)
@@ -485,7 +485,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			pet.PetAbilityTemplate = petAbilityTemplate;
 			if (abilities != null)
 			{
-				pet.Abilities = abilities;
+				pet.PetAbilityIDs = abilities;
 			}
 			petController.Pet = pet;
 
@@ -619,7 +619,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Capture immutable data for the async path
 			long characterID = character.ID;
 			int templateID = petController.Pet?.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
-			List<int> abilities = petController.Pet?.Abilities != null ? new List<int>(petController.Pet.Abilities) : new List<int>();
+			List<int> abilities = petController.Pet?.PetAbilityIDs != null ? new List<int>(petController.Pet.PetAbilityIDs) : new List<int>();
 			bool spawned = petController.Pet != null && currentHealth > 0.0f;
 
 			if (petController.Pet != null &&

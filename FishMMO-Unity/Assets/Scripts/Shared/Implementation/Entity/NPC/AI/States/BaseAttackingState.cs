@@ -95,19 +95,16 @@ namespace FishMMO.Shared
 			if (controller.Target == null ||
 				!controller.Target.gameObject.activeSelf)
 			{
-				// If the target is lost... Check again for nearby enemies
-				List<ICharacter> enemies = new List<ICharacter>();
+				// Re-use the controller's buffer to avoid per-frame GC allocations.
+				controller.CombatTargetBuffer.Clear();
 				if (controller.AttackingState != null &&
-					SweepForEnemies(controller, enemies))
+					SweepForEnemies(controller, controller.CombatTargetBuffer))
 				{
-					controller.ChangeState(controller.AttackingState, enemies);
+					controller.ChangeState(controller.AttackingState, controller.CombatTargetBuffer);
 					return;
 				}
-				// Otherwise handle post attack logic
-				else
-				{
-					controller.TransitionToRandomMovementState();
-				}
+
+				controller.TransitionToRandomMovementState();
 				return;
 			}
 
@@ -242,7 +239,6 @@ namespace FishMMO.Shared
 		{
 			if (!controller.Character.TryGet(out IAbilityController abilityController))
 			{
-				// No ability controller — nothing we can do.
 				controller.TransitionToIdleState();
 				return;
 			}
@@ -250,19 +246,8 @@ namespace FishMMO.Shared
 			float sqrDistance = controller.GetSqrDistanceToTarget();
 			float distance = Mathf.Sqrt(sqrDistance);
 
-			// If the ability controller is currently activating, stop movement and wait.
-			if (abilityController.IsActivating || abilityController.AbilityQueued)
-			{
-				// Stop the agent while casting/channeling to avoid cancellation.
-				controller.Agent.isStopped = true;
-
-				// Auto-release charged abilities once the charge time is complete.
-				if (abilityController.IsActivating && abilityController.RemainingActivationTime <= 0f)
-				{
-					abilityController.Release();
-				}
+			if (HandleActivationInProgress(controller, abilityController))
 				return;
-			}
 
 			// Pick an ability to use.
 			Ability chosenAbility = controller.PickBestAbility(PreferredDistance > 0f ? PreferredDistance : float.MaxValue);
@@ -305,6 +290,28 @@ namespace FishMMO.Shared
 			// keeps the held state active. Regular abilities get isHeld=false.
 			bool held = abilityController.RequiresHeld(ability.ID);
 			abilityController.Activate(ability.ID, held);
+		}
+
+		/// <summary>
+		/// Returns true if the ability controller is currently activating or has a queued ability.
+		/// Stops the agent and auto-releases charged abilities when their charge time completes.
+		/// Call at the start of <see cref="TryAttack"/> to skip attack logic while casting.
+		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="abilityController">The ability controller to check.</param>
+		/// <returns>True if an activation is in progress and the caller should return early.</returns>
+		protected static bool HandleActivationInProgress(AIController controller, IAbilityController abilityController)
+		{
+			if (!abilityController.IsActivating && !abilityController.AbilityQueued)
+				return false;
+
+			controller.Agent.isStopped = true;
+
+			if (abilityController.IsActivating && abilityController.RemainingActivationTime <= 0f)
+			{
+				abilityController.Release();
+			}
+			return true;
 		}
 
 		/// <summary>

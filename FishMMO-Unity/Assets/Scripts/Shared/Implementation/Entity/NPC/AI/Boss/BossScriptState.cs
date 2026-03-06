@@ -212,7 +212,7 @@ namespace FishMMO.Shared
 			{
 				if (controller.Character.TryGet(out IAbilityController abilityController))
 				{
-					Ability ability = FindAbilityByTemplate(abilityController, mechanic.AbilityTemplateID);
+					Ability ability = AIUtility.FindAbilityByTemplate(abilityController, mechanic.AbilityTemplateID);
 					if (ability != null)
 					{
 						bool held = abilityController.RequiresHeld(ability.ID);
@@ -251,18 +251,5 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Finds the first ability whose template matches the given ID.
-		/// </summary>
-		private static Ability FindAbilityByTemplate(IAbilityController abilityController, int templateID)
-		{
-			foreach (var kvp in abilityController.KnownAbilities)
-			{
-				Ability ability = kvp.Value;
-				if (ability != null && ability.Template != null && ability.Template.ID == templateID)
-					return ability;
-			}
-			return null;
-		}
 	}
 }

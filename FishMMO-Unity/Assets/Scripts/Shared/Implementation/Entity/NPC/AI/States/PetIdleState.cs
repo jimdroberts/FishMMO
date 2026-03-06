@@ -39,8 +39,8 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Get the Pet component
-			Pet pet = controller.gameObject.GetComponent<Pet>();
+			// Get the Pet from the character reference directly (avoids GetComponent per frame).
+			Pet pet = controller.Character as Pet;
 			if (pet == null)
 			{
 				return;
