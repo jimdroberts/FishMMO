@@ -1,132 +1,427 @@
 # Server Implementation
 
+**Short description:** Concrete server-side runtime layer that composes core services, FishNet networking, database access, authentication, and modular server behaviours into running Login, World, and Scene server processes.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation / Build](#installation--build)
+- [Quick Start Guides](#quick-start-guides)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Operational Checks](#operational-checks)
+- [Flow Diagram](#flow-diagram)
+- [Project Structure](#project-structure)
+- [License](#license)
+
 ## Overview
 
-The `Server` class is the runtime composition root for FishMMO server processes. It wires together core services, network transport/authentication, runtime data containers, server behaviours, periodic callbacks, and shutdown orchestration.
+The `Server` class (`Server.cs`) is the composition root for every FishMMO server process. It inherits `MonoBehaviour` and implements `IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>`, `IServer<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer>`, and `IPeriodicUpdateSystem`.
 
-At startup, it constructs and initializes the server stack, then starts FishNet listening. During runtime, it drives behaviour updates and interval-based callbacks. During shutdown, it deinitializes and unregisters subsystems in reverse order and releases network/database resources.
+At startup the composition root:
 
-## Directory Structure
+1. Resolves a `NetworkManager` from the scene.
+2. Builds `IServerConfiguration`, `IServerEvents`, `ICoreServer`, and `INetworkManagerWrapper`.
+3. Fetches the external IP address asynchronously.
+4. Once the IP is available, initialises the core server, database orchestrator, address provider, authenticator, account manager, runtime data containers (auto-discovered via `RequiresDataContainerAttribute`), and server behaviours.
+5. Disables KCC auto-simulation and starts the FishNet server.
 
-```text
+During runtime, `LateUpdate` drives two loops: the behaviour update loop (snapshot-safe against registration mutations) and the periodic callback system (enumeration-complete-before-invoke pattern). Shutdown is idempotent and tears down subsystems in reverse order.
+
+The Implementation layer sits between the abstract `Server.Core` interfaces and the concrete FishNet/Unity runtime. Each server type (Login, World, Scene) is loaded as an Addressable scene; `ServerLauncher` selects which scene(s) to load based on command-line arguments or a configurable boot list.
+
+### Sub-System Organisation
+
+| Sub-System | Description |
+|---|---|
+| **Account** | Account management strategies — SRP-based (login) and token-based (world/scene). |
+| **Authentication** | Server authenticator hierarchy — base, SRP (`ServerAuthenticator`), and token (`TokenServerAuthenticator`). |
+| **RuntimeData** | Shared runtime data containers, factory, and registry for mutable per-system state. |
+| **LoginServer** | Login-server-specific systems: account creation, character create/select, server select, and the login server lifecycle. |
+| **World** | World and scene server systems organised into `WorldServer/`, `SceneServer/`, and `KickRequest/`. |
+
+## Supported Platforms
+
+| Platform | Supported | Notes |
+|---|---|---|
+| Windows | Yes | Full support including console title via `SetConsoleTitle` (kernel32) |
+| Linux | Yes | Process name set via `prctl` (libc.so.6) |
+| macOS | Yes | Process title set via `setproctitle` (libc.dylib) |
+| WebGL | N/A | Server-only — not applicable |
+
+| Requirement | Version |
+|---|---|
+| Unity | 6.3 LTS |
+| Scripting Backend | IL2CPP |
+| FishNet | Runtime dependency |
+
+## Features
+
+- **Composition-root architecture** — `Server` wires core services, networking, database, authentication, behaviours, and data containers in a single orchestrated startup.
+- **Modular server behaviours** — `ServerBehaviour` (ScriptableObject-based) provides a plug-in lifecycle: `InitializeOnce`, `OnUpdate`, `OnDeinitialize`.
+- **Auto-discovered runtime data containers** — behaviours declare `[RequiresDataContainer(typeof(T))]`; the server discovers, deduplicates, priority-sorts, and creates containers automatically.
+- **Generic component registries** — `ServerComponentRegistry<TNet, TConn, TComponent>` registers components under concrete type and all `IServerComponent`-derived interfaces for dependency lookup.
+- **Network abstraction** — `INetworkManagerWrapper` / `FishNetNetworkWrapper` decouple the server from FishNet internals, exposing start/stop, transport config, broadcast registration, and authenticator attachment.
+- **Periodic callback system** — `IPeriodicUpdateSystem` with register/unregister/update-interval; enumeration-safe dispatch; callbacks receive their registered interval, not frame delta.
+- **Main-thread queue helper** — generic `MainThreadQueueHelper.Drain<T>` / `TryEnqueue<T>` for marshalling async work back to Unity's main thread.
+- **Address resolution** — `ServerAddressProvider` resolves IPv4/IPv6 bind addresses from the transport layer with optional overrides.
+- **Physics ticker** — `PhysicsTicker` hooks FishNet's `OnPrePhysicsSimulation` to manually advance a scene's `PhysicsScene`.
+- **Server launcher** — `ServerLauncher` loads Addressable scenes by command-line argument (`LOGIN`, `WORLD`, `SCENE`) or a configurable boot list.
+- **Window title updater** — `ServerWindowTitleUpdater` periodically sets the OS process/console title with transport type, connection state, and client count (Windows, Linux, macOS).
+- **Dual account manager strategy** — `SrpAccountManager` for SRP-authenticated login servers; `TokenAccountManager` for token-authenticated world/scene servers.
+- **Dual authenticator strategy** — `ServerAuthenticator` (SRP) and `TokenServerAuthenticator` selected at startup based on scene type.
+- **Idempotent shutdown** — `PerformShutdown` runs once via `hasShutdown` flag, cleaning up behaviours, containers, authenticator workers, network, database, and core server in reverse order.
+- **KCC integration** — `KinematicCharacterSystem.AutoSimulation` set to `false` for deterministic server-driven simulation.
+- **Snapshot-safe behaviour dispatch** — behaviour list is snapshotted before `OnLateUpdate` dispatch to prevent `InvalidOperationException` if behaviours register or unregister during update.
+- **Cached delegate names** — `PeriodicCallbackData.CallbackName` caches the reflection-derived display name at construction time; no runtime reflection in any log path.
+
+## Prerequisites
+
+- Unity 6.3 LTS with IL2CPP scripting backend.
+- FishNet networking framework (imported via Plugins).
+- KinematicCharacterController package.
+- PostgreSQL database (configured via `appsettings.json`).
+- Redis (optional, for caching — configured via `appsettings.json`).
+- ZString for zero-allocation string formatting.
+- Addressable Assets for scene and template loading.
+- `FishMMO.Server.Core` and `FishMMO.Shared` assemblies.
+
+## Installation / Build
+
+This is an integrated module within the FishMMO Unity project. No separate installation is required.
+
+1. Open the FishMMO-Unity project in Unity 6.3 LTS.
+2. Ensure all dependencies (FishNet, KCC, ZString, Addressables) are imported.
+3. Configure `appsettings.json` for database and Redis connection strings.
+4. Build server executables via Unity Build Settings with the desired server scenes.
+5. Alternatively, enter Play Mode with the `ServerLauncher` bootstrap scene to run locally.
+
+## Quick Start Guides
+
+### Running in the Editor
+
+1. Open the bootstrap scene containing `ServerLauncher`.
+2. Ensure the `BootList` field on `ServerLauncher` includes the desired server scenes (default: `LoginServer`, `WorldServer`, `SceneServer`).
+3. Enter Play Mode. The launcher loads scenes as Addressables and each `Server` MonoBehaviour self-initialises.
+
+### Running a Standalone Build
+
+```bash
+# Launch all servers (default boot list)
+./FishMMO-Server
+
+# Launch a specific server type
+./FishMMO-Server LOGIN
+./FishMMO-Server WORLD
+./FishMMO-Server SCENE
+```
+
+The second command-line argument selects the server type. If no argument is provided, all scenes in the boot list are loaded.
+
+### Adding a New Server Behaviour
+
+1. Create a class extending `ServerBehaviour`.
+2. Implement `InitializeOnce()`, `OnDeinitialize()`, and optionally `OnUpdate(float deltaTime)`.
+3. If the behaviour needs mutable runtime state, create a `RuntimeDataContainer` subclass and annotate the behaviour with `[RequiresDataContainer(typeof(YourData))]`.
+4. Create a ScriptableObject asset for the behaviour and add it to the `Server` component's `serverBehaviours` list.
+
+## Configuration
+
+| Setting | Source | Description |
+|---|---|---|
+| `AddressOverride` | `Server` inspector field | Optional bind address override |
+| `PortOverride` | `Server` inspector field | Optional bind port override |
+| `BootList` | `ServerLauncher` inspector field | Array of scene names to load at startup |
+| `updateRate` | `ServerWindowTitleUpdater` inspector field | Window title refresh interval (seconds, default 15) |
+| Database connection | `appsettings.json` | PostgreSQL connection string |
+| Redis connection | `appsettings.json` | Redis connection string |
+| Environment | `ASPNETCORE_ENVIRONMENT` or `DOTNET_ENVIRONMENT` | Selects `appsettings.{env}.json` overlay |
+| Transport settings | `IServerConfiguration` / `appsettings.json` | Bind address, port, max clients applied via `ApplyTransportConfiguration` |
+
+## Usage Examples
+
+### Registering a Periodic Callback
+
+```csharp
+// Inside a ServerBehaviour's InitializeOnce:
+Server.RegisterPeriodicCallback(5.0f, OnHeartbeat);
+
+private void OnHeartbeat(float interval)
+{
+    // interval == 5.0f (the registered period, not frame deltaTime)
+    Database.SendHeartbeat();
+}
+
+// In OnDeinitialize:
+Server.UnregisterPeriodicCallback(OnHeartbeat);
+```
+
+### Enqueuing Main-Thread Work from an Async Worker
+
+```csharp
+MainThreadQueueHelper.TryEnqueue<MySystemMainThreadQueueData>(
+    Server,
+    () => ProcessResult(result));
+```
+
+### Draining a Main-Thread Queue in OnUpdate
+
+```csharp
+public override void OnUpdate(float deltaTime)
+{
+    MainThreadQueueHelper.Drain<MySystemMainThreadQueueData>(Server, maxActions: 10, drainAll: false);
+}
+```
+
+### Looking Up a Behaviour or Data Container
+
+```csharp
+if (Server.BehaviourRegistry.TryGet<IMyBehaviour>(out var behaviour))
+{
+    behaviour.DoWork();
+}
+
+if (Server.DataContainerRegistry.TryGet<MyRuntimeData>(out var data))
+{
+    data.Counter++;
+}
+```
+
+## Operational Checks
+
+| Check | Method | Expected Result |
+|---|---|---|
+| Server starts | Enter Play Mode with `ServerLauncher` | Log: `"Server is starting..."` followed by `"Initialization Complete"` |
+| External IP resolved | Startup sequence | No exception at `OnFinalizeSetup` |
+| Database connected | Startup sequence | Log: `"Initializing Database with Environment: ..."` |
+| Login server initialised | `ServerEvents.OnLoginServerInitialized` fires | Log: `"LoginServer initialized."` |
+| World server initialised | `ServerEvents.OnWorldServerInitialized` fires | Log: `"WorldServer initialized."` |
+| Scene server initialised | `ServerEvents.OnSceneServerInitialized` fires | Log: `"SceneServer initialized."` |
+| Behaviours initialised | `BehaviourRegistry.InitializeAll` | No `"failed to initialize"` warnings |
+| Data containers created | `DiscoverAndCreateDataContainers` | Log: `"Auto-created RuntimeDataContainer: ..."` for each type |
+| Network listening | `ServerManager_OnServerConnectionState` | Log: `"Local: ... Remote: ... - Started"` |
+| Window title updated | 15-second cycle (default) | OS process/console title reflects server status |
+| Graceful shutdown | Stop Play Mode or `Ctrl+C` | All subsystems deinitialised in reverse order, no errors |
+| Periodic callbacks fire | Register a callback with known interval | Callback invoked on schedule with correct interval argument |
+
+## Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        ServerLauncher                               │
+│  (Bootstrap: parse CLI args → load Addressable server scenes)       │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ loads scene(s)
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Server (MonoBehaviour)                           │
+│                     Composition Root                                │
+│                                                                     │
+│  Start()                                                            │
+│   ├─ Resolve NetworkManager                                         │
+│   ├─ Create Configuration, ServerEvents, CoreServer                 │
+│   ├─ Create FishNetNetworkWrapper                                   │
+│   └─ FetchExternalIPAddress → OnFinalizeSetup(remoteAddress)        │
+│                                                                     │
+│  OnFinalizeSetup()                                                  │
+│   ├─ CoreServer.Initialize(remoteAddress, sceneName)                │
+│   ├─ Build Database (Npgsql + Redis from appsettings.json)          │
+│   ├─ Create ServerAddressProvider                                   │
+│   ├─ Apply transport config + attach authenticator                  │
+│   ├─ Create AccountManager (SRP or Token based on authenticator)    │
+│   ├─ Discover + create RuntimeDataContainers (priority-sorted)      │
+│   ├─ Register + initialise data containers                          │
+│   ├─ Register + initialise ServerBehaviours                         │
+│   ├─ KCC AutoSimulation = false                                     │
+│   └─ NetworkWrapper.StartServer()                                   │
+│                                                                     │
+│  LateUpdate()                                                       │
+│   ├─ UpdateServerBehaviours(deltaTime)   ← snapshot-safe dispatch   │
+│   └─ UpdatePeriodicCallbacks(deltaTime)  ← enum-then-invoke         │
+│                                                                     │
+│  PerformShutdown() [idempotent]                                     │
+│   ├─ Clear periodic callbacks                                       │
+│   ├─ Deinitialise + unregister behaviours (reverse order)           │
+│   ├─ Deinitialise + unregister data containers (reverse order)      │
+│   ├─ Shutdown authenticator workers                                 │
+│   ├─ Stop network server                                            │
+│   ├─ Shutdown database                                              │
+│   ├─ Deinitialise core server + clear account manager               │
+│   └─ Unsubscribe event handlers                                     │
+└─────────────────────────────────────────────────────────────────────┘
+          │                    │                     │
+          ▼                    ▼                     ▼
+   ┌─────────────┐   ┌────────────────┐   ┌────────────────┐
+   │ LoginServer  │   │  WorldServer   │   │  SceneServer   │
+   │  Scene       │   │   Scene        │   │   Scene        │
+   │              │   │                │   │                │
+   │ Systems:     │   │ Systems:       │   │ Systems:       │
+   │ · Login      │   │ · WorldServer  │   │ · SceneServer  │
+   │ · AcctCreate │   │ · WorldScene   │   │ · Achievement  │
+   │ · CharCreate │   │ · Auth         │   │ · Character    │
+   │ · CharSelect │   │ · KickRequest  │   │ · Inventory    │
+   │ · ServerSel  │   │                │   │ · Chat/Guild   │
+   └─────────────┘   └────────────────┘   │ · Party/Friend │
+                                           │ · Pet/Hotkey   │
+                                           │ · Interactable │
+                                           │ · Naming       │
+                                           │ · SceneChannel │
+                                           └────────────────┘
+```
+
+## Project Structure
+
+```
 Implementation/
-├── README.md                         # This document
-├── Server.cs                         # Composition root and lifecycle coordinator
-├── ServerBehaviour.cs                # Base class for implementation-side server behaviours
-├── ServerBehaviourRegistry.cs        # Behaviour registration/initialization orchestration
-├── ServerComponentRegistry.cs        # Runtime-data-container registration orchestration
-├── FishNetNetworkWrapper.cs          # FishNet adapter implementing network wrapper interface
-├── INetworkManagerWrapper.cs         # Network abstraction used by core/implementation
-├── MainThreadQueueHelper.cs          # Queues work onto the main Unity thread
-├── ServerAddressProvider.cs          # Local/public server address resolution
-├── PeriodicCallbackData.cs           # Periodic callback timing state
-├── PhysicsTicker.cs                  # Physics tick integration
-├── ServerLauncher.cs                 # Server bootstrap helper
-├── ServerWindowTitleUpdater.cs       # Window title status updater
-├── ServerWindowTitleUpdaterRuntimeData.cs # Runtime state for window title updater
-├── RuntimeData/                      # Shared runtime data containers
-├── Account/                          # Account/auth related implementation pieces
-├── Authentication/                   # Authenticator and auth workflow integration
-├── LoginServer/                      # Login-server-specific systems
-└── World/                            # World/scene server systems
+├── README.md                                    # This document
+├── Server.cs                                    # Composition root and lifecycle coordinator
+├── ServerBehaviour.cs                           # Base class for server-side behaviours (ScriptableObject)
+├── ServerBehaviourRegistry.cs                   # Behaviour registration/initialisation orchestration
+├── ServerComponentRegistry.cs                   # Generic component registry base class
+├── FishNetNetworkWrapper.cs                     # FishNet adapter implementing INetworkManagerWrapper
+├── INetworkManagerWrapper.cs                    # Network abstraction interface
+├── MainThreadQueueHelper.cs                     # Static helper for main-thread queue drain/enqueue
+├── ServerAddressProvider.cs                     # Local/public server address resolution
+├── PeriodicCallbackData.cs                      # Periodic callback timing state with cached name
+├── PhysicsTicker.cs                             # Physics tick integration via FishNet TimeManager
+├── ServerLauncher.cs                            # Bootstrap: CLI args → Addressable scene loading
+├── ServerWindowTitleUpdater.cs                  # OS-native window/process title updater
+├── ServerWindowTitleUpdaterRuntimeData.cs       # Runtime state for window title updater
+│
+├── Account/                                     # Account management strategies
+│   ├── AccountManager.cs                        #   Base/interface for account managers
+│   ├── SrpAccountManager.cs                     #   SRP-based account manager (login server)
+│   └── TokenAccountManager.cs                   #   Token-based account manager (world/scene)
+│
+├── Authentication/                              # Server authenticator hierarchy
+│   ├── IServerAuthenticator.cs                  #   Authenticator interface
+│   ├── BaseServerAuthenticator.cs               #   Shared authenticator base class
+│   ├── ServerAuthenticator.cs                   #   SRP authenticator (login server)
+│   └── TokenServerAuthenticator.cs              #   Token authenticator (world/scene)
+│
+├── RuntimeData/                                 # Shared runtime data container framework
+│   ├── RuntimeDataContainer.cs                  #   Base class for runtime data containers
+│   ├── RuntimeDataContainerFactory.cs           #   Factory for creating containers by type
+│   ├── RuntimeDataContainerRegistry.cs          #   Registry for container lifecycle management
+│   ├── AsyncWorkerData.cs                       #   Base for async worker thread data
+│   ├── MainThreadQueueData.cs                   #   Base for main-thread queue data containers
+│   └── SystemMainThreadQueueData.cs             #   System-level main-thread queue data
+│
+├── LoginServer/                                 # Login-server-specific systems
+│   ├── AccountCreation/                         #   Account creation workflow
+│   │   ├── AccountCreationSystem.cs
+│   │   ├── AccountCreationSystemMainThreadQueueData.cs
+│   │   ├── AccountCreationSystemMappingData.cs
+│   │   └── AccountCreationSystemRuntimeData.cs
+│   ├── CharacterCreate/                         #   Character creation workflow
+│   │   ├── CharacterCreateSystem.cs
+│   │   ├── CharacterCreateSystemMainThreadQueueData.cs
+│   │   └── CharacterCreateSystemRuntimeData.cs
+│   ├── CharacterSelect/                         #   Character selection workflow
+│   │   ├── CharacterSelectSystem.cs
+│   │   ├── CharacterSelectSystemMainThreadQueueData.cs
+│   │   └── CharacterSelectSystemRuntimeData.cs
+│   ├── LoginServer/                             #   Login server lifecycle
+│   │   ├── LoginServerSystem.cs
+│   │   └── LoginServerRuntimeData.cs
+│   └── ServerSelect/                            #   Server selection workflow
+│       ├── ServerSelectSystem.cs
+│       ├── ServerSelectSystemMainThreadQueueData.cs
+│       └── ServerSelectSystemRuntimeData.cs
+│
+└── World/                                       # World and scene server systems
+    ├── KickRequest/                             #   Player kick request handling
+    │   ├── KickRequestSystem.cs
+    │   ├── KickRequestSystemMainThreadQueueData.cs
+    │   └── KickRequestSystemQueueData.cs
+    ├── LoginServer/                             #   Login-server-facing world systems
+    │   └── ServerSelect/
+    ├── SceneServer/                             #   Scene-server-specific systems
+    │   ├── Achievement/                         #     Achievement tracking
+    │   ├── Authentication/                      #     Scene-server authentication
+    │   ├── Character/                           #     Character state management
+    │   ├── CharacterInventory/                  #     Inventory operations
+    │   ├── Chat/                                #     Chat messaging
+    │   ├── Friend/                              #     Friend list management
+    │   ├── Guild/                               #     Guild systems
+    │   ├── Hotkey/                              #     Hotkey configuration
+    │   ├── Interactable/                        #     Interactable objects
+    │   ├── Naming/                              #     Entity naming
+    │   ├── Party/                               #     Party systems
+    │   ├── Pet/                                 #     Pet systems
+    │   ├── SceneChannel/                        #     Scene channel management
+    │   └── SceneServer/                         #     Scene server lifecycle
+    │       ├── SceneServerSystem.cs
+    │       ├── SceneServerRuntimeData.cs
+    │       ├── SceneServerSystemMainThreadQueueData.cs
+    │       ├── SceneInstanceDetails.cs
+    │       └── SceneInstanceMappingData.cs
+    └── WorldServer/                             #   World-server-specific systems
+        ├── Authentication/                      #     World-server authentication
+        │   └── WorldServerAuthenticator.cs
+        ├── WorldScene/                          #     World scene management
+        │   ├── WorldSceneSystem.cs
+        │   ├── WorldSceneSystemRuntimeData.cs
+        │   ├── WorldSceneSystemMainThreadQueueData.cs
+        │   └── WorldSceneMappingData.cs
+        └── WorldServer/                         #     World server lifecycle
+            ├── WorldServerSystem.cs
+            └── WorldServerSystemRuntimeData.cs
 ```
 
-## Class and Interface Relationships
+### Inheritance Hierarchy
 
-`Server` inherits and implements:
-
-```text
+```
 MonoBehaviour
-└── Server
-    ├── IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>
-    ├── IServer<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer>
-    └── IPeriodicUpdateSystem
+└── Server : IServer<...IServerBehaviour>, IServer<...IRuntimeDataContainer>, IPeriodicUpdateSystem
+
+ScriptableObject
+└── ServerBehaviour : IServerBehaviour<INetworkManagerWrapper, ServerManager, NetworkConnection, IServerBehaviour>
+    ├── LoginServerSystem
+    ├── AccountCreationSystem
+    ├── CharacterCreateSystem
+    ├── CharacterSelectSystem
+    ├── ServerSelectSystem
+    ├── WorldServerSystem
+    ├── WorldSceneSystem
+    ├── SceneServerSystem
+    ├── KickRequestSystem
+    ├── ServerWindowTitleUpdater
+    └── (scene-server systems: Achievement, Character, Chat, Guild, etc.)
+
+RuntimeDataContainer : IRuntimeDataContainer
+├── LoginServerRuntimeData
+├── AccountCreationSystemRuntimeData
+├── CharacterCreateSystemRuntimeData
+├── CharacterSelectSystemRuntimeData
+├── ServerSelectSystemRuntimeData
+├── WorldServerSystemRuntimeData
+├── WorldSceneSystemRuntimeData
+├── SceneServerRuntimeData
+├── ServerWindowTitleUpdaterRuntimeData
+├── KickRequestSystemQueueData
+└── *SystemMainThreadQueueData variants
+
+INetworkManagerWrapper
+└── FishNetNetworkWrapper
+
+IAccountManager<NetworkConnection>
+├── SrpAccountManager
+└── TokenAccountManager
+
+IServerAuthenticator
+└── BaseServerAuthenticator
+    ├── ServerAuthenticator        (SRP — login server)
+    └── TokenServerAuthenticator   (token — world/scene servers)
+
+ServerComponentRegistry<TNet, TConn, TComponent>
+├── ServerBehaviourRegistry  : IServerBehaviourRegistry<...>
+└── RuntimeDataContainerRegistry
 ```
 
-## Startup Flow
+## License
 
-1. `Start()`
-   - Resolves `NetworkManager`.
-   - Builds `Configuration`, `ServerEvents`, `CoreServer`, and `NetworkWrapper`.
-   - Subscribes initialization log handlers.
-   - Fetches external IP asynchronously.
-2. `OnFinalizeSetup(remoteAddress)`
-   - Initializes core server addressing.
-   - Creates database orchestrator.
-   - Builds `AddressProvider`.
-   - Applies transport settings and authenticator wiring.
-   - Creates account manager.
-   - Discovers, registers, and initializes runtime data containers.
-   - Registers and initializes server behaviours.
-   - Configures KCC simulation mode.
-   - Starts network server.
-
-## Runtime Update Model
-
-### Behaviour Updates
-
-`LateUpdate()` calls `UpdateServerBehaviours(deltaTime)` which snapshots `serverBehaviours` into a reusable scratch list before dispatch. This prevents `InvalidOperationException` if a behaviour's `OnLateUpdate` registers or unregisters behaviours. Only initialized, non-null behaviours are invoked.
-
-### Periodic Callbacks
-
-`Server` exposes `IPeriodicUpdateSystem`:
-- `RegisterPeriodicCallback(interval, callback)`
-- `UnregisterPeriodicCallback(callback)`
-- `UpdateCallbackInterval(callback, newInterval)`
-
-Callbacks are stored in a dictionary. Each frame, `UpdatePeriodicCallbacks` decrements timers and collects ready callbacks into a reusable scratch list. The `foreach` over the dictionary completes before any callback is invoked, so callbacks are free to call `Register`/`Unregister` during dispatch without dictionary mutation during enumeration.
-
-Callbacks receive `data.Interval` (not frame `deltaTime`) so the argument is always the registered period. After invocation, `TimeRemaining` resets to the full interval — no catch-up loop, which is appropriate for DB heartbeats and server-tick work.
-
-`PeriodicCallbackData` caches a `CallbackName` string at construction time so log messages never pay repeated reflection cost on `Callback.Method`. All log paths use the cached name exclusively.
-
-## Connection State Handling
-
-`ServerManager_OnServerConnectionState(...)` maps FishNet connection states to internal `ConnectionState` via `MapConnectionState(...)` and logs local/remote bind details when available.
-
-## Data Container Discovery
-
-`DiscoverAndCreateDataContainers()` scans `ServerBehaviour` instances for `RequiresDataContainerAttribute`:
-- clears `dataContainers` first to prevent accumulation if Unity domain reload is disabled,
-- deduplicates container types,
-- validates constructability through `RuntimeDataContainerFactory`,
-- groups by initialization priority,
-- creates and stores containers in priority order,
-- uses `is RuntimeDataContainer` pattern-match instead of a direct cast for factory return safety.
-
-## Shutdown Flow
-
-`OnDestroy()` and `OnApplicationQuit()` both call `PerformShutdown()` (idempotent via `hasShutdown`).
-
-Shutdown sequence:
-1. Clear periodic callbacks.
-2. Deinitialize and unregister behaviours (reverse order).
-3. Deinitialize and unregister runtime data containers (reverse order).
-4. Shutdown authenticator workers.
-5. Stop network server.
-6. Shutdown database.
-7. Deinitialize core server and clear account manager.
-8. Unsubscribe server event handlers and connection-state handler.
-
-## Key Dependencies
-
-- **FishNet**: transport, connection states, authenticator integration.
-- **Core server layer**: role initialization and lifecycle events.
-- **Database orchestrator**: service registry and graceful shutdown.
-- **Runtime registries**: behaviour and data-container orchestration.
-- **KCC**: deterministic simulation setup (`AutoSimulation = false`).
-
-## Reliability Notes
-
-- Startup fails fast if critical dependencies are missing (`NetworkManager`, remote IP).
-- Event handler callbacks use cached delegates to support reliable unsubscribe.
-- Cleanup is guarded for null-safe shutdown and only executed once.
-- Registry unregistration runs independently from `Initialized` flags to avoid skip-on-shutdown edge cases.
-- Periodic callback enumeration completes before invocation, so callbacks can safely register/unregister.
-- Behaviour dispatch snapshots the list to avoid mutation during `OnLateUpdate`.
-- Periodic callbacks receive `data.Interval`, not frame `deltaTime`, so the argument is always meaningful.
-- `PeriodicCallbackData.CallbackName` caches the reflection-derived display name at construction time; no runtime reflection in any log path.
-- `RegisterPeriodicCallback` uses `TryGetValue` instead of `ContainsKey` + double-indexer to save a hash lookup.
-- Container factory results use `is` pattern-match instead of direct cast for future-safe type checking.
-- `dataContainers.Clear()` at start of discovery prevents accumulation when Unity domain reload is disabled.
-- `ServerBehaviourRegistry` implements `IServerBehaviourRegistry` directly, enabling clean assignment without `as` cast.
+This module is part of the FishMMO project and is distributed under the FishMMO project license. See the repository root for full license terms.

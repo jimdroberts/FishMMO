@@ -33,6 +33,18 @@ namespace FishMMO.Shared.Core
 		event Action OnReset;
 
 		/// <summary>
+		/// Fired when predicted ability objects are destroyed due to state mismatch.
+		/// Provides the reconcile tick. For 1-2 tick mismatches, replay corrects invisibly.
+		/// </summary>
+		event Action<uint> OnPredictionMismatch;
+
+		/// <summary>
+		/// Fired when the server denies an ability the client already started predicting.
+		/// Subscribers should show an "interrupted" flash, restore predicted resources, etc.
+		/// </summary>
+		event Action<long> OnAbilityDenied;
+
+		/// <summary>
 		/// True if an ability is currently activating.
 		/// </summary>
 		bool IsActivating { get; }
@@ -65,21 +77,6 @@ namespace FishMMO.Shared.Core
 		/// Gets the current ability type.
 		/// </summary>
 		AbilityType GetCurrentAbilityType();
-		/// <summary>
-		/// Returns true if the current ability type is aerial.
-		/// </summary>
-		bool IsCurrentAbilityTypeAerial();
-		/// <summary>
-		/// Gets the activation attribute template for the given ability.
-		/// </summary>
-		/// <param name="ability">The ability to check.</param>
-		CharacterAttributeTemplate GetActivationAttributeTemplate(Ability ability);
-		/// <summary>
-		/// Calculates the speed reduction for the given attribute.
-		/// </summary>
-		/// <param name="attribute">The attribute to check.</param>
-		float CalculateSpeedReduction(CharacterAttributeTemplate attribute);
-
 		/// <summary>
 		/// Returns true if the ability requires held input (channeled or charged).
 		/// AI should pass the result as the isHeld parameter when calling Activate().

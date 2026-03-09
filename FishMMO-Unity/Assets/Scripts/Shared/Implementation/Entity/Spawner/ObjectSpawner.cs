@@ -221,7 +221,7 @@ namespace FishMMO.Shared
 		{
 			// Calculate the next respawn time based on a random respawn time or the initial respawn time.
 			TimeSpan respawnDelay = RandomRespawnTime
-				? TimeSpan.FromSeconds(UnityEngine.Random.Range(spawnableSettings.MinimumRespawnTime, spawnableSettings.MaximumRespawnTime))
+				? TimeSpan.FromSeconds(DeterministicRNG.Shared.Range(spawnableSettings.MinimumRespawnTime, spawnableSettings.MaximumRespawnTime))
 				: TimeSpan.FromSeconds(InitialRespawnTime);
 
 			// Return the DateTime of when the object should respawn.
@@ -339,7 +339,7 @@ namespace FishMMO.Shared
 			UpdateTotalSpawnChanceCache();
 
 			// Pick a random value between 0 and total spawn chance.
-			float randomValue = UnityEngine.Random.Range(0f, cachedTotalSpawnChance);
+			float randomValue = DeterministicRNG.Shared.Range(0f, cachedTotalSpawnChance);
 
 			float cumulativeChance = 0f;
 
@@ -381,7 +381,7 @@ namespace FishMMO.Shared
 					}
 					break;
 				case ObjectSpawnType.Random:
-					spawnIndex = UnityEngine.Random.Range(0, Spawnables.Count);
+					spawnIndex = DeterministicRNG.Shared.Range(0, Spawnables.Count);
 					break;
 				case ObjectSpawnType.Weighted:
 					spawnIndex = GetWeightedSpawnIndex();
@@ -423,9 +423,9 @@ namespace FishMMO.Shared
 				if (physicsScene != null)
 				{
 					// Get a random point at the top of the bounding box.
-					Vector3 origin = new Vector3(UnityEngine.Random.Range(-BoundingBoxExtents.x, BoundingBoxExtents.x),
+					Vector3 origin = new Vector3(DeterministicRNG.Shared.Range(-BoundingBoxExtents.x, BoundingBoxExtents.x),
 												 BoundingBoxExtents.y,
-												 UnityEngine.Random.Range(-BoundingBoxExtents.z, BoundingBoxExtents.z));
+												 DeterministicRNG.Shared.Range(-BoundingBoxExtents.z, BoundingBoxExtents.z));
 
 					// Add the spawner position.
 					origin += spawnPosition;

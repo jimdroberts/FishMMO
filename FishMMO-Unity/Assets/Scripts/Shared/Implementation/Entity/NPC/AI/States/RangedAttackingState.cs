@@ -117,8 +117,8 @@ namespace FishMMO.Shared
 			if (distance <= abilityRange)
 			{
 				// Occasionally strafe for variety.
-				System.Random rng = controller.NpcRNG;
-				if (StrafeState != null && (rng != null ? (float)rng.NextDouble() : Random.value) < StrafeChance)
+				DeterministicRNG rng = controller.NpcRNG;
+				if (StrafeState != null && (rng ?? DeterministicRNG.Shared).NextFloat() < StrafeChance)
 				{
 					// Activate ability then immediately strafe.
 					bool held = abilityController.RequiresHeld(bestAbility.ID);

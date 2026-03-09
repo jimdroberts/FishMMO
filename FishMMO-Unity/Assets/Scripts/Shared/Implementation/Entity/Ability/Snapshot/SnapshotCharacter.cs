@@ -62,6 +62,13 @@ namespace FishMMO.Shared
 		/// <see cref="AbilityObject.OnCollisionEnter"/> continue to dispatch ECA events
 		/// through the phantom caster.
 		/// </summary>
+		/// <remarks>
+		/// CONTRACT: This MUST return <c>true</c>. Both <see cref="AbilityObject.Update"/>
+		/// and <see cref="AbilityObject.OnCollisionEnter"/> guard event dispatch with
+		/// <c>Caster != null &amp;&amp; Caster.IsSpawned</c>. Returning <c>false</c>
+		/// would silently suppress all tick and collision events on every detached
+		/// ability object for the remainder of its lifetime.
+		/// </remarks>
 		public bool IsSpawned => true;
 
 		/// <inheritdoc/>
@@ -120,57 +127,42 @@ namespace FishMMO.Shared
 			Transform = abilityObjectTransform;
 			Flags = liveCharacter.Flags;
 
-			// Snapshot the attribute controller if the live character has one.
+			// Register the attribute controller directly by its known interface type.
+			// SnapshotCharacter only ever needs ICharacterAttributeController; using
+			// typeof(T) is resolved at compile time and is safe under IL2CPP code stripping.
 			if (liveCharacter.TryGet(out ICharacterAttributeController liveAttributes))
 			{
 				SnapshotAttributeController snapshotAttributes = new SnapshotAttributeController(liveAttributes, this);
-				RegisterCharacterBehaviour(snapshotAttributes);
+				behaviours[typeof(ICharacterAttributeController)] = snapshotAttributes;
 			}
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// <see cref="SnapshotCharacter"/> only supports <see cref="ICharacterAttributeController"/>.
+		/// Registering other behaviour types is a no-op. This avoids <c>GetInterfaces()</c>
+		/// reflection which is fragile under IL2CPP code stripping.
+		/// </remarks>
 		public void RegisterCharacterBehaviour(ICharacterBehaviour behaviour)
 		{
-			if (behaviour == null)
+			if (behaviour is ICharacterAttributeController attributeController)
 			{
-				return;
-			}
-
-			Type[] interfaces = behaviour.GetType().GetInterfaces();
-			for (int i = 0; i < interfaces.Length; ++i)
-			{
-				Type iface = interfaces[i];
-				if (iface == typeof(ICharacterBehaviour))
-				{
-					continue;
-				}
-				if (!typeof(ICharacterBehaviour).IsAssignableFrom(iface))
-				{
-					continue;
-				}
-				if (!behaviours.ContainsKey(iface))
-				{
-					behaviours.Add(iface, behaviour);
-				}
+				behaviours[typeof(ICharacterAttributeController)] = attributeController;
 			}
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// <see cref="SnapshotCharacter"/> only supports <see cref="ICharacterAttributeController"/>.
+		/// Unregistering other behaviour types is a no-op.
+		/// </remarks>
 		public void UnregisterCharacterBehaviour(ICharacterBehaviour behaviour)
 		{
-			if (behaviour == null)
+			if (behaviour is ICharacterAttributeController &&
+				behaviours.TryGetValue(typeof(ICharacterAttributeController), out ICharacterBehaviour existing) &&
+				existing == behaviour)
 			{
-				return;
-			}
-
-			Type[] interfaces = behaviour.GetType().GetInterfaces();
-			for (int i = 0; i < interfaces.Length; ++i)
-			{
-				Type iface = interfaces[i];
-				if (behaviours.TryGetValue(iface, out ICharacterBehaviour existing) && existing == behaviour)
-				{
-					behaviours.Remove(iface);
-				}
+				behaviours.Remove(typeof(ICharacterAttributeController));
 			}
 		}
 
@@ -188,6 +180,23 @@ namespace FishMMO.Shared
 			}
 			control = null;
 			return false;
+		}
+
+		/// <summary>
+		/// Creates a <see cref="SnapshotCharacter"/> from a live caster, freezing identity
+		/// and attribute data so that detached ability objects can continue to resolve
+		/// stat-scaled calculations.
+		/// </summary>
+		/// <param name="liveCaster">The live character to snapshot.</param>
+		/// <param name="abilityObjectTransform">The ability object's transform, used as the phantom's positional reference.</param>
+		/// <returns>A new <see cref="SnapshotCharacter"/> or null if <paramref name="liveCaster"/> is null.</returns>
+		public static SnapshotCharacter FromLive(ICharacter liveCaster, Transform abilityObjectTransform)
+		{
+			if (liveCaster == null)
+			{
+				return null;
+			}
+			return new SnapshotCharacter(liveCaster, abilityObjectTransform);
 		}
 	}
 }

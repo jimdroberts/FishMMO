@@ -24,19 +24,19 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Static random number generator for NPC attribute seed generation.
 		/// </summary>
-		private static System.Random npcSeedGenerator = new System.Random();
+		private static DeterministicRNG npcSeedGenerator = new DeterministicRNG();
 
 		/// <summary>
 		/// Random number generator for this NPC, seeded for deterministic results.
 		/// </summary>
-		private System.Random npcRNG;
+		private DeterministicRNG npcRNG;
 
 		/// <summary>
 		/// Exposes the seeded RNG for deterministic AI decisions.
-		/// All AI subsystems should use this instead of <see cref="UnityEngine.Random"/>
+		/// All AI subsystems should use this instead of <see cref="DeterministicRNG.Shared"/>
 		/// so that behaviour is reproducible given the same seed.
 		/// </summary>
-		public System.Random RNG => npcRNG;
+		public DeterministicRNG RNG => npcRNG;
 
 		/// <summary>
 		/// The seed used for RNG, synchronized over the network.
@@ -103,7 +103,7 @@ namespace FishMMO.Shared
 			if (npcRNG == null)
 			{
 				npcSeed = npcSeedGenerator.Next();
-				npcRNG = new System.Random(npcSeed);
+				npcRNG = new DeterministicRNG(npcSeed);
 			}
 		}
 
@@ -159,7 +159,7 @@ namespace FishMMO.Shared
 			npcSeed = reader.ReadInt32();
 
 			// Instantiate the client side NPC RNG with the received seed.
-			npcRNG = new System.Random(npcSeed);
+			npcRNG = new DeterministicRNG(npcSeed);
 
 			//Log.Debug($"Received NPC RNG Seed {npcSeed}");
 

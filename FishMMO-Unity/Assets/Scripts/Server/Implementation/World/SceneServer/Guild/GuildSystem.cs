@@ -1290,7 +1290,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					CharacterGuildData? newLeader = null;
-					var rng = new System.Random();
+					var rng = new DeterministicRNG();
 					if (officers.Count > 0)
 					{
 						// pick a random officer

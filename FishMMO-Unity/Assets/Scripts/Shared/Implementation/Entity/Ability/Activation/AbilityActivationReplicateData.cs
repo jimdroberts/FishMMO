@@ -1,4 +1,5 @@
 ﻿using FishNet.Object.Prediction;
+using FishNet.CodeGenerating;
 
 namespace FishMMO.Shared
 {
@@ -7,6 +8,7 @@ namespace FishMMO.Shared
 	/// Camera data is not included here to save bandwidth; instead, AbilityController reads from
 	/// KCCController.VirtualCameraPosition/VirtualCameraRotation which is guaranteed fresh via OnPostTick ordering.
 	/// </summary>
+	[UseGlobalCustomSerializer]
 	public struct AbilityActivationReplicateData : IReplicateData
 	{
 		/// <summary>
@@ -16,6 +18,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// The ID of the queued ability or consumable template.
+		/// Typed as long to match <see cref="Ability.ID"/> for ability activations.
+		/// Consumable activations store template IDs which fit in int but use long for uniformity.
 		/// </summary>
 		public long QueuedAbilityID;
 
@@ -29,10 +33,10 @@ namespace FishMMO.Shared
 			ActivationFlags = activationFlags;
 			QueuedAbilityID = queuedAbilityID;
 
-			_tick = 0;
+			tick = 0;
 		}
 
-		private uint _tick;
+		private uint tick;
 
 		/// <summary>
 		/// Disposes the replicate data (no-op).
@@ -43,12 +47,12 @@ namespace FishMMO.Shared
 		/// Gets the network tick value.
 		/// </summary>
 		/// <returns>The tick value.</returns>
-		public uint GetTick() => _tick;
+		public uint GetTick() => tick;
 
 		/// <summary>
 		/// Sets the network tick value.
 		/// </summary>
 		/// <param name="value">Tick value.</param>
-		public void SetTick(uint value) => _tick = value;
+		public void SetTick(uint value) => tick = value;
 	}
 }

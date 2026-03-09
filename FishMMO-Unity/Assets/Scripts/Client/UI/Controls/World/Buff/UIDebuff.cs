@@ -27,7 +27,7 @@ namespace FishMMO.Client
 		public override void OnStarting()
 		{
 			// Subscribe to debuff events for updating UI.
-			IBuffController.OnSubtractTime += BuffController_OnSubtractTime;
+			IBuffController.OnBuffTick += BuffController_OnBuffTick;
 			IBuffController.OnAddDebuff += BuffController_OnAddDebuff;
 			IBuffController.OnRemoveDebuff += BuffController_OnRemoveDebuff;
 
@@ -41,7 +41,7 @@ namespace FishMMO.Client
 		public override void OnDestroying()
 		{
 			// Unsubscribe from debuff events and clear all debuffs.
-			IBuffController.OnSubtractTime -= BuffController_OnSubtractTime;
+			IBuffController.OnBuffTick -= BuffController_OnBuffTick;
 			IBuffController.OnAddDebuff -= BuffController_OnAddDebuff;
 			IBuffController.OnRemoveDebuff -= BuffController_OnRemoveDebuff;
 
@@ -74,10 +74,11 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Event handler for subtracting time from a debuff. Updates the duration slider in the UI.
+		/// Event handler called each tick for active debuffs. Updates the duration slider in the UI.
 		/// </summary>
-		/// <param name="buff">The debuff to update.</param>
-		private void BuffController_OnSubtractTime(Buff buff)
+		/// <param name="buff">The debuff that was ticked.</param>
+		/// <param name="currentTick">The current network tick, used to compute remaining duration.</param>
+		private void BuffController_OnBuffTick(Buff buff, uint currentTick)
 		{
 			// Validate buff and template, and ensure it's a debuff before updating UI.
 			if (buff == null)
@@ -94,7 +95,7 @@ namespace FishMMO.Client
 			}
 			if (Debuffs.TryGetValue(buff.Template.ID, out UIBuffGroup buffGroup))
 			{
-				buffGroup.DurationSlider.value = buff.RemainingTime / buff.Template.Duration;
+				buffGroup.DurationSlider.value = buff.RemainingSeconds(currentTick) / buff.Template.Duration;
 			}
 		}
 

@@ -1,59 +1,70 @@
 # Target System
 
+**Short description:** Raycast-based targeting system for FishMMO characters, handling target selection, self-hit avoidance, and event-driven notifications on both client and server.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation / Build](#installation--build)
+- [Quick Start Guide](#quick-start-guide)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Operational Checks](#operational-checks)
+- [Flow Diagram](#flow-diagram)
+- [Project Structure](#project-structure)
+- [License](#license)
+
 ## Overview
 
 The Target system provides raycast-based targeting for FishMMO characters. It handles target selection via physics raycasts, self-hit avoidance, target change/update/clear event notifications, and supports both client-side (screen-space mouse ray) and server-side (physics scene ray) targeting. The system operates on a configurable tick rate and exposes target state through a lightweight `TargetInfo` struct consumed by the ability system and UI.
 
-## Directory Structure
+## Supported Platforms
 
-```
-Target/
-├── ITargetController.cs    # Target controller interface
-├── TargetController.cs      # Per-entity controller (CharacterBehaviour)
-└── TargetInfo.cs            # Lightweight target data struct
-```
+| Platform | Supported | Notes |
+|----------|-----------|-------|
+| Windows  | Yes       | Full client and server support |
+| Linux    | Yes       | Full client and server support |
+| WebGL    | Yes       | Client-side targeting only |
 
-## Inheritance Hierarchies
+- **Unity Version:** Unity 6.3 LTS
+- **Scripting Backend:** IL2CPP
 
-### Controllers (CharacterBehaviour)
+## Features
 
-```
-CharacterBehaviour
-└── TargetController : ITargetController
-```
+- Raycast-based target selection from mouse position (client) or caller-provided ray (server)
+- Self-hit avoidance with automatic re-raycast past the player's own collider
+- Configurable physics layer mask for target filtering
+- Event-driven notifications: `OnChangeTarget`, `OnUpdateTarget`, `OnClearTarget`
+- Lightweight `TargetInfo` value-type struct for zero-allocation target state
+- Configurable tick rate (`TARGET_UPDATE_RATE`) to control update frequency
+- Maximum target distance clamping (`MAX_TARGET_DISTANCE`)
+- Platform-aware raycasting (client `Physics.Raycast` vs. server `PhysicsScene.Raycast`)
+- Automatic cleanup of event delegates and target state on destroy
 
-### Data Structures
+## Prerequisites
 
-```
-TargetInfo (struct)
-    ├── Target      : Transform
-    └── HitPosition : Vector3
-```
+- **Unity 6.3 LTS**
+- **FishNetworking** — Network transport and `CharacterBehaviour` base class
+- **FishMMO Shared Core** — `PlayerCharacter`, `CharacterBehaviour`, scene/physics infrastructure
 
-## TargetInfo
+## Installation / Build
 
-A lightweight value-type struct that holds the result of a targeting raycast.
+This is an integrated module within the FishMMO project. No separate installation or build steps are required. The target system is included automatically when the FishMMO Shared assembly is referenced.
 
-| Field         | Type        | Description                                           |
-|---------------|-------------|-------------------------------------------------------|
-| `Target`      | `Transform` | The transform of the targeted object, or `null` if nothing was hit |
-| `HitPosition` | `Vector3`   | The world-space position where the ray hit, or the ray endpoint if nothing was hit |
+## Quick Start Guide
 
-## ITargetController
+1. Ensure `PlayerCharacter` has a `TargetController` component (added automatically via `[RequireComponent]`).
+2. Configure the `LayerMask` field in the Inspector to include targetable physics layers.
+3. Subscribe to targeting events on `ITargetController`:
+   - `OnChangeTarget` — fired when a new target is selected.
+   - `OnUpdateTarget` — fired when the same target is re-validated.
+   - `OnClearTarget` — fired when the previous target is deselected.
+4. On the server, call `ITargetController.UpdateTarget(origin, direction, maxDistance)` directly from the ability system.
 
-Interface exposing targeting capabilities and events.
-
-| Member           | Type / Signature                                          | Description                                         |
-|------------------|-----------------------------------------------------------|-----------------------------------------------------|
-| `Current`        | `TargetInfo`                                              | The current target information (read-only)          |
-| `OnChangeTarget` | `event Action<Transform>`                                 | Fired when the target changes to a different object |
-| `OnUpdateTarget` | `event Action<Transform>`                                 | Fired when the same target is re-validated          |
-| `OnClearTarget`  | `event Action<Transform>`                                 | Fired when the previous target is deselected        |
-| `UpdateTarget`   | `TargetInfo UpdateTarget(Vector3, Vector3, float)`        | Performs a raycast and returns updated target info   |
-
-## TargetController
-
-The `TargetController` is a `CharacterBehaviour` that manages target selection through raycasting. It is a required component on `PlayerCharacter` via `[RequireComponent(typeof(TargetController))]`.
+## Configuration
 
 ### Constants
 
@@ -62,13 +73,45 @@ The `TargetController` is a `CharacterBehaviour` that manages target selection t
 | `MAX_TARGET_DISTANCE`  | `50.0f` | Maximum allowed raycast distance                 |
 | `TARGET_UPDATE_RATE`   | `0.05f` | Seconds between target update ticks (client-side)|
 
-### Fields
+### Inspector Fields
 
 | Field       | Type         | Description                                     |
 |-------------|--------------|-------------------------------------------------|
 | `LayerMask` | `LayerMask`  | Physics layer mask for target raycasts          |
+
+### Runtime State
+
+| Field       | Type         | Description                                     |
+|-------------|--------------|-------------------------------------------------|
 | `Last`      | `TargetInfo` | The previous frame's target information         |
 | `Current`   | `TargetInfo` | The current frame's target information          |
+
+### TargetInfo Struct
+
+| Field         | Type        | Description                                           |
+|---------------|-------------|-------------------------------------------------------|
+| `Target`      | `Transform` | The transform of the targeted object, or `null` if nothing was hit |
+| `HitPosition` | `Vector3`   | The world-space position where the ray hit, or the ray endpoint if nothing was hit |
+
+### Platform Differences
+
+| Feature              | Client (`!UNITY_SERVER`)                          | Server (`UNITY_SERVER`)                                |
+|----------------------|---------------------------------------------------|--------------------------------------------------------|
+| **Raycast API**      | `Physics.Raycast(ray, ...)`                       | `PlayerCharacter.Motor.PhysicsScene.Raycast(...)`      |
+| **Update loop**      | `Update()` with tick rate                         | No automatic updates; called by ability system         |
+| **Ray source**       | `Camera.main.ScreenPointToRay(Input.mousePosition)` | Provided by caller (e.g., ability controller)       |
+
+## Usage Examples
+
+### ITargetController Interface
+
+| Member           | Type / Signature                                          | Description                                         |
+|------------------|-----------------------------------------------------------|-----------------------------------------------------|
+| `Current`        | `TargetInfo`                                              | The current target information (read-only)          |
+| `OnChangeTarget` | `event Action<Transform>`                                 | Fired when the target changes to a different object |
+| `OnUpdateTarget` | `event Action<Transform>`                                 | Fired when the same target is re-validated          |
+| `OnClearTarget`  | `event Action<Transform>`                                 | Fired when the previous target is deselected        |
+| `UpdateTarget`   | `TargetInfo UpdateTarget(Vector3, Vector3, float)`        | Performs a raycast and returns updated target info   |
 
 ### Client-Side Update Loop
 
@@ -80,9 +123,39 @@ On the client (`!UNITY_SERVER`), `Update()` runs at `TARGET_UPDATE_RATE`:
    - **Target changed**: Invokes `OnClearTarget` for the old target, then `OnChangeTarget` for the new.
    - **Target unchanged**: Invokes `OnUpdateTarget` for the current target.
 
-### UpdateTarget Flow
+### Self-Hit Avoidance
 
-The core targeting method, used by both client and server:
+When the raycast hits the casting character itself, the controller fires a second raycast:
+1. Moves the ray origin slightly past the hit point (`hit.point + direction.normalized * 0.1f`).
+2. Reduces the max distance by the already-traveled distance.
+3. Uses the new hit (if any) as the actual target.
+
+This prevents the player from always targeting themselves when the camera is behind the character.
+
+### External Integration Points
+
+- **Ability System** — `AbilityController` calls `ITargetController.UpdateTarget()` to resolve the target before spawning ability objects. `AbilityObject.Spawn()` and `SetAbilitySpawnPosition()` use `TargetInfo` to determine projectile aim direction and ground-targeted ability placement.
+- **UI System** — Subscribes to `OnChangeTarget`, `OnUpdateTarget`, and `OnClearTarget` to display target frames, health bars, name labels, and outline highlights.
+- **PlayerCharacter** — `TargetController` is a `[RequireComponent]` on `PlayerCharacter`, ensuring every player entity has targeting capability.
+
+### Cleanup
+
+`OnDestroying()` nulls all three event delegates (`OnChangeTarget`, `OnUpdateTarget`, `OnClearTarget`) and resets `Last` and `Current` to `default` to prevent dangling references.
+
+## Operational Checks
+
+| Check | How to Verify | Expected Result |
+|-------|---------------|-----------------|
+| Target selection | Hover mouse over a targetable entity, observe target frame UI | `OnChangeTarget` fires, UI displays target info |
+| Target clear | Move mouse away from all entities | `OnClearTarget` fires, UI hides target info |
+| Self-hit avoidance | Position camera behind character, hover over distant entity | Target resolves to distant entity, not self |
+| Layer mask filtering | Set `LayerMask` to exclude a layer, hover over entity on that layer | Entity is not targeted |
+| Server-side targeting | Use ability on server, check `UpdateTarget` return | `TargetInfo` contains correct target and hit position |
+| Event consistency | Subscribe to all three events, cycle through targets | Events fire in correct order: Clear → Change or Update |
+
+## Flow Diagram
+
+### UpdateTarget Flow
 
 ```
 UpdateTarget(origin, direction, maxDistance)
@@ -106,28 +179,7 @@ UpdateTarget(origin, direction, maxDistance)
     └── Store result in Current, move old Current to Last
 ```
 
-### Self-Hit Avoidance
-
-When the raycast hits the casting character itself, the controller fires a second raycast:
-1. Moves the ray origin slightly past the hit point (`hit.point + direction.normalized * 0.1f`).
-2. Reduces the max distance by the already-traveled distance.
-3. Uses the new hit (if any) as the actual target.
-
-This prevents the player from always targeting themselves when the camera is behind the character.
-
-### Platform Differences
-
-| Feature              | Client (`!UNITY_SERVER`)                          | Server (`UNITY_SERVER`)                                |
-|----------------------|---------------------------------------------------|--------------------------------------------------------|
-| **Raycast API**      | `Physics.Raycast(ray, ...)`                       | `PlayerCharacter.Motor.PhysicsScene.Raycast(...)`      |
-| **Update loop**      | `Update()` with tick rate                         | No automatic updates; called by ability system         |
-| **Ray source**       | `Camera.main.ScreenPointToRay(Input.mousePosition)` | Provided by caller (e.g., ability controller)       |
-
-### Cleanup
-
-`OnDestroying()` nulls all three event delegates (`OnChangeTarget`, `OnUpdateTarget`, `OnClearTarget`) and resets `Last` and `Current` to `default` to prevent dangling references.
-
-## Event Flow
+### Event Flow
 
 ```
 Frame N:
@@ -151,10 +203,34 @@ Frame N+3:
         → OnChangeTarget(null)        // no new target
 ```
 
-## External Integration Points
+## Project Structure
 
-The target system is consumed by several other systems:
+### Directory Structure
 
-- **Ability System** — `AbilityController` calls `ITargetController.UpdateTarget()` to resolve the target before spawning ability objects. `AbilityObject.Spawn()` and `SetAbilitySpawnPosition()` use `TargetInfo` to determine projectile aim direction and ground-targeted ability placement.
-- **UI System** — Subscribes to `OnChangeTarget`, `OnUpdateTarget`, and `OnClearTarget` to display target frames, health bars, name labels, and outline highlights.
-- **PlayerCharacter** — `TargetController` is a `[RequireComponent]` on `PlayerCharacter`, ensuring every player entity has targeting capability.
+```
+Target/
+├── ITargetController.cs    # Target controller interface
+├── TargetController.cs      # Per-entity controller (CharacterBehaviour)
+└── TargetInfo.cs            # Lightweight target data struct
+```
+
+### Inheritance Hierarchies
+
+#### Controllers (CharacterBehaviour)
+
+```
+CharacterBehaviour
+└── TargetController : ITargetController
+```
+
+#### Data Structures
+
+```
+TargetInfo (struct)
+    ├── Target      : Transform
+    └── HitPosition : Vector3
+```
+
+## License
+
+This project is subject to the FishMMO project license.

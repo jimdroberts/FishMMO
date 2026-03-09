@@ -33,6 +33,7 @@ namespace FishMMO.Shared
 		AchievementTemplate IContainer.AchievementTemplate => AchievementTemplate;
 
 		private readonly List<Item> items = new List<Item>();
+		private HashSet<int> lockedSlots;
 
 		public event Action<IItemContainer, Item, int> OnSlotUpdated;
 
@@ -153,6 +154,8 @@ namespace FishMMO.Shared
 
 		public void Clear()
 		{
+			lockedSlots?.Clear();
+
 			for (int i = 0; i < items.Count; ++i)
 			{
 				Item item = items[i];
@@ -297,7 +300,9 @@ namespace FishMMO.Shared
 			if (from < 0 ||
 				to < 0 ||
 				from >= Items.Count ||
-				to >= Items.Count)
+				to >= Items.Count ||
+				IsSlotLocked(from) ||
+				IsSlotLocked(to))
 			{
 				fromItem = null;
 				toItem = null;
@@ -327,7 +332,8 @@ namespace FishMMO.Shared
 
 		public Item RemoveItem(int slot)
 		{
-			if (!IsValidSlot(slot))
+			if (!IsValidSlot(slot) ||
+				IsSlotLocked(slot))
 			{
 				return null;
 			}
@@ -340,6 +346,46 @@ namespace FishMMO.Shared
 			item.Slot = -1;
 			SetItemSlot(null, slot);
 			return item;
+		}
+
+		/// <summary>
+		/// Returns true if the specified slot is currently locked.
+		/// Locked slots cannot be swapped, removed, or transferred until unlocked.
+		/// </summary>
+		/// <param name="slot">The slot index to check.</param>
+		/// <returns>True if the slot is locked, otherwise false.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool IsSlotLocked(int slot)
+		{
+			return lockedSlots != null && lockedSlots.Contains(slot);
+		}
+
+		/// <summary>
+		/// Locks the specified slot, preventing it from being swapped, removed, or transferred.
+		/// </summary>
+		/// <param name="slot">The slot index to lock.</param>
+		public void LockSlot(int slot)
+		{
+			if (!IsValidSlot(slot))
+			{
+				return;
+			}
+
+			if (lockedSlots == null)
+			{
+				lockedSlots = new HashSet<int>();
+			}
+
+			lockedSlots.Add(slot);
+		}
+
+		/// <summary>
+		/// Unlocks the specified slot, allowing normal manipulation again.
+		/// </summary>
+		/// <param name="slot">The slot index to unlock.</param>
+		public void UnlockSlot(int slot)
+		{
+			lockedSlots?.Remove(slot);
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)
@@ -366,6 +412,7 @@ namespace FishMMO.Shared
 		{
 			base.ReadPayload(connection, reader);
 			int slotCount = reader.ReadInt32();
+			lockedSlots?.Clear();
 			items.Clear();
 			for (int i = 0; i < slotCount; i++)
 			{

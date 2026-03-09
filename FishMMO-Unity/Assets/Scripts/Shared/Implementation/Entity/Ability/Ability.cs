@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -74,39 +75,51 @@ namespace FishMMO.Shared
 		public AbilityTypeOverrideEventType TypeOverride { get; private set; }
 
 		/// <summary>
+		/// Returns the effective ability type, accounting for any <see cref="TypeOverride"/>.
+		/// </summary>
+		public AbilityType EffectiveType => TypeOverride != null ? TypeOverride.OverrideAbilityType : Template.Type;
+
+		/// <summary>
 		/// All ability events, indexed by event ID, for quick access.
 		/// </summary>
-		public Dictionary<int, AbilityEvent> AbilityEvents = new Dictionary<int, AbilityEvent>();
+		/// <remarks>
+		/// <see cref="SortedDictionary{TKey,TValue}"/> is used intentionally for all event
+		/// dictionaries so that iteration order is deterministic (ascending event ID).
+		/// This guarantees identical execution order on client and server during CSP
+		/// prediction/reconciliation, which <see cref="Dictionary{TKey,TValue}"/> cannot ensure.
+		/// The O(log n) cost per lookup is acceptable because event counts per ability are small.
+		/// </remarks>
+		public SortedDictionary<int, AbilityEvent> AbilityEvents = new SortedDictionary<int, AbilityEvent>();
 
 		/// <summary>
 		/// All OnTick events, indexed by event ID.
 		/// </summary>
-		public Dictionary<int, AbilityOnTickEvent> OnTickEvents = new Dictionary<int, AbilityOnTickEvent>();
+		public SortedDictionary<int, AbilityOnTickEvent> OnTickEvents = new SortedDictionary<int, AbilityOnTickEvent>();
 
 		/// <summary>
 		/// All OnHit events, indexed by event ID.
 		/// </summary>
-		public Dictionary<int, AbilityOnHitEvent> OnHitEvents = new Dictionary<int, AbilityOnHitEvent>();
+		public SortedDictionary<int, AbilityOnHitEvent> OnHitEvents = new SortedDictionary<int, AbilityOnHitEvent>();
 
 		/// <summary>
 		/// All OnPreSpawn events, indexed by event ID.
 		/// </summary>
-		public Dictionary<int, AbilityOnPreSpawnEvent> OnPreSpawnEvents = new Dictionary<int, AbilityOnPreSpawnEvent>();
+		public SortedDictionary<int, AbilityOnPreSpawnEvent> OnPreSpawnEvents = new SortedDictionary<int, AbilityOnPreSpawnEvent>();
 
 		/// <summary>
 		/// All OnSpawn events, indexed by event ID.
 		/// </summary>
-		public Dictionary<int, AbilityOnSpawnEvent> OnSpawnEvents = new Dictionary<int, AbilityOnSpawnEvent>();
+		public SortedDictionary<int, AbilityOnSpawnEvent> OnSpawnEvents = new SortedDictionary<int, AbilityOnSpawnEvent>();
 
 		/// <summary>
 		/// All OnDestroy events, indexed by event ID.
 		/// </summary>
-		public Dictionary<int, AbilityOnDestroyEvent> OnDestroyEvents = new Dictionary<int, AbilityOnDestroyEvent>();
+		public SortedDictionary<int, AbilityOnDestroyEvent> OnDestroyEvents = new SortedDictionary<int, AbilityOnDestroyEvent>();
 
 		/// <summary>
 		/// Cache of all active ability objects, organized as a dictionary mapping container IDs to dictionaries of ability object IDs and their corresponding <see cref="AbilityObject"/> instances.
 		/// </summary>
-		public Dictionary<int, Dictionary<int, AbilityObject>> Objects { get; set; }
+		public Dictionary<int, Dictionary<int, AbilityObject>> Objects { get; internal set; }
 
 		/// <summary>
 		/// Cached resource costs dictionary, invalidated when events are added or removed.
@@ -119,10 +132,28 @@ namespace FishMMO.Shared
 		private bool resourceCostsDirty = true;
 
 		/// <summary>
+		/// Reusable buffer for container IDs to remove during <see cref="DestroyAbilityObjectsAfterTick"/>.
+		/// Static because all usage is synchronous single-threaded (Unity main thread).
+		/// </summary>
+		private static readonly List<int> emptyContainerBuffer = new List<int>();
+
+		/// <summary>
+		/// Reusable buffer for object IDs to remove during <see cref="DestroyAbilityObjectsAfterTick"/>.
+		/// Static because all usage is synchronous single-threaded (Unity main thread).
+		/// </summary>
+		private static readonly List<int> objectRemoveBuffer = new List<int>();
+
+		/// <summary>
 		/// Constructs an ability from a template and optional event list.
 		/// </summary>
 		/// <param name="template">The ability template to use.</param>
 		/// <param name="abilityEvents">Optional list of event IDs to add to the ability.</param>
+		/// <remarks>
+		/// <b>Server-only crafting path.</b> ID is set to <c>-1</c> until the database assigns
+		/// a persistent ID via the crafting persistence call. Never use this constructor for
+		/// network-replicated ability instances — use <see cref="Ability(long, AbilityTemplate, List{int})"/>
+		/// with the DB-assigned ID instead.
+		/// </remarks>
 		public Ability(AbilityTemplate template, List<int> abilityEvents = null)
 		{
 			Initialize(-1, template, abilityEvents);
@@ -158,6 +189,12 @@ namespace FishMMO.Shared
 		/// <param name="abilityEvents">Optional list of event IDs to add to the ability.</param>
 		private void Initialize(long abilityID, AbilityTemplate template, List<int> abilityEvents)
 		{
+			if (template == null)
+			{
+				throw new ArgumentNullException(nameof(template),
+					$"Ability {abilityID} requires a non-null template.");
+			}
+
 			ID = abilityID;
 			Template = template;
 			Name = Template.Name;
@@ -176,7 +213,20 @@ namespace FishMMO.Shared
 				foreach (int eventId in abilityEvents)
 				{
 					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(eventId);
-					AddEvent(abilityEvent);
+					if (abilityEvent != null)
+					{
+						AddEvent(abilityEvent);
+					}
+					else
+					{
+						// Check if the ID corresponds to a type override template
+						// (extends BaseAbilityTemplate, not AbilityEvent).
+						BaseAbilityTemplate baseTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(eventId);
+						if (baseTemplate is AbilityTypeOverrideEventType typeOverride)
+						{
+							TypeOverride = typeOverride;
+						}
+					}
 				}
 			}
 
@@ -195,6 +245,7 @@ namespace FishMMO.Shared
 			AbilityEvents.Add(abilityEvent.ID, abilityEvent);
 			AddEventModifiers(abilityEvent);
 			resourceCostsDirty = true;
+			CachedTooltip = null;
 
 			switch (abilityEvent)
 			{
@@ -218,6 +269,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Adds a list of ability events to the appropriate event dictionaries and applies their stat modifiers.
+		/// Delegates to <see cref="AddEvent"/> for each element, ensuring consistent modifier application
+		/// and resource cost invalidation.
 		/// </summary>
 		/// <typeparam name="T">The type of ability event.</typeparam>
 		/// <param name="abilityEvents">The list of events to add.</param>
@@ -227,51 +280,7 @@ namespace FishMMO.Shared
 
 			foreach (T abilityEvent in abilityEvents)
 			{
-				if (abilityEvent == null) continue;
-
-				// Always add to AbilityEvents
-				if (!AbilityEvents.ContainsKey(abilityEvent.ID))
-					AbilityEvents.Add(abilityEvent.ID, abilityEvent);
-
-				// Add to the specific event dictionary and apply modifiers
-				switch (abilityEvent)
-				{
-					case AbilityOnTickEvent tickEvent:
-						if (!OnTickEvents.ContainsKey(tickEvent.ID))
-						{
-							OnTickEvents.Add(tickEvent.ID, tickEvent);
-							AddEventModifiers(tickEvent);
-						}
-						break;
-					case AbilityOnHitEvent hitEvent:
-						if (!OnHitEvents.ContainsKey(hitEvent.ID))
-						{
-							OnHitEvents.Add(hitEvent.ID, hitEvent);
-							AddEventModifiers(hitEvent);
-						}
-						break;
-					case AbilityOnPreSpawnEvent preSpawnEvent:
-						if (!OnPreSpawnEvents.ContainsKey(preSpawnEvent.ID))
-						{
-							OnPreSpawnEvents.Add(preSpawnEvent.ID, preSpawnEvent);
-							AddEventModifiers(preSpawnEvent);
-						}
-						break;
-					case AbilityOnSpawnEvent spawnEvent:
-						if (!OnSpawnEvents.ContainsKey(spawnEvent.ID))
-						{
-							OnSpawnEvents.Add(spawnEvent.ID, spawnEvent);
-							AddEventModifiers(spawnEvent);
-						}
-						break;
-					case AbilityOnDestroyEvent destroyEvent:
-						if (!OnDestroyEvents.ContainsKey(destroyEvent.ID))
-						{
-							OnDestroyEvents.Add(destroyEvent.ID, destroyEvent);
-							AddEventModifiers(destroyEvent);
-						}
-						break;
-				}
+				AddEvent(abilityEvent);
 			}
 		}
 
@@ -351,28 +360,23 @@ namespace FishMMO.Shared
 					resourceCost.ResourceTemplate != null &&
 					resourceCost.ResourceAmount > 0)
 				{
-					if (costs.ContainsKey(resourceCost.ResourceTemplate))
-					{
-						costs[resourceCost.ResourceTemplate] += resourceCost.ResourceAmount;
-					}
-					else
-					{
-						costs[resourceCost.ResourceTemplate] = resourceCost.ResourceAmount;
-					}
+					costs.TryGetValue(resourceCost.ResourceTemplate, out int existing);
+					costs[resourceCost.ResourceTemplate] = existing + resourceCost.ResourceAmount;
 				}
 			}
 		}
 
 		/// <summary>
 		/// The total resource cost for this ability, summing all <see cref="IResourceCost"/> amounts.
+		/// Uses the cached cost dictionary from <see cref="GetResourceCosts"/>.
 		/// </summary>
 		public int TotalResourceCost
 		{
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
 			get
 			{
 				int totalCost = 0;
-				Dictionary<CharacterAttributeTemplate, int> costs = GetResourceCosts();
-				foreach (int cost in costs.Values)
+				foreach (int cost in GetResourceCosts().Values)
 				{
 					totalCost += cost;
 				}
@@ -381,16 +385,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Evaluates the template's activation conditions (excluding <see cref="IResourceCost"/> conditions, which are handled by <see cref="HasResource"/>).
-		/// Checks requirements such as faction, archetype, and attribute conditions.
+		/// Evaluates the template's activation conditions using a cached <see cref="EventData"/>.
+		/// The <paramref name="checkData"/> reference is created or updated if the initiator
+		/// changes, avoiding a per-call allocation on hot paths (e.g., every tick in Replicate).
 		/// </summary>
 		/// <param name="character">The character to check.</param>
+		/// <param name="checkData">Reusable event data; created if null, recreated if initiator changed.</param>
 		/// <returns>True if all non-resource activation conditions are met, false otherwise.</returns>
-		public bool MeetsActivationConditions(ICharacter character)
+		public bool MeetsActivationConditions(ICharacter character, ref EventData checkData)
 		{
 			if (Template?.ActivationConditions == null || Template.ActivationConditions.Count == 0) return true;
 
-			EventData checkData = new EventData(character);
+			if (checkData == null || checkData.Initiator != character)
+			{
+				checkData = new EventData(character);
+			}
 			foreach (BaseCondition condition in Template.ActivationConditions)
 			{
 				if (condition == null) continue;
@@ -449,19 +458,25 @@ namespace FishMMO.Shared
 				Speed -= abilityEvent.Speed;
 
 				resourceCostsDirty = true;
+				CachedTooltip = null;
 				return true;
 			}
 			return false;
 		}
 
 		/// <summary>
-		/// Checks if the given character has enough resources to use this ability.
+		/// Processes resource costs for this ability, either checking availability or consuming them.
 		/// Aggregates all <see cref="IResourceCost"/> conditions from the template and events.
+		/// Blood resource conversion redirects all costs to the health attribute.
+		/// Uses a two-pass approach: validates all resources first, then consumes atomically.
+		/// This prevents partial consumption when a later resource check fails.
 		/// </summary>
-		/// <param name="character">The character to check.</param>
-		/// <param name="resourceConversionTrigger">Optional event that allows resource conversion (e.g., health for mana).</param>
-		/// <returns>True if the character has enough resources, false otherwise.</returns>
-		public bool HasResource(ICharacter character, AbilityEvent resourceConversionTrigger = null)
+		/// <param name="character">The character to check or consume resources from.</param>
+		/// <param name="resourceConversionTrigger">Optional event that enables resource conversion (e.g., health for mana).</param>
+		/// <param name="consume">If true, consumes resources after validation. If false, only checks availability.</param>
+		/// <returns>True if all required resources are available (and consumed when <paramref name="consume"/> is true), false otherwise.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private bool ProcessResources(ICharacter character, AbilityEvent resourceConversionTrigger, bool consume)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
@@ -471,7 +486,7 @@ namespace FishMMO.Shared
 			Dictionary<CharacterAttributeTemplate, int> costs = GetResourceCosts();
 			if (costs.Count == 0) return true;
 
-			// Blood resource conversion: all costs are summed and checked against health.
+			// Blood resource conversion: all costs are summed and checked/consumed from health.
 			if (resourceConversionTrigger != null && AbilityEvents.ContainsKey(resourceConversionTrigger.ID))
 			{
 				int totalCost = 0;
@@ -485,10 +500,16 @@ namespace FishMMO.Shared
 				{
 					return false;
 				}
+
+				if (consume)
+				{
+					resource.Consume(totalCost);
+				}
 				return true;
 			}
 
-			// Normal check: each resource is checked individually against its aggregated cost.
+			// Normal path: two-pass to ensure atomic consumption.
+			// Pass 1: validate all resources are sufficient.
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in costs)
 			{
 				if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute resource) ||
@@ -497,7 +518,31 @@ namespace FishMMO.Shared
 					return false;
 				}
 			}
+
+			// Pass 2: consume all resources (only reached when all checks passed).
+			if (consume)
+			{
+				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in costs)
+				{
+					if (attributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute resource))
+					{
+						resource.Consume(pair.Value);
+					}
+				}
+			}
 			return true;
+		}
+
+		/// <summary>
+		/// Checks if the given character has enough resources to use this ability.
+		/// Aggregates all <see cref="IResourceCost"/> conditions from the template and events.
+		/// </summary>
+		/// <param name="character">The character to check.</param>
+		/// <param name="resourceConversionTrigger">Optional event that allows resource conversion (e.g., health for mana).</param>
+		/// <returns>True if the character has enough resources, false otherwise.</returns>
+		public bool HasResource(ICharacter character, AbilityEvent resourceConversionTrigger = null)
+		{
+			return ProcessResources(character, resourceConversionTrigger, false);
 		}
 
 		/// <summary>
@@ -508,40 +553,7 @@ namespace FishMMO.Shared
 		/// <param name="resourceConversionTrigger">Optional event that allows resource conversion (e.g., health for mana).</param>
 		public void ConsumeResources(ICharacter character, AbilityEvent resourceConversionTrigger = null)
 		{
-			if (!character.TryGet(out ICharacterAttributeController attributeController))
-			{
-				return;
-			}
-
-			Dictionary<CharacterAttributeTemplate, int> costs = GetResourceCosts();
-			if (costs.Count == 0) return;
-
-			// Blood resource conversion: all costs are summed and consumed from health.
-			if (resourceConversionTrigger != null && AbilityEvents.ContainsKey(resourceConversionTrigger.ID))
-			{
-				int totalCost = 0;
-				foreach (int cost in costs.Values)
-				{
-					totalCost += cost;
-				}
-
-				if (attributeController.TryGetHealthAttribute(out CharacterResourceAttribute resource) &&
-					resource.CurrentValue >= totalCost)
-				{
-					resource.Consume(totalCost);
-				}
-				return;
-			}
-
-			// Normal consumption: each resource is consumed individually.
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in costs)
-			{
-				if (attributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute resource) &&
-					resource.CurrentValue >= pair.Value)
-				{
-					resource.Consume(pair.Value);
-				}
-			}
+			ProcessResources(character, resourceConversionTrigger, true);
 		}
 
 		/// <summary>
@@ -567,6 +579,11 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Destroys all spawned ability objects for this ability and clears the Objects dictionary.
+		/// Routes each object through <see cref="AbilityObject.DestroyAbilityObjectInternal"/> so that
+		/// the destroyed-flag, OnTick unsubscription, and OnDestroy events are executed.
+		/// <see cref="AbilityObject.Ability"/> is nulled before the internal call to prevent
+		/// <see cref="RemoveAbilityObject"/> from modifying the <see cref="Objects"/> dictionary
+		/// while we are iterating it; the dictionary is cleared in bulk after the loop.
 		/// Call this when the owning character disconnects, dies, or is otherwise cleaned up.
 		/// </summary>
 		public void DestroyAllAbilityObjects()
@@ -580,12 +597,12 @@ namespace FishMMO.Shared
 			{
 				foreach (AbilityObject obj in container.Values)
 				{
-					if (obj != null && obj.GameObject != null)
+					if (obj != null)
 					{
+						// Null the Ability back-reference so DestroyAbilityObjectInternal
+						// skips RemoveAbilityObject (we Clear() below).
 						obj.Ability = null;
-						obj.Caster = null;
-						obj.GameObject.SetActive(false);
-						UnityEngine.Object.Destroy(obj.GameObject);
+						obj.DestroyAbilityObjectInternal();
 					}
 				}
 			}
@@ -620,12 +637,17 @@ namespace FishMMO.Shared
 						// Create the phantom caster on demand when we encounter the first object that needs it.
 						if (phantomCaster == null)
 						{
-							phantomCaster = AbilityObjectSnapshot.CreatePhantomCaster(obj.Caster, obj.Transform);
+							phantomCaster = SnapshotCharacter.FromLive(obj.Caster, obj.Transform);
 						}
 
 						// Replace the live caster with a phantom that preserves identity
 						// and attribute data for stat-scaled calculations.
 						obj.Caster = phantomCaster;
+
+						// Lazily create the snapshot before nulling the Ability reference.
+						// The object uses the snapshot as a fallback for event dispatch,
+						// lifetime checks, and collision handling after detach.
+						obj.Snapshot ??= new AbilityObjectSnapshot(this);
 						obj.Ability = null;
 					}
 				}
@@ -637,6 +659,11 @@ namespace FishMMO.Shared
 		/// Destroys all spawned ability objects whose <see cref="AbilityObject.SpawnTick"/> is greater than
 		/// the specified tick. Used during reconcile rollback to remove client-predicted objects
 		/// that the server has not confirmed.
+		/// Routes each object through <see cref="AbilityObject.DestroyAbilityObjectInternal"/> so that
+		/// the destroyed-flag, OnTick unsubscription, and OnDestroy events are executed.
+		/// <see cref="AbilityObject.Ability"/> is nulled before the internal call to prevent
+		/// <see cref="RemoveAbilityObject"/> from modifying the <see cref="Objects"/> dictionary
+		/// while we are iterating it; the outer loop handles dictionary cleanup instead.
 		/// </summary>
 		/// <param name="tick">The reconcile tick. Objects spawned after this tick are destroyed.</param>
 		public void DestroyAbilityObjectsAfterTick(uint tick)
@@ -646,56 +673,38 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			List<int> emptyContainers = null;
+			emptyContainerBuffer.Clear();
 
 			foreach (KeyValuePair<int, Dictionary<int, AbilityObject>> containerEntry in Objects)
 			{
-				List<int> toRemove = null;
+				objectRemoveBuffer.Clear();
 
 				foreach (KeyValuePair<int, AbilityObject> objEntry in containerEntry.Value)
 				{
 					if (objEntry.Value != null && objEntry.Value.SpawnTick > tick)
 					{
-						if (objEntry.Value.GameObject != null)
-						{
-							objEntry.Value.Ability = null;
-							objEntry.Value.Caster = null;
-							objEntry.Value.GameObject.SetActive(false);
-							UnityEngine.Object.Destroy(objEntry.Value.GameObject);
-						}
-
-						if (toRemove == null)
-						{
-							toRemove = new List<int>();
-						}
-						toRemove.Add(objEntry.Key);
+						// Null the Ability back-reference so DestroyAbilityObjectInternal
+						// skips RemoveAbilityObject (we handle dict removal below).
+						objEntry.Value.Ability = null;
+						objEntry.Value.DestroyAbilityObjectInternal();
+						objectRemoveBuffer.Add(objEntry.Key);
 					}
 				}
 
-				if (toRemove != null)
+				for (int i = 0; i < objectRemoveBuffer.Count; i++)
 				{
-					foreach (int key in toRemove)
-					{
-						containerEntry.Value.Remove(key);
-					}
+					containerEntry.Value.Remove(objectRemoveBuffer[i]);
 				}
 
 				if (containerEntry.Value.Count == 0)
 				{
-					if (emptyContainers == null)
-					{
-						emptyContainers = new List<int>();
-					}
-					emptyContainers.Add(containerEntry.Key);
+					emptyContainerBuffer.Add(containerEntry.Key);
 				}
 			}
 
-			if (emptyContainers != null)
+			for (int i = 0; i < emptyContainerBuffer.Count; i++)
 			{
-				foreach (int key in emptyContainers)
-				{
-					Objects.Remove(key);
-				}
+				Objects.Remove(emptyContainerBuffer[i]);
 			}
 		}
 
@@ -714,7 +723,7 @@ namespace FishMMO.Shared
 			using (var builder = new TooltipBuilder())
 			{
 				Template.BuildTooltip(builder);
-				AbilityType abilityType = TypeOverride != null ? TypeOverride.OverrideAbilityType : Template.Type;
+				AbilityType abilityType = EffectiveType;
 				if (abilityType != AbilityType.None)
 				{
 					builder.AddLine($"Type: {abilityType}", 90, TooltipColors.Title, false, "120%");

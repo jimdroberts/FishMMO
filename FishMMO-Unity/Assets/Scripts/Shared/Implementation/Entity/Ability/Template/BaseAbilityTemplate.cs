@@ -12,9 +12,10 @@ namespace FishMMO.Shared
 	public abstract class BaseAbilityTemplate : CachedScriptableObject<BaseAbilityTemplate>, ICachedObject, ITooltip
 	{
 		/// <summary>
-		/// The icon representing the ability.
+		/// The icon representing the ability. Serialized for Unity inspector access.
 		/// </summary>
-		public Sprite icon;
+		[SerializeField]
+		private Sprite icon;
 
 		/// <summary>
 		/// Description of the ability.

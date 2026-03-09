@@ -9,9 +9,10 @@ namespace FishMMO.Shared.Core
 	public interface IBuffController : ICharacterBehaviour
 	{
 		/// <summary>
-		/// Static event triggered when time is subtracted from a buff.
+		/// Static event fired each tick for every active buff, providing the current network tick
+		/// for UI duration-bar updates via <see cref="Buff.RemainingSeconds"/>.
 		/// </summary>
-		static Action<Buff> OnSubtractTime;
+		static Action<Buff, uint> OnBuffTick;
 
 		/// <summary>
 		/// Static event triggered when a buff (positive effect) is added.
@@ -36,14 +37,14 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Dictionary of all active buffs for the character, indexed by template ID.
 		/// </summary>
-		Dictionary<int, Buff> Buffs { get; }
+		SortedDictionary<int, Buff> Buffs { get; }
 
 		/// <summary>
-		/// Deterministic tick that advances all buff timers by the given delta.
+		/// Deterministic buff tick — evaluates expiry and tick conditions for all active buffs.
 		/// Use this for CSP instead of relying on Unity's Update.
 		/// </summary>
-		/// <param name="deltaTime">The time step to advance (seconds).</param>
-		void Tick(float deltaTime);
+		/// <param name="currentTick">The current network tick.</param>
+		void Tick(uint currentTick);
 
 		/// <summary>
 		/// Applies a buff to the character by template, creating a new instance if needed and handling stacking.
@@ -66,15 +67,26 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Removes a random non-permanent buff or debuff, filtered by inclusion flags.
 		/// </summary>
-		/// <param name="rng">The random number generator to use.</param>
+		/// <param name="rng">The deterministic random number generator to use.</param>
 		/// <param name="includeBuffs">Whether to include buffs in the selection.</param>
 		/// <param name="includeDebuffs">Whether to include debuffs in the selection.</param>
-		void RemoveRandom(Random rng, bool includeBuffs = false, bool includeDebuffs = false);
+		void RemoveRandom(DeterministicRNG rng, bool includeBuffs = false, bool includeDebuffs = false);
 
 		/// <summary>
 		/// Removes all non-permanent buffs from the character, optionally suppressing removal events.
 		/// </summary>
 		/// <param name="ignoreInvokeRemove">If true, does not invoke OnRemoveBuff/OnRemoveDebuff events.</param>
 		void RemoveAll(bool ignoreInvokeRemove = false);
+
+		/// <summary>
+		/// Creates a reconcile snapshot of all active buffs.
+		/// Returns null when no buffs are active.
+		/// </summary>
+		BuffReconcileEntry[] CreateReconcileSnapshot();
+
+		/// <summary>
+		/// Restores buff state from a reconcile snapshot.
+		/// </summary>
+		void RestoreFromReconcile(BuffReconcileEntry[] entries);
 	}
 }

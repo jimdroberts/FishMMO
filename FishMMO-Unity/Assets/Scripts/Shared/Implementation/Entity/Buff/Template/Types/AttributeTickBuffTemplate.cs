@@ -131,7 +131,9 @@ namespace FishMMO.Shared
 				}
 			}
 
-			buff.TickCount++;
+			// TickCount is incremented by Buff.TryTick after OnTick returns.
+			// Do NOT increment here — doing so would double-count ticks,
+			// causing OnRemove to reverse 2x the actual applied modifiers.
 		}
 	}
 }

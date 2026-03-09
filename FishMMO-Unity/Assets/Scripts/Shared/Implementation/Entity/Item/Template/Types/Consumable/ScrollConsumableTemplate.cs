@@ -21,9 +21,9 @@ namespace FishMMO.Shared
 		/// <param name="character">The player character consuming the scroll.</param>
 		/// <param name="item">The scroll item being consumed.</param>
 		/// <returns>True if the scroll was successfully consumed and abilities granted, false otherwise.</returns>
-		public override bool Invoke(IPlayerCharacter character, Item item)
+		public override bool Invoke(IPlayerCharacter character, Item item, uint currentTick)
 		{
-			if (base.Invoke(character, item))
+			if (base.Invoke(character, item, currentTick))
 			{
 				if (character.TryGet(out IAbilityController abilityController))
 				{

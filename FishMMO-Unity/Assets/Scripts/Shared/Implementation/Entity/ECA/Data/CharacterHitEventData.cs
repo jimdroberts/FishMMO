@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The random number generator used for any randomization in the event (optional).
 		/// </summary>
-		public System.Random RNG { get; }
+		public DeterministicRNG RNG { get; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterHitEventData"/> class.
@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 		/// <param name="initiator">The character initiating the event.</param>
 		/// <param name="target">The character that was hit or targeted.</param>
 		/// <param name="rng">The random number generator for the event (optional).</param>
-		public CharacterHitEventData(ICharacter initiator, ICharacter target, System.Random rng = null)
+		public CharacterHitEventData(ICharacter initiator, ICharacter target, DeterministicRNG rng = null)
 			: base(initiator)
 		{
 			Target = target;

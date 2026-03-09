@@ -344,11 +344,11 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// The seeded RNG from the owning <see cref="NPC"/>.
-		/// All AI randomisation should use this instead of <c>UnityEngine.Random</c>
+		/// All AI randomisation should use this instead of <c>DeterministicRNG.Shared</c>
 		/// so that NPC behaviour is fully deterministic given the same seed.
 		/// Returns null for non-NPC characters.
 		/// </summary>
-		public System.Random NpcRNG
+		public DeterministicRNG NpcRNG
 		{
 			get
 			{
@@ -1103,16 +1103,20 @@ namespace FishMMO.Shared
 			Ability bestAbility = null;
 			float bestScore = float.MinValue;
 
+			uint currentTick = base.TimeManager.LocalTick;
+
+			EventData activationCheckData = null;
+
 			for (int i = 0; i < cachedAbilities.Count; i++)
 			{
 				Ability ability = cachedAbilities[i];
 
 				// Skip abilities on cooldown.
-				if (cooldownController.IsOnCooldown(ability.ID))
+				if (cooldownController.IsOnCooldown(ability.ID, currentTick))
 					continue;
 
 				// Skip abilities the character can't afford.
-				if (!ability.MeetsActivationConditions(Character))
+				if (!ability.MeetsActivationConditions(Character, ref activationCheckData))
 					continue;
 
 				float abilityRange = ability.Range;
@@ -1142,11 +1146,8 @@ namespace FishMMO.Shared
 
 				// Add small random jitter so the NPC doesn't always pick the same ability.
 				// Uses the seeded NPC RNG for deterministic behaviour.
-				System.Random rng = NpcRNG;
-				if (rng != null)
-					score += (float)rng.NextDouble() * 50f;
-				else
-					score += Random.Range(0f, 50f);
+				DeterministicRNG rng = NpcRNG;
+				score += (rng ?? DeterministicRNG.Shared).Range(0f, 50f);
 
 				if (score > bestScore)
 				{
@@ -1173,13 +1174,16 @@ namespace FishMMO.Shared
 			RebuildAbilityCacheIfDirty(abilityController);
 
 			float sqrMinRange = minRange * minRange;
+			uint currentTick = base.TimeManager.LocalTick;
+
+			EventData activationCheckData = null;
 
 			for (int i = 0; i < cachedAbilities.Count; i++)
 			{
 				Ability ability = cachedAbilities[i];
-				if (cooldownController.IsOnCooldown(ability.ID))
+				if (cooldownController.IsOnCooldown(ability.ID, currentTick))
 					continue;
-				if (!ability.MeetsActivationConditions(Character))
+				if (!ability.MeetsActivationConditions(Character, ref activationCheckData))
 					continue;
 				if (ability.Range * ability.Range >= sqrMinRange)
 					return true;

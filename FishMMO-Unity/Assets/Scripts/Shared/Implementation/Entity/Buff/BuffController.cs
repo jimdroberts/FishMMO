@@ -11,30 +11,71 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Controls the application, ticking, and removal of buffs for a character, including network synchronization.
-	/// Uses FishNet TimeManager.OnTick for deterministic tick-aligned simulation.
+	/// For player characters, ticking is driven by AbilityController.Replicate for prediction determinism.
+	/// For NPCs, uses FishNet TimeManager.OnTick for tick-aligned simulation.
 	/// </summary>
 	public class BuffController : CharacterBehaviour, IBuffController
 	{
 		/// <summary>
 		/// Internal dictionary mapping buff template IDs to active buff instances.
 		/// </summary>
-		private Dictionary<int, Buff> buffs = new Dictionary<int, Buff>();
+		private SortedDictionary<int, Buff> buffs = new SortedDictionary<int, Buff>();
 
 		/// <summary>
 		/// Public accessor for the character's active buffs.
 		/// </summary>
-		public Dictionary<int, Buff> Buffs { get { return buffs; } }
+		public SortedDictionary<int, Buff> Buffs { get { return buffs; } }
 
 		/// <summary>
 		/// Reusable list of keys to remove after update loop (avoids allocation each frame).
 		/// </summary>
 		private readonly List<int> keysToRemove = new List<int>();
 
+		/// <summary>
+		/// Reusable set for tracking buff IDs to remove during <see cref="RestoreFromReconcile"/>.
+		/// Separate from <see cref="keysToRemove"/> to avoid contention and provides O(1) removal.
+		/// </summary>
+		private readonly HashSet<int> reconcileKeysToRemove = new HashSet<int>();
+
+		/// <summary>
+		/// Cached reconcile snapshot, reused across ticks when buffs haven't changed.
+		/// Invalidated by <see cref="Apply(BaseBuffTemplate)"/>, <see cref="Remove"/>,
+		/// <see cref="RemoveAll"/>, <see cref="RestoreFromReconcile"/>, and <see cref="Tick"/>.
+		/// </summary>
+		private BuffReconcileEntry[] cachedSnapshot;
+
+		/// <summary>
+		/// When true, <see cref="cachedSnapshot"/> is stale and must be rebuilt.
+		/// </summary>
+		private bool snapshotDirty = true;
+
+		/// <summary>
+		/// Fixed seconds-per-tick, cached from <c>TimeManager.TickDelta</c> in
+		/// <see cref="OnStartNetwork"/>. Used for converting float durations to tick counts.
+		/// </summary>
+		private float tickDelta;
+
+		/// <summary>
+		/// True when this BuffController self-ticks via TimeManager.OnTick (NPCs).
+		/// False when ticking is driven by AbilityController.Replicate (player characters).
+		/// </summary>
+		private bool selfTicking;
+
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
 
 			if (base.TimeManager != null)
+			{
+				tickDelta = (float)base.TimeManager.TickDelta;
+			}
+
+			// Characters with an AbilityController have their buffs ticked from
+			// AbilityController.Replicate for prediction determinism.
+			// Characters without one (e.g. NPCs, environment objects) self-tick.
+			selfTicking = !Character.TryGet(out IAbilityController _);
+
+			if (selfTicking && base.TimeManager != null)
 			{
 				base.TimeManager.OnTick += TimeManager_OnTick;
 			}
@@ -44,18 +85,18 @@ namespace FishMMO.Shared
 		{
 			base.OnStopNetwork();
 
-			if (base.TimeManager != null)
+			if (selfTicking && base.TimeManager != null)
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
 		}
 
 		/// <summary>
-		/// TimeManager tick callback. Drives buff ticking using the fixed network tick delta.
+		/// TimeManager tick callback. Drives buff ticking for self-ticking characters (NPCs).
 		/// </summary>
 		private void TimeManager_OnTick()
 		{
-			Tick((float)base.TimeManager.TickDelta);
+			Tick(base.TimeManager.LocalTick);
 		}
 
 		/// <summary>
@@ -65,16 +106,22 @@ namespace FishMMO.Shared
 		/// <param name="reader">The network reader to read from.</param>
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
+			const int maxPayloadBuffs = 4096;
+
 			int buffCount = reader.ReadInt32();
+			if (buffCount < 0 || buffCount > maxPayloadBuffs)
+			{
+				return;
+			}
 			for (int i = 0; i < buffCount; ++i)
 			{
-				int templateID = reader.ReadInt32();
-				float remainingTime = reader.ReadSingle();
-				float tickTime = reader.ReadSingle();
-				int stacks = reader.ReadInt32();
-				int tickCount = reader.ReadInt32();
+				int templateID   = reader.ReadInt32();
+				uint expiryTick   = reader.ReadUInt32();
+				uint nextTickTick = reader.ReadUInt32();
+				int stacks        = reader.ReadInt32();
+				int tickCount     = reader.ReadInt32();
 
-				Buff buff = new Buff(templateID, remainingTime, tickTime, stacks, tickCount);
+				Buff buff = new Buff(templateID, expiryTick, nextTickTick, tickDelta, stacks, tickCount);
 				Apply(buff);
 			}
 		}
@@ -96,38 +143,45 @@ namespace FishMMO.Shared
 			foreach (Buff buff in buffs.Values)
 			{
 				writer.WriteInt32(buff.Template.ID);
-				writer.WriteSingle(buff.RemainingTime);
-				writer.WriteSingle(buff.TickTime);
+				writer.WriteUInt32(buff.ExpiryTick);
+				writer.WriteUInt32(buff.NextTickTick);
 				writer.WriteInt32(buff.Stacks);
 				writer.WriteInt32(buff.TickCount);
 			}
 		}
 
 		/// <summary>
-		/// Deterministic buff tick. Advances all buff timers by the given delta, triggers ticks,
-		/// removes expired stacks, and queues fully expired buffs for removal.
+		/// Deterministic buff tick. Evaluates expiry and tick conditions for all active buffs,
+		/// triggers effects, removes expired stacks, and queues fully expired buffs for removal.
+		/// Tick-based timing (<see cref="Buff.ExpiryTick"/>, <see cref="Buff.NextTickTick"/>)
+		/// produces zero float drift; <see cref="snapshotDirty"/> is only set when state
+		/// actually changes, restoring the delta serializer's <c>ReferenceEquals</c> fast-path.
 		/// </summary>
-		/// <param name="deltaTime">The time step to advance (seconds).</param>
-		public void Tick(float deltaTime)
+		/// <param name="currentTick">The current network tick.</param>
+		public void Tick(uint currentTick)
 		{
 			foreach (var pair in buffs)
 			{
 				Buff buff = pair.Value;
-				buff.SubtractTime(deltaTime);
 
-				IBuffController.OnSubtractTime?.Invoke(buff);
+				IBuffController.OnBuffTick?.Invoke(buff, currentTick);
 
-				if (buff.RemainingTime > 0.0f)
+				if (!buff.HasExpired(currentTick))
 				{
-					buff.SubtractTickTime(deltaTime);
-					buff.TryTick(Character);
+					if (buff.TryTick(Character, currentTick, tickDelta))
+					{
+						// NextTickTick and TickCount changed — reconcile snapshot is stale.
+						snapshotDirty = true;
+					}
 				}
 				else
 				{
 					if (buff.Stacks > 0)
 					{
+						// Structural change: topmost stack removed, duration reset to full.
+						snapshotDirty = true;
 						buff.RemoveStack(Character);
-						buff.ResetDuration();
+						buff.ResetDuration(currentTick, tickDelta);
 					}
 					else
 					{
@@ -136,6 +190,7 @@ namespace FishMMO.Shared
 				}
 			}
 
+			// Remove() sets snapshotDirty for each expired buff.
 			for (int i = 0; i < keysToRemove.Count; i++)
 			{
 				Remove(keysToRemove[i]);
@@ -150,10 +205,12 @@ namespace FishMMO.Shared
 		public void Apply(BaseBuffTemplate template)
 		{
 			if (template == null) return;
+			snapshotDirty = true;
 
 			if (!buffs.TryGetValue(template.ID, out Buff buffInstance))
 			{
-				buffInstance = new Buff(template.ID);
+				uint applyTick = base.TimeManager?.LocalTick ?? 0u;
+				buffInstance = new Buff(template.ID, applyTick, tickDelta);
 				buffInstance.Apply(Character);
 				buffs.Add(template.ID, buffInstance);
 
@@ -167,14 +224,15 @@ namespace FishMMO.Shared
 				}
 			}
 
+			uint refreshTick = base.TimeManager?.LocalTick ?? 0u;
 			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
 			{
 				buffInstance.AddStack(Character);
-				buffInstance.ResetDuration();
+				buffInstance.ResetDuration(refreshTick, tickDelta);
 			}
 			else
 			{
-				buffInstance.ResetDuration();
+				buffInstance.ResetDuration(refreshTick, tickDelta);
 			}
 
 			template.OnApplyFX(buffInstance, Character);
@@ -227,6 +285,7 @@ namespace FishMMO.Shared
 		{
 			if (buffs.TryGetValue(buffID, out Buff buffInstance))
 			{
+				snapshotDirty = true;
 				// Remove all remaining stack modifiers before removing the base effect
 				while (buffInstance.Stacks > 0)
 				{
@@ -261,7 +320,7 @@ namespace FishMMO.Shared
 		/// <param name="rng">The random number generator to use.</param>
 		/// <param name="includeBuffs">Whether to include buffs in the selection.</param>
 		/// <param name="includeDebuffs">Whether to include debuffs in the selection.</param>
-		public void RemoveRandom(System.Random rng, bool includeBuffs = false, bool includeDebuffs = false)
+		public void RemoveRandom(DeterministicRNG rng, bool includeBuffs = false, bool includeDebuffs = false)
 		{
 			if (rng == null || buffs.Count < 1) return;
 
@@ -300,6 +359,7 @@ namespace FishMMO.Shared
 		/// <param name="ignoreInvokeRemove">If true, does not invoke OnRemoveBuff/OnRemoveDebuff events.</param>
 		public void RemoveAll(bool ignoreInvokeRemove = false)
 		{
+			snapshotDirty = true;
 			// Collect keys to remove (reuse keysToRemove to avoid allocation)
 			keysToRemove.Clear();
 			foreach (var pair in buffs)
@@ -341,14 +401,140 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Resets the buff controller state, clearing all buffs without invoking removal events.
+		/// Creates a reconcile snapshot of all active buffs.
+		/// Returns the cached array when buffs haven't changed since the last call.
+		/// Returns null when no buffs are active.
+		/// </summary>
+		public BuffReconcileEntry[] CreateReconcileSnapshot()
+		{
+			if (buffs.Count == 0)
+			{
+				cachedSnapshot = null;
+				snapshotDirty = false;
+				return null;
+			}
+
+			if (!snapshotDirty && cachedSnapshot != null)
+			{
+				return cachedSnapshot;
+			}
+
+			if (cachedSnapshot == null || cachedSnapshot.Length != buffs.Count)
+			{
+				cachedSnapshot = new BuffReconcileEntry[buffs.Count];
+			}
+
+			int i = 0;
+			foreach (KeyValuePair<int, Buff> kvp in buffs)
+			{
+				cachedSnapshot[i++] = new BuffReconcileEntry
+				{
+					TemplateID   = kvp.Value.Template.ID,
+					ExpiryTick   = kvp.Value.ExpiryTick,
+					NextTickTick = kvp.Value.NextTickTick,
+					Stacks       = kvp.Value.Stacks,
+					TickCount    = kvp.Value.TickCount,
+				};
+			}
+			snapshotDirty = false;
+			return cachedSnapshot;
+		}
+
+		/// <summary>
+		/// Restores buff state from a reconcile snapshot using a diff-first approach.
+		/// Only modifies buffs that actually differ from the authoritative state, avoiding
+		/// redundant Remove+Apply cycles that would churn attribute modifiers and fire
+		/// non-idempotent side effects (sound, VFX, DB writes) on every reconcile tick.
+		/// </summary>
+		public void RestoreFromReconcile(BuffReconcileEntry[] entries)
+		{
+			snapshotDirty = true;
+			// Build a set of what the server wants removed — start with all current buff IDs.
+			reconcileKeysToRemove.Clear();
+			foreach (int id in buffs.Keys)
+			{
+				reconcileKeysToRemove.Add(id);
+			}
+
+			if (entries != null)
+			{
+				for (int i = 0; i < entries.Length; i++)
+				{
+					ref BuffReconcileEntry entry = ref entries[i];
+					reconcileKeysToRemove.Remove(entry.TemplateID);
+
+					if (buffs.TryGetValue(entry.TemplateID, out Buff existing))
+					{
+						// Buff exists on both sides — patch timing and fix stacks if diverged.
+						if (existing.Stacks != entry.Stacks)
+						{
+							while (existing.Stacks > entry.Stacks)
+							{
+								existing.RemoveStack(Character);
+							}
+							while (existing.Stacks < entry.Stacks)
+							{
+								existing.AddStack(Character);
+							}
+						}
+						existing.ExpiryTick = entry.ExpiryTick;
+						existing.NextTickTick = entry.NextTickTick;
+						existing.TickCount = entry.TickCount;
+					}
+					else
+					{
+						// Server has a buff we don't — add it.
+						Buff buff = new Buff(
+							entry.TemplateID,
+							entry.ExpiryTick,
+							entry.NextTickTick,
+							tickDelta,
+							entry.Stacks,
+							entry.TickCount);
+
+						if (buff.Template == null)
+						{
+							continue;
+						}
+
+						buff.Apply(Character);
+						buffs[buff.Template.ID] = buff;
+
+						for (int s = 0; s < buff.Stacks; s++)
+						{
+							buff.Template.OnApplyStack(buff, Character);
+						}
+					}
+				}
+			}
+
+			// Remove buffs the server doesn't have.
+			foreach (int key in reconcileKeysToRemove)
+			{
+				if (buffs.TryGetValue(key, out Buff toRemove))
+				{
+					while (toRemove.Stacks > 0)
+					{
+						toRemove.RemoveStack(Character);
+					}
+					toRemove.Remove(Character);
+					buffs.Remove(key);
+				}
+			}
+			reconcileKeysToRemove.Clear();
+		}
+
+		/// <summary>
+		/// Resets the buff controller state, properly removing all buffs to undo
+		/// attribute modifiers. Without this, <c>buffs.Clear()</c> alone would leave
+		/// phantom modifiers on the attribute controller after a reconnect or scene transfer.
 		/// </summary>
 		/// <param name="asServer">Whether the reset is being performed on the server.</param>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
 
-			buffs.Clear();
+			RemoveAll(ignoreInvokeRemove: true);
 		}
 
 #if !UNITY_SERVER
@@ -497,16 +683,12 @@ namespace FishMMO.Shared
 
 #if UNITY_SERVER
 		/// <summary>
-		/// Sends an add-buff update to owner and observers.
+		/// Sends an add-buff update to observers only.
+		/// The owner receives buff state through CSP reconcile.
 		/// </summary>
 		private void SendBuffAddUpdate(int templateID)
 		{
 			if (Character == null) return;
-
-			BroadcastToOwnerOnly(Character, new BuffAddBroadcast()
-			{
-				TemplateID = templateID,
-			}, Channel.Reliable);
 
 			CharacterObserverBuffAddBroadcast observerBroadcast = new CharacterObserverBuffAddBroadcast()
 			{
@@ -520,16 +702,12 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sends a remove-buff update to owner and observers.
+		/// Sends a remove-buff update to observers only.
+		/// The owner receives buff state through CSP reconcile.
 		/// </summary>
 		private void SendBuffRemoveUpdate(int templateID)
 		{
 			if (Character == null) return;
-
-			BroadcastToOwnerOnly(Character, new BuffRemoveBroadcast()
-			{
-				TemplateID = templateID,
-			}, Channel.Reliable);
 
 			CharacterObserverBuffRemoveBroadcast observerBroadcast = new CharacterObserverBuffRemoveBroadcast()
 			{
@@ -540,18 +718,6 @@ namespace FishMMO.Shared
 				},
 			};
 			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
-		}
-
-		/// <summary>
-		/// Broadcasts the payload to only the owner of the character.
-		/// </summary>
-		private static void BroadcastToOwnerOnly<T>(ICharacter character, T broadcast, Channel channel)
-			where T : struct, IBroadcast
-		{
-			if (character?.Owner != null)
-			{
-				character.Owner.Broadcast(broadcast, true, channel);
-			}
 		}
 
 		/// <summary>

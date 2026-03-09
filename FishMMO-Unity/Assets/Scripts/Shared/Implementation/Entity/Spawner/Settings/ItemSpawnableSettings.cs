@@ -36,7 +36,7 @@ namespace FishMMO.Shared
 			if (worldItem != null && ItemTemplate != null)
 			{
 				worldItem.Template = ItemTemplate;
-				worldItem.Amount = (uint)UnityEngine.Random.Range(MinimumAmount, MaximumAmount + 1);
+				worldItem.Amount = (uint)DeterministicRNG.Shared.Range(MinimumAmount, MaximumAmount + 1);
 			}
 		}
 	}

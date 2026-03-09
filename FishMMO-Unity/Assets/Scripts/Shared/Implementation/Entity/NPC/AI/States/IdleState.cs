@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 			float updateRate = base.GetUpdateRate();
 			if (MaxUpdateRate > updateRate)
 			{
-				updateRate = Random.Range(updateRate, MaxUpdateRate);
+				updateRate = DeterministicRNG.Shared.Range(updateRate, MaxUpdateRate);
 			}
 			return updateRate;
 		}

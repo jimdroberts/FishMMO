@@ -727,9 +727,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Get a random point at the top of the bounding box
-			Vector3 origin = new Vector3(UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.x, petAbilityTemplate.SpawnBoundingBox.x),
+			Vector3 origin = new Vector3(DeterministicRNG.Shared.Range(-petAbilityTemplate.SpawnBoundingBox.x, petAbilityTemplate.SpawnBoundingBox.x),
 									 petAbilityTemplate.SpawnBoundingBox.y,
-									 UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.z, petAbilityTemplate.SpawnBoundingBox.z));
+									 DeterministicRNG.Shared.Range(-petAbilityTemplate.SpawnBoundingBox.z, petAbilityTemplate.SpawnBoundingBox.z));
 
 			Vector3 spawnPosition = caster.Transform.position;
 

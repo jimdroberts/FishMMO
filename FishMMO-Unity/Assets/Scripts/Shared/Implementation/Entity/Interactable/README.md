@@ -1,10 +1,263 @@
 # Interactable System
 
+**Short description:** A server-authoritative, template-driven framework for interactive world objects in FishMMO, providing fourteen concrete interactable types from banking to teleporters.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation / Build](#installation--build)
+- [Quick Start Guide](#quick-start-guide)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Operational Checks](#operational-checks)
+- [Flow Diagram](#flow-diagram)
+- [Project Structure](#project-structure)
+- [License](#license)
+
 ## Overview
 
 The Interactable system is a server-authoritative, template-driven framework for interactive world objects in FishMMO. It provides an abstract `Interactable` base class (NetworkBehaviour + ISpawnable) that handles range checking, rate limiting, network payloads, scene-object registration, and UI title rendering. Fourteen concrete subclasses extend this base to implement specific gameplay interactions: banking, ability crafting, shrines, capture points, containers (chests), dialogue NPCs, dungeon entrances, gathering nodes, lore objects, mailboxes, merchants, switches, teleporters, and world items.
 
-## Directory Structure
+## Supported Platforms
+
+| Platform | Supported | Notes |
+|----------|-----------|-------|
+| Windows  | Yes       | Full server and client support |
+| Linux    | Yes       | Full server and client support |
+| WebGL    | Yes       | Client only |
+
+- **Engine:** Unity 6.3 LTS
+- **Backend:** IL2CPP
+
+## Features
+
+- Abstract `Interactable` base class with range checking, rate limiting, and network payload handling
+- Fourteen concrete interactable types: AbilityCrafter, Banker, Bindstone, CapturePoint, Container, DialogueInteractable, DungeonEntrance, GatheringNode, LoreObject, Mailbox, Merchant, Shrine, Switch, Teleporter, WorldItem
+- Server-authoritative validation with `sqrMagnitude`-based range checks (no square root)
+- Template-driven configuration via ScriptableObjects per interactable type
+- Scene-object registration and deterministic naming via `SceneObjectNamer`
+- Object pooling support through `ISpawnable` and `ObjectSpawner` integration
+- Client-side floating title/name label rendering with customizable color
+- Achievement integration on most interactable types
+- Dialogue tree system with branching nodes, conditions, and actions
+- PvP/PvE capture point objectives with state tracking (Neutral, Capturing, Captured, Contested)
+- Gathering nodes with weighted drop tables, limited uses, and gather timers
+- Merchant tab system supporting abilities, ability events, and items
+
+## Prerequisites
+
+- **Unity 6.3 LTS**
+- **FishNetworking** (FishNet) — NetworkBehaviour, SyncVar, broadcast infrastructure
+- **FishMMO Shared Core** — `IInteractable`, `ISpawnable`, `CharacterBehaviour`, `CachedScriptableObject<T>`, scene-object interfaces
+
+## Installation / Build
+
+This is an integrated module within the FishMMO project. No separate installation is required. The interactable scripts are included automatically when the FishMMO Unity project is opened.
+
+## Quick Start Guide
+
+1. **Create a new interactable** — Add one of the concrete interactable components (e.g., `Merchant`, `GatheringNode`, `Container`) to a GameObject in a scene.
+2. **Assign a template** — For template-driven types, create the matching ScriptableObject (e.g., `MerchantTemplate`, `GatheringNodeTemplate`) and assign it to the component's `Template` field.
+3. **Set interaction range** — Adjust the `InteractionRange` field on the component (default: 3.5 units).
+4. **Ensure SceneObjectNamer** — Types like `AbilityCrafter`, `Banker`, `Merchant`, and `Container` require `SceneObjectNamer` (added automatically via `[RequireComponent]`).
+5. **Server registration** — On the server, the interactable registers itself in `Awake()` via `SceneObject.Register()`. On the client, registration happens in `ReadPayload()` after receiving the object's `ID`.
+
+## Configuration
+
+### Interactable Base Constants
+
+| Constant              | Value | Description                                           |
+|-----------------------|-------|-------------------------------------------------------|
+| `INTERACT_RATE_LIMIT` | 60 ms | Default minimum time between consecutive interactions |
+
+### Interactable Base Fields
+
+| Field              | Type    | Default | Description                                       |
+|--------------------|---------|---------|---------------------------------------------------|
+| `InteractionRange` | `float` | 3.5     | Maximum distance a player can interact from       |
+
+### Virtual Properties
+
+| Property           | Type     | Default                 | Description                  |
+|--------------------|----------|-------------------------|------------------------------|
+| `Name`             | `string` | `GameObject.name`       | Object name                  |
+| `Title`            | `string` | `"Interactable"`        | UI display title             |
+| `TitleColor`       | `Color`  | `TinyColor.forestGreen` | Title label color            |
+| `InteractRateLimit`| `double` | `INTERACT_RATE_LIMIT`   | Override per-type rate limit |
+
+### CapturePointTemplate
+
+| Field / Property       | Type               | Description                                  |
+|------------------------|--------------------|----------------------------------------------|
+| `Template`             | `CapturePointTemplate` | ScriptableObject with capture parameters |
+| `AchievementTemplate`  | `AchievementTemplate`  | Achievement to increment on capture      |
+| `OwnerCharacterID`     | `long`             | Current owner (0 = neutral)                  |
+| `CaptureProgress`      | `int`              | Interactions toward capture                  |
+| `CapturingCharacterID` | `long`             | Player currently capturing                   |
+| `State`                | `ObjectiveState`   | Current objective state                      |
+
+### ContainerTemplate
+
+| Field / Property       | Type                | Description                              |
+|------------------------|---------------------|------------------------------------------|
+| `Template`             | `ContainerTemplate` | ScriptableObject: `SlotCount`, `DespawnWhenEmpty` |
+| `AchievementTemplate`  | `AchievementTemplate`  | Achievement to increment on open      |
+| `Items`                | `List<Item>`        | Current item slots                       |
+
+### GatheringNodeTemplate
+
+| Field / Property       | Type                    | Description                            |
+|------------------------|-------------------------|----------------------------------------|
+| `Template`             | `GatheringNodeTemplate` | Drops list, MaxUses, GatherTimeSeconds |
+| `RemainingUses`        | `int`                   | Remaining harvests before respawn      |
+
+**GatheringDrop**: `Item` (BaseItemTemplate), `MinAmount`, `MaxAmount`, `Weight`.
+
+### LoreObjectTemplate
+
+| Field             | Type                  | Description                           |
+|-------------------|-----------------------|---------------------------------------|
+| `Template`        | `LoreObjectTemplate`  | LoreText, GrantAbilities, GrantAbilityEvents, GrantItems |
+
+### MerchantTemplate
+
+**MerchantTemplate** (ScriptableObject): lists of `AbilityTemplate`, `AbilityEvent`, and `BaseItemTemplate` references, organized by `MerchantTabType`.
+
+### ShrineTemplate
+
+| Field              | Type                  | Description                        |
+|--------------------|-----------------------|------------------------------------|
+| `HealHealth`       | `bool`                | Whether to heal health             |
+| `HealthHealPercent`| `float`               | Percentage of max HP to restore    |
+| `HealMana`         | `bool`                | Whether to heal mana               |
+| `ManaHealPercent`  | `float`               | Percentage of max MP to restore    |
+| `Buff`             | `BuffTemplate`        | Optional buff to apply             |
+| `BuffStackCount`   | `int`                 | Number of buff stacks to apply     |
+
+### SwitchTemplate
+
+| Field       | Type             | Description                          |
+|-------------|------------------|--------------------------------------|
+| `Target`    | `ISwitchTarget`  | Object to activate/deactivate        |
+| `IsToggle`  | `bool`           | If true, toggles; otherwise one-shot |
+
+**ISwitchTarget** interface: `IsActivated` (bool), `Activate()`, `Deactivate()`.
+
+### DialogueTemplate
+
+**DialogueTemplate** (ScriptableObject):
+- `StartNodeId` — entry node in the tree.
+- `CacheDialogueChoices` — server-side choice persistence to prevent replay abuse.
+- `Nodes` — list of `DialogueNode` entries, each with `Text`, `Conditions`, `OnEnterActions`, `OnExitActions`, and `Choices`.
+- `DialogueChoice` — each choice has `Text`, `NextNodeId`, `Conditions`, and `OnSelectActions`.
+
+## Usage Examples
+
+### Network Lifecycle Methods
+
+| Method            | Description                                                              |
+|-------------------|--------------------------------------------------------------------------|
+| `Awake()`         | Caches `Transform`, computes `interactionRangeSqr`. Client: strips "(Clone)" from name, renders title label. Server: calls `SceneObject.Register()`. |
+| `OnDestroy()`     | Calls `SceneObject.Unregister()`.                                        |
+| `ReadPayload()`   | Reads `ID` (Int64) from network reader, registers in scene.             |
+| `WritePayload()`  | Writes `ID` (Int64) to network writer.                                  |
+| `ResetState()`    | Clears `OnDespawn` event and `SpawnableSettings` (object pooling reset).|
+| `Despawn()`       | Delegates to `ObjectSpawner.Despawn(this)`.                             |
+
+### ISpawnable Members
+
+| Member              | Type                | Description                                         |
+|---------------------|---------------------|-----------------------------------------------------|
+| `ObjectSpawner`     | `ObjectSpawner`     | The spawner managing this object                    |
+| `SpawnableSettings` | `SpawnableSettings` | Spawn configuration from the spawner                |
+| `ID`                | `long`              | Unique network identifier                           |
+| `OnDespawn`         | `event Action<ISpawnable>` | Fired when the object is despawned            |
+
+### Static Events (ICapturePoint)
+
+- `OnCaptured(ICapturePoint, IPlayerCharacter)` — fired when capture completes.
+- `OnStateChanged(ICapturePoint, ObjectiveState)` — fired on state transitions.
+
+### Instance Events (IDialogueInteractable)
+
+- `OnDialogueStarted` — fired when a dialogue tree is started with a player.
+
+### Instance Events (IBindstone)
+
+- `OnBind` — fired when a player binds to this Bindstone.
+
+### Interactable Types Summary
+
+| Type                  | Description                                                              | Template                |
+|-----------------------|--------------------------------------------------------------------------|-------------------------|
+| AbilityCrafter        | Opens the ability crafting UI. `[RequireComponent(typeof(SceneObjectNamer))]` | —                       |
+| Banker                | Opens the bank storage UI. `[RequireComponent(typeof(SceneObjectNamer))]`    | —                       |
+| Bindstone             | Sets the player's respawn point. Fires `IBindstone.OnBind`               | —                       |
+| CapturePoint          | PvP/PvE objective: ownership + capture progress tracking                 | `CapturePointTemplate`  |
+| Container             | Chest/crate with items. `IItemContainer` for full slot management        | `ContainerTemplate`     |
+| DialogueInteractable  | NPC dialogue tree with branching, conditions, and actions                | `DialogueTemplate`      |
+| DungeonEntrance       | Portal to a dungeon scene. Achievement-integrated                        | —                       |
+| GatheringNode         | Harvestable resource node with weighted drops and limited uses           | `GatheringNodeTemplate` |
+| LoreObject            | Discoverable lore granting abilities, events, or items                   | `LoreObjectTemplate`    |
+| Mailbox               | Opens the mail UI. No template required                                  | —                       |
+| Merchant              | Buy/sell with tabbed inventory. `[RequireComponent(typeof(SceneObjectNamer))]` | `MerchantTemplate`      |
+| Shrine                | Healing/buff station                                                     | `ShrineTemplate`        |
+| Switch                | Toggle/trigger activating an `ISwitchTarget`                             | —                       |
+| Teleporter            | Moves player to target Transform                                         | —                       |
+| WorldItem             | Dropped item with `BaseItemTemplate` + custom network payload            | —                       |
+
+### Common Patterns
+
+- **SceneObjectNamer**: Required component on `AbilityCrafter`, `Banker`, `CapturePoint`, `Container`, `Merchant`, and others. Generates deterministic scene-unique names for network-safe identification.
+- **AchievementTemplate**: Most interactable types expose an `AchievementTemplate` field to increment progress on interaction.
+- **Title / TitleColor**: Every subclass overrides `Title` and `TitleColor` to customize the floating name label rendered via the `ICharacter.CharacterGuildLabel` on the client.
+- **SceneObject Registration**: Server-side registration happens in `Awake()`; client-side registration happens in `ReadPayload()` after receiving the object's `ID` from the server.
+
+## Operational Checks
+
+| Check | Expected Result | How to Verify |
+|-------|----------------|---------------|
+| Interactable spawns in scene | Object appears with floating title label | Enter play mode, observe scene |
+| Range check blocks distant interaction | Interaction rejected when player > `InteractionRange` | Move player beyond range, attempt interact |
+| Rate limit prevents spam | Rapid interactions throttled to `InteractRateLimit` interval | Spam interact key, observe rejection |
+| SceneObject registration | Server registers in `Awake()`, client in `ReadPayload()` | Check server logs for registration |
+| Template data loads | ScriptableObject fields populated at runtime | Inspect interactable component in inspector |
+| Network payload round-trip | `ID` written/read correctly across server and client | Spawn interactable, verify client receives correct ID |
+| Object pooling reset | `ResetState()` clears events and settings on despawn | Despawn and respawn, verify clean state |
+| Achievement increment | Achievement progresses on interaction | Interact with achievement-enabled interactable, check achievement |
+
+## Flow Diagram
+
+### Interaction Flow
+
+```
+Player requests interaction
+        │
+        ▼
+  CanInteract(IPlayerCharacter)
+        │
+        ├── NextInteractTime < UtcNow?  ──No──▶  Rejected
+        │       │
+        │      Yes
+        │       ▼
+        ├── InRange(transform)?  ──No──▶  Rejected
+        │       │
+        │      Yes
+        │       ▼
+        └── Set NextInteractTime = UtcNow + InteractRateLimit
+                │
+                ▼
+           return true → Subclass handles interaction
+```
+
+Range checking uses `sqrMagnitude` for efficiency (no square root).
+
+## Project Structure
+
+### Directory Structure
 
 ```
 Interactable/
@@ -53,9 +306,9 @@ Interactable/
     └── ISwitchTarget.cs                # Interface for objects activated by switches
 ```
 
-## Inheritance Hierarchies
+### Inheritance Hierarchies
 
-### Interactable Types
+#### Interactable Types
 
 ```
 NetworkBehaviour
@@ -77,7 +330,7 @@ NetworkBehaviour
     └── WorldItem          : IWorldItem
 ```
 
-### Templates (ScriptableObjects)
+#### Templates (ScriptableObjects)
 
 ```
 CachedScriptableObject<T>
@@ -90,7 +343,7 @@ CachedScriptableObject<T>
 └── ShrineTemplate
 ```
 
-### Enums
+#### Enums
 
 ```
 ObjectiveState : byte
@@ -106,201 +359,7 @@ MerchantTabType : byte
 └── Item         = 3
 ```
 
-## Interactable Base Class
-
-The abstract `Interactable` class (`NetworkBehaviour`) provides the shared foundation for all interactive world objects.
-
-### Constants
-
-| Constant              | Value | Description                                           |
-|-----------------------|-------|-------------------------------------------------------|
-| `INTERACT_RATE_LIMIT` | 60 ms | Default minimum time between consecutive interactions |
-
-### Configuration
-
-| Field              | Type    | Default | Description                                       |
-|--------------------|---------|---------|---------------------------------------------------|
-| `InteractionRange` | `float` | 3.5     | Maximum distance a player can interact from       |
-
-### Virtual Properties
-
-| Property         | Type     | Default                        | Description                           |
-|------------------|----------|--------------------------------|---------------------------------------|
-| `Name`           | `string` | `GameObject.name`              | Object name                           |
-| `Title`          | `string` | `"Interactable"`               | UI display title                      |
-| `TitleColor`     | `Color`  | `TinyColor.forestGreen`        | Title label color                     |
-| `InteractRateLimit`| `double`| `INTERACT_RATE_LIMIT`          | Override per-type rate limit          |
-
-### Interaction Flow
-
-```
-Player requests interaction
-        │
-        ▼
-  CanInteract(IPlayerCharacter)
-        │
-        ├── NextInteractTime < UtcNow?  ──No──▶  Rejected
-        │       │
-        │      Yes
-        │       ▼
-        ├── InRange(transform)?  ──No──▶  Rejected
-        │       │
-        │      Yes
-        │       ▼
-        └── Set NextInteractTime = UtcNow + InteractRateLimit
-                │
-                ▼
-           return true → Subclass handles interaction
-```
-
-Range checking uses `sqrMagnitude` for efficiency (no square root).
-
-### Network Lifecycle
-
-| Method            | Description                                                              |
-|-------------------|--------------------------------------------------------------------------|
-| `Awake()`         | Caches `Transform`, computes `interactionRangeSqr`. Client: strips "(Clone)" from name, renders title label. Server: calls `SceneObject.Register()`. |
-| `OnDestroy()`     | Calls `SceneObject.Unregister()`.                                        |
-| `ReadPayload()`   | Reads `ID` (Int64) from network reader, registers in scene.             |
-| `WritePayload()`  | Writes `ID` (Int64) to network writer.                                  |
-| `ResetState()`    | Clears `OnDespawn` event and `SpawnableSettings` (object pooling reset).|
-| `Despawn()`       | Delegates to `ObjectSpawner.Despawn(this)`.                             |
-
-### ISpawnable Members
-
-| Member              | Type                | Description                                         |
-|---------------------|---------------------|-----------------------------------------------------|
-| `ObjectSpawner`     | `ObjectSpawner`     | The spawner managing this object                    |
-| `SpawnableSettings` | `SpawnableSettings` | Spawn configuration from the spawner                |
-| `ID`                | `long`              | Unique network identifier                           |
-| `OnDespawn`         | `event Action<ISpawnable>` | Fired when the object is despawned            |
-
-## Interactable Types
-
-### AbilityCrafter
-
-Opens the ability crafting UI. `[RequireComponent(typeof(SceneObjectNamer))]`.
-
-### Banker
-
-Opens the bank storage UI. `[RequireComponent(typeof(SceneObjectNamer))]`.
-
-### Bindstone
-
-Sets the player's respawn point to this location. Fires `IBindstone.OnBind`.
-
-### CapturePoint
-
-PvP/PvE objective that tracks ownership and capture progress.
-
-| Field / Property       | Type               | Description                                  |
-|------------------------|--------------------|----------------------------------------------|
-| `Template`             | `CapturePointTemplate` | ScriptableObject with capture parameters |
-| `AchievementTemplate`  | `AchievementTemplate`  | Achievement to increment on capture      |
-| `OwnerCharacterID`     | `long`             | Current owner (0 = neutral)                  |
-| `CaptureProgress`      | `int`              | Interactions toward capture                  |
-| `CapturingCharacterID` | `long`             | Player currently capturing                   |
-| `State`                | `ObjectiveState`   | Current objective state                      |
-
-**Static Events** on `ICapturePoint`:
-- `OnCaptured(ICapturePoint, IPlayerCharacter)` — fired when capture completes.
-- `OnStateChanged(ICapturePoint, ObjectiveState)` — fired on state transitions.
-
-### Container
-
-Chest/crate that stores items. Implements `IItemContainer` for full slot management (add, remove, set, swap, clear).
-
-| Field / Property       | Type                | Description                              |
-|------------------------|---------------------|------------------------------------------|
-| `Template`             | `ContainerTemplate` | ScriptableObject: `SlotCount`, `DespawnWhenEmpty` |
-| `AchievementTemplate`  | `AchievementTemplate`  | Achievement to increment on open      |
-| `Items`                | `List<Item>`        | Current item slots                       |
-
-### DialogueInteractable
-
-Starts a dialogue tree with the player. Fires `IDialogueInteractable.OnDialogueStarted`.
-
-**DialogueTemplate** (ScriptableObject):
-- `StartNodeId` — entry node in the tree.
-- `CacheDialogueChoices` — server-side choice persistence to prevent replay abuse.
-- `Nodes` — list of `DialogueNode` entries, each with `Text`, `Conditions`, `OnEnterActions`, `OnExitActions`, and `Choices`.
-- `DialogueChoice` — each choice has `Text`, `NextNodeId`, `Conditions`, and `OnSelectActions`.
-
-### DungeonEntrance
-
-Portal to a dungeon scene. Achievement-integrated.
-
-### GatheringNode
-
-Harvestable resource (mining, herbalism, etc.) with limited uses and weighted drops.
-
-| Field / Property       | Type                    | Description                            |
-|------------------------|-------------------------|----------------------------------------|
-| `Template`             | `GatheringNodeTemplate` | Drops list, MaxUses, GatherTimeSeconds |
-| `RemainingUses`        | `int`                   | Remaining harvests before respawn      |
-
-**GatheringDrop**: `Item` (BaseItemTemplate), `MinAmount`, `MaxAmount`, `Weight`.
-
-### LoreObject
-
-Discoverable lore that can grant abilities, ability events, or items on interaction.
-
-| Field             | Type                  | Description                           |
-|-------------------|-----------------------|---------------------------------------|
-| `Template`        | `LoreObjectTemplate`  | LoreText, GrantAbilities, GrantAbilityEvents, GrantItems |
-
-### Mailbox
-
-Opens the mail UI. No template required.
-
-### Merchant
-
-Buy/sell interactable with tabbed inventory. `[RequireComponent(typeof(SceneObjectNamer))]`.
-
-**MerchantTemplate** (ScriptableObject): lists of `AbilityTemplate`, `AbilityEvent`, and `BaseItemTemplate` references, organized by `MerchantTabType`.
-
-### Shrine
-
-Healing/buff station.
-
-**ShrineTemplate** (ScriptableObject):
-
-| Field              | Type                  | Description                        |
-|--------------------|-----------------------|------------------------------------|
-| `HealHealth`       | `bool`                | Whether to heal health             |
-| `HealthHealPercent`| `float`               | Percentage of max HP to restore    |
-| `HealMana`         | `bool`                | Whether to heal mana               |
-| `ManaHealPercent`  | `float`               | Percentage of max MP to restore    |
-| `Buff`             | `BuffTemplate`        | Optional buff to apply             |
-| `BuffStackCount`   | `int`                 | Number of buff stacks to apply     |
-
-### Switch
-
-Toggle/trigger that activates an `ISwitchTarget`.
-
-| Field       | Type             | Description                          |
-|-------------|------------------|--------------------------------------|
-| `Target`    | `ISwitchTarget`  | Object to activate/deactivate        |
-| `IsToggle`  | `bool`           | If true, toggles; otherwise one-shot |
-
-**ISwitchTarget** interface: `IsActivated` (bool), `Activate()`, `Deactivate()`.
-
-### Teleporter
-
-Moves the player to a target location. Has a `Target` Transform reference.
-
-### WorldItem
-
-Dropped item in the world with a `BaseItemTemplate` reference. Writes/reads custom item data via network payload.
-
-## Common Patterns
-
-- **SceneObjectNamer**: Required component on `AbilityCrafter`, `Banker`, `CapturePoint`, `Container`, `Merchant`, and others. Generates deterministic scene-unique names for network-safe identification.
-- **AchievementTemplate**: Most interactable types expose an `AchievementTemplate` field to increment progress on interaction.
-- **Title / TitleColor**: Every subclass overrides `Title` and `TitleColor` to customize the floating name label rendered via the `ICharacter.CharacterGuildLabel` on the client.
-- **SceneObject Registration**: Server-side registration happens in `Awake()`; client-side registration happens in `ReadPayload()` after receiving the object's `ID` from the server.
-
-## Related Files
+### Related Files
 
 ```
 Shared/Core/Entity/Interactable/                # 15 core interfaces (IAbilityCrafter, IBanker, etc.)
@@ -309,3 +368,7 @@ Shared/Implementation/Entity/Spawner/            # ObjectSpawner that spawns/des
 Server/Implementation/World/SceneServer/          # Server-side interaction handling systems
 Client/UI/Controls/World/                         # Client-side UI panels for each interaction type
 ```
+
+## License
+
+This project is subject to the FishMMO project license.

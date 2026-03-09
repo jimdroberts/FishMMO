@@ -17,6 +17,12 @@ namespace FishMMO.Shared
 		private readonly List<Item> items = new List<Item>();
 
 		/// <summary>
+		/// Set of slot indices currently locked by active operations (e.g., consumable activation).
+		/// Locked slots cannot be swapped, removed, or transferred.
+		/// </summary>
+		private HashSet<int> lockedSlots;
+
+		/// <summary>
 		/// Event triggered when an item slot is updated (item added, removed, or changed).
 		/// </summary>
 		public event Action<IItemContainer, Item, int> OnSlotUpdated;
@@ -27,11 +33,12 @@ namespace FishMMO.Shared
 		public List<Item> Items { get { return items; } }
 
 		/// <summary>
-		/// Called when the container is being destroyed. Clears event handlers.
+		/// Called when the container is being destroyed. Clears event handlers and locks.
 		/// </summary>
 		public override void OnDestroying()
 		{
 			OnSlotUpdated = null;
+			lockedSlots?.Clear();
 		}
 
 		/// <summary>
@@ -365,6 +372,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Swaps items between two slots and returns the items that were swapped.
+		/// Fails if either slot is locked.
 		/// </summary>
 		/// <param name="from">The source slot index.</param>
 		/// <param name="to">The destination slot index.</param>
@@ -377,7 +385,9 @@ namespace FishMMO.Shared
 				from < 0 ||
 				to < 0 ||
 				from >= Items.Count ||
-				to >= Items.Count)
+				to >= Items.Count ||
+				IsSlotLocked(from) ||
+				IsSlotLocked(to))
 			{
 				fromItem = null;
 				toItem = null;
@@ -408,13 +418,15 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Removes an item from the specified slot and returns it. Returns null if the slot was empty.
+		/// Fails if the slot is locked.
 		/// </summary>
 		/// <param name="slot">The slot index to remove the item from.</param>
 		/// <returns>The item that was removed, or null if no item was present.</returns>
 		public Item RemoveItem(int slot)
 		{
 			if (!CanManipulate() ||
-				!IsValidSlot(slot))
+				!IsValidSlot(slot) ||
+				IsSlotLocked(slot))
 			{
 				return null;
 			}
@@ -427,6 +439,44 @@ namespace FishMMO.Shared
 			item.Slot = -1;
 			SetItemSlot(null, slot);
 			return item;
+		}
+
+		/// <summary>
+		/// Returns true if the specified slot is currently locked.
+		/// Locked slots cannot be swapped, removed, or transferred until unlocked.
+		/// </summary>
+		/// <param name="slot">The slot index to check.</param>
+		/// <returns>True if the slot is locked, false otherwise.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool IsSlotLocked(int slot)
+		{
+			return lockedSlots != null && lockedSlots.Contains(slot);
+		}
+
+		/// <summary>
+		/// Locks the specified slot, preventing it from being swapped, removed, or transferred.
+		/// </summary>
+		/// <param name="slot">The slot index to lock.</param>
+		public void LockSlot(int slot)
+		{
+			if (!IsValidSlot(slot))
+			{
+				return;
+			}
+			if (lockedSlots == null)
+			{
+				lockedSlots = new HashSet<int>();
+			}
+			lockedSlots.Add(slot);
+		}
+
+		/// <summary>
+		/// Unlocks the specified slot, allowing normal manipulation again.
+		/// </summary>
+		/// <param name="slot">The slot index to unlock.</param>
+		public void UnlockSlot(int slot)
+		{
+			lockedSlots?.Remove(slot);
 		}
 	}
 }

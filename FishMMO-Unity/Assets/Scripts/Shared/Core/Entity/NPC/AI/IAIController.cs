@@ -22,6 +22,18 @@ namespace FishMMO.Shared.Core
 		Transform Target { get; set; }
 
 		/// <summary>
+		/// The simulated camera position for ability targeting.
+		/// Mirrors <see cref="KCCController.VirtualCameraPosition"/> for player characters.
+		/// </summary>
+		Vector3 VirtualCameraPosition { get; }
+
+		/// <summary>
+		/// The simulated camera rotation for ability targeting.
+		/// Mirrors <see cref="KCCController.VirtualCameraRotation"/> for player characters.
+		/// </summary>
+		Quaternion VirtualCameraRotation { get; }
+
+		/// <summary>
 		/// Initializes the controller with a home position and optional waypoints.
 		/// </summary>
 		/// <param name="home">The home position for the AI.</param>

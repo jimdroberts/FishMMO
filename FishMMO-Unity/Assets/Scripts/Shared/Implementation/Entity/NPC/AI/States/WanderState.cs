@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 			if (MaxUpdateRate > updateRate)
 			{
 				// Randomize update rate between base and max value for more natural wandering.
-				updateRate = Random.Range(updateRate, MaxUpdateRate);
+				updateRate = DeterministicRNG.Shared.Range(updateRate, MaxUpdateRate);
 			}
 			return updateRate;
 		}
@@ -83,8 +83,8 @@ namespace FishMMO.Shared
 					 (!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f))
 			{
 				// Randomly decide whether to transition to idle or continue wandering.
-				System.Random rng = controller.NpcRNG;
-				float randomChance = rng != null ? (float)rng.NextDouble() : Random.Range(0f, 1f);
+				DeterministicRNG rng = controller.NpcRNG;
+				float randomChance = (rng ?? DeterministicRNG.Shared).NextFloat();
 				float transitionThreshold = 0.5f; // Probability threshold (e.g., 50%)
 
 				if (randomChance <= transitionThreshold)

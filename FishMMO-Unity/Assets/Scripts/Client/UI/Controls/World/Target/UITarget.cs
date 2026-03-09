@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FishNet;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using TMPro;
@@ -232,6 +233,8 @@ namespace FishMMO.Client
 				return;
 			}
 
+			uint currentTick = InstanceFinder.TimeManager.LocalTick;
+
 			// Mark all existing entries as stale candidates.
 			staleBuffKeys.Clear();
 			foreach (var key in targetBuffs.Keys)
@@ -254,7 +257,7 @@ namespace FishMMO.Client
 					// Update duration slider for an existing entry.
 					if (existing.DurationSlider != null && buff.Template.Duration > 0f)
 					{
-						existing.DurationSlider.value = buff.RemainingTime / buff.Template.Duration;
+						existing.DurationSlider.value = buff.RemainingSeconds(currentTick) / buff.Template.Duration;
 					}
 				}
 				else
@@ -275,7 +278,7 @@ namespace FishMMO.Client
 					}
 					if (group.DurationSlider != null && buff.Template.Duration > 0f)
 					{
-						group.DurationSlider.value = buff.RemainingTime / buff.Template.Duration;
+						group.DurationSlider.value = buff.RemainingSeconds(currentTick) / buff.Template.Duration;
 					}
 					group.gameObject.SetActive(true);
 					targetBuffs.Add(kvp.Key, group);

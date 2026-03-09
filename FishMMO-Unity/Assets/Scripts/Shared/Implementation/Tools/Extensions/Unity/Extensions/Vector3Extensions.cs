@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 		/// <param name="random">Random number generator.</param>
 		/// <returns>A Quaternion representing the random conical direction.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static Quaternion GetRandomConicalDirection(this Vector3 forward, Vector3 startPosition, float coneRadius, float distance, System.Random random)
+		public static Quaternion GetRandomConicalDirection(this Vector3 forward, Vector3 startPosition, float coneRadius, float distance, DeterministicRNG random)
 		{
 			return Quaternion.Euler(startPosition - ((distance * forward) + (RandomOnUnitSphere(random) * coneRadius)));
 		}
@@ -33,10 +33,10 @@ namespace FishMMO.Shared
 		public static Vector3 RandomPositionWithinRadius(Vector3 center, float radius)
 		{
 			// Generate a random angle between 0 and 2π
-			float angle = UnityEngine.Random.Range(0f, 2 * Mathf.PI);
+			float angle = DeterministicRNG.Shared.Range(0f, 2 * Mathf.PI);
 
 			// Generate a random distance between 0 and radius
-			float distance = UnityEngine.Random.Range(0f, radius);
+			float distance = DeterministicRNG.Shared.Range(0f, radius);
 
 			// Calculate X and Z offsets
 			float xOffset = distance * Mathf.Cos(angle);
@@ -68,15 +68,15 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns a random point on the surface of a unit sphere using a provided or new System.Random.
+		/// Returns a random point on the surface of a unit sphere using a provided or new <see cref="DeterministicRNG"/>.
 		/// </summary>
 		/// <param name="random">Optional random number generator.</param>
 		/// <returns>A random Vector3 on the unit sphere.</returns>
-		public static Vector3 RandomOnUnitSphere(System.Random random = null)
+		public static Vector3 RandomOnUnitSphere(DeterministicRNG random = null)
 		{
 			if (random == null)
 			{
-				random = new System.Random();
+				random = new DeterministicRNG();
 			}
 
 			// Generate random spherical coordinates
@@ -102,9 +102,9 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Vector3 RandomInBoundingBox(Vector3 boundingBox)
 		{
-			return new Vector3(UnityEngine.Random.Range(-boundingBox.x, boundingBox.x),
-							   UnityEngine.Random.Range(-boundingBox.y, boundingBox.y),
-							   UnityEngine.Random.Range(-boundingBox.z, boundingBox.z));
+			return new Vector3(DeterministicRNG.Shared.Range(-boundingBox.x, boundingBox.x),
+							   DeterministicRNG.Shared.Range(-boundingBox.y, boundingBox.y),
+							   DeterministicRNG.Shared.Range(-boundingBox.z, boundingBox.z));
 		}
 
 		/// <summary>
@@ -116,8 +116,8 @@ namespace FishMMO.Shared
 		public static Vector3 GetRandomPointInToroid(float R, float radius)
 		{
 			// Generate random angles
-			float theta = UnityEngine.Random.Range(0f, 2f * Mathf.PI); // Angle around the central axis
-			float phi = UnityEngine.Random.Range(0f, 2f * Mathf.PI);   // Angle around the tube
+			float theta = DeterministicRNG.Shared.Range(0f, 2f * Mathf.PI); // Angle around the central axis
+			float phi = DeterministicRNG.Shared.Range(0f, 2f * Mathf.PI);   // Angle around the tube
 
 			// Convert to Cartesian coordinates
 			float x = (R + radius * Mathf.Cos(phi)) * Mathf.Cos(theta);
@@ -136,10 +136,10 @@ namespace FishMMO.Shared
 		public static Vector3 GetRandomPointInFlatToroid(float R, float radius)
 		{
 			// Generate a random angle (theta) around the central axis (the hole of the ring)
-			float theta = UnityEngine.Random.Range(0f, 2f * Mathf.PI);  // Angle around the center
+			float theta = DeterministicRNG.Shared.Range(0f, 2f * Mathf.PI);  // Angle around the center
 
 			// Generate a random radial distance between R and (R + radius) from the center of the ring
-			float r = UnityEngine.Random.Range(R, R + radius);  // Radial distance within the tube
+			float r = DeterministicRNG.Shared.Range(R, R + radius);  // Radial distance within the tube
 
 			// Convert to Cartesian coordinates
 			float x = r * Mathf.Cos(theta);

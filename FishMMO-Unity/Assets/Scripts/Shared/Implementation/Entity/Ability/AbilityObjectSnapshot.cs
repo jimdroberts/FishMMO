@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
@@ -26,18 +25,26 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Snapshot of OnTick event triggers for continued ticking.
+		/// Stored as <see cref="IReadOnlyDictionary{TKey,TValue}"/> backed by a shallow copy
+		/// of the live <see cref="Ability"/> dictionary. The <see cref="Dictionary{TKey,TValue}"/>
+		/// implements <see cref="IReadOnlyDictionary{TKey,TValue}"/> directly, preventing
+		/// new entries without the overhead of a wrapper.
+		/// This ensures the snapshot is effectively immutable even if the live ability's event
+		/// dictionaries are later modified by <see cref="Ability.RemoveAbilityEvent"/>.
 		/// </summary>
-		public readonly Dictionary<int, AbilityOnTickEvent> OnTickEvents;
+		public readonly IReadOnlyDictionary<int, AbilityOnTickEvent> OnTickEvents;
 
 		/// <summary>
 		/// Snapshot of OnHit event triggers for collision hit dispatching.
+		/// See <see cref="OnTickEvents"/> for immutability rationale.
 		/// </summary>
-		public readonly Dictionary<int, AbilityOnHitEvent> OnHitEvents;
+		public readonly IReadOnlyDictionary<int, AbilityOnHitEvent> OnHitEvents;
 
 		/// <summary>
 		/// Snapshot of OnDestroy event triggers for cleanup dispatching.
+		/// See <see cref="OnTickEvents"/> for immutability rationale.
 		/// </summary>
-		public readonly Dictionary<int, AbilityOnDestroyEvent> OnDestroyEvents;
+		public readonly IReadOnlyDictionary<int, AbilityOnDestroyEvent> OnDestroyEvents;
 
 		/// <summary>
 		/// The TargetTrigger from the ability template for collision handling.
@@ -46,33 +53,22 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Creates a snapshot from a live <see cref="Ability"/> instance.
+		/// Each event dictionary is shallow-copied into a new <see cref="Dictionary{TKey,TValue}"/>
+		/// and assigned to an <see cref="IReadOnlyDictionary{TKey,TValue}"/> field. This isolates the
+		/// snapshot from later mutations via <see cref="Ability.RemoveAbilityEvent"/> while
+		/// still sharing the immutable <see cref="ScriptableObject"/> event template values.
 		/// </summary>
 		/// <param name="ability">The ability to snapshot. Must not be null.</param>
 		public AbilityObjectSnapshot(Ability ability)
 		{
 			Speed = ability.Speed;
 			LifeTime = ability.LifeTime;
-			OnTickEvents = ability.OnTickEvents;
-			OnHitEvents = ability.OnHitEvents;
-			OnDestroyEvents = ability.OnDestroyEvents;
+			// Shallow-copy each dictionary so the snapshot is isolated from live mutations.
+			OnTickEvents = new Dictionary<int, AbilityOnTickEvent>(ability.OnTickEvents);
+			OnHitEvents = new Dictionary<int, AbilityOnHitEvent>(ability.OnHitEvents);
+			OnDestroyEvents = new Dictionary<int, AbilityOnDestroyEvent>(ability.OnDestroyEvents);
 			TargetTrigger = ability.Template?.TargetTrigger;
 		}
 
-		/// <summary>
-		/// Creates a <see cref="SnapshotCharacter"/> from a live caster, freezing identity
-		/// and attribute data so that detached ability objects can continue to resolve
-		/// stat-scaled calculations.
-		/// </summary>
-		/// <param name="liveCaster">The live character to snapshot.</param>
-		/// <param name="abilityObjectTransform">The ability object's transform, used as the phantom's positional reference.</param>
-		/// <returns>A new <see cref="SnapshotCharacter"/> or null if <paramref name="liveCaster"/> is null.</returns>
-		public static SnapshotCharacter CreatePhantomCaster(ICharacter liveCaster, UnityEngine.Transform abilityObjectTransform)
-		{
-			if (liveCaster == null)
-			{
-				return null;
-			}
-			return new SnapshotCharacter(liveCaster, abilityObjectTransform);
-		}
 	}
 }

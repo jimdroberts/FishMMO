@@ -1,94 +1,75 @@
 # Spawner System
 
+**Short description:** Server-authoritative, condition-driven framework for spawning and respawning networked objects in FishMMO with configurable selection strategies, conditional gating, and physics-based placement.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation / Build](#installation--build)
+- [Quick Start Guide](#quick-start-guide)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Operational Checks](#operational-checks)
+- [Flow Diagram](#flow-diagram)
+- [Project Structure](#project-structure)
+- [License](#license)
+
 ## Overview
 
 The Spawner system is a server-authoritative, condition-driven framework for spawning and respawning networked objects in FishMMO. It provides configurable spawn selection (linear, random, weighted), conditional respawn gating (OR and AND condition lists), bounding-box placement with physics-based ground detection, object pooling via FishNet, and per-object respawn timers. Spawners are placed in scenes as `NetworkBehaviour` components and manage the full lifecycle of spawned entities.
 
-## Directory Structure
+## Supported Platforms
 
-```
-Spawner/
-├── ISpawnable.cs              # Interface for entities managed by an ObjectSpawner
-├── ObjectSpawnType.cs          # Enum for spawn selection strategy (Linear, Random, Weighted)
-├── ObjectSpawner.cs            # Core spawner component (NetworkBehaviour)
-├── Settings/
-│   ├── SpawnableSettings.cs        # Per-object spawn configuration (respawn times, chance, offset)
-│   ├── ItemSpawnableSettings.cs    # Item-specific spawnable settings
-│   └── NPCSpawnableSettings.cs     # NPC-specific spawnable settings
-└── Condition/
-    ├── BaseRespawnCondition.cs          # Abstract base for respawn conditions
-    └── Types/
-        └── DeadNPCRespawnCondition.cs   # Condition: all specified NPCs must be dead
-```
+| Platform | Supported | Notes |
+|----------|-----------|-------|
+| Windows  | Yes       | Server-authoritative; spawners run on server only |
+| Linux    | Yes       | Server-authoritative; spawners run on server only |
+| WebGL    | N/A       | Server-side only system; no client-side spawner logic |
 
-## Inheritance Hierarchies
+- **Unity Version:** Unity 6.3 LTS
+- **Scripting Backend:** IL2CPP
 
-### Spawner Components
+## Features
 
-```
-NetworkBehaviour
-└── ObjectSpawner
-```
+- Server-authoritative spawn lifecycle (spawn, despawn, respawn)
+- Three spawn selection strategies: Linear (sequential), Random (uniform), Weighted (proportional odds via `SpawnChance`)
+- Conditional respawn gating with OR and AND condition lists (`BaseRespawnCondition`)
+- Bounding-box placement with physics SphereCast ground detection
+- FishNet object pooling via `GetPooledInstantiated()` / `Despawn(DespawnType.Pool)`
+- Per-object configurable respawn timers (fixed or randomized between min/max)
+- Auto-calculated vertical offset (`YOffset`) from prefab collider dimensions
+- Initial spawn count with clamping to max concurrent limit
+- AI controller initialization with home position on spawn
+- Scene-aware spawning via `SceneManager.MoveGameObjectToScene()`
+- Editor gizmo visualization of bounding box and spawn area
+- Extensible respawn condition system (e.g., `DeadNPCRespawnCondition` for boss encounters)
 
-### Spawnable Interface
+## Prerequisites
 
-```
-ISpawnable
-├── NPC : BaseCharacter, ISceneObject, ISpawnable
-│   └── Pet
-└── (any entity implementing ISpawnable)
-```
+- **Unity 6.3 LTS**
+- **FishNetworking** — `NetworkBehaviour`, `NetworkObject`, `ServerManager`, object pooling
+- **FishMMO Shared Core** — `ISpawnable`, `IAIController`, `ICharacterDamageController`, scene infrastructure
 
-### Respawn Conditions
+## Installation / Build
 
-```
-MonoBehaviour
-└── BaseRespawnCondition (abstract)
-    └── DeadNPCRespawnCondition
-```
+This is an integrated module within the FishMMO project. No separate installation or build steps are required. The spawner system is included automatically when the FishMMO Shared assembly is referenced.
 
-### Enums
+## Quick Start Guide
 
-```
-ObjectSpawnType : byte
-├── Linear   = 0   # Sequential cycling through the list
-├── Random   = 1   # Uniform random selection
-└── Weighted = 2   # Weighted random using SpawnChance values
-```
+1. Add an `ObjectSpawner` component to a GameObject in your scene.
+2. Configure `Spawnables` list — assign `NetworkObject` prefabs with spawn settings.
+3. Set `InitialSpawnCount` and `MaxSpawnCount` to control concurrency.
+4. Choose a `SpawnType` (Linear, Random, or Weighted).
+5. Optionally configure `BoundingBoxSize` and enable `RandomSpawnPosition` for area-based placement.
+6. Optionally add `BaseRespawnCondition` components and assign them to `OrConditions` / `TrueConditions`.
+7. Enter Play Mode on the server — spawner initializes and begins managing entities automatically.
 
-## Core Components
+## Configuration
 
-### ISpawnable
-
-Interface implemented by any entity that can be spawned and managed by an `ObjectSpawner`.
-
-| Member             | Type                | Description                                         |
-|--------------------|---------------------|-----------------------------------------------------|
-| `ObjectSpawner`    | `ObjectSpawner`     | The spawner that created and manages this entity     |
-| `SpawnableSettings`| `SpawnableSettings` | The settings used when spawning this entity          |
-| `NetworkObject`    | `NetworkObject`     | FishNet network object for synchronization           |
-| `ID`               | `long`              | Unique identifier for the spawned entity             |
-| `Despawn()`        | `void`              | Despawns the entity via its owning ObjectSpawner     |
-
-### SpawnableSettings
-
-Serializable configuration for each spawnable object in the spawner's list.
-
-| Field               | Type             | Default | Description                                          |
-|---------------------|------------------|---------|------------------------------------------------------|
-| `NetworkObject`     | `NetworkObject`  | —       | The prefab to spawn                                  |
-| `MinimumRespawnTime`| `float`          | 0       | Minimum respawn delay (seconds)                      |
-| `MaximumRespawnTime`| `float`          | 0       | Maximum respawn delay (seconds)                      |
-| `SpawnChance`       | `float [0–1]`    | 0.5     | Selection weight for weighted spawn mode             |
-| `YOffset`           | `float`          | auto    | Vertical offset from ground, calculated from collider|
-
-`OnValidate()` ensures the `NetworkObject` is marked spawnable and auto-calculates `YOffset` from the prefab's collider dimensions.
-
-### ObjectSpawner
-
-The core spawner component, attached as a `NetworkBehaviour` in the scene.
-
-#### Configuration
+### ObjectSpawner Inspector Fields
 
 | Field                | Type                          | Default        | Description                                          |
 |----------------------|-------------------------------|----------------|------------------------------------------------------|
@@ -104,23 +85,57 @@ The core spawner component, attached as a `NetworkBehaviour` in the scene.
 | `OrConditions`       | `List<BaseRespawnCondition>`  | —              | Any condition true → respawn allowed (logical OR)    |
 | `TrueConditions`     | `List<BaseRespawnCondition>`  | —              | All conditions must be true (logical AND)            |
 
-#### Runtime State
+### SpawnableSettings
+
+Serializable configuration for each spawnable object in the spawner's list.
+
+| Field               | Type             | Default | Description                                          |
+|---------------------|------------------|---------|------------------------------------------------------|
+| `NetworkObject`     | `NetworkObject`  | —       | The prefab to spawn                                  |
+| `MinimumRespawnTime`| `float`          | 0       | Minimum respawn delay (seconds)                      |
+| `MaximumRespawnTime`| `float`          | 0       | Maximum respawn delay (seconds)                      |
+| `SpawnChance`       | `float [0–1]`    | 0.5     | Selection weight for weighted spawn mode             |
+| `YOffset`           | `float`          | auto    | Vertical offset from ground, calculated from collider|
+
+`OnValidate()` ensures the `NetworkObject` is marked spawnable and auto-calculates `YOffset` from the prefab's collider dimensions.
+
+### ObjectSpawnType Enum
+
+```
+ObjectSpawnType : byte
+├── Linear   = 0   # Sequential cycling through the list
+├── Random   = 1   # Uniform random selection
+└── Weighted = 2   # Weighted random using SpawnChance values
+```
+
+### Runtime State
 
 | Field                    | Type                             | Description                                    |
 |--------------------------|----------------------------------|------------------------------------------------|
 | `Spawned`                | `Dictionary<long, ISpawnable>`   | Currently active spawned objects by ID          |
 | `SpawnableRespawnTimers` | `List<DateTime>`                 | Pending respawn timestamps                     |
 
-## Spawn Lifecycle
+### Editor Settings
 
-### Initialization (`OnStartNetwork`)
+- `GizmoColor` — Configurable gizmo color (default: red) for bounding box visualization in Scene view.
+- `OnDrawGizmos()` visualizes the spawner's bounding box or collider.
+- Collider-based gizmo uses `DrawGizmo()` extension; fallback uses `DrawWireCube`.
 
-1. Validates all `SpawnableSettings` via `OnValidate()`.
-2. Clamps `InitialSpawnCount` to `[0, MaxSpawnCount]`.
-3. Spawns `InitialSpawnCount` objects immediately.
-4. Creates respawn timers for the remaining slots up to `MaxSpawnCount`.
+## Usage Examples
 
-### Spawn Selection (`GetSpawnIndex`)
+### ISpawnable Interface
+
+Interface implemented by any entity that can be spawned and managed by an `ObjectSpawner`.
+
+| Member             | Type                | Description                                         |
+|--------------------|---------------------|-----------------------------------------------------|
+| `ObjectSpawner`    | `ObjectSpawner`     | The spawner that created and manages this entity     |
+| `SpawnableSettings`| `SpawnableSettings` | The settings used when spawning this entity          |
+| `NetworkObject`    | `NetworkObject`     | FishNet network object for synchronization           |
+| `ID`               | `long`              | Unique identifier for the spawned entity             |
+| `Despawn()`        | `void`              | Despawns the entity via its owning ObjectSpawner     |
+
+### Spawn Selection Logic (`GetSpawnIndex`)
 
 | SpawnType  | Selection Logic                                                    |
 |------------|--------------------------------------------------------------------|
@@ -128,7 +143,61 @@ The core spawner component, attached as a `NetworkBehaviour` in the scene.
 | `Random`   | Uniform random: `Random.Range(0, Count)`                          |
 | `Weighted` | Cumulative weight: picks based on `SpawnChance` proportional odds  |
 
-### Spawn Placement (`SpawnObject`)
+### Respawn Conditions
+
+#### BaseRespawnCondition
+
+Abstract `MonoBehaviour` base. Subclasses implement `OnCheckCondition(ObjectSpawner)` returning `bool`.
+
+#### DeadNPCRespawnCondition
+
+Allows respawn only when **all** specified NPCs are dead:
+
+- Iterates the `NPCs` list.
+- Skips null entries or those without `ICharacterDamageController`.
+- Returns `false` if any NPC's `IsAlive` is true.
+- Returns `true` if all are dead or the list is empty.
+
+Typical use: Boss encounters where all mobs must be defeated before the encounter resets.
+
+### External Integration Points
+
+- **NPC System** — NPCs implement `ISpawnable`; spawner sets their `ObjectSpawner` and `SpawnableSettings`, and calls `IAIController.Initialize()` with home position.
+- **Pet System** — Pets (extending NPC) are spawnable entities managed by ObjectSpawner.
+- **AI System** — `IAIController.Initialize(spawnPosition)` is called on spawn, setting the AI's home position.
+- **CharacterAttribute System** — `ICharacterDamageController.IsAlive` is used by `DeadNPCRespawnCondition` for alive/dead checks.
+- **FishNet Networking** — Object pooling via `GetPooledInstantiated()` / `Despawn(DespawnType.Pool)`, server spawning via `ServerManager.Spawn()`.
+- **Scene System** — Spawned objects are moved to the spawner's scene via `SceneManager.MoveGameObjectToScene()`.
+- **Physics System** — SphereCast for ground detection when placing objects with `RandomSpawnPosition`.
+
+## Operational Checks
+
+| Check | How to Verify | Expected Result |
+|-------|---------------|-----------------|
+| Initial spawn | Enter Play Mode on server with `InitialSpawnCount > 0` | Correct number of entities spawned immediately |
+| Max spawn cap | Verify `Spawned.Count` never exceeds `MaxSpawnCount` | Count stays at or below configured maximum |
+| Linear selection | Set `SpawnType = Linear`, observe spawn sequence | Spawns cycle sequentially through the list |
+| Random selection | Set `SpawnType = Random`, observe over many spawns | Uniform distribution across spawnables |
+| Weighted selection | Set `SpawnType = Weighted` with varied `SpawnChance` | Higher-chance entries spawn proportionally more |
+| Respawn timer | Despawn an entity, wait for respawn delay | New entity spawns after configured delay |
+| OR conditions | Add an OR condition that returns false | Respawn blocked until at least one OR condition is true |
+| AND conditions | Add an AND condition that returns false | Respawn blocked until all AND conditions are true |
+| Ground detection | Enable `RandomSpawnPosition`, place spawner above terrain | Entities placed on ground surface with correct YOffset |
+| Gizmo display | Select spawner in Editor Scene view | Bounding box wireframe visible with configured color |
+| Object pooling | Despawn and respawn repeatedly, monitor allocations | Objects returned to pool and reused |
+
+## Flow Diagram
+
+### Spawn Lifecycle
+
+#### Initialization (`OnStartNetwork`)
+
+1. Validates all `SpawnableSettings` via `OnValidate()`.
+2. Clamps `InitialSpawnCount` to `[0, MaxSpawnCount]`.
+3. Spawns `InitialSpawnCount` objects immediately.
+4. Creates respawn timers for the remaining slots up to `MaxSpawnCount`.
+
+#### Spawn Placement (`SpawnObject`)
 
 1. Selects a `SpawnableSettings` via `GetSpawnIndex()`.
 2. If `RandomSpawnPosition` is true:
@@ -143,42 +212,14 @@ The core spawner component, attached as a `NetworkBehaviour` in the scene.
 8. Calls `ServerManager.Spawn()` to network the object.
 9. Clears respawn timers if `MaxSpawnCount` is reached.
 
-### Despawn (`Despawn`)
+#### Despawn
 
 1. Removes the entity from the `Spawned` dictionary.
 2. Schedules a new respawn timer via `GetNextRespawnTime()`.
 3. Clears the entity's `ObjectSpawner` and `SpawnableSettings` references.
 4. Returns the object to the pool via `ServerManager.Despawn(DespawnType.Pool)`.
 
-### Respawn Loop (`TryRespawn`)
-
-Runs every frame in `Update()`:
-
-1. Skips if no spawnables or no pending timers.
-2. Clears all timers if `Spawned.Count >= MaxSpawnCount`.
-3. For each timer that has elapsed (`DateTime.UtcNow >= respawnTime`):
-   - **OR conditions**: If any condition returns true, respawn is allowed. If the list is empty, defaults to allowed.
-   - **AND conditions**: All conditions must return true (checked only if OR conditions passed).
-   - If all conditions pass, spawns the object and removes the timer.
-
-## Respawn Conditions
-
-### BaseRespawnCondition
-
-Abstract `MonoBehaviour` base. Subclasses implement `OnCheckCondition(ObjectSpawner)` returning `bool`.
-
-### DeadNPCRespawnCondition
-
-Allows respawn only when **all** specified NPCs are dead:
-
-- Iterates the `NPCs` list.
-- Skips null entries or those without `ICharacterDamageController`.
-- Returns `false` if any NPC's `IsAlive` is true.
-- Returns `true` if all are dead or the list is empty.
-
-Typical use: Boss encounters where all mobs must be defeated before the encounter resets.
-
-## Condition Evaluation Flow
+### Condition Evaluation Flow
 
 ```
 Timer Elapsed?
@@ -204,21 +245,62 @@ Timer Elapsed?
                             └── Any condition false → shouldRespawn = false → No respawn
 ```
 
-## Editor Support
+### Respawn Loop (`TryRespawn`)
 
-In the Unity Editor (`UNITY_EDITOR`):
-- `OnDrawGizmos()` visualizes the spawner's bounding box or collider in scene view.
-- `GizmoColor` is configurable (default: red).
-- Collider-based gizmo uses `DrawGizmo()` extension; fallback uses `DrawWireCube`.
+Runs every frame in `Update()`:
 
-## External Integration Points
+1. Skips if no spawnables or no pending timers.
+2. Clears all timers if `Spawned.Count >= MaxSpawnCount`.
+3. For each timer that has elapsed (`DateTime.UtcNow >= respawnTime`):
+   - **OR conditions**: If any condition returns true, respawn is allowed. If the list is empty, defaults to allowed.
+   - **AND conditions**: All conditions must return true (checked only if OR conditions passed).
+   - If all conditions pass, spawns the object and removes the timer.
 
-The Spawner system is consumed by and integrates with many other systems:
+## Project Structure
 
-- **NPC System** — NPCs implement `ISpawnable`; spawner sets their `ObjectSpawner` and `SpawnableSettings`, and calls `IAIController.Initialize()` with home position.
-- **Pet System** — Pets (extending NPC) are spawnable entities managed by ObjectSpawner.
-- **AI System** — `IAIController.Initialize(spawnPosition)` is called on spawn, setting the AI's home position.
-- **CharacterAttribute System** — `ICharacterDamageController.IsAlive` is used by `DeadNPCRespawnCondition` for alive/dead checks.
-- **FishNet Networking** — Object pooling via `GetPooledInstantiated()` / `Despawn(DespawnType.Pool)`, server spawning via `ServerManager.Spawn()`.
-- **Scene System** — Spawned objects are moved to the spawner's scene via `SceneManager.MoveGameObjectToScene()`.
-- **Physics System** — SphereCast for ground detection when placing objects with `RandomSpawnPosition`.
+### Directory Structure
+
+```
+Spawner/
+├── ISpawnable.cs              # Interface for entities managed by an ObjectSpawner
+├── ObjectSpawnType.cs          # Enum for spawn selection strategy (Linear, Random, Weighted)
+├── ObjectSpawner.cs            # Core spawner component (NetworkBehaviour)
+├── Settings/
+│   ├── SpawnableSettings.cs        # Per-object spawn configuration (respawn times, chance, offset)
+│   ├── ItemSpawnableSettings.cs    # Item-specific spawnable settings
+│   └── NPCSpawnableSettings.cs     # NPC-specific spawnable settings
+└── Condition/
+    ├── BaseRespawnCondition.cs          # Abstract base for respawn conditions
+    └── Types/
+        └── DeadNPCRespawnCondition.cs   # Condition: all specified NPCs must be dead
+```
+
+### Inheritance Hierarchies
+
+#### Spawner Components
+
+```
+NetworkBehaviour
+└── ObjectSpawner
+```
+
+#### Spawnable Interface
+
+```
+ISpawnable
+├── NPC : BaseCharacter, ISceneObject, ISpawnable
+│   └── Pet
+└── (any entity implementing ISpawnable)
+```
+
+#### Respawn Conditions
+
+```
+MonoBehaviour
+└── BaseRespawnCondition (abstract)
+    └── DeadNPCRespawnCondition
+```
+
+## License
+
+This project is subject to the FishMMO project license.

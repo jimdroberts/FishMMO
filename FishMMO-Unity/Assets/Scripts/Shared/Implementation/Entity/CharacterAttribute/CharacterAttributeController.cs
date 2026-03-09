@@ -201,6 +201,13 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
+			// Reset the regen accumulator so that a reconnect or scene transfer
+			// does not carry over a stale partial-interval. Without this, the
+			// first Regenerate() call after reset would fire a tick early or late,
+			// causing a regen desync between client and server until the next
+			// reconcile corrects it.
+			accumulatedRegenDelta = 0.0f;
+
 			foreach (CharacterResourceAttribute characterResourceAttribute in ResourceAttributes.Values)
 			{
 				characterResourceAttribute.SetCurrentValue(characterResourceAttribute.FinalValue);

@@ -6,8 +6,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Value provider that returns a random integer between <see cref="Min"/> and <see cref="Max"/> (inclusive).
-	/// Uses the deterministic <see cref="System.Random"/> from <see cref="CharacterHitEventData.RNG"/> when available,
-	/// otherwise falls back to <see cref="UnityEngine.Random"/>.
+	/// Uses the deterministic <see cref="DeterministicRNG"/> from <see cref="CharacterHitEventData.RNG"/> when available,
+	/// otherwise falls back to <see cref="DeterministicRNG.Shared"/>.
 	/// </summary>
 	[Serializable]
 	public sealed class RandomRangeValue : IIntValueProvider
@@ -46,8 +46,8 @@ namespace FishMMO.Shared
 				return hitData.RNG.Next(min, max + 1);
 			}
 
-			// Fallback to Unity random.
-			return UnityEngine.Random.Range(min, max + 1);
+			// Fallback to shared RNG.
+			return DeterministicRNG.Shared.Range(min, max + 1);
 		}
 	}
 }

@@ -90,22 +90,50 @@ namespace FishMMO.Shared
 		public List<int> GetAllAbilityEventIDs()
 		{
 			if (cachedAllEventIDs != null)
+			{
 				return cachedAllEventIDs;
+			}
 
-			var eventIDs = new HashSet<int>();
-			if (OnTickEvents != null)
-				eventIDs.UnionWith(OnTickEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
-			if (OnHitEvents != null)
-				eventIDs.UnionWith(OnHitEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
-			if (OnPreSpawnEvents != null)
-				eventIDs.UnionWith(OnPreSpawnEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
-			if (OnSpawnEvents != null)
-				eventIDs.UnionWith(OnSpawnEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
-			if (OnDestroyEvents != null)
-				eventIDs.UnionWith(OnDestroyEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
+			HashSet<int> eventIDs = new HashSet<int>();
+			AppendEventIDs(OnTickEvents, eventIDs);
+			AppendEventIDs(OnHitEvents, eventIDs);
+			AppendEventIDs(OnPreSpawnEvents, eventIDs);
+			AppendEventIDs(OnSpawnEvents, eventIDs);
+			AppendEventIDs(OnDestroyEvents, eventIDs);
 
 			cachedAllEventIDs = new List<int>(eventIDs);
 			return cachedAllEventIDs;
+		}
+
+		/// <summary>
+		/// Clears cached event ID data when the template is edited in the inspector.
+		/// </summary>
+		private void OnValidate()
+		{
+			cachedAllEventIDs = null;
+		}
+
+		/// <summary>
+		/// Appends all non-null event IDs from the provided list into the target set without extra list allocations.
+		/// </summary>
+		/// <typeparam name="T">The concrete ability event type.</typeparam>
+		/// <param name="source">The source list to scan.</param>
+		/// <param name="eventIDs">The destination set receiving event IDs.</param>
+		private static void AppendEventIDs<T>(List<T> source, HashSet<int> eventIDs) where T : AbilityEvent
+		{
+			if (source == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < source.Count; ++i)
+			{
+				T abilityEvent = source[i];
+				if (abilityEvent != null)
+				{
+					eventIDs.Add(abilityEvent.ID);
+				}
+			}
 		}
 
 		/// <summary>

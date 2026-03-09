@@ -1,52 +1,137 @@
-# CharacterSelect System
+# Character Select System
+
+**Short description:** Login-server subsystem that handles character listing, deletion, and selection for authenticated player accounts, with per-connection in-flight gating, async database operations, and main-thread response marshalling.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation / Build](#installation--build)
+- [Quick Start Guides](#quick-start-guides)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Operational Checks](#operational-checks)
+- [Flow Diagram](#flow-diagram)
+- [Project Structure](#project-structure)
+- [License](#license)
 
 ## Overview
 
-The CharacterSelect system handles character listing, deletion, and selection on the login server. It keeps the network handler path lightweight by queuing database-heavy work onto `AsyncWorkerData`, then marshals all FishNet responses back onto the Unity main thread through a dedicated main-thread queue container.
+The Character Select system manages the character list, delete, and select workflows on the login server. It keeps the network handler path lightweight by queuing database-heavy work onto `AsyncWorkerData`, then marshals all FishNet broadcast responses back onto the Unity main thread through a dedicated main-thread queue container (`CharacterSelectSystemMainThreadQueueData`).
 
-It also applies per-connection in-flight gating for select/delete requests and bounded main-thread response draining to reduce DoS pressure and frame spikes.
+Per-connection in-flight gating prevents a single client from queuing multiple concurrent list/select/delete operations, and a post-release cooldown (`RequestCooldownMilliseconds = 2000`) prevents rapid sequential spam. Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) avoids frame spikes.
 
-## Directory Structure
+### Threading Model
 
-```
-CharacterSelect/
-├── CharacterSelectSystem.cs                    # Stateless login-server character list/delete/select behaviour
-├── CharacterSelectSystemRuntimeData.cs         # Per-connection in-flight gate container
-├── CharacterSelectSystemMainThreadQueueData.cs # Per-system main-thread action queue container
-└── README.md
-```
+| Thread | Work |
+|--------|------|
+| Network / Main | Broadcast receive, fast validation, enqueue async work |
+| Async Workers | Database fetch / delete / select operations |
+| Main Thread | FishNet `Broadcast` and `Kick` operations via queued actions |
 
-Related core contracts:
+`OnUpdate` drains queued main-thread actions every frame, capped by `maxMainThreadResponsesPerFrame`. `OnDeinitialize` drains all remaining actions so clients receive final messages.
 
-- `Server/Core/LoginServer/CharacterSelect/ICharacterSelectSystem.cs`
-- `Server/Core/LoginServer/CharacterSelect/ICharacterSelectSystemMainThreadQueueData.cs`
-- `Server/Core/RuntimeData/IAsyncWorkerData.cs`
-- `Server/Core/RuntimeData/IMainThreadQueueData.cs`
+### Broadcast Protocol
 
-## Inheritance Hierarchies
+| Broadcast | Direction | Purpose |
+|-----------|-----------|---------|
+| `CharacterRequestListBroadcast` | Client → Server | Request list of characters for the authenticated account |
+| `CharacterListBroadcast` | Server → Client | Response containing `List<CharacterDetails>` |
+| `CharacterDeleteBroadcast` | Client → Server | Request deletion of a named character |
+| `CharacterDeleteBroadcast` | Server → Client | Echo confirming deletion (character name) or failure (empty name) |
+| `CharacterSelectBroadcast` | Client → Server | Request selection of a named character |
+| `ServerListBroadcast` | Server → Client | Response containing `List<WorldServerDetails>` of active world servers |
 
-### Behaviour
+### Failure Response Behaviour
 
-```
-ServerBehaviour
-└── CharacterSelectSystem : ICharacterSelectSystem
-```
+All request flows guarantee a response to the client, even on failure, to prevent indefinite client hangs:
 
-### Runtime Data Containers
+- **Character List:** On DB service unavailability or fetch failure, an empty `CharacterListBroadcast` is sent.
+- **Character Select:** On any failure (service unavailability, UoW failure, ownership mismatch, commit failure, or world server fetch failure), an empty `ServerListBroadcast` is sent. If the character does not exist or belongs to another account, the connection is kicked with `KickReason.UnusualActivity`.
+- **Character Delete:** On failure, a `CharacterDeleteBroadcast` with an empty `CharacterName` is sent. The in-flight guard releases so the user can retry.
 
-```
-RuntimeDataContainer
-├── CharacterSelectSystemRuntimeData
-└── MainThreadQueueData (abstract)
-    └── SystemMainThreadQueueData (abstract)
-        └── CharacterSelectSystemMainThreadQueueData : ICharacterSelectSystemMainThreadQueueData
-```
+## Supported Platforms
 
-## Runtime Data Container Details
+| Platform | Supported | Notes |
+|----------|-----------|-------|
+| Windows | Yes | |
+| Linux | Yes | |
+| WebGL | N/A | Server-only subsystem |
 
-### `CharacterSelectSystemRuntimeData`
+**Engine:** Unity 6.3 LTS
+**Scripting Backend:** IL2CPP
 
-Mutable runtime state for the character selection system.
+## Features
+
+- **Character list retrieval** — async database fetch via `ICharacterService.FetchManyAsync`, maps `CharacterData` rows to `CharacterDetails` (name, scene, race template ID)
+- **Character deletion** — atomic Unit of Work transaction covering sub-entity cleanup and soft-delete of the character row
+- **Character selection** — atomic Unit of Work transaction with defense-in-depth ownership verification and `SetSelectedAsync`
+- **World server routing** — after successful selection, fetches active world servers via `IWorldServerService.FetchActiveAsync` and sends `ServerListBroadcast`
+- **Per-connection in-flight gating** — `ConcurrentDictionary<int, byte>` prevents duplicate concurrent operations per connection
+- **Post-release cooldown** — 2-second gap between successive requests enforced via `NextAllowedRequestUtc`
+- **Bounded main-thread draining** — configurable `maxMainThreadResponsesPerFrame` to time-slice response dispatch
+- **Character name validation** — `Authentication.IsAllowedCharacterName` check on delete and select before any async work
+- **Disconnect cleanup** — `OnRemoteConnectionStopped` removes in-flight and cooldown entries for disconnected clients
+- **Configurable deletion retention** — `KeepDeleteData` toggle controls whether sub-entity rows are preserved or purged
+- **Sub-entity deletion** — when `KeepDeleteData` is false, deletes abilities, achievements, attributes, bank, buffs, equipment, factions, friends, hotkeys, inventory, known abilities, and pets (guild/party memberships handled by `CharacterService.DeleteAsync`)
+
+## Prerequisites
+
+- FishMMO server framework with `ServerBehaviour` base class
+- FishNet networking library
+- PostgreSQL database with Npgsql services implementing:
+  - `ICharacterService`
+  - `IWorldServerService`
+  - `IUnitOfWorkService`
+  - `ICharacterAbilityService`, `ICharacterAchievementService`, `ICharacterAttributeService`, `ICharacterBankService`, `ICharacterBuffService`, `ICharacterEquipmentService`, `ICharacterFactionService`, `ICharacterFriendService`, `ICharacterHotkeyService`, `ICharacterInventoryService`, `ICharacterKnownAbilityService`, `ICharacterPetService`
+- `AccountManager` for connection-to-account mapping
+- `AsyncWorkerData` runtime data container for background task dispatch
+- `DataContainerRegistry` with required containers registered
+
+## Installation / Build
+
+This is an integrated module within the FishMMO server framework. No separate installation is required.
+
+1. The `CharacterSelectSystem` ScriptableObject is created via **Assets → Create → FishMMO → Server → LoginServer → Character Select System**.
+2. Add the created asset to the login server's `ServerBehaviour` list.
+3. The `DataContainerRegistry` automatically creates required runtime data containers declared via `[RequiresDataContainer]` attributes.
+
+## Quick Start Guides
+
+### Server Operator
+
+1. Create the `CharacterSelectSystem` ScriptableObject asset via the Unity menu.
+2. Assign it to the login server behaviour list.
+3. Configure inspector fields (see [Configuration](#configuration)).
+4. Start the login server — the system registers broadcast handlers on `InitializeOnce`.
+5. Authenticated clients can now request character lists, delete characters, and select characters.
+
+### Developer
+
+1. `CharacterSelectSystem` extends `ServerBehaviour` and implements `ICharacterSelectSystem`.
+2. Broadcast handlers are registered in `InitializeOnce` and unregistered in `OnDeinitialize`.
+3. All async database work is dispatched via `TryEnqueueAsyncWork` onto `AsyncWorkerData`.
+4. All FishNet broadcasts are marshalled back to the main thread via `TryEnqueueMainThread<ICharacterSelectSystemMainThreadQueueData>`.
+5. Per-connection state is stored in `CharacterSelectSystemRuntimeData` — always release in-flight gates in `finally` blocks.
+
+## Configuration
+
+### Inspector Fields (`CharacterSelectSystem`)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `maxMainThreadResponsesPerFrame` | `int` | `100` | Maximum queued main-thread response actions processed per frame. Clamped to minimum of 1 on initialization. |
+| `keepDeleteData` | `bool` | `true` | If true, deleted character sub-entity rows are preserved in the database for recovery or auditing. If false, all sub-entity data is purged before soft-deleting the character row. |
+
+### Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `RequestCooldownMilliseconds` | `2000` | Minimum interval in milliseconds between successive character-select requests from the same connection. |
+
+### Runtime Data: `CharacterSelectSystemRuntimeData`
 
 | Property | Type | Purpose |
 |----------|------|---------|
@@ -56,138 +141,219 @@ Mutable runtime state for the character selection system.
 **Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
 
 **Lifecycle:**
-- `InitializeOnce()` — creates empty `ConcurrentDictionary`.
+- `InitializeOnce()` — creates empty dictionaries.
 - `Clear()` — clears dictionary entries.
-- `Deinitialize()` — clears and nulls reference.
+- `OnDeinitialize()` — clears and nulls references.
 
-### `CharacterSelectSystemMainThreadQueueData`
+### Runtime Data Dependencies
 
-Per-system main-thread action queue. Inherits from `SystemMainThreadQueueData` (which inherits from `MainThreadQueueData`). Implements `ICharacterSelectSystemMainThreadQueueData`.
-
-Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker responses back to the Unity main thread.
-
-**Why a separate concrete type?** The `DataContainerRegistry` creates independent instances per concrete type, ensuring each system gets its own isolated main-thread queue.
-
-## Runtime Data Dependencies
-
-`CharacterSelectSystem` declares three required containers:
-
-- `[RequiresDataContainer(typeof(CharacterSelectSystemMainThreadQueueData))]`
-- `[RequiresDataContainer(typeof(CharacterSelectSystemRuntimeData))]`
-- `[RequiresDataContainer(typeof(AsyncWorkerData))]`
+`CharacterSelectSystem` declares three required containers via attributes:
 
 | Container | Responsibility |
 |-----------|----------------|
 | `CharacterSelectSystemRuntimeData` | Per-connection in-flight gate and cooldown for list/select/delete request deduplication |
 | `AsyncWorkerData` | Executes database operations in background worker threads |
-| `CharacterSelectSystemMainThreadQueueData` | Marshals network-safe response actions to main thread |
+| `CharacterSelectSystemMainThreadQueueData` | Marshals network-safe response actions to the main thread |
 
-## Operational Safeguards
+## Usage Examples
 
-- **Per-connection in-flight gate (`CharacterSelectSystemRuntimeData.InFlightRequests`)**
-    - Applied to `CharacterRequestListBroadcast`, `CharacterDeleteBroadcast`, and `CharacterSelectBroadcast`.
-    - Prevents a single connection from queueing multiple concurrent list/select/delete operations.
-    - Gate is always released in `finally` after async processing.
-- **Post-release cooldown (`RequestCooldownMilliseconds`, constant `2000`)**
-    - After an in-flight request completes, the connection must wait the configured cooldown before another request is accepted.
-    - Tracked via `NextAllowedRequestUtc` in runtime data.
-    - Prevents rapid sequential spam after each request completes.
-    - Entries are cleaned up on disconnect.
-- **Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`)**
-    - `OnLateUpdate` drains up to `maxMainThreadResponsesPerFrame` actions each frame.
-    - `OnDeinitialize` drains all remaining actions.
+### Character List Request (Client → Server → Client)
 
-## Request Flows
+```
+Client sends: CharacterRequestListBroadcast { }
+Server validates account, fetches characters from DB
+Server sends: CharacterListBroadcast { Characters = [ { CharacterName, SceneName, RaceTemplateID }, ... ] }
+```
 
-### Character List (`CharacterRequestListBroadcast`)
+### Character Delete Request (Client → Server → Client)
 
-1. Validate account ownership via `AccountManager` (`connection -> accountName`).
-2. Queue async fetch (`ICharacterService.FetchManyAsync(accountName)`).
-3. Map `CharacterData` rows to `CharacterDetails`.
-4. Enqueue main-thread response action.
-5. Send `CharacterListBroadcast`.
+```
+Client sends: CharacterDeleteBroadcast { CharacterName = "MyHero" }
+Server validates account + ownership, runs atomic delete transaction
+Server sends: CharacterDeleteBroadcast { CharacterName = "MyHero" }   // success
+Server sends: CharacterDeleteBroadcast { CharacterName = "" }         // failure
+```
 
-### Character Delete (`CharacterDeleteBroadcast`)
+### Character Select Request (Client → Server → Client)
 
-1. Validate connection + account binding.
-2. Acquire per-connection in-flight gate.
-3. Queue async deletion pipeline.
-3. Open Unit of Work transaction.
-4. Fetch character and verify account ownership.
-5. If `KeepDeleteData == false`, delete all sub-entity tables (abilities, achievements, attributes, bank, buffs, equipment, factions, friends, hotkeys, inventory, known abilities, pets).
-6. Soft-delete character row via `ICharacterService.DeleteAsync(...)`.
-7. Commit transaction.
-8. Enqueue main-thread response action.
-9. Send `CharacterDeleteBroadcast`.
-10. Release in-flight gate in `finally`.
+```
+Client sends: CharacterSelectBroadcast { CharacterName = "MyHero" }
+Server validates account + ownership, sets selected, fetches world servers
+Server sends: ServerListBroadcast { Servers = [ { Name, LastPulse, Address, Port, CharacterCount, Locked }, ... ] }
+```
 
-### Character Select (`CharacterSelectBroadcast`)
+## Operational Checks
 
-1. Validate connection + account binding.
-2. Acquire per-connection in-flight gate.
-3. Queue async select pipeline.
-3. Open Unit of Work transaction.
-4. Fetch character and verify ownership.
-5. Set selected character (`SetSelectedAsync(accountName, characterId)`).
-6. Verify selected ownership state for defense-in-depth (`FetchByAccountAsync(accountName, selected: true)`).
-7. Commit transaction.
-8. Fetch active world servers.
-9. Map rows to `WorldServerDetails`.
-10. Enqueue main-thread response action.
-11. Send `ServerListBroadcast`.
-12. Release in-flight gate in `finally`.
+| Check | How to Verify | Expected Result |
+|-------|---------------|-----------------|
+| System initializes | Login server startup logs | `"CharacterSelectSystem: Initialized"` in debug log |
+| Character list works | Authenticate and request character list | Client receives `CharacterListBroadcast` with character entries |
+| Character deletion works | Delete a character from the selection screen | Client receives `CharacterDeleteBroadcast` echo with character name |
+| Character selection works | Select a character | Client receives `ServerListBroadcast` with active world servers |
+| In-flight gating | Rapid-fire requests from same connection | Only one request processed at a time; subsequent requests silently dropped |
+| Cooldown enforcement | Send request immediately after previous completes | Request rejected until 2-second cooldown expires |
+| Ownership verification | Attempt to select/delete another account's character | Connection kicked with `KickReason.UnusualActivity` (select) or failure response (delete) |
+| Disconnect cleanup | Client disconnects mid-flow | In-flight and cooldown entries removed for that connection |
+| Failure responses | DB service unavailable or query failure | Client receives empty list response (never hangs) |
+| KeepDeleteData=false | Delete character with retention disabled | All sub-entity rows purged before character soft-delete |
 
-## Failure Response Behavior
+## Flow Diagram
 
-All request flows guarantee a response to the client, even on failure, to prevent indefinite client hangs:
+### Character List Flow
 
-- **Character List**: On DB service unavailability or fetch failure, an empty `CharacterListBroadcast` is sent.
-- **Character Select**: On any failure (service unavailability, UoW failure, ownership mismatch, commit failure, or world server fetch failure), an empty `ServerListBroadcast` is sent.
-- **Character Delete**: On failure, no `CharacterDeleteBroadcast` echo is sent — the character stays in the client's list. The in-flight guard releases so the user can retry.
+```
+Client                    LoginServer                        Database
+  |                           |                                 |
+  |-- CharacterRequestList -->|                                 |
+  |                           |-- Validate account ------------>|
+  |                           |-- Enqueue async work            |
+  |                           |       |                         |
+  |                           |       |-- FetchManyAsync ------>|
+  |                           |       |<-- CharacterData[] -----|
+  |                           |       |                         |
+  |                           |<- Enqueue main-thread response  |
+  |<-- CharacterListBroadcast |                                 |
+```
 
-## Transaction Boundaries
+### Character Delete Flow
 
-Both delete and select operations run under `IUnitOfWorkService` to preserve consistency:
+```
+Client                    LoginServer                        Database
+  |                           |                                 |
+  |-- CharacterDelete ------->|                                 |
+  |                           |-- Validate account + name       |
+  |                           |-- Acquire in-flight gate        |
+  |                           |-- Enqueue async work            |
+  |                           |       |                         |
+  |                           |       |-- BeginAsync (UoW) ---->|
+  |                           |       |-- FetchAsync ---------->|
+  |                           |       |<-- CharacterData -------|
+  |                           |       |-- Verify ownership      |
+  |                           |       |-- Delete sub-entities*->|
+  |                           |       |-- DeleteAsync --------->|
+  |                           |       |-- CommitAsync --------->|
+  |                           |       |                         |
+  |                           |<- Enqueue main-thread response  |
+  |<-- CharacterDeleteBroadcast (echo)                          |
+  |                           |-- Release in-flight gate        |
 
-- Begin transaction
-- Validate ownership + mutate data
-- Commit
+* Sub-entity deletion only when KeepDeleteData == false.
+  Deletes: abilities, achievements, attributes, bank, buffs,
+  equipment, factions, friends, hotkeys, inventory,
+  known abilities, pets. Guild/party handled by CharacterService.
+```
 
-If any stage fails, no success message is sent and logs are emitted with failure context.
+### Character Select Flow
 
-## Backpressure and Queueing
+```
+Client                    LoginServer                        Database
+  |                           |                                 |
+  |-- CharacterSelect ------->|                                 |
+  |                           |-- Validate account + name       |
+  |                           |-- Acquire in-flight gate        |
+  |                           |-- Enqueue async work            |
+  |                           |       |                         |
+  |                           |       |-- BeginAsync (UoW) ---->|
+  |                           |       |-- FetchAsync ---------->|
+  |                           |       |<-- CharacterData -------|
+  |                           |       |-- Verify ownership      |
+  |                           |       |-- SetSelectedAsync ---->|
+  |                           |       |-- FetchByAccountAsync ->|
+  |                           |       |   (defense-in-depth)    |
+  |                           |       |-- CommitAsync --------->|
+  |                           |       |                         |
+  |                           |       |-- FetchActiveAsync ---->|
+  |                           |       |<-- WorldServerData[] ---|
+  |                           |       |                         |
+  |                           |<- Enqueue main-thread response  |
+  |<-- ServerListBroadcast    |                                 |
+  |                           |-- Release in-flight gate        |
+```
 
-Async work dispatch uses `TryEnqueueAsyncWork(...)` and returns `bool`:
+## Project Structure
 
-- `true`: request accepted by async queue.
-- `false`: request rejected under pressure or missing queue dependency.
+### Directory Tree
 
-Rejected enqueue attempts are logged with account context to aid operational monitoring.
+```
+Server/Implementation/LoginServer/CharacterSelect/
+├── CharacterSelectSystem.cs                    # Login-server character list/delete/select behaviour
+├── CharacterSelectSystemRuntimeData.cs         # Per-connection in-flight gate and cooldown container
+├── CharacterSelectSystemMainThreadQueueData.cs # Per-system main-thread action queue container
+└── README.md
 
-## Threading Model
+Server/Core/LoginServer/CharacterSelect/
+├── ICharacterSelectSystem.cs                   # Engine-agnostic public API interface
+└── ICharacterSelectSystemMainThreadQueueData.cs # Main-thread queue data interface
 
-| Thread | Work |
-|--------|------|
-| Network/Main | Broadcast receive, fast validation, enqueue async work |
-| Async Workers | Database fetch/delete/select operations |
-| Main Thread | FishNet `Broadcast` and `Kick` operations via queued actions |
+Shared/Implementation/Network/CharacterSelect/
+├── CharacterSelectBroadcasts.cs                # Network broadcast structs (request list, list, delete, select)
+└── CharacterDetails.cs                         # Serializable character details (name, scene, race template ID)
 
-`OnLateUpdate` drains queued main-thread actions every frame, capped by `maxMainThreadResponsesPerFrame`.
+Shared/Implementation/Network/
+├── WorldServerDetails.cs                       # Serializable world server details (name, address, port, etc.)
+└── ServerSelect/ServerSelectBroadcasts.cs      # ServerListBroadcast struct
+```
 
-## Deletion Retention Policy
+### Inheritance Hierarchies
 
-`KeepDeleteData` controls whether sub-entity character records are preserved when deleting a character:
+#### Behaviour
 
-- `true`: keep sub-entity rows (character row still soft-deleted).
-- `false`: remove sub-entity rows before character delete.
+```
+ServerBehaviour
+└── CharacterSelectSystem : ICharacterSelectSystem
+```
 
-This allows operational choice between retention/auditing and full cleanup.
+#### Runtime Data Containers
 
-## External Integration Points
+```
+RuntimeDataContainer
+├── CharacterSelectSystemRuntimeData
+└── MainThreadQueueData (abstract)
+    └── SystemMainThreadQueueData (abstract)
+        └── CharacterSelectSystemMainThreadQueueData : ICharacterSelectSystemMainThreadQueueData
+```
 
-- **AccountManager**: validates connection ownership (`GetAccountNameByConnection`).
-- **Database Service Registry**: resolves all character/world/unit-of-work services.
-- **CharacterService**: fetch list, fetch by name, set selected, delete character.
-- **WorldServerService**: supplies active world server list after successful selection.
-- **AsyncWorkerData**: centralized background task queue.
-- **CharacterSelectSystemMainThreadQueueData**: guarantees main-thread-safe network dispatch.
+#### Broadcast Structs
+
+```
+IBroadcast
+├── CharacterRequestListBroadcast
+├── CharacterListBroadcast          → List<CharacterDetails>
+├── CharacterDeleteBroadcast        → string CharacterName
+├── CharacterSelectBroadcast        → string CharacterName
+└── ServerListBroadcast             → List<WorldServerDetails>
+```
+
+#### Shared Data Classes
+
+```
+CharacterDetails
+├── CharacterName   : string
+├── SceneName       : string
+└── RaceTemplateID  : int
+
+WorldServerDetails
+├── Name            : string
+├── LastPulse       : DateTime
+├── Address         : string
+├── Port            : ushort
+├── CharacterCount  : int
+└── Locked          : bool
+```
+
+### External Integration Points
+
+| Dependency | Purpose |
+|------------|---------|
+| `AccountManager` | Validates connection ownership via `GetAccountNameByConnection` |
+| `Database Service Registry` | Resolves all character / world / unit-of-work services |
+| `ICharacterService` | Fetch list, fetch by name, fetch by account, set selected, delete character |
+| `IWorldServerService` | Supplies active world server list after successful selection |
+| `IUnitOfWorkService` | Provides atomic transaction boundaries for delete and select operations |
+| `AsyncWorkerData` | Centralized background task queue for async database work |
+| `CharacterSelectSystemMainThreadQueueData` | Guarantees main-thread-safe network dispatch |
+| `Authentication` | Character name validation via `IsAllowedCharacterName` |
+
+## License
+
+This module is part of the FishMMO project and is subject to the FishMMO project license.

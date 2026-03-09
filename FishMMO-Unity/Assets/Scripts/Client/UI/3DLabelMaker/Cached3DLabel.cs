@@ -190,9 +190,9 @@ namespace FishMMO.Client
 			}
 			if (effectFlags.IsFlagged(LabelEffect.Shake))
 			{
-				moveOffset.x += Random.Range(-ShakeIntensity, ShakeIntensity);
-				moveOffset.y += Random.Range(-ShakeIntensity, ShakeIntensity);
-				moveOffset.z += Random.Range(-ShakeIntensity, ShakeIntensity);
+				moveOffset.x += DeterministicRNG.Shared.Range(-ShakeIntensity, ShakeIntensity);
+				moveOffset.y += DeterministicRNG.Shared.Range(-ShakeIntensity, ShakeIntensity);
+				moveOffset.z += DeterministicRNG.Shared.Range(-ShakeIntensity, ShakeIntensity);
 			}
 
 			// ── Apply ───────────────────────────────────────────
@@ -241,9 +241,9 @@ namespace FishMMO.Client
 			if (effectFlags.IsFlagged(LabelEffect.FloatRandom))
 			{
 				Vector3 randomDir = new Vector3(
-					Random.Range(-1f, 1f),
+					DeterministicRNG.Shared.Range(-1f, 1f),
 					1f,
-					Random.Range(-1f, 1f)
+					DeterministicRNG.Shared.Range(-1f, 1f)
 				).normalized;
 				floatRandomVelocity = randomDir * FloatRandomSpeed;
 			}

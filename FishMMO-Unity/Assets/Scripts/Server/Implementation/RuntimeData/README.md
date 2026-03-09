@@ -1,157 +1,208 @@
-# RuntimeData Container System
+# Runtime Data
+
+**Short description:** Provides a container-based separation of mutable runtime state from server behaviour logic, with automatic attribute-driven discovery, deduplication, priority-ordered initialization, and shared cross-system containers for async work queues and main-thread action marshalling.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation / Build](#installation--build)
+- [Quick Start Guides](#quick-start-guides)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Operational Checks](#operational-checks)
+- [Flow Diagram](#flow-diagram)
+- [Project Structure](#project-structure)
+- [License](#license)
 
 ## Overview
 
-The RuntimeData Container system provides a clean separation of concerns between server logic and mutable runtime state in FishMMO. `ServerBehaviour` ScriptableObjects handle business logic, event subscriptions, and configuration, while `RuntimeDataContainer` classes hold all mutable runtime data (dictionaries, trackers, timestamps). Containers are automatically discovered via the `[RequiresDataContainer]` attribute, deduplicated, priority-ordered, and registered in a global `DataContainerRegistry` for type-safe access.
+The Runtime Data system enforces a clean separation between server business logic (`ServerBehaviour` ScriptableObjects) and mutable runtime state (`RuntimeDataContainer` classes). ServerBehaviours handle configuration, event subscriptions, validation, and algorithms — they are stateless. RuntimeDataContainers hold all dictionaries, trackers, timestamps, and queues — they contain no business logic.
 
-## Directory Structure
+Containers are automatically discovered via `[RequiresDataContainer]` attributes placed on ServerBehaviour classes. The server scans all behaviours at startup, creates container instances through `RuntimeDataContainerFactory` (reflection-based, parameterless-constructor validation), deduplicates by concrete type so multiple systems requiring the same container share one instance, orders them by `InitializationPriority`, and registers them in a global `RuntimeDataContainerRegistry` for type-safe lookup.
 
-```
-Server/
-├── Core/RuntimeData/
-│   ├── IRuntimeDataContainer.cs              # Marker + generic data container interface
-│   ├── IRuntimeDataContainerFactory.cs       # Factory interface for container creation
-│   ├── IRuntimeDataContainerRegistry.cs      # Registry interface for container management
-│   └── RequiresDataContainerAttribute.cs     # Attribute for declaring container dependencies
-│
-└── Implementation/RuntimeData/
-    ├── AsyncWorkerData.cs                  # Shared bounded async work queue container
-    ├── MainThreadQueueData.cs              # Shared base container for main-thread action marshalling
-    ├── SystemMainThreadQueueData.cs        # Concrete per-system main-thread queue container
-    ├── RuntimeDataContainer.cs               # Abstract base class for all containers
-    ├── RuntimeDataContainerFactory.cs        # Reflection-based container factory
-    └── RuntimeDataContainerRegistry.cs       # Concrete registry with lifecycle management
-```
+The Core layer (`Server/Core/RuntimeData/`) defines engine-agnostic interfaces: `IRuntimeDataContainer` (marker extending `IServerComponent`), the generic `IRuntimeDataContainer<TNetworkManager, TServerManager, TConnection, TDataContainer>` (with `Initialize`, `Clear`), `IRuntimeDataContainerFactory`, `IRuntimeDataContainerRegistry<...>`, `IAsyncWorkerData`, and `IMainThreadQueueData`. The Implementation layer (`Server/Implementation/RuntimeData/`) provides the abstract `RuntimeDataContainer` base class, the concrete `RuntimeDataContainerFactory` and `RuntimeDataContainerRegistry`, and shared cross-system containers: `AsyncWorkerData` (bounded async work queue with backpressure and entity-keyed ordering), `MainThreadQueueData` (thread-safe main-thread action marshalling with copy-then-invoke drain), and `SystemMainThreadQueueData` (thin abstract subclass for per-system queue isolation).
 
-Concrete per-system containers (e.g., `PartyRuntimeData`, `CharacterMappingData`) still live alongside their respective system implementations under `Server/Implementation/World/` and `Server/Implementation/LoginServer/`, while shared cross-system containers (e.g., `AsyncWorkerData`, `MainThreadQueueData`) are centralized in `Server/Implementation/RuntimeData/`.
+Concrete per-system containers (e.g., `PartyRuntimeData`, `GuildRuntimeData`, `CharacterMappingData`) live alongside their respective system implementations under `Server/Implementation/World/` and `Server/Implementation/LoginServer/`, while shared cross-system containers are centralized here.
 
-## Separation of Concerns
+## Supported Platforms
 
-### ServerBehaviour (Logic)
+| Platform | Supported | Notes |
+|----------|-----------|-------|
+| Windows  | Yes       | Fully supported as a server host |
+| Linux    | Yes       | Fully supported as a server host |
+| WebGL    | N/A       | Server-only component; not applicable to browser builds |
 
-- `ScriptableObject`-based, added to the server via Unity Inspector.
-- Contains immutable configuration (e.g., `MaxPartySize`, `SaveRate`).
-- Implements business logic, validation, and algorithms.
-- Handles network broadcasts, events, and callbacks.
-- **Stateless** — all mutable state lives in containers.
+**Engine:** Unity 6.3 LTS
+**Scripting backend:** IL2CPP
 
-### RuntimeDataContainer (Data)
+## Features
 
-- Non-serializable runtime classes created via reflection.
-- Contains mutable runtime state (dictionaries, trackers, timestamps).
-- **No business logic** — pure data storage.
-- Automatically created via attribute-based discovery.
-- Registered with `DataContainerRegistry` for global access.
+- **Logic / data separation** — `ServerBehaviour` ScriptableObjects own immutable configuration and business logic; `RuntimeDataContainer` classes own all mutable runtime state. Neither crosses into the other's responsibility.
+- **Automatic attribute-driven discovery** — `[RequiresDataContainer(typeof(T))]` on any `ServerBehaviour` causes the server to instantiate container `T` at startup without manual wiring.
+- **Deduplication** — Multiple behaviours can declare the same container type; only one instance is created and shared across all consumers.
+- **Priority-ordered initialization** — `RequiresDataContainerAttribute.InitializationPriority` (int, lower = earlier) controls container initialization order when containers depend on each other.
+- **Reflection-based factory with validation** — `RuntimeDataContainerFactory.CreateContainer(Type)` validates that the type is non-null, non-abstract, not an interface, assignable to `IRuntimeDataContainer`, and has a public parameterless constructor before calling `Activator.CreateInstance`.
+- **Type-safe registry** — `RuntimeDataContainerRegistry` extends `ServerComponentRegistry` and provides `Register<T>()`, `Unregister<T>()`, `TryGet<T>(out T)`, `Get<T>()`, `InitializeAll(IServer)`, and `DeinitializeAll()`. Behaviours access containers via `Server.DataContainerRegistry.TryGet<IMyData>(out var data)`.
+- **Lifecycle management** — `InitializeAll` iterates registered containers, calling `container.Initialize(server, serverManager)` which sets references and calls the abstract `InitializeOnce()`. `DeinitializeAll` calls `Clear()` then `Deinitialize()` on each unique instance (deduplicated via `HashSet`), then empties the registry.
+- **Bounded async work queue (AsyncWorkerData)** — Replaces fire-and-forget `_ = SomeAsync(...)` with backpressure-aware scheduling. Uses multiple `System.Threading.Channels.Channel<AsyncWorkItem>` (one per worker, `BoundedChannelFullMode.DropWrite`, capacity 1024). Supports round-robin enqueue and entity-keyed consistent-hashing enqueue for FIFO ordering per entity. Exposes `PendingCount` and `CompletedCount` for monitoring. Performs graceful shutdown: cancels workers, completes writers, drains remaining items, waits up to 10 seconds for worker tasks.
+- **Main-thread action marshalling (MainThreadQueueData)** — Abstract base container with a `Queue<Action>` guarded by `lock`. Background threads call `TryEnqueue(Action)` (bounded at 10 000 pending actions). Main thread calls `Drain()` or `Drain(int maxActions)` each frame, which copies actions under lock then invokes outside the lock to minimize lock hold time. Uses a reusable `drainBuffer` list to avoid per-call allocation.
+- **Per-system queue isolation (SystemMainThreadQueueData)** — Abstract subclass of `MainThreadQueueData` that concrete per-system queue containers inherit, ensuring each system gets its own isolated queue instance via the `DataContainerRegistry`.
+- **Diagnostic counters** — `AsyncWorkerData` tracks `CompletedCount` (atomic `Interlocked.Read`) and `PendingCount` (sum of all channel reader counts). Work items carry an optional `CallerName` for error logging attribution.
+- **Structured logging** — All lifecycle events (`Initialize`, `Deinitialize`, worker startup/shutdown, errors) are logged via `FishMMO.Logging.Log` with category tags (`"AsyncWorkerData"`, `"RuntimeDataContainerRegistry"`).
 
-### Why This Separation?
+## Prerequisites
 
-| Benefit            | Description                                                             |
-|--------------------|-------------------------------------------------------------------------|
-| **Testability**    | Mock data containers without mocking entire systems                     |
-| **Reusability**    | Multiple behaviours can share the same data container                   |
-| **Clarity**        | Clear ownership — behaviours own logic, containers own state            |
-| **Thread Safety**  | Data containers can be locked independently                             |
-| **Serialization**  | ScriptableObjects (logic) can be serialized; runtime data cannot        |
-| **Hot Reload**     | Unity can reload ScriptableObjects without losing runtime state         |
+- Unity 6.3 LTS (IL2CPP scripting backend)
+- FishNet networking framework (`FishNet.Connection.NetworkConnection`, `FishNet.Managing.Server.ServerManager`)
+- FishMMO server core assemblies (`FishMMO.Server.Core` — `IRuntimeDataContainer`, `IRuntimeDataContainerFactory`, `IRuntimeDataContainerRegistry`, `IServerComponent`, `IServerComponentRegistry`, `ServerComponentRegistry`, `RequiresDataContainerAttribute`, `IAsyncWorkerData`, `IMainThreadQueueData`)
+- FishMMO logging (`FishMMO.Logging.Log`)
+- `System.Threading.Channels` (for `AsyncWorkerData` bounded channel work queues)
+- `System.Threading` (`Interlocked`, `CancellationTokenSource`, `Task`) for async worker lifecycle
 
-## Inheritance Hierarchies
+## Installation / Build
 
-### Core Interfaces
+This is an integrated module within the FishMMO Unity project. No separate installation is required.
 
-```
-IServerComponent
-└── IRuntimeDataContainer (marker)
-    └── IRuntimeDataContainer<TNetworkManager, TServerManager, TConnection, TDataContainer>
-            • Initialize(server, serverManager) → ServerComponentInitializationStatus
-            • Clear()
+1. Ensure the FishMMO Unity project is open in the Unity Editor.
+2. The `RuntimeDataContainerRegistry`, `RuntimeDataContainerFactory`, and all container instances are created automatically by the server during `OnFinalizeSetup`. No manual ScriptableObject or asset creation is needed.
+3. ServerBehaviours declare container dependencies via `[RequiresDataContainer(typeof(T))]` — the server handles discovery, creation, deduplication, and initialization.
 
-IServerComponentRegistry<TNetworkManager, TConnection, TDataContainer>
-└── IRuntimeDataContainerRegistry<TNetworkManager, TConnection, TDataContainer>
+## Quick Start Guides
 
-IRuntimeDataContainerFactory
-    • CreateContainer(Type) → IRuntimeDataContainer
-    • IsValidContainerType(Type) → bool
-```
+### Creating a New Runtime Data Container
 
-### Concrete Implementations
-
-```
-RuntimeDataContainer (abstract)
-    : IRuntimeDataContainer<INetworkManagerWrapper, ServerManager, NetworkConnection, IRuntimeDataContainer>
-    │
-    ├── AsyncWorkerData
-    ├── MainThreadQueueData (abstract)
-    ├── PartyRuntimeData
-    ├── GuildRuntimeData
-    ├── ChatRuntimeData
-    ├── CharacterMappingData
-    ├── SceneServerRuntimeData
-    ├── WorldServerRuntimeData
-    └── ... (per-system containers)
-
-ServerComponentRegistry<...>
-└── RuntimeDataContainerRegistry
-        : IServerComponentRegistry<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer>
-
-RuntimeDataContainerFactory
-    : IRuntimeDataContainerFactory
-```
-
-## Shared Containers in RuntimeData
-
-### AsyncWorkerData
-
-`AsyncWorkerData` is a centralized bounded async work queue used to replace fire-and-forget patterns (`_ = SomeAsync(...)`) with backpressure-aware scheduling.
-
-- Uses multiple bounded channels (`DropWrite`) and fixed worker loops.
-- Supports round-robin enqueue and entity-keyed consistent hashing enqueue.
-- Exposes queue health via `PendingCount` and `CompletedCount`.
-- Performs graceful shutdown with worker cancellation and channel drain.
-
-Typical usage:
+1. Define a Core interface extending `IRuntimeDataContainer`:
 
 ```csharp
-// Any worker
-asyncWorkerData.Enqueue(() => PersistInventoryAsync(dto));
-
-// Keyed ordering (same entity always on same worker)
-asyncWorkerData.Enqueue(() => SaveCharacterAsync(characterData), characterID);
+public interface IMySystemData : IRuntimeDataContainer
+{
+    Dictionary<long, string> Tracker { get; }
+    DateTime LastSyncTime { get; set; }
+}
 ```
 
-### MainThreadQueueData
-
-`MainThreadQueueData` is an abstract base container for thread-safe main-thread marshalling.
-
-- Worker/background threads call `Enqueue(Action)`.
-- Main thread calls `Drain()` (typically each frame) to execute queued actions.
-- Uses copy-then-invoke to minimize lock hold time.
-- Intended to be subclassed per system so each system gets an isolated queue instance.
-
-## Automatic Container Discovery
-
-### RequiresDataContainer Attribute
-
-Declare container dependencies directly on `ServerBehaviour` classes:
+2. Implement the container extending `RuntimeDataContainer`:
 
 ```csharp
-[RequiresDataContainer(typeof(PartyRuntimeData))]
-public class PartySystem : ServerBehaviour
+public class MySystemData : RuntimeDataContainer, IMySystemData
+{
+    private readonly Dictionary<long, string> tracker = new();
+
+    public Dictionary<long, string> Tracker => tracker;
+    public DateTime LastSyncTime { get; set; }
+
+    public override ServerComponentInitializationStatus InitializeOnce()
+    {
+        LastSyncTime = DateTime.UtcNow;
+        return ServerComponentInitializationStatus.Initialized;
+    }
+
+    public override void Clear()
+    {
+        tracker.Clear();
+        LastSyncTime = DateTime.UtcNow;
+    }
+
+    protected override void OnDeinitialize() => Clear();
+}
+```
+
+3. Declare the dependency on your ServerBehaviour:
+
+```csharp
+[RequiresDataContainer(typeof(MySystemData))]
+public class MySystem : ServerBehaviour
 {
     public override ServerComponentInitializationStatus InitializeOnce()
     {
-        // Container is guaranteed to exist and be initialized
-        if (!Server.DataContainerRegistry.TryGet<IPartyRuntimeData>(out var data))
+        if (!Server.DataContainerRegistry.TryGet<IMySystemData>(out var data))
             return ServerComponentInitializationStatus.FailedToGetDataContainer;
 
-        // Use the container...
+        // Container is ready — subscribe to events, store local ref, etc.
         return ServerComponentInitializationStatus.Initialized;
     }
 }
 ```
 
-### Deduplication
+### Using AsyncWorkerData for Background Work
 
-Multiple systems can require the same container — only one instance is created:
+1. Declare the dependency:
+
+```csharp
+[RequiresDataContainer(typeof(AsyncWorkerData))]
+public class PersistenceSystem : ServerBehaviour { ... }
+```
+
+2. Enqueue work (round-robin):
+
+```csharp
+if (Server.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker))
+{
+    asyncWorker.Enqueue(() => PersistInventoryAsync(dto));
+}
+```
+
+3. Enqueue ordered work (entity-keyed):
+
+```csharp
+asyncWorker.Enqueue(() => SaveCharacterAsync(charData), characterID);
+// Same characterID always routes to the same worker — FIFO ordering guaranteed
+```
+
+### Using MainThreadQueueData for Thread Marshalling
+
+1. Create a concrete queue container inheriting `SystemMainThreadQueueData`:
+
+```csharp
+public class MySystemMainThreadQueue : SystemMainThreadQueueData { }
+```
+
+2. Declare it on your behaviour and drain each frame:
+
+```csharp
+[RequiresDataContainer(typeof(MySystemMainThreadQueue))]
+public class MyNetworkSystem : ServerBehaviour
+{
+    private IMainThreadQueueData mainThreadQueue;
+
+    public override ServerComponentInitializationStatus InitializeOnce()
+    {
+        if (!Server.DataContainerRegistry.TryGet<IMainThreadQueueData>(out mainThreadQueue))
+            return ServerComponentInitializationStatus.FailedToGetDataContainer;
+        return ServerComponentInitializationStatus.Initialized;
+    }
+
+    // Called from async worker thread
+    private void OnAsyncResult(NetworkConnection conn, byte[] payload)
+    {
+        mainThreadQueue.TryEnqueue(() => conn.Broadcast(new ResultMsg { Data = payload }));
+    }
+
+    // Called each frame on main thread
+    public void OnLateUpdate() => mainThreadQueue.Drain();
+}
+```
+
+## Configuration
+
+| Parameter | Location | Default | Description |
+|-----------|----------|---------|-------------|
+| Worker count | `AsyncWorkerData.DEFAULT_WORKER_COUNT` | `4` | Number of async worker loops spawned at initialization |
+| Channel capacity | `AsyncWorkerData.DEFAULT_CHANNEL_CAPACITY` | `1024` | Bounded capacity per worker channel; `DropWrite` when full (backpressure) |
+| Max queue capacity | `MainThreadQueueData.MaxQueueCapacity` | `10000` | Maximum pending actions before `TryEnqueue` returns `false` |
+| Channel full mode | `AsyncWorkerData` | `BoundedChannelFullMode.DropWrite` | Items are silently dropped when channel is full |
+| Channel single reader | `AsyncWorkerData` | `true` | Each channel has exactly one reader (its worker loop) |
+| Shutdown timeout | `AsyncWorkerData.OnDeinitialize` | `10 seconds` | Maximum wait time for worker tasks to complete during shutdown |
+| `InitializationPriority` | `[RequiresDataContainer]` attribute | `0` | Lower values initialize first; set per-attribute on each ServerBehaviour |
+
+All values are compile-time constants. To adjust, modify the source constants and rebuild.
+
+## Usage Examples
+
+### Shared Container Across Multiple Systems
 
 ```csharp
 [RequiresDataContainer(typeof(CharacterMappingData))]
@@ -163,12 +214,10 @@ public class PartySystem : ServerBehaviour { }
 [RequiresDataContainer(typeof(CharacterMappingData))]  // Same container
 public class FriendSystem : ServerBehaviour { }
 
-// Result: Only ONE CharacterMappingData instance is created
+// Result: Only ONE CharacterMappingData instance is created and shared
 ```
 
-### Priority Ordering
-
-Handle container initialization dependencies:
+### Priority-Ordered Initialization
 
 ```csharp
 [RequiresDataContainer(typeof(CharacterMappingData), InitializationPriority = 0)]
@@ -179,70 +228,20 @@ public class CharacterInventorySystem : ServerBehaviour { }
 // CharacterInventoryData initialized second (priority 10)
 ```
 
-## Container Lifecycle
+### Monitoring Async Worker Health
 
-### RuntimeDataContainer Base Class
-
-All concrete containers extend `RuntimeDataContainer`, which provides:
-
-| Member              | Type / Signature                               | Description                                      |
-|---------------------|-------------------------------------------------|--------------------------------------------------|
-| `Initialized`       | `bool`                                          | Whether the container has been initialized       |
-| `Server`            | `IServer<...>`                                  | Reference to the server instance                 |
-| `ServerManager`     | `ServerManager`                                 | Reference to FishNet's server manager            |
-| `Initialize()`      | `→ ServerComponentInitializationStatus`         | Sets references, calls `InitializeOnce()`        |
-| `InitializeOnce()`  | `abstract`                                      | One-time initialization (override in subclass)   |
-| `Clear()`           | `abstract`                                      | Resets all mutable state                         |
-| `Deinitialize()`    | `abstract`                                      | Cleanup on shutdown                              |
-
-### RuntimeDataContainerFactory
-
-Creates container instances via reflection. Validates that the type is:
-- Non-null, non-abstract, not an interface.
-- Assignable to `IRuntimeDataContainer`.
-- Has a public parameterless constructor.
-
-### RuntimeDataContainerRegistry
-
-Manages all container instances. Provides:
-- `Register<T>()` / `Unregister<T>()` — Add/remove containers by interface type.
-- `TryGet<T>(out T)` / `Get<T>()` — Type-safe container lookup.
-- `InitializeAll(server)` — Initializes all registered containers with the server instance.
-- `DeinitializeAll()` — Clears and deinitializes all containers, then empties the registry.
-
-## Initialization Order
-
-```
-Server.Start()
-    │
-    └── OnFinalizeSetup(remoteAddress)
-            │
-            ├── DataContainerRegistry = new RuntimeDataContainerRegistry()
-            │
-            ├── DiscoverAndCreateDataContainers()
-            │   ├── Scan all ServerBehaviours for [RequiresDataContainer] attributes
-            │   ├── Create container instances via RuntimeDataContainerFactory
-            │   ├── Deduplicate by Type
-            │   └── Order by InitializationPriority
-            │
-            ├── RegisterAllDataContainers()
-            │   └── Register each container in DataContainerRegistry
-            │
-            ├── DataContainerRegistry.InitializeAll(this)
-            │   └── Call container.Initialize() → container.InitializeOnce()
-            │       for each container (marks as Initialized)
-            │
-            ├── BehaviourRegistry.InitializeAll(this)
-            │   └── Call behaviour.InitializeOnce() for each behaviour
-            │       (behaviours can now access initialized containers)
-            │
-            └── NetworkWrapper.StartServer()
-                └── Server Running ✓
+```csharp
+if (Server.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker))
+{
+    int pending = asyncWorker.PendingCount;
+    long completed = asyncWorker.CompletedCount;
+    Log.Info("Health", $"AsyncWorker: pending={pending}, completed={completed}");
+}
 ```
 
-## Example: Party System
+### Party System — Full Container Pattern
 
-### 1. Core Interface (Engine-Agnostic)
+**Core interface:**
 
 ```csharp
 public interface IPartyRuntimeData : IRuntimeDataContainer
@@ -254,7 +253,7 @@ public interface IPartyRuntimeData : IRuntimeDataContainer
 }
 ```
 
-### 2. Implementation (Concrete Data)
+**Implementation:**
 
 ```csharp
 public class PartyRuntimeData : RuntimeDataContainer, IPartyRuntimeData
@@ -282,18 +281,17 @@ public class PartyRuntimeData : RuntimeDataContainer, IPartyRuntimeData
         LastFetchTime = DateTime.UtcNow;
     }
 
-    public override void Deinitialize() => Clear();
+    protected override void OnDeinitialize() => Clear();
 }
 ```
 
-### 3. System Logic (Behaviour)
+**Behaviour:**
 
 ```csharp
 [CreateAssetMenu(fileName = "PartySystem", menuName = "FishMMO/Server/SceneServer/Party System")]
 [RequiresDataContainer(typeof(PartyRuntimeData))]
 public class PartySystem : ServerBehaviour, IPartySystem<NetworkConnection>
 {
-    // Immutable configuration — no mutable state here
     public int MaxPartySize = 6;
     public float UpdatePumpRate = 1.0f;
 
@@ -307,58 +305,192 @@ public class PartySystem : ServerBehaviour, IPartySystem<NetworkConnection>
 
         return ServerComponentInitializationStatus.Initialized;
     }
-
-    public void OnServerPartyCreateBroadcastReceived(
-        NetworkConnection conn, PartyCreateBroadcast msg, Channel channel)
-    {
-        if (!Server.DataContainerRegistry.TryGet<IPartyRuntimeData>(out var runtimeData))
-            return;
-
-        if (ValidatePartyCreation(conn))
-        {
-            long partyId = CreatePartyInDatabase();
-            runtimeData.PartyMemberTracker[partyId] = new HashSet<long> { characterId };
-            runtimeData.PartyCharacterTracker[partyId] = new HashSet<long> { characterId };
-        }
-    }
 }
 ```
 
-## Best Practices
+## Operational Checks
 
-### ServerBehaviour — DO
+| Check | How to Verify | Expected Result |
+|-------|---------------|-----------------|
+| Container discovery | Check server startup logs for `"RuntimeDataContainerRegistry"` → `"Initializing all data containers"` | All declared containers appear in log output |
+| Container initialization | Check per-container log `"[TypeName] Initialization Status: Initialized"` | Every container reports `Initialized` |
+| Deduplication | Declare same container type on multiple behaviours | Only one instance created; all behaviours share it |
+| Priority ordering | Assign different `InitializationPriority` values | Lower-priority containers initialize first |
+| Factory validation | Pass an abstract type or interface to `RuntimeDataContainerFactory.CreateContainer` | `InvalidOperationException` with descriptive message |
+| Async worker startup | Check log `"AsyncWorkerData"` → `"Initialized (4 workers, 1024 capacity per channel)"` | Worker count and capacity match constants |
+| Async worker backpressure | Enqueue more than 1024 items to a single worker channel | `Enqueue` returns `false`; item is dropped |
+| Async worker entity ordering | Enqueue multiple items with the same `entityKey` | All items route to the same worker and execute in FIFO order |
+| Async worker shutdown | Stop the server | Log `"Worker N shutdown complete."` for each worker; `"Deinitialized (Completed=X, Remaining=Y)"` |
+| Main-thread queue capacity | Enqueue more than 10 000 actions without draining | `TryEnqueue` returns `false` |
+| Main-thread drain | Call `Drain()` on main thread after enqueueing actions | All queued actions execute; drain returns count |
+| Registry DeinitializeAll | Stop server | Each unique container instance has `Clear()` and `Deinitialize()` called exactly once (deduplicated via `HashSet`) |
+| Full lifecycle | Start → operate → stop server | Containers created → initialized → used → cleared → deinitialized; no leaked state |
 
-- Store configuration values (rates, limits, thresholds).
-- Implement business logic and validation.
-- Subscribe to events and broadcasts.
-- Access containers via `Server.DataContainerRegistry.TryGet<T>()`.
-- Keep stateless — no mutable collections.
+## Flow Diagram
 
-### RuntimeDataContainer — DO
+```
+Server.Start()
+    │
+    └── OnFinalizeSetup(remoteAddress)
+            │
+            ├── DataContainerRegistry = new RuntimeDataContainerRegistry()
+            │
+            ├── DiscoverAndCreateDataContainers()
+            │   ├── Scan all ServerBehaviours for [RequiresDataContainer] attributes
+            │   ├── Create container instances via RuntimeDataContainerFactory
+            │   │   └── Activator.CreateInstance(containerType)
+            │   ├── Deduplicate by concrete Type (multiple decls → one instance)
+            │   └── Order by InitializationPriority (lower = first)
+            │
+            ├── RegisterAllDataContainers()
+            │   └── Register each container in DataContainerRegistry
+            │       └── Stored by interface type for TryGet<T>() lookup
+            │
+            ├── DataContainerRegistry.InitializeAll(this)
+            │   └── For each container:
+            │       ├── Cast server to IServer<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer>
+            │       ├── container.Initialize(server, serverManager)
+            │       │   ├── Set Server + ServerManager references
+            │       │   ├── Call InitializeOnce()
+            │       │   │   ├── AsyncWorkerData: create channels, spawn worker loops
+            │       │   │   ├── MainThreadQueueData: queue ready at construction
+            │       │   │   └── Custom containers: init trackers, set timestamps
+            │       │   └── Set Initialized = true
+            │       └── Log initialization status
+            │
+            ├── BehaviourRegistry.InitializeAll(this)
+            │   └── For each behaviour:
+            │       └── behaviour.InitializeOnce()
+            │           └── TryGet<IMyData>() → container guaranteed initialized
+            │
+            └── NetworkWrapper.StartServer()
+                └── Server Running ✓
 
-- Store all mutable runtime state.
-- Provide read-only public interfaces for collections.
-- Implement `Clear()` to reset state.
-- Use proper collection types (`Dictionary`, `HashSet`, `Queue`, etc.).
+  ┌─────────────────────── Runtime Operation ───────────────────────┐
+  │                                                                 │
+  │  ServerBehaviour (main thread)                                  │
+  │    ├── Receives broadcast → reads/writes container data         │
+  │    ├── asyncWorkerData.Enqueue(() => PersistAsync(data))        │
+  │    │       └── Round-robin or entity-keyed → worker channel     │
+  │    └── mainThreadQueue.Drain() (each frame in OnLateUpdate)     │
+  │             └── Copy-under-lock → invoke outside lock           │
+  │                                                                 │
+  │  AsyncWorkerData (background threads)                           │
+  │    ├── Worker loops: await channel.Reader.ReadAllAsync(ct)      │
+  │    ├── Execute work item → Interlocked.Increment(completedCount)│
+  │    └── On error: log with CallerName attribution                │
+  │                                                                 │
+  │  Background thread → MainThreadQueueData                        │
+  │    └── TryEnqueue(Action) → main thread executes via Drain()    │
+  └─────────────────────────────────────────────────────────────────┘
 
-### ServerBehaviour — DON'T
+Server.Stop()
+    │
+    └── DataContainerRegistry.DeinitializeAll()
+            ├── Deduplicate instances via HashSet<IRuntimeDataContainer>
+            ├── For each unique instance:
+            │   ├── container.Clear()
+            │   │   ├── AsyncWorkerData: drain all channels without executing
+            │   │   ├── MainThreadQueueData: clear queue under lock
+            │   │   └── Custom containers: clear dictionaries, reset timestamps
+            │   └── container.Deinitialize()
+            │       ├── Call OnDeinitialize()
+            │       │   ├── AsyncWorkerData: cancel CTS → complete writers →
+            │       │   │   wait workers (10s timeout) → log stats → dispose CTS
+            │       │   ├── MainThreadQueueData: drain remaining actions
+            │       │   └── Custom containers: cleanup resources
+            │       └── Reset Initialized, Server, ServerManager to null
+            └── components.Clear() → registry empty
+```
 
-- Don't store mutable collections (`Dictionary`, `List`, `HashSet`, `Queue`).
-- Don't cache data references in fields.
-- Don't implement data storage logic.
-- Don't create containers manually.
+## Project Structure
 
-### RuntimeDataContainer — DON'T
+```
+Server/
+├── Core/RuntimeData/
+│   ├── IRuntimeDataContainer.cs              # Marker + generic data container interface (extends IServerComponent)
+│   ├── IRuntimeDataContainerFactory.cs       # Factory interface: CreateContainer(Type), IsValidContainerType(Type)
+│   ├── IRuntimeDataContainerRegistry.cs      # Registry interface (extends IServerComponentRegistry)
+│   ├── IAsyncWorkerData.cs                   # Interface: Enqueue (round-robin + entity-keyed), PendingCount, CompletedCount
+│   ├── IMainThreadQueueData.cs               # Interface: TryEnqueue(Action), Drain(), Drain(int maxActions)
+│   └── RequiresDataContainerAttribute.cs     # [RequiresDataContainer(typeof(T), InitializationPriority = N)]
+│
+└── Implementation/RuntimeData/
+    ├── RuntimeDataContainer.cs               # Abstract base: Initialized, Server, ServerManager, Initialize → InitializeOnce, Deinitialize → OnDeinitialize, Clear
+    ├── RuntimeDataContainerFactory.cs        # Reflection factory: Activator.CreateInstance with type validation
+    ├── RuntimeDataContainerRegistry.cs       # Concrete registry: InitializeAll (cast + iterate), DeinitializeAll (HashSet dedup)
+    ├── AsyncWorkerData.cs                    # Bounded channel work queue: 4 workers, 1024 capacity, DropWrite, entity-keyed hashing
+    ├── MainThreadQueueData.cs                # Abstract main-thread queue: lock + Queue<Action>, copy-then-invoke Drain, 10K cap
+    └── SystemMainThreadQueueData.cs          # Abstract subclass of MainThreadQueueData for per-system queue isolation
+```
 
-- Don't implement business logic.
-- Don't subscribe to events or broadcasts.
-- Don't call other systems directly.
-- Don't make it a ScriptableObject.
+### Inheritance Hierarchy
 
-## External Integration Points
+```
+IServerComponent
+└── IRuntimeDataContainer (marker)
+    ├── IAsyncWorkerData
+    │       • Enqueue(Func<Task>, callerName?) → bool
+    │       • Enqueue(Func<Task>, entityKey, callerName?) → bool
+    │       • PendingCount → int
+    │       • CompletedCount → long
+    ├── IMainThreadQueueData
+    │       • TryEnqueue(Action) → bool
+    │       • Drain() → void
+    │       • Drain(int maxActions) → int
+    └── IRuntimeDataContainer<TNetworkManager, TServerManager, TConnection, TDataContainer>
+            • Initialize(server, serverManager) → ServerComponentInitializationStatus
+            • Clear() → void
 
-- **Server** — Owns the `DataContainerRegistry`, drives discovery, creation, and initialization during startup.
-- **ServerBehaviour** — All server systems declare container dependencies via `[RequiresDataContainer]` and access them through the registry.
-- **IServerComponent / IServerComponentRegistry** — The container system extends the unified server component architecture.
-- **FishNet** — `RuntimeDataContainer` receives `ServerManager` during initialization for network access.
-- **Database Layer** — Containers often store data fetched from or destined for the database (e.g., `LastFetchTime` for periodic DB sync).
+RuntimeDataContainer (abstract)
+    : IRuntimeDataContainer<INetworkManagerWrapper, ServerManager, NetworkConnection, IRuntimeDataContainer>
+    │   • Initialized : bool
+    │   • Server : IServer<...>
+    │   • ServerManager : ServerManager
+    │   • Initialize() → sets refs → calls InitializeOnce()
+    │   • Deinitialize() → calls OnDeinitialize() → resets refs
+    │   • InitializeOnce() [abstract]
+    │   • OnDeinitialize() [abstract]
+    │   • Clear() [abstract]
+    │
+    ├── AsyncWorkerData : IAsyncWorkerData
+    │       4 worker loops, BoundedChannel<AsyncWorkItem>, round-robin + entity-keyed enqueue
+    │
+    ├── MainThreadQueueData (abstract) : IMainThreadQueueData
+    │   │   Queue<Action> + lock, TryEnqueue (10K cap), copy-then-invoke Drain
+    │   │
+    │   └── SystemMainThreadQueueData (abstract)
+    │           Per-system concrete subclasses inherit this
+    │
+    ├── PartyRuntimeData, GuildRuntimeData, ChatRuntimeData, ...
+    └── (per-system containers alongside their ServerBehaviour implementations)
+
+IServerComponentRegistry<...>
+└── ServerComponentRegistry<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer>
+    └── RuntimeDataContainerRegistry
+            • InitializeAll: cast server, iterate containers, call Initialize
+            • DeinitializeAll: HashSet dedup, Clear + Deinitialize each, empty registry
+
+IRuntimeDataContainerFactory
+└── RuntimeDataContainerFactory
+        • CreateContainer(Type): validate → Activator.CreateInstance
+        • IsValidContainerType(Type): non-null, non-abstract, non-interface, assignable, has parameterless ctor
+```
+
+### Design Rules
+
+| Rule | ServerBehaviour (Logic) | RuntimeDataContainer (Data) |
+|------|-------------------------|-----------------------------|
+| **Unity type** | ScriptableObject | Plain C# class |
+| **State** | Stateless — immutable config only | All mutable runtime state |
+| **Logic** | Business logic, validation, events | No business logic |
+| **Collections** | None (no Dictionary, List, etc.) | Owns all collections |
+| **Creation** | Added via Unity Inspector | Created via reflection factory |
+| **Serialization** | Serializable (ScriptableObject) | Non-serializable runtime only |
+| **Hot Reload** | Unity can reload without state loss | State survives SO reload |
+| **Testability** | Mock containers, not entire systems | Mock via interface |
+| **Thread Safety** | Accesses containers through registry | Containers lock independently |
+
+## License
+
+This module is part of the FishMMO project and is subject to the FishMMO project license.

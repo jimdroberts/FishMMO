@@ -111,7 +111,7 @@ namespace FishMMO.Shared
 
 			template ??= item?.Template; // Use null-coalescing operator for cleaner assignment
 
-			System.Random random = new System.Random(seed);
+			DeterministicRNG random = new DeterministicRNG(seed);
 
 			if (random != null && attributes != null)
 			{
@@ -141,7 +141,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="random">The random number generator.</param>
 		/// <param name="equippable">The equippable item template.</param>
-		private void GenerateItemAttributes(System.Random random, EquippableItemTemplate equippable)
+		private void GenerateItemAttributes(DeterministicRNG random, EquippableItemTemplate equippable)
 		{
 			if (equippable is WeaponTemplate weapon)
 			{
@@ -159,7 +159,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="random">The random number generator.</param>
 		/// <param name="equippable">The equippable item template.</param>
-		private void AddRandomAttributes(System.Random random, EquippableItemTemplate equippable)
+		private void AddRandomAttributes(DeterministicRNG random, EquippableItemTemplate equippable)
 		{
 			int attributeCount = random.Next(0, equippable.MaxItemAttributes);
 			for (int i = 0; i < attributeCount; ++i)

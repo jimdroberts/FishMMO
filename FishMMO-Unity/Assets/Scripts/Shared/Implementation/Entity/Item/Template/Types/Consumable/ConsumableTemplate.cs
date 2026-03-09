@@ -24,20 +24,27 @@ namespace FishMMO.Shared
 		public float Cooldown;
 
 		/// <summary>
+		/// The time required to activate this consumable (in seconds).
+		/// A value of 0 means instant activation.
+		/// </summary>
+		public float ActivationTime;
+
+		/// <summary>
 		/// Determines if the specified character can consume the given item.
 		/// Checks for valid character, item, stackable status, sufficient charges, and cooldown.
 		/// </summary>
 		/// <param name="character">The player character attempting to consume.</param>
 		/// <param name="item">The item to be consumed.</param>
+		/// <param name="currentTick">The current network tick for cooldown evaluation.</param>
 		/// <returns>True if the item can be consumed, false otherwise.</returns>
-		public bool CanConsume(IPlayerCharacter character, Item item)
+		public bool CanConsume(IPlayerCharacter character, Item item, uint currentTick)
 		{
 			return character != null &&
 				   item != null &&
 				   item.IsStackable &&
 				   item.Stackable.Amount >= ChargeCost &&
 				   character.TryGet(out ICooldownController cooldownController) &&
-				   !cooldownController.IsOnCooldown(ID);
+				   !cooldownController.IsOnCooldown(ID, currentTick);
 		}
 
 		/// <summary>
@@ -46,15 +53,16 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="character">The player character consuming the item.</param>
 		/// <param name="item">The item to be consumed.</param>
+		/// <param name="currentTick">The current network tick for cooldown creation.</param>
 		/// <returns>True if the item was successfully consumed, false otherwise.</returns>
-		public virtual bool Invoke(IPlayerCharacter character, Item item)
+		public virtual bool Invoke(IPlayerCharacter character, Item item, uint currentTick)
 		{
-			if (CanConsume(character, item) &&
+			if (CanConsume(character, item, currentTick) &&
 				character.TryGet(out ICooldownController cooldownController))
 			{
 				if (Cooldown > 0.0f)
 				{
-					cooldownController.AddCooldown(ID, new CooldownInstance(Cooldown));
+					cooldownController.AddCooldown(ID, new CooldownInstance(currentTick, Cooldown, (float)character.NetworkObject.TimeManager.TickDelta));
 				}
 				if (item.IsStackable && item.Stackable.Amount > ChargeCost)
 				{

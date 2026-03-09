@@ -26,7 +26,7 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Dictionary of known abilities by ID.
 		/// </summary>
-		Dictionary<long, Ability> KnownAbilities { get; }
+		SortedDictionary<long, Ability> KnownAbilities { get; }
 		/// <summary>
 		/// Set of known base ability IDs.
 		/// </summary>

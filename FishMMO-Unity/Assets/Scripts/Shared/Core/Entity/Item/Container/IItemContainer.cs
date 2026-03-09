@@ -138,5 +138,25 @@ namespace FishMMO.Shared.Core
 		/// <param name="slot">The slot index to remove the item from.</param>
 		/// <returns>The item that was removed, or null if no item was present.</returns>
 		Item RemoveItem(int slot);
+
+		/// <summary>
+		/// Returns true if the specified slot is currently locked (e.g., a consumable activation is in progress).
+		/// Locked slots cannot be swapped, removed, or transferred until unlocked.
+		/// </summary>
+		/// <param name="slot">The slot index to check.</param>
+		/// <returns>True if the slot is locked, false otherwise.</returns>
+		bool IsSlotLocked(int slot);
+
+		/// <summary>
+		/// Locks the specified slot, preventing it from being swapped, removed, or transferred.
+		/// </summary>
+		/// <param name="slot">The slot index to lock.</param>
+		void LockSlot(int slot);
+
+		/// <summary>
+		/// Unlocks the specified slot, allowing normal manipulation again.
+		/// </summary>
+		/// <param name="slot">The slot index to unlock.</param>
+		void UnlockSlot(int slot);
 	}
 }

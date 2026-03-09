@@ -28,7 +28,21 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// All known abilities for this character, indexed by ability ID.
 		/// </summary>
-		public Dictionary<long, Ability> KnownAbilities { get; private set; }
+		/// <remarks>
+		/// SECURITY: This dictionary must only be populated via server-authoritative
+		/// code paths (WritePayload / ReadPayload). All activation methods
+		/// (<see cref="Activate"/>, <see cref="CanActivate"/>) gate on membership
+		/// in this dictionary, so a desync or bug that adds an unearned ability
+		/// would let the character activate it. Ensure no client-only code path
+		/// can insert entries.
+		/// </remarks>
+		public SortedDictionary<long, Ability> KnownAbilities { get; private set; }
+
+		/// <summary>
+		/// Reverse index mapping ability template IDs to ability instance IDs.
+		/// Enables O(1) <see cref="KnowsLearnedAbility"/> lookups instead of O(n) scans.
+		/// </summary>
+		private Dictionary<int, long> templateToAbilityID;
 
 		/// <summary>
 		/// All known base ability template IDs for this character.
@@ -147,26 +161,7 @@ namespace FishMMO.Shared
 				if (abilityEvent == null) continue;
 
 				KnownAbilityEvents.Add(abilityEvent.ID);
-
-				// Categorize the event by its specific type for fast lookup.
-				switch (abilityEvent)
-				{
-					case AbilityOnTickEvent _:
-						KnownAbilityOnTickEvents.Add(abilityEvent.ID);
-						break;
-					case AbilityOnHitEvent _:
-						KnownAbilityOnHitEvents.Add(abilityEvent.ID);
-						break;
-					case AbilityOnPreSpawnEvent _:
-						KnownAbilityOnPreSpawnEvents.Add(abilityEvent.ID);
-						break;
-					case AbilityOnSpawnEvent _:
-						KnownAbilityOnSpawnEvents.Add(abilityEvent.ID);
-						break;
-					case AbilityOnDestroyEvent _:
-						KnownAbilityOnDestroyEvents.Add(abilityEvent.ID);
-						break;
-				}
+				CategorizeAbilityEvent(abilityEvent);
 			}
 			return true;
 		}
@@ -184,8 +179,16 @@ namespace FishMMO.Shared
 			}
 
 			KnownAbilityEvents.Add(abilityEvent.ID);
+			CategorizeAbilityEvent(abilityEvent);
+			return true;
+		}
 
-			// Categorize the event by its specific type for fast lookup.
+		/// <summary>
+		/// Categorizes a single ability event into the appropriate known event type set for fast lookup.
+		/// </summary>
+		/// <param name="abilityEvent">The ability event to categorize. Must not be null.</param>
+		private void CategorizeAbilityEvent(AbilityEvent abilityEvent)
+		{
 			switch (abilityEvent)
 			{
 				case AbilityOnTickEvent _:
@@ -204,17 +207,17 @@ namespace FishMMO.Shared
 					KnownAbilityOnDestroyEvents.Add(abilityEvent.ID);
 					break;
 			}
-			return true;
 		}
 
 		/// <summary>
 		/// Checks if the controller knows an ability instance with the given template ID.
+		/// Uses the <see cref="templateToAbilityID"/> reverse index for O(1) lookups.
 		/// </summary>
 		/// <param name="templateID">The template ID to check.</param>
 		/// <returns>True if the ability is known, false otherwise.</returns>
 		public bool KnowsLearnedAbility(int templateID)
 		{
-			return KnownAbilities?.ContainsKey(templateID) ?? false;
+			return templateToAbilityID != null && templateToAbilityID.ContainsKey(templateID);
 		}
 
 		/// <summary>
@@ -222,6 +225,21 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="ability">The ability to learn.</param>
 		/// <param name="remainingCooldown">Optional remaining cooldown to apply to the ability.</param>
+		/// <remarks>
+		/// SECURITY: This method is public because it implements
+		/// <see cref="IAbilityKnowledgeController.LearnAbility"/>. All current call sites
+		/// are server-authoritative:
+		/// <list type="bullet">
+		/// <item><description>AbilityController.Networking.cs — ReadPayload/WritePayload (server sync).</description></item>
+		/// <item><description>NPC.cs — server-side NPC initialisation.</description></item>
+		/// <item><description>CharacterSystem.Loading.cs — server-side character loading from DB.</description></item>
+		/// <item><description>InteractableSystem.AbilityCraft.cs — server-side ability crafting.</description></item>
+		/// </list>
+		/// If a new call site is added that is reachable from client-controlled input
+		/// (e.g., a broadcast handler), it MUST perform its own server-side validation
+		/// before calling this method. An attacker with a crafted packet could otherwise
+		/// grant themselves arbitrary abilities.
+		/// </remarks>
 		public void LearnAbility(Ability ability, float remainingCooldown = 0.0f)
 		{
 			if (ability == null)
@@ -230,6 +248,13 @@ namespace FishMMO.Shared
 			}
 			KnownAbilities[ability.ID] = ability;
 
+			// Update reverse index for O(1) KnowsLearnedAbility lookups.
+			if (ability.Template != null)
+			{
+				templateToAbilityID ??= new Dictionary<int, long>();
+				templateToAbilityID[ability.Template.ID] = ability.ID;
+			}
+
 			// If a cooldown is specified, apply it to the cooldown controller.
 			if (remainingCooldown > 0.0f &&
 				Character.TryGet(out ICooldownController cooldownController))
@@ -237,7 +262,8 @@ namespace FishMMO.Shared
 				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
 				float cooldown = ability.Cooldown * cooldownReduction;
 
-				cooldownController.AddCooldown(ability.ID, new CooldownInstance(cooldown, remainingCooldown));
+				cooldownController.AddCooldown(ability.ID, CooldownInstance.FromRemainingSeconds(
+					base.TimeManager.LocalTick, cooldown, remainingCooldown, (float)base.TimeManager.TickDelta));
 			}
 		}
 
@@ -247,6 +273,13 @@ namespace FishMMO.Shared
 		/// <param name="referenceID">The ability reference ID to remove.</param>
 		public void RemoveAbility(long referenceID)
 		{
+			// Update reverse index before removing.
+			if (KnownAbilities.TryGetValue(referenceID, out Ability removedAbility) &&
+				removedAbility.Template != null &&
+				templateToAbilityID != null)
+			{
+				templateToAbilityID.Remove(removedAbility.Template.ID);
+			}
 			KnownAbilities.Remove(referenceID);
 		}
 	}

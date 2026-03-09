@@ -588,9 +588,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (buffData != null && buffData.Count > 0 &&
 				character.TryGet(out IBuffController buffController))
 			{
+				float loadTickDelta = (float)Server.NetworkWrapper.NetworkManager.TimeManager.TickDelta;
+				uint loadCurrentTick = Server.NetworkWrapper.NetworkManager.TimeManager.LocalTick;
 				foreach (CharacterBuffData buff in buffData)
 				{
-					Buff newBuff = new Buff(buff.TemplateID, buff.RemainingTime, buff.TickTime, buff.Stacks);
+					uint expiryTick = loadCurrentTick + (uint)Math.Max(1.0, Math.Ceiling(buff.RemainingTime / loadTickDelta));
+					uint nextTickTick = loadCurrentTick + (uint)Math.Max(1.0, Math.Ceiling(buff.TickTime / loadTickDelta));
+					Buff newBuff = new Buff(buff.TemplateID, expiryTick, nextTickTick, loadTickDelta, buff.Stacks, 0);
 					newBuff.Version = buff.Version;
 					buffController.Apply(newBuff);
 				}

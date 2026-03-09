@@ -125,14 +125,16 @@ namespace FishMMO.Shared
 			Last = Current;
 
 			float distance = maxDistance.Clamp(0.0f, MAX_TARGET_DISTANCE);
+			Ray ray = new Ray(origin, direction);
 			RaycastHit hit;
 #if !UNITY_SERVER
-			Ray ray = new Ray(origin, direction);
-			if (Physics.Raycast(ray, out hit, distance, LayerMask))
+			bool hasHit = Physics.Raycast(ray, out hit, distance, LayerMask);
 #else
-			if (PlayerCharacter != null &&
-				PlayerCharacter.Motor.PhysicsScene.Raycast(origin, direction, out hit, distance, LayerMask))
+			bool hasHit = PlayerCharacter != null
+				? PlayerCharacter.Motor.PhysicsScene.Raycast(origin, direction, out hit, distance, LayerMask)
+				: Physics.Raycast(ray, out hit, distance, LayerMask);
 #endif
+			if (hasHit)
 			{
 				// If the raycast hits the character itself, shoot another ray through the character to find the next target.
 				IPlayerCharacter hitPlayerCharacter = hit.transform.GetComponent<IPlayerCharacter>();
@@ -145,8 +147,15 @@ namespace FishMMO.Shared
 					ray = new Ray(newRayOrigin, direction);
 					Physics.Raycast(ray, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
 #else
+					ray = new Ray(newRayOrigin, direction);
 					if (PlayerCharacter != null)
+					{
 						PlayerCharacter.Motor.PhysicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
+					}
+					else
+					{
+						Physics.Raycast(ray, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
+					}
 #endif
 				}
 				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
@@ -155,9 +164,6 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-#if UNITY_SERVER
-				Ray ray = new Ray(origin, direction);
-#endif
 				// If no target is hit, set Current to null and use the ray's endpoint.
 				Current = new TargetInfo(null, ray.GetPoint(distance));
 			}

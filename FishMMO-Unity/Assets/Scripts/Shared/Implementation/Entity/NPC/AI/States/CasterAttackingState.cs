@@ -113,8 +113,8 @@ namespace FishMMO.Shared
 			if (bestAbility == null)
 			{
 				// All abilities on cooldown — consider repositioning.
-				System.Random rng = controller.NpcRNG;
-				float roll = rng != null ? (float)rng.NextDouble() : Random.value;
+				DeterministicRNG rng = controller.NpcRNG;
+				float roll = (rng ?? DeterministicRNG.Shared).NextFloat();
 				if (WanderState != null && roll < CooldownRepositionChance)
 				{
 					controller.ChangeState(WanderState);

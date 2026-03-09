@@ -1,5 +1,6 @@
 ﻿using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using FishNet;
 using FishNet.Transporting;
 using UnityEngine.UI;
 
@@ -59,11 +60,14 @@ namespace FishMMO.Client
 				return;
 			}
 
+			uint currentTick = InstanceFinder.TimeManager.LocalTick;
+			float remaining = cooldown.RemainingTime(currentTick);
+
 			// Only update if cooldown times are valid
-			if (cooldown.RemainingTime > 0 &&
+			if (remaining > 0 &&
 				cooldown.TotalTime > 0)
 			{
-				CooldownMask.value = cooldown.RemainingTime / cooldown.TotalTime;
+				CooldownMask.value = remaining / cooldown.TotalTime;
 			}
 		}
 
@@ -81,11 +85,14 @@ namespace FishMMO.Client
 				return;
 			}
 
+			uint currentTick = InstanceFinder.TimeManager.LocalTick;
+			float remaining = cooldown.RemainingTime(currentTick);
+
 			// Only update if cooldown times are valid
-			if (cooldown.RemainingTime > 0 &&
+			if (remaining > 0 &&
 				cooldown.TotalTime > 0)
 			{
-				CooldownMask.value = cooldown.RemainingTime / cooldown.TotalTime;
+				CooldownMask.value = remaining / cooldown.TotalTime;
 			}
 		}
 

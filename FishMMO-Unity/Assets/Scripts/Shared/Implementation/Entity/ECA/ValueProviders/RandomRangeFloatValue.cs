@@ -6,8 +6,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Float value provider that returns a random float between <see cref="Min"/> and <see cref="Max"/> (inclusive).
-	/// Uses the deterministic <see cref="System.Random"/> from <see cref="CharacterHitEventData.RNG"/> when available,
-	/// otherwise falls back to <see cref="UnityEngine.Random"/>.
+	/// Uses the deterministic <see cref="DeterministicRNG"/> from <see cref="CharacterHitEventData.RNG"/> when available,
+	/// otherwise falls back to <see cref="DeterministicRNG.Shared"/>.
 	/// </summary>
 	[Serializable]
 	public sealed class RandomRangeFloatValue : IFloatValueProvider
@@ -43,12 +43,11 @@ namespace FishMMO.Shared
 				eventData.TryGet(out CharacterHitEventData hitData) &&
 				hitData.RNG != null)
 			{
-				// NextDouble returns [0.0, 1.0), scale to [min, max].
-				return (float)(min + (hitData.RNG.NextDouble() * (max - min)));
+				return hitData.RNG.Range(min, max);
 			}
 
-			// Fallback to Unity random.
-			return UnityEngine.Random.Range(min, max);
+			// Fallback to shared RNG.
+			return DeterministicRNG.Shared.Range(min, max);
 		}
 	}
 }

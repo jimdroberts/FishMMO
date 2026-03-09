@@ -38,8 +38,8 @@ namespace FishMMO.Shared
 			base.OnStartServer();
 
 			// Randomly select prefix and suffix IDs from available caches.
-			prefixID = Prefix == null || Prefix.Names == null ? -1 : Random.Range(0, Prefix.Names.Count);
-			suffixID = Suffix == null || Suffix.Names == null ? -1 : Random.Range(0, Suffix.Names.Count);
+			prefixID = Prefix == null || Prefix.Names == null ? -1 : DeterministicRNG.Shared.Range(0, Prefix.Names.Count);
+			suffixID = Suffix == null || Suffix.Names == null ? -1 : DeterministicRNG.Shared.Range(0, Suffix.Names.Count);
 		}
 
 		/// <summary>

@@ -1286,7 +1286,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Transfer leadership if the leaving character was leader and others remain
 				if (rank == PartyRank.Leader && remainingCount > 0)
 				{
-					System.Random rng = new System.Random();
+					DeterministicRNG rng = new DeterministicRNG();
 					CharacterPartyData newLeader = remainingMembers[rng.Next(0, remainingMembers.Count)];
 					await charPartyService.UpdateRankAsync(newLeader.CharacterID, partyID, (byte)PartyRank.Leader, newLeader.Version + 1);
 				}

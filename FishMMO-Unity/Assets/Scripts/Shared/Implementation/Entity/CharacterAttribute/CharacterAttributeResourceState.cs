@@ -1,9 +1,12 @@
-﻿namespace FishMMO.Shared
+﻿using FishNet.CodeGenerating;
+
+namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Represents the current state of a character's resource attributes (health, mana, stamina) and regeneration timer.
 	/// Used for synchronizing resource values and regeneration progress between client and server.
 	/// </summary>
+	[UseGlobalCustomSerializer]
 	public struct CharacterAttributeResourceState
 	{
 		/// <summary>

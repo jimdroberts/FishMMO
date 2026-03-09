@@ -61,19 +61,16 @@ namespace FishMMO.Shared
 				{
 					abilityObject = go.AddComponent<AbilityObject>();
 				}
-				// Copy relevant properties from the original object.
-				abilityObject.ContainerID = initialObject.ContainerID;
-				abilityObject.Ability = ability;
-				abilityObject.Caster = caster;
-				abilityObject.HitCount = initialObject.HitCount;
-				abilityObject.RemainingLifeTime = initialObject.RemainingLifeTime;
-				abilityObject.RNG = initialObject.RNG;
-				abilityObject.SpawnTick = initialObject.SpawnTick;
-				abilityObject.Snapshot = initialObject.Snapshot;
-
 				go.transform.SetPositionAndRotation(initialObject.transform.position, initialObject.transform.rotation);
 
-				spawnEventData.SpawnedAbilityObjects[++nextID.Value] = abilityObject;
+				// Assign a unique ID from the shared counter so RemoveAbilityObject
+				// can locate this child by (ContainerID, ID) during cleanup.
+				int abilityObjectID = nextID.Value++;
+				AbilityObject.InitializeSpawnedChildObject(abilityObject,
+					initialObject,
+					abilityObjectID,
+					spawnEventData.SpawnedAbilityObjects,
+					spawnEventData.Seed);
 			}
 		}
 	}

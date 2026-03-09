@@ -61,7 +61,7 @@ namespace FishMMO.Shared
 			}
 			if (candidates.Count > 0)
 			{
-				int idx = Random.Range(0, candidates.Count);
+				int idx = DeterministicRNG.Shared.Range(0, candidates.Count);
 				yield return candidates[idx];
 			}
 		}

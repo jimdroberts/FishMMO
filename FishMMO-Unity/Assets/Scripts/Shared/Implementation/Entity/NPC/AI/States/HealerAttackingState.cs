@@ -251,19 +251,23 @@ namespace FishMMO.Shared
 			if (!controller.Character.TryGet(out ICooldownController cooldownController))
 				return null;
 
-			System.Random rng = controller.NpcRNG;
+			DeterministicRNG rng = controller.NpcRNG;
 			float sqrDist = (ally.Transform.position - controller.Character.Transform.position).sqrMagnitude;
 
 			Ability best = null;
 			float bestScore = float.MinValue;
+
+			uint currentTick = controller.TimeManager.LocalTick;
+
+			EventData activationCheckData = null;
 
 			foreach (var kvp in abilityController.KnownAbilities)
 			{
 				Ability ability = kvp.Value;
 				if (ability == null || ability.Template == null) continue;
 				if (!IsHealAbility(ability)) continue;
-				if (cooldownController.IsOnCooldown(ability.ID)) continue;
-				if (!ability.MeetsActivationConditions(controller.Character)) continue;
+				if (cooldownController.IsOnCooldown(ability.ID, currentTick)) continue;
+				if (!ability.MeetsActivationConditions(controller.Character, ref activationCheckData)) continue;
 
 				float score = 0f;
 				if (ability.Range * ability.Range >= sqrDist)
@@ -275,7 +279,7 @@ namespace FishMMO.Shared
 					score = ability.Range;
 				}
 
-				score += rng != null ? (float)(rng.NextDouble() * 30.0) : Random.Range(0f, 30f);
+				score += (rng ?? DeterministicRNG.Shared).Range(0f, 30f);
 
 				if (score > bestScore)
 				{
@@ -295,19 +299,23 @@ namespace FishMMO.Shared
 			if (!controller.Character.TryGet(out ICooldownController cooldownController))
 				return null;
 
-			System.Random rng = controller.NpcRNG;
+			DeterministicRNG rng = controller.NpcRNG;
 			float sqrDist = controller.GetSqrDistanceToTarget();
 
 			Ability best = null;
 			float bestScore = float.MinValue;
+
+			uint currentTick = controller.TimeManager.LocalTick;
+
+			EventData activationCheckData = null;
 
 			foreach (var kvp in abilityController.KnownAbilities)
 			{
 				Ability ability = kvp.Value;
 				if (ability == null || ability.Template == null) continue;
 				if (IsHealAbility(ability)) continue; // Skip heal abilities.
-				if (cooldownController.IsOnCooldown(ability.ID)) continue;
-				if (!ability.MeetsActivationConditions(controller.Character)) continue;
+				if (cooldownController.IsOnCooldown(ability.ID, currentTick)) continue;
+				if (!ability.MeetsActivationConditions(controller.Character, ref activationCheckData)) continue;
 
 				float score = 0f;
 				if (ability.Range * ability.Range >= sqrDist)
@@ -319,7 +327,7 @@ namespace FishMMO.Shared
 					score = ability.Range;
 				}
 
-				score += rng != null ? (float)(rng.NextDouble() * 50.0) : Random.Range(0f, 50f);
+				score += (rng ?? DeterministicRNG.Shared).Range(0f, 50f);
 
 				if (score > bestScore)
 				{

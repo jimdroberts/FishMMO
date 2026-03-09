@@ -56,7 +56,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			int amount = drop.MinAmount;
 			if (drop.MaxAmount > drop.MinAmount)
 			{
-				amount = UnityEngine.Random.Range(drop.MinAmount, drop.MaxAmount + 1);
+				amount = DeterministicRNG.Shared.Range(drop.MinAmount, drop.MaxAmount + 1);
 			}
 
 			Item newItem = new Item(drop.Item, (uint)amount);
@@ -103,7 +103,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return null;
 			}
 
-			float roll = UnityEngine.Random.Range(0f, totalWeight);
+			float roll = DeterministicRNG.Shared.Range(0f, totalWeight);
 			float cumulative = 0f;
 
 			for (int i = 0; i < template.Drops.Count; i++)

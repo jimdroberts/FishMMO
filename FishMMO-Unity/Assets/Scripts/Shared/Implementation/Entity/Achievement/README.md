@@ -1,114 +1,83 @@
 # Achievement System
 
+**Short description:** A data-driven, template-based framework for tracking player milestones with multi-tier progression, categorized grouping, tier-based rewards, FishNet network synchronization, and fire-and-forget database persistence in FishMMO.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation / Build](#installation--build)
+- [Quick Start Guide](#quick-start-guide)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Operational Checks](#operational-checks)
+- [Flow Diagram](#flow-diagram)
+- [Project Structure](#project-structure)
+- [License](#license)
+
 ## Overview
 
 The Achievement system is a data-driven, template-based framework for tracking player milestones in FishMMO. It supports multi-tier progression, categorized grouping, tier-based rewards (abilities, ability events, items, buffs, titles), FishNet network synchronization, and fire-and-forget database persistence. Achievements are incremented by gameplay systems (combat, healing, kills) and automatically advance through tiers when value thresholds are met.
 
-## Directory Structure
+## Supported Platforms
 
-```
-Achievement/
-├── Achievement.cs                 # Runtime achievement instance (tier, value, template ref)
-├── AchievementCategory.cs         # Enum of achievement categories (Combat, Exploration, etc.)
-├── AchievementController.cs       # Per-entity controller (CharacterBehaviour / NetworkBehaviour)
-├── IAchievementController.cs      # Achievement controller interface + static events
-└── Template/
-    ├── AchievementTemplate.cs         # ScriptableObject blueprint (icon, category, tiers)
-    ├── AchievementTemplateDatabase.cs # Name-to-template lookup database (ScriptableObject)
-    └── AchievementTier.cs             # Serializable tier definition (value threshold, rewards)
-```
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Windows  | ✅ Supported | Primary development platform |
+| Linux    | ✅ Supported | Server and client builds |
+| WebGL    | ✅ Supported | Via Unity WebGL export |
 
-### Related Files (Outside This Directory)
+**Engine:** Unity 6.3 LTS
+**Backend:** IL2CPP
 
-```
-Shared/Implementation/Network/Character/AchievementBroadcasts.cs              # FishNet broadcast structs for achievement updates
-Server/Implementation/World/SceneServer/Achievement/AchievementSystem.cs       # Server-side achievement tracking, rewards, and DB persistence
-Shared/Implementation/Entity/CharacterAttribute/CharacterDamageController.cs   # Calls Increment() for damage, kill, and heal achievements
-Client/Client.cs                                                               # Client-side OnCompleteAchievement handler
-Client/UI/Controls/World/Achievement/UIAchievements.cs                         # Achievement UI panel
-```
+## Features
 
-## Inheritance Hierarchies
+- **Multi-tier progression** — Each achievement template defines ordered tiers with ascending value thresholds; multiple tiers can complete in a single increment call.
+- **Categorized grouping** — 19 built-in categories (Combat, Exploration, Crafting, PvP, etc.) for organizing and filtering achievements.
+- **Tier-based rewards** — Each tier can grant abilities, ability events, items, buffs, and titles upon completion.
+- **FishNet network synchronization** — Server-authoritative state broadcast to clients via `AchievementUpdateBroadcast` and `AchievementUpdateMultipleBroadcast`.
+- **Fire-and-forget database persistence** — Reward persistence (abilities, items) uses async services marshalled back to the main thread.
+- **Static events** — `OnCompleteAchievement` and `OnUpdateAchievement` allow any system to react to achievement progress and completion.
+- **ScriptableObject templates** — `AchievementTemplate` blueprints are configured in the Unity Editor with icon, category, description, and tier definitions.
+- **Inventory/bank fallback** — Item rewards attempt inventory first, falling back to bank if inventory lacks space.
 
-### Runtime Instances
+## Prerequisites
 
-```
-Achievement                        # Standalone class (no inheritance)
-```
+| Dependency | Purpose |
+|------------|---------|
+| Unity 6.3 LTS | Game engine |
+| FishNetworking | Networking layer (NetworkBehaviour, broadcasts) |
+| FishMMO Shared Core | `CharacterBehaviour`, `CachedScriptableObject`, `ICharacter`, base templates |
 
-### Templates (ScriptableObjects)
+## Installation / Build
 
-```
-CachedScriptableObject<AchievementTemplate>
-└── AchievementTemplate            # Icon, Category, Description, List<AchievementTier>
-```
+The Achievement system is an integrated module within the FishMMO project. No separate installation or build steps are required. Achievement templates are created as ScriptableObject assets in the Unity Editor and registered in the `AchievementTemplateDatabase`.
 
-### Controllers (NetworkBehaviour)
+## Quick Start Guide
 
-```
-CharacterBehaviour
-└── AchievementController : IAchievementController
-```
+1. **Create an `AchievementTemplate`** — Right-click in the Project window → Create → FishMMO → Achievement. Configure icon, category, description, and add tier entries.
+2. **Define tiers** — For each `AchievementTier`, set the cumulative `Value` threshold, completion message, optional sound, and reward lists.
+3. **Register the template** — Add it to the `AchievementTemplateDatabase` ScriptableObject.
+4. **Increment from gameplay** — Call `AchievementController.Increment(template, amount)` from any gameplay system (e.g., `CharacterDamageController`).
+5. **Observe events** — Subscribe to `IAchievementController.OnCompleteAchievement` or `OnUpdateAchievement` for server-side reward processing, UI updates, or client effects.
 
-### Configuration Types
+## Configuration
 
-```
-AchievementTier                    # [Serializable] class: Value threshold + reward lists
-AchievementCategory                # Enum: 19 categories (Ability, Character, Combat, etc.)
-```
+### Template Properties
 
-## Achievement Lifecycle
+`AchievementTemplate` exposes the following configurable fields:
 
-### 1. Increment
+| Property | Type | Description |
+|----------|------|-------------|
+| `Icon` | `Sprite` | UI icon for the achievement |
+| `Category` | `AchievementCategory` | Category for grouping and filtering |
+| `Description` | `string` | Player-facing description text |
+| `Tiers` | `List<AchievementTier>` | Ordered list of tier milestones and rewards |
+| `Name` | `string` | Read-only, from ScriptableObject name |
 
-Gameplay systems call `AchievementController.Increment(template, amount)`:
-
-```
-Increment(template, amount)
-  ├── Achievement exists?
-  │   └── No  → Create Achievement(template.ID) with Tier=0, Value=0
-  ├── CurrentValue += amount
-  ├── For each tier from CurrentTier onward:
-  │   └── CurrentValue >= tier.Value?
-  │       └── Yes → Fire OnCompleteAchievement(Character, Template, Tier)
-  │                → CurrentTier = i + 1
-  │       └── No  → break
-  └── Fire OnUpdateAchievement(Character, Achievement)
-```
-
-**Key behavior**: Multiple tiers can be completed in a single `Increment` call if the amount is large enough to cross multiple thresholds.
-
-### 2. Set (Direct)
-
-`SetAchievement(templateID, tier, value)` directly sets tier and value. Used by:
-- Client broadcast handler (receiving server state)
-- Network payload deserialization
-- Server-side state restoration from database
-
-### 3. Server Processing
-
-`AchievementSystem` (server) subscribes to both static events:
-
-| Event | Server Handler |
-|-------|---------------|
-| `OnUpdateAchievement` | Broadcasts `AchievementUpdateBroadcast` to the player client |
-| `OnCompleteAchievement` | Processes tier rewards (abilities, ability events, items) |
-
-### 4. Reward Processing
-
-When a tier is completed, `AchievementSystem.IAchievementController_HandleAchievementRewards` processes:
-
-| Reward Type | Handler | Persistence |
-|-------------|---------|-------------|
-| `AbilityRewards` | `HandleAbilityRewards` — Learns ability, broadcasts to client | Fire-and-forget async via `ICharacterKnownAbilityService` |
-| `AbilityEventRewards` | `HandleAbilityEventRewards` — Learns ability event, broadcasts to client | Fire-and-forget async via `ICharacterKnownAbilityService` |
-| `ItemRewards` | `HandleItemRewards` — Adds to inventory (preferred) or bank (fallback), broadcasts to client | Fire-and-forget async via `ICharacterInventoryService` or `ICharacterBankService` |
-| `BuffRewards` | Not yet implemented | — |
-| `TitleRewards` | Not yet implemented | — |
-
-Item rewards attempt inventory first. If the inventory lacks sufficient free slots, the system falls back to the bank. If neither has space, items are silently dropped.
-
-## Tier Model
+### Tier Model
 
 Each `AchievementTemplate` contains a `List<AchievementTier>`. Tiers are ordered by ascending `Value` thresholds and represent progressive milestones:
 
@@ -123,7 +92,7 @@ Each `AchievementTemplate` contains a `List<AchievementTier>`. Tiers are ordered
 | `BuffRewards` | `List<BaseBuffTemplate>` | Buffs applied on completion |
 | `TitleRewards` | `List<string>` | Titles granted on completion |
 
-### Example Progression
+#### Example Progression
 
 ```
 Template: "Monster Slayer"
@@ -134,7 +103,7 @@ Template: "Monster Slayer"
 
 A player with `CurrentTier=1, CurrentValue=85` needs 15 more to reach Tier 1's threshold of 100. `NextTierValue` returns `100`.
 
-## Achievement Categories
+### Achievement Categories
 
 The `AchievementCategory` enum provides 19 categories for organizing achievements:
 
@@ -162,41 +131,18 @@ The `AchievementCategory` enum provides 19 categories for organizing achievement
 | `Trading` | Trading, bartering, or marketplace |
 | `World` | Server-wide goals or global events |
 
-## Template Properties
+## Usage Examples
 
-`AchievementTemplate` exposes the following configurable fields:
+### API — Incrementing an Achievement
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Icon` | `Sprite` | UI icon for the achievement |
-| `Category` | `AchievementCategory` | Category for grouping and filtering |
-| `Description` | `string` | Player-facing description text |
-| `Tiers` | `List<AchievementTier>` | Ordered list of tier milestones and rewards |
-| `Name` | `string` | Read-only, from ScriptableObject name |
+Gameplay systems call `AchievementController.Increment(template, amount)` to advance progress:
 
-## Network Synchronization
+```csharp
+// In CharacterDamageController.Damage()
+achievementController.Increment(DamageAchievementTemplate, damageDealt);
+```
 
-### Client Broadcast Receivers
-
-| Broadcast | Purpose |
-|-----------|---------|
-| `AchievementUpdateBroadcast` | Server tells client to update a single achievement (templateID, value, tier) |
-| `AchievementUpdateMultipleBroadcast` | Server tells client to update multiple achievements at once |
-
-Client broadcast handlers call `SetAchievement(templateID, tier, value)` to apply server-authoritative state.
-
-## Static Events
-
-All events are defined on `IAchievementController`:
-
-| Event | Signature | When Fired |
-|-------|-----------|------------|
-| `OnCompleteAchievement` | `Action<ICharacter, AchievementTemplate, AchievementTier>` | When a tier threshold is reached during `Increment` |
-| `OnUpdateAchievement` | `Action<ICharacter, Achievement>` | After any `Increment` call or `SetAchievement` (unless `skipEvent=true`) |
-
-## Increment Sources
-
-The achievement system is incremented by gameplay systems:
+### Increment Sources
 
 | Source | Achievement | Amount |
 |--------|------------|--------|
@@ -209,9 +155,55 @@ The achievement system is incremented by gameplay systems:
 
 Additional increment sources can be added by any system with access to `IAchievementController`.
 
-## External Integration Points
+### API — Setting Achievement State Directly
 
-The achievement system is consumed by and interacts with:
+`SetAchievement(templateID, tier, value)` directly sets tier and value. Used by:
+- Client broadcast handler (receiving server state)
+- Network payload deserialization
+- Server-side state restoration from database
+
+### Network Synchronization
+
+#### Client Broadcast Receivers
+
+| Broadcast | Purpose |
+|-----------|---------|
+| `AchievementUpdateBroadcast` | Server tells client to update a single achievement (templateID, value, tier) |
+| `AchievementUpdateMultipleBroadcast` | Server tells client to update multiple achievements at once |
+
+Client broadcast handlers call `SetAchievement(templateID, tier, value)` to apply server-authoritative state.
+
+### Static Events
+
+All events are defined on `IAchievementController`:
+
+| Event | Signature | When Fired |
+|-------|-----------|------------|
+| `OnCompleteAchievement` | `Action<ICharacter, AchievementTemplate, AchievementTier>` | When a tier threshold is reached during `Increment` |
+| `OnUpdateAchievement` | `Action<ICharacter, Achievement>` | After any `Increment` call or `SetAchievement` (unless `skipEvent=true`) |
+
+### Server-Side Reward Processing
+
+`AchievementSystem` (server) subscribes to both static events:
+
+| Event | Server Handler |
+|-------|---------------|
+| `OnUpdateAchievement` | Broadcasts `AchievementUpdateBroadcast` to the player client |
+| `OnCompleteAchievement` | Processes tier rewards (abilities, ability events, items) |
+
+When a tier is completed, `AchievementSystem.IAchievementController_HandleAchievementRewards` processes:
+
+| Reward Type | Handler | Persistence |
+|-------------|---------|-------------|
+| `AbilityRewards` | `HandleAbilityRewards` — Learns ability, broadcasts to client | Fire-and-forget async via `ICharacterKnownAbilityService` |
+| `AbilityEventRewards` | `HandleAbilityEventRewards` — Learns ability event, broadcasts to client | Fire-and-forget async via `ICharacterKnownAbilityService` |
+| `ItemRewards` | `HandleItemRewards` — Adds to inventory (preferred) or bank (fallback), broadcasts to client | Fire-and-forget async via `ICharacterInventoryService` or `ICharacterBankService` |
+| `BuffRewards` | Not yet implemented | — |
+| `TitleRewards` | Not yet implemented | — |
+
+Item rewards attempt inventory first. If the inventory lacks sufficient free slots, the system falls back to the bank. If neither has space, items are silently dropped.
+
+### External Integration Points
 
 - **CharacterDamageController** — Increments damage, kill, and heal achievements during combat.
 - **Ability System** — Achievement rewards can grant new abilities and ability events.
@@ -222,7 +214,145 @@ The achievement system is consumed by and interacts with:
 - **UI** — `UIAchievements` panel subscribes to `OnUpdateAchievement` for real-time progress display.
 - **Client** — `Client.cs` subscribes to `OnCompleteAchievement` for client-side completion effects (messages, sounds).
 
+## Operational Checks
+
+| Check | How to Verify |
+|-------|---------------|
+| Template registered | `AchievementTemplateDatabase` contains the template by name |
+| Increment triggers progress | Call `Increment(template, amount)` and confirm `OnUpdateAchievement` fires |
+| Tier completion fires event | Increment past a tier threshold and confirm `OnCompleteAchievement` fires |
+| Multi-tier completion | Increment with a large amount crossing multiple thresholds; verify all tiers complete |
+| Server broadcasts update | Confirm client receives `AchievementUpdateBroadcast` after server-side increment |
+| Ability rewards granted | Complete a tier with ability rewards; confirm ability is learned and broadcast to client |
+| Item rewards — inventory | Complete a tier with item rewards; confirm items appear in inventory |
+| Item rewards — bank fallback | Fill inventory, complete a tier with item rewards; confirm items appear in bank |
+| Database persistence | Disconnect and reconnect; confirm achievement state is restored |
+| UI reflects progress | Open `UIAchievements` panel; confirm progress updates in real time |
+
+## Flow Diagram
+
+### Achievement Lifecycle
+
+```
+┌─────────────────────────────────┐
+│    Gameplay System              │
+│  (CharacterDamageController)    │
+└──────────────┬──────────────────┘
+               │ Increment(template, amount)
+               ▼
+┌─────────────────────────────────┐
+│    AchievementController        │
+│  ┌───────────────────────────┐  │
+│  │ Achievement exists?       │  │
+│  │  No → Create(tier=0,val=0)│  │
+│  │  Yes → CurrentValue += amt│  │
+│  └───────────┬───────────────┘  │
+│              │                  │
+│  ┌───────────▼───────────────┐  │
+│  │ For each tier ≥ current:  │  │
+│  │  Value ≥ threshold?       │  │
+│  │   Yes → OnComplete event  │  │
+│  │         CurrentTier++     │  │
+│  │   No  → break             │  │
+│  └───────────┬───────────────┘  │
+│              │                  │
+│  Fire OnUpdateAchievement       │
+└──────────────┬──────────────────┘
+               │
+       ┌───────┴────────┐
+       ▼                ▼
+┌──────────────┐ ┌──────────────────┐
+│ Server:      │ │ Server:          │
+│ Broadcast    │ │ Process Rewards  │
+│ Update to    │ │ (abilities,      │
+│ Client       │ │  items, events)  │
+└──────┬───────┘ └────────┬─────────┘
+       │                  │
+       ▼                  ▼
+┌──────────────┐ ┌──────────────────┐
+│ Client:      │ │ Database:        │
+│ SetAchieve-  │ │ Fire-and-forget  │
+│ ment() +     │ │ async persist    │
+│ UI update    │ │ (abilities,items)│
+└──────────────┘ └──────────────────┘
+```
+
+### Tier Progression
+
+```
+Value:     0        10        100        1000
+           │         │          │           │
+Tier 0:    ├─────────┤          │           │
+           │ progress │          │           │
+Tier 1:    │         ├──────────┤           │
+           │         │ progress  │           │
+Tier 2:    │         │          ├───────────┤
+           │         │          │  progress  │
+           ▼         ▼          ▼           ▼
+        Created   Complete   Complete    Complete
+                  Tier 0     Tier 1      Tier 2
+```
+
+## Project Structure
+
+### Directory Structure
+
+```
+Achievement/
+├── Achievement.cs                 # Runtime achievement instance (tier, value, template ref)
+├── AchievementCategory.cs         # Enum of achievement categories (Combat, Exploration, etc.)
+├── AchievementController.cs       # Per-entity controller (CharacterBehaviour / NetworkBehaviour)
+├── IAchievementController.cs      # Achievement controller interface + static events
+└── Template/
+    ├── AchievementTemplate.cs         # ScriptableObject blueprint (icon, category, tiers)
+    ├── AchievementTemplateDatabase.cs # Name-to-template lookup database (ScriptableObject)
+    └── AchievementTier.cs             # Serializable tier definition (value threshold, rewards)
+```
+
+### Related Files (Outside This Directory)
+
+```
+Shared/Implementation/Network/Character/AchievementBroadcasts.cs              # FishNet broadcast structs for achievement updates
+Server/Implementation/World/SceneServer/Achievement/AchievementSystem.cs       # Server-side achievement tracking, rewards, and DB persistence
+Shared/Implementation/Entity/CharacterAttribute/CharacterDamageController.cs   # Calls Increment() for damage, kill, and heal achievements
+Client/Client.cs                                                               # Client-side OnCompleteAchievement handler
+Client/UI/Controls/World/Achievement/UIAchievements.cs                         # Achievement UI panel
+```
+
+### Inheritance Hierarchies
+
+#### Runtime Instances
+
+```
+Achievement                        # Standalone class (no inheritance)
+```
+
+#### Templates (ScriptableObjects)
+
+```
+CachedScriptableObject<AchievementTemplate>
+└── AchievementTemplate            # Icon, Category, Description, List<AchievementTier>
+```
+
+#### Controllers (NetworkBehaviour)
+
+```
+CharacterBehaviour
+└── AchievementController : IAchievementController
+```
+
+#### Configuration Types
+
+```
+AchievementTier                    # [Serializable] class: Value threshold + reward lists
+AchievementCategory                # Enum: 19 categories (Ability, Character, Combat, etc.)
+```
+
 ## Notes
 
 - **Buff and Title rewards** are defined on `AchievementTier` but not yet processed by `AchievementSystem`. These reward types will need dedicated handlers when the title system is implemented and buff reward application is designed.
 - **Item overflow** — If neither inventory nor bank has sufficient free slots for item rewards, the items are silently dropped. Consider adding a mail or overflow system.
+
+## License
+
+This module is part of the FishMMO project. See the repository root for license details.

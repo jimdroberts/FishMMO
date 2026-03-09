@@ -2,6 +2,7 @@ using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System.Collections.Generic;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -12,6 +13,16 @@ namespace FishMMO.Shared
 	/// </summary>
 	public partial class AbilityController
 	{
+		/// <summary>
+		/// Reusable buffer for batch known-ability broadcast processing.
+		/// </summary>
+		private readonly List<BaseAbilityTemplate> knownAbilityBuffer = new List<BaseAbilityTemplate>();
+
+		/// <summary>
+		/// Reusable buffer for batch known-ability-event broadcast processing.
+		/// </summary>
+		private readonly List<AbilityEvent> knownAbilityEventBuffer = new List<AbilityEvent>();
+
 #if !UNITY_SERVER
 		public override void OnStartCharacter()
 		{
@@ -75,18 +86,24 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientKnownAbilityAddMultipleBroadcastReceived(KnownAbilityAddMultipleBroadcast msg, Channel channel)
 		{
-			List<BaseAbilityTemplate> templates = new List<BaseAbilityTemplate>();
+			knownAbilityBuffer.Clear();
 			foreach (KnownAbilityAddBroadcast knownAbility in msg.Abilities)
 			{
 				BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(knownAbility.TemplateID);
 				if (baseAbilityTemplate != null)
 				{
-					templates.Add(baseAbilityTemplate);
-
-					OnAddKnownAbility?.Invoke(baseAbilityTemplate);
+					knownAbilityBuffer.Add(baseAbilityTemplate);
 				}
 			}
-			LearnBaseAbilities(templates);
+
+			// Learn all templates before firing events so listeners that query
+			// KnownBaseAbilities see a consistent, fully-populated set.
+			LearnBaseAbilities(knownAbilityBuffer);
+
+			foreach (BaseAbilityTemplate baseAbilityTemplate in knownAbilityBuffer)
+			{
+				OnAddKnownAbility?.Invoke(baseAbilityTemplate);
+			}
 		}
 
 		/// <summary>
@@ -108,18 +125,24 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientKnownAbilityEventAddMultipleBroadcastReceived(KnownAbilityEventAddMultipleBroadcast msg, Channel channel)
 		{
-			List<AbilityEvent> events = new List<AbilityEvent>();
+			knownAbilityEventBuffer.Clear();
 			foreach (KnownAbilityEventAddBroadcast knownAbilityEvent in msg.AbilityEvents)
 			{
 				AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(knownAbilityEvent.TemplateID);
 				if (abilityEvent != null)
 				{
-					events.Add(abilityEvent);
-
-					OnAddKnownAbilityEvent?.Invoke(abilityEvent);
+					knownAbilityEventBuffer.Add(abilityEvent);
 				}
 			}
-			LearnAbilityEvents(events);
+
+			// Learn all events before firing notifications so listeners that query
+			// KnownAbilityEvents see a consistent, fully-populated set.
+			LearnAbilityEvents(knownAbilityEventBuffer);
+
+			foreach (AbilityEvent abilityEvent in knownAbilityEventBuffer)
+			{
+				OnAddKnownAbilityEvent?.Invoke(abilityEvent);
+			}
 		}
 
 		/// <summary>
@@ -163,11 +186,14 @@ namespace FishMMO.Shared
 		/// <param name="reader">The network reader to read from.</param>
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
+			const int maxPayloadAbilities = 2048;
+			const int maxPayloadAbilityEvents = 512;
+
 			// Read the AbilitySeedGenerator seed
 			abilitySeed = reader.ReadInt32();
 
 			// Instantiate the AbilitySeedGenerator
-			abilitySeedGenerator = new System.Random(abilitySeed);
+			abilitySeedGenerator = new DeterministicRNG(abilitySeed);
 
 			// Set the initial seed
 			currentSeed = abilitySeedGenerator.Next();
@@ -175,10 +201,17 @@ namespace FishMMO.Shared
 			//Log.Debug($"Received AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			int abilityCount = reader.ReadInt32();
-			if (abilityCount < 1)
+			if (abilityCount < 0)
 			{
+				Log.Error("AbilityController", $"ReadPayload: invalid ability count {abilityCount}. Treating as empty.");
+				abilityCount = 0;
+			}
+			else if (abilityCount > maxPayloadAbilities)
+			{
+				Log.Error("AbilityController", $"ReadPayload: ability count {abilityCount} exceeds limit {maxPayloadAbilities}. Aborting payload read.");
 				return;
 			}
+
 			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
 			KnownAbilityEvents.Clear();
@@ -188,25 +221,51 @@ namespace FishMMO.Shared
 			KnownAbilityOnSpawnEvents.Clear();
 			KnownAbilityOnDestroyEvents.Clear();
 
+			List<int> abilityEvents = readPayloadAbilityEvents;
 			for (int i = 0; i < abilityCount; ++i)
 			{
 				long abilityID = reader.ReadInt64();
 				int abilityTemplateID = reader.ReadInt32();
 
-				List<int> abilityEvents = new List<int>();
+				abilityEvents.Clear();
 				int abilityEventsCount = reader.ReadInt32();
+				if (abilityEventsCount < 0)
+				{
+					Log.Error("AbilityController", $"ReadPayload: invalid ability event count {abilityEventsCount} for abilityID {abilityID}. Skipping ability.");
+					continue;
+				}
+				if (abilityEventsCount > maxPayloadAbilityEvents)
+				{
+					Log.Error("AbilityController", $"ReadPayload: ability event count {abilityEventsCount} exceeds limit {maxPayloadAbilityEvents} for abilityID {abilityID}. Aborting payload read.");
+					// The event count is outside the valid range. Attempting to drain an
+					// adversarially large count would stall the main thread before the
+					// Reader throws. The payload is unrecoverable — abort entirely.
+					return;
+				}
+
 				for (int j = 0; j < abilityEventsCount; ++j)
 				{
 					abilityEvents.Add(reader.ReadInt32());
 				}
-				Ability ability = new Ability(abilityID, abilityTemplateID, abilityEvents);
+
+				// Validate the template exists before constructing the Ability.
+				// A corrupted or outdated payload could contain an invalid template ID;
+				// Ability.Initialize would NullRef on Template.Name if we proceeded.
+				AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(abilityTemplateID);
+				if (abilityTemplate == null)
+				{
+					Log.Error("AbilityController", $"ReadPayload: invalid ability template ID {abilityTemplateID} for abilityID {abilityID}. Skipping.");
+					continue;
+				}
+
+				Ability ability = new Ability(abilityID, abilityTemplate, abilityEvents);
 
 				LearnAbility(ability);
 			}
 
 			if (Character.TryGet(out ICooldownController cooldownController))
 			{
-				cooldownController.Read(reader);
+				cooldownController.Read(reader, base.TimeManager.LocalTick);
 			}
 		}
 
@@ -224,7 +283,7 @@ namespace FishMMO.Shared
 				abilitySeed = playerSeedGenerator.Next();
 
 				// Instantiate the AbilitySeedGenerator on the server
-				abilitySeedGenerator = new System.Random(abilitySeed);
+				abilitySeedGenerator = new DeterministicRNG(abilitySeed);
 
 				// Set the initial seed
 				currentSeed = abilitySeedGenerator.Next();
@@ -242,10 +301,22 @@ namespace FishMMO.Shared
 				writer.WriteInt64(ability.ID);
 				writer.WriteInt32(ability.Template.ID);
 
-				writer.WriteInt32(ability.AbilityEvents.Count);
+				// Count includes the TypeOverride if present (serialized as an extra event ID).
+				int eventCount = ability.AbilityEvents.Count;
+				bool hasTypeOverride = ability.TypeOverride != null;
+				if (hasTypeOverride)
+				{
+					eventCount++;
+				}
+
+				writer.WriteInt32(eventCount);
 				foreach (int abilityEvent in ability.AbilityEvents.Keys)
 				{
 					writer.WriteInt32(abilityEvent);
+				}
+				if (hasTypeOverride)
+				{
+					writer.WriteInt32(ability.TypeOverride.ID);
 				}
 			}
 

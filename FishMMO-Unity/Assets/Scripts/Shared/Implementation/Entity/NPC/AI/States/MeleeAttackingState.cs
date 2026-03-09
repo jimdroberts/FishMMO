@@ -75,8 +75,8 @@ namespace FishMMO.Shared
 				return;
 
 			// Occasionally introduce movement variety instead of a straight attack.
-			System.Random rng = controller.NpcRNG;
-			if (distance <= meleeRange * 1.5f && (rng != null ? (float)rng.NextDouble() : Random.value) < MovementVarietyChance)
+			DeterministicRNG rng = controller.NpcRNG;
+			if (distance <= meleeRange * 1.5f && (rng ?? DeterministicRNG.Shared).NextFloat() < MovementVarietyChance)
 			{
 				BaseAIState varietyState = PickVarietyState(rng);
 				if (varietyState != null)
@@ -121,14 +121,14 @@ namespace FishMMO.Shared
 		/// Picks a random variety state (orbit or get-behind) to break up melee attack patterns.
 		/// Returns null if no variety states are configured.
 		/// </summary>
-		private BaseAIState PickVarietyState(System.Random rng)
+		private BaseAIState PickVarietyState(DeterministicRNG rng)
 		{
 			bool hasOrbit = OrbitState != null;
 			bool hasGetBehind = GetBehindState != null;
 
 			if (hasOrbit && hasGetBehind)
 			{
-				float roll = rng != null ? (float)rng.NextDouble() : Random.value;
+				float roll = (rng ?? DeterministicRNG.Shared).NextFloat();
 				return roll < 0.5f ? OrbitState : GetBehindState;
 			}
 			if (hasOrbit) return OrbitState;
