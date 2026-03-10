@@ -135,6 +135,13 @@ namespace FishMMO.Shared
 		/// Because <see cref="CooldownInstance"/> is immutable, this only removes entries —
 		/// it never mutates them. Safe to call during replay since the same tick always
 		/// produces the same expiration result.
+		/// <para>
+		/// Performance note: SortedDictionary iteration is O(n log n) per full traversal
+		/// (each MoveNext is O(log n)) and provides no early-exit benefit since it is
+		/// ordered by ability ID, not expiry tick. Acceptable because typical cooldown
+		/// counts per character are small (< 20). If profiling shows this as a hotspot,
+		/// consider a secondary structure keyed by expiry tick.
+		/// </para>
 		/// </summary>
 		/// <param name="currentTick">The current network tick.</param>
 		public void ExpireElapsed(uint currentTick)

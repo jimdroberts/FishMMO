@@ -313,9 +313,7 @@ namespace FishMMO.Shared
 			// would diverge from what the client receives via ReadPayload,
 			// causing a one-tick seed mismatch and spurious reconcile.
 			abilitySeedGenerator = null;
-			abilitySeed = playerSeedGenerator.Next();
-			abilitySeedGenerator = new DeterministicRNG(abilitySeed);
-			currentSeed = abilitySeedGenerator.Next();
+			EnsureAbilitySeedGenerator();
 		}
 
 		/// <summary>
@@ -523,12 +521,7 @@ namespace FishMMO.Shared
 				Debug.Assert((replicatedFlags & ~0xFFFF) == 0,
 					$"replicatedFlags 0x{replicatedFlags:X} exceeds 16-bit Pack range");
 
-				if (abilitySeedGenerator == null)
-				{
-					abilitySeed = playerSeedGenerator.Next();
-					abilitySeedGenerator = new DeterministicRNG(abilitySeed);
-					currentSeed = abilitySeedGenerator.Next();
-				}
+				EnsureAbilitySeedGenerator();
 
 				abilitySeedGenerator.CaptureState(out uint rngS0, out uint rngS1, out uint rngS2, out uint rngS3);
 
@@ -573,6 +566,14 @@ namespace FishMMO.Shared
 				// can show an "interrupted" flash, restore predicted resources, etc.
 				// If both agree on the ability ID (or both are inactive), it's a timing
 				// mismatch — replay will correct it invisibly.
+				//
+				// Edge case: rd.AbilityID == NO_ABILITY could also mean the server started
+				// the ability and it completed before this reconcile arrived. This is
+				// unlikely at typical reconcile frequency (30 Hz) for abilities with
+				// non-trivial activation times, but fast-cast instant abilities could
+				// theoretically trigger a false denial. Subscribers should treat the
+				// denial flash as best-effort — the subsequent replay will restore the
+				// correct state regardless.
 				if (currentAbilityID != NO_ABILITY && rd.AbilityID == NO_ABILITY)
 				{
 					OnAbilityDenied?.Invoke(currentAbilityID);
@@ -642,6 +643,24 @@ namespace FishMMO.Shared
 			if (cachedAttributeController != null)
 			{
 				cachedAttributeController.ApplyResourceState(rd.ResourceState);
+			}
+		}
+
+		/// <summary>
+		/// Ensures the ability seed generator is initialized. Creates a new generator
+		/// from <see cref="playerSeedGenerator"/> if one does not exist, and sets
+		/// <see cref="currentSeed"/> to the first generated value.
+		/// Called from <see cref="ResetState"/>, <see cref="CreateReconcile"/>, and
+		/// <see cref="WritePayload"/> — all three paths must produce identical results
+		/// when the generator is null, so the logic is centralized here.
+		/// </summary>
+		private void EnsureAbilitySeedGenerator()
+		{
+			if (abilitySeedGenerator == null)
+			{
+				abilitySeed = playerSeedGenerator.Next();
+				abilitySeedGenerator = new DeterministicRNG(abilitySeed);
+				currentSeed = abilitySeedGenerator.Next();
 			}
 		}
 

@@ -132,6 +132,16 @@ namespace FishMMO.Shared
 		private bool resourceCostsDirty = true;
 
 		/// <summary>
+		/// Cached total resource cost, invalidated alongside <see cref="cachedResourceCosts"/>.
+		/// </summary>
+		private int cachedTotalResourceCost;
+
+		/// <summary>
+		/// Whether <see cref="cachedTotalResourceCost"/> needs to be recalculated.
+		/// </summary>
+		private bool totalResourceCostDirty = true;
+
+		/// <summary>
 		/// Reusable buffer for container IDs to remove during <see cref="DestroyAbilityObjectsAfterTick"/>.
 		/// Static because all usage is synchronous single-threaded (Unity main thread).
 		/// </summary>
@@ -245,6 +255,7 @@ namespace FishMMO.Shared
 			AbilityEvents.Add(abilityEvent.ID, abilityEvent);
 			AddEventModifiers(abilityEvent);
 			resourceCostsDirty = true;
+			totalResourceCostDirty = true;
 			CachedTooltip = null;
 
 			switch (abilityEvent)
@@ -375,11 +386,17 @@ namespace FishMMO.Shared
 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
 			get
 			{
+				if (!totalResourceCostDirty)
+				{
+					return cachedTotalResourceCost;
+				}
 				int totalCost = 0;
 				foreach (int cost in GetResourceCosts().Values)
 				{
 					totalCost += cost;
 				}
+				cachedTotalResourceCost = totalCost;
+				totalResourceCostDirty = false;
 				return totalCost;
 			}
 		}
@@ -458,6 +475,7 @@ namespace FishMMO.Shared
 				Speed -= abilityEvent.Speed;
 
 				resourceCostsDirty = true;
+				totalResourceCostDirty = true;
 				CachedTooltip = null;
 				return true;
 			}

@@ -506,11 +506,11 @@ namespace FishMMO.Server.Implementation
 			// ── Phase 2: Cookie verification ────────────────────────────────
 			// Client echoed a cookie. Verify against the current and immediately
 			// preceding time bucket to tolerate bucket-boundary crossings.
+			string remoteIp = NormalizeIp(conn.GetAddress());
 			{
-				string verifyIp = NormalizeIp(conn.GetAddress());
 				uint currentBucket = GetTimeBucket();
-				if (!VerifyHandshakeCookie(msg.Cookie, verifyIp, msg.PublicKey, currentBucket, hmacKeySnapshot) &&
-					!VerifyHandshakeCookie(msg.Cookie, verifyIp, msg.PublicKey, currentBucket - 1, hmacKeySnapshot))
+				if (!VerifyHandshakeCookie(msg.Cookie, remoteIp, msg.PublicKey, currentBucket, hmacKeySnapshot) &&
+					!VerifyHandshakeCookie(msg.Cookie, remoteIp, msg.PublicKey, currentBucket - 1, hmacKeySnapshot))
 				{
 					conn.Disconnect(true);
 					return;
@@ -520,7 +520,6 @@ namespace FishMMO.Server.Implementation
 			// ── Per-IP rate limit ───────────────────────────────────────────
 			// Checked before the global cap so that per-IP debounce is always
 			// updated, even when the global cap would silently drop the request.
-			string remoteIp = NormalizeIp(conn.GetAddress());
 			if (!string.IsNullOrEmpty(remoteIp))
 			{
 				DateTime nowUtc = DateTime.UtcNow;

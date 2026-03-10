@@ -790,7 +790,7 @@ namespace FishMMO.Shared
 		/// changes do not silently invalidate outstanding tokens.
 		/// Increment only when the token wire format changes.
 		/// </summary>
-		public const byte TokenFormatVersion = 1;
+		public const byte TokenFormatVersion = 2;
 
 		/// <summary>
 		/// Token type discriminator for authentication tokens.
@@ -800,7 +800,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Builds a signed authentication token for use in World/Scene server token-based authentication.
-		/// Layout: [1-byte version][1-byte tokenType][2-byte accountName length BE][accountName UTF-8][8-byte loginServerId BE][8-byte expiresUtcTicks BE][16-byte nonce][32-byte HMAC-SHA256].
+		/// Layout: [1-byte version][1-byte tokenType][2-byte accountName length BE][accountName UTF-8][1-byte accessLevel][8-byte loginServerId BE][8-byte expiresUtcTicks BE][16-byte nonce][32-byte HMAC-SHA256].
 		/// The HMAC covers the entire payload (everything except the trailing 32-byte HMAC).
 		/// Token format version and token type are included in the HMAC, preventing token
 		/// reuse across format versions or different token subsystems.
@@ -818,9 +818,10 @@ namespace FishMMO.Shared
 		/// <param name="accountName">Account name to embed in the token.</param>
 		/// <param name="loginServerId">Database ID of the issuing LoginServer.</param>
 		/// <param name="expiresUtc">UTC expiration time for the token.</param>
+		/// <param name="accessLevel">Account access level to embed in the token.</param>
 		/// <param name="hmacKey">32-byte HMAC signing key.</param>
 		/// <returns>Signed token as a byte array (payload + HMAC).</returns>
-		public static byte[] BuildAuthToken(string accountName, long loginServerId, DateTime expiresUtc, byte[] hmacKey)
+		public static byte[] BuildAuthToken(string accountName, long loginServerId, DateTime expiresUtc, byte[] hmacKey, AccessLevel accessLevel)
 		{
 			if (string.IsNullOrEmpty(accountName)) throw new ArgumentException("accountName is required.", nameof(accountName));
 			if (loginServerId < 0) throw new ArgumentOutOfRangeException(nameof(loginServerId), "loginServerId must be non-negative.");
@@ -837,8 +838,8 @@ namespace FishMMO.Shared
 			if (nameBytes.Length > ushort.MaxValue)
 				throw new ArgumentException("Account name too long.", nameof(accountName));
 
-			// Layout: [1B version][1B tokenType][2B nameLen][name][8B serverId][8B ticks][16B nonce]
-			int payloadLength = 1 + 1 + 2 + nameBytes.Length + 8 + 8 + 16;
+			// Layout: [1B version][1B tokenType][2B nameLen][name][1B accessLevel][8B serverId][8B ticks][16B nonce]
+			int payloadLength = 1 + 1 + 2 + nameBytes.Length + 1 + 8 + 8 + 16;
 			byte[] payload = new byte[payloadLength];
 			int offset = 0;
 
@@ -855,6 +856,9 @@ namespace FishMMO.Shared
 			// Account name
 			Buffer.BlockCopy(nameBytes, 0, payload, offset, nameBytes.Length);
 			offset += nameBytes.Length;
+
+			// Access level (1 byte)
+			payload[offset++] = (byte)accessLevel;
 
 			// LoginServerId (8 bytes big-endian)
 			long sid = loginServerId;
@@ -901,9 +905,9 @@ namespace FishMMO.Shared
 		public static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
 		/// <summary>
-		/// Minimum valid signed token length: 1 (version) + 1 (tokenType) + 2 (nameLen) + 1 (name) + 8 (serverId) + 8 (ticks) + 16 (nonce) + 32 (HMAC).
+		/// Minimum valid signed token length: 1 (version) + 1 (tokenType) + 2 (nameLen) + 1 (name) + 1 (accessLevel) + 8 (serverId) + 8 (ticks) + 16 (nonce) + 32 (HMAC).
 		/// </summary>
-		public const int MinSignedTokenLength = 1 + 1 + 2 + 1 + 8 + 8 + 16 + HmacTagLength;
+		public const int MinSignedTokenLength = 1 + 1 + 2 + 1 + 1 + 8 + 8 + 16 + HmacTagLength;
 
 		/// <summary>
 		/// Parses and verifies an authentication token's HMAC signature.
@@ -913,12 +917,14 @@ namespace FishMMO.Shared
 		/// <param name="hmacKey">32-byte HMAC verification key.</param>
 		/// <param name="accountName">Parsed account name (null on failure).</param>
 		/// <param name="loginServerId">Parsed LoginServer database ID (0 on failure).</param>
+		/// <param name="accessLevel">Parsed access level (AccessLevel.Player on failure).</param>
 		/// <param name="expiresUtc">Parsed UTC expiration (DateTime.MinValue on failure).</param>
 		/// <returns><c>true</c> if the HMAC is valid and the token is well-formed; otherwise <c>false</c>.</returns>
-		public static bool TryParseAndVerifyAuthToken(byte[] signedToken, byte[] hmacKey, out string accountName, out long loginServerId, out DateTime expiresUtc)
+		public static bool TryParseAndVerifyAuthToken(byte[] signedToken, byte[] hmacKey, out string accountName, out long loginServerId, out AccessLevel accessLevel, out DateTime expiresUtc)
 		{
 			accountName = null;
 			loginServerId = 0;
+			accessLevel = AccessLevel.Player;
 			expiresUtc = DateTime.MinValue;
 
 			if (signedToken == null || signedToken.Length < MinSignedTokenLength)
@@ -966,7 +972,7 @@ namespace FishMMO.Shared
 			// Account name length (2 bytes big-endian)
 			int nameLength = (signedToken[offset] << 8) | signedToken[offset + 1];
 			offset += 2;
-			if (nameLength <= 0 || offset + nameLength + 8 + 8 + 16 > payloadLength)
+			if (nameLength <= 0 || offset + nameLength + 1 + 8 + 8 + 16 > payloadLength)
 			{
 				return false;
 			}
@@ -981,6 +987,9 @@ namespace FishMMO.Shared
 				return false;
 			}
 			offset += nameLength;
+
+			// Access level (1 byte)
+			accessLevel = (AccessLevel)signedToken[offset++];
 
 			// LoginServerId (8 bytes big-endian)
 			loginServerId = 0;

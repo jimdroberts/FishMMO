@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -72,7 +73,7 @@ namespace FishMMO.Shared
 		private CharacterResourceAttribute resourceInstance;
 		/// <summary>
 		/// Gets the cached health resource attribute for this character.
-		/// Throws an exception if the attribute controller or health attribute is missing.
+		/// Returns null and logs an error if the attribute controller or health attribute is missing.
 		/// </summary>
 		public CharacterResourceAttribute ResourceInstance
 		{
@@ -80,15 +81,11 @@ namespace FishMMO.Shared
 			{
 				if (resourceInstance == null)
 				{
-					if (!Character.TryGet(out ICharacterAttributeController attributeController))
+					if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
+						!attributeController.TryGetHealthAttribute(out resourceInstance))
 					{
-						throw new UnityException($"{gameObject.name} ICharacterAttributeController is missing");
+						Log.Error("CharacterDamageController", $"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute.");
 					}
-					if (!attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
-					{
-						throw new UnityException($"{gameObject.name} Health Resource Attribute is missing");
-					}
-					resourceInstance = health;
 				}
 				return resourceInstance;
 			}

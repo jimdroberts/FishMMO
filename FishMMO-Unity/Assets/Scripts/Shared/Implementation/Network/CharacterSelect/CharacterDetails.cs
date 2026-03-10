@@ -15,6 +15,7 @@ namespace FishMMO.Shared
 		public string SceneName;
 		/// <summary>Template ID representing the character's race.</summary>
 		public int RaceTemplateID;
-		// TODO: Add equipped items list when implemented.
+		/// <summary>Template IDs of equipped items indexed by slot (see <see cref="ItemSlot"/>). Null when equipment data is unavailable.</summary>
+		public Dictionary<int, int> EquippedItems;
 	}
 }

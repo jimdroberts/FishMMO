@@ -578,13 +578,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (WorldSceneDetailsCache == null ||
 				!WorldSceneDetailsCache.Scenes.Contains(sceneData.SceneName))
 			{
-				Log.Debug("SceneServerSystem", "Scene Server System: Scene is missing from the cache. Unable to load the scene.");
+				Log.Warning("SceneServerSystem", $"Scene is missing from the cache. Unable to load scene: SceneID={sceneData.ID} Scene={sceneData.SceneName}");
 				if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID))
 				{
 					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update for missing scene: SceneID={sceneData.ID}. Firing directly.");
 					_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
 				}
-				// TODO: kick players waiting for this scene otherwise they get stuck
+
+				// Kick any connected characters assigned to this scene so they don't get stuck.
+				// Characters arriving after this point are handled by CharacterSystem.Loading
+				// which disconnects when TryGetSceneInstanceDetails returns false.
+				if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMappingData))
+				{
+					foreach (var kvp in charMappingData.ConnectionCharacters)
+					{
+						if (kvp.Value.SceneName == sceneData.SceneName)
+						{
+							Log.Warning("SceneServerSystem", $"Kicking character '{kvp.Value.CharacterName}' — scene '{sceneData.SceneName}' failed to load.");
+							kvp.Key.Disconnect(false);
+						}
+					}
+				}
 				return;
 			}
 

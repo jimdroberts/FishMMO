@@ -53,7 +53,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Creates a snapshot from a live <see cref="Ability"/> instance.
-		/// Each event dictionary is shallow-copied into a new <see cref="Dictionary{TKey,TValue}"/>
+		/// Each event dictionary structure is copied into a new <see cref="Dictionary{TKey,TValue}"/>
 		/// and assigned to an <see cref="IReadOnlyDictionary{TKey,TValue}"/> field. This isolates the
 		/// snapshot from later mutations via <see cref="Ability.RemoveAbilityEvent"/> while
 		/// still sharing the immutable <see cref="ScriptableObject"/> event template values.
@@ -63,7 +63,9 @@ namespace FishMMO.Shared
 		{
 			Speed = ability.Speed;
 			LifeTime = ability.LifeTime;
-			// Shallow-copy each dictionary so the snapshot is isolated from live mutations.
+			// Copy each dictionary structure so the snapshot is isolated from live mutations.
+			// The dictionary keys/values (ScriptableObject event template references) are shared,
+			// not deep-copied — they are immutable and safe to share.
 			OnTickEvents = new Dictionary<int, AbilityOnTickEvent>(ability.OnTickEvents);
 			OnHitEvents = new Dictionary<int, AbilityOnHitEvent>(ability.OnHitEvents);
 			OnDestroyEvents = new Dictionary<int, AbilityOnDestroyEvent>(ability.OnDestroyEvents);

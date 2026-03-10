@@ -220,6 +220,7 @@ namespace FishMMO.Shared
 			KnownAbilityOnPreSpawnEvents.Clear();
 			KnownAbilityOnSpawnEvents.Clear();
 			KnownAbilityOnDestroyEvents.Clear();
+			templateToAbilityID?.Clear();
 
 			List<int> abilityEvents = readPayloadAbilityEvents;
 			for (int i = 0; i < abilityCount; ++i)
@@ -276,18 +277,8 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer to write to.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
-			// Check if we already instantiated an RNG for this ability controller
-			if (abilitySeedGenerator == null)
-			{
-				// Generate an AbilitySeedGenerator Seed
-				abilitySeed = playerSeedGenerator.Next();
-
-				// Instantiate the AbilitySeedGenerator on the server
-				abilitySeedGenerator = new DeterministicRNG(abilitySeed);
-
-				// Set the initial seed
-				currentSeed = abilitySeedGenerator.Next();
-			}
+			// Ensure the seed generator exists (shared with ResetState and CreateReconcile).
+			EnsureAbilitySeedGenerator();
 
 			// Write the ability RNG seed for the clients
 			writer.WriteInt32(abilitySeed);

@@ -276,16 +276,16 @@ namespace FishMMO.Server.Implementation
 				}
 
 				// Extract loginServerId from token payload (partial parse to look up signing key).
-				// Token format: [1B version][1B tokenType][2B nameLen BE][name][8B serverId]...
+				// Token format: [1B version][1B tokenType][2B nameLen BE][name][1B accessLevel][8B serverId]...
 				int nameLen = (rawToken[2] << 8) | rawToken[3];
-				if (nameLen <= 0 || 4 + nameLen + 8 + 8 + 16 + CryptoHelper.HmacTagLength > rawToken.Length)
+				if (nameLen <= 0 || 4 + nameLen + 1 + 8 + 8 + 16 + CryptoHelper.HmacTagLength > rawToken.Length)
 				{
 					CryptographicOperations.ZeroMemory(rawToken);
 					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
-				int serverIdOffset = 4 + nameLen;
+				int serverIdOffset = 4 + nameLen + 1;
 				long loginServerId = 0;
 				for (int i = 0; i < 8; i++)
 					loginServerId = (loginServerId << 8) | rawToken[serverIdOffset + i];
@@ -321,7 +321,7 @@ namespace FishMMO.Server.Implementation
 				}
 
 				// Verify HMAC and parse token fields
-				bool hmacValid = CryptoHelper.TryParseAndVerifyAuthToken(rawToken, hmacKey, out string accountName, out long parsedServerId, out DateTime expiresUtc);
+				bool hmacValid = CryptoHelper.TryParseAndVerifyAuthToken(rawToken, hmacKey, out string accountName, out long parsedServerId, out AccessLevel parsedAccessLevel, out DateTime expiresUtc);
 				CryptographicOperations.ZeroMemory(hmacKey);
 
 				if (!keyFound || !hmacValid)
@@ -369,12 +369,10 @@ namespace FishMMO.Server.Implementation
 					return;
 				}
 
-				// accountName is extracted from the HMAC-verified token payload.
+				// accountName and parsedAccessLevel are extracted from the HMAC-verified token payload.
 				// Canonicalization (e.g., case normalization) must match the LoginServer's
 				// token issuance to ensure consistent identity across server types.
-				// TODO: Store AccessLevel in the auth token and extract it here
-				// instead of hardcoding Player. GM-level tokens currently downgrade.
-				tokenAccountManager.AddConnectionAccount(conn, accountName, AccessLevel.Player);
+				tokenAccountManager.AddConnectionAccount(conn, accountName, parsedAccessLevel);
 
 				// Attempt login (virtual — overridden by WorldServer/SceneServer)
 				ClientAuthenticationResult result = await TryLoginAsync(ClientAuthenticationResult.LoginSuccess, accountName);
@@ -411,8 +409,6 @@ namespace FishMMO.Server.Implementation
 					{
 						Server.AccountManager.RemoveConnectionAccount(conn);
 					}
-
-					ClearTransientAuthState(clientId);
 				});
 			}
 			catch (Exception ex)

@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Logging;
+using FishNet.Connection;
 using FishNet.Managing;
+using FishNet.Transporting;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -199,7 +201,17 @@ namespace FishMMO.Shared
 			if (!string.IsNullOrEmpty(phase.PhaseAnnouncement))
 			{
 				Log.Info("BossScriptState", $"[BOSS] {controller.gameObject.name}: {phase.PhaseAnnouncement}");
-				// TODO: Broadcast announcement to nearby players via chat system.
+
+				// Broadcast to all players observing this boss.
+				ChatBroadcast chatMsg = new ChatBroadcast()
+				{
+					Channel = ChatChannel.System,
+					Text = phase.PhaseAnnouncement,
+				};
+				foreach (NetworkConnection conn in controller.NetworkObject.Observers)
+				{
+					controller.ServerManager.Broadcast(conn, chatMsg, false, Channel.Reliable);
+				}
 			}
 		}
 

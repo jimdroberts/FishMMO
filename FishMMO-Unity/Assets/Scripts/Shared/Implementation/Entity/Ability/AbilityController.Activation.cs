@@ -176,6 +176,8 @@ namespace FishMMO.Shared
 		/// but this method intentionally does not re-check resource availability. A character
 		/// that runs out of mana mid-channel will continue channeling. If this behavior should
 		/// change, add a resource check here and in <see cref="ProcessActiveAbility"/>.
+		/// // NOTE(cross-ref): keep this in sync with ProcessActiveAbility — if either
+		/// // gains a mid-cast resource check, the other must be updated to match.
 		/// </remarks>
 		private bool ValidateActiveCast(out Ability validatedAbility)
 		{
@@ -213,7 +215,13 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Return immediately if we are charging our attack
+			// Return immediately if we are charging our attack.
+			// Both replicatedFlags (previous tick's authoritative state) and
+			// activationData.ActivationFlags (current tick's input) must have
+			// IsHeld set. This is not redundant — each comes from a different
+			// state source. Requiring both prevents a one-tick window where
+			// the flag was cleared in one source but not the other from
+			// accidentally continuing the hold.
 			if (ChargedTemplate != null &&
 				validatedAbility.HasAbilityEvent(ChargedTemplate.ID) &&
 				replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld) &&
@@ -478,7 +486,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Processes the currently active consumable each tick. Handles the activation countdown
 		/// and finishes the consumable when activation time expires.
-		/// Consumables do not support channeling or charging.
+		/// Consumables do not support channeling, charging, or held-state early cancellation.
+		/// Unlike abilities (which can be released mid-cast via the IsHeld flag in
+		/// <see cref="UpdateActivation"/>), consumables always run to completion once started.
+		/// This is intentional: potions and similar items should not be interruptible by
+		/// releasing the activation key. Interrupts via <see cref="ProcessInterrupt"/> still
+		/// apply (e.g., stun, explicit cancel).
 		/// </summary>
 		/// <param name="activationData">The replicate data for this tick.</param>
 		/// <param name="state">The prediction state.</param>
@@ -563,7 +576,10 @@ namespace FishMMO.Shared
 							cachedInventoryController.UnlockSlot(slot);
 							// Prevent double-unlock: Cancel() also unlocks consumableSlot.
 							// Setting to -1 here ensures the subsequent Cancel() is a no-op
-							// for slot unlocking.
+							// for slot unlocking. If SetItemSlot below throws,
+							// currentAbilityID is still set — the subsequent Cancel(state)
+							// will clear it, but the slot is already unlocked and cleaned
+							// up correctly. This ordering is intentional.
 							consumableSlot = -1;
 							cachedInventoryController.SetItemSlot(null, slot);
 						}
@@ -599,7 +615,10 @@ namespace FishMMO.Shared
 
 			// IItemContainer.Items is declared as List<Item> — the compile-time type
 			// guarantees index-stable iteration required for deterministic lookup.
+			// Runtime assertion: if the interface ever returns a different collection type
+			// (e.g., via a shim or mock), catch the determinism break immediately.
 			List<Item> items = cachedInventoryController.Items;
+			Debug.Assert(items != null, "FindConsumableItem: IInventoryController.Items returned null — determinism contract violated.");
 			for (int i = 0; i < items.Count; ++i)
 			{
 				Item item = items[i];
@@ -753,9 +772,10 @@ namespace FishMMO.Shared
 			replicatedFlags.DisableBit(AbilityActivationFlags.IsMount);
 
 			// Only clear persistent bits from local input on non-replay execution.
-			// During reconcile replay, the flags will be restored by the next
-			// Replicate tick — clearing them here would silently drop queued
-			// inputs (e.g., a consumable activation queued between ticks).
+			// During replay these bits are not cleared, so any input queued
+			// between ticks (e.g., a consumable activation) naturally persists
+			// until the next real tick processes it. Clearing here during
+			// non-replay is what actually consumes the flags.
 			if (!state.ContainsReplayed())
 			{
 				localInputFlags.DisableBit(AbilityActivationFlags.IsHeld);

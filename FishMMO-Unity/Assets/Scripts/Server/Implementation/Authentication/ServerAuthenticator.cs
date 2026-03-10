@@ -307,6 +307,14 @@ namespace FishMMO.Server.Implementation
 				fakeSaltKey = null;
 			}
 
+			// Defense-in-depth: zero the token signing key in case the external owner
+			// (LoginServerSystem) fails to clean up before authenticator shutdown.
+			if (_tokenSigningKey != null)
+			{
+				CryptographicOperations.ZeroMemory(_tokenSigningKey);
+				_tokenSigningKey = null;
+			}
+
 			kickRequestNextAllowedUtcByAccount.Clear();
 			ipAuthNextAllowedUtc.Clear();
 			accountVerifyNextAllowedUtc.Clear();
@@ -899,6 +907,7 @@ namespace FishMMO.Server.Implementation
 
 			string serverProof = null;
 			string username = null;
+			AccessLevel accessLevel = AccessLevel.Player;
 
 			// Atomically validate proof and advance auth state: ProofPending → SrpSuccess.
 			bool proofValid = Server.AccountManager.TryAdvanceAuthState(conn, AuthState.ProofPending, AuthState.SrpSuccess, (a) =>
@@ -907,6 +916,7 @@ namespace FishMMO.Server.Implementation
 				{
 					serverProof = proof;
 					username = a.SrpData.UserName;
+					accessLevel = a.AccessLevel;
 					return true;
 				}
 				return false;
@@ -999,7 +1009,7 @@ namespace FishMMO.Server.Implementation
 					try
 					{
 						DateTime expiresUtc = DateTime.UtcNow.AddMinutes(tokenExpirationMinutes);
-						byte[] rawToken = CryptoHelper.BuildAuthToken(username, LoginServerId, expiresUtc, signingKeySnapshot);
+						byte[] rawToken = CryptoHelper.BuildAuthToken(username, LoginServerId, expiresUtc, signingKeySnapshot, accessLevel);
 
 						// Persist token hash to DB for revocation support.
 						string tokenHash = CryptoHelper.HashTokenHex(rawToken);
@@ -1056,8 +1066,6 @@ namespace FishMMO.Server.Implementation
 						// On failed authentication, remove all connection/account mappings and encryption state.
 						Server.AccountManager.RemoveConnectionAccount(conn);
 					}
-
-					ClearTransientAuthState(clientId);
 				});
 			}
 			catch (Exception ex)
@@ -1065,7 +1073,7 @@ namespace FishMMO.Server.Implementation
 				await Log.Error("ServerAuthenticator", $"Error during SRP proof login: {ex}");
 				EnqueueMainThread(() =>
 				{
-					conn.Disconnect(false);
+					if (conn.IsActive) conn.Disconnect(false);
 				});
 				PurgeConnectionAuthState(conn, disconnect: false);
 			}

@@ -78,10 +78,16 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Invokes the <see cref="OnAttributeUpdated"/> event for the given attribute.
+		/// During graph propagation, the notification is deferred until all values stabilize.
 		/// </summary>
 		/// <param name="item">The attribute that was changed.</param>
 		protected virtual void Internal_OnAttributeChanged(CharacterAttribute item)
 		{
+			if (characterAttributeController != null && characterAttributeController.IsPropagating)
+			{
+				characterAttributeController.EnqueueNotification(item);
+				return;
+			}
 			OnAttributeUpdated?.Invoke(item);
 		}
 
@@ -376,10 +382,23 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Updates the attribute's values, propagates changes to parent attributes if needed,
 		/// and notifies listeners after propagation completes.
+		/// <para>
+		/// The outermost call brackets the entire graph walk with
+		/// <see cref="ICharacterAttributeController.BeginPropagation"/> /
+		/// <see cref="ICharacterAttributeController.EndPropagation"/>.
+		/// Intermediate nodes enqueue notifications instead of firing them,
+		/// so listeners only see fully-stabilized values.
+		/// </para>
 		/// </summary>
 		/// <param name="forceUpdate">If true, forces update even if value is unchanged.</param>
 		public void UpdateValues(bool forceUpdate)
 		{
+			bool isRoot = characterAttributeController != null && !characterAttributeController.IsPropagating;
+			if (isRoot)
+			{
+				characterAttributeController.BeginPropagation();
+			}
+
 			int oldFinalValue = finalValue;
 
 			ApplyChildren();
@@ -394,6 +413,11 @@ namespace FishMMO.Shared
 			}
 
 			Internal_OnAttributeChanged(this);
+
+			if (isRoot)
+			{
+				characterAttributeController.EndPropagation();
+			}
 		}
 
 		/// <summary>

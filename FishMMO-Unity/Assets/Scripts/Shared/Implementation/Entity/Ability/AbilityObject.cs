@@ -533,7 +533,16 @@ namespace FishMMO.Shared
 			spawnedAbilityObjects = new Dictionary<int, AbilityObject>();
 			containerID = unchecked(seed ^ ((int)spawnTick * 1000003));
 
-			// If a stale predicted entry occupies this slot, destroy it first.
+			// If an existing entry occupies this slot, destroy it first.
+			// This handles two cases:
+			//   (1) A stale predicted entry leftover from a mispredicted spawn.
+			//   (2) A genuine hash collision — expected in multi-cast scenarios
+			//       where two abilities fire on the same tick with different seeds
+			//       (e.g., a proc triggers a second ability). The simple hash has
+			//       no collision probing, so identical (spawnTick, seed) pairs or
+			//       unlucky XOR results will land here. This is safe: the older
+			//       entry is destroyed and replaced, which is correct for both
+			//       stale cleanup and same-tick multi-cast.
 			if (ability.Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> staleContainer))
 			{
 				foreach (AbilityObject staleObj in staleContainer.Values)

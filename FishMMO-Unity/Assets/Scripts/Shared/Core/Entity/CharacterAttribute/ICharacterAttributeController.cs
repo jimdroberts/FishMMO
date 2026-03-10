@@ -111,5 +111,31 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <returns>Current resource state struct.</returns>
 		CharacterAttributeResourceState GetResourceState();
+
+		/// <summary>
+		/// True while the attribute graph is propagating value changes.
+		/// Notifications are deferred until propagation completes.
+		/// </summary>
+		bool IsPropagating { get; }
+
+		/// <summary>
+		/// Begins a propagation batch. While active, <see cref="EnqueueNotification"/>
+		/// collects changed attributes instead of firing events immediately.
+		/// Must be paired with <see cref="EndPropagation"/>.
+		/// </summary>
+		void BeginPropagation();
+
+		/// <summary>
+		/// Ends a propagation batch. If this is the outermost batch (depth returns to zero),
+		/// fires all deferred <see cref="CharacterAttribute.OnAttributeUpdated"/> events.
+		/// </summary>
+		void EndPropagation();
+
+		/// <summary>
+		/// Enqueues an attribute for deferred notification during propagation.
+		/// If not propagating, callers should invoke the event directly instead.
+		/// </summary>
+		/// <param name="attribute">The attribute to notify after propagation completes.</param>
+		void EnqueueNotification(CharacterAttribute attribute);
 	}
 }

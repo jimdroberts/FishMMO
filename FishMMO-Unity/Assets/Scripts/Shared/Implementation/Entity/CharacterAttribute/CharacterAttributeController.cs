@@ -7,6 +7,7 @@ using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
+using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -84,6 +85,86 @@ namespace FishMMO.Shared
 		public CharacterAttributeTemplate StaminaRegenerationTemplate;
 
 		/// <summary>
+		/// Time in seconds between resource regeneration ticks.
+		/// Configurable per character type (e.g., NPCs may use a different rate than players).
+		/// </summary>
+		[SerializeField]
+		[Tooltip("Time in seconds between resource regeneration ticks.")]
+		private float regenTickRate = 5.0f;
+
+		/// <summary>
+		/// Propagation depth counter for batched attribute graph updates.
+		/// While > 0, attribute change notifications are deferred.
+		/// </summary>
+		private int propagationDepth;
+
+		/// <summary>
+		/// Attributes whose <see cref="CharacterAttribute.OnAttributeUpdated"/> event
+		/// has been deferred during the current propagation batch.
+		/// </summary>
+		private readonly HashSet<CharacterAttribute> pendingNotifications = new HashSet<CharacterAttribute>();
+
+		/// <summary>
+		/// Reusable buffer for draining <see cref="pendingNotifications"/> without
+		/// iterator-invalidation issues if a listener triggers a new propagation.
+		/// </summary>
+		private readonly List<CharacterAttribute> notificationDrainBuffer = new List<CharacterAttribute>();
+
+		/// <summary>
+		/// Guard flag preventing re-entrant notification draining.
+		/// </summary>
+		private bool isDrainingNotifications;
+
+		/// <inheritdoc/>
+		public bool IsPropagating => propagationDepth > 0;
+
+		/// <inheritdoc/>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void BeginPropagation()
+		{
+			propagationDepth++;
+		}
+
+		/// <inheritdoc/>
+		public void EndPropagation()
+		{
+			if (--propagationDepth > 0)
+			{
+				return;
+			}
+			propagationDepth = 0;
+
+			if (isDrainingNotifications)
+			{
+				// Re-entrant — the outer EndPropagation will drain new entries.
+				return;
+			}
+
+			isDrainingNotifications = true;
+			while (pendingNotifications.Count > 0)
+			{
+				notificationDrainBuffer.Clear();
+				foreach (CharacterAttribute attr in pendingNotifications)
+				{
+					notificationDrainBuffer.Add(attr);
+				}
+				pendingNotifications.Clear();
+				for (int i = 0; i < notificationDrainBuffer.Count; i++)
+				{
+					notificationDrainBuffer[i].OnAttributeUpdated?.Invoke(notificationDrainBuffer[i]);
+				}
+			}
+			isDrainingNotifications = false;
+		}
+
+		/// <inheritdoc/>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void EnqueueNotification(CharacterAttribute attribute)
+		{
+			pendingNotifications.Add(attribute);
+		}
+
+		/// <summary>
 		/// Dictionary of all non-resource character attributes, keyed by template ID.
 		/// </summary>
 		private readonly Dictionary<int, CharacterAttribute> attributes = new Dictionary<int, CharacterAttribute>();
@@ -128,6 +209,9 @@ namespace FishMMO.Shared
 				// Set up parent/child/dependant relationships for all attributes.
 				InitializeAttributeDependents();
 				InitializeResourceAttributeDependents();
+
+				// Cache regen dependency references now that the graph is fully wired.
+				CacheRegenReferences();
 			}
 			else
 			{
@@ -207,6 +291,11 @@ namespace FishMMO.Shared
 			// causing a regen desync between client and server until the next
 			// reconcile corrects it.
 			accumulatedRegenDelta = 0.0f;
+
+			// Reset propagation state to prevent stale notifications.
+			propagationDepth = 0;
+			pendingNotifications.Clear();
+			isDrainingNotifications = false;
 
 			foreach (CharacterResourceAttribute characterResourceAttribute in ResourceAttributes.Values)
 			{
@@ -753,46 +842,70 @@ namespace FishMMO.Shared
 		private float accumulatedRegenDelta = 0.0f;
 
 		/// <summary>
-		/// Processes resource regeneration for health, mana, and stamina using a 5-second tick rate.
-		/// Accumulates delta time and applies regeneration in discrete intervals.
+		/// Cached regeneration dependency attribute references, resolved once during init
+		/// to avoid per-tick string-keyed dictionary lookups in <see cref="RegenerateResource"/>.
 		/// </summary>
-		/// <param name="deltaTime">Time elapsed since the last call, in seconds.</param>
-		public void Regenerate(float deltaTime)
+		private CharacterAttribute cachedHealthRegen;
+		private CharacterAttribute cachedManaRegen;
+		private CharacterAttribute cachedStaminaRegen;
+
+		/// <summary>
+		/// Resolves and caches regeneration dependency attribute references for health, mana, and stamina.
+		/// Must be called after <see cref="InitializeResourceAttributeDependents"/> so the dependency graph is fully wired.
+		/// </summary>
+		private void CacheRegenReferences()
 		{
-			const float REGEN_TICK_RATE = 5.0f;
-
-			accumulatedRegenDelta += deltaTime;
-
-			// Check if accumulatedDelta has reached or exceeded REGEN_TICK_RATE seconds
-			if (accumulatedRegenDelta >= REGEN_TICK_RATE)
+			if (HealthResourceTemplate != null && HealthRegenerationTemplate != null &&
+				resourceAttributes.TryGetValue(HealthResourceTemplate.ID, out var health))
 			{
-				// Calculate how many 5-second intervals have passed
-				int intervals = (int)(accumulatedRegenDelta / REGEN_TICK_RATE);
-
-				// Reduce accumulatedDelta by the total duration of processed intervals
-				accumulatedRegenDelta -= intervals * REGEN_TICK_RATE;
-
-				// Regenerate health, mana, and stamina
-				RegenerateResource(HealthResourceTemplate, HealthRegenerationTemplate, intervals);
-				RegenerateResource(ManaResourceTemplate, ManaRegenerationTemplate, intervals);
-				RegenerateResource(StaminaResourceTemplate, StaminaRegenerationTemplate, intervals);
+				cachedHealthRegen = health.GetDependant(HealthRegenerationTemplate.Name);
+			}
+			if (ManaResourceTemplate != null && ManaRegenerationTemplate != null &&
+				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out var mana))
+			{
+				cachedManaRegen = mana.GetDependant(ManaRegenerationTemplate.Name);
+			}
+			if (StaminaResourceTemplate != null && StaminaRegenerationTemplate != null &&
+				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out var stamina))
+			{
+				cachedStaminaRegen = stamina.GetDependant(StaminaRegenerationTemplate.Name);
 			}
 		}
 
 		/// <summary>
-		/// Regenerates a single resource attribute by looking up its regeneration dependency and applying the gain.
+		/// Processes resource regeneration for health, mana, and stamina.
+		/// Accumulates delta time and applies regeneration in discrete intervals
+		/// controlled by <see cref="regenTickRate"/>.
+		/// </summary>
+		/// <param name="deltaTime">Time elapsed since the last call, in seconds.</param>
+		public void Regenerate(float deltaTime)
+		{
+			accumulatedRegenDelta += deltaTime;
+
+			if (accumulatedRegenDelta >= regenTickRate)
+			{
+				int intervals = (int)(accumulatedRegenDelta / regenTickRate);
+				accumulatedRegenDelta -= intervals * regenTickRate;
+
+				RegenerateResource(HealthResourceTemplate, cachedHealthRegen, intervals);
+				RegenerateResource(ManaResourceTemplate, cachedManaRegen, intervals);
+				RegenerateResource(StaminaResourceTemplate, cachedStaminaRegen, intervals);
+			}
+		}
+
+		/// <summary>
+		/// Regenerates a single resource attribute using the cached regen dependency reference.
 		/// </summary>
 		/// <param name="resourceTemplate">The template of the resource to regenerate.</param>
-		/// <param name="regenerationTemplate">The template of the regeneration rate attribute.</param>
-		/// <param name="intervals">The number of 5-second intervals to process.</param>
-		private void RegenerateResource(CharacterAttributeTemplate resourceTemplate, CharacterAttributeTemplate regenerationTemplate, int intervals)
+		/// <param name="cachedRegen">The cached regeneration dependency attribute (resolved at init).</param>
+		/// <param name="intervals">The number of regen-tick intervals to process.</param>
+		private void RegenerateResource(CharacterAttributeTemplate resourceTemplate, CharacterAttribute cachedRegen, int intervals)
 		{
 			if (resourceTemplate != null &&
-				regenerationTemplate != null &&
+				cachedRegen != null &&
 				resourceAttributes.TryGetValue(resourceTemplate.ID, out CharacterResourceAttribute resource))
 			{
-				int regenAmountPerInterval = resource.GetDependantFinalValue(regenerationTemplate.Name);
-				int totalRegenAmount = regenAmountPerInterval * intervals;
+				int totalRegenAmount = cachedRegen.FinalValue * intervals;
 				resource.Gain(totalRegenAmount);
 			}
 		}
@@ -809,13 +922,42 @@ namespace FishMMO.Shared
 				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))
 			{
 				accumulatedRegenDelta = resourceState.RegenDelta;
+
+				// Batch all notifications so listeners see fully-settled values.
+				BeginPropagation();
+
 				health.SetFinal(resourceState.MaxHealth);
 				mana.SetFinal(resourceState.MaxMana);
 				stamina.SetFinal(resourceState.MaxStamina);
+
+				// Re-propagate to parents so any attribute whose formula depends on
+				// these max values recalculates. SetFinal intentionally does not call
+				// UpdateValues — doing so would overwrite the reconciled snapshot with
+				// a formula-computed result. Only parents need the re-calculation.
+				PropagateToParents(health);
+				PropagateToParents(mana);
+				PropagateToParents(stamina);
+
 				health.SetCurrentValue(resourceState.Health);
 				// Skipping internal UI update here fixes an issue with Replicate/Reconcile fighting over UI updates.
 				mana.SetCurrentValue(resourceState.Mana, false);
 				stamina.SetCurrentValue(resourceState.Stamina);
+
+				EndPropagation();
+			}
+		}
+
+		/// <summary>
+		/// Re-propagates value changes to all parent attributes.
+		/// Used after <see cref="CharacterAttribute.SetFinal"/> to ensure
+		/// dependent formulas reflect the new FinalValue without recalculating the attribute itself.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static void PropagateToParents(CharacterAttribute attribute)
+		{
+			foreach (CharacterAttribute parent in attribute.Parents.Values)
+			{
+				parent.UpdateValues();
 			}
 		}
 
