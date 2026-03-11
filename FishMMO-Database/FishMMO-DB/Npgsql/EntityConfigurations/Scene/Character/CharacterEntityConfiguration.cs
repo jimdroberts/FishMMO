@@ -27,7 +27,7 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasConversion<short>()
 				.HasColumnType("smallint")
-				.HasDefaultValue((short)CharacterSessionState.Offline);
+				.HasDefaultValue(CharacterSessionState.Offline);
 
 			builder.Property(e => e.SessionOwnerServerId)
 				.IsRequired()

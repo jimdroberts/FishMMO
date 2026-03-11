@@ -35,7 +35,7 @@
     <IsEFBuild>false</IsEFBuild>
   </PropertyGroup>
   <PropertyGroup>
-    <IsEFBuild Condition="Exists('..\..\Installer.exe')">true</IsEFBuild>
+    <IsEFBuild Condition="Exists('..\..\FishMMO-Installer.exe') Or Exists('..\..\FishMMO-Installer')">true</IsEFBuild>
   </PropertyGroup>
   <!-- Move the DLL to the Unity project. -->
   <Target Name="FishMMODependencies" AfterTargets="Build" Condition="'$(IsEFBuild)' == 'false'">

@@ -19,8 +19,18 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.4" />
   </ItemGroup>
 
+  <!-- Clean stale files from previously copied source trees before re-copying -->
+  <Target Name="CleanCopiedSourceTrees" AfterTargets="Build">
+    <PropertyGroup>
+      <FishMMODatabaseDest>$(OutputPath)FishMMO-Database</FishMMODatabaseDest>
+      <FishMMOSharedUtilityDest>$(OutputPath)FishMMO-SharedUtility</FishMMOSharedUtilityDest>
+    </PropertyGroup>
+    <RemoveDir Directories="$(FishMMODatabaseDest)" Condition="Exists('$(FishMMODatabaseDest)')" />
+    <RemoveDir Directories="$(FishMMOSharedUtilityDest)" Condition="Exists('$(FishMMOSharedUtilityDest)')" />
+  </Target>
+
   <!-- Copy the FishMMO-Database directory into the build output for migration support -->
-  <Target Name="CopyFishMMODatabase" AfterTargets="Build">
+  <Target Name="CopyFishMMODatabase" AfterTargets="CleanCopiedSourceTrees">
     <PropertyGroup>
       <FishMMODatabaseSource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\FishMMO-Database'))</FishMMODatabaseSource>
       <FishMMODatabaseDest>$(OutputPath)FishMMO-Database</FishMMODatabaseDest>
@@ -30,9 +40,24 @@
                             Exclude="$(FishMMODatabaseSource)\**\bin\**;$(FishMMODatabaseSource)\**\obj\**;$(FishMMODatabaseSource)\.vs\**" />
     </ItemGroup>
     <Copy SourceFiles="@(FishMMODatabaseFiles)"
-          DestinationFiles="@(FishMMODatabaseFiles->'$(FishMMODatabaseDest)\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+          DestinationFiles="@(FishMMODatabaseFiles->'$(FishMMODatabaseDest)\%(RecursiveDir)%(Filename)%(Extension)')" />
     <Message Text="Copied FishMMO-Database to $(FishMMODatabaseDest)" Importance="high" />
+  </Target>
+
+  <!-- Copy the FishMMO-SharedUtility directory into the build output so FishMMO-DB project references resolve -->
+  <Target Name="CopyFishMMOSharedUtility" AfterTargets="CleanCopiedSourceTrees">
+    <PropertyGroup>
+      <FishMMOSharedUtilitySource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\FishMMO-SharedUtility'))</FishMMOSharedUtilitySource>
+      <FishMMOSharedUtilityDest>$(OutputPath)FishMMO-SharedUtility</FishMMOSharedUtilityDest>
+    </PropertyGroup>
+    <ItemGroup>
+      <FishMMOSharedUtilityFiles Include="$(FishMMOSharedUtilitySource)\**\*.*"
+                                  Exclude="$(FishMMOSharedUtilitySource)\**\bin\**;$(FishMMOSharedUtilitySource)\**\obj\**;$(FishMMOSharedUtilitySource)\.vs\**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FishMMOSharedUtilityFiles)"
+          DestinationFiles="@(FishMMOSharedUtilityFiles->'$(FishMMOSharedUtilityDest)\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Text="Copied FishMMO-SharedUtility to $(FishMMOSharedUtilityDest)" Importance="high" />
   </Target>
 
 </Project>

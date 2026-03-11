@@ -253,7 +253,8 @@ namespace FishMMO.Installer
 				|| directoryName.Equals(".git", StringComparison.OrdinalIgnoreCase)
 				|| directoryName.Equals(".vs", StringComparison.OrdinalIgnoreCase)
 				|| directoryName.Equals("node_modules", StringComparison.OrdinalIgnoreCase)
-				|| directoryName.Equals("FishMMO-Unity", StringComparison.OrdinalIgnoreCase);
+				|| directoryName.Equals("FishMMO-Unity", StringComparison.OrdinalIgnoreCase)
+				|| directoryName.Equals("FishMMO-Installer", StringComparison.OrdinalIgnoreCase);
 		}
 	}
 }
