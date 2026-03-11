@@ -616,15 +616,15 @@ namespace FishMMO.Server.Implementation
 			ClientAuthenticationResult result;
 			bool waitingForProof = false;
 
-			// Decrypt the username and public ephemeral on worker thread using explicit sequence numbers.
+			// Decrypt the username (or email) and public ephemeral on worker thread using explicit sequence numbers.
 			string username;
 			uint seq = request.Seq;
 
-			// Guard: seq == 0 prevents uint underflow in the seq - 1 computation below
+			// Guard: seq < 1 prevents uint underflow in the seq - 1 computation below
 			// (uint 0 - 1 wraps to uint.MaxValue, producing an invalid sequence).
-			if (seq == 0)
+			if (seq < 1)
 			{
-				await Log.Warning("ServerAuthenticator", "Invalid SRP verify sequence 0 received.");
+				await Log.Warning("ServerAuthenticator", "Invalid SRP verify sequence received (too low for 2-field encoding).");
 				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
@@ -633,9 +633,9 @@ namespace FishMMO.Server.Implementation
 			{
 				// ┌──────────────────────────────────────────────────────────────┐
 				// │ PROTOCOL RULE — SRP Verify two-sequence encoding:            │
-				// │   seq-1 : AES-GCM encrypted username                         │
+				// │   seq-1 : AES-GCM encrypted identifier (username or email)   │
 				// │   seq   : AES-GCM encrypted public ephemeral                 │
-				// │ Both sequences are consumed and nonce-bound independently.    │
+				// │ All sequences are consumed and nonce-bound independently.     │
 				// │ DO NOT reorder, collapse, or reuse — replay safety depends    │
 				// │ on each field having a unique (nonce, AAD) pair.              │
 				// └──────────────────────────────────────────────────────────────┘
@@ -676,17 +676,25 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			// Reject oversized or empty usernames to prevent heavy DB lookups and dictionary churn.
-			// The encrypted payload is already bounded by MaxSrpPayloadBytes, but post-decrypt
-			// validation is a cheap safety net against encoding edge cases.
-			// Username is used as-is from client decryption. Database collation determines
-			// whether lookups are case-sensitive. If case-insensitive authentication is desired,
-			// normalize here (e.g., username = username.ToLowerInvariant()) and ensure the
-			// database stores usernames in the same canonical form.
-			if (!Authentication.IsAllowedUsername(username))
+			// Determine if the identifier is an email address or a username.
+			bool isEmail = username.Contains('@');
+
+			// Validate the identifier against the appropriate rules.
+			if (isEmail)
 			{
-				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
-				return;
+				if (!Authentication.IsAllowedEmailUsername(username))
+				{
+					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+					return;
+				}
+			}
+			else
+			{
+				if (!Authentication.IsAllowedUsername(username))
+				{
+					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+					return;
+				}
 			}
 
 			if (!TryBeginAccountVerifyAttempt(username))
@@ -733,8 +741,8 @@ namespace FishMMO.Server.Implementation
 						return;
 					}
 
-					// Fetch account for login from database.
-					DatabaseResult<Database.Data.AccountData> loginResult = await accountService.FetchForLoginAsync(username);
+					// Fetch account for login from database (identifier is username or email).
+					DatabaseResult<Database.Data.AccountData> loginResult = await accountService.FetchForLoginAsync(username, isEmail);
 
 					// Refresh TTL after potentially slow database fetch to prevent
 					// the stale-auth sweep from purging this connection mid-flow.
@@ -762,6 +770,14 @@ namespace FishMMO.Server.Implementation
 					else
 					{
 						Database.Data.AccountData accountData = loginResult.Data;
+
+						// Reject unverified accounts immediately.
+						if (!accountData.Verified)
+						{
+							RejectAndPurge(conn, ClientAuthenticationResult.AccountUnverified);
+							return;
+						}
+
 						salt = accountData.Salt;
 						verifier = accountData.Verifier;
 						accessLevel = (AccessLevel)accountData.AccessLevel;

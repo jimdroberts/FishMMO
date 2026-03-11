@@ -27,6 +27,9 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.Notice)
 				.HasMaxLength(500);
 
+			builder.Property(e => e.MessageOfTheDay)
+				.HasMaxLength(500);
+
 			// Case-insensitive uniqueness via normalized computed column.
 			builder.HasIndex(e => e.NameLowercase)
 				.IsUnique();

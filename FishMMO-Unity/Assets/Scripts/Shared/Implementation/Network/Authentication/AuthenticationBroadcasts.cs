@@ -9,6 +9,10 @@ namespace FishMMO.Shared
 	{
 		/// <summary>SRP username as a byte array.</summary>
 		public byte[] Username;
+		/// <summary>Encrypted email address (AES-GCM).</summary>
+		public byte[] Email;
+		/// <summary>Encrypted age value as UTF-8 string bytes (AES-GCM).</summary>
+		public byte[] Age;
 		/// <summary>SRP salt for password hashing.</summary>
 		public byte[] Salt;
 		/// <summary>SRP verifier for password authentication.</summary>
@@ -75,7 +79,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct SrpVerifyBroadcast : IBroadcast
 	{
-		/// <summary>SRP salt value.</summary>
+		/// <summary>SRP salt value (or encrypted username/email on client->server).</summary>
 		public byte[] S;
 		/// <summary>SRP public ephemeral value.</summary>
 		public byte[] PublicEphemeral;
@@ -130,6 +134,21 @@ namespace FishMMO.Shared
 	{
 		/// <summary>AES-GCM encrypted signed auth token.</summary>
 		public byte[] Token;
+
+		/// <summary>Explicit message sequence number (client->server).</summary>
+		public uint Seq;
+	}
+
+	/// <summary>
+	/// Broadcast sent by the client to verify an account using a verification code
+	/// received after account creation.
+	/// </summary>
+	public struct AccountVerifyBroadcast : IBroadcast
+	{
+		/// <summary>Encrypted account username (AES-GCM).</summary>
+		public byte[] Username;
+		/// <summary>Encrypted verification code as UTF-8 string bytes (AES-GCM).</summary>
+		public byte[] VerifyCode;
 
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;

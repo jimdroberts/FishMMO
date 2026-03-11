@@ -66,5 +66,13 @@
 		/// The authentication token has been revoked.
 		/// </summary>
 		TokenRevoked,
+		/// <summary>
+		/// Account email has not been verified. The user must enter the verification code sent during registration.
+		/// </summary>
+		AccountUnverified,
+		/// <summary>
+		/// Account has been successfully verified with the correct verification code.
+		/// </summary>
+		AccountVerified,
 	}
 }

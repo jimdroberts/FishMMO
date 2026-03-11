@@ -33,6 +33,14 @@ namespace FishMMO.Client
 		/// </remarks>
 		private string password = "";
 		/// <summary>
+		/// The email used for multi-factor login identification.
+		/// </summary>
+		private string email = "";
+		/// <summary>
+		/// The age used for multi-factor login identification.
+		/// </summary>
+		private int age;
+		/// <summary>
 		/// Indicates whether the client is registering a new account.
 		/// </summary>
 		private bool register;
@@ -152,11 +160,15 @@ namespace FishMMO.Client
 		/// <param name="username">The username.</param>
 		/// <param name="password">The password.</param>
 		/// <param name="register">True to register a new account; false to login.</param>
-		public void SetLoginCredentials(string username, string password, bool register = false)
+		/// <param name="email">The email address for multi-factor identification.</param>
+		/// <param name="age">The age for multi-factor identification.</param>
+		public void SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0)
 		{
 			this.username = username;
 			this.password = password;
 			this.register = register;
+			this.email = email;
+			this.age = age;
 		}
 
 		/// <summary>
@@ -372,6 +384,33 @@ namespace FishMMO.Client
 			{
 				SrpData.GetSaltAndVerifier(username, password, out string salt, out string verifier);
 
+				// Encrypt email and age before sending
+				byte[] emailBytes = Encoding.UTF8.GetBytes(this.email ?? "");
+				byte[] ageBytes = Encoding.UTF8.GetBytes(this.age.ToString());
+				byte[] encryptedEmail;
+				byte[] encryptedAge;
+				try
+				{
+					var (nonceE, seqE) = sendNonceCtx.NextNonce();
+					byte[] aadE = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, seqE);
+					encryptedEmail = CryptoHelper.EncryptAES(clientToServerKey, nonceE, emailBytes, aadE);
+
+					var (nonceA, seqA) = sendNonceCtx.NextNonce();
+					byte[] aadA = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, seqA);
+					encryptedAge = CryptoHelper.EncryptAES(clientToServerKey, nonceA, ageBytes, aadA);
+				}
+				catch (CryptographicException ex)
+				{
+					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for email/age: {ex.Message}");
+					ClearKeyMaterial();
+					Client.ForceDisconnect();
+					CryptographicOperations.ZeroMemory(emailBytes);
+					CryptographicOperations.ZeroMemory(ageBytes);
+					return;
+				}
+				CryptographicOperations.ZeroMemory(emailBytes);
+				CryptographicOperations.ZeroMemory(ageBytes);
+
 				// Encrypt the salt and verifier before sending
 				byte[] saltBytes = Encoding.UTF8.GetBytes(salt);
 				byte[] verifierBytes = Encoding.UTF8.GetBytes(verifier);
@@ -403,13 +442,15 @@ namespace FishMMO.Client
 
 				// PROTOCOL NOTE — CreateAccountBroadcast implicit sequence encoding:
 				// Seq is the verifier’s sequence. The server derives:
-				//   username_seq = Seq - 2   salt_seq = Seq - 1   verifier_seq = Seq
+				//   username_seq = Seq - 4   email_seq = Seq - 3   age_seq = Seq - 2
+				//   salt_seq = Seq - 1   verifier_seq = Seq
 				// from consecutive Interlocked.Increment calls above. Do NOT insert
-				// additional encrypted fields between username and verifier without
-				// updating the server’s derivation logic.
+				// additional encrypted fields without updating the server's derivation logic.
 				Client.Broadcast(new CreateAccountBroadcast()
 				{
 					Username = encryptedUsername,
+					Email = encryptedEmail,
+					Age = encryptedAge,
 					Salt = encryptedSalt,
 					Verifier = encryptedVerifier,
 					Seq = createAccountSeq,
@@ -438,6 +479,10 @@ namespace FishMMO.Client
 				}
 				CryptographicOperations.ZeroMemory(clientEphemeralBytes);
 
+				// PROTOCOL NOTE — SrpVerifyBroadcast implicit sequence encoding:
+				// Seq is the ephemeral's sequence. The server derives:
+				//   identifier_seq = Seq - 1   ephemeral_seq = Seq
+				// The identifier (username or email) is sent in the S field.
 				Client.Broadcast(new SrpVerifyBroadcast()
 				{
 					S = encryptedUsername,
@@ -727,6 +772,8 @@ namespace FishMMO.Client
 			agreedVersion = 0;
 			username = null;
 			password = null;
+			email = null;
+			age = 0;
 		}
 
 		/// <summary>
@@ -740,6 +787,64 @@ namespace FishMMO.Client
 				CryptographicOperations.ZeroMemory(storedAuthToken);
 				storedAuthToken = null;
 			}
+		}
+
+		/// <summary>
+		/// Encrypts and sends an account verification code to the server on the current connection.
+		/// Must be called while the handshake-established encryption session is still active.
+		/// </summary>
+		/// <param name="username">The account username to verify.</param>
+		/// <param name="verifyCode">The verification code entered by the user.</param>
+		public void SendVerifyCode(string username, string verifyCode)
+		{
+			if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(verifyCode))
+			{
+				return;
+			}
+
+			if (sendNonceCtx == null || clientToServerKey == null)
+			{
+				Client.ForceDisconnect();
+				return;
+			}
+
+			byte[] usernameBytes = Encoding.UTF8.GetBytes(username);
+			byte[] codeBytes = Encoding.UTF8.GetBytes(verifyCode);
+			byte[] encryptedUsername;
+			byte[] encryptedCode;
+			uint accountVerifySeq;
+			try
+			{
+				var (nonceU, seqU) = sendNonceCtx.NextNonce();
+				byte[] aadU = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.AccountVerify, agreedVersion, seqU);
+				encryptedUsername = CryptoHelper.EncryptAES(clientToServerKey, nonceU, usernameBytes, aadU);
+
+				var (nonceC, seqC) = sendNonceCtx.NextNonce();
+				accountVerifySeq = seqC;
+				byte[] aadC = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.AccountVerify, agreedVersion, seqC);
+				encryptedCode = CryptoHelper.EncryptAES(clientToServerKey, nonceC, codeBytes, aadC);
+			}
+			catch (CryptographicException ex)
+			{
+				Log.Error("ClientLoginAuthenticator", $"AES encryption failed for verify code: {ex.Message}");
+				ClearKeyMaterial();
+				Client.ForceDisconnect();
+				CryptographicOperations.ZeroMemory(usernameBytes);
+				CryptographicOperations.ZeroMemory(codeBytes);
+				return;
+			}
+			CryptographicOperations.ZeroMemory(usernameBytes);
+			CryptographicOperations.ZeroMemory(codeBytes);
+
+			// PROTOCOL NOTE — AccountVerifyBroadcast implicit sequence encoding:
+			// Seq is the verifyCode's sequence. The server derives:
+			//   username_seq = Seq - 1   verifyCode_seq = Seq
+			Client.Broadcast(new AccountVerifyBroadcast()
+			{
+				Username = encryptedUsername,
+				VerifyCode = encryptedCode,
+				Seq = accountVerifySeq,
+			}, Channel.Reliable);
 		}
 
 		/// <summary>

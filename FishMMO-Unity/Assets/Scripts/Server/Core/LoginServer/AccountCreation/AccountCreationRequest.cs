@@ -21,6 +21,16 @@ namespace FishMMO.Server.Core.LoginServer
 		public readonly byte[] EncryptedUsername;
 
 		/// <summary>
+		/// Encrypted email data (AES encrypted).
+		/// </summary>
+		public readonly byte[] EncryptedEmail;
+
+		/// <summary>
+		/// Encrypted age data as UTF-8 string bytes (AES encrypted).
+		/// </summary>
+		public readonly byte[] EncryptedAge;
+
+		/// <summary>
 		/// Encrypted SRP salt data (AES encrypted).
 		/// </summary>
 		public readonly byte[] EncryptedSalt;
@@ -39,7 +49,7 @@ namespace FishMMO.Server.Core.LoginServer
 		/// <summary>
 		/// Explicit client-sent sequence number for this create-account message. This
 		/// represents the last sequence used when encrypting multi-field payloads
-		/// (e.g., username, salt, verifier) and is used to derive nonces for each field.
+		/// (e.g., username, email, age, salt, verifier) and is used to derive nonces for each field.
 		/// </summary>
 		public readonly uint Seq;
 
@@ -53,15 +63,21 @@ namespace FishMMO.Server.Core.LoginServer
 		/// </summary>
 		/// <param name="connection">Network connection of the client.</param>
 		/// <param name="encryptedUsername">Encrypted username bytes.</param>
+		/// <param name="encryptedEmail">Encrypted email bytes.</param>
+		/// <param name="encryptedAge">Encrypted age bytes.</param>
 		/// <param name="encryptedSalt">Encrypted salt bytes.</param>
 		/// <param name="encryptedVerifier">Encrypted verifier bytes.</param>
 		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
 		/// <param name="ipAddress">IP address of the client.</param>
-		public AccountCreationRequest(TConnection connection, byte[] encryptedUsername, byte[] encryptedSalt,
+		/// <param name="seq">Explicit sequence number.</param>
+		public AccountCreationRequest(TConnection connection, byte[] encryptedUsername, byte[] encryptedEmail,
+			byte[] encryptedAge, byte[] encryptedSalt,
 			byte[] encryptedVerifier, ConnectionEncryptionData encryptionData, string ipAddress, uint seq)
 		{
 			Connection = connection;
 			EncryptedUsername = encryptedUsername;
+			EncryptedEmail = encryptedEmail;
+			EncryptedAge = encryptedAge;
 			EncryptedSalt = encryptedSalt;
 			EncryptedVerifier = encryptedVerifier;
 			EncryptionData = encryptionData;

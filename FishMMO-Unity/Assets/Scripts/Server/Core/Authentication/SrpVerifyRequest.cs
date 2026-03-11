@@ -16,7 +16,7 @@ namespace FishMMO.Server.Core.Authentication
 		public readonly TConnection Connection;
 
 		/// <summary>
-		/// Encrypted username bytes (AES). Decryption deferred to worker thread.
+		/// Encrypted username or email bytes (AES). Decryption deferred to worker thread.
 		/// </summary>
 		public readonly byte[] EncryptedUsername;
 
@@ -40,10 +40,12 @@ namespace FishMMO.Server.Core.Authentication
 		/// Creates a new SRP verify request with encrypted data for deferred processing.
 		/// </summary>
 		/// <param name="connection">The originating network connection.</param>
-		/// <param name="encryptedUsername">Encrypted username bytes.</param>
+		/// <param name="encryptedUsername">Encrypted username or email bytes.</param>
 		/// <param name="encryptedPublicEphemeral">Encrypted client public ephemeral bytes.</param>
 		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
-		public SrpVerifyRequest(TConnection connection, byte[] encryptedUsername, byte[] encryptedPublicEphemeral,
+		/// <param name="seq">Explicit sequence number.</param>
+		public SrpVerifyRequest(TConnection connection, byte[] encryptedUsername,
+			byte[] encryptedPublicEphemeral,
 			ConnectionEncryptionData encryptionData, uint seq)
 		{
 			Connection = connection;

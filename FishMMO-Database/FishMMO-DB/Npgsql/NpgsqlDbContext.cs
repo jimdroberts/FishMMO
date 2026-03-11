@@ -73,6 +73,7 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<CharacterFactionEntity> CharacterFactions { get; set; }
 		public DbSet<CharacterQuestEntity> CharacterQuests { get; set; }
 		public DbSet<CharacterFriendEntity> CharacterFriends { get; set; }
+		public DbSet<CharacterArchetypeEntity> CharacterArchetypes { get; set; }
 		public DbSet<CharacterGuildEntity> CharacterGuilds { get; set; }
 		public DbSet<GuildEntity> Guilds { get; set; }
 		public DbSet<GuildUpdateEntity> GuildUpdates { get; set; }

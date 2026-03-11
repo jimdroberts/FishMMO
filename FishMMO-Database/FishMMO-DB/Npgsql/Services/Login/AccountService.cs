@@ -30,11 +30,10 @@ namespace FishMMO.Database.Npgsql.Services
 					.Any(a => a.Name == accountName));
 
 		/// <summary>
-		/// Compiled query for FetchForLoginAsync hot path (login authentication).
-		/// Pre-compiles the query expression tree for better performance on repeated executions.
+		/// Compiled query for FetchForLoginAsync by account name.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<AccountEntity?>> getAccountForLoginQuery =
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<AccountEntity?>> getAccountForLoginByNameQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountName, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
@@ -42,15 +41,38 @@ namespace FishMMO.Database.Npgsql.Services
 #pragma warning restore CS8619
 
 		/// <summary>
-		/// Compiled query for FetchLastLoginAsync hot path.
-		/// Pre-compiles the query expression tree for better performance on repeated executions.
+		/// Compiled query for FetchForLoginAsync by email.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<DateTime?>> getLastLoginQuery =
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<AccountEntity?>> getAccountForLoginByEmailQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string email, CancellationToken ct) =>
+				context.Accounts
+					.AsNoTracking()
+					.FirstOrDefault(a => a.Email == email));
+#pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for FetchLastLoginAsync by account name.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<DateTime?>> getLastLoginByNameQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountName, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
 					.Where(a => a.Name == accountName)
+					.Select(a => (DateTime?)a.LastLogin)
+					.FirstOrDefault());
+#pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for FetchLastLoginAsync by email.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<DateTime?>> getLastLoginByEmailQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string email, CancellationToken ct) =>
+				context.Accounts
+					.AsNoTracking()
+					.Where(a => a.Email == email)
 					.Select(a => (DateTime?)a.LastLogin)
 					.FirstOrDefault());
 #pragma warning restore CS8619
@@ -66,22 +88,37 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<DateTime>> FetchLastLoginAsync(
-			string accountName,
+			string username,
+			bool email = false,
 			CancellationToken cancellationToken = default)
 		{
-			if (!Authentication.IsAllowedUsername(accountName))
+			if (email)
 			{
-				return DatabaseResult<DateTime>.Failure(
-					DatabaseErrorCodes.ValidationError,
-					Authentication.InvalidUsernameError);
+				if (string.IsNullOrWhiteSpace(username) || username.Length > 320)
+				{
+					return DatabaseResult<DateTime>.Failure(
+						DatabaseErrorCodes.ValidationError,
+						"Email is required and must not exceed 320 characters.");
+				}
+			}
+			else
+			{
+				if (!Authentication.IsAllowedUsername(username))
+				{
+					return DatabaseResult<DateTime>.Failure(
+						DatabaseErrorCodes.ValidationError,
+						Authentication.InvalidUsernameError);
+				}
 			}
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var lastLogin = await getLastLoginQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false);
+				var lastLogin = email
+					? await getLastLoginByEmailQuery(dbContext, username, cancellationToken).ConfigureAwait(false)
+					: await getLastLoginByNameQuery(dbContext, username, cancellationToken).ConfigureAwait(false);
 				if (lastLogin == null)
 				{
-					throw new DatabaseEntityNotFoundException("Account", accountName);
+					throw new DatabaseEntityNotFoundException("Account", username);
 				}
 				return lastLogin.Value;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -92,6 +129,8 @@ namespace FishMMO.Database.Npgsql.Services
 			string accountName,
 			string salt,
 			string verifier,
+			string email,
+			int age,
 			CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(accountName))
@@ -115,14 +154,28 @@ namespace FishMMO.Database.Npgsql.Services
 					"Verifier is required for account creation.");
 			}
 
+			if (string.IsNullOrWhiteSpace(email) || email.Length > 320)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Email is required and must not exceed 320 characters.");
+			}
+
+			if (age < 0 || age > 200)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Age must be between 0 and 200.");
+			}
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"INSERT INTO {TableName} (name, salt, verifier, access_level)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}})
+				var sql = $@"INSERT INTO {TableName} (name, salt, verifier, access_level, email, age)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}})
 					ON CONFLICT (name) DO NOTHING";
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { accountName, salt, verifier, (byte)AccessLevel.Player },
+					new object[] { accountName, salt, verifier, (byte)AccessLevel.Player, email, age },
 					cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected <= 0)
@@ -135,18 +188,33 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<AccountData>> FetchForLoginAsync(
-			string accountName,
+			string username,
+			bool email = false,
 			CancellationToken cancellationToken = default)
 		{
-			if (!Authentication.IsAllowedUsername(accountName))
+			if (email)
 			{
-				return DatabaseResult<AccountData>.Failure(
-					DatabaseErrorCodes.ValidationError,
-					Authentication.InvalidUsernameError);
+				if (string.IsNullOrWhiteSpace(username) || username.Length > 320)
+				{
+					return DatabaseResult<AccountData>.Failure(
+						DatabaseErrorCodes.ValidationError,
+						"Email is required and must not exceed 320 characters.");
+				}
+			}
+			else
+			{
+				if (!Authentication.IsAllowedUsername(username))
+				{
+					return DatabaseResult<AccountData>.Failure(
+						DatabaseErrorCodes.ValidationError,
+						Authentication.InvalidUsernameError);
+				}
 			}
 
 			var result = await ExecuteReadAsync(async dbContext =>
-				await getAccountForLoginQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false),
+				email
+					? await getAccountForLoginByEmailQuery(dbContext, username, cancellationToken).ConfigureAwait(false)
+					: await getAccountForLoginByNameQuery(dbContext, username, cancellationToken).ConfigureAwait(false),
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
@@ -223,10 +291,6 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		/// <param name="entity">The account entity retrieved from the database.</param>
 		/// <returns>A data transfer object containing account information.</returns>
-		/// <remarks>
-		/// This method performs a shallow copy of entity data to a DTO.
-		/// All properties are value types or immutable strings, so deep cloning is not required.
-		/// </remarks>
 		private static AccountData MapEntityToDto(AccountEntity entity)
 		{
 			return new AccountData(
@@ -234,9 +298,249 @@ namespace FishMMO.Database.Npgsql.Services
 				salt: entity.Salt,
 				verifier: entity.Verifier,
 				accessLevel: entity.AccessLevel,
+				email: entity.Email,
+				age: entity.Age,
+				twoFactorEnabled: entity.TwoFactorEnabled,
+				twoFactorCode: entity.TwoFactorCode,
+				discordLinkCode: entity.DiscordLinkCode,
+				verified: entity.Verified,
+				verifyCode: entity.VerifyCode,
 				created: entity.TimeCreated,
 				lastLogin: entity.LastLogin
 			);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistEmailAsync(
+			string accountName,
+			string? email,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			if (email != null && email.Length > 320)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Email must not exceed 320 characters.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET email = {{0}} WHERE name = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { (object?)email ?? DBNull.Value, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistAgeAsync(
+			string accountName,
+			int age,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			if (age < 0 || age > 200)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Age must be between 0 and 200.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET age = {{0}} WHERE name = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { age, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistTwoFactorEnabledAsync(
+			string accountName,
+			bool enabled,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET two_factor_enabled = {{0}} WHERE name = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { enabled, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistTwoFactorCodeAsync(
+			string accountName,
+			string? code,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			if (code != null && code.Length > 64)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Two-factor code must not exceed 64 characters.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET two_factor_code = {{0}} WHERE name = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { (object?)code ?? DBNull.Value, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistDiscordLinkCodeAsync(
+			string accountName,
+			string? linkCode,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			if (linkCode != null && linkCode.Length > 64)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Discord link code must not exceed 64 characters.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET discord_link_code = {{0}} WHERE name = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { (object?)linkCode ?? DBNull.Value, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<AccountData?>> FetchByDiscordLinkCodeAsync(
+			string linkCode,
+			CancellationToken cancellationToken = default)
+		{
+			if (string.IsNullOrWhiteSpace(linkCode) || linkCode.Length > 64)
+			{
+				return DatabaseResult<AccountData?>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Discord link code must be a non-empty string of at most 64 characters.");
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				var account = await dbContext.Accounts
+					.AsNoTracking()
+					.FirstOrDefaultAsync(a => a.DiscordLinkCode == linkCode, cancellationToken)
+					.ConfigureAwait(false);
+
+				return account != null ? (AccountData?)MapEntityToDto(account) : null;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistVerifiedAsync(
+			string accountName,
+			int verifyCode,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET verified = true, verify_code = 0 WHERE name = {{0}} AND verify_code = {{1}} AND verified = false";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { accountName, verifyCode }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseException("Invalid verification code or account already verified.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistVerifyCodeAsync(
+			string accountName,
+			int verifyCode,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET verify_code = {{0}} WHERE name = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { verifyCode, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

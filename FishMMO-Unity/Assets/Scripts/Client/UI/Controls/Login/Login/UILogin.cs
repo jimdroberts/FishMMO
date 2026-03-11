@@ -30,9 +30,17 @@ namespace FishMMO.Client
 		/// </summary>
 		public TMP_InputField Username;
 		/// <summary>
+		/// Input field for the email address.
+		/// </summary>
+		public TMP_InputField Email;
+		/// <summary>
 		/// Input field for the password.
 		/// </summary>
 		public TMP_InputField Password;
+		/// <summary>
+		/// Dropdown for age selection. Must match the age used during registration.
+		/// </summary>
+		public TMP_Dropdown AgeSelect;
 		/// <summary>
 		/// Button to register a new account.
 		/// </summary>
@@ -54,6 +62,12 @@ namespace FishMMO.Client
 		/// Called after OnLoginSuccessStart finishes.
 		/// </summary>
 		public Action OnLoginSuccessEnd;
+
+		/// <summary>
+		/// Temporarily stores the login identifier for verification code submission
+		/// when the server responds with AccountUnverified.
+		/// </summary>
+		private string pendingVerifyUsername;
 
 		/// <summary>
 		/// Called when the client is set. Subscribes to connection and authentication events.
@@ -108,6 +122,7 @@ namespace FishMMO.Client
 			{
 				HandshakeMSG.text = "";
 				SetSignInLocked(false);
+				pendingVerifyUsername = null;
 			}
 		}
 
@@ -140,6 +155,12 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.Banned:
 					OnLoginAuthenticationDialog("Account is banned. Please contact the system administrator.");
 					break;
+				case ClientAuthenticationResult.AccountUnverified:
+					OnAccountUnverified();
+					break;
+				case ClientAuthenticationResult.AccountVerified:
+					OnAccountVerified();
+					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					OnLoginSuccess();
 					break;
@@ -151,6 +172,51 @@ namespace FishMMO.Client
 				default:
 					break;
 			}
+		}
+
+		/// <summary>
+		/// Handles AccountUnverified: stays connected and opens the verification code input dialog.
+		/// </summary>
+		private void OnAccountUnverified()
+		{
+			SetSignInLocked(true);
+			Hide();
+
+			if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox uiDialogInputBox))
+			{
+				uiDialogInputBox.Open(
+					"Your account has not been verified. Please enter the verification code sent to your email.",
+					(code) =>
+					{
+						if (!string.IsNullOrWhiteSpace(pendingVerifyUsername) && !string.IsNullOrWhiteSpace(code))
+						{
+							Client.LoginAuthenticator.SendVerifyCode(pendingVerifyUsername, code.Trim());
+						}
+					},
+					() =>
+					{
+						pendingVerifyUsername = null;
+						Client.ForceDisconnect();
+						SetSignInLocked(false);
+						Show();
+					});
+			}
+		}
+
+		/// <summary>
+		/// Handles successful account verification: disconnects and returns to the login screen.
+		/// </summary>
+		private void OnAccountVerified()
+		{
+			pendingVerifyUsername = null;
+			Client.ForceDisconnect();
+			SetSignInLocked(false);
+
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			{
+				uiDialogBox.Open("Your account has been verified! You may now log in.");
+			}
+			Show();
 		}
 
 		/// <summary>
@@ -200,25 +266,15 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Called when the register button is clicked. Initiates account creation process.
+		/// Called when the register button is clicked. Hides the login panel and shows the registration panel.
 		/// </summary>
 		public void OnClick_OnRegister()
 		{
-			SetSignInLocked(true);
-
-			StartCoroutine(Client.GetLoginServerList((e) =>
+			if (UIManager.TryGet("UIRegister", out UIRegister uiRegister))
 			{
-				if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
-				{
-					uiDialogBox.Open(e);
-				}
-				Log.Error("UILogin", e);
-				SetSignInLocked(false);
-			},
-			(servers) =>
-			{
-				Connect("Creating account.", Username.text, Password.text, true);
-			}));
+				Hide();
+				uiRegister.Show();
+			}
 		}
 
 		/// <summary>
@@ -237,13 +293,32 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Login()
 		{
-			if (!Authentication.IsAllowedUsername(Username.text) ||
-				!Authentication.IsAllowedPassword(Password.text))
+			string usernameText = Username.text;
+			string emailText = Email.text;
+
+			// Determine which identifier to use: prefer email if filled, otherwise username.
+			string identifier;
+			if (!string.IsNullOrWhiteSpace(emailText) && Authentication.IsAllowedEmailUsername(emailText))
+			{
+				identifier = emailText;
+			}
+			else if (!string.IsNullOrWhiteSpace(usernameText) && Authentication.IsAllowedUsername(usernameText))
+			{
+				identifier = usernameText;
+			}
+			else
+			{
+				return;
+			}
+
+			if (!Authentication.IsAllowedPassword(Password.text))
 			{
 				return;
 			}
 
 			SetSignInLocked(true);
+
+			string password = Password.text;
 
 			StartCoroutine(Client.GetLoginServerList((e) =>
 			{
@@ -256,7 +331,8 @@ namespace FishMMO.Client
 			},
 			(servers) =>
 			{
-				Connect("Connecting...", Username.text, Password.text);
+				pendingVerifyUsername = identifier;
+				Connect("Connecting...", identifier, password);
 			}));
 		}
 
@@ -264,21 +340,20 @@ namespace FishMMO.Client
 		/// Attempts to connect to the login server with provided credentials.
 		/// </summary>
 		/// <param name="handshakeMessage">Message to display during handshake.</param>
-		/// <param name="username">Username to use.</param>
+		/// <param name="identifier">Login identifier (username or email).</param>
 		/// <param name="password">Password to use.</param>
-		/// <param name="isRegistration">True if registering a new account.</param>
 		/// <param name="address">Optional server address.</param>
 		/// <param name="port">Optional server port.</param>
-		private void Connect(string handshakeMessage, string username, string password, bool isRegistration = false, string address = null, ushort port = 0)
+		private void Connect(string handshakeMessage, string identifier, string password, string address = null, ushort port = 0)
 		{
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Authentication.IsAllowedUsername(username) &&
+				(Authentication.IsAllowedUsername(identifier) || Authentication.IsAllowedEmailUsername(identifier)) &&
 				Authentication.IsAllowedPassword(password) &&
 				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress) &&
 				Authentication.IsAddressValid(serverAddress.Address))
 			{
 				HandshakeMSG.text = handshakeMessage;
-				Client.LoginAuthenticator.SetLoginCredentials(username, password, isRegistration);
+				Client.LoginAuthenticator.SetLoginCredentials(identifier, password);
 				Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
 			}
 			else
@@ -304,7 +379,9 @@ namespace FishMMO.Client
 			RegisterButton.interactable = !locked;
 			SignInButton.interactable = !locked;
 			Username.enabled = !locked;
+			Email.enabled = !locked;
 			Password.enabled = !locked;
+			AgeSelect.interactable = !locked;
 		}
 	}
 }

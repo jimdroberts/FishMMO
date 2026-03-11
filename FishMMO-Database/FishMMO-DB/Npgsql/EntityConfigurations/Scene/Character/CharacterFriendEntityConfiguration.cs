@@ -25,6 +25,10 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.FriendCharacterID)
 				.IsRequired();
 
+			builder.Property(e => e.IsBlocked)
+				.IsRequired()
+				.HasDefaultValue(false);
+
 			// Unique constraint: one friendship relationship per character pair
 			builder.HasIndex(e => new { e.CharacterID, e.FriendCharacterID })
 				.IsUnique();

@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class AccountEntityConfiguration : IEntityTypeConfiguration<AccountEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<AccountEntity> builder)
 		{
 			builder.ToTable("accounts");
@@ -31,6 +32,31 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.AccessLevel)
 				.IsRequired();
 
+			builder.Property(e => e.Email)
+				.HasMaxLength(320);
+
+			builder.Property(e => e.Age)
+				.IsRequired()
+				.HasDefaultValue(0);
+
+			builder.Property(e => e.TwoFactorEnabled)
+				.IsRequired()
+				.HasDefaultValue(false);
+
+			builder.Property(e => e.TwoFactorCode)
+				.HasMaxLength(64);
+
+			builder.Property(e => e.DiscordLinkCode)
+				.HasMaxLength(64);
+
+			builder.Property(e => e.Verified)
+				.IsRequired()
+				.HasDefaultValue(false);
+
+			builder.Property(e => e.VerifyCode)
+				.IsRequired()
+				.HasDefaultValue(0);
+
 			builder.Property(e => e.LastLogin)
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -39,6 +65,15 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.AccessLevel);
 
 			builder.HasIndex(e => e.TimeCreated);
+
+			// Unique index on email when provided
+			builder.HasIndex(e => e.Email)
+				.IsUnique()
+				.HasFilter("email IS NOT NULL");
+
+			// Index on discord link code for verification lookups
+			builder.HasIndex(e => e.DiscordLinkCode)
+				.HasFilter("discord_link_code IS NOT NULL");
 		}
 	}
 }

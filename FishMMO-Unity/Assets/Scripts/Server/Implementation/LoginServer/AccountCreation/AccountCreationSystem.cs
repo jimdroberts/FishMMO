@@ -203,6 +203,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Register network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived, false);
+			Server.NetworkWrapper.RegisterBroadcast<AccountVerifyBroadcast>(OnServerAccountVerifyBroadcastReceived, false);
 
 			Log.Debug("AccountCreationSystem", $"Initialized (RateLimit={ipRateLimitSeconds}s, MaxFailures={maxFailedAttempts}, BlockDuration={ipBlockDurationSeconds}s)");
 			return ServerComponentInitializationStatus.Initialized;
@@ -232,6 +233,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Unregister broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<AccountVerifyBroadcast>(OnServerAccountVerifyBroadcastReceived);
 
 			Log.Debug("AccountCreationSystem", "Deinitialized");
 		}
@@ -254,6 +256,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Reject oversized encrypted fields before any allocation or decryption.
 			if (msg.Username == null || msg.Username.Length > MaxEncryptedFieldSize ||
+				msg.Email == null || msg.Email.Length > MaxEncryptedFieldSize ||
+				msg.Age == null || msg.Age.Length > MaxEncryptedFieldSize ||
 				msg.Salt == null || msg.Salt.Length > MaxEncryptedFieldSize ||
 				msg.Verifier == null || msg.Verifier.Length > MaxEncryptedFieldSize)
 			{
@@ -268,6 +272,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			var request = new AccountCreationRequest<NetworkConnection>(
 				conn,
 				msg.Username,              // Still encrypted!
+				msg.Email,                 // Still encrypted!
+				msg.Age,                   // Still encrypted!
 				msg.Salt,                  // Still encrypted!
 				msg.Verifier,              // Still encrypted!
 				encryptionData,
@@ -402,12 +408,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					// Decrypt credentials on worker thread using explicit sequence numbers provided by client.
 					byte[] decryptedUsername;
+					byte[] decryptedEmail;
+					byte[] decryptedAge;
 					byte[] decryptedSalt;
 					byte[] decryptedVerifier;
 					try
 					{
 						uint seq = request.Seq;
-						if (seq == 0 || seq < 2)
+						if (seq < 4)
 						{
 							NetworkConnection failConn = request.Connection;
 							TryEnqueueMainThread(() =>
@@ -418,8 +426,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 							return;
 						}
 
-						// Expected order: username (seq-2), salt (seq-1), verifier (seq)
-						uint seqUsername = seq - 2;
+						// Expected order: username (seq-4), email (seq-3), age (seq-2), salt (seq-1), verifier (seq)
+						uint seqUsername = seq - 4;
+						uint seqEmail = seq - 3;
+						uint seqAge = seq - 2;
 						uint seqSalt = seq - 1;
 						uint seqVerifier = seq;
 
@@ -429,6 +439,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 						byte[] nonceU = request.EncryptionData.BuildReceiveNonce(seqUsername);
 						byte[] aadU = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqUsername);
 						decryptedUsername = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceU, request.EncryptedUsername, aadU);
+
+						// Consume and decrypt email
+						if (!request.EncryptionData.TryConsumeReceiveSequence(seqEmail))
+							throw new CryptographicException("Account creation email sequence out-of-order or duplicate.");
+						byte[] nonceE = request.EncryptionData.BuildReceiveNonce(seqEmail);
+						byte[] aadE = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqEmail);
+						decryptedEmail = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceE, request.EncryptedEmail, aadE);
+
+						// Consume and decrypt age
+						if (!request.EncryptionData.TryConsumeReceiveSequence(seqAge))
+							throw new CryptographicException("Account creation age sequence out-of-order or duplicate.");
+						byte[] nonceA = request.EncryptionData.BuildReceiveNonce(seqAge);
+						byte[] aadA = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqAge);
+						decryptedAge = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceA, request.EncryptedAge, aadA);
 
 						// Consume and decrypt salt
 						if (!request.EncryptionData.TryConsumeReceiveSequence(seqSalt))
@@ -456,13 +480,34 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 
 					string username;
+					string email;
+					int age;
 					try
 					{
 						username = CryptoHelper.StrictUtf8.GetString(decryptedUsername);
+						email = CryptoHelper.StrictUtf8.GetString(decryptedEmail);
+						string ageStr = CryptoHelper.StrictUtf8.GetString(decryptedAge);
+						if (!int.TryParse(ageStr, out age))
+						{
+							CryptographicOperations.ZeroMemory(decryptedUsername);
+							CryptographicOperations.ZeroMemory(decryptedEmail);
+							CryptographicOperations.ZeroMemory(decryptedAge);
+							CryptographicOperations.ZeroMemory(decryptedSalt);
+							CryptographicOperations.ZeroMemory(decryptedVerifier);
+							NetworkConnection failConn = request.Connection;
+							TryEnqueueMainThread(() =>
+							{
+								if (failConn != null && failConn.IsActive)
+									failConn.Disconnect(false);
+							});
+							return;
+						}
 					}
 					catch (DecoderFallbackException)
 					{
 						CryptographicOperations.ZeroMemory(decryptedUsername);
+						CryptographicOperations.ZeroMemory(decryptedEmail);
+						CryptographicOperations.ZeroMemory(decryptedAge);
 						CryptographicOperations.ZeroMemory(decryptedSalt);
 						CryptographicOperations.ZeroMemory(decryptedVerifier);
 						NetworkConnection failConn = request.Connection;
@@ -474,6 +519,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 						return;
 					}
 					CryptographicOperations.ZeroMemory(decryptedUsername);
+					CryptographicOperations.ZeroMemory(decryptedEmail);
+					CryptographicOperations.ZeroMemory(decryptedAge);
 
 					// Validate decrypted username against centralized naming rules before any DB work.
 					if (!Authentication.IsAllowedUsername(username))
@@ -481,6 +528,42 @@ namespace FishMMO.Server.Implementation.LoginServer
 						result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 
 						// Marshal early rejection — skip DB call entirely
+						NetworkConnection earlyConn = request.Connection;
+						TryEnqueueMainThread(() =>
+						{
+							if (earlyConn != null && earlyConn.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(earlyConn,
+									new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.InvalidUsernameOrPassword },
+									false, Channel.Reliable);
+							}
+						});
+						return;
+					}
+
+					// Validate email against centralized rules.
+					if (string.IsNullOrWhiteSpace(email) || email.Length > 320 || !Authentication.IsAllowedEmailUsername(email))
+					{
+						result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+
+						NetworkConnection earlyConn = request.Connection;
+						TryEnqueueMainThread(() =>
+						{
+							if (earlyConn != null && earlyConn.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(earlyConn,
+									new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.InvalidUsernameOrPassword },
+									false, Channel.Reliable);
+							}
+						});
+						return;
+					}
+
+					// Validate age range.
+					if (age < 0 || age > 200)
+					{
+						result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+
 						NetworkConnection earlyConn = request.Connection;
 						TryEnqueueMainThread(() =>
 						{
@@ -505,6 +588,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					{
 						CryptographicOperations.ZeroMemory(decryptedSalt);
 						CryptographicOperations.ZeroMemory(decryptedVerifier);
+						// email+age already zeroed above
 						NetworkConnection failConn = request.Connection;
 						TryEnqueueMainThread(() =>
 						{
@@ -533,7 +617,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 
 					// Database operation via registry-resolved service (BaseService handles context lifecycle)
-					DatabaseResult dbResult = await accountService.PersistAsync(username, salt, verifier);
+					DatabaseResult dbResult = await accountService.PersistAsync(username, salt, verifier, email, age);
 
 					// Update statistics
 					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData) &&
@@ -545,6 +629,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 							runtimeData.IncrementProcessed();
 							// Clear failure tracker on success
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
+
+							// Generate and store a verification code for email verification.
+							int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
+							await accountService.PersistVerifyCodeAsync(username, verifyCode);
 						}
 						else
 						{
@@ -838,6 +926,184 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			runtimeData.ConnectionEncryptionCache.Upsert(conn.ClientId, encryptionData, now);
 			return true;
+		}
+
+		/// <summary>
+		/// UDP gate: Receives AccountVerify broadcast, validates connection, and enqueues
+		/// encrypted data for async processing. Zero blocking — no decryption on network thread.
+		/// </summary>
+		private void OnServerAccountVerifyBroadcastReceived(NetworkConnection conn, AccountVerifyBroadcast msg, Channel channel)
+		{
+			if (!ResolveEncryptionData(conn, out ConnectionEncryptionData encryptionData))
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
+			// Reject oversized payloads before any allocation or decryption.
+			if (msg.Username == null || msg.Username.Length > MaxEncryptedFieldSize ||
+				msg.VerifyCode == null || msg.VerifyCode.Length > MaxEncryptedFieldSize)
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
+			string ipAddress = ResolveIpAddress(conn);
+
+			// Reuse account creation rate limiting for verification attempts.
+			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData))
+			{
+				if (mappingData.IpFailureTracker.TryGetValue(ipAddress, out int failureCount) &&
+					failureCount >= maxFailedAttempts)
+				{
+					conn.Disconnect(true);
+					return;
+				}
+			}
+
+			if (TryEnqueueAsyncWork(() => ProcessAccountVerifyAsync(conn, msg.Username, msg.VerifyCode, encryptionData, ipAddress, msg.Seq), conn.ClientId))
+			{
+				return;
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new ClientAuthResultBroadcast()
+			{
+				Result = ClientAuthenticationResult.ServerBusy
+			}, false, Channel.Unreliable);
+		}
+
+		/// <summary>
+		/// Processes a single account verification request asynchronously.
+		/// Decrypts username and verify code, then validates via PersistVerifiedAsync.
+		/// </summary>
+		private async Task ProcessAccountVerifyAsync(
+			NetworkConnection conn,
+			byte[] encryptedUsername,
+			byte[] encryptedVerifyCode,
+			ConnectionEncryptionData encryptionData,
+			string ipAddress,
+			uint seq)
+		{
+			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+
+			if (Server.Database?.ServiceRegistry != null &&
+				Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
+			{
+				try
+				{
+					byte[] decryptedUsername;
+					byte[] decryptedVerifyCode;
+					try
+					{
+						if (seq < 1)
+						{
+							NetworkConnection failConn = conn;
+							TryEnqueueMainThread(() =>
+							{
+								if (failConn != null && failConn.IsActive)
+									failConn.Disconnect(false);
+							});
+							return;
+						}
+
+						// Expected order: username (seq-1), verifyCode (seq)
+						uint seqUsername = seq - 1;
+						uint seqCode = seq;
+
+						if (!encryptionData.TryConsumeReceiveSequence(seqUsername))
+							throw new CryptographicException("Account verify username sequence out-of-order or duplicate.");
+						byte[] nonceU = encryptionData.BuildReceiveNonce(seqUsername);
+						byte[] aadU = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.AccountVerify, encryptionData.AgreedVersion, seqUsername);
+						decryptedUsername = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonceU, encryptedUsername, aadU);
+
+						if (!encryptionData.TryConsumeReceiveSequence(seqCode))
+							throw new CryptographicException("Account verify code sequence out-of-order or duplicate.");
+						byte[] nonceC = encryptionData.BuildReceiveNonce(seqCode);
+						byte[] aadC = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.AccountVerify, encryptionData.AgreedVersion, seqCode);
+						decryptedVerifyCode = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonceC, encryptedVerifyCode, aadC);
+					}
+					catch (CryptographicException)
+					{
+						NetworkConnection failConn = conn;
+						TryEnqueueMainThread(() =>
+						{
+							if (failConn != null && failConn.IsActive)
+								failConn.Disconnect(false);
+						});
+						return;
+					}
+
+					string username;
+					int verifyCode;
+					try
+					{
+						username = CryptoHelper.StrictUtf8.GetString(decryptedUsername);
+						string codeStr = CryptoHelper.StrictUtf8.GetString(decryptedVerifyCode);
+						if (!int.TryParse(codeStr, out verifyCode))
+						{
+							CryptographicOperations.ZeroMemory(decryptedUsername);
+							CryptographicOperations.ZeroMemory(decryptedVerifyCode);
+							NetworkConnection failConn = conn;
+							TryEnqueueMainThread(() =>
+							{
+								if (failConn != null && failConn.IsActive)
+									failConn.Disconnect(false);
+							});
+							return;
+						}
+					}
+					catch (DecoderFallbackException)
+					{
+						CryptographicOperations.ZeroMemory(decryptedUsername);
+						CryptographicOperations.ZeroMemory(decryptedVerifyCode);
+						NetworkConnection failConn = conn;
+						TryEnqueueMainThread(() =>
+						{
+							if (failConn != null && failConn.IsActive)
+								failConn.Disconnect(false);
+						});
+						return;
+					}
+					CryptographicOperations.ZeroMemory(decryptedUsername);
+					CryptographicOperations.ZeroMemory(decryptedVerifyCode);
+
+					if (!Authentication.IsAllowedUsername(username))
+					{
+						result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+					}
+					else
+					{
+						DatabaseResult dbResult = await accountService.PersistVerifiedAsync(username, verifyCode);
+						result = dbResult.IsSuccess
+							? ClientAuthenticationResult.AccountVerified
+							: ClientAuthenticationResult.InvalidUsernameOrPassword;
+					}
+
+					// Track failures for rate limiting.
+					if (result != ClientAuthenticationResult.AccountVerified &&
+						Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData))
+					{
+						mappingData.IpFailureTracker.AddOrUpdate(ipAddress, 1, (_, existing) => existing + 1);
+					}
+				}
+				catch (Exception ex)
+				{
+					await Log.Error("AccountCreationSystem", $"Error during account verification: {ex}");
+					result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+				}
+			}
+
+			ClientAuthenticationResult capturedResult = result;
+			NetworkConnection capturedConn = conn;
+			TryEnqueueMainThread(() =>
+			{
+				if (capturedConn != null && capturedConn.IsActive)
+				{
+					Server.NetworkWrapper.Broadcast(capturedConn,
+						new ClientAuthResultBroadcast() { Result = capturedResult },
+						false, Channel.Reliable);
+				}
+			});
 		}
 
 	}

@@ -18,14 +18,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		IFetchCollectionByKeyAction<long, CharacterFriendData>
 	{
 		/// <summary>
-		/// Persists a friend relationship for the specified character.
+		/// Persists a friend or block relationship for the specified character.
 		/// </summary>
 		/// <param name="characterId">The owning character ID.</param>
 		/// <param name="friendCharacterId">The friend character ID.</param>
 		/// <param name="incomingVersion">The authoritative, monotonic version for this persist operation.</param>
+		/// <param name="isBlocked">When true the relationship is a block; when false it is a friend.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
-		Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, bool isBlocked, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a friend relationship for the specified character if <paramref name="incomingVersion"/> is newer.

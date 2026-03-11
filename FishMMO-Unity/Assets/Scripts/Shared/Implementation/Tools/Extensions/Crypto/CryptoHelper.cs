@@ -454,7 +454,8 @@ namespace FishMMO.Shared
 			SrpSuccess = 0x06, // server->client
 			ClientAuthResult = 0x07,
 			CreateAccount = 0x08,
-			TokenAuth = 0x09
+			TokenAuth = 0x09,
+			AccountVerify = 0x0A // client->server
 		}
 
 		/// <summary>

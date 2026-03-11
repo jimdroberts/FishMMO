@@ -94,8 +94,8 @@ namespace FishMMO.Database.Npgsql.Services
 				var now = DateTime.UtcNow;
 				var sql = $@"
 					WITH inserted AS (
-						INSERT INTO {TableName} (name, notice, time_created)
-						VALUES ({{0}}, '', {{1}})
+						INSERT INTO {TableName} (name, notice, message_of_the_day, time_created)
+						VALUES ({{0}}, '', '', {{1}})
 						ON CONFLICT (name_lowercase)
 						DO NOTHING
 						RETURNING id
@@ -187,7 +187,30 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>Guild data DTO.</returns>
 		private GuildData MapEntityToDto(GuildEntity entity)
 		{
-			return new GuildData(entity.ID, entity.Name, entity.Notice);
+			return new GuildData(entity.ID, entity.Name, entity.Notice, entity.MessageOfTheDay ?? string.Empty);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistMessageOfTheDayAsync(long guildId, string messageOfTheDay, CancellationToken cancellationToken = default)
+		{
+			if (guildId <= 0)
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid guild ID.");
+
+			if (messageOfTheDay != null && messageOfTheDay.Length > 500)
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Message of the day must not exceed 500 characters.");
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET message_of_the_day = {{0}} WHERE id = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { messageOfTheDay ?? string.Empty, guildId }, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Guild", guildId.ToString());
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

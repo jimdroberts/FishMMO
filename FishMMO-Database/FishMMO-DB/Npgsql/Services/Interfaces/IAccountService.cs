@@ -33,7 +33,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <summary>
 		/// Gets the last login time for an account.
 		/// </summary>
-		/// <param name="accountName">The account name to query. Must be 3-32 characters.</param>
+		/// <param name="username">The account name or email to query, depending on <paramref name="email"/>.</param>
+		/// <param name="email">When false, <paramref name="username"/> is treated as the account name (3-32 chars). When true, it is treated as an email (max 320 chars).</param>
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>
 		/// DatabaseResult containing the last login timestamp on success, or error information on failure.
@@ -44,13 +45,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// 
 		/// Success: Returns the last login timestamp.
 		/// Failure cases:
-		/// - VALIDATION_ERROR: Username validation failed (invalid length or format)
+		/// - VALIDATION_ERROR: Username or email validation failed
 		/// - DB_NOT_FOUND: Account does not exist
 		/// - DB_CONNECTION_FAILED: Database connection error (transient)
 		/// - DB_TIMEOUT: Query timeout (transient)
 		/// </remarks>
 		Task<DatabaseResult<DateTime>> FetchLastLoginAsync(
-			string accountName,
+			string username,
+			bool email = false,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
@@ -59,12 +61,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="accountName">The account name. Must be 3-32 characters.</param>
 		/// <param name="salt">The salt for SRP password hashing. Must not be null or whitespace.</param>
 		/// <param name="verifier">The verifier for SRP password hashing. Must not be null or whitespace.</param>
+		/// <param name="email">The account email. Must not be empty and must not exceed 320 characters.</param>
+		/// <param name="age">The account holder age. Must be between 0 and 200.</param>
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
 		/// Success: Account created with Player access level and current timestamp.
 		/// Failure cases:
-		/// - VALIDATION_ERROR: Invalid username, salt, or verifier
+		/// - VALIDATION_ERROR: Invalid username, salt, verifier, email, or age
 		/// - UNIQUE_VIOLATION: Account name already exists (non-transient)
 		/// - DATABASE_ERROR: Unexpected database error
 		/// </remarks>
@@ -72,12 +76,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			string accountName,
 			string salt,
 			string verifier,
+			string email,
+			int age,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves account authentication data for login.
 		/// </summary>
-		/// <param name="accountName">The account name. Must be 3-32 characters.</param>
+		/// <param name="username">The account name or email to query, depending on <paramref name="email"/>.</param>
+		/// <param name="email">When false, <paramref name="username"/> is treated as the account name (3-32 chars). When true, it is treated as an email (max 320 chars).</param>
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>
 		/// DatabaseResult containing AccountData with authentication credentials on success, or error information on failure.
@@ -90,7 +97,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// - (Banned, null): Account exists but is banned
 		/// Success: Returns AccountData with salt, verifier, access level, and timestamps.
 		/// Failure cases:
-		/// - VALIDATION_ERROR: Username validation failed
+		/// - VALIDATION_ERROR: Username or email validation failed
 		/// - DB_NOT_FOUND: Account does not exist
 		/// - ACCOUNT_BANNED: Account exists but is banned
 		/// - DB_CONNECTION_FAILED: Database connection error (transient)
@@ -103,7 +110,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// after the database context is disposed.
 		/// </remarks>
 		Task<DatabaseResult<AccountData>> FetchForLoginAsync(
-			string accountName,
+			string username,
+			bool email = false,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
@@ -127,6 +135,105 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </remarks>
 		Task<DatabaseResult> PersistLastLoginAsync(
 			string accountName,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Updates the email address for an account.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="email">The new email address, or null to clear.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistEmailAsync(
+			string accountName,
+			string? email,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Updates the age for an account.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="age">The age value.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistAgeAsync(
+			string accountName,
+			int age,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Enables or disables two-factor authentication for an account.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="enabled">Whether 2FA should be enabled.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistTwoFactorEnabledAsync(
+			string accountName,
+			bool enabled,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Sets the current two-factor authentication code for an account.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="code">The 2FA code, or null to clear.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistTwoFactorCodeAsync(
+			string accountName,
+			string? code,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Sets the temporary Discord link verification code for an account.
+		/// The Discord bot generates this code; the user verifies in-game with /verify.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="linkCode">The link code, or null to clear after verification.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistDiscordLinkCodeAsync(
+			string accountName,
+			string? linkCode,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches an account by its Discord link code for verification.
+		/// Used by the Discord bot to confirm in-game verification.
+		/// </summary>
+		/// <param name="linkCode">The Discord link code to search for.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult containing the AccountData if found, or null.</returns>
+		Task<DatabaseResult<AccountData?>> FetchByDiscordLinkCodeAsync(
+			string linkCode,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Sets the verified status for an account.
+		/// Called when the user provides the correct verify code from the email verification link.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="verifyCode">The verification code the user provided. Must match the stored verify code.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistVerifiedAsync(
+			string accountName,
+			int verifyCode,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Sets the verification code for an account.
+		/// A random int is generated and stored; the same code is sent to the account email.
+		/// The user must provide this code to verify their account.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="verifyCode">The randomly generated verification code.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistVerifyCodeAsync(
+			string accountName,
+			int verifyCode,
 			CancellationToken cancellationToken = default);
 	}
 }

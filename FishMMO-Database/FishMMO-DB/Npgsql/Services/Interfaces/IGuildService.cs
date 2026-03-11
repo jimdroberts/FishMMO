@@ -51,5 +51,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
 		/// </remarks>
 		Task<DatabaseResult<string?>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Updates the message of the day for a guild.
+		/// </summary>
+		/// <param name="guildId">Guild ID.</param>
+		/// <param name="messageOfTheDay">The new message of the day text.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistMessageOfTheDayAsync(long guildId, string messageOfTheDay, CancellationToken cancellationToken = default);
 	}
 }

@@ -60,7 +60,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PersistAsync(long characterId, long friendCharacterId, long incomingVersion, bool isBlocked, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || friendCharacterId <= 0)
 			{
@@ -91,11 +91,12 @@ namespace FishMMO.Database.Npgsql.Services
 				var now = DateTime.UtcNow;
 				var sql = $@"
 					INSERT INTO {TableName}
-						(character_id, friend_character_id, version, time_created, deleted, time_deleted)
+						(character_id, friend_character_id, version, is_blocked, time_created, deleted, time_deleted)
 					VALUES
-						({{0}}, {{1}}, {{2}}, {{3}}, FALSE, NULL)
+						({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, FALSE, NULL)
 					ON CONFLICT (character_id, friend_character_id)
 					DO UPDATE SET
+						is_blocked = EXCLUDED.is_blocked,
 						deleted = FALSE,
 						time_deleted = NULL,
 						version = EXCLUDED.version
@@ -104,7 +105,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { characterId, friendCharacterId, incomingVersion, now },
+					new object[] { characterId, friendCharacterId, incomingVersion, isBlocked, now },
 					cancellationToken)
 					.ConfigureAwait(false);
 
@@ -233,7 +234,8 @@ namespace FishMMO.Database.Npgsql.Services
 					id: f.ID,
 					version: f.Version,
 					characterID: f.CharacterID,
-					friendCharacterID: f.FriendCharacterID
+					friendCharacterID: f.FriendCharacterID,
+					isBlocked: f.IsBlocked
 				)).ToList();
 
 				return (IReadOnlyList<CharacterFriendData>)friends;

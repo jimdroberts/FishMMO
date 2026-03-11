@@ -1,83 +1,182 @@
 using Discord;
 using Discord.WebSocket;
+using Discord.Rest;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Discord.Rest;
-using FishMMO.DiscordBot.Data; // Ensure this is correct for DynamicGameChatChannelState
-using FishMMO.Database.Npgsql; // Added for NpgsqlDbContextFactory
-using Microsoft.EntityFrameworkCore; // Added for AsQueryable() and FirstOrDefaultAsync
+using FishMMO.DiscordBot.Data;
+using FishMMO.Database.Npgsql;
+using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.DiscordBot.Services
 {
-	// Represents the state of a dynamically created Discord channel linked to a game scene.
-	public class DynamicGameChatChannelState
-	{
-		public ulong DiscordCategoryId { get; set; }
-		public ulong DiscordChannelId { get; set; }
-		public long WorldServerId { get; set; }
-		public string WorldServerName { get; set; }
-		public long SceneServerId { get; set; }
-		public string SceneServerName { get; set; }
-		public DateTime LastActivity { get; set; } // UTC timestamp of last message/activity
-	}
-
-	public class DynamicChannelManagerService
+	/// <summary>
+	/// Manages dynamically created Discord channels that bridge game world/scene chat to Discord.
+	/// Implements <see cref="IHostedService"/> for lifecycle management of the cleanup timer.
+	/// All inner dictionaries are <see cref="ConcurrentDictionary{TKey,TValue}"/> for thread safety.
+	/// </summary>
+	public class DynamicChannelManagerService : IHostedService, IDisposable
 	{
 		private readonly DiscordSocketClient discord;
 		private readonly ILogger<DynamicChannelManagerService> logger;
 		private readonly BotConfigurationService botConfigService;
-		private readonly NpgsqlDbContextFactory dbContextFactory; // Added NpgsqlDbContextFactory
-		private ConcurrentDictionary<ulong, Dictionary<long, Dictionary<long, DynamicGameChatChannelState>>> managedChannels; // GuildId -> WorldId -> SceneId -> State
-		private Timer? cleanupTimer;
-		private const int CleanupIntervalMinutes = 30; // How often to check for stale channels
-		private const int InactivityThresholdMinutes = 120; // Channels inactive for this long will be cleaned up
-															// Updated Regex to capture the name and the ID, assuming format "Name-ID"
-		private readonly Regex channelNameRegex = new Regex(@"^(.+?)-(\d+)$", RegexOptions.Compiled);
-		private readonly Regex categoryNameRegex = new Regex(@"^(.+?)-(\d+)$", RegexOptions.Compiled);
+		private readonly NpgsqlDbContextFactory dbContextFactory;
 
+		/// <summary>GuildId -> WorldId -> SceneId -> State. All levels are thread-safe.</summary>
+		private ConcurrentDictionary<ulong, ConcurrentDictionary<long, ConcurrentDictionary<long, DynamicGameChatChannelState>>> managedChannels;
+
+		/// <summary>Reverse lookup: DiscordChannelId -> (GuildId, WorldId, SceneId).</summary>
+		private readonly ConcurrentDictionary<ulong, (ulong GuildId, long WorldId, long SceneId)> channelIdLookup;
+
+		/// <summary>Serializes channel creation to prevent duplicate Discord channels from race conditions.</summary>
+		private readonly SemaphoreSlim createChannelLock = new SemaphoreSlim(1, 1);
+
+		/// <summary>Prevents overlapping cleanup timer callbacks.</summary>
+		private readonly SemaphoreSlim cleanupLock = new SemaphoreSlim(1, 1);
+
+		private Timer? cleanupTimer;
+		private int disposed;
+
+		/// <summary>
+		/// How often the stale-channel cleanup task runs, in minutes.
+		/// </summary>
+		private const int CleanupIntervalMinutes = 30;
+
+		/// <summary>
+		/// Channels inactive for longer than this threshold (in minutes) are deleted.
+		/// </summary>
+		private const int InactivityThresholdMinutes = 120;
+
+		/// <summary>
+		/// Matches channel and category names in the format "Name-ID".
+		/// </summary>
+		private static readonly Regex IdSuffixRegex = new Regex(@"^(.+?)-(\d+)$", RegexOptions.Compiled);
+
+		/// <summary>
+		/// Returns the total number of managed channels across all guilds.
+		/// </summary>
+		public int TotalManagedChannelCount => channelIdLookup.Count;
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="DynamicChannelManagerService"/> class.
+		/// </summary>
+		/// <param name="discord">The Discord socket client.</param>
+		/// <param name="logger">Logger instance.</param>
+		/// <param name="botConfigService">Configuration service for persistent channel state.</param>
+		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		public DynamicChannelManagerService(
 			DiscordSocketClient discord,
 			ILogger<DynamicChannelManagerService> logger,
 			BotConfigurationService botConfigService,
-			NpgsqlDbContextFactory dbContextFactory) // Injected NpgsqlDbContextFactory
+			NpgsqlDbContextFactory dbContextFactory)
 		{
 			this.discord = discord;
 			this.logger = logger;
 			this.botConfigService = botConfigService;
-			this.dbContextFactory = dbContextFactory; // Initialized NpgsqlDbContextFactory
-			managedChannels = botConfigService.GetDynamicChannelStates(); // Get reference to the shared state
-		}
-
-		public async Task LoadManagedChannelsAsync()
-		{
-			// This is primarily handled by BotConfigurationService.LoadConfigurationsAsync()
-			// We just ensure our internal reference is correct.
+			this.dbContextFactory = dbContextFactory;
+			channelIdLookup = new ConcurrentDictionary<ulong, (ulong, long, long)>();
 			managedChannels = botConfigService.GetDynamicChannelStates();
-			logger.LogInformation("DynamicChannelManagerService loaded {Count} managed channels from configuration.", managedChannels.Sum(g => g.Value.Sum(w => w.Value.Count)));
 		}
 
-		public void StartCleanupTask()
+		/// <inheritdoc />
+		public async Task StartAsync(CancellationToken cancellationToken)
 		{
-			cleanupTimer = new Timer(CleanupStaleChannels, null, TimeSpan.Zero, TimeSpan.FromMinutes(CleanupIntervalMinutes));
-			logger.LogInformation("Dynamic channel cleanup task started. Running every {Interval} minutes, cleaning up channels inactive for {Threshold} minutes.", CleanupIntervalMinutes, InactivityThresholdMinutes);
+			await botConfigService.LoadConfigurationsAsync();
+			managedChannels = botConfigService.GetDynamicChannelStates();
+			RebuildReverseLookup();
+
+			cleanupTimer = new Timer(
+				OnCleanupTimerElapsed,
+				null,
+				TimeSpan.FromMinutes(CleanupIntervalMinutes),
+				TimeSpan.FromMinutes(CleanupIntervalMinutes));
+
+			logger.LogInformation(
+				"DynamicChannelManagerService started. Cleanup every {Interval} min, inactivity threshold {Threshold} min.",
+				CleanupIntervalMinutes,
+				InactivityThresholdMinutes);
 		}
 
-		public void StopCleanupTask()
+		/// <inheritdoc />
+		public Task StopAsync(CancellationToken cancellationToken)
 		{
 			cleanupTimer?.Change(Timeout.Infinite, 0);
-			logger.LogInformation("Dynamic channel cleanup task stopped.");
+			logger.LogInformation("DynamicChannelManagerService stopped.");
+			return Task.CompletedTask;
 		}
 
-		private async void CleanupStaleChannels(object? state)
+		/// <inheritdoc />
+		public void Dispose()
+		{
+			if (Interlocked.Exchange(ref disposed, 1) == 0)
+			{
+				cleanupTimer?.Dispose();
+				createChannelLock.Dispose();
+				cleanupLock.Dispose();
+			}
+		}
+
+		/// <summary>
+		/// Rebuilds the reverse lookup dictionary from the current managed channels state.
+		/// </summary>
+		private void RebuildReverseLookup()
+		{
+			channelIdLookup.Clear();
+			foreach (var guildEntry in managedChannels)
+			{
+				ulong guildId = guildEntry.Key;
+				foreach (var worldEntry in guildEntry.Value)
+				{
+					long worldId = worldEntry.Key;
+					foreach (var sceneEntry in worldEntry.Value)
+					{
+						long sceneId = sceneEntry.Key;
+						channelIdLookup[sceneEntry.Value.DiscordChannelId] = (guildId, worldId, sceneId);
+					}
+				}
+			}
+			logger.LogInformation("Rebuilt reverse channel lookup with {Count} entries.", channelIdLookup.Count);
+		}
+
+		/// <summary>
+		/// Timer callback wrapper with reentrancy guard. Skips execution if a previous cleanup is still running.
+		/// </summary>
+		private async void OnCleanupTimerElapsed(object? state)
+		{
+			if (!cleanupLock.Wait(0))
+			{
+				logger.LogDebug("Skipping cleanup — previous cleanup is still running.");
+				return;
+			}
+
+			try
+			{
+				await CleanupStaleChannelsAsync();
+			}
+			catch (Exception ex)
+			{
+				logger.LogError(ex, "Unhandled exception during stale channel cleanup.");
+			}
+			finally
+			{
+				cleanupLock.Release();
+			}
+		}
+
+		/// <summary>
+		/// Removes Discord channels that have been inactive beyond the threshold.
+		/// Also cleans up empty parent category channels.
+		/// </summary>
+		/// <returns>The number of channels removed.</returns>
+		private async Task<int> CleanupStaleChannelsAsync()
 		{
 			logger.LogDebug("Running stale channel cleanup...");
-			List<DynamicGameChatChannelState> channelsToDelete = new List<DynamicGameChatChannelState>();
+			var channelsToDelete = new List<(ulong GuildId, long WorldId, long SceneId, DynamicGameChatChannelState State)>();
 			DateTime cutoff = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(InactivityThresholdMinutes));
 
 			foreach (var guildEntry in managedChannels)
@@ -93,27 +192,28 @@ namespace FishMMO.DiscordBot.Services
 
 						if (channelState.LastActivity < cutoff)
 						{
-							channelsToDelete.Add(channelState);
-							logger.LogInformation("Identified stale channel for deletion: Guild {GuildId}, World {WorldId}, Scene {SceneId}.", guildId, worldId, sceneId);
+							channelsToDelete.Add((guildId, worldId, sceneId, channelState));
+							logger.LogInformation(
+								"Identified stale channel for deletion: Guild {GuildId}, World {WorldId}, Scene {SceneId}.",
+								guildId, worldId, sceneId);
 						}
 					}
 				}
 			}
 
-			foreach (var channelState in channelsToDelete)
+			var emptyCategoryIds = new HashSet<ulong>();
+
+			foreach (var (guildId, worldId, sceneId, channelState) in channelsToDelete)
 			{
 				try
 				{
-					var guild = discord.GetGuild(channelState.DiscordCategoryId);
+					var guild = discord.GetGuild(guildId);
 					if (guild == null)
 					{
-						guild = discord.Guilds.FirstOrDefault(g => g.Id == channelState.DiscordCategoryId);
-					}
-
-					if (guild == null)
-					{
-						logger.LogWarning("Guild not found for stale channel cleanup. GuildID (from category or direct): {GuildId}", channelState.DiscordCategoryId);
-						RemoveChannelStateFromConfig(channelState.DiscordCategoryId, channelState.WorldServerId, channelState.SceneServerId);
+						logger.LogWarning(
+							"Guild {GuildId} not found for stale channel cleanup. Removing from config only.",
+							guildId);
+						RemoveChannelState(guildId, worldId, sceneId, channelState.DiscordChannelId);
 						continue;
 					}
 
@@ -121,14 +221,23 @@ namespace FishMMO.DiscordBot.Services
 					if (channel != null)
 					{
 						await channel.DeleteAsync();
-						logger.LogInformation("Deleted stale Discord channel: {ChannelName} (ID: {ChannelId}) from Guild {GuildId}.", channel.Name, channel.Id, guild.Id);
+						logger.LogInformation(
+							"Deleted stale Discord channel: {ChannelName} (ID: {ChannelId}) from Guild {GuildId}.",
+							channel.Name, channel.Id, guild.Id);
 					}
 					else
 					{
-						logger.LogWarning("Discord channel with ID {ChannelId} not found in Guild {GuildId} for cleanup. Removing from config only.", channelState.DiscordChannelId, guild.Id);
+						logger.LogWarning(
+							"Discord channel ID {ChannelId} not found in Guild {GuildId} for cleanup. Removing from config only.",
+							channelState.DiscordChannelId, guild.Id);
 					}
 
-					RemoveChannelStateFromConfig(channelState.DiscordCategoryId, channelState.WorldServerId, channelState.SceneServerId);
+					RemoveChannelState(guildId, worldId, sceneId, channelState.DiscordChannelId);
+
+					if (channelState.DiscordCategoryId != 0)
+					{
+						emptyCategoryIds.Add(channelState.DiscordCategoryId);
+					}
 				}
 				catch (Exception ex)
 				{
@@ -136,41 +245,143 @@ namespace FishMMO.DiscordBot.Services
 				}
 			}
 
+			// Clean up empty parent categories
+			foreach (ulong categoryId in emptyCategoryIds)
+			{
+				await TryDeleteEmptyCategoryAsync(categoryId);
+			}
+
 			if (channelsToDelete.Count > 0)
 			{
 				await botConfigService.SaveConfigurationsAsync();
 			}
+
 			logger.LogDebug("Stale channel cleanup completed. {Count} channels removed.", channelsToDelete.Count);
+			return channelsToDelete.Count;
 		}
 
-		private void RemoveChannelStateFromConfig(ulong guildId, long worldServerId, long sceneServerId)
+		/// <summary>
+		/// Forces an immediate cleanup of stale channels. Called from admin commands.
+		/// </summary>
+		/// <returns>The number of channels removed.</returns>
+		public async Task<int> ForceCleanupAsync()
 		{
+			await cleanupLock.WaitAsync();
+			try
+			{
+				return await CleanupStaleChannelsAsync();
+			}
+			finally
+			{
+				cleanupLock.Release();
+			}
+		}
+
+		/// <summary>
+		/// Deletes a Discord category channel if it has no remaining child channels.
+		/// </summary>
+		/// <param name="categoryId">The Discord category channel snowflake.</param>
+		private async Task TryDeleteEmptyCategoryAsync(ulong categoryId)
+		{
+			try
+			{
+				var fetchedChannel = await discord.Rest.GetChannelAsync(categoryId);
+				if (fetchedChannel is RestCategoryChannel restCategory)
+				{
+					// Check if any managed channel still references this category
+					bool hasChildren = false;
+					foreach (var guildEntry in managedChannels)
+					{
+						foreach (var worldEntry in guildEntry.Value)
+						{
+							foreach (var sceneEntry in worldEntry.Value)
+							{
+								if (sceneEntry.Value.DiscordCategoryId == categoryId)
+								{
+									hasChildren = true;
+									break;
+								}
+							}
+							if (hasChildren) break;
+						}
+						if (hasChildren) break;
+					}
+
+					if (!hasChildren)
+					{
+						await restCategory.DeleteAsync();
+						logger.LogInformation(
+							"Deleted empty category channel: {CategoryName} (ID: {CategoryId}).",
+							restCategory.Name, restCategory.Id);
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				logger.LogWarning(ex, "Failed to delete potentially empty category ID {CategoryId}.", categoryId);
+			}
+		}
+
+		/// <summary>
+		/// Removes a channel state entry from the in-memory cache and reverse lookup.
+		/// Thread-safe via <see cref="ConcurrentDictionary{TKey,TValue}"/> operations.
+		/// </summary>
+		/// <param name="guildId">The Discord guild ID.</param>
+		/// <param name="worldServerId">The game world server ID.</param>
+		/// <param name="sceneServerId">The game scene server ID.</param>
+		/// <param name="discordChannelId">The Discord channel snowflake to remove from reverse lookup.</param>
+		private void RemoveChannelState(ulong guildId, long worldServerId, long sceneServerId, ulong discordChannelId)
+		{
+			channelIdLookup.TryRemove(discordChannelId, out _);
+
 			if (managedChannels.TryGetValue(guildId, out var guildWorlds))
 			{
 				if (guildWorlds.TryGetValue(worldServerId, out var worldScenes))
 				{
-					if (worldScenes.Remove(sceneServerId))
+					worldScenes.TryRemove(sceneServerId, out _);
+					if (worldScenes.IsEmpty)
 					{
-						logger.LogDebug("Removed channel state for Guild {GuildId}, World {WorldId}, Scene {SceneId} from in-memory cache.", guildId, worldServerId, sceneServerId);
-					}
-					if (worldScenes.Count == 0)
-					{
-						guildWorlds.Remove(worldServerId);
-						logger.LogDebug("Removed World {WorldId} from Guild {GuildId} as it has no more scenes.", worldServerId, guildId);
+						guildWorlds.TryRemove(worldServerId, out _);
 					}
 				}
-				if (guildWorlds.Count == 0)
+				if (guildWorlds.IsEmpty)
 				{
-					((ConcurrentDictionary<ulong, Dictionary<long, Dictionary<long, DynamicGameChatChannelState>>>)managedChannels).TryRemove(guildId, out _);
-					logger.LogDebug("Removed Guild {GuildId} as it has no more worlds.", guildId);
+					managedChannels.TryRemove(guildId, out _);
 				}
 			}
+
+			logger.LogDebug(
+				"Removed channel state for Guild {GuildId}, World {WorldId}, Scene {SceneId}.",
+				guildId, worldServerId, sceneServerId);
 		}
 
-		// Method to get or create a Discord channel for a given game world/scene
-		public async Task<DynamicGameChatChannelState> GetOrCreateChannelState(
-			ulong guildId, long worldServerId, string? worldServerName, long sceneServerId, string? sceneServerName) // Made names nullable
+		/// <summary>
+		/// Gets or creates a Discord channel for a given game world/scene combination.
+		/// Creates the Discord category and text channel if they do not already exist.
+		/// Serialized via <see cref="createChannelLock"/> to prevent duplicate channel creation.
+		/// </summary>
+		/// <param name="guildId">The Discord guild in which to manage channels.</param>
+		/// <param name="worldServerId">The game world server ID.</param>
+		/// <param name="worldServerName">The world server name (fetched from DB if null or empty).</param>
+		/// <param name="sceneServerId">The game scene server ID.</param>
+		/// <param name="sceneServerName">The scene server name (fetched from DB if null or empty).</param>
+		/// <returns>The channel state, or <c>null</c> if the guild was not found.</returns>
+		public async Task<DynamicGameChatChannelState?> GetOrCreateChannelState(
+			ulong guildId,
+			long worldServerId,
+			string? worldServerName,
+			long sceneServerId,
+			string? sceneServerName)
 		{
+			// Fast path: check without lock
+			if (managedChannels.TryGetValue(guildId, out var guildWorlds) &&
+				guildWorlds.TryGetValue(worldServerId, out var worldScenes) &&
+				worldScenes.TryGetValue(sceneServerId, out var existingState))
+			{
+				existingState.LastActivity = DateTime.UtcNow;
+				return existingState;
+			}
+
 			var guild = discord.GetGuild(guildId);
 			if (guild == null)
 			{
@@ -178,169 +389,188 @@ namespace FishMMO.DiscordBot.Services
 				return null;
 			}
 
-			// Check if already managed
-			if (managedChannels.TryGetValue(guildId, out var guildWorlds) &&
-				guildWorlds.TryGetValue(worldServerId, out var worldScenes) &&
-				worldScenes.TryGetValue(sceneServerId, out var existingState))
+			await createChannelLock.WaitAsync();
+			try
 			{
-				logger.LogDebug("Found existing channel state in managed cache for Guild {GuildId}, World {WorldId}, Scene {SceneId}.", guildId, worldServerId, sceneServerId);
-				existingState.LastActivity = DateTime.UtcNow;
-				botConfigService.UpdateDynamicChannelState(guildId, worldServerId, sceneServerId, existingState);
-				return existingState;
-			}
-
-			string actualWorldServerName = worldServerName;
-			string actualSceneServerName = sceneServerName;
-
-			using (var dbContext = dbContextFactory.CreateDbContext()) // Create a new DbContext for this operation
-			{
-				if (string.IsNullOrWhiteSpace(actualWorldServerName))
+				// Double-check after acquiring lock to avoid duplicate creation
+				if (managedChannels.TryGetValue(guildId, out guildWorlds) &&
+					guildWorlds.TryGetValue(worldServerId, out worldScenes) &&
+					worldScenes.TryGetValue(sceneServerId, out existingState))
 				{
-					var worldEntity = await dbContext.WorldServers.AsQueryable()
-																  .FirstOrDefaultAsync(ws => ws.ID == worldServerId);
-					if (worldEntity != null)
+					existingState.LastActivity = DateTime.UtcNow;
+					return existingState;
+				}
+
+				string actualWorldServerName = worldServerName ?? string.Empty;
+				string actualSceneServerName = sceneServerName ?? string.Empty;
+
+				using (var dbContext = dbContextFactory.CreateDbContext())
+				{
+					if (string.IsNullOrWhiteSpace(actualWorldServerName))
 					{
-						actualWorldServerName = worldEntity.Name;
-						logger.LogDebug("Fetched WorldServerName from DB: {WorldName} for ID {WorldId}", actualWorldServerName, worldServerId);
+						var worldEntity = await dbContext.WorldServers.AsQueryable()
+							.FirstOrDefaultAsync(ws => ws.ID == worldServerId);
+						actualWorldServerName = worldEntity?.Name ?? "UnknownWorld";
 					}
-					else
+
+					if (string.IsNullOrWhiteSpace(actualSceneServerName))
 					{
-						logger.LogError("WorldServer with ID {WorldId} not found in database. Cannot create channel with proper name.", worldServerId);
-						actualWorldServerName = $"UnknownWorld"; // Fallback name
+						var sceneEntity = await dbContext.SceneServers.AsQueryable()
+							.FirstOrDefaultAsync(ss => ss.ID == sceneServerId);
+						actualSceneServerName = sceneEntity?.Name ?? "UnknownScene";
+					}
+				}
+
+				var categoryName = $"{actualWorldServerName}-{worldServerId}";
+				SocketCategoryChannel? socketCategory = null;
+				foreach (var cat in guild.CategoryChannels)
+				{
+					if (cat.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase))
+					{
+						socketCategory = cat;
+						break;
+					}
+				}
+
+				RestCategoryChannel? restCategory = null;
+
+				if (socketCategory != null)
+				{
+					var fetchedChannel = await discord.Rest.GetChannelAsync(socketCategory.Id);
+					if (fetchedChannel is RestCategoryChannel fetchedRestCategory)
+					{
+						restCategory = fetchedRestCategory;
 					}
 				}
 
-				if (string.IsNullOrWhiteSpace(actualSceneServerName))
+				if (restCategory == null)
 				{
-					var sceneEntity = await dbContext.SceneServers.AsQueryable()
-																  .FirstOrDefaultAsync(ss => ss.ID == sceneServerId);
-					if (sceneEntity != null)
-					{
-						actualSceneServerName = sceneEntity.Name;
-						logger.LogDebug("Fetched SceneServerName from DB: {SceneName} for ID {SceneId}", actualSceneServerName, sceneServerId);
-					}
-					else
-					{
-						logger.LogError("SceneServer with ID {SceneId} not found in database. Cannot create channel with proper name.", sceneServerId);
-						actualSceneServerName = $"UnknownScene"; // Fallback name
-					}
+					logger.LogInformation(
+						"Creating new category '{CategoryName}' in Guild {GuildId} for World {WorldId}.",
+						categoryName, guildId, worldServerId);
+					restCategory = await guild.CreateCategoryChannelAsync(categoryName);
+					await restCategory.AddPermissionOverwriteAsync(
+						guild.EveryoneRole,
+						new OverwritePermissions(sendMessages: PermValue.Deny, viewChannel: PermValue.Allow));
 				}
-			}
 
-			// If not found in cache, proceed to check Discord and potentially create
-			// Use actual names fetched/provided
-			var categoryName = $"{actualWorldServerName}-{worldServerId}";
-			SocketCategoryChannel socketCategory = guild.CategoryChannels.FirstOrDefault(c => c.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
-			RestCategoryChannel restCategory = null;
+				var channelName = $"{actualSceneServerName}-{sceneServerId}";
+				RestTextChannel textChannel = await guild.CreateTextChannelAsync(
+					channelName,
+					props => props.CategoryId = restCategory.Id);
 
-			if (socketCategory != null)
-			{
-				logger.LogInformation("Found existing SocketCategoryChannel '{CategoryName}' (ID: {CategoryId}). Attempting to fetch its REST equivalent for permissions.", socketCategory.Name, socketCategory.Id);
-				var fetchedChannel = await discord.Rest.GetChannelAsync(socketCategory.Id);
-				if (fetchedChannel is RestCategoryChannel fetchedRestCategory)
+				await textChannel.AddPermissionOverwriteAsync(
+					guild.EveryoneRole,
+					new OverwritePermissions(sendMessages: PermValue.Allow, viewChannel: PermValue.Allow));
+
+				var newState = new DynamicGameChatChannelState
 				{
-					restCategory = fetchedRestCategory;
-				}
-				else
-				{
-					logger.LogWarning("Fetched channel for category ID {CategoryId} was not a RestCategoryChannel.", socketCategory.Id);
-				}
+					DiscordCategoryId = restCategory.Id,
+					DiscordChannelId = textChannel.Id,
+					WorldServerId = worldServerId,
+					WorldServerName = actualWorldServerName,
+					SceneServerId = sceneServerId,
+					SceneServerName = actualSceneServerName,
+					LastActivity = DateTime.UtcNow
+				};
+
+				botConfigService.UpdateDynamicChannelState(guildId, worldServerId, sceneServerId, newState);
+				channelIdLookup[textChannel.Id] = (guildId, worldServerId, sceneServerId);
+				await botConfigService.SaveConfigurationsAsync();
+
+				logger.LogInformation(
+					"Created Discord channel: {ChannelName} (ID: {ChannelId}) in Category {CategoryName} (ID: {CategoryId}) for World {WorldId}, Scene {SceneId}.",
+					textChannel.Name, textChannel.Id, restCategory.Name, restCategory.Id, worldServerId, sceneServerId);
+
+				return newState;
 			}
-
-			if (restCategory == null)
+			finally
 			{
-				logger.LogInformation("Creating new category '{CategoryName}' in Guild {GuildId} for World {WorldId}.", categoryName, guildId, worldServerId);
-				restCategory = await guild.CreateCategoryChannelAsync(categoryName);
+				createChannelLock.Release();
 			}
-
-			await restCategory.AddPermissionOverwriteAsync(guild.EveryoneRole, new OverwritePermissions(sendMessages: PermValue.Deny, viewChannel: PermValue.Allow));
-			logger.LogInformation("Category '{CategoryName}' (ID: {CategoryId}) created/found and permissions set (Send: Deny, View: Allow for @everyone).", restCategory.Name, restCategory.Id);
-
-
-			// Use actual names fetched/provided
-			var channelName = $"{actualSceneServerName}-{sceneServerId}";
-			logger.LogInformation("Creating new channel '{ChannelName}' in category '{CategoryName}' (ID: {CategoryId}).", channelName, restCategory.Name, restCategory.Id);
-			RestTextChannel textChannel = await guild.CreateTextChannelAsync(channelName, props => props.CategoryId = restCategory.Id);
-
-			await textChannel.AddPermissionOverwriteAsync(guild.EveryoneRole, new OverwritePermissions(sendMessages: PermValue.Allow, viewChannel: PermValue.Allow));
-			logger.LogInformation("Channel '{ChannelName}' (ID: {ChannelId}) created and permissions set (Send: Allow, View: Allow for @everyone).", textChannel.Name, textChannel.Id);
-
-			var newState = new DynamicGameChatChannelState
-			{
-				DiscordCategoryId = restCategory.Id,
-				DiscordChannelId = textChannel.Id,
-				WorldServerId = worldServerId,
-				WorldServerName = actualWorldServerName, // Use the actual (fetched/provided) name
-				SceneServerId = sceneServerId,
-				SceneServerName = actualSceneServerName, // Use the actual (fetched/provided) name
-				LastActivity = DateTime.UtcNow
-			};
-
-			botConfigService.UpdateDynamicChannelState(guildId, worldServerId, sceneServerId, newState);
-			await botConfigService.SaveConfigurationsAsync();
-
-			logger.LogInformation("Created and managed new Discord channel: {ChannelName} (ID: {ChannelId}) in Category {CategoryName} (ID: {CategoryId}) for World {WorldId}, Scene {SceneId}.",
-				textChannel.Name, textChannel.Id, restCategory.Name, restCategory.Id, worldServerId, sceneServerId);
-
-			return newState;
 		}
 
-		// Retrieves the managed channel state for a given World/Scene combination within a specific guild.
+		/// <summary>
+		/// Retrieves the managed channel state for a given World/Scene combination within a guild.
+		/// Thread-safe via <see cref="ConcurrentDictionary{TKey,TValue}"/> reads.
+		/// </summary>
+		/// <param name="guildId">The Discord guild ID.</param>
+		/// <param name="worldServerId">The game world server ID.</param>
+		/// <param name="sceneServerId">The game scene server ID.</param>
+		/// <returns>The channel state, or <c>null</c> if not managed.</returns>
 		public DynamicGameChatChannelState? GetManagedChannelState(ulong guildId, long worldServerId, long sceneServerId)
 		{
-			if (managedChannels.TryGetValue(guildId, out var guildWorlds))
+			if (managedChannels.TryGetValue(guildId, out var guildWorlds) &&
+				guildWorlds.TryGetValue(worldServerId, out var worldScenes) &&
+				worldScenes.TryGetValue(sceneServerId, out var channelState))
 			{
-				if (guildWorlds.TryGetValue(worldServerId, out var worldScenes))
-				{
-					if (worldScenes.TryGetValue(sceneServerId, out var channelState))
-					{
-						logger.LogDebug("GetManagedChannelState found existing channel for Guild {GuildId}, World {WorldId}, Scene {SceneId}.", guildId, worldServerId, sceneServerId);
-						return channelState;
-					}
-				}
+				return channelState;
 			}
-			logger.LogDebug("GetManagedChannelState did NOT find existing channel for Guild {GuildId}, World {WorldId}, Scene {SceneId}.", guildId, worldServerId, sceneServerId);
 			return null;
 		}
 
-
-		// Method to check if a Discord channel is one of our dynamically managed channels (by iterating all managed guilds)
-		public bool IsOurDynamicChannel(ulong guildId, ulong channelId)
+		/// <summary>
+		/// Returns a snapshot list of all managed channels for the specified guild.
+		/// </summary>
+		/// <param name="guildId">The Discord guild ID.</param>
+		/// <returns>A list of tuples containing WorldId, SceneId, and the channel state.</returns>
+		public List<(long WorldId, long SceneId, DynamicGameChatChannelState State)> GetManagedChannelsForGuild(ulong guildId)
 		{
+			var result = new List<(long, long, DynamicGameChatChannelState)>();
 			if (managedChannels.TryGetValue(guildId, out var guildWorlds))
 			{
-				foreach (var worldEntry in guildWorlds.Values)
+				foreach (var worldEntry in guildWorlds)
 				{
-					foreach (var sceneEntry in worldEntry.Values)
+					foreach (var sceneEntry in worldEntry.Value)
 					{
-						if (sceneEntry.DiscordChannelId == channelId)
-						{
-							return true;
-						}
+						result.Add((worldEntry.Key, sceneEntry.Key, sceneEntry.Value));
 					}
 				}
 			}
-			return false;
+			return result;
 		}
 
-		// Extracts World and Scene IDs from a Discord channel's name and its category's name
+		/// <summary>
+		/// Checks whether a Discord channel is one of the dynamically managed game chat channels.
+		/// Uses O(1) reverse lookup instead of scanning all channels.
+		/// </summary>
+		/// <param name="guildId">The Discord guild ID.</param>
+		/// <param name="channelId">The Discord channel ID to check.</param>
+		/// <returns><c>true</c> if the channel is managed by this service.</returns>
+		public bool IsOurDynamicChannel(ulong guildId, ulong channelId)
+		{
+			return channelIdLookup.TryGetValue(channelId, out var entry) && entry.GuildId == guildId;
+		}
+
+		/// <summary>
+		/// Extracts World and Scene IDs from a Discord channel's name and its category's name.
+		/// Expects the format "Name-ID" for both category (World) and channel (Scene).
+		/// </summary>
+		/// <param name="channel">The Discord text channel to extract IDs from.</param>
+		/// <returns>A tuple of (WorldId, SceneId), either of which may be null on parse failure.</returns>
 		public (long? WorldId, long? SceneId) GetWorldAndSceneIdsFromChannel(SocketTextChannel channel)
 		{
+			// Fast path: use reverse lookup if available
+			if (channelIdLookup.TryGetValue(channel.Id, out var entry))
+			{
+				return (entry.WorldId, entry.SceneId);
+			}
+
 			long? worldId = null;
 			long? sceneId = null;
 
-			// Try to get world ID from category name (e.g., "WorldName-1")
 			if (channel.Category != null)
 			{
-				Match categoryMatch = categoryNameRegex.Match(channel.Category.Name);
-				if (categoryMatch.Success && long.TryParse(categoryMatch.Groups[2].Value, out long parsedWorldId)) // Group 2 for ID
+				Match categoryMatch = IdSuffixRegex.Match(channel.Category.Name);
+				if (categoryMatch.Success && long.TryParse(categoryMatch.Groups[2].Value, out long parsedWorldId))
 				{
 					worldId = parsedWorldId;
-					// You could also extract the name here: string worldName = categoryMatch.Groups[1].Value;
 				}
 				else
 				{
-					logger.LogWarning("Category name '{CategoryName}' for channel '{ChannelName}' does not match expected pattern 'Name-ID'.", channel.Category.Name, channel.Name);
+					logger.LogWarning(
+						"Category name '{CategoryName}' for channel '{ChannelName}' does not match expected pattern 'Name-ID'.",
+						channel.Category.Name, channel.Name);
 				}
 			}
 			else
@@ -348,12 +578,10 @@ namespace FishMMO.DiscordBot.Services
 				logger.LogWarning("Channel '{ChannelName}' does not have a category. Cannot extract World ID.", channel.Name);
 			}
 
-			// Try to get scene ID from channel name (e.g., "SceneName-101")
-			Match channelMatch = channelNameRegex.Match(channel.Name);
-			if (channelMatch.Success && long.TryParse(channelMatch.Groups[2].Value, out long parsedSceneId)) // Group 2 for ID
+			Match channelMatch = IdSuffixRegex.Match(channel.Name);
+			if (channelMatch.Success && long.TryParse(channelMatch.Groups[2].Value, out long parsedSceneId))
 			{
 				sceneId = parsedSceneId;
-				// You could also extract the name here: string sceneName = channelMatch.Groups[1].Value;
 			}
 			else
 			{
@@ -363,22 +591,20 @@ namespace FishMMO.DiscordBot.Services
 			return (worldId, sceneId);
 		}
 
-		// Method to update LastActivity timestamp for a channel
-		public async Task UpdateChannelActivityAsync(ulong guildId, long worldServerId, long sceneServerId)
+		/// <summary>
+		/// Updates the last-activity timestamp for a managed channel.
+		/// Does not persist to disk — saves are batched during cleanup or channel creation.
+		/// </summary>
+		/// <param name="guildId">The Discord guild ID.</param>
+		/// <param name="worldServerId">The game world server ID.</param>
+		/// <param name="sceneServerId">The game scene server ID.</param>
+		public void UpdateChannelActivity(ulong guildId, long worldServerId, long sceneServerId)
 		{
 			if (managedChannels.TryGetValue(guildId, out var guildWorlds) &&
 				guildWorlds.TryGetValue(worldServerId, out var worldScenes) &&
 				worldScenes.TryGetValue(sceneServerId, out var channelState))
 			{
 				channelState.LastActivity = DateTime.UtcNow;
-				botConfigService.UpdateDynamicChannelState(guildId, worldServerId, sceneServerId, channelState); // Notify config service of update
-				await botConfigService.SaveConfigurationsAsync(); // Save changes
-				logger.LogDebug("Updated last activity for channel Guild {GuildId}, World {WorldId}, Scene {SceneId}.", guildId, worldServerId, sceneServerId);
-			}
-			else
-			{
-				logger.LogWarning("Attempted to update activity for unmanaged channel: Guild {GuildId}, World {WorldId}, Scene {SceneId}. Channel may not exist or is not managed.", guildId, worldServerId, sceneServerId);
-				// Optionally, if it's not found, try to create it here or log a critical error if it should exist.
 			}
 		}
 	}
