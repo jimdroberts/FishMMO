@@ -48,7 +48,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Cached tick delta for converting between seconds and ticks.
-		/// Lazily initialized from <see cref="TimeManager.TickDelta"/>.
+		/// Eagerly initialized from <see cref="TimeManager.TickDelta"/> in
+		/// <see cref="OnStartNetwork"/>. Falls back to lazy initialization if unavailable.
 		/// </summary>
 		private float cachedTickDelta;
 
@@ -65,6 +66,16 @@ namespace FishMMO.Shared
 					cachedTickDelta = (float)base.TimeManager.TickDelta;
 				}
 				return cachedTickDelta > 0f ? cachedTickDelta : Time.fixedDeltaTime;
+			}
+		}
+
+		public override void OnStartNetwork()
+		{
+			base.OnStartNetwork();
+
+			if (base.TimeManager != null)
+			{
+				cachedTickDelta = (float)base.TimeManager.TickDelta;
 			}
 		}
 
@@ -153,11 +164,7 @@ namespace FishMMO.Shared
 				}
 
 				CooldownInstance cooldown = new CooldownInstance(startTick, durationTicks, td);
-
-				if (i < maxPayloadCooldowns)
-				{
-					cooldowns[abilityID] = cooldown;
-				}
+				cooldowns[abilityID] = cooldown;
 			}
 		}
 

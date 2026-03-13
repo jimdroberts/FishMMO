@@ -48,6 +48,7 @@ namespace FishMMO.Shared
 			DeltaSerializerOption option)
 		{
 			ushort flags = 0;
+			bool forceWrite = option != DeltaSerializerOption.Unset;
 
 			int flagPos = writer.Position;
 			writer.WriteUInt16(0);
@@ -79,7 +80,6 @@ namespace FishMMO.Shared
 			if (WriteRngStateDelta(writer, prev, next, option))
 				flags |= RNG_STATE_BIT;
 
-			bool forceWrite = option != DeltaSerializerOption.Unset;
 			if (flags != 0 || forceWrite)
 			{
 				int endPos = writer.Position;
@@ -96,6 +96,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Compares and writes the 4 xoshiro128** state words. All 4 change together,
 		/// so a single bit controls whether the full 16 bytes are written.
+		/// Delta encoding is intentionally skipped: the state words are pseudo-random
+		/// with high entropy, so XOR/delta encoding saves nothing. Writing raw uint32s
+		/// is simpler and equally compact.
 		/// </summary>
 		private static bool WriteRngStateDelta(
 			Writer writer,

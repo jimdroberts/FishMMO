@@ -97,6 +97,14 @@ namespace FishMMO.Shared
 		/// Writes a 1-byte bitmask indicating which of the 7 fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
+		/// <remarks>
+		/// Float fields (RegenDelta, Health, Mana, Stamina) use raw <c>WriteSingle</c>
+		/// with manual equality checks because FishNet does not expose a public
+		/// <c>WriteDeltaSingle</c> for scalar floats. Int fields (MaxHealth, MaxMana,
+		/// MaxStamina) use <c>WriteDeltaInt32</c> which benefits from varint delta encoding.
+		/// If FishNet adds a public float-delta API in the future, the float fields
+		/// should be migrated for better compression on small regen increments.
+		/// </remarks>
 		private static bool WriteDelta(
 			Writer writer,
 			CharacterAttributeResourceState prev,

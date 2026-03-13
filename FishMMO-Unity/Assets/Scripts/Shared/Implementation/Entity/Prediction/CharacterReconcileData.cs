@@ -22,10 +22,10 @@ namespace FishMMO.Shared
 	/// <para>
 	/// Activation phase is implicit and reconstructible from existing fields:
 	/// <list type="bullet">
-	/// <item><description>AbilityID == NO_ABILITY → idle (no ability active).</description></item>
-	/// <item><description>AbilityID != NO_ABILITY, RemainingTicks &gt; 0, IsHeld not set → casting.</description></item>
-	/// <item><description>AbilityID != NO_ABILITY, RemainingTicks &gt; 0, IsHeld set → channeling (held cast in progress).</description></item>
-	/// <item><description>AbilityID != NO_ABILITY, RemainingTicks == 0, IsHeld set → charged/holding (awaiting release).</description></item>
+		/// <item><description>AbilityID == <see cref="AbilityController.NO_ABILITY"/> (0) → idle (no ability active).</description></item>
+		/// <item><description>AbilityID != <see cref="AbilityController.NO_ABILITY"/>, RemainingTicks &gt; 0, IsHeld not set → casting.</description></item>
+		/// <item><description>AbilityID != <see cref="AbilityController.NO_ABILITY"/>, RemainingTicks &gt; 0, IsHeld set → channeling (held cast in progress).</description></item>
+		/// <item><description>AbilityID != <see cref="AbilityController.NO_ABILITY"/>, RemainingTicks == 0, IsHeld set → charged/holding (awaiting release).</description></item>
 	/// <item><description>IsConsumable flag set → consumable activation (same RemainingTicks logic, no IsHeld).</description></item>
 	/// </list>
 	/// No explicit phase enum is needed.
@@ -46,6 +46,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The ID of the ability instance, or consumable template ID.
 		/// Typed as long to match <see cref="Ability.ID"/> (database-generated).
+		/// A value of 0 (<see cref="AbilityController.NO_ABILITY"/>) indicates idle state.
 		/// </summary>
 		public long AbilityID;
 
@@ -115,12 +116,14 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Extracts the activation flags from the lower 16 bits of <see cref="PackedFlagsAndSlot"/>.
+		/// This is a computed property — each access performs a bitmask operation.
 		/// </summary>
 		public int UnpackFlags => PackedFlagsAndSlot & 0xFFFF;
 
 		/// <summary>
 		/// Extracts the consumable slot from the upper 16 bits of <see cref="PackedFlagsAndSlot"/> as a signed short.
 		/// Returns -1 when no consumable is active.
+		/// This is a computed property — each access performs a shift operation.
 		/// </summary>
 		public short UnpackConsumableSlot => (short)(PackedFlagsAndSlot >> 16);
 
@@ -132,10 +135,12 @@ namespace FishMMO.Shared
 		/// <returns>The packed int.</returns>
 		public static int Pack(int flags, int consumableSlot)
 		{
-			System.Diagnostics.Debug.Assert((flags & ~0xFFFF) == 0,
-				$"CharacterReconcileData.Pack flags 0x{flags:X} exceed 16-bit storage.");
-			System.Diagnostics.Debug.Assert(consumableSlot >= short.MinValue && consumableSlot <= short.MaxValue,
-				$"CharacterReconcileData.Pack consumableSlot {consumableSlot} exceeds signed 16-bit storage.");
+			if ((flags & ~0xFFFF) != 0)
+				throw new System.ArgumentOutOfRangeException(nameof(flags),
+					$"CharacterReconcileData.Pack flags 0x{flags:X} exceed 16-bit storage.");
+			if (consumableSlot < short.MinValue || consumableSlot > short.MaxValue)
+				throw new System.ArgumentOutOfRangeException(nameof(consumableSlot),
+					$"CharacterReconcileData.Pack consumableSlot {consumableSlot} exceeds signed 16-bit storage.");
 
 			return (flags & 0xFFFF) | (((short)consumableSlot) << 16);
 		}

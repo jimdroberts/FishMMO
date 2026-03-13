@@ -221,15 +221,24 @@ namespace FishMMO.Shared
 		/// Applies a buff to the character by template, creating a new instance if needed and handling stacking.
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
+		/// <remarks>
+		/// <b>Tick source:</b> Uses <c>TimeManager.LocalTick</c> which tracks the current
+		/// simulation tick. During reconcile replay this equals the replayed tick, not wall-clock time.
+		/// If buff application is ever triggered outside the prediction pipeline (e.g., broadcast handlers),
+		/// consider plumbing the deterministic tick from <see cref="CharacterReplicateData.GetTick()"/>.
+		/// </remarks>
 		public void Apply(BaseBuffTemplate template)
 		{
 			if (template == null) return;
 			snapshotDirty = true;
 
+			uint currentTick = base.TimeManager?.LocalTick ?? 0u;
+
 			if (!buffs.TryGetValue(template.ID, out Buff buffInstance))
 			{
-				uint applyTick = base.TimeManager?.LocalTick ?? 0u;
-				buffInstance = new Buff(template.ID, applyTick, tickDelta);
+				// New buff: constructor computes ExpiryTick from currentTick + duration.
+				// No separate ResetDuration call needed — the constructor handles it.
+				buffInstance = new Buff(template.ID, currentTick, tickDelta);
 				buffInstance.Apply(Character);
 				buffs.Add(template.ID, buffInstance);
 
@@ -243,16 +252,12 @@ namespace FishMMO.Shared
 				}
 			}
 
-			uint refreshTick = base.TimeManager?.LocalTick ?? 0u;
+			// Existing buff (or just-created): add a stack if under cap, always refresh duration.
 			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
 			{
 				buffInstance.AddStack(Character);
-				buffInstance.ResetDuration(refreshTick, tickDelta);
 			}
-			else
-			{
-				buffInstance.ResetDuration(refreshTick, tickDelta);
-			}
+			buffInstance.ResetDuration(currentTick, tickDelta);
 
 			template.OnApplyFX(buffInstance, Character);
 
@@ -336,6 +341,11 @@ namespace FishMMO.Shared
 		/// Removes a random non-permanent buff or debuff, filtered by inclusion flags.
 		/// Uses a single pass to build eligible candidates, avoiding retry loops.
 		/// </summary>
+		/// <remarks>
+		/// Uses a local list instead of the shared <see cref="keysToRemove"/> to avoid
+		/// clearing mid-iteration if called from within a <see cref="Tick"/> callback
+		/// (e.g., a buff's OnTick triggers a dispel).
+		/// </remarks>
 		/// <param name="rng">The random number generator to use.</param>
 		/// <param name="includeBuffs">Whether to include buffs in the selection.</param>
 		/// <param name="includeDebuffs">Whether to include debuffs in the selection.</param>
@@ -343,32 +353,26 @@ namespace FishMMO.Shared
 		{
 			if (rng == null || buffs.Count < 1) return;
 
-			// Build list of eligible buff IDs in a single pass
-			keysToRemove.Clear();
+			// Use a local list to avoid contention with keysToRemove used by Tick/RemoveAll.
+			List<int> eligible = new List<int>();
 			foreach (var pair in buffs)
 			{
 				Buff buff = pair.Value;
 				if (buff.Template.IsPermanent) continue;
 				if (includeBuffs && !buff.Template.IsDebuff)
 				{
-					keysToRemove.Add(pair.Key);
+					eligible.Add(pair.Key);
 				}
 				else if (includeDebuffs && buff.Template.IsDebuff)
 				{
-					keysToRemove.Add(pair.Key);
+					eligible.Add(pair.Key);
 				}
 			}
 
-			if (keysToRemove.Count > 0)
+			if (eligible.Count > 0)
 			{
-				int index = rng.Next(0, keysToRemove.Count);
-				int key = keysToRemove[index];
-				keysToRemove.Clear();
-				Remove(key);
-			}
-			else
-			{
-				keysToRemove.Clear();
+				int index = rng.Next(0, eligible.Count);
+				Remove(eligible[index]);
 			}
 		}
 
@@ -465,6 +469,13 @@ namespace FishMMO.Shared
 		/// redundant Remove+Apply cycles that would churn attribute modifiers and fire
 		/// non-idempotent side effects (sound, VFX, DB writes) on every reconcile tick.
 		/// </summary>
+		/// <remarks>
+		/// For new buffs, the constructor receives 0 stacks and then <see cref="Buff.AddStack"/>
+		/// is called incrementally. This matches the normal Apply path where each stack sees
+		/// the correct <see cref="Buff.Stacks"/> value at the time of application.
+		/// Calling <c>OnApplyStack</c> directly with the final Stacks value pre-set would
+		/// produce different results if any template inspects <c>buff.Stacks</c> to scale modifiers.
+		/// </remarks>
 		public void RestoreFromReconcile(BuffReconcileEntry[] entries)
 		{
 			snapshotDirty = true;
@@ -502,13 +513,14 @@ namespace FishMMO.Shared
 					}
 					else
 					{
-						// Server has a buff we don't — add it.
+						// Server has a buff we don't — construct with 0 stacks then AddStack
+						// incrementally so each OnApplyStack sees the correct Stacks value.
 						Buff buff = new Buff(
 							entry.TemplateID,
 							entry.ExpiryTick,
 							entry.NextTickTick,
 							tickDelta,
-							entry.Stacks,
+							0,
 							entry.TickCount);
 
 						if (buff.Template == null)
@@ -519,9 +531,9 @@ namespace FishMMO.Shared
 						buff.Apply(Character);
 						buffs[buff.Template.ID] = buff;
 
-						for (int s = 0; s < buff.Stacks; s++)
+						for (int s = 0; s < entry.Stacks; s++)
 						{
-							buff.Template.OnApplyStack(buff, Character);
+							buff.AddStack(Character);
 						}
 					}
 				}

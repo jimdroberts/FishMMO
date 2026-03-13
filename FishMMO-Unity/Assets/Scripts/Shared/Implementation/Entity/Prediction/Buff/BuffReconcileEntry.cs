@@ -103,6 +103,11 @@ namespace FishMMO.Shared
 		/// (negative count signals index-delta mode). When the length differs or
 		/// on a forced tick, the full array is written (positive count).
 		/// </summary>
+		/// <remarks>
+		/// <para><b>Null / empty equivalence:</b> both <c>null</c> and empty arrays
+		/// serialize as count == 0 on the wire, and <see cref="ReadArrayDelta"/> returns
+		/// <c>null</c> for both. Callers must treat <c>null</c> and empty as identical.</para>
+		/// </remarks>
 		public static bool WriteArrayDelta(
 			Writer writer,
 			BuffReconcileEntry[] prev,
@@ -120,27 +125,34 @@ namespace FishMMO.Shared
 			int prevCount = prev?.Length ?? 0;
 			int nextCount = next?.Length ?? 0;
 
+			// Index-delta path: same length, single pass — reserve changedCount,
+			// write entries, then patch the count. Avoids double-iterating the array.
 			if (!forceWrite && prevCount == nextCount)
 			{
+				int countPos = writer.Position;
+				writer.WriteInt32(0); // placeholder for -changedCount
+
 				int changedCount = 0;
-				for (int i = 0; i < nextCount; i++)
-				{
-					if (!prev[i].Equals(next[i]))
-						changedCount++;
-				}
-
-				if (changedCount == 0)
-					return false;
-
-				writer.WriteInt32(-changedCount);
 				for (int i = 0; i < nextCount; i++)
 				{
 					if (!prev[i].Equals(next[i]))
 					{
 						writer.WriteInt32(i);
 						next[i].WriteTo(writer);
+						changedCount++;
 					}
 				}
+
+				if (changedCount == 0)
+				{
+					writer.Position = countPos; // rewind — nothing changed
+					return false;
+				}
+
+				int endPos = writer.Position;
+				writer.Position = countPos;
+				writer.WriteInt32(-changedCount);
+				writer.Position = endPos;
 				return true;
 			}
 
@@ -156,6 +168,11 @@ namespace FishMMO.Shared
 		/// Reads a buff array from the delta stream.
 		/// Positive count = full array. Negative count = index-delta over prev.
 		/// </summary>
+		/// <remarks>
+		/// When count exceeds <see cref="MaxEntries"/>, remaining entry data is
+		/// drained from the reader to keep the stream position valid for subsequent
+		/// fields. The previous state is preserved.
+		/// </remarks>
 		public static BuffReconcileEntry[] ReadArrayDelta(Reader reader, BuffReconcileEntry[] prev)
 		{
 			int count = reader.ReadInt32();
@@ -165,7 +182,8 @@ namespace FishMMO.Shared
 				int changedCount = -count;
 				if (changedCount > MaxEntries)
 				{
-					Log.Warning("BuffReconcileEntry", $"Index-delta count {changedCount} exceeds limit {MaxEntries}. Preserving previous state.");
+					Log.Warning("BuffReconcileEntry", $"Index-delta count {changedCount} exceeds limit {MaxEntries}. Draining entries and preserving previous state.");
+					DrainIndexDeltaEntries(reader, changedCount);
 					return prev;
 				}
 
@@ -195,7 +213,8 @@ namespace FishMMO.Shared
 
 			if (count > MaxEntries)
 			{
-				Log.Warning("BuffReconcileEntry", $"Full-array count {count} exceeds limit {MaxEntries}. Preserving previous state.");
+				Log.Warning("BuffReconcileEntry", $"Full-array count {count} exceeds limit {MaxEntries}. Draining entries and preserving previous state.");
+				DrainFullArrayEntries(reader, count);
 				return prev;
 			}
 
@@ -205,6 +224,30 @@ namespace FishMMO.Shared
 				result[i] = ReadFrom(reader);
 			}
 			return result;
+		}
+
+		/// <summary>
+		/// Drains index-delta entries from the reader to keep the stream position valid.
+		/// Each entry consists of an int32 index + the entry fields.
+		/// </summary>
+		private static void DrainIndexDeltaEntries(Reader reader, int changedCount)
+		{
+			for (int i = 0; i < changedCount; i++)
+			{
+				reader.ReadInt32(); // index
+				ReadFrom(reader);   // entry fields
+			}
+		}
+
+		/// <summary>
+		/// Drains full-array entries from the reader to keep the stream position valid.
+		/// </summary>
+		private static void DrainFullArrayEntries(Reader reader, int count)
+		{
+			for (int i = 0; i < count; i++)
+			{
+				ReadFrom(reader);
+			}
 		}
 	}
 }
