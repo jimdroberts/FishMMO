@@ -479,7 +479,6 @@ Ability/
 ├── AbilityObjectSnapshot.cs            # Immutable snapshot for detached ability objects
 ├── Activation/
 │   ├── AbilityActivationReplicateData.cs           # IReplicateData: ActivationFlags (int), QueuedAbilityID (long)
-│   └── CharacterAttributeResourceStateSerializer.cs # Delta + full serializer for CharacterAttributeResourceState
 ├── Cooldown/
 │   ├── CooldownController.cs           # Per-entity cooldown manager (CharacterBehaviour, ICooldownController, IPredictableController Order=90)
 │   ├── CooldownInstance.cs             # Cooldown data: StartTick (uint), DurationTicks (uint)
@@ -592,7 +591,7 @@ AbilityType : byte
 ### Related Files
 
 ```
-Shared/Core/Entity/Ability/                                    # Core interfaces (IAbilityController, IAbilityKnowledgeController, ICooldownController)
+Shared/Core/Entity/Prediction/Ability/                                    # Core interfaces (IAbilityController, IAbilityKnowledgeController, ICooldownController)
 Shared/Implementation/Entity/Prediction/CharacterAttribute/    # Attribute templates for speed/cooldown reduction
 Shared/Implementation/Entity/Prediction/Buff/                  # Buff system integrated via ApplyBuffActivationEvent
 Shared/Implementation/Entity/Target/                           # TargetController used for targeted abilities

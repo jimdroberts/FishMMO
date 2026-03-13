@@ -326,6 +326,7 @@ CharacterAttribute/
 ├── CharacterAttributeController.cs        # Per-entity controller (CharacterBehaviour, ICharacterAttributeController, IPredictableController Order=95)
 ├── CharacterDamageController.cs           # Damage, heal, and kill logic (CharacterBehaviour, ICharacterDamageController)
 ├── CharacterAttributeResourceState.cs     # Snapshot struct for reconciliation [UseGlobalCustomSerializer]
+├── CharacterAttributeResourceStateSerializer.cs # Delta + full serializer for CharacterAttributeResourceState
 └── Template/
     ├── CharacterAttributeTemplate.cs          # ScriptableObject blueprint (value, bounds, relationships, formulas)
     ├── CharacterAttributeTemplateDatabase.cs  # Master list of all templates
@@ -340,8 +341,8 @@ CharacterAttribute/
 #### Related Files (Outside This Directory)
 
 ```
-Shared/Core/Entity/CharacterAttribute/                                 # Core interfaces (ICharacterAttributeController, ICharacterDamageController)
-Shared/Implementation/Entity/Prediction/Ability/Activation/CharacterAttributeResourceStateSerializer.cs  # Delta + full serializer
+Shared/Core/Entity/Prediction/CharacterAttribute/                                 # Core interfaces (ICharacterAttributeController, ICharacterDamageController)
+Shared/Implementation/Entity/Prediction/CharacterAttribute/Activation/CharacterAttributeResourceStateSerializer.cs  # Delta + full serializer
 Shared/Implementation/Entity/Prediction/                               # CharacterPredictionController, CharacterReplicateData, CharacterReconcileData
 ```
 
