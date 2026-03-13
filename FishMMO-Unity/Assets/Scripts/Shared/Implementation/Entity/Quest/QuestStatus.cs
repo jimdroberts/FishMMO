@@ -1,23 +1,33 @@
 ﻿namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Defines the status of a quest instance for a character.
+	/// Defines the lifecycle status of a quest instance for a character.
 	/// </summary>
 	public enum QuestStatus : byte
 	{
 		/// <summary>
-		/// The quest is not yet started or acquired.
+		/// The quest has not been accepted yet.
 		/// </summary>
 		Inactive = 0,
 
 		/// <summary>
-		/// The quest is currently active and in progress.
+		/// The quest has been accepted and is in progress.
 		/// </summary>
 		Active,
 
 		/// <summary>
-		/// The quest has been completed.
+		/// All objectives have been met and the quest is ready for turn-in.
 		/// </summary>
-		Completed,
+		Complete,
+
+		/// <summary>
+		/// The quest has been turned in and rewards have been granted.
+		/// </summary>
+		TurnedIn,
+
+		/// <summary>
+		/// The quest was failed (e.g. timer expired).
+		/// </summary>
+		Failed,
 	}
 }

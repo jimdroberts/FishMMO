@@ -128,6 +128,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<QuestAcceptBroadcast>(OnServerQuestAcceptBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<QuestTurnInBroadcast>(OnServerQuestTurnInBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<QuestAbandonBroadcast>(OnServerQuestAbandonBroadcastReceived, true);
 
 			IDialogueInteractable.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
 
@@ -171,6 +174,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<QuestAcceptBroadcast>(OnServerQuestAcceptBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<QuestTurnInBroadcast>(OnServerQuestTurnInBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<QuestAbandonBroadcast>(OnServerQuestAbandonBroadcastReceived);
 
 			IDialogueInteractable.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
 

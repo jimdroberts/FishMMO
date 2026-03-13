@@ -64,6 +64,36 @@ namespace FishMMO.Shared
 		public static readonly TinyColor plum = new TinyColor(221, 160, 221, 255);
 		public static readonly TinyColor forestGreen = new TinyColor(34, 139, 34, 255);
 
+		// --- Metallics & Earth Tones ---
+		public static readonly TinyColor gold = new TinyColor(255, 215, 0, 255);
+		public static readonly TinyColor bronze = new TinyColor(205, 127, 50, 255);
+		public static readonly TinyColor sienna = new TinyColor(160, 82, 45, 255);
+		public static readonly TinyColor saddleBrown = new TinyColor(139, 69, 19, 255);
+		public static readonly TinyColor wheat = new TinyColor(245, 222, 179, 255);
+
+		// --- Extended UI Neutrals (The "Grays") ---
+		// Filling the gaps between Black, Charcoal, and White
+		public static readonly TinyColor offWhite = new TinyColor(245, 245, 245, 255);
+		public static readonly TinyColor gainsboro = new TinyColor(220, 220, 220, 255);
+		public static readonly TinyColor dimGrey = new TinyColor(105, 105, 105, 255);
+		public static readonly TinyColor slateGrey = new TinyColor(112, 128, 144, 255);
+		public static readonly TinyColor midnightBlue = new TinyColor(25, 25, 112, 255);
+
+		// --- Muted & Professional Tones ---
+		// Better for backgrounds or less "neon" looking elements
+		public static readonly TinyColor royalBlue = new TinyColor(65, 105, 225, 255);
+		public static readonly TinyColor crimson = new TinyColor(220, 20, 60, 255);
+		public static readonly TinyColor darkSlateGreen = new TinyColor(47, 79, 79, 255);
+		public static readonly TinyColor seaGreen = new TinyColor(46, 139, 87, 255);
+		public static readonly TinyColor steelBlue = new TinyColor(70, 130, 180, 255);
+
+		// --- Vibrant Accents ---
+		public static readonly TinyColor coral = new TinyColor(255, 127, 80, 255);
+		public static readonly TinyColor hotPink = new TinyColor(255, 105, 180, 255);
+		public static readonly TinyColor orchid = new TinyColor(218, 112, 214, 255);
+		public static readonly TinyColor cyan = new TinyColor(0, 255, 255, 255);
+		public static readonly TinyColor chartreuse = new TinyColor(127, 255, 0, 255);
+
 		// UI Colors - these are also predefined colors but categorized for UI purposes.
 		public static readonly TinyColor darkGrey = new TinyColor(64, 64, 64, 255);    // Primary
 		public static readonly TinyColor lightGrey = new TinyColor(192, 192, 192, 255);  // Text

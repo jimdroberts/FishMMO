@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using FishNet.CodeGenerating;
 using UnityEngine;
 
 namespace KinematicCharacterController
@@ -73,6 +74,7 @@ namespace KinematicCharacterController
 	/// <summary>
 	/// Contains the simulation-relevant information for the motor's grounding status
 	/// </summary>
+	[UseGlobalCustomSerializer]
 	public struct CharacterTransientGroundingReport
 	{
 		public bool FoundAnyGround;

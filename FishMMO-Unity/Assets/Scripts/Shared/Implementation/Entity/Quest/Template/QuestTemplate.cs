@@ -5,18 +5,20 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// ScriptableObject template for defining quests, their requirements, objectives, and progression logic.
+	/// ScriptableObject template defining a quest, its requirements, objectives, and reward structure.
+	/// Does not contain lifecycle logic; that lives in <see cref="QuestController"/>.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest", order = 1)]
 	public class QuestTemplate : CachedScriptableObject<QuestTemplate>, ICachedObject
 	{
 		/// <summary>
-		/// Description of the quest and its narrative.
+		/// Description of the quest narrative.
 		/// </summary>
+		[TextArea(2, 6)]
 		public string Description;
 
 		/// <summary>
-		/// Time allowed to complete the quest, in seconds.
+		/// Time allowed to complete the quest in seconds. Zero means unlimited.
 		/// </summary>
 		public uint TimeToCompleteInSeconds;
 
@@ -26,63 +28,68 @@ namespace FishMMO.Shared
 		public Texture2D Icon;
 
 		/// <summary>
-		/// List of character attribute requirements needed to accept the quest.
+		/// Character attribute requirements needed to accept the quest.
 		/// </summary>
 		public List<QuestAttributeRequirement> CharacterAttributeRequirements;
 
 		/// <summary>
-		/// List of quests that must be completed before this quest can be accepted.
+		/// Quests that must have been turned in before this quest can be accepted.
 		/// </summary>
 		public List<QuestTemplate> CompletedQuestRequirements;
 
 		/// <summary>
-		/// List of quests that are automatically progressed after this quest is completed.
+		/// Quests that are automatically offered after this quest is turned in.
 		/// </summary>
 		public List<QuestTemplate> AutoProgression;
 
 		/// <summary>
-		/// List of objectives that must be completed for this quest.
+		/// Objectives that must be completed for this quest.
 		/// </summary>
 		public List<QuestObjective> Objectives;
 
 		/// <summary>
-		/// The name of the quest, derived from the asset name.
+		/// Item rewards granted upon turn-in.
+		/// </summary>
+		public List<BaseItemTemplate> Rewards;
+
+		/// <summary>
+		/// The name of the quest derived from the asset name.
 		/// </summary>
 		public string Name { get { return this.name; } }
 
 		/// <summary>
-		/// Checks if the given player character can accept this quest, based on attribute and completed quest requirements.
+		/// Evaluates whether a player character meets all acceptance requirements.
 		/// </summary>
 		/// <param name="character">The player character to evaluate.</param>
-		/// <returns>True if requirements are met, false otherwise.</returns>
+		/// <returns>True if the character may accept this quest.</returns>
 		public bool CanAcceptQuest(IPlayerCharacter character)
 		{
-			// Check attribute requirements
 			if (CharacterAttributeRequirements != null && CharacterAttributeRequirements.Count > 0)
 			{
 				if (!character.TryGet(out ICharacterAttributeController characterAttributeController))
 				{
 					return false;
 				}
-				foreach (QuestAttributeRequirement attributeRequirement in CharacterAttributeRequirements)
+				for (int i = 0; i < CharacterAttributeRequirements.Count; i++)
 				{
-					if (!attributeRequirement.MeetsRequirements(characterAttributeController))
+					if (!CharacterAttributeRequirements[i].MeetsRequirements(characterAttributeController))
 					{
 						return false;
 					}
 				}
 			}
-			// Check completed quest requirements
+
 			if (CompletedQuestRequirements != null && CompletedQuestRequirements.Count > 0)
 			{
 				if (!character.TryGet(out IQuestController questController))
 				{
 					return false;
 				}
-				foreach (QuestTemplate questRequirement in CompletedQuestRequirements)
+				for (int i = 0; i < CompletedQuestRequirements.Count; i++)
 				{
-					QuestInstance quest;
-					if (!questController.TryGetQuest(questRequirement.Name, out quest) || quest.Status != QuestStatus.Completed)
+					QuestTemplate requirement = CompletedQuestRequirements[i];
+					if (!questController.TryGetQuest(requirement.Name, out QuestInstance quest) ||
+						quest.Status != QuestStatus.TurnedIn)
 					{
 						return false;
 					}
@@ -90,35 +97,18 @@ namespace FishMMO.Shared
 			}
 			return true;
 		}
+	}
 
+	/// <summary>
+	/// Objective for killing a specific type of NPC identified by name.
+	/// </summary>
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Kill Objective", order = 1)]
+	public class QuestKillObjective : QuestObjective
+	{
 		/// <summary>
-		/// Accepts the quest for the given player character, if not already acquired.
+		/// The NPC name to match when tracking kills.
 		/// </summary>
-		/// <param name="character">The player character accepting the quest.</param>
-		public void AcceptQuest(IPlayerCharacter character)
-		{
-			if (!character.TryGet(out IQuestController questController))
-			{
-				return;
-			}
-
-			QuestInstance quest;
-			if (questController.TryGetQuest(this.Name, out quest))
-			{
-				return;
-			}
-
-			questController.Acquire(this);
-		}
-
-		/// <summary>
-		/// Attempts to complete the quest for the given quest instance. (Implementation needed)
-		/// </summary>
-		/// <param name="questInstance">The quest instance to complete.</param>
-		public void TryCompleteQuest(QuestInstance questInstance)
-		{
-			// Implementation for quest completion should be added here.
-		}
+		public string TargetNPCName;
 	}
 
 	/// <summary>
@@ -146,7 +136,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Objective for enchanting (details to be implemented).
+	/// Objective for enchanting.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Enchant Objective", order = 1)]
 	public class QuestEnchantObjective : QuestObjective
@@ -166,23 +156,43 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Objective for reaching a character attribute value (details to be implemented).
+	/// Objective for reaching a character attribute value.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/CharacterAttribute Objective", order = 1)]
 	public class QuestCharacterAttributeObjective : QuestObjective
 	{
+		/// <summary>
+		/// The attribute template to check.
+		/// </summary>
+		public CharacterAttributeTemplate AttributeTemplate;
 	}
 
 	/// <summary>
-	/// Objective for interacting with something (details to be implemented).
+	/// Objective for interacting with something.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Interact Objective", order = 1)]
 	public class QuestInteractObjective : QuestObjective
 	{
+		/// <summary>
+		/// The interactable scene object name to interact with.
+		/// </summary>
+		public string InteractableName;
 	}
 
 	/// <summary>
-	/// Objective for socializing (details to be implemented).
+	/// Objective for gathering a specific item from gathering nodes.
+	/// </summary>
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Gather Objective", order = 1)]
+	public class QuestGatherObjective : QuestObjective
+	{
+		/// <summary>
+		/// The item to gather for this objective.
+		/// </summary>
+		public BaseItemTemplate ItemToGather;
+	}
+
+	/// <summary>
+	/// Objective for socializing.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Socialize Objective", order = 1)]
 	public class QuestSocializeObjective : QuestObjective
@@ -190,11 +200,14 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Objective for exploring a location (details to be implemented).
+	/// Objective for exploring a location.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Explore Objective", order = 1)]
 	public class QuestExploreObjective : QuestObjective
 	{
-		//public BaseWorldScene SceneToExplore;
+		/// <summary>
+		/// The scene name to visit for exploration.
+		/// </summary>
+		public string SceneName;
 	}
 }

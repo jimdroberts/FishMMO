@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// ECA action that triggers a server-authoritative dialogue session.
-	/// On the server, raises <see cref="DialogueRequestEvents.OnServerDialogueRequested"/> which
+	/// On the server, raises <see cref="IDialogueInteractable.OnServerDialogueRequested"/> which
 	/// the InteractableSystem subscribes to. On the client, this action is a no-op.
 	/// </summary>
 	[Serializable]
@@ -22,7 +22,7 @@ namespace FishMMO.Shared
 		public string SpeakerName;
 
 		/// <summary>
-		/// On the server: raises <see cref="DialogueRequestEvents.OnServerDialogueRequested"/> to start a dialogue session.
+		/// On the server: raises <see cref="IDialogueInteractable.OnServerDialogueRequested"/> to start a dialogue session.
 		/// On the client: no-op (dialogue is driven by server broadcasts).
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			DialogueRequestEvents.RaiseServerDialogueRequested(initiator, DialogueTemplate);
+			IDialogueInteractable.OnServerDialogueRequested?.Invoke(initiator, DialogueTemplate);
 #endif
 		}
 	}

@@ -8,7 +8,11 @@ namespace FishMMO.Shared.Core
 	/// </summary>
 	public interface IDialogueInteractable : IInteractable
 	{
-		public static event Action<ICharacter, DialogueTemplate> OnServerDialogueRequested;
+		/// <summary>
+		/// Raised on the server when a dialogue session is requested via an ECA action.
+		/// The InteractableSystem subscribes to this delegate to start dialogue sessions.
+		/// </summary>
+		static Action<ICharacter, DialogueTemplate> OnServerDialogueRequested;
 
 		/// <summary>
 		/// The dialogue template defining conversation nodes and choices.
