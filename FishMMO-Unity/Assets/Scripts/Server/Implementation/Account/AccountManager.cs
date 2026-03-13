@@ -53,16 +53,23 @@ namespace FishMMO.Server.Implementation
 		/// Registers a connection's X25519 public key and creates initial AccountData with Handshake state.
 		/// Directional encryption keys are established later by the handshake handler after
 		/// X25519 ECDH key agreement completes.
-		/// If the connection already has AccountData beyond Handshake state, the encryption data
-		/// is still updated but AccountData is preserved (defensive against re-handshake during auth).
+		/// Uses try-add semantics: if the connection already has encryption data the call
+		/// returns <c>false</c> and the existing entry is not modified. This closes the
+		/// TOCTOU race where two concurrent handshake packets could both pass the
+		/// <see cref="GetConnectionEncryptionData"/> idempotency guard before either writes.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
 		/// <param name="publicKey">The client's X25519 public key (32 bytes).</param>
-		public void AddConnectionEncryptionData(NetworkConnection connection, byte[] publicKey)
+		/// <returns><c>true</c> if the entry was added; <c>false</c> if one already existed.</returns>
+		public bool TryAddConnectionEncryptionData(NetworkConnection connection, byte[] publicKey)
 		{
 			var data = new ConnectionEncryptionData(publicKey);
 			lock (syncRoot)
 			{
+				// Atomic check-and-add: reject if encryption data was already set.
+				if (connectionEncryptionEntries.ContainsKey(connection))
+					return false;
+
 				connectionEncryptionEntries[connection] = data;
 
 				// Create AccountData at Handshake state if it doesn't exist yet.
@@ -81,6 +88,7 @@ namespace FishMMO.Server.Implementation
 
 				TrackUnauthenticatedConnection_NoLock(connection);
 			}
+			return true;
 		}
 
 		/// <summary>

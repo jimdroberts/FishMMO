@@ -53,9 +53,11 @@ namespace FishMMO.Server.Implementation
 	{
 		/// <summary>
 		/// Maximum number of queued main-thread actions processed per Update tick.
-		/// This time-slices queue draining to avoid frame spikes.
+		/// This time-slices queue draining to avoid frame spikes. Increase on high-throughput
+		/// servers with fast frames; decrease on servers sharing the main thread with simulation.
 		/// </summary>
-		private const int MaxMainThreadActionsPerUpdate = 100;
+		[UnityEngine.SerializeField]
+		private int maxMainThreadActionsPerUpdate = 100;
 
 		/// <summary>
 		/// Authentication TTL in seconds. Connections that do not complete auth within this window are purged.
@@ -67,6 +69,14 @@ namespace FishMMO.Server.Implementation
 		/// <see cref="RefreshAuthTtl"/> will not extend a connection's TTL beyond this
 		/// absolute limit from its original start time, preventing unbounded TTL extension
 		/// by adversaries who trigger repeated slow operations.
+		/// <para>
+		/// <b>Connection-slot exhaustion vector:</b> An attacker can hold up to
+		/// <see cref="MaxPendingAuthConnections"/> slots for <c>AuthHardDeadlineSeconds</c>
+		/// each by sending a valid cookie but never completing SRP. The product
+		/// <c>MaxPendingAuthConnections × AuthHardDeadlineSeconds</c> bounds steady-state
+		/// slot-seconds of exposure; operators should size <c>MaxPendingAuthConnections</c>
+		/// accordingly and monitor the pending-auth-cap warning log for sustained saturation.
+		/// </para>
 		/// </summary>
 		private const float AuthHardDeadlineSeconds = 60f;
 
@@ -188,6 +198,10 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Per-IP handshake rate limiter. Prevents X25519 CPU abuse from rapid handshake replay.
 		/// </summary>
+		/// <para><b>Bounding:</b> Under sustained attack the dictionary can accumulate up to
+		/// <c>MaxGlobalHandshakesPerSecond × HandshakeRateLimitSweepIntervalSeconds</c> unique IP
+		/// entries between sweeps. <see cref="SweepExpiredHandshakeRateLimits"/> evicts expired
+		/// entries each tick, keeping steady-state size proportional to active unique IPs.</para>
 		private readonly ConcurrentDictionary<string, DateTime> handshakeIpNextAllowedUtc = new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
@@ -211,6 +225,15 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Rolling count of completed X25519 handshakes in the current 1-second window.
 		/// Accessed from the network thread via <see cref="Interlocked"/>.
+		/// <para>
+		/// <b>Transient negative values:</b> This counter can briefly read negative because
+		/// the increment-then-reject pattern in <c>OnServerClientHandshakeReceived</c> is
+		/// not wrapped in a single atomic CAS. Under benign concurrency the window is a few
+		/// instructions wide and self-corrects when the counter is reset to zero at the start
+		/// of each 1-second window via <see cref="Interlocked.Exchange"/>. The downstream
+		/// comparison <c>count > MaxGlobalHandshakesPerSecond</c> is unaffected because a
+		/// negative <c>int</c> is always <c>&lt; Max</c>.
+		/// </para>
 		/// </summary>
 		private int globalHandshakeCount;
 
@@ -230,6 +253,14 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Countdown timer (seconds) until the next stale-authentication sweep.
+		/// <para>
+		/// <b>Time.deltaTime usage:</b> Unlike the global handshake rate-limit window (which
+		/// uses wall-clock <c>DateTime.UtcNow</c>), this timer uses <c>Time.deltaTime</c>.
+		/// A long frame will delay the sweep proportionally, which is acceptable because the
+		/// sweep is a housekeeping operation — stale connections simply live slightly longer
+		/// than <c>AuthStaleTtlSeconds</c>. The security-critical hard deadline is enforced
+		/// by wall-clock comparison inside <c>SweepStaleAuthentication</c> itself.
+		/// </para>
 		/// </summary>
 		private float nextAuthSweepSeconds = AuthSweepIntervalSeconds;
 
@@ -396,10 +427,10 @@ namespace FishMMO.Server.Implementation
 		/// Drains queued actions without locks using ConcurrentQueue.
 		/// This reduces contention when many workers and the network thread enqueue simultaneously.
 		/// </summary>
-		/// <param name="drainAll">If true, drains all queued actions; otherwise caps at <see cref="MaxMainThreadActionsPerUpdate"/>.</param>
+		/// <param name="drainAll">If true, drains all queued actions; otherwise caps at <see cref="maxMainThreadActionsPerUpdate"/>.</param>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
-			int maxActions = drainAll ? int.MaxValue : MaxMainThreadActionsPerUpdate;
+			int maxActions = drainAll ? int.MaxValue : maxMainThreadActionsPerUpdate;
 			for (int i = 0; i < maxActions; i++)
 			{
 				if (!mainThreadQueue.TryDequeue(out Action action))
@@ -417,10 +448,10 @@ namespace FishMMO.Server.Implementation
 			}
 
 			// If we hit the per-frame cap without fully draining, log a warning so
-			// operators can tune MaxMainThreadActionsPerUpdate or investigate load.
+			// operators can tune maxMainThreadActionsPerUpdate or investigate load.
 			if (!drainAll && mainThreadQueue.Count > 0)
 			{
-				Log.Warning(LogPrefix, $"Main-thread queue back-pressure: {mainThreadQueue.Count} actions remain after draining {MaxMainThreadActionsPerUpdate}.");
+				Log.Warning(LogPrefix, $"Main-thread queue back-pressure: {mainThreadQueue.Count} actions remain after draining {maxMainThreadActionsPerUpdate}.");
 			}
 		}
 
@@ -537,6 +568,12 @@ namespace FishMMO.Server.Implementation
 			// against legitimate players. The connection stays alive; the client's
 			// cookie remains valid and they can retry on a subsequent tick.
 			// Decrement on rejection to prevent over-counting under sustained load.
+			//
+			// ASYMMETRY NOTE: Successful handshakes intentionally consume a count
+			// slot for the full timer window (reset in OnUpdate). Only rejections
+			// decrement immediately. This means the effective per-window budget is
+			// MaxGlobalHandshakesPerSecond, and successful completions consume from
+			// that budget until the next window reset.
 			if (Interlocked.Increment(ref globalHandshakeCount) > MaxGlobalHandshakesPerSecond)
 			{
 				Interlocked.Decrement(ref globalHandshakeCount);
@@ -573,7 +610,17 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			Server.AccountManager.AddConnectionEncryptionData(conn, msg.PublicKey);
+			// Atomically register encryption data. If another concurrent handshake
+			// packet already registered for this connection, TryAdd returns false and
+			// we silently drop — the first packet's ECDH result wins.
+			if (!Server.AccountManager.TryAddConnectionEncryptionData(conn, msg.PublicKey))
+			{
+				// Clean up TTL tracking entries added by TrackAuthStart; otherwise the
+				// stale entry consumes a MaxPendingAuthConnections slot until the sweep.
+				ClearTransientAuthState(conn.ClientId);
+				Interlocked.Decrement(ref globalHandshakeCount);
+				return;
+			}
 
 			if (Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
@@ -670,7 +717,9 @@ namespace FishMMO.Server.Implementation
 		private byte[] ComputeHandshakeCookie(string remoteIp, byte[] clientPublicKey, uint timeBucket, byte[] hmacKey)
 		{
 			byte[] ipBytes = string.IsNullOrEmpty(remoteIp) ? Array.Empty<byte>() : Encoding.ASCII.GetBytes(remoteIp);
-			int dataLen = CookieDomainSeparator.Length + 4 + ipBytes.Length + clientPublicKey.Length;
+			// +2 for IP length prefix to eliminate concatenation ambiguity between
+			// variable-length IP strings (7–45 chars) and the fixed-width public key.
+			int dataLen = CookieDomainSeparator.Length + 4 + 2 + ipBytes.Length + clientPublicKey.Length;
 			byte[] data = new byte[dataLen];
 			int offset = 0;
 
@@ -683,6 +732,11 @@ namespace FishMMO.Server.Implementation
 			data[offset++] = (byte)(timeBucket >> 16);
 			data[offset++] = (byte)(timeBucket >> 8);
 			data[offset++] = (byte)timeBucket;
+
+			// IP length prefix (2 bytes big-endian) disambiguates the boundary
+			// between the variable-length IP and the fixed-width public key.
+			data[offset++] = (byte)(ipBytes.Length >> 8);
+			data[offset++] = (byte)ipBytes.Length;
 
 			Buffer.BlockCopy(ipBytes, 0, data, offset, ipBytes.Length);
 			offset += ipBytes.Length;
@@ -745,6 +799,14 @@ namespace FishMMO.Server.Implementation
 		/// Returns <c>false</c> if the pending authentication cap (<see cref="MaxPendingAuthConnections"/>)
 		/// has been reached, preventing memory exhaustion from half-open connection floods.
 		/// </summary>
+		/// <remarks>
+		/// The <c>Count</c> check and <c>TryAdd</c> are not atomic — under extreme
+		/// concurrency the count may overshoot the cap by up to (thread-count ×
+		/// handshake-rate-per-tick) entries before the next check observes the
+		/// excess. This is intentional: a hard atomic cap would require a global lock
+		/// on every handshake, and the stale-auth sweep drains excess entries within
+		/// one TTL cycle.
+		/// </remarks>
 		/// <param name="conn">Connection entering the authentication flow.</param>
 		/// <returns><c>true</c> if tracking was started; <c>false</c> if the cap was reached.</returns>
 		protected bool TrackAuthStart(NetworkConnection conn)
@@ -874,6 +936,11 @@ namespace FishMMO.Server.Implementation
 				// Atomically claim ownership via TryRemove to prevent double-purge
 				// if a concurrent path (connection state change, subclass sweep) also
 				// triggers purge for this connection.
+				// SAFE DOUBLE-PURGE: Even if both this sweep and a concurrent TOTP/token
+				// handler purge race on the same ClientId, the worst outcome is redundant
+				// TryRemove calls on ConcurrentDictionary (returns false) and an extra
+				// OnPurgeConnectionState call — which is idempotent for ConcurrentDictionary
+				// operations. No state corruption occurs.
 				if (!authStartTimeByClientId.TryRemove(kvp.Key, out _))
 					continue;
 
@@ -888,6 +955,24 @@ namespace FishMMO.Server.Implementation
 					Server?.AccountManager?.RemoveConnectionAccount(conn);
 					if (conn.IsActive)
 						conn.Disconnect(false);
+				}
+				else
+				{
+					// Connection reference was lost (e.g., FishNet recycled the object before
+					// the sweep ran). Dictionary entries have been cleaned up above, but no
+					// AccountManager cleanup can run without a valid connection reference.
+					// This is harmless — the account-level entries will be purged by the
+					// AccountManager's own unauthenticated-connection sweep.
+					//
+					// RECYCLED-ID RISK: If FishNet has already reassigned this ClientId to a
+					// new connection, the dictionary entries we removed above belonged to the
+					// OLD connection. The new connection's entries (if any) are safe because
+					// they would have been added AFTER the old reference was lost, so
+					// authConnectionByClientId would hold the new object (not null). If a
+					// subclass sweep (e.g., SweepUnauthenticatedConnections) iterates by
+					// ClientId, it should validate that the connection object it retrieves is
+					// the same one that created the entry (ReferenceEquals) before acting.
+					Log.Warning(LogPrefix, $"SweepStaleAuthentication: conn was null for ClientId {kvp.Key} — dictionary entries cleaned.");
 				}
 			}
 		}

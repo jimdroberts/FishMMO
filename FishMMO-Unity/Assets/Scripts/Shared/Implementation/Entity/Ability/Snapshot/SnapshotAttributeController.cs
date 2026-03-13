@@ -105,6 +105,18 @@ namespace FishMMO.Shared
 		// --- Mutating methods are no-ops on a snapshot. ---
 
 		/// <inheritdoc/>
+		public bool IsPropagating => false;
+
+		/// <inheritdoc/>
+		public void BeginPropagation() { }
+
+		/// <inheritdoc/>
+		public void EndPropagation() { }
+
+		/// <inheritdoc/>
+		public void EnqueueNotification(CharacterAttribute attribute) { }
+
+		/// <inheritdoc/>
 		public void SetAttribute(int id, int value, int? modifier = null) { }
 
 		/// <inheritdoc/>

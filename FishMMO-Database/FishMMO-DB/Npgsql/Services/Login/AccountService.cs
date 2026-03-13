@@ -300,8 +300,10 @@ namespace FishMMO.Database.Npgsql.Services
 				accessLevel: entity.AccessLevel,
 				email: entity.Email,
 				age: entity.Age,
-				twoFactorEnabled: entity.TwoFactorEnabled,
-				twoFactorCode: entity.TwoFactorCode,
+				totpEnabled: entity.TotpEnabled,
+				totpSecret: entity.TotpSecret,
+				totpVerifiedAt: entity.TotpVerifiedAt,
+				lastTotpWindow: entity.LastTotpWindow,
 				discordLinkCode: entity.DiscordLinkCode,
 				verified: entity.Verified,
 				verifyCode: entity.VerifyCode,
@@ -377,7 +379,40 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistTwoFactorEnabledAsync(
+		public async Task<DatabaseResult> PersistTotpSecretAsync(
+			string accountName,
+			string encryptedTotpSecret,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			if (string.IsNullOrWhiteSpace(encryptedTotpSecret) || encryptedTotpSecret.Length > 256)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"TOTP secret is required and must not exceed 256 characters.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET totp_secret = {{0}} WHERE name = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { encryptedTotpSecret, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistTotpEnabledAsync(
 			string accountName,
 			bool enabled,
 			CancellationToken cancellationToken = default)
@@ -391,7 +426,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET two_factor_enabled = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET totp_enabled = {{0}} WHERE name = {{1}}";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { enabled, accountName }, cancellationToken)
 					.ConfigureAwait(false);
@@ -403,9 +438,9 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistTwoFactorCodeAsync(
+		public async Task<DatabaseResult> PersistTotpVerifiedAtAsync(
 			string accountName,
-			string? code,
+			long totpWindow,
 			CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(accountName))
@@ -415,18 +450,63 @@ namespace FishMMO.Database.Npgsql.Services
 					Authentication.InvalidUsernameError);
 			}
 
-			if (code != null && code.Length > 64)
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var now = DateTime.UtcNow;
+				var sql = $@"UPDATE {TableName} SET totp_verified_at = {{0}}, totp_enabled = true, last_totp_window = {{1}} WHERE name = {{2}} AND totp_verified_at IS NULL";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { now, totpWindow, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseException("Account not found or TOTP already verified.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistLastTotpWindowAsync(
+			string accountName,
+			long totpWindow,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult.Failure(
 					DatabaseErrorCodes.ValidationError,
-					"Two-factor code must not exceed 64 characters.");
+					Authentication.InvalidUsernameError);
 			}
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET two_factor_code = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET last_totp_window = {{0}} WHERE name = {{1}} AND last_totp_window < {{0}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { (object?)code ?? DBNull.Value, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { totpWindow, accountName }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseException("TOTP code replay detected or account not found.", errorCode: DatabaseErrorCodes.ValidationError);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> ClearTotpAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET totp_secret = NULL, totp_enabled = false, totp_verified_at = NULL, last_totp_window = 0 WHERE name = {{0}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{

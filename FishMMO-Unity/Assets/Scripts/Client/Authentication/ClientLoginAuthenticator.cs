@@ -108,6 +108,12 @@ namespace FishMMO.Client
 		public event Action<ClientAuthenticationResult> OnClientAuthenticationResult;
 
 		/// <summary>
+		/// Fired when the server sends 2FA setup data after account creation.
+		/// Parameters: otpauth URI (for authenticator app), recovery codes array.
+		/// </summary>
+		public event Action<string, string[]> OnTwoFactorSetupReceived;
+
+		/// <summary>
 		/// Overridden authentication result event (not used on client).
 		/// </summary>
 #pragma warning disable CS0067
@@ -133,6 +139,7 @@ namespace FishMMO.Client
 			base.NetworkManager.ClientManager.RegisterBroadcast<SrpVerifyBroadcast>(OnClientSrpVerifyBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<SrpSuccessBroadcast>(OnClientSrpSuccessBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<ClientAuthResultBroadcast>(OnClientAuthResultBroadcastReceived);
+			base.NetworkManager.ClientManager.RegisterBroadcast<TwoFactorSetupBroadcast>(OnClientTwoFactorSetupBroadcastReceived);
 		}
 
 		/// <summary>
@@ -156,19 +163,33 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets the login credentials for authentication or registration.
+		/// Returns false if the basic credential format is invalid (username or password
+		/// doesn't pass shared validation rules), preventing a wasteful connection attempt.
 		/// </summary>
 		/// <param name="username">The username.</param>
 		/// <param name="password">The password.</param>
 		/// <param name="register">True to register a new account; false to login.</param>
 		/// <param name="email">The email address for multi-factor identification.</param>
 		/// <param name="age">The age for multi-factor identification.</param>
-		public void SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0)
+		/// <returns><c>true</c> if credentials were accepted; <c>false</c> if rejected.</returns>
+		public bool SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0)
 		{
+			if (!Authentication.IsAllowedUsername(username) || !Authentication.IsAllowedPassword(password))
+			{
+				return false;
+			}
+
+			if (register && (string.IsNullOrWhiteSpace(email) || !Authentication.IsAllowedEmailUsername(email)))
+			{
+				return false;
+			}
+
 			this.username = username;
 			this.password = password;
 			this.register = register;
 			this.email = email;
 			this.age = age;
+			return true;
 		}
 
 		/// <summary>
@@ -297,10 +318,10 @@ namespace FishMMO.Client
 				serverToClientKey = sessionKeys.ServerToClientKey;
 
 				// Create nonce contexts that own copies of the session prefixes.
-				// Client send = client→server = serverToClient: false
-				// Client receive = server→client = serverToClient: true
-				sendNonceCtx = new CryptoHelper.GcmNonceContext(sessionKeys.ClientPrefix, serverToClient: false);
-				receiveNonceCtx = new CryptoHelper.GcmNonceContext(sessionKeys.ServerPrefix, serverToClient: true);
+				// Client send = client→server direction
+				// Client receive = server→client direction
+				sendNonceCtx = new CryptoHelper.GcmNonceContext(sessionKeys.ClientPrefix, CryptoHelper.NonceSide.ClientToServer);
+				receiveNonceCtx = new CryptoHelper.GcmNonceContext(sessionKeys.ServerPrefix, CryptoHelper.NonceSide.ServerToClient);
 
 				// sharedSecret already zeroed by DeriveSessionKeys.
 
@@ -347,12 +368,27 @@ namespace FishMMO.Client
 				return;
 			}
 
-			// Pre-validate username length to fail fast before consuming a sequence number.
-			// Server-side IsAllowedUsername enforces 3-32 chars; this client-side check
-			// prevents sending payloads that will be rejected anyway.
+			// Pre-validate all credentials before consuming any sequence numbers.
+			// This prevents protocol desync if validation would fail after sequences are consumed.
 			if (string.IsNullOrEmpty(this.username) || this.username.Length < 3 || this.username.Length > 32)
 			{
 				Log.Warning("ClientLoginAuthenticator", "Username is empty or outside allowed length (3-32 characters).");
+				ClearKeyMaterial();
+				Client.ForceDisconnect();
+				return;
+			}
+
+			if (string.IsNullOrEmpty(this.password) || this.password.Length < 1)
+			{
+				Log.Warning("ClientLoginAuthenticator", "Password is empty.");
+				ClearKeyMaterial();
+				Client.ForceDisconnect();
+				return;
+			}
+
+			if (register && string.IsNullOrEmpty(this.email))
+			{
+				Log.Warning("ClientLoginAuthenticator", "Email is required for registration.");
 				ClearKeyMaterial();
 				Client.ForceDisconnect();
 				return;
@@ -364,7 +400,12 @@ namespace FishMMO.Client
 			try
 			{
 				var (nonce, seq) = sendNonceCtx.NextNonce();
-				byte[] aad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerify, agreedVersion, seq);
+				// Registration encrypts username with CreateAccount AAD (server-side expectation).
+				// Login encrypts with SrpVerify AAD to match ServerAuthenticator's decrypt.
+				var aadType = register
+					? CryptoHelper.AuthMessageType.CreateAccount
+					: CryptoHelper.AuthMessageType.SrpVerify;
+				byte[] aad = CryptoHelper.BuildAad((byte)aadType, agreedVersion, seq);
 				encryptedUsername = CryptoHelper.EncryptAES(clientToServerKey, nonce, usernameBytes, aad);
 				// include Seq in broadcast
 				// Note: CreateAccount/SrpVerify will get Seq set below when broadcasting
@@ -374,14 +415,23 @@ namespace FishMMO.Client
 				Log.Error("ClientLoginAuthenticator", $"AES encryption failed for username: {ex.Message}");
 				ClearKeyMaterial();
 				Client.ForceDisconnect();
-				CryptographicOperations.ZeroMemory(usernameBytes);
 				return;
 			}
-			CryptographicOperations.ZeroMemory(usernameBytes);
+			finally
+			{
+				CryptographicOperations.ZeroMemory(usernameBytes);
+			}
 
 			// Register a new account
 			if (register)
 			{
+				// Design note — String heap retention (salt, verifier): GetSaltAndVerifier returns
+				// .NET strings that persist on the managed heap until the GC collects them. These
+				// contain the SRP salt (random) and verifier (derived from password). The verifier is
+				// not the password itself — it is a one-way derivation — so heap retention does not
+				// directly leak the password. Nevertheless, an attacker with memory-read access could
+				// use the verifier for offline brute-force. No practical mitigation exists within the
+				// .NET string/SRP library constraint; the byte[] intermediates are zeroed below.
 				SrpData.GetSaltAndVerifier(username, password, out string salt, out string verifier);
 
 				// Encrypt email and age before sending
@@ -583,9 +633,11 @@ namespace FishMMO.Client
 
 			if (SrpData.GetProof(this.username, this.password, salt, publicServerEphemeral, out string proof))
 			{
-				// Credentials are no longer needed — clear immediately.
+			// Credentials are no longer needed — clear immediately.
 				username = null;
 				password = null;
+				email = null;
+				age = 0;
 
 				byte[] proofBytes = Encoding.UTF8.GetBytes(proof);
 				byte[] encryptedProof;
@@ -619,6 +671,8 @@ namespace FishMMO.Client
 			{
 				username = null;
 				password = null;
+				email = null;
+				age = 0;
 				Client.ForceDisconnect();
 			}
 		}
@@ -695,8 +749,26 @@ namespace FishMMO.Client
 			// Verify the client session
 			if (SrpData.Verify(proof, out string result))
 			{
+				// Latch the guard immediately to prevent a same-frame duplicate from
+				// re-entering this block (single-threaded Unity, but belt-and-suspenders).
+				srpSuccessProcessed = true;
+
 				// Extract and store the auth token for World/Scene server authentication.
-				if (msg.Token != null && msg.Token.Length > 0)
+				// TOKEN DECRYPT FAILURE NOTE: If token decryption fails (CryptographicException),
+				// we still report LoginSuccess to the client because the SRP proof was verified —
+				// the user IS authenticated at the Login server. The token is only needed later for
+				// World/Scene server authentication. A missing token means the user will be unable
+				// to connect to game servers but the login itself is valid. The warning log below
+				// alerts operators. The client could implement a retry or re-login on World server
+				// rejection when storedAuthToken is null.
+				//
+				// NONCE GUARD: The proof nonce (receiveNonceCtx.NextNonce above) is consumed
+				// unconditionally because the server always encrypts the proof in SrpSuccessBroadcast.
+				// The token nonce is conditional — only consumed when the server signals LoginSuccess
+				// and includes an encrypted token. For non-success results (e.g., AlreadyOnline) the
+				// server omits the token, so decrypting here would advance receiveNonceCtx and desync.
+				if (msg.Result == ClientAuthenticationResult.LoginSuccess &&
+					msg.Token != null && msg.Token.Length > 0)
 				{
 					try
 					{
@@ -717,7 +789,6 @@ namespace FishMMO.Client
 				// Clear SRP state now that authentication decision has been made.
 				SrpData.Clear();
 				SrpData = null;
-				srpSuccessProcessed = true;
 			}
 			else
 			{
@@ -773,6 +844,7 @@ namespace FishMMO.Client
 			username = null;
 			password = null;
 			email = null;
+			register = false;
 			age = 0;
 		}
 
@@ -846,6 +918,115 @@ namespace FishMMO.Client
 				Seq = accountVerifySeq,
 			}, Channel.Reliable);
 		}
+
+		/// <summary>
+		/// Handles the 2FA setup broadcast from the server during account creation.
+		/// Decrypts the otpauth URI and recovery codes, then fires the setup event.
+		/// </summary>
+		private void OnClientTwoFactorSetupBroadcastReceived(TwoFactorSetupBroadcast msg, Channel channel)
+		{
+			if (receiveNonceCtx == null || serverToClientKey == null)
+			{
+				return;
+			}
+
+			if (msg.OtpauthUri == null || msg.OtpauthUri.Length == 0 ||
+				msg.RecoveryCodes == null || msg.RecoveryCodes.Length == 0)
+			{
+				return;
+			}
+
+			byte[] decryptedUri = null;
+			byte[] decryptedCodes = null;
+			try
+			{
+				var (nonce1, rseq1) = receiveNonceCtx.NextNonce();
+				byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, agreedVersion, rseq1);
+				decryptedUri = CryptoHelper.DecryptAES(serverToClientKey, nonce1, msg.OtpauthUri, aad1);
+
+				var (nonce2, rseq2) = receiveNonceCtx.NextNonce();
+				byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, agreedVersion, rseq2);
+				decryptedCodes = CryptoHelper.DecryptAES(serverToClientKey, nonce2, msg.RecoveryCodes, aad2);
+			}
+			catch (CryptographicException)
+			{
+				Log.Warning("ClientLoginAuthenticator", "AES decryption failed for 2FA setup data.");
+				if (decryptedUri != null) CryptographicOperations.ZeroMemory(decryptedUri);
+				if (decryptedCodes != null) CryptographicOperations.ZeroMemory(decryptedCodes);
+				return;
+			}
+
+			string otpauthUri;
+			string[] recoveryCodes;
+			try
+			{
+				otpauthUri = CryptoHelper.StrictUtf8.GetString(decryptedUri);
+				string codesStr = CryptoHelper.StrictUtf8.GetString(decryptedCodes);
+				recoveryCodes = codesStr.Split('\n');
+			}
+			catch (DecoderFallbackException)
+			{
+				Log.Warning("ClientLoginAuthenticator", "Malformed UTF-8 in 2FA setup data.");
+				CryptographicOperations.ZeroMemory(decryptedUri);
+				CryptographicOperations.ZeroMemory(decryptedCodes);
+				return;
+			}
+			CryptographicOperations.ZeroMemory(decryptedUri);
+			CryptographicOperations.ZeroMemory(decryptedCodes);
+
+			OnTwoFactorSetupReceived?.Invoke(otpauthUri, recoveryCodes);
+		}
+
+		/// <summary>
+		/// Encrypts and sends a TOTP code to the server for two-factor verification during login.
+		/// </summary>
+		/// <param name="code">The 6-digit TOTP code from the authenticator app.</param>
+		public void SendTotpCode(string code)
+		{
+			if (string.IsNullOrEmpty(code))
+			{
+				return;
+			}
+
+			if (sendNonceCtx == null || clientToServerKey == null)
+			{
+				Client.ForceDisconnect();
+				return;
+			}
+
+			byte[] codeBytes = Encoding.UTF8.GetBytes(code);
+			byte[] encryptedCode;
+			uint totpSeq;
+			try
+			{
+				var (nonce, seq) = sendNonceCtx.NextNonce();
+				totpSeq = seq;
+				byte[] aad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorVerify, agreedVersion, totpSeq);
+				encryptedCode = CryptoHelper.EncryptAES(clientToServerKey, nonce, codeBytes, aad);
+			}
+			catch (CryptographicException ex)
+			{
+				Log.Error("ClientLoginAuthenticator", $"AES encryption failed for TOTP code: {ex.Message}");
+				ClearKeyMaterial();
+				Client.ForceDisconnect();
+				CryptographicOperations.ZeroMemory(codeBytes);
+				return;
+			}
+			CryptographicOperations.ZeroMemory(codeBytes);
+
+			Client.Broadcast(new TwoFactorVerifyBroadcast()
+			{
+				Code = encryptedCode,
+				Seq = totpSeq,
+			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Returns the current login identifier (username or email) if still set.
+		/// Used by UI controls to defer identifier capture until the server responds.
+		/// Returns null after credentials are cleared (post-SRP proof or disconnect).
+		/// </summary>
+		public string PendingLoginIdentifier => username;
 
 		/// <summary>
 		/// Returns whether the client has a stored authentication token for World/Scene server connections.

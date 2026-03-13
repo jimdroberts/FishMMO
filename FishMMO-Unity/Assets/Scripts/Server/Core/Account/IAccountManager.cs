@@ -12,11 +12,13 @@ namespace FishMMO.Server.Core.Account
 	{
 		/// <summary>
 		/// Adds encryption data for a connection and creates initial <see cref="AccountData"/>
-		/// with <see cref="AuthState.Handshake"/>.
+		/// with <see cref="AuthState.Handshake"/>. Uses try-add semantics: returns <c>false</c>
+		/// if the connection already has encryption data.
 		/// </summary>
 		/// <param name="connection">The network connection.</param>
 		/// <param name="publicKey">The public key for encryption.</param>
-		void AddConnectionEncryptionData(TConnection connection, byte[] publicKey);
+		/// <returns><c>true</c> if added; <c>false</c> if encryption data already existed.</returns>
+		bool TryAddConnectionEncryptionData(TConnection connection, byte[] publicKey);
 
 		/// <summary>
 		/// Gets the encryption data for a connection.

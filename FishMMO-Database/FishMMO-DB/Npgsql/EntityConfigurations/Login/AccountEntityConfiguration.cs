@@ -39,12 +39,18 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(0);
 
-			builder.Property(e => e.TwoFactorEnabled)
+			builder.Property(e => e.TotpEnabled)
 				.IsRequired()
 				.HasDefaultValue(false);
 
-			builder.Property(e => e.TwoFactorCode)
-				.HasMaxLength(64);
+			builder.Property(e => e.TotpSecret)
+				.HasMaxLength(256);
+
+			builder.Property(e => e.TotpVerifiedAt);
+
+			builder.Property(e => e.LastTotpWindow)
+				.IsRequired()
+				.HasDefaultValue(0L);
 
 			builder.Property(e => e.DiscordLinkCode)
 				.HasMaxLength(64);

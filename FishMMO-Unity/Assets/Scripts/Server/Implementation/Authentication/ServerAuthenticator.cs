@@ -5,6 +5,7 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
@@ -97,6 +98,13 @@ namespace FishMMO.Server.Implementation
 		private const float AccountVerifyDebounceSeconds = 2f;
 
 		/// <summary>
+		/// Maximum entries allowed in the account-verify debounce tracker before new
+		/// entries are silently rejected. Guards against memory exhaustion if an attacker
+		/// floods unique account names to grow the dictionary unboundedly.
+		/// </summary>
+		private const int MaxAccountVerifyDebounceEntries = 50_000;
+
+		/// <summary>
 		/// Sweep interval in seconds for expired auth rate-limit entries.
 		/// </summary>
 		private const float AuthRateLimitSweepIntervalSeconds = 60f;
@@ -114,8 +122,17 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// TTL in seconds for per-connection IP cache entries.
+		/// <para>
+		/// <b>Coupling note:</b> This value MUST be ≥ the longest IP-based block duration
+		/// across all server systems (currently <c>AccountCreationSystem.ipBlockDurationSeconds = 300s</c>).
+		/// If the cache TTL is shorter than the block duration, a blocked IP's cache entry can
+		/// expire and be re-resolved, but the block is still active — causing a logic error where
+		/// the IP is looked up again (minor perf cost, no security breach). If this value is
+		/// ever made configurable, add a startup assertion:
+		/// <c>Debug.Assert(ConnectionIpCacheTtlSeconds >= AccountCreationSystem.ipBlockDurationSeconds)</c>.
+		/// </para>
 		/// </summary>
-		private const float ConnectionIpCacheTtlSeconds = 120f;
+		private const float ConnectionIpCacheTtlSeconds = 300f;
 
 		/// <summary>
 		/// Pre-computed fake SRP salt/verifier for non-existent accounts.
@@ -218,6 +235,107 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
+		/// Volatile backing field for <see cref="TotpMasterKey"/>.
+		/// </summary>
+		private volatile byte[] _totpMasterKey;
+
+		/// <summary>
+		/// AES-256 master key for decrypting TOTP secrets from the database during login.
+		/// Set by LoginServerSystem on startup. Must match AccountCreationSystem.TotpMasterKey.
+		/// </summary>
+		public byte[] TotpMasterKey
+		{
+			get => _totpMasterKey;
+			set => _totpMasterKey = value;
+		}
+
+		/// <summary>
+		/// Maximum concurrent TOTP verification tasks.
+		/// Bounds thread-pool usage for TOTP processing, unlike SRP which uses bounded channels.
+		/// </summary>
+		private const int MaxConcurrentTotpVerifications = 4;
+
+		/// <summary>
+		/// Maximum failed TOTP attempts before disconnecting the client.
+		/// </summary>
+		private const int MaxTotpAttempts = 5;
+
+		/// <summary>
+		/// Maximum cumulative TOTP failures per username across all connections before
+		/// a temporary lockout. Prevents attackers from reconnecting to reset the per-
+		/// connection attempt counter.
+		/// </summary>
+		private const int MaxTotpFailuresPerUsername = 15;
+
+		/// <summary>
+		/// How long a per-username TOTP lockout lasts after exceeding <see cref="MaxTotpFailuresPerUsername"/>.
+		/// </summary>
+		private static readonly TimeSpan TotpUsernameLockoutDuration = TimeSpan.FromMinutes(5);
+
+		/// <summary>
+		/// Maximum entries to scan per sweep when evicting expired TOTP per-username
+		/// failure records. Bounds main-thread work per tick.
+		/// </summary>
+		private const int TotpUsernameFailureSweepMaxScan = 64;
+
+		/// <summary>
+		/// Maximum entries allowed in the per-username TOTP failure tracker before new
+		/// entries are silently ignored. Guards against memory exhaustion if an attacker
+		/// floods unique usernames to grow the dictionary unboundedly.
+		/// </summary>
+		private const int MaxTotpUsernameFailureEntries = 10_000;
+
+		/// <summary>
+		/// Pending TOTP verification state per connection. Stores data needed to complete
+		/// login after the client provides a valid TOTP code.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, TotpPendingState> totpPendingStates = new ConcurrentDictionary<int, TotpPendingState>();
+
+		/// <summary>
+		/// Semaphore controlling concurrent TOTP verification tasks to prevent thread-pool exhaustion.
+		/// </summary>
+		private SemaphoreSlim totpSemaphore;
+
+		/// <summary>
+		/// Per-connection cache of TotpEnabled flag, populated during SRP verify (when account data
+		/// is already fetched) and consumed during SRP proof to avoid a redundant DB fetch.
+		/// <para><b>Bounding:</b> Entry count is bounded by <c>MaxPendingAuthConnections</c> — each
+		/// connection can cache at most one flag, and the total number of in-flight auth connections
+		/// is capped. Entries are removed by <see cref="OnPurgeConnectionState"/> and sweep cleanup.</para>
+		/// </summary>
+		private readonly ConcurrentDictionary<int, bool> totpEnabledByClientId = new ConcurrentDictionary<int, bool>();
+
+		/// <summary>
+		/// Per-username TOTP failure counter for cross-connection rate limiting.
+		/// Key = lowercased username, Value = (failureCount, firstFailureUtc).
+		/// Entries are lazily evicted when checked after <see cref="TotpUsernameLockoutDuration"/> expires,
+		/// and proactively swept by <see cref="SweepExpiredTotpUsernameFailures"/> during <see cref="OnAuthSweep"/>.
+		/// </summary>
+		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> totpUsernameFailures = new ConcurrentDictionary<string, (int, DateTime)>();
+
+		/// <summary>
+		/// Holds intermediate login state while waiting for TOTP code from the client.
+		/// </summary>
+		private class TotpPendingState
+		{
+			/// <summary>
+			/// The connection that created this pending state. Used to detect stale state
+			/// from a recycled ClientId after TTL sweep or disconnect.
+			/// </summary>
+			public NetworkConnection Connection;
+			public ConnectionEncryptionData EncryptionData;
+			public string ServerProof;
+			public string Username;
+			public AccessLevel AccessLevel;
+			/// <summary>
+			/// Failed TOTP attempt counter. Must be accessed exclusively via
+			/// <see cref="System.Threading.Interlocked"/> methods since the network thread
+			/// and async workers may read/write concurrently.
+			/// </summary>
+			public volatile int Attempts;
+		}
+
+		/// <summary>
 		/// LoginServer database ID for token generation. Set by LoginServerSystem on startup.
 		/// </summary>
 		public long LoginServerId { get; set; }
@@ -235,6 +353,7 @@ namespace FishMMO.Server.Implementation
 		{
 			networkManager.ServerManager.RegisterBroadcast<SrpVerifyBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpProofBroadcast>(OnServerSrpProofBroadcastReceived, false);
+			networkManager.ServerManager.RegisterBroadcast<TwoFactorVerifyBroadcast>(OnServerTwoFactorVerifyBroadcastReceived, false);
 		}
 
 		/// <summary>
@@ -253,6 +372,18 @@ namespace FishMMO.Server.Implementation
 			// Force FakeSrpTuple initialization now to prevent first-use timing
 			// side-channel on the first non-existent account lookup.
 			_ = FakeSrpTuple.Value;
+
+			// Validate that per-username derived fake salts match the length of the
+			// static fake salt. A mismatch would create a ciphertext-size oracle that
+			// leaks whether an account exists (length of encrypted salt differs).
+			string testDerivedSalt = DerivePerUsernameFakeSalt("__startup_length_check__");
+			UnityEngine.Debug.Assert(
+				testDerivedSalt.Length == FakeSrpTuple.Value.Salt.Length,
+				$"{LogPrefix}: Fake salt length mismatch — DerivePerUsernameFakeSalt produced {testDerivedSalt.Length} chars, FakeSrpTuple.Salt is {FakeSrpTuple.Value.Salt.Length} chars. " +
+				"This would create a ciphertext-size oracle leaking account existence.");
+
+			// Initialize TOTP concurrency limiter.
+			totpSemaphore = new SemaphoreSlim(MaxConcurrentTotpVerifications, MaxConcurrentTotpVerifications);
 
 			// DropWrite: under load, excess requests are silently discarded rather than
 			// back-pressuring the network thread. Handlers roll back AuthState on write
@@ -284,7 +415,7 @@ namespace FishMMO.Server.Implementation
 				_ = ProcessSrpProofRequestsAsync(cancellationToken, workerId);
 			}
 
-			Log.Debug("ServerAuthenticator", $"Workers initialized (Verify={VerifyWorkerCount}, Proof={ProofWorkerCount})");
+			Log.Debug(LogPrefix, $"Workers initialized (Verify={VerifyWorkerCount}, Proof={ProofWorkerCount})");
 		}
 
 		/// <summary>
@@ -315,6 +446,17 @@ namespace FishMMO.Server.Implementation
 				_tokenSigningKey = null;
 			}
 
+			if (_totpMasterKey != null)
+			{
+				CryptographicOperations.ZeroMemory(_totpMasterKey);
+				_totpMasterKey = null;
+			}
+
+			totpPendingStates.Clear();
+			totpEnabledByClientId.Clear();
+			totpUsernameFailures.Clear();
+			totpSemaphore?.Dispose();
+			totpSemaphore = null;
 			kickRequestNextAllowedUtcByAccount.Clear();
 			ipAuthNextAllowedUtc.Clear();
 			accountVerifyNextAllowedUtc.Clear();
@@ -322,11 +464,32 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Sweeps stale unauthenticated SRP/encryption state at the auth sweep interval.
+		/// Sweeps stale unauthenticated SRP/encryption state and expired TOTP
+		/// per-username failure entries at the auth sweep interval.
 		/// </summary>
 		protected override void OnAuthSweep()
 		{
 			SweepStaleUnauthenticatedAccountState();
+			SweepExpiredTotpUsernameFailures();
+		}
+
+		/// <summary>
+		/// Evicts expired entries from <see cref="totpUsernameFailures"/> whose lockout
+		/// window has elapsed. Bounded scan to avoid stalling the main thread.
+		/// </summary>
+		private void SweepExpiredTotpUsernameFailures()
+		{
+			DateTime now = DateTime.UtcNow;
+			int scanned = 0;
+			foreach (var kvp in totpUsernameFailures)
+			{
+				if (++scanned > TotpUsernameFailureSweepMaxScan)
+					break;
+				if (now - kvp.Value.FirstFailure > TotpUsernameLockoutDuration)
+				{
+					totpUsernameFailures.TryRemove(kvp.Key, out _);
+				}
+			}
 		}
 
 		/// <summary>
@@ -383,10 +546,11 @@ namespace FishMMO.Server.Implementation
 			string ipAddress = ResolveIpAddress(conn);
 			if (!TryBeginIpAuthAttempt(ipAddress))
 			{
+				// Use Unreliable to avoid amplifying server-side send-queue work under flood.
 				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 				{
 					Result = ClientAuthenticationResult.ServerBusy,
-				}, false, Channel.Reliable);
+				}, false, Channel.Unreliable);
 				return;
 			}
 
@@ -408,7 +572,7 @@ namespace FishMMO.Server.Implementation
 			if (msg.S == null || msg.S.Length == 0 || msg.S.Length > CryptoHelper.MaxSrpPayloadBytes ||
 				msg.PublicEphemeral == null || msg.PublicEphemeral.Length == 0 || msg.PublicEphemeral.Length > CryptoHelper.MaxSrpPayloadBytes)
 			{
-				conn.Disconnect(true);
+				PurgeConnectionAuthState(conn, disconnect: true);
 				return;
 			}
 
@@ -428,7 +592,7 @@ namespace FishMMO.Server.Implementation
 				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 				{
 					Result = ClientAuthenticationResult.ServerBusy,
-				}, false, Channel.Reliable);
+				}, false, Channel.Unreliable);
 			}
 		}
 
@@ -456,8 +620,18 @@ namespace FishMMO.Server.Implementation
 			// disconnect gracefully — strictly better than a silent timeout.
 			// Note: a theoretical TOCTOU exists between the two calls if the verify worker
 			// advances state in between, but the TTL sweep provides the ultimate safety net.
-			if (!Server.AccountManager.TryAdvanceAuthState(conn, AuthState.WaitingForProof, AuthState.ProofPending) &&
-				!Server.AccountManager.TryAdvanceAuthState(conn, AuthState.VerifyPending, AuthState.ProofPending))
+			// Track which state the connection came from so the rollback on channel-
+			// write failure restores the correct prior state (see end of method).
+			AuthState priorState;
+			if (Server.AccountManager.TryAdvanceAuthState(conn, AuthState.WaitingForProof, AuthState.ProofPending))
+			{
+				priorState = AuthState.WaitingForProof;
+			}
+			else if (Server.AccountManager.TryAdvanceAuthState(conn, AuthState.VerifyPending, AuthState.ProofPending))
+			{
+				priorState = AuthState.VerifyPending;
+			}
+			else
 			{
 				return;
 			}
@@ -472,7 +646,7 @@ namespace FishMMO.Server.Implementation
 			// Enqueue encrypted data for async processing — no SRP math on network thread
 			if (msg.Proof == null || msg.Proof.Length == 0 || msg.Proof.Length > CryptoHelper.MaxSrpPayloadBytes)
 			{
-				conn.Disconnect(true);
+				PurgeConnectionAuthState(conn, disconnect: true);
 				return;
 			}
 
@@ -485,13 +659,13 @@ namespace FishMMO.Server.Implementation
 
 			if (proofChannel == null || !proofChannel.Writer.TryWrite(request))
 			{
-				// DropWrite self-healing: roll back to WaitingForProof so the client can
-				// re-submit proof. TTL sweep is the ultimate safety net.
-				Server.AccountManager.TryAdvanceAuthState(conn, AuthState.ProofPending, AuthState.WaitingForProof);
+				// DropWrite self-healing: roll back to the state we came from so the
+				// client can re-submit proof. TTL sweep is the ultimate safety net.
+				Server.AccountManager.TryAdvanceAuthState(conn, AuthState.ProofPending, priorState);
 				NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
 				{
 					Result = ClientAuthenticationResult.ServerBusy,
-				}, false, Channel.Reliable);
+				}, false, Channel.Unreliable);
 			}
 		}
 
@@ -507,7 +681,7 @@ namespace FishMMO.Server.Implementation
 		/// <param name="workerId">Worker ID for logging.</param>
 		private async Task ProcessSrpVerifyRequestsAsync(CancellationToken cancellationToken, int workerId)
 		{
-			await Log.Debug("ServerAuthenticator", $"Verify worker {workerId} started");
+			await Log.Debug(LogPrefix, $"Verify worker {workerId} started");
 			try
 			{
 				// Rely on channel completion (TryComplete in ShutdownWorkers) for graceful exit.
@@ -523,16 +697,16 @@ namespace FishMMO.Server.Implementation
 					}
 					catch (Exception ex)
 					{
-						await Log.Error("ServerAuthenticator", $"Verify worker {workerId} error: {ex}");
+						await Log.Error(LogPrefix, $"Verify worker {workerId} error: {ex}");
 					}
 				}
 			}
 			catch (Exception ex) when (!(ex is OperationCanceledException))
 			{
-				await Log.Error("ServerAuthenticator", $"Verify worker {workerId} unexpected error: {ex}");
+				await Log.Error(LogPrefix, $"Verify worker {workerId} unexpected error: {ex}");
 			}
 
-			await Log.Debug("ServerAuthenticator", $"Verify worker {workerId} stopped");
+			await Log.Debug(LogPrefix, $"Verify worker {workerId} stopped");
 		}
 
 		/// <summary>
@@ -543,7 +717,7 @@ namespace FishMMO.Server.Implementation
 		/// <param name="workerId">Worker ID for logging.</param>
 		private async Task ProcessSrpProofRequestsAsync(CancellationToken cancellationToken, int workerId)
 		{
-			await Log.Debug("ServerAuthenticator", $"Proof worker {workerId} started");
+			await Log.Debug(LogPrefix, $"Proof worker {workerId} started");
 			try
 			{
 				// Rely on channel completion (TryComplete in ShutdownWorkers) for graceful exit.
@@ -559,16 +733,16 @@ namespace FishMMO.Server.Implementation
 					}
 					catch (Exception ex)
 					{
-						await Log.Error("ServerAuthenticator", $"Proof worker {workerId} error: {ex}");
+						await Log.Error(LogPrefix, $"Proof worker {workerId} error: {ex}");
 					}
 				}
 			}
 			catch (Exception ex) when (!(ex is OperationCanceledException))
 			{
-				await Log.Error("ServerAuthenticator", $"Proof worker {workerId} unexpected error: {ex}");
+				await Log.Error(LogPrefix, $"Proof worker {workerId} unexpected error: {ex}");
 			}
 
-			await Log.Debug("ServerAuthenticator", $"Proof worker {workerId} stopped");
+			await Log.Debug(LogPrefix, $"Proof worker {workerId} stopped");
 		}
 
 		#endregion
@@ -620,11 +794,11 @@ namespace FishMMO.Server.Implementation
 			string username;
 			uint seq = request.Seq;
 
-			// Guard: seq < 1 prevents uint underflow in the seq - 1 computation below
-			// (uint 0 - 1 wraps to uint.MaxValue, producing an invalid sequence).
-			if (seq < 1)
+			// Guard: ValidateSequenceRange ensures seq is large enough for the 2-field
+			// protocol encoding (seq-1: username, seq: public ephemeral) without uint underflow.
+			if (!CryptoHelper.ValidateSequenceRange(seq, 2))
 			{
-				await Log.Warning("ServerAuthenticator", "Invalid SRP verify sequence received (too low for 2-field encoding).");
+				await Log.Warning(LogPrefix, "Invalid SRP verify sequence received (too low for 2-field encoding).");
 				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
@@ -642,13 +816,18 @@ namespace FishMMO.Server.Implementation
 				uint seqUsername = seq - 1;
 				if (!request.EncryptionData.TryConsumeReceiveSequence(seqUsername))
 				{
-					await Log.Warning("ServerAuthenticator", "SRP verify username sequence out-of-order or duplicate.");
+					await Log.Warning(LogPrefix, "SRP verify username sequence out-of-order or duplicate.");
 					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 					return;
 				}
 
 				byte[] nonce1 = request.EncryptionData.BuildReceiveNonce(seqUsername);
-				byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerify, request.EncryptionData.AgreedVersion, seqUsername);
+				byte[] aad1 = new byte[CryptoHelper.AadLength];
+				// NOTE: WriteAad and BuildAad serve the same purpose (version + messageType + seq).
+				// WriteAad writes into a caller-supplied buffer; BuildAad allocates and returns one.
+				// A future Span<byte> migration could unify them. Until then, prefer WriteAad on hot
+				// paths to avoid the extra allocation.
+				CryptoHelper.WriteAad(aad1, (byte)CryptoHelper.AuthMessageType.SrpVerify, request.EncryptionData.AgreedVersion, seqUsername);
 				byte[] decryptedRawUsername = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce1, request.EncryptedUsername, aad1);
 				try
 				{
@@ -664,14 +843,14 @@ namespace FishMMO.Server.Implementation
 				// Consume sequence for the public ephemeral and decrypt it below when needed.
 				if (!request.EncryptionData.TryConsumeReceiveSequence(seq))
 				{
-					await Log.Warning("ServerAuthenticator", "SRP verify public ephemeral sequence out-of-order or duplicate.");
+					await Log.Warning(LogPrefix, "SRP verify public ephemeral sequence out-of-order or duplicate.");
 					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 					return;
 				}
 			}
 			catch (CryptographicException)
 			{
-				await Log.Warning("ServerAuthenticator", "AES decryption/authentication failed for SRP verify.");
+				await Log.Warning(LogPrefix, "AES decryption/authentication failed for SRP verify.");
 				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
@@ -721,7 +900,8 @@ namespace FishMMO.Server.Implementation
 					try
 					{
 						byte[] nonce2 = request.EncryptionData.BuildReceiveNonce(request.Seq);
-						byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerify, request.EncryptionData.AgreedVersion, request.Seq);
+						byte[] aad2 = new byte[CryptoHelper.AadLength];
+						CryptoHelper.WriteAad(aad2, (byte)CryptoHelper.AuthMessageType.SrpVerify, request.EncryptionData.AgreedVersion, request.Seq);
 						byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce2, request.EncryptedPublicEphemeral, aad2);
 						try
 						{
@@ -736,7 +916,7 @@ namespace FishMMO.Server.Implementation
 					}
 					catch (CryptographicException)
 					{
-						await Log.Warning("ServerAuthenticator", "AES decryption/authentication failed for public ephemeral.");
+						await Log.Warning(LogPrefix, "AES decryption/authentication failed for public ephemeral.");
 						RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 						return;
 					}
@@ -765,22 +945,43 @@ namespace FishMMO.Server.Implementation
 						salt = DerivePerUsernameFakeSalt(username);
 						verifier = FakeSrpTuple.Value.Verifier;
 						accessLevel = AccessLevel.Player;
-						await Log.Debug("ServerAuthenticator", $"Using pre-computed fake SRP state for non-existent account '{username}' to avoid enumeration.");
+						await Log.Debug(LogPrefix, $"Using pre-computed fake SRP state for non-existent account '{username}' to avoid enumeration.");
 					}
 					else
 					{
 						Database.Data.AccountData accountData = loginResult.Data;
 
-						// Reject unverified accounts immediately.
+						// Reject unverified accounts.
 						if (!accountData.Verified)
 						{
-							RejectAndPurge(conn, ClientAuthenticationResult.AccountUnverified);
-							return;
+							if (isEmail)
+							{
+								// For email-based login, treat unverified accounts as non-existent
+								// to prevent email enumeration. The SRP exchange runs with a fake
+								// verifier so the timing and response are indistinguishable from
+								// a non-existent account. Legitimate users should verify their
+								// account first, or log in by username (which still shows
+								// AccountUnverified for clear UX feedback).
+								salt = DerivePerUsernameFakeSalt(username);
+								verifier = FakeSrpTuple.Value.Verifier;
+								accessLevel = AccessLevel.Player;
+								await Log.Debug(LogPrefix, $"Using fake SRP state for unverified email-based login to prevent enumeration.");
+							}
+							else
+							{
+								RejectAndPurge(conn, ClientAuthenticationResult.AccountUnverified);
+								return;
+							}
 						}
+						else
+						{
+							salt = accountData.Salt;
+							verifier = accountData.Verifier;
+							accessLevel = (AccessLevel)accountData.AccessLevel;
 
-						salt = accountData.Salt;
-						verifier = accountData.Verifier;
-						accessLevel = (AccessLevel)accountData.AccessLevel;
+							// Cache TotpEnabled so ProcessSrpProofAsync can skip a redundant DB fetch.
+							totpEnabledByClientId[conn.ClientId] = accountData.TotpEnabled;
+						}
 					}
 
 					result = ClientAuthenticationResult.SrpVerify;
@@ -800,6 +1001,9 @@ namespace FishMMO.Server.Implementation
 					string srpSalt = null;
 					string srpPublicServerEphemeral = null;
 
+					// NOTE: TryAdvanceAuthState is called with expected == new == WaitingForProof.
+					// This is intentional: it performs a synchronized read of the auth data under
+					// the AccountManager lock without transitioning to a different state.
 					if (Server.AccountManager.TryAdvanceAuthState(conn, AuthState.WaitingForProof, AuthState.WaitingForProof, (a) =>
 						{
 							srpSalt = a.SrpData.Salt;
@@ -815,17 +1019,23 @@ namespace FishMMO.Server.Implementation
 							// Acquire explicit send sequence and build nonce + AAD for each field
 							uint sendSeq1 = request.EncryptionData.NextSendSequence();
 							byte[] sendNonce1 = request.EncryptionData.BuildSendNonce(sendSeq1);
-							byte[] aadSend1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, request.EncryptionData.AgreedVersion, sendSeq1);
-							encryptedSalt = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce1, Encoding.UTF8.GetBytes(srpSalt), aadSend1);
+							byte[] aadSend1 = new byte[CryptoHelper.AadLength];
+							CryptoHelper.WriteAad(aadSend1, (byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, request.EncryptionData.AgreedVersion, sendSeq1);
+							byte[] srpSaltBytes = Encoding.UTF8.GetBytes(srpSalt);
+							encryptedSalt = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce1, srpSaltBytes, aadSend1);
+							CryptographicOperations.ZeroMemory(srpSaltBytes);
 
 							uint sendSeq2 = request.EncryptionData.NextSendSequence();
 							byte[] sendNonce2 = request.EncryptionData.BuildSendNonce(sendSeq2);
-							byte[] aadSend2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, request.EncryptionData.AgreedVersion, sendSeq2);
-							encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce2, Encoding.UTF8.GetBytes(srpPublicServerEphemeral), aadSend2);
+							byte[] aadSend2 = new byte[CryptoHelper.AadLength];
+							CryptoHelper.WriteAad(aadSend2, (byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, request.EncryptionData.AgreedVersion, sendSeq2);
+							byte[] srpEphemeralBytes = Encoding.UTF8.GetBytes(srpPublicServerEphemeral);
+							encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce2, srpEphemeralBytes, aadSend2);
+							CryptographicOperations.ZeroMemory(srpEphemeralBytes);
 						}
 						catch (CryptographicException ex)
 						{
-							await Log.Error("ServerAuthenticator", $"AES encryption failed for SRP response: {ex.Message}");
+							await Log.Error(LogPrefix, $"AES encryption failed for SRP response: {ex.Message}");
 							RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 							return;
 						}
@@ -851,7 +1061,7 @@ namespace FishMMO.Server.Implementation
 				}
 				catch (Exception ex)
 				{
-					await Log.Error("ServerAuthenticator", $"Error during SRP verify: {ex}");
+					await Log.Error(LogPrefix, $"Error during SRP verify: {ex}");
 					result = ClientAuthenticationResult.ServerBusy;
 				}
 			}
@@ -886,6 +1096,14 @@ namespace FishMMO.Server.Implementation
 			NetworkConnection conn = request.Connection;
 			int clientId = conn.ClientId;
 
+			// Guard: EncryptionData can be null if the connection was purged between
+			// the channel write and this worker consuming the request.
+			if (request.EncryptionData == null)
+			{
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+				return;
+			}
+
 			// Decrypt client proof on worker thread.
 			// Note: clientProof is a managed string and cannot be deterministically zeroed.
 			// See "Design note — String zeroization" above.
@@ -895,13 +1113,14 @@ namespace FishMMO.Server.Implementation
 				// Validate and consume explicit client->server sequence before decrypting.
 				if (!request.EncryptionData.TryConsumeReceiveSequence(request.Seq))
 				{
-					await Log.Warning("ServerAuthenticator", "SRP proof sequence out-of-order or duplicate.");
+					await Log.Warning(LogPrefix, "SRP proof sequence out-of-order or duplicate.");
 					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 					return;
 				}
 
 				byte[] nonce = request.EncryptionData.BuildReceiveNonce(request.Seq);
-				byte[] aad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpProof, request.EncryptionData.AgreedVersion, request.Seq);
+				byte[] aad = new byte[CryptoHelper.AadLength];
+				CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.SrpProof, request.EncryptionData.AgreedVersion, request.Seq);
 				byte[] decryptedClientProof = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce, request.EncryptedClientProof, aad);
 				try
 				{
@@ -916,7 +1135,7 @@ namespace FishMMO.Server.Implementation
 			}
 			catch (CryptographicException)
 			{
-				await Log.Warning("ServerAuthenticator", "AES decryption/authentication failed for client proof.");
+				await Log.Warning(LogPrefix, "AES decryption/authentication failed for client proof.");
 				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
@@ -955,36 +1174,49 @@ namespace FishMMO.Server.Implementation
 				// indistinguishable SRP exchanges. Only after the client proves
 				// knowledge of the password do we reveal online status.
 				//
+				// DUAL-PROOF GUARD: The TryAdvanceAuthState(ProofPending → SrpSuccess)
+				// above is the primary serialization point — only one proof worker per
+				// connection wins the CAS. For the same *account* from different
+				// connections, this online check is the guard: the first proof completes
+				// login, and any concurrent proof for the same account sees isOnline=true
+				// and receives AlreadyOnline.
+				//
 				// CAVEAT: The online flag lives on CharacterData. If the server crashes
 				// without cleanly logging characters out, stale Online=true flags may
 				// persist. Crash recovery should reset all Online flags on startup.
 				//
-				// PERFORMANCE NOTE: FetchManyAsync loads all characters for the account.
-				// For accounts with many characters this is a per-auth DoS vector.
-				// Consider adding a database-level "any online" flag on the account row
-				// or a stored procedure that short-circuits on the first Online=true.
+				// AnyOnlineAsync short-circuits at the database level, avoiding
+				// the previous FetchManyAsync per-auth DoS vector.
 				bool isOnline = false;
+				bool hasPendingKick = false;
 				if (Server.Database?.ServiceRegistry != null &&
 					Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
-					DatabaseResult<IReadOnlyList<CharacterData>> charactersResult = await characterService.FetchManyAsync(username);
-					if (charactersResult.IsSuccess && charactersResult.Data != null)
+					DatabaseResult<bool> onlineResult = await characterService.AnyOnlineAsync(username);
+					if (onlineResult.IsSuccess && onlineResult.Data)
 					{
-						foreach (CharacterData c in charactersResult.Data)
-						{
-							if (c.Online)
-							{
-								isOnline = true;
-								break;
-							}
-						}
+						isOnline = true;
 					}
 				}
 
-				if (isOnline)
+				// Check for a pending kick request that hasn't been processed yet.
+				// Without this, a login between kick persist and kick processing could
+				// succeed, and the stale kick would terminate the new session.
+				if (!isOnline &&
+					Server.Database?.ServiceRegistry != null &&
+					Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var pendingKickService))
+				{
+					var pendingResult = await pendingKickService.HasPendingAsync(username);
+					if (pendingResult.IsSuccess && pendingResult.Data)
+					{
+						hasPendingKick = true;
+					}
+				}
+
+				if (isOnline || hasPendingKick)
 				{
 					// Persist kick request for the online character (rate-limited per account).
-					if (TryBeginKickRequest(username) &&
+					if (isOnline && TryBeginKickRequest(username) &&
 						Server.Database?.ServiceRegistry != null &&
 						Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var kickRequestService))
 					{
@@ -993,13 +1225,65 @@ namespace FishMMO.Server.Implementation
 				}
 
 				// Attempt to complete login authentication (virtual — overridden by WorldServer/SceneServer).
-				// Skip login for already-online accounts — they receive AlreadyOnline + kick request instead.
-				ClientAuthenticationResult result = isOnline
+				// Skip login for already-online accounts or those with pending kick requests.
+				ClientAuthenticationResult result = (isOnline || hasPendingKick)
 					? ClientAuthenticationResult.AlreadyOnline
 					: await TryLoginAsync(ClientAuthenticationResult.LoginSuccess, username);
 
 				// Refresh TTL after potentially slow database/login checks.
 				RefreshAuthTtl(conn);
+
+				// ── TOTP two-factor check ─────────────────────────────────────
+				// After SRP proof succeeds and login would succeed, check if the
+				// account requires TOTP verification before completing login.
+				// TotpEnabled was cached during ProcessSrpVerifyAsync to avoid a
+				// redundant database fetch here.
+				if (result == ClientAuthenticationResult.LoginSuccess)
+				{
+					bool totpRequired = false;
+					byte[] totpMasterKeySnapshot = TotpMasterKey;
+					if (totpMasterKeySnapshot != null && totpMasterKeySnapshot.Length == 32 &&
+						totpEnabledByClientId.TryGetValue(conn.ClientId, out bool cachedTotpEnabled) &&
+						cachedTotpEnabled)
+					{
+						totpRequired = true;
+					}
+
+					if (totpRequired)
+					{
+						// Store pending state for TOTP verification completion.
+						// AUTH-STATE NOTE: The connection remains in SrpSuccess while awaiting TOTP.
+						// SrpSuccess is intentionally untracked from the unauthenticated timer —
+						// TryAdvanceAuthState removes the unauthenticated-connection tracking when
+						// advancing to SrpSuccess, so SweepUnauthenticatedAccountState will not
+						// evict this connection. The stale-auth TTL sweep (BaseServerAuthenticator)
+						// is the safety net if TOTP is never completed.
+						// SRP material (salt, verifier, ephemeral) remains on AccountData until
+						// ProcessTwoFactorVerifyAsync completes and calls ClearSrpState, or until
+						// SweepStaleAuthentication purges the connection.
+						totpPendingStates[conn.ClientId] = new TotpPendingState
+						{
+							Connection = conn,
+							EncryptionData = request.EncryptionData,
+							ServerProof = serverProof,
+							Username = username,
+							AccessLevel = accessLevel,
+							Attempts = 0,
+						};
+
+						// Send TwoFactorRequired — client will prompt for TOTP code.
+						EnqueueMainThread(() =>
+						{
+							if (conn.IsActive)
+							{
+								NetworkManager.ServerManager.Broadcast(conn,
+									new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.TwoFactorRequired },
+									false, Channel.Reliable);
+							}
+						});
+						return;
+					}
+				}
 
 				// Inclusion list: only LoginSuccess is authenticated. All other results
 				// (including future new codes) default to unauthenticated.
@@ -1010,46 +1294,16 @@ namespace FishMMO.Server.Implementation
 				// Encrypt server proof on worker thread.
 				uint sendSeq = request.EncryptionData.NextSendSequence();
 				byte[] sendNonce = request.EncryptionData.BuildSendNonce(sendSeq);
-				byte[] aadSend = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpSuccess, request.EncryptionData.AgreedVersion, sendSeq);
+				byte[] aadSend = new byte[CryptoHelper.AadLength];
+				CryptoHelper.WriteAad(aadSend, (byte)CryptoHelper.AuthMessageType.SrpSuccess, request.EncryptionData.AgreedVersion, sendSeq);
 				byte[] encryptedServerProof = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce, Encoding.UTF8.GetBytes(serverProof), aadSend);
 
 				// Generate and encrypt auth token if signing key is available.
 				// Note: encryptedToken is ciphertext — not sensitive even if the lambda
 				// is held alive during main-thread queue backlog.
-				byte[] encryptedToken = null;
-				// Snapshot TokenSigningKey to prevent a race where ShutdownWorkers or key
-				// rotation zeroes the array between the null check and BuildAuthToken.
-				byte[] signingKeySnapshot = TokenSigningKey;
-				if (authenticated && signingKeySnapshot != null && signingKeySnapshot.Length >= CryptoHelper.HmacKeyLength)
-				{
-					try
-					{
-						DateTime expiresUtc = DateTime.UtcNow.AddMinutes(tokenExpirationMinutes);
-						byte[] rawToken = CryptoHelper.BuildAuthToken(username, LoginServerId, expiresUtc, signingKeySnapshot, accessLevel);
-
-						// Persist token hash to DB for revocation support.
-						string tokenHash = CryptoHelper.HashTokenHex(rawToken);
-						if (Server.Database?.ServiceRegistry != null &&
-							Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var authTokenService))
-						{
-							await authTokenService.IssueAsync(tokenHash, username, LoginServerId, expiresUtc);
-						}
-
-						// Encrypt token with session key.
-						uint tokenSeq = request.EncryptionData.NextSendSequence();
-						byte[] tokenNonce = request.EncryptionData.BuildSendNonce(tokenSeq);
-						byte[] tokenAad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpSuccess, request.EncryptionData.AgreedVersion, tokenSeq);
-						encryptedToken = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, tokenNonce, rawToken, tokenAad);
-
-						CryptographicOperations.ZeroMemory(rawToken);
-					}
-					catch (Exception tokenEx)
-					{
-						await Log.Warning("ServerAuthenticator", $"Token generation failed (non-fatal): {tokenEx.Message}");
-						// Token issuance failure is non-fatal — auth still succeeds.
-						encryptedToken = null;
-					}
-				}
+				byte[] encryptedToken = authenticated
+					? await GenerateEncryptedAuthTokenAsync(request.EncryptionData, username, accessLevel)
+					: null;
 
 				// Marshal final broadcast + authentication events to main thread.
 				EnqueueMainThread(() =>
@@ -1074,8 +1328,12 @@ namespace FishMMO.Server.Implementation
 					if (authenticated)
 					{
 						// Advance to terminal Authenticated state and remove sensitive SRP material.
-						Server.AccountManager.TryAdvanceAuthState(conn, AuthState.SrpSuccess, AuthState.Authenticated);
-						srpAccountManager.ClearSrpState(conn);
+						// Only clear SRP state if the advance succeeded — if it fails, another
+						// path already moved past SrpSuccess and cleanup is their responsibility.
+						if (Server.AccountManager.TryAdvanceAuthState(conn, AuthState.SrpSuccess, AuthState.Authenticated))
+						{
+							srpAccountManager.ClearSrpState(conn);
+						}
 					}
 					else
 					{
@@ -1086,7 +1344,7 @@ namespace FishMMO.Server.Implementation
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("ServerAuthenticator", $"Error during SRP proof login: {ex}");
+				await Log.Error(LogPrefix, $"Error during SRP proof login: {ex}");
 				EnqueueMainThread(() =>
 				{
 					if (conn.IsActive) conn.Disconnect(false);
@@ -1097,14 +1355,461 @@ namespace FishMMO.Server.Implementation
 
 		#endregion
 
+		#region Two-Factor TOTP
+
 		/// <summary>
-		/// Returns <see cref="ClientAuthenticationResult.LoginSuccess"/> for the SRP login flow.
-		/// Subclasses (WorldServer/SceneServer) override for additional server-type-specific checks.
+		/// UDP gate: Handles TwoFactorVerifyBroadcast from clients during TOTP login.
+		/// Validates connection state and processes asynchronously.
 		/// </summary>
-		internal override Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult result, string username)
+		private void OnServerTwoFactorVerifyBroadcastReceived(NetworkConnection conn, TwoFactorVerifyBroadcast msg, Channel channel)
 		{
-			return Task.FromResult(ClientAuthenticationResult.LoginSuccess);
+			if (conn == null || !conn.IsActive)
+				return;
+
+			// Only connections with pending TOTP state should send this.
+			if (!totpPendingStates.TryGetValue(conn.ClientId, out var pendingState))
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
+			// Guard against stale pending state after ClientId reuse: the connection
+			// that created the pending state must be the same object as the current one.
+			if (!object.ReferenceEquals(pendingState.Connection, conn))
+			{
+				totpPendingStates.TryRemove(conn.ClientId, out _);
+				conn.Disconnect(true);
+				return;
+			}
+
+			// Give the user a fresh TTL window while they are actively submitting TOTP codes.
+			RefreshAuthTtl(conn);
+
+			// Reject oversized payloads.
+			// Purge state before disconnecting so cleanup doesn't race with a
+			// reconnect on a recycled ClientId if Disconnect ever becomes async.
+			if (msg.Code == null || msg.Code.Length > CryptoHelper.MaxSrpPayloadBytes)
+			{
+				totpPendingStates.TryRemove(conn.ClientId, out _);
+				PurgeConnectionAuthState(conn, disconnect: true);
+				return;
+			}
+
+			// Per-username rate limit: prevents reconnect-and-retry from resetting
+			// the per-connection attempt cap. Entries expire after the lockout window.
+			string userKey = pendingState.Username?.ToLowerInvariant();
+			if (userKey != null && totpUsernameFailures.TryGetValue(userKey, out var failInfo))
+			{
+				if (DateTime.UtcNow - failInfo.FirstFailure > TotpUsernameLockoutDuration)
+				{
+					// Window expired — evict stale entry.
+					totpUsernameFailures.TryRemove(userKey, out _);
+				}
+				else if (failInfo.Count >= MaxTotpFailuresPerUsername)
+				{
+					// Locked out — reject immediately.
+					totpPendingStates.TryRemove(conn.ClientId, out _);
+					EnqueueMainThread(() =>
+					{
+						if (conn.IsActive) conn.Disconnect(false);
+					});
+					PurgeConnectionAuthState(conn, disconnect: false);
+					return;
+				}
+			}
+
+			// Gate TOTP verification through the concurrency semaphore to
+			// prevent thread-pool exhaustion under burst traffic.
+			// Checked BEFORE incrementing attempts so a busy server doesn't
+			// silently burn one of the user's allowed retries.
+			var sem = totpSemaphore;
+			if (sem == null)
+			{
+				// Shutdown in progress — semaphore was disposed.
+				totpPendingStates.TryRemove(conn.ClientId, out _);
+				PurgeConnectionAuthState(conn, disconnect: true);
+				return;
+			}
+			if (!sem.Wait(0))
+			{
+				// All verification slots are occupied — ask client to retry.
+				EnqueueMainThread(() =>
+				{
+					if (conn.IsActive)
+					{
+						NetworkManager.ServerManager.Broadcast(conn,
+							new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.TwoFactorInvalid },
+							false, Channel.Reliable);
+					}
+				});
+				return;
+			}
+
+			// Increment attempt counter AFTER the semaphore gate so that
+			// back-pressure rejections don't consume one of the allowed retries.
+			int attempts = System.Threading.Interlocked.Increment(ref pendingState.Attempts);
+			if (attempts > MaxTotpAttempts)
+			{
+				sem.Release();
+				totpPendingStates.TryRemove(conn.ClientId, out _);
+				EnqueueMainThread(() =>
+				{
+					if (conn.IsActive) conn.Disconnect(false);
+				});
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
+
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					await ProcessTwoFactorVerifyAsync(conn, msg.Code, msg.Seq, pendingState);
+				}
+				catch (Exception ex)
+				{
+					await Log.Error(LogPrefix, $"TOTP verify error: {ex}");
+					totpPendingStates.TryRemove(conn.ClientId, out _);
+					EnqueueMainThread(() =>
+					{
+						if (conn.IsActive) conn.Disconnect(false);
+					});
+					PurgeConnectionAuthState(conn, disconnect: false);
+				}
+				finally
+				{
+					sem.Release();
+				}
+			});
 		}
+
+		/// <summary>
+		/// Processes a TOTP verification request asynchronously.
+		/// Decrypts the code, verifies against the stored TOTP secret, and completes login on success.
+		/// </summary>
+		private async Task ProcessTwoFactorVerifyAsync(
+			NetworkConnection conn,
+			byte[] encryptedCode,
+			uint seq,
+			TotpPendingState pendingState)
+		{
+			// Decrypt TOTP code.
+			string totpCode;
+			try
+			{
+				if (!pendingState.EncryptionData.TryConsumeReceiveSequence(seq))
+				{
+					// Sequence replay/out-of-order: track as a per-username failure to prevent
+					// reconnect-and-retry abuse with stale sequence numbers.
+					TrackTotpUsernameFailure(pendingState.Username);
+
+					// Check if max attempts exceeded (already incremented in outer handler).
+					// Attempts is volatile — plain read has acquire semantics.
+					if (pendingState.Attempts > MaxTotpAttempts)
+					{
+						totpPendingStates.TryRemove(conn.ClientId, out _);
+						EnqueueMainThread(() =>
+						{
+							if (conn.IsActive) conn.Disconnect(false);
+						});
+						PurgeConnectionAuthState(conn, disconnect: false);
+						return;
+					}
+
+					EnqueueMainThread(() =>
+					{
+						if (conn.IsActive)
+						{
+							NetworkManager.ServerManager.Broadcast(conn,
+								new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.TwoFactorInvalid },
+								false, Channel.Reliable);
+						}
+					});
+					return;
+				}
+
+				byte[] nonce = pendingState.EncryptionData.BuildReceiveNonce(seq);
+				byte[] aad = new byte[CryptoHelper.AadLength];
+				CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.TwoFactorVerify, pendingState.EncryptionData.AgreedVersion, seq);
+				byte[] decryptedCode = CryptoHelper.DecryptAES(pendingState.EncryptionData.ClientToServerKey, nonce, encryptedCode, aad);
+				try
+				{
+					totpCode = CryptoHelper.StrictUtf8.GetString(decryptedCode);
+				}
+				catch (DecoderFallbackException)
+				{
+					CryptographicOperations.ZeroMemory(decryptedCode);
+					throw new CryptographicException("Malformed UTF-8 in TOTP code.");
+				}
+				CryptographicOperations.ZeroMemory(decryptedCode);
+			}
+			catch (CryptographicException)
+			{
+				totpPendingStates.TryRemove(conn.ClientId, out _);
+				EnqueueMainThread(() =>
+				{
+					if (conn.IsActive) conn.Disconnect(false);
+				});
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
+
+			// Fetch account data and verify TOTP code.
+			byte[] totpMasterKeySnapshot = TotpMasterKey;
+			if (totpMasterKeySnapshot == null || totpMasterKeySnapshot.Length != 32 ||
+				Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
+			{
+				totpPendingStates.TryRemove(conn.ClientId, out _);
+				EnqueueMainThread(() =>
+				{
+					if (conn.IsActive) conn.Disconnect(false);
+				});
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
+
+			var accountResult = await accountService.FetchForLoginAsync(pendingState.Username);
+			if (!accountResult.IsSuccess || string.IsNullOrEmpty(accountResult.Data.TotpSecret))
+			{
+				totpPendingStates.TryRemove(conn.ClientId, out _);
+				EnqueueMainThread(() =>
+				{
+					if (conn.IsActive) conn.Disconnect(false);
+				});
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
+
+			// Detect code type: TOTP codes are 6-digit numeric; recovery
+			// codes use the XXXXX-XXXXX uppercase hex format (11 chars).
+			bool isRecoveryCode = false;
+			if (totpCode.Length == 11 && totpCode[5] == '-')
+			{
+				isRecoveryCode = true;
+				for (int i = 0; i < 11; i++)
+				{
+					if (i == 5) continue;
+					char c = char.ToUpperInvariant(totpCode[i]);
+					if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F')))
+					{
+						isRecoveryCode = false;
+						break;
+					}
+				}
+			}
+
+			if (isRecoveryCode)
+			{
+				// Recovery code path: fetch stored hashes and verify against each.
+				if (!Server.Database.ServiceRegistry.TryGet<ITwoFactorRecoveryCodeService>(out var recoveryCodeService))
+				{
+					totpPendingStates.TryRemove(conn.ClientId, out _);
+					EnqueueMainThread(() =>
+					{
+						if (conn.IsActive) conn.Disconnect(false);
+					});
+					PurgeConnectionAuthState(conn, disconnect: false);
+					return;
+				}
+
+				var storedCodesResult = await recoveryCodeService.FetchUnusedByAccountAsync(pendingState.Username);
+				if (!storedCodesResult.IsSuccess || storedCodesResult.Data == null || storedCodesResult.Data.Count == 0)
+				{
+					TrackTotpUsernameFailure(pendingState.Username);
+					EnqueueMainThread(() =>
+					{
+						if (conn.IsActive)
+						{
+							NetworkManager.ServerManager.Broadcast(conn,
+								new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.TwoFactorInvalid },
+								false, Channel.Reliable);
+						}
+					});
+					return;
+				}
+
+				string matchedHash = null;
+				foreach (var codeData in storedCodesResult.Data)
+				{
+					if (CryptoHelper.TwoFactor.VerifyRecoveryCode(totpCode, codeData.CodeHash))
+					{
+						matchedHash = codeData.CodeHash;
+						break;
+					}
+				}
+
+				if (matchedHash == null)
+				{
+					TrackTotpUsernameFailure(pendingState.Username);
+					EnqueueMainThread(() =>
+					{
+						if (conn.IsActive)
+						{
+							NetworkManager.ServerManager.Broadcast(conn,
+								new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.TwoFactorInvalid },
+								false, Channel.Reliable);
+						}
+					});
+					return;
+				}
+
+				// Consume the matched recovery code so it cannot be reused.
+				await recoveryCodeService.ConsumeCodeAsync(pendingState.Username, matchedHash);
+			}
+			else
+			{
+				// Standard TOTP path.
+				byte[] plaintextSecret = null;
+				try
+				{
+					plaintextSecret = CryptoHelper.TwoFactor.DecryptTotpSecret(totpMasterKeySnapshot, accountResult.Data.TotpSecret);
+					var (valid, windowUsed) = CryptoHelper.TwoFactor.VerifyTotpCode(plaintextSecret, totpCode, accountResult.Data.LastTotpWindow);
+
+					if (!valid)
+					{
+						// Track per-username TOTP failures across connections.
+						TrackTotpUsernameFailure(pendingState.Username);
+
+						// Invalid TOTP — allow retry.
+						EnqueueMainThread(() =>
+						{
+							if (conn.IsActive)
+							{
+								NetworkManager.ServerManager.Broadcast(conn,
+									new ClientAuthResultBroadcast() { Result = ClientAuthenticationResult.TwoFactorInvalid },
+									false, Channel.Reliable);
+							}
+						});
+						return;
+					}
+
+					// TOTP valid — persist anti-replay window.
+					// ANTI-REPLAY NOTE: There is an inherent race between VerifyTotpCode (which
+					// checks the last-used window) and PersistLastTotpWindowAsync (which writes
+					// the new window). Two concurrent requests using the same TOTP code could both
+					// pass the in-memory check before either persists. This is mitigated by:
+					//   1. The totpSemaphore limits concurrent TOTP verifications (MaxConcurrentTotpVerifications).
+					//   2. The per-ClientId TotpPendingState means only one TOTP path is active per connection.
+					//   3. PersistLastTotpWindowAsync SHOULD use a conditional update in the DB:
+					//      UPDATE accounts SET last_totp_window = @new WHERE last_totp_window < @new
+					//      This ensures that if two writes race, only the later window value wins
+					//      and replays of the same window are rejected on the next attempt.
+					if (accountResult.Data.TotpVerifiedAt == null)
+					{
+						// First TOTP verification ever — marks 2FA as fully activated.
+						await accountService.PersistTotpVerifiedAtAsync(pendingState.Username, windowUsed);
+					}
+					else
+					{
+						await accountService.PersistLastTotpWindowAsync(pendingState.Username, windowUsed);
+					}
+				}
+				finally
+				{
+					if (plaintextSecret != null)
+						CryptographicOperations.ZeroMemory(plaintextSecret);
+				}
+			}
+
+			// TOTP verified — advance auth state on the worker thread BEFORE
+			// encrypting or enqueueing. This prevents two concurrent TOTP verify
+			// messages from both reaching token issuance before either advances state.
+			totpPendingStates.TryRemove(conn.ClientId, out _);
+			totpEnabledByClientId.TryRemove(conn.ClientId, out _);
+
+			if (!Server.AccountManager.TryAdvanceAuthState(conn, AuthState.SrpSuccess, AuthState.Authenticated))
+			{
+				// Another path (parallel verify, sweep, or disconnect) already
+				// transitioned or purged this connection — nothing to do.
+				// NOTE: This warning is expected under packet reordering: if two
+				// TOTP verify messages arrive close together, the first succeeds
+				// and the second hits this path. Not a security issue.
+				await Log.Warning(LogPrefix, $"TOTP advance to Authenticated failed for client {conn.ClientId} — duplicate or purged.");
+				return;
+			}
+
+			string serverProof = pendingState.ServerProof;
+			string username = pendingState.Username;
+			AccessLevel accessLevel = pendingState.AccessLevel;
+			ClientAuthenticationResult loginResult = ClientAuthenticationResult.LoginSuccess;
+
+			// Refresh TTL before final work.
+			RefreshAuthTtl(conn);
+
+			// Encrypt server proof.
+			uint sendSeq = pendingState.EncryptionData.NextSendSequence();
+			byte[] sendNonce = pendingState.EncryptionData.BuildSendNonce(sendSeq);
+			byte[] aadSend = new byte[CryptoHelper.AadLength];
+			CryptoHelper.WriteAad(aadSend, (byte)CryptoHelper.AuthMessageType.SrpSuccess, pendingState.EncryptionData.AgreedVersion, sendSeq);
+			byte[] encryptedServerProof = CryptoHelper.EncryptAES(pendingState.EncryptionData.ServerToClientKey, sendNonce, Encoding.UTF8.GetBytes(serverProof), aadSend);
+
+			// Generate and encrypt auth token.
+			byte[] encryptedToken = await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, username, accessLevel);
+
+			// Marshal login success to main thread.
+			EnqueueMainThread(() =>
+			{
+				if (conn.IsActive)
+				{
+					SrpSuccessBroadcast resultMsg = new SrpSuccessBroadcast()
+					{
+						Proof = encryptedServerProof,
+						Result = loginResult,
+						Token = encryptedToken,
+					};
+					NetworkManager.ServerManager.Broadcast(conn, resultMsg, false, Channel.Reliable);
+				}
+
+				OnAuthentication(conn, true);
+				InvokeClientAuthenticationResult(conn, true);
+
+				// State already advanced to Authenticated on the worker thread.
+				// Clear SRP material now that login is complete.
+				srpAccountManager.ClearSrpState(conn);
+			});
+		}
+
+		/// <summary>
+		/// Tracks a TOTP failure for the given username in the per-username rate limiter.
+		/// </summary>
+		private void TrackTotpUsernameFailure(string username)
+		{
+			string failKey = username?.ToLowerInvariant();
+			if (failKey != null)
+			{
+				// Hard cap: reject new entries when the tracker is full to prevent
+				// unbounded memory growth from unique-username flooding.
+				if (!totpUsernameFailures.ContainsKey(failKey) &&
+					totpUsernameFailures.Count >= MaxTotpUsernameFailureEntries)
+					return;
+
+				DateTime now = DateTime.UtcNow;
+				totpUsernameFailures.AddOrUpdate(
+					failKey,
+					_ => (1, now),
+					(_, existing) => (Math.Min(existing.Count + 1, MaxTotpFailuresPerUsername + 1), existing.FirstFailure));
+			}
+		}
+
+		/// <summary>
+		/// Cleans up TOTP pending state when a connection is purged.
+		/// </summary>
+		private void CleanupTotpPendingState(NetworkConnection conn)
+		{
+			if (conn != null)
+			{
+				totpPendingStates.TryRemove(conn.ClientId, out _);
+				totpEnabledByClientId.TryRemove(conn.ClientId, out _);
+			}
+		}
+
+		#endregion
+
+		// NOTE: TryLoginAsync is intentionally NOT overridden here.
+		// The base implementation (passthrough) is correct for the LoginServer SRP flow,
+		// which always passes LoginSuccess. Subclasses (WorldServerAuthenticator,
+		// SceneServerAuthenticator) override TryLoginAsync for server-type-specific checks.
 
 		/// <summary>
 		/// Derives a deterministic per-username fake SRP salt via HMAC-SHA512
@@ -1145,6 +1850,8 @@ namespace FishMMO.Server.Implementation
 			if (conn != null)
 			{
 				connectionIpCache.Remove(conn.ClientId);
+				totpEnabledByClientId.TryRemove(conn.ClientId, out _);
+				CleanupTotpPendingState(conn);
 			}
 		}
 
@@ -1243,10 +1950,56 @@ namespace FishMMO.Server.Implementation
 				return false;
 			}
 
+			// Hard cap: reject new entries when the debounce tracker is full to prevent
+			// unbounded memory growth from unique-account-name flooding.
+			if (accountVerifyNextAllowedUtc.Count >= MaxAccountVerifyDebounceEntries)
+			{
+				return false;
+			}
+
+			// Normalize to prevent case-variant bypass of the debounce window.
 			return accountVerifyNextAllowedUtc.TryBegin(
-				accountName,
+				accountName.ToLowerInvariant(),
 				DateTime.UtcNow,
 				TimeSpan.FromSeconds(AccountVerifyDebounceSeconds));
+		}
+
+		/// <summary>
+		/// Builds an auth token, persists its hash for revocation, and encrypts it with the session key.
+		/// Returns <c>null</c> if the signing key is unavailable or if token generation fails (non-fatal).
+		/// </summary>
+		private async Task<byte[]> GenerateEncryptedAuthTokenAsync(ConnectionEncryptionData encryptionData, string username, AccessLevel accessLevel)
+		{
+			byte[] signingKeySnapshot = TokenSigningKey;
+			if (signingKeySnapshot == null || signingKeySnapshot.Length < CryptoHelper.HmacKeyLength)
+				return null;
+
+			try
+			{
+				DateTime expiresUtc = DateTime.UtcNow.AddMinutes(tokenExpirationMinutes);
+				byte[] rawToken = CryptoHelper.BuildAuthToken(username, LoginServerId, expiresUtc, signingKeySnapshot, accessLevel);
+
+				string tokenHash = CryptoHelper.HashTokenHex(rawToken);
+				if (Server.Database?.ServiceRegistry != null &&
+					Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var authTokenService))
+				{
+					await authTokenService.IssueAsync(tokenHash, username, LoginServerId, expiresUtc);
+				}
+
+				uint tokenSeq = encryptionData.NextSendSequence();
+				byte[] tokenNonce = encryptionData.BuildSendNonce(tokenSeq);
+				byte[] tokenAad = new byte[CryptoHelper.AadLength];
+				CryptoHelper.WriteAad(tokenAad, (byte)CryptoHelper.AuthMessageType.SrpSuccess, encryptionData.AgreedVersion, tokenSeq);
+				byte[] encryptedToken = CryptoHelper.EncryptAES(encryptionData.ServerToClientKey, tokenNonce, rawToken, tokenAad);
+
+				CryptographicOperations.ZeroMemory(rawToken);
+				return encryptedToken;
+			}
+			catch (Exception tokenEx)
+			{
+				await Log.Warning(LogPrefix, $"Token generation failed (non-fatal): {tokenEx.Message}");
+				return null;
+			}
 		}
 
 		/// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -122,6 +123,22 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				authenticator.TokenSigningKey = hmacKey;
 				authenticator.LoginServerId = runtimeData.ID;
+
+				// Derive a TOTP master key from the HMAC signing key using HMAC-SHA256
+				// with a domain separator. This key encrypts TOTP secrets at rest in the DB.
+				byte[] totpMasterKey;
+				using (var kdf = new HMACSHA256(hmacKey))
+				{
+					totpMasterKey = kdf.ComputeHash(Encoding.UTF8.GetBytes("fishmmo-totp-master-key-v1"));
+				}
+				authenticator.TotpMasterKey = totpMasterKey;
+
+				// Wire the same TOTP master key to the account creation system.
+				if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem) &&
+					accountSystem is AccountCreationSystem concreteAccountSystem)
+				{
+					concreteAccountSystem.TotpMasterKey = totpMasterKey;
+				}
 			}
 			else
 			{
@@ -156,12 +173,28 @@ namespace FishMMO.Server.Implementation.LoginServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPulse);
 			}
 
-			// Zero the authenticator's signing key before shutdown
-			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator &&
-				authenticator.TokenSigningKey != null)
+			// Zero the authenticator's signing key and TOTP master key before shutdown
+			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
 			{
-				CryptographicOperations.ZeroMemory(authenticator.TokenSigningKey);
-				authenticator.TokenSigningKey = null;
+				if (authenticator.TokenSigningKey != null)
+				{
+					CryptographicOperations.ZeroMemory(authenticator.TokenSigningKey);
+					authenticator.TokenSigningKey = null;
+				}
+				if (authenticator.TotpMasterKey != null)
+				{
+					CryptographicOperations.ZeroMemory(authenticator.TotpMasterKey);
+					authenticator.TotpMasterKey = null;
+				}
+			}
+
+			// Zero the account creation system's TOTP master key
+			if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem) &&
+				accountSystem is AccountCreationSystem concreteAccountSystem &&
+				concreteAccountSystem.TotpMasterKey != null)
+			{
+				CryptographicOperations.ZeroMemory(concreteAccountSystem.TotpMasterKey);
+				concreteAccountSystem.TotpMasterKey = null;
 			}
 
 			// Deregister login server and signing key from database on shutdown

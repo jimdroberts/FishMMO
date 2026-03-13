@@ -55,6 +55,14 @@ namespace FishMMO.Server.Implementation
 				connectionAccounts.Remove(connection);
 				connectionAccounts.Add(connection, accountName);
 
+				// Silently replaces if the same account is already mapped to a different
+				// connection (narrow race between online-check and state advance).
+				// The TryAdvanceAuthState gate makes this extremely unlikely, but log
+				// if it happens for diagnostics.
+				if (accountConnections.TryGetValue(accountName, out NetworkConnection existing) && existing != connection)
+				{
+					UnityEngine.Debug.LogWarning($"[SrpAccountManager] Replacing existing connection for account '{accountName}' (old clientId={existing.ClientId}, new clientId={connection.ClientId}).");
+				}
 				accountConnections.Remove(accountName);
 				accountConnections.Add(accountName, connection);
 

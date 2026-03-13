@@ -38,14 +38,27 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int Age { get; set; }
 
 		/// <summary>
-		/// Whether two-factor authentication is enabled.
+		/// Whether TOTP two-factor authentication is enabled for this account.
 		/// </summary>
-		public bool TwoFactorEnabled { get; set; }
+		public bool TotpEnabled { get; set; }
 
 		/// <summary>
-		/// Current two-factor authentication code. Null when 2FA is disabled or no code is active.
+		/// Base32-encoded TOTP secret key, encrypted at rest by the server layer.
+		/// Null when TOTP has not been set up.
 		/// </summary>
-		public string? TwoFactorCode { get; set; }
+		public string? TotpSecret { get; set; }
+
+		/// <summary>
+		/// Timestamp (UTC) of the first successful TOTP verification, confirming setup completion.
+		/// Null when TOTP setup has not been confirmed.
+		/// </summary>
+		public DateTime? TotpVerifiedAt { get; set; }
+
+		/// <summary>
+		/// The last TOTP time-step window that was successfully used, for replay attack prevention.
+		/// Zero when no TOTP code has been verified yet.
+		/// </summary>
+		public long LastTotpWindow { get; set; }
 
 		/// <summary>
 		/// Temporary code used to link a Discord account. Null when no link is pending.

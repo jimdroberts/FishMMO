@@ -65,6 +65,9 @@ The request pipeline follows four stages:
 - **Graceful shutdown** — full queue drain on deinitialize ensures clients receive final responses
 - **Stateless behaviour** — all mutable state in `RuntimeDataContainer` instances; system logic is pure and testable
 - **Engine-agnostic core** — interface/implementation split with generic `TConnection` parameter
+- **Account verification** — encrypted verification code flow via `AccountVerifyBroadcast`; validates codes against database before marking accounts as verified
+- **Per-username verification brute-force protection** — failed verification attempts tracked per username (lowercased). After 10 failures within 30 minutes, further attempts are rejected until the lockout expires. Bounded sweep (64 max scan) evicts stale entries. Hard cap of 50,000 tracked entries prevents memory exhaustion.
+- **Mandatory 2FA setup** — account creation generates a TOTP secret (encrypted at rest with the server-side master key), recovery codes (PBKDF2-SHA256 hashed), and delivers the otpauth URI and plaintext recovery codes to the client via AES-encrypted transport
 
 ## Prerequisites
 
@@ -142,6 +145,10 @@ All tunables are clamped to safe minimums during `InitializeOnce()`:
 | `MaxEncryptedFieldSize` | `2048` bytes | Rejects oversized encrypted payloads on the network thread before any decryption or allocation |
 | `MaxSaltLength` | `256` chars | Maximum allowed length for the decrypted SRP salt string |
 | `MaxVerifierLength` | `1024` chars | Maximum allowed length for the decrypted SRP verifier string |
+| `MaxVerifyFailuresPerUsername` | `10` | Maximum failed verification attempts per username before lockout |
+| `VerifyUsernameLockoutDuration` | `30` min | Lockout window for per-username verification failures |
+| `MaxVerifyUsernameFailureEntries` | `50,000` | Hard cap on tracked username entries to prevent memory exhaustion |
+| `VerifyUsernameFailureSweepMaxScan` | `64` | Maximum entries scanned per sweep for expired verification failures |
 
 ## Usage Examples
 
@@ -344,6 +351,7 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 | **FishNet** | Receives `CreateAccountBroadcast`, sends `ClientAuthResultBroadcast` |
 | **AccountManager** | Provides per-connection AES key/IV needed to decrypt payloads |
 | **Database Service Registry** | Resolves `IAccountService` for persistence via `PersistAsync(username, salt, verifier)` |
+| **ITwoFactorRecoveryCodeService** | Stores PBKDF2-SHA256 hashed recovery codes via `PersistManyAsync` during account creation |
 | **DataContainerRegistry** | Supplies queue, runtime, mapping, and main-thread queue containers |
 | **CryptoHelper** | AES decrypt, strict UTF-8 encoding, AAD construction, `AuthMessageType.CreateAccount` |
 | **Authentication** | Centralized `IsAllowedUsername()` validation |

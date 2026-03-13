@@ -53,6 +53,7 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<KickRequestEntity> KickRequests { get; set; }
 		public DbSet<LoginServerSigningKeyEntity> LoginServerSigningKeys { get; set; }
 		public DbSet<AuthTokenEntity> AuthTokens { get; set; }
+		public DbSet<TwoFactorRecoveryCodeEntity> TwoFactorRecoveryCodes { get; set; }
 
 		public DbSet<CharacterEntity> Characters { get; set; }
 		public DbSet<CharacterAbilityEntity> CharacterAbilities { get; set; }

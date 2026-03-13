@@ -1,8 +1,10 @@
 using System;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using OtpNet;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Engines;
 using Org.BouncyCastle.Crypto.Generators;
@@ -52,15 +54,46 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static byte[] BuildAad(byte messageType, ushort version, uint sequence)
 		{
-			var aad = new byte[7];
-			aad[0] = messageType;
-			aad[1] = (byte)(version >> 8);
-			aad[2] = (byte)version;
-			aad[3] = (byte)(sequence >> 24);
-			aad[4] = (byte)(sequence >> 16);
-			aad[5] = (byte)(sequence >> 8);
-			aad[6] = (byte)sequence;
+			var aad = new byte[AadLength];
+			WriteAad(aad, messageType, version, sequence);
 			return aad;
+		}
+
+		/// <summary>
+		/// Length in bytes of an AAD buffer produced by <see cref="BuildAad"/>.
+		/// </summary>
+		public const int AadLength = 7;
+
+		/// <summary>
+		/// Writes AAD directly into a caller-supplied buffer, avoiding a heap allocation.
+		/// Use on hot paths (e.g., per-field encryption in a multi-field message) where
+		/// thousands of 7-byte arrays per second would pressure the GC.
+		/// </summary>
+		/// <param name="destination">Must be at least <see cref="AadLength"/> bytes.</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void WriteAad(byte[] destination, byte messageType, ushort version, uint sequence)
+		{
+			destination[0] = messageType;
+			destination[1] = (byte)(version >> 8);
+			destination[2] = (byte)version;
+			destination[3] = (byte)(sequence >> 24);
+			destination[4] = (byte)(sequence >> 16);
+			destination[5] = (byte)(sequence >> 8);
+			destination[6] = (byte)sequence;
+		}
+
+		/// <summary>
+		/// Validates that a base sequence number is large enough to derive <paramref name="fieldCount"/>
+		/// sub-sequences via <c>seq - (fieldCount - 1)</c> through <c>seq</c> without underflow.
+		/// Use before any <c>seq - N</c> arithmetic in protocol handlers to prevent uint wrap-around.
+		/// </summary>
+		/// <param name="seq">The base (highest) sequence number from the message.</param>
+		/// <param name="fieldCount">Total number of fields encoded (e.g., 5 for CreateAccount, 2 for SrpVerify).</param>
+		/// <returns><c>true</c> if <c>seq >= fieldCount - 1</c>; <c>false</c> if subtraction would underflow.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool ValidateSequenceRange(uint seq, uint fieldCount)
+		{
+			return fieldCount <= 1 || seq >= (fieldCount - 1);
 		}
 
 		/// <summary>
@@ -455,7 +488,9 @@ namespace FishMMO.Shared
 			ClientAuthResult = 0x07,
 			CreateAccount = 0x08,
 			TokenAuth = 0x09,
-			AccountVerify = 0x0A // client->server
+			AccountVerify = 0x0A, // client->server
+			TwoFactorSetup = 0x0B, // server->client (2FA setup data after registration)
+			TwoFactorVerify = 0x0C, // client->server (TOTP code during login)
 		}
 
 		/// <summary>
@@ -465,7 +500,11 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Maximum GCM nonce counter value (7 bytes = 2^56 − 1).
-		/// Sessions MUST be rekeyed before the counter reaches this limit.
+		/// This is the theoretical nonce-space limit for the 7-byte counter field in the
+		/// 12-byte GCM nonce layout. In practice, <see cref="GcmNonceContext.NextNonce"/>
+		/// caps the counter at <see cref="uint.MaxValue"/> (2^32 − 1) because the sequence
+		/// numbers exchanged in wire messages are 32-bit. <see cref="GcmNonceContext.ShouldRekey"/>
+		/// uses uint.MaxValue as the practical maximum accordingly.
 		/// </summary>
 		public const ulong MaxGcmNonceCounter = 0x00FFFFFFFFFFFFFF;
 
@@ -483,6 +522,20 @@ namespace FishMMO.Shared
 		/// <para><b>Thread safety:</b> Counter increments use <see cref="Interlocked.Increment(ref long)"/>.
 		/// Multiple threads may call <see cref="NextNonce"/> concurrently.</para>
 		/// </remarks>
+		/// <summary>
+		/// Traffic direction for <see cref="GcmNonceContext"/>.
+		/// Selects the direction byte embedded in each GCM nonce to guarantee that
+		/// client→server and server→client nonces are always distinct, even when
+		/// derived from the same counter value and session prefix.
+		/// </summary>
+		public enum NonceSide : byte
+		{
+			/// <summary>Client→server direction (nonce direction byte = 0x00).</summary>
+			ClientToServer = 0,
+			/// <summary>Server→client direction (nonce direction byte = 0x01).</summary>
+			ServerToClient = 1,
+		}
+
 		public sealed class GcmNonceContext : IDisposable
 		{
 			private byte[] prefix;
@@ -492,6 +545,17 @@ namespace FishMMO.Shared
 
 			/// <summary>
 			/// Creates a nonce context that copies the session prefix.
+			/// </summary>
+			/// <param name="sessionPrefix">4-byte session prefix (copied, not aliased).</param>
+			/// <param name="side">Traffic direction — determines the direction byte in generated nonces.</param>
+			public GcmNonceContext(byte[] sessionPrefix, NonceSide side)
+				: this(sessionPrefix, side == NonceSide.ServerToClient)
+			{
+			}
+
+			/// <summary>
+			/// Creates a nonce context that copies the session prefix.
+			/// Prefer the <see cref="NonceSide"/> overload for clarity.
 			/// </summary>
 			/// <param name="sessionPrefix">4-byte session prefix (copied, not aliased).</param>
 			/// <param name="serverToClient"><c>true</c> for server→client direction; <c>false</c> for client→server.</param>
@@ -532,30 +596,67 @@ namespace FishMMO.Shared
 			}
 
 			/// <summary>
+			/// Atomically increments the internal counter and returns the sequence number
+			/// without building a nonce. Use when the caller needs the sequence for AAD
+			/// construction and will build the nonce separately via <see cref="BuildNonceForSequence"/>.
+			/// Avoids the heap allocation of a 12-byte nonce array that would be immediately discarded.
+			/// </summary>
+			/// <returns>The next sequence number.</returns>
+			/// <exception cref="CryptographicException">Thrown when the counter exceeds <see cref="uint.MaxValue"/>.</exception>
+			public uint NextSequenceOnly()
+			{
+				if (disposed) throw new ObjectDisposedException(nameof(GcmNonceContext));
+				long seq = Interlocked.Increment(ref counter);
+				if (seq > uint.MaxValue)
+					throw new CryptographicException("GCM nonce counter exhausted; session must be rekeyed.");
+				return (uint)seq;
+			}
+
+			/// <summary>
 			/// Atomically validates and consumes an expected receive sequence number.
 			/// Returns <c>true</c> and advances the counter if <paramref name="seq"/> is exactly
 			/// one greater than the current counter. Returns <c>false</c> for duplicates or gaps.
 			/// </summary>
+			/// <summary>
+			/// Maximum CAS retry iterations before giving up. Bounds the spin loop to
+			/// prevent pathological spinning under extreme contention (e.g., many threads
+			/// racing on the same context). 16 iterations is generous — under normal
+			/// conditions the CAS succeeds on the first attempt.
+			/// </summary>
+			private const int MaxCasRetries = 16;
+
 			/// <param name="seq">The expected incoming sequence number.</param>
 			/// <returns><c>true</c> if consumed; <c>false</c> otherwise.</returns>
 			public bool TryConsumeSequence(uint seq)
 			{
 				if (disposed) throw new ObjectDisposedException(nameof(GcmNonceContext));
-				while (true)
+				for (int attempt = 0; attempt < MaxCasRetries; attempt++)
 				{
 					long current = Interlocked.Read(ref counter);
+					// Guard: if the counter has reached uint.MaxValue, no further
+					// sequences can be consumed. Without this, (current + 1) as long
+					// would be 4294967296 and the uint cast would wrap to 0, accepting
+					// a replayed seq-0 on an exhausted counter.
+					if (current >= uint.MaxValue)
+						return false;
 					if (seq == (uint)(current + 1))
 					{
 						long exchanged = Interlocked.CompareExchange(ref counter, seq, current);
 						if (exchanged == current)
 							return true;
-						// CAS failed — retry
+						// CAS failed — another thread advanced the counter concurrently. Retry.
+						// Under normal single-producer usage this should never happen.
+						// NOTE: Debug.Assert is a no-op in Release/IL2CPP builds.
+						// Use UnityEngine.Debug.LogWarning so contention is observable in production.
+						UnityEngine.Debug.LogWarning($"[GcmNonceContext] TryConsumeSequence CAS retry at attempt {attempt} — unexpected contention.");
 					}
 					else
 					{
 						return false;
 					}
 				}
+				// Exhausted retries under extreme contention — treat as failure.
+				return false;
 			}
 
 			/// <summary>
@@ -603,6 +704,11 @@ namespace FishMMO.Shared
 		/// <param name="aad">Additional authenticated data bound into the GCM tag.</param>
 		/// <returns>Ciphertext including the GCM authentication tag. The return value is
 		/// not secret and does not require zeroization by callers.</returns>
+		/// <remarks>
+		/// The intermediate output buffer is heap-allocated and zeroed in a <c>finally</c> block.
+		/// ArrayPool would reduce GC pressure, but System.Buffers has an ambient assembly
+		/// conflict in this project (duplicate with netstandard2.1). Revisit if that is resolved.
+		/// </remarks>
 		public static byte[] EncryptAES(byte[] symmetricKey, byte[] iv, byte[] input, byte[] aad)
 		{
 			if (symmetricKey == null) throw new ArgumentNullException(nameof(symmetricKey));
@@ -621,7 +727,7 @@ namespace FishMMO.Shared
 			if (expectedOutputSize > MaxAesCiphertextSize)
 				throw new CryptographicException($"Requested AES output too large: {expectedOutputSize} bytes (max {MaxAesCiphertextSize}).");
 
-			var output = new byte[expectedOutputSize];
+			byte[] output = new byte[expectedOutputSize];
 			int len = 0;
 			try
 			{
@@ -669,7 +775,8 @@ namespace FishMMO.Shared
 			if (input.Length < AesGcmTagLengthBytes)
 				throw new CryptographicException($"AES ciphertext too small: {input.Length} bytes (min {AesGcmTagLengthBytes} for GCM tag).");
 
-			var output = new byte[cipher.GetOutputSize(input.Length)];
+			int outputSize = cipher.GetOutputSize(input.Length);
+			byte[] output = new byte[outputSize];
 			int len = 0;
 			try
 			{
@@ -837,7 +944,10 @@ namespace FishMMO.Shared
 
 			byte[] nameBytes = Encoding.UTF8.GetBytes(accountName);
 			if (nameBytes.Length > ushort.MaxValue)
+			{
+				CryptographicOperations.ZeroMemory(nameBytes);
 				throw new ArgumentException("Account name too long.", nameof(accountName));
+			}
 
 			// Layout: [1B version][1B tokenType][2B nameLen][name][1B accessLevel][8B serverId][8B ticks][16B nonce]
 			int payloadLength = 1 + 1 + 2 + nameBytes.Length + 1 + 8 + 8 + 16;
@@ -893,6 +1003,7 @@ namespace FishMMO.Shared
 			Buffer.BlockCopy(payload, 0, token, 0, payloadLength);
 			Buffer.BlockCopy(signature, 0, token, payloadLength, HmacTagLength);
 
+			CryptographicOperations.ZeroMemory(nameBytes);
 			CryptographicOperations.ZeroMemory(payload);
 			CryptographicOperations.ZeroMemory(signature);
 
@@ -1007,6 +1118,278 @@ namespace FishMMO.Shared
 
 			expiresUtc = new DateTime(ticks, DateTimeKind.Utc);
 			return true;
+		}
+
+		/// <summary>
+		/// TOTP two-factor authentication helpers.
+		/// Uses OtpNet for TOTP generation/verification, AES-256-GCM for encrypting
+		/// TOTP secrets at rest, and PBKDF2-SHA256 for hashing recovery codes.
+		/// </summary>
+		public static class TwoFactor
+		{
+			/// <summary>
+			/// TOTP secret length in bytes (160 bits per RFC 4226 §4).
+			/// </summary>
+			public const int TotpSecretLength = 20;
+
+			/// <summary>
+			/// Default number of recovery codes generated per account.
+			/// </summary>
+			public const int DefaultRecoveryCodeCount = 8;
+
+			/// <summary>
+			/// PBKDF2 iteration count for recovery code hashing.
+			/// </summary>
+			private const int Pbkdf2Iterations = 100_000;
+
+			/// <summary>
+			/// PBKDF2 salt length in bytes.
+			/// </summary>
+			private const int Pbkdf2SaltLength = 16;
+
+			/// <summary>
+			/// PBKDF2 derived hash length in bytes.
+			/// </summary>
+			private const int Pbkdf2HashLength = 32;
+
+			/// <summary>
+			/// TOTP step size in seconds (standard 30s per RFC 6238).
+			/// </summary>
+			private const int TotpStepSeconds = 30;
+
+			/// <summary>
+			/// TOTP code digit count.
+			/// </summary>
+			private const int TotpDigits = 6;
+
+			/// <summary>
+			/// Fixed AAD used when encrypting TOTP secrets at rest with the server master key.
+			/// Prevents cross-context decryption if the same master key is accidentally reused.
+			/// </summary>
+			private static readonly byte[] TotpSecretAad = Encoding.ASCII.GetBytes("fishmmo-totp-secret-v1");
+
+			/// <summary>
+			/// Generates a cryptographically random TOTP secret.
+			/// </summary>
+			/// <returns>20-byte secret suitable for TOTP.</returns>
+			public static byte[] GenerateTotpSecret()
+			{
+				return GenerateKey(TotpSecretLength);
+			}
+
+			/// <summary>
+			/// Encrypts a TOTP secret for at-rest storage in the database using AES-256-GCM
+			/// with the server's persistent master key.
+			/// </summary>
+			/// <param name="masterKey">32-byte persistent server master key.</param>
+			/// <param name="plaintextSecret">Plaintext TOTP secret (20 bytes).</param>
+			/// <returns>Base64-encoded string containing nonce + ciphertext + GCM tag.</returns>
+			public static string EncryptTotpSecret(byte[] masterKey, byte[] plaintextSecret)
+			{
+				if (masterKey == null || masterKey.Length != 32)
+					throw new ArgumentException("Master key must be exactly 32 bytes.", nameof(masterKey));
+				if (plaintextSecret == null || plaintextSecret.Length == 0)
+					throw new ArgumentNullException(nameof(plaintextSecret));
+
+				// Random nonce (not session-based) for at-rest encryption.
+				byte[] nonce = GenerateKey(GcmNonceLength);
+				byte[] ciphertext = EncryptAES(masterKey, nonce, plaintextSecret, TotpSecretAad);
+
+				// Format: nonce || ciphertext (includes GCM tag)
+				byte[] combined = new byte[nonce.Length + ciphertext.Length];
+				Buffer.BlockCopy(nonce, 0, combined, 0, nonce.Length);
+				Buffer.BlockCopy(ciphertext, 0, combined, nonce.Length, ciphertext.Length);
+
+				string result = Convert.ToBase64String(combined);
+				CryptographicOperations.ZeroMemory(nonce);
+				CryptographicOperations.ZeroMemory(combined);
+				return result;
+			}
+
+			/// <summary>
+			/// Decrypts a TOTP secret from its at-rest database representation.
+			/// </summary>
+			/// <param name="masterKey">32-byte persistent server master key.</param>
+			/// <param name="storedValue">Base64-encoded string from <see cref="EncryptTotpSecret"/>.</param>
+			/// <returns>Plaintext TOTP secret. Caller must zeroize when done.</returns>
+			public static byte[] DecryptTotpSecret(byte[] masterKey, string storedValue)
+			{
+				if (masterKey == null || masterKey.Length != 32)
+					throw new ArgumentException("Master key must be exactly 32 bytes.", nameof(masterKey));
+				if (string.IsNullOrEmpty(storedValue))
+					throw new ArgumentNullException(nameof(storedValue));
+
+				byte[] combined = Convert.FromBase64String(storedValue);
+				if (combined.Length <= GcmNonceLength)
+					throw new CryptographicException("Stored TOTP secret is too short.");
+
+				byte[] nonce = new byte[GcmNonceLength];
+				Buffer.BlockCopy(combined, 0, nonce, 0, GcmNonceLength);
+
+				byte[] ciphertext = new byte[combined.Length - GcmNonceLength];
+				Buffer.BlockCopy(combined, GcmNonceLength, ciphertext, 0, ciphertext.Length);
+
+				byte[] plaintext = DecryptAES(masterKey, nonce, ciphertext, TotpSecretAad);
+
+				CryptographicOperations.ZeroMemory(nonce);
+				CryptographicOperations.ZeroMemory(ciphertext);
+				CryptographicOperations.ZeroMemory(combined);
+
+				return plaintext;
+			}
+
+			/// <summary>
+			/// Builds an otpauth:// URI for use with authenticator apps (Google Authenticator, Authy, etc.).
+			/// </summary>
+			/// <param name="secret">Plaintext TOTP secret.</param>
+			/// <param name="accountName">Account name to display in the authenticator app.</param>
+			/// <param name="issuer">Issuer name (application name).</param>
+			/// <returns>otpauth://totp/ URI string.</returns>
+			public static string BuildOtpauthUri(byte[] secret, string accountName, string issuer = "FishMMO")
+			{
+				if (secret == null || secret.Length == 0)
+					throw new ArgumentNullException(nameof(secret));
+				if (string.IsNullOrEmpty(accountName))
+					throw new ArgumentException("Account name is required.", nameof(accountName));
+
+				string base32Secret = Base32Encoding.ToString(secret);
+				return $"otpauth://totp/{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(accountName)}?secret={base32Secret}&issuer={Uri.EscapeDataString(issuer)}&algorithm=SHA1&digits={TotpDigits}&period={TotpStepSeconds}";
+			}
+
+			/// <summary>
+			/// Generates a set of single-use recovery codes in XXXXX-XXXXX format.
+			/// </summary>
+			/// <param name="count">Number of codes to generate.</param>
+			/// <returns>Array of plaintext recovery codes.</returns>
+			public static string[] GenerateRecoveryCodes(int count = DefaultRecoveryCodeCount)
+			{
+				if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
+
+				string[] codes = new string[count];
+				for (int i = 0; i < count; i++)
+				{
+					byte[] bytes = GenerateKey(5);
+					string hex = BitConverter.ToString(bytes).Replace("-", "").ToUpperInvariant();
+					codes[i] = hex.Substring(0, 5) + "-" + hex.Substring(5, 5);
+					CryptographicOperations.ZeroMemory(bytes);
+				}
+				return codes;
+			}
+
+			/// <summary>
+			/// Hashes a recovery code with PBKDF2-SHA256 for secure at-rest storage.
+			/// </summary>
+			/// <param name="plaintextCode">Plaintext recovery code.</param>
+			/// <returns>String in format "base64(salt):base64(hash)" for database storage.</returns>
+			public static string HashRecoveryCode(string plaintextCode)
+			{
+				if (string.IsNullOrEmpty(plaintextCode))
+					throw new ArgumentNullException(nameof(plaintextCode));
+
+				string normalized = plaintextCode.Trim().ToUpperInvariant();
+
+				byte[] salt = GenerateKey(Pbkdf2SaltLength);
+				byte[] codeBytes = Encoding.UTF8.GetBytes(normalized);
+
+				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
+				{
+					byte[] hash = pbkdf2.GetBytes(Pbkdf2HashLength);
+					string result = Convert.ToBase64String(salt) + ":" + Convert.ToBase64String(hash);
+					CryptographicOperations.ZeroMemory(salt);
+					CryptographicOperations.ZeroMemory(hash);
+					CryptographicOperations.ZeroMemory(codeBytes);
+					return result;
+				}
+			}
+
+			/// <summary>
+			/// Verifies a submitted recovery code against a stored PBKDF2-SHA256 hash.
+			/// </summary>
+			/// <param name="submitted">Plaintext recovery code submitted by the user.</param>
+			/// <param name="storedHash">Stored hash in "base64(salt):base64(hash)" format.</param>
+			/// <returns><c>true</c> if the code matches; <c>false</c> otherwise.</returns>
+			public static bool VerifyRecoveryCode(string submitted, string storedHash)
+			{
+				if (string.IsNullOrEmpty(submitted) || string.IsNullOrEmpty(storedHash))
+					return false;
+
+				string[] parts = storedHash.Split(':');
+				if (parts.Length != 2)
+					return false;
+
+				byte[] salt;
+				byte[] expectedHash;
+				try
+				{
+					salt = Convert.FromBase64String(parts[0]);
+					expectedHash = Convert.FromBase64String(parts[1]);
+				}
+				catch (FormatException)
+				{
+					return false;
+				}
+
+				if (salt.Length != Pbkdf2SaltLength || expectedHash.Length != Pbkdf2HashLength)
+				{
+					CryptographicOperations.ZeroMemory(salt);
+					CryptographicOperations.ZeroMemory(expectedHash);
+					return false;
+				}
+
+				string normalized = submitted.Trim().ToUpperInvariant();
+				byte[] codeBytes = Encoding.UTF8.GetBytes(normalized);
+
+				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
+				{
+					byte[] computedHash = pbkdf2.GetBytes(Pbkdf2HashLength);
+					bool result = FixedTimeEquals(computedHash, expectedHash);
+					CryptographicOperations.ZeroMemory(salt);
+					CryptographicOperations.ZeroMemory(expectedHash);
+					CryptographicOperations.ZeroMemory(computedHash);
+					CryptographicOperations.ZeroMemory(codeBytes);
+					return result;
+				}
+			}
+
+			/// <summary>
+			/// Verifies a TOTP code with a ±1 step verification window and anti-replay protection.
+			/// </summary>
+			/// <param name="plaintextSecret">Decrypted TOTP secret.</param>
+			/// <param name="submittedCode">6-digit TOTP code from the user.</param>
+			/// <param name="lastWindow">Last successfully used TOTP time window (for anti-replay). Pass 0 for first use.</param>
+			/// <returns>Tuple: (valid, windowUsed). If valid, windowUsed should be stored for anti-replay.</returns>
+			/// <remarks>
+			/// <para><b>Heap retention:</b> The OtpNet <c>Totp</c> constructor copies
+			/// <paramref name="plaintextSecret"/> into an internal managed array that cannot
+			/// be zeroed without reflection. The <c>Totp</c> object becomes GC-eligible once
+			/// this method returns, and the caller is expected to zero <paramref name="plaintextSecret"/>
+			/// in its <c>finally</c> block (after any DB persistence calls complete). Pinning and manual zeroing of the OtpNet internal field is not
+			/// worthwhile given the narrow time window and the already-encrypted-at-rest storage.</para>
+			/// </remarks>
+			public static (bool Valid, long WindowUsed) VerifyTotpCode(byte[] plaintextSecret, string submittedCode, long lastWindow)
+			{
+				if (plaintextSecret == null || plaintextSecret.Length == 0)
+					return (false, 0);
+				if (string.IsNullOrEmpty(submittedCode) || submittedCode.Length != TotpDigits)
+					return (false, 0);
+
+				var totp = new Totp(plaintextSecret, step: TotpStepSeconds, mode: OtpHashMode.Sha1, totpSize: TotpDigits);
+
+				long timeWindowUsed;
+				// previous: 1 allows one expired window for clock drift / slow typing.
+				// future: 0 rejects codes from upcoming windows to prevent pre-computed
+				// code submission (the server clock is authoritative).
+				bool valid = totp.VerifyTotp(submittedCode, out timeWindowUsed, new VerificationWindow(previous: 1, future: 0));
+
+				if (!valid)
+					return (false, 0);
+
+				// Anti-replay: reject if this window was already used
+				if (timeWindowUsed <= lastWindow)
+					return (false, 0);
+
+				return (true, timeWindowUsed);
+			}
 		}
 	}
 }

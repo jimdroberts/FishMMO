@@ -67,7 +67,8 @@ namespace FishMMO.Server.Core.Collections
 		}
 
 		/// <summary>
-		/// Removes a tracked key if present.
+		/// Removes a tracked key if present. O(1) via Dictionary→LinkedListNode lookup;
+		/// <see cref="LinkedList{T}.Remove(LinkedListNode{T})"/> is itself O(1).
 		/// </summary>
 		public bool Remove(TKey key)
 		{

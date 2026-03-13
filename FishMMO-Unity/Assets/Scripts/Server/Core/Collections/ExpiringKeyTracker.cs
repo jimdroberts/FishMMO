@@ -30,6 +30,20 @@ namespace FishMMO.Server.Core.Collections
 		}
 
 		/// <summary>
+		/// Current number of tracked keys.
+		/// </summary>
+		public int Count
+		{
+			get
+			{
+				lock (gate)
+				{
+					return nextAllowedUtc.Count;
+				}
+			}
+		}
+
+		/// <summary>
 		/// Clears all tracked entries.
 		/// </summary>
 		public void Clear()

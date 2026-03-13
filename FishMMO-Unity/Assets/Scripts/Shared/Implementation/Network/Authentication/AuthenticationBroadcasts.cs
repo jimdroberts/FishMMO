@@ -153,4 +153,35 @@ namespace FishMMO.Shared
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
 	}
+
+	/// <summary>
+	/// Broadcast sent by the server after account creation containing encrypted TOTP
+	/// setup data (otpauth URI and recovery codes) for two-factor authentication.
+	/// </summary>
+	public struct TwoFactorSetupBroadcast : IBroadcast
+	{
+		/// <summary>Encrypted otpauth:// URI for authenticator app setup (AES-GCM, server->client).</summary>
+		public byte[] OtpauthUri;
+		/// <summary>Encrypted newline-delimited plaintext recovery codes (AES-GCM, server->client).</summary>
+		public byte[] RecoveryCodes;
+
+		/// <summary>
+		/// Explicit message sequence number (server->client).
+		/// The server derives: otpauthUri_seq = Seq - 1, recoveryCodes_seq = Seq.
+		/// </summary>
+		public uint Seq;
+	}
+
+	/// <summary>
+	/// Broadcast sent by the client to submit a TOTP code during login when
+	/// two-factor authentication is required.
+	/// </summary>
+	public struct TwoFactorVerifyBroadcast : IBroadcast
+	{
+		/// <summary>Encrypted 6-digit TOTP code as UTF-8 string bytes (AES-GCM).</summary>
+		public byte[] Code;
+
+		/// <summary>Explicit message sequence number (client->server).</summary>
+		public uint Seq;
+	}
 }

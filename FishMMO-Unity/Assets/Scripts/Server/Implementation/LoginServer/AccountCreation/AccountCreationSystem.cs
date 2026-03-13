@@ -2,6 +2,7 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
+using System.Net;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
@@ -66,6 +67,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
 
 		/// <summary>
+		/// Hard cap on the number of unique IPs tracked in the <see cref="IAccountCreationSystemMappingData.IpFailureTracker"/>.
+		/// Prevents unbounded dictionary growth if an attacker floods from spoofed or rotating IPs.
+		/// When the cap is reached, new AddOrUpdate calls are silently skipped — the request still
+		/// fails (result code unchanged), but no new IP entry is stored.
+		/// </summary>
+		private const int MaxIpFailureTrackerEntries = 50_000;
+
+		/// <summary>
 		/// Maximum entries scanned per map during one maintenance sweep.
 		/// </summary>
 		[Header("Cleanup Bounds")]
@@ -89,10 +98,45 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private bool useConnectionIdForRateLimit = false;
 
 		/// <summary>
+		/// Maximum cumulative verification failures per username across all connections before
+		/// a temporary lockout. Prevents botnets from distributing brute-force across IPs.
+		/// </summary>
+		private const int MaxVerifyFailuresPerUsername = 10;
+
+		/// <summary>
+		/// How long a per-username verification lockout lasts after exceeding <see cref="MaxVerifyFailuresPerUsername"/>.
+		/// </summary>
+		private static readonly TimeSpan VerifyUsernameLockoutDuration = TimeSpan.FromMinutes(30);
+
+		/// <summary>
+		/// Maximum entries allowed in the per-username verification failure tracker before new
+		/// entries are silently ignored. Guards against memory exhaustion from unique username floods.
+		/// </summary>
+		private const int MaxVerifyUsernameFailureEntries = 50_000;
+
+		/// <summary>
+		/// Maximum entries scanned per sweep when evicting expired per-username verification failure records.
+		/// </summary>
+		private const int VerifyUsernameFailureSweepMaxScan = 64;
+
+		/// <summary>
+		/// Per-username verification failure counter for cross-connection rate limiting.
+		/// Key = lowercased username, Value = (failureCount, firstFailureUtc).
+		/// Entries are lazily evicted when checked and proactively swept in <see cref="CleanUpMappingData"/>.
+		/// </summary>
+		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> verifyUsernameFailures = new ConcurrentDictionary<string, (int, DateTime)>();
+
+		/// <summary>
 		/// Maximum allowed size in bytes for any single encrypted field in CreateAccountBroadcast.
 		/// Rejects oversized payloads on the network thread before any decryption or allocation.
 		/// </summary>
 		private const int MaxEncryptedFieldSize = 2048;
+
+		/// <summary>
+		/// AES-256 master key for encrypting TOTP secrets at rest in the database.
+		/// Set by LoginServerSystem on startup. Must match ServerAuthenticator.TotpMasterKey.
+		/// </summary>
+		public byte[] TotpMasterKey { get; set; }
 
 		/// <summary>
 		/// Maximum allowed length for the decrypted SRP salt string.
@@ -247,6 +291,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCreateAccountBroadcastReceived(NetworkConnection conn, CreateAccountBroadcast msg, Channel channel)
 		{
+			// Already-authenticated connections should not be creating accounts.
+			if (conn.IsAuthenticated)
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
 			// Fast validation - don't block network thread
 			if (!ResolveEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
@@ -407,6 +458,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 				try
 				{
 					// Decrypt credentials on worker thread using explicit sequence numbers provided by client.
+					// Design note — String heap retention: After decrypting into byte arrays (which are
+					// zeroed in finally/catch blocks), the byte data must be converted to .NET strings
+					// (username, email, salt, verifier) for validation, DB operations, and SRP math.
+					// These strings are immutable, GC-managed, and CANNOT be deterministically zeroed.
+					// They will persist in heap memory until the GC collects them. This is an inherent
+					// limitation of the .NET string type. No practical mitigation exists short of pinvoke
+					// to pinned char arrays, which would not integrate with Entity Framework or SRP libraries.
+					// The byte[] plaintext is zeroed as soon as the string conversion completes.
 					byte[] decryptedUsername;
 					byte[] decryptedEmail;
 					byte[] decryptedAge;
@@ -415,7 +474,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 					try
 					{
 						uint seq = request.Seq;
-						if (seq < 4)
+						// Guard: ValidateSequenceRange ensures seq is large enough for the 5-field
+						// protocol encoding (seq-4..seq) without uint underflow.
+						if (!CryptoHelper.ValidateSequenceRange(seq, 5))
 						{
 							NetworkConnection failConn = request.Connection;
 							TryEnqueueMainThread(() =>
@@ -437,35 +498,40 @@ namespace FishMMO.Server.Implementation.LoginServer
 						if (!request.EncryptionData.TryConsumeReceiveSequence(seqUsername))
 							throw new CryptographicException("Account creation username sequence out-of-order or duplicate.");
 						byte[] nonceU = request.EncryptionData.BuildReceiveNonce(seqUsername);
-						byte[] aadU = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqUsername);
+						byte[] aadU = new byte[CryptoHelper.AadLength];
+						CryptoHelper.WriteAad(aadU, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqUsername);
 						decryptedUsername = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceU, request.EncryptedUsername, aadU);
 
 						// Consume and decrypt email
 						if (!request.EncryptionData.TryConsumeReceiveSequence(seqEmail))
 							throw new CryptographicException("Account creation email sequence out-of-order or duplicate.");
 						byte[] nonceE = request.EncryptionData.BuildReceiveNonce(seqEmail);
-						byte[] aadE = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqEmail);
+						byte[] aadE = new byte[CryptoHelper.AadLength];
+						CryptoHelper.WriteAad(aadE, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqEmail);
 						decryptedEmail = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceE, request.EncryptedEmail, aadE);
 
 						// Consume and decrypt age
 						if (!request.EncryptionData.TryConsumeReceiveSequence(seqAge))
 							throw new CryptographicException("Account creation age sequence out-of-order or duplicate.");
 						byte[] nonceA = request.EncryptionData.BuildReceiveNonce(seqAge);
-						byte[] aadA = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqAge);
+						byte[] aadA = new byte[CryptoHelper.AadLength];
+						CryptoHelper.WriteAad(aadA, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqAge);
 						decryptedAge = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceA, request.EncryptedAge, aadA);
 
 						// Consume and decrypt salt
 						if (!request.EncryptionData.TryConsumeReceiveSequence(seqSalt))
 							throw new CryptographicException("Account creation salt sequence out-of-order or duplicate.");
 						byte[] nonceS = request.EncryptionData.BuildReceiveNonce(seqSalt);
-						byte[] aadS = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqSalt);
+						byte[] aadS = new byte[CryptoHelper.AadLength];
+						CryptoHelper.WriteAad(aadS, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqSalt);
 						decryptedSalt = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceS, request.EncryptedSalt, aadS);
 
 						// Consume and decrypt verifier
 						if (!request.EncryptionData.TryConsumeReceiveSequence(seqVerifier))
 							throw new CryptographicException("Account creation verifier sequence out-of-order or duplicate.");
 						byte[] nonceV = request.EncryptionData.BuildReceiveNonce(seqVerifier);
-						byte[] aadV = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqVerifier);
+						byte[] aadV = new byte[CryptoHelper.AadLength];
+						CryptoHelper.WriteAad(aadV, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqVerifier);
 						decryptedVerifier = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceV, request.EncryptedVerifier, aadV);
 					}
 					catch (CryptographicException)
@@ -631,8 +697,95 @@ namespace FishMMO.Server.Implementation.LoginServer
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
 
 							// Generate and store a verification code for email verification.
+							// 6-digit numerical code (100000–999999): 900,000 possible values.
+							// Brute-force is mitigated by the per-IP IpFailureTracker which blocks
+							// after maxFailedAttempts (default 5). The code is single-use and expires
+							// via DB-level TTL, so the effective attack window is narrow.
 							int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
 							await accountService.PersistVerifyCodeAsync(username, verifyCode);
+
+							// Generate and store mandatory 2FA setup.
+							// Snapshot TotpMasterKey to prevent a TOCTOU race:
+							// the field could be zeroed or rotated between the null/length
+							// check and the EncryptTotpSecret call. Capturing a local
+							// reference ensures the same array is used for both checks and
+							// the encrypt call. This is safe even without a lock because the
+							// field is only written at startup/shutdown (single-writer).
+							byte[] totpMasterKeySnapshot = TotpMasterKey;
+							if (totpMasterKeySnapshot != null && totpMasterKeySnapshot.Length == 32)
+							{
+								try
+								{
+									byte[] totpSecret = CryptoHelper.TwoFactor.GenerateTotpSecret();
+
+									// Encrypt for DB at-rest storage.
+									string encryptedTotpSecret = CryptoHelper.TwoFactor.EncryptTotpSecret(totpMasterKeySnapshot, totpSecret);
+									await accountService.PersistTotpSecretAsync(username, encryptedTotpSecret);
+									await accountService.PersistTotpEnabledAsync(username, true);
+
+									// Generate and hash recovery codes.
+									string[] recoveryCodes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
+									var codeHashes = new List<string>(recoveryCodes.Length);
+									foreach (string code in recoveryCodes)
+									{
+										codeHashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(code));
+									}
+									if (Server.Database.ServiceRegistry.TryGet<ITwoFactorRecoveryCodeService>(out var recoveryCodeService))
+									{
+										await recoveryCodeService.PersistManyAsync(username, codeHashes);
+									}
+
+									// Build otpauth URI for the client's authenticator app.
+									string otpauthUri = CryptoHelper.TwoFactor.BuildOtpauthUri(totpSecret, username);
+
+									// Encrypt setup data with the session key for secure transport to client.
+									byte[] otpauthUriBytes = Encoding.UTF8.GetBytes(otpauthUri);
+									byte[] recoveryCodesBytes = Encoding.UTF8.GetBytes(string.Join("\n", recoveryCodes));
+
+									uint seq1 = request.EncryptionData.NextSendSequence();
+									byte[] nonce1 = request.EncryptionData.BuildSendNonce(seq1);
+									byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq1);
+									byte[] encOtpauthUri = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce1, otpauthUriBytes, aad1);
+
+									uint seq2 = request.EncryptionData.NextSendSequence();
+									byte[] nonce2 = request.EncryptionData.BuildSendNonce(seq2);
+									byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq2);
+									byte[] encRecoveryCodes = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce2, recoveryCodesBytes, aad2);
+
+									// Zeroize plaintext secrets.
+									CryptographicOperations.ZeroMemory(totpSecret);
+									CryptographicOperations.ZeroMemory(otpauthUriBytes);
+									CryptographicOperations.ZeroMemory(recoveryCodesBytes);
+
+									// Capture for main-thread dispatch.
+									byte[] capturedEncUri = encOtpauthUri;
+									byte[] capturedEncCodes = encRecoveryCodes;
+									uint capturedSetupSeq = seq2;
+									string capturedUsername = username;
+									NetworkConnection setupConn = request.Connection;
+
+									TryEnqueueMainThread(() =>
+									{
+										if (setupConn != null && setupConn.IsActive)
+										{
+											Server.NetworkWrapper.Broadcast(setupConn,
+												new TwoFactorSetupBroadcast()
+												{
+													OtpauthUri = capturedEncUri,
+													RecoveryCodes = capturedEncCodes,
+													Seq = capturedSetupSeq,
+												}, false, Channel.Reliable);
+										}
+									});
+								}
+								catch (Exception tfaEx)
+								{
+									// Account was created but 2FA setup failed. The account exists
+									// without an active TOTP secret, so login will not require 2FA
+									// until the user reconfigures it. Log at Error level for ops visibility.
+									await Log.Error("AccountCreationSystem", $"2FA setup failed for {username} (account created without 2FA): {tfaEx}");
+								}
+							}
 						}
 						else
 						{
@@ -644,8 +797,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 								_ => ClientAuthenticationResult.ServerBusy,
 							};
 
-							// Track failure atomically
-							mappingData.IpFailureTracker.AddOrUpdate(request.IpAddress, 1, (_, existing) => existing + 1);
+							// Track failure atomically (skip if tracker is at capacity to prevent unbounded growth).
+							if (mappingData.IpFailureTracker.Count < MaxIpFailureTrackerEntries)
+								mappingData.IpFailureTracker.AddOrUpdate(request.IpAddress, 1, (_, existing) => existing + 1);
 							runtimeData.IncrementRejected();
 						}
 					}
@@ -661,7 +815,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 
 					// Track failure against IP for blocking (e.g., garbage-payload decryption exceptions).
-					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var failMappingData))
+					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var failMappingData)
+						&& failMappingData.IpFailureTracker.Count < MaxIpFailureTrackerEntries)
 					{
 						failMappingData.IpFailureTracker.AddOrUpdate(request.IpAddress, 1, (_, existing) => existing + 1);
 					}
@@ -706,6 +861,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
+			// Float accumulation of deltaTime is acceptable here: a 60-second
+			// interval resets to 0 each cycle, so precision loss is negligible.
 			runtimeData.CleanupTimer += deltaTime;
 			if (runtimeData.CleanupTimer < 60f)
 			{
@@ -728,20 +885,31 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Evict failure-tracking entries for IPs whose block period has expired.
 			// Once the rate-limit entry is gone (expired above), the failure count serves no purpose.
+			// Snapshot keys first to avoid mutating the dictionary during enumeration.
+			// Uses key-only TryRemove: the rate-limit entry being expired is sufficient
+			// justification for removal. A concurrent request that created a fresh failure
+			// entry after the rate-limit expired will simply re-create the entry.
 			int scannedFailures = 0;
 			int removedFailures = 0;
+			var failureKeysToRemove = new System.Collections.Generic.List<string>();
 			foreach (var entry in mappingData.IpFailureTracker)
 			{
+				if (scannedFailures >= cleanupMaxScanPerMap)
+					break;
 				scannedFailures++;
-				if (!mappingData.IpRateLimitTracker.ContainsKey(entry.Key) &&
-					mappingData.IpFailureTracker.TryRemove(entry.Key, out _))
+				if (!mappingData.IpRateLimitTracker.ContainsKey(entry.Key))
+				{
+					failureKeysToRemove.Add(entry.Key);
+				}
+			}
+
+			foreach (var key in failureKeysToRemove)
+			{
+				if (removedFailures >= cleanupMaxRemovalsPerMap)
+					break;
+				if (mappingData.IpFailureTracker.TryRemove(key, out _))
 				{
 					removedFailures++;
-				}
-
-				if (scannedFailures >= cleanupMaxScanPerMap || removedFailures >= cleanupMaxRemovalsPerMap)
-				{
-					break;
 				}
 			}
 
@@ -749,6 +917,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			TimeSpan cacheTtl = TimeSpan.FromSeconds(Math.Max(1f, ipBlockDurationSeconds));
 			runtimeData.ConnectionIpCache.SweepExpired(DateTime.UtcNow, cacheTtl, cleanupMaxScanPerMap, cleanupMaxRemovalsPerMap);
 			runtimeData.ConnectionEncryptionCache.SweepExpired(DateTime.UtcNow, cacheTtl, cleanupMaxScanPerMap, cleanupMaxRemovalsPerMap);
+
+			// Evict expired per-username verification failure entries.
+			SweepExpiredVerifyUsernameFailures();
 		}
 
 		/// <summary>
@@ -875,7 +1046,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
-				return conn.GetAddress() ?? "unknown";
+				return NormalizeIp(conn.GetAddress());
 			}
 
 			DateTime now = DateTime.UtcNow;
@@ -885,18 +1056,36 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return cachedIp;
 			}
 
-			string ipAddress = conn.GetAddress();
-			if (string.IsNullOrEmpty(ipAddress))
-			{
-				ipAddress = "unknown";
-			}
+			string ipAddress = NormalizeIp(conn.GetAddress());
 
 			runtimeData.ConnectionIpCache.Upsert(conn.ClientId, ipAddress, now);
 			return ipAddress;
 		}
 
 		/// <summary>
+		/// Collapses IPv4-mapped-IPv6 addresses to plain IPv4 so that both
+		/// representations share a single rate-limit identity.
+		/// </summary>
+		private static string NormalizeIp(string rawIp)
+		{
+			if (string.IsNullOrEmpty(rawIp))
+				return "unknown";
+			if (!IPAddress.TryParse(rawIp, out IPAddress parsed))
+				return "unknown";
+			if (parsed.IsIPv4MappedToIPv6)
+				parsed = parsed.MapToIPv4();
+			return parsed.ToString();
+		}
+
+		/// <summary>
 		/// Resolves encryption data with a per-connection cache to reduce lock pressure on AccountManager.
+		/// <para><b>ClientId reuse safety:</b> This cache is keyed by <c>conn.ClientId</c>.
+		/// <see cref="OnRemoteConnectionStopped"/> evicts the entry when the connection closes.
+		/// If the transport layer reuses ClientIds, the eviction MUST fire before the new
+		/// connection's first <c>ResolveEncryptionData</c> call; otherwise the new connection
+		/// would receive stale key material from the previous session. FishNet currently assigns
+		/// monotonically increasing IDs; if this changes, add a generation counter or validate
+		/// the cached reference against <c>AccountManager.GetConnectionEncryptionData</c>.</para>
 		/// </summary>
 		private bool ResolveEncryptionData(NetworkConnection conn, out ConnectionEncryptionData encryptionData)
 		{
@@ -915,8 +1104,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (runtimeData.ConnectionEncryptionCache.TryGetAndTouch(conn.ClientId, now, out ConnectionEncryptionData cached) &&
 				cached != null)
 			{
-				encryptionData = cached;
-				return true;
+				// Validate the cache hit against the authoritative AccountManager data.
+				// After a disconnect+reconnect, the same ClientId may map to a fresh
+				// ConnectionEncryptionData. Serving a stale cache entry would cause
+				// decryption failures (wrong keys) and nonce desync.
+				if (Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData authoritative) &&
+					ReferenceEquals(cached, authoritative))
+				{
+					encryptionData = cached;
+					return true;
+				}
+
+				// Stale cache hit — evict and fall through to re-fetch.
+				runtimeData.ConnectionEncryptionCache.Remove(conn.ClientId);
 			}
 
 			if (!Server.AccountManager.GetConnectionEncryptionData(conn, out encryptionData) || encryptionData == null)
@@ -934,6 +1134,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private void OnServerAccountVerifyBroadcastReceived(NetworkConnection conn, AccountVerifyBroadcast msg, Channel channel)
 		{
+			// Already authenticated — verification is meaningless. Disconnect to prevent abuse.
+			if (conn.IsAuthenticated)
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
 			if (!ResolveEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
 				conn.Disconnect(true);
@@ -961,6 +1168,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 			}
 
+			// Per-username brute-force protection: prevents distributed attacks from
+			// bypassing per-IP limits by rotating source IPs.
+			// Username is still encrypted here, so we defer the actual check to
+			// ProcessAccountVerifyAsync after decryption. The gate here only checks
+			// the IP-based limit; the username-based check runs asynchronously.
+
 			if (TryEnqueueAsyncWork(() => ProcessAccountVerifyAsync(conn, msg.Username, msg.VerifyCode, encryptionData, ipAddress, msg.Seq), conn.ClientId))
 			{
 				return;
@@ -976,6 +1189,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Processes a single account verification request asynchronously.
 		/// Decrypts username and verify code, then validates via PersistVerifiedAsync.
 		/// </summary>
+		/// <remarks>
+		/// <b>CancellationToken:</b> This method does not currently accept a CancellationToken.
+		/// The underlying <see cref="TryEnqueueAsyncWork"/> infrastructure dispatches bare
+		/// <c>Func&lt;Task&gt;</c> delegates. If the base infrastructure is extended to pass
+		/// per-operation tokens (e.g., linked to server shutdown), this method should propagate
+		/// that token into its DB calls (<c>PersistVerifiedAsync</c>) to enable cooperative
+		/// cancellation during graceful shutdown.
+		/// </remarks>
 		private async Task ProcessAccountVerifyAsync(
 			NetworkConnection conn,
 			byte[] encryptedUsername,
@@ -995,7 +1216,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 					byte[] decryptedVerifyCode;
 					try
 					{
-						if (seq < 1)
+						// Guard: ValidateSequenceRange ensures seq is large enough for the 2-field
+						// protocol encoding (seq-1: username, seq: verify code) without uint underflow.
+						if (!CryptoHelper.ValidateSequenceRange(seq, 2))
 						{
 							NetworkConnection failConn = conn;
 							TryEnqueueMainThread(() =>
@@ -1013,13 +1236,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 						if (!encryptionData.TryConsumeReceiveSequence(seqUsername))
 							throw new CryptographicException("Account verify username sequence out-of-order or duplicate.");
 						byte[] nonceU = encryptionData.BuildReceiveNonce(seqUsername);
-						byte[] aadU = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.AccountVerify, encryptionData.AgreedVersion, seqUsername);
+						byte[] aadU = new byte[CryptoHelper.AadLength];
+						CryptoHelper.WriteAad(aadU, (byte)CryptoHelper.AuthMessageType.AccountVerify, encryptionData.AgreedVersion, seqUsername);
 						decryptedUsername = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonceU, encryptedUsername, aadU);
 
 						if (!encryptionData.TryConsumeReceiveSequence(seqCode))
 							throw new CryptographicException("Account verify code sequence out-of-order or duplicate.");
 						byte[] nonceC = encryptionData.BuildReceiveNonce(seqCode);
-						byte[] aadC = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.AccountVerify, encryptionData.AgreedVersion, seqCode);
+						byte[] aadC = new byte[CryptoHelper.AadLength];
+						CryptoHelper.WriteAad(aadC, (byte)CryptoHelper.AuthMessageType.AccountVerify, encryptionData.AgreedVersion, seqCode);
 						decryptedVerifyCode = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonceC, encryptedVerifyCode, aadC);
 					}
 					catch (CryptographicException)
@@ -1073,17 +1298,42 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					else
 					{
+						// Per-username brute-force check (runs after decryption reveals the username).
+						string userKey = username.ToLowerInvariant();
+						if (verifyUsernameFailures.TryGetValue(userKey, out var failInfo))
+						{
+							if (DateTime.UtcNow - failInfo.FirstFailure > VerifyUsernameLockoutDuration)
+							{
+								// Window expired — evict stale entry.
+								verifyUsernameFailures.TryRemove(userKey, out _);
+							}
+							else if (failInfo.Count >= MaxVerifyFailuresPerUsername)
+							{
+								// Locked out — reject immediately.
+								result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+								goto trackFailure;
+							}
+						}
+
 						DatabaseResult dbResult = await accountService.PersistVerifiedAsync(username, verifyCode);
 						result = dbResult.IsSuccess
 							? ClientAuthenticationResult.AccountVerified
 							: ClientAuthenticationResult.InvalidUsernameOrPassword;
 					}
 
+					trackFailure:
 					// Track failures for rate limiting.
-					if (result != ClientAuthenticationResult.AccountVerified &&
-						Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData))
+					if (result != ClientAuthenticationResult.AccountVerified)
 					{
-						mappingData.IpFailureTracker.AddOrUpdate(ipAddress, 1, (_, existing) => existing + 1);
+						// Per-IP failure tracking (skip if tracker is at capacity).
+						if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData)
+							&& mappingData.IpFailureTracker.Count < MaxIpFailureTrackerEntries)
+						{
+							mappingData.IpFailureTracker.AddOrUpdate(ipAddress, 1, (_, existing) => existing + 1);
+						}
+
+						// Per-username failure tracking.
+						TrackVerifyUsernameFailure(username);
 					}
 				}
 				catch (Exception ex)
@@ -1104,6 +1354,46 @@ namespace FishMMO.Server.Implementation.LoginServer
 						false, Channel.Reliable);
 				}
 			});
+		}
+
+		/// <summary>
+		/// Tracks a verification failure for the given username in the per-username rate limiter.
+		/// </summary>
+		private void TrackVerifyUsernameFailure(string username)
+		{
+			string failKey = username?.ToLowerInvariant();
+			if (failKey == null)
+				return;
+
+			// Hard cap: reject new entries when the tracker is full to prevent
+			// unbounded memory growth from unique-username flood attacks.
+			if (verifyUsernameFailures.Count >= MaxVerifyUsernameFailureEntries &&
+				!verifyUsernameFailures.ContainsKey(failKey))
+				return;
+
+			verifyUsernameFailures.AddOrUpdate(
+				failKey,
+				_ => (1, DateTime.UtcNow),
+				(_, existing) => (existing.Count + 1, existing.FirstFailure));
+		}
+
+		/// <summary>
+		/// Evicts expired entries from <see cref="verifyUsernameFailures"/> whose lockout
+		/// window has elapsed. Bounded scan to avoid stalling the main thread.
+		/// </summary>
+		private void SweepExpiredVerifyUsernameFailures()
+		{
+			DateTime now = DateTime.UtcNow;
+			int scanned = 0;
+			foreach (var kvp in verifyUsernameFailures)
+			{
+				if (++scanned > VerifyUsernameFailureSweepMaxScan)
+					break;
+				if (now - kvp.Value.FirstFailure > VerifyUsernameLockoutDuration)
+				{
+					verifyUsernameFailures.TryRemove(kvp.Key, out _);
+				}
+			}
 		}
 
 	}

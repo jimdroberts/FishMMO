@@ -162,27 +162,66 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Enables or disables two-factor authentication for an account.
+		/// Stores the encrypted TOTP secret and enables TOTP for an account.
+		/// Called during 2FA enrollment after the server generates the secret.
 		/// </summary>
 		/// <param name="accountName">The account name.</param>
-		/// <param name="enabled">Whether 2FA should be enabled.</param>
+		/// <param name="encryptedTotpSecret">The Base32-encoded TOTP secret, encrypted at rest by the server.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>DatabaseResult indicating success or failure.</returns>
-		Task<DatabaseResult> PersistTwoFactorEnabledAsync(
+		Task<DatabaseResult> PersistTotpSecretAsync(
+			string accountName,
+			string encryptedTotpSecret,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Enables or disables TOTP two-factor authentication for an account.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="enabled">Whether TOTP should be enabled.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistTotpEnabledAsync(
 			string accountName,
 			bool enabled,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Sets the current two-factor authentication code for an account.
+		/// Records the first successful TOTP verification timestamp, confirming 2FA setup.
+		/// Atomically sets totp_verified_at and updates last_totp_window.
 		/// </summary>
 		/// <param name="accountName">The account name.</param>
-		/// <param name="code">The 2FA code, or null to clear.</param>
+		/// <param name="totpWindow">The time-step window of the verified code.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>DatabaseResult indicating success or failure.</returns>
-		Task<DatabaseResult> PersistTwoFactorCodeAsync(
+		Task<DatabaseResult> PersistTotpVerifiedAtAsync(
 			string accountName,
-			string? code,
+			long totpWindow,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Updates the last TOTP time-step window used for an account, preventing replay attacks.
+		/// Only updates if the new window is greater than the stored value.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="totpWindow">The time-step window of the verified code.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistLastTotpWindowAsync(
+			string accountName,
+			long totpWindow,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Clears all TOTP fields when a user disables 2FA.
+		/// Atomically resets totp_secret, totp_enabled, totp_verified_at, and last_totp_window.
+		/// Recovery codes should be invalidated separately via ITwoFactorRecoveryCodeService.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> ClearTotpAsync(
+			string accountName,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>

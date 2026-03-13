@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
 using FishMMO.Logging;
+using System.IO;
 
 namespace FishMMO.Client
 {
@@ -79,6 +80,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+			Client.LoginAuthenticator.OnTwoFactorSetupReceived += OnTwoFactorSetupReceived;
 		}
 
 		/// <summary>
@@ -88,6 +90,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+			Client.LoginAuthenticator.OnTwoFactorSetupReceived -= OnTwoFactorSetupReceived;
 		}
 
 		/// <summary>
@@ -155,17 +158,81 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Handles successful account creation: stays connected and opens the verification code input dialog.
+		/// Handles successful account creation: hides the form and waits for the 2FA setup broadcast.
+		/// The verify code dialog is opened later by <see cref="OnTwoFactorSetupReceived"/>.
 		/// </summary>
 		private void OnAccountCreated()
 		{
 			SetFormLocked(true);
 			Hide();
+			StatusMessage.text = "Setting up two-factor authentication...";
+		}
 
+		/// <summary>
+		/// Handles the 2FA setup data received from the server after account creation.
+		/// Displays the otpauth URI and recovery codes, then opens the verify code dialog.
+		/// </summary>
+		private void OnTwoFactorSetupReceived(string otpauthUri, string[] recoveryCodes)
+		{
+			if (string.IsNullOrEmpty(pendingVerifyUsername))
+			{
+				return;
+			}
+
+			// Save recovery codes and otpauth URI to disk immediately so the user
+			// has a persistent copy even if they close the dialog or lose the codes.
+			string savePath = Path.Combine(Application.persistentDataPath, $"2fa_setup_{pendingVerifyUsername}.txt");
+			try
+			{
+				string saveContent = $"OTPAuth URI:\n{otpauthUri}\n\nRecovery Codes:\n{string.Join("\n", recoveryCodes)}\n";
+				File.WriteAllText(savePath, saveContent);
+				Log.Info("UIRegister", $"2FA setup data saved to: {savePath}");
+			}
+			catch (System.Exception ex)
+			{
+				Log.Warning("UIRegister", $"Failed to save 2FA setup data: {ex.Message}");
+				savePath = null;
+			}
+
+			string codesDisplay = string.Join("\n", recoveryCodes);
+			string message = "Two-Factor Authentication Setup\n\n" +
+				"Scan the following URI with your authenticator app (e.g. Google Authenticator):\n\n" +
+				otpauthUri + "\n\n" +
+				"Recovery Codes (save these somewhere safe!):\n\n" +
+				codesDisplay + "\n\n" +
+				(savePath != null ? $"Saved to: {savePath}\n\n" : "") +
+				"Press Confirm to continue to email verification.";
+
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			{
+				uiDialogBox.Open(
+					message,
+					() =>
+					{
+						OpenVerifyCodeDialog();
+					},
+					() =>
+					{
+						pendingVerifyUsername = null;
+						Client.ForceDisconnect();
+						SetFormLocked(false);
+						if (UIManager.TryGet("UILogin", out UILogin uiLogin))
+						{
+							uiLogin.Show();
+						}
+					});
+			}
+		}
+
+		/// <summary>
+		/// Opens the verification code input dialog for email verification.
+		/// </summary>
+		private void OpenVerifyCodeDialog()
+		{
 			if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox uiDialogInputBox))
 			{
 				uiDialogInputBox.Open(
-					"Your account has been created! Please enter the verification code sent to your email.",
+					"Please enter the verification code sent to your email.",
 					(code) =>
 					{
 						if (!string.IsNullOrWhiteSpace(pendingVerifyUsername) && !string.IsNullOrWhiteSpace(code))

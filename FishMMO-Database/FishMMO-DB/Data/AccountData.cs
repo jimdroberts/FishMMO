@@ -38,14 +38,24 @@ namespace FishMMO.Database.Data
 		public readonly int Age;
 
 		/// <summary>
-		/// Whether two-factor authentication is enabled.
+		/// Whether TOTP two-factor authentication is enabled.
 		/// </summary>
-		public readonly bool TwoFactorEnabled;
+		public readonly bool TotpEnabled;
 
 		/// <summary>
-		/// Current two-factor authentication code. Null when 2FA is disabled or no code is active.
+		/// Base32-encoded TOTP secret key, encrypted at rest. Null when not set up.
 		/// </summary>
-		public readonly string? TwoFactorCode;
+		public readonly string? TotpSecret;
+
+		/// <summary>
+		/// Timestamp (UTC) of the first successful TOTP verification. Null when setup not confirmed.
+		/// </summary>
+		public readonly DateTime? TotpVerifiedAt;
+
+		/// <summary>
+		/// Last TOTP time-step window successfully used, for replay attack prevention.
+		/// </summary>
+		public readonly long LastTotpWindow;
 
 		/// <summary>
 		/// Temporary code for Discord account linking. Null when no link is pending.
@@ -82,8 +92,10 @@ namespace FishMMO.Database.Data
 			byte accessLevel,
 			string? email,
 			int age,
-			bool twoFactorEnabled,
-			string? twoFactorCode,
+			bool totpEnabled,
+			string? totpSecret,
+			DateTime? totpVerifiedAt,
+			long lastTotpWindow,
 			string? discordLinkCode,
 			bool verified,
 			int verifyCode,
@@ -96,8 +108,10 @@ namespace FishMMO.Database.Data
 			AccessLevel = accessLevel;
 			Email = email;
 			Age = age;
-			TwoFactorEnabled = twoFactorEnabled;
-			TwoFactorCode = twoFactorCode;
+			TotpEnabled = totpEnabled;
+			TotpSecret = totpSecret;
+			TotpVerifiedAt = totpVerifiedAt;
+			LastTotpWindow = lastTotpWindow;
 			DiscordLinkCode = discordLinkCode;
 			Verified = verified;
 			VerifyCode = verifyCode;

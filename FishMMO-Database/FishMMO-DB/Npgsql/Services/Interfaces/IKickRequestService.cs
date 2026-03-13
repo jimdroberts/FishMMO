@@ -48,6 +48,17 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> PersistAsync(string accountName, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Checks whether a pending kick request exists for the specified account.
+		/// </summary>
+		/// <param name="accountName">Account name to check.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing <c>true</c> if a pending kick request exists,
+		/// <c>false</c> otherwise, or a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		Task<DatabaseResult<bool>> HasPendingAsync(string accountName, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Deletes all kick requests for the specified account.
 		/// </summary>
 		/// <param name="accountName">Account name whose kick requests will be deleted.</param>

@@ -114,6 +114,11 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// Ordering: TryComplete signals the channel's Reader to stop, then the field is
+		/// nulled. Workers capture a local reference at startup (<c>var channel = tokenChannel</c>),
+		/// so the null assignment cannot race with an in-progress ReadAllAsync enumeration.
+		/// </remarks>
 		protected override void ShutdownWorkersCore()
 		{
 			tokenChannel?.Writer.TryComplete();
@@ -149,7 +154,7 @@ namespace FishMMO.Server.Implementation
 
 			if (msg.Token == null || msg.Token.Length == 0 || msg.Token.Length > MaxTokenPayloadBytes)
 			{
-				conn.Disconnect(true);
+				PurgeConnectionAuthState(conn, disconnect: true);
 				return;
 			}
 
@@ -157,6 +162,11 @@ namespace FishMMO.Server.Implementation
 
 			if (tokenChannel == null || !tokenChannel.Writer.TryWrite(request))
 			{
+				// TOKEN NO-RETRY: Unlike the SRP path (which rolls back state to allow
+				// retry), token auth is one-shot by design. RejectAndPurge disconnects
+				// the client and removes all connection state. The client must reconnect
+				// and present the token again on a fresh connection. This is intentional
+				// because token auth has no intermediate state worth preserving.
 				RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
 			}
 		}
@@ -183,7 +193,7 @@ namespace FishMMO.Server.Implementation
 			await Log.Debug(LogPrefix, $"Token worker {workerId} started");
 			try
 			{
-				// Capture a local reference to the channel to prevent a NullReferenceException
+				// Defensive backstop: capture a local reference to prevent a NullReferenceException
 				// if ShutdownWorkersCore nulls the field between TryComplete and worker exit.
 				var channel = tokenChannel;
 				if (channel == null)
@@ -233,7 +243,7 @@ namespace FishMMO.Server.Implementation
 				if (request.Seq == 0 || !request.EncryptionData.TryConsumeReceiveSequence(request.Seq))
 				{
 					await Log.Warning(LogPrefix, "Token auth sequence invalid or duplicate.");
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenInvalid);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
@@ -241,14 +251,15 @@ namespace FishMMO.Server.Implementation
 				try
 				{
 					byte[] nonce = request.EncryptionData.BuildReceiveNonce(request.Seq);
-					byte[] aad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TokenAuth, request.EncryptionData.AgreedVersion, request.Seq);
+					byte[] aad = new byte[CryptoHelper.AadLength];
+					CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.TokenAuth, request.EncryptionData.AgreedVersion, request.Seq);
 					rawToken = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce, request.EncryptedToken, aad);
 				}
 				catch (CryptographicException)
 				{
 					await Log.Warning(LogPrefix, "AES decryption failed for token auth.");
 					rawToken = null;
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenInvalid);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
@@ -261,7 +272,7 @@ namespace FishMMO.Server.Implementation
 				{
 					await Log.Warning(LogPrefix, "Token too short.");
 					CryptographicOperations.ZeroMemory(rawToken);
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenInvalid);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
@@ -271,7 +282,7 @@ namespace FishMMO.Server.Implementation
 					!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var authTokenService))
 				{
 					CryptographicOperations.ZeroMemory(rawToken);
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.ServerBusy);
+					RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
 					return;
 				}
 
@@ -281,7 +292,7 @@ namespace FishMMO.Server.Implementation
 				if (nameLen <= 0 || 4 + nameLen + 1 + 8 + 8 + 16 + CryptoHelper.HmacTagLength > rawToken.Length)
 				{
 					CryptographicOperations.ZeroMemory(rawToken);
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenInvalid);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
@@ -327,7 +338,7 @@ namespace FishMMO.Server.Implementation
 				if (!keyFound || !hmacValid)
 				{
 					CryptographicOperations.ZeroMemory(rawToken);
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenInvalid);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
@@ -336,7 +347,7 @@ namespace FishMMO.Server.Implementation
 				if (parsedServerId != loginServerId)
 				{
 					CryptographicOperations.ZeroMemory(rawToken);
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenInvalid);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
@@ -344,7 +355,7 @@ namespace FishMMO.Server.Implementation
 				if (DateTime.UtcNow >= expiresUtc)
 				{
 					CryptographicOperations.ZeroMemory(rawToken);
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenExpired);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenExpired);
 					return;
 				}
 
@@ -359,20 +370,31 @@ namespace FishMMO.Server.Implementation
 
 				if (!tokenResult.IsSuccess)
 				{
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenInvalid);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
 				if (tokenResult.Data.Revoked)
 				{
-					SendResultAndDisconnect(conn, ClientAuthenticationResult.TokenRevoked);
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenRevoked);
 					return;
 				}
 
 				// accountName and parsedAccessLevel are extracted from the HMAC-verified token payload.
 				// Canonicalization (e.g., case normalization) must match the LoginServer's
 				// token issuance to ensure consistent identity across server types.
-				tokenAccountManager.AddConnectionAccount(conn, accountName, parsedAccessLevel);
+				try
+				{
+					tokenAccountManager.AddConnectionAccount(conn, accountName, parsedAccessLevel);
+				}
+				catch (InvalidOperationException addEx)
+				{
+					// AddConnectionAccount throws when no AccountData was pre-initialised during
+					// handshake. rawToken is already zeroed at this point, so skip ZeroMemory.
+					await Log.Error(LogPrefix, $"AddConnectionAccount failed: {addEx.Message}");
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
+					return;
+				}
 
 				// Attempt login (virtual — overridden by WorldServer/SceneServer)
 				ClientAuthenticationResult result = await TryLoginAsync(ClientAuthenticationResult.LoginSuccess, accountName);
@@ -383,7 +405,12 @@ namespace FishMMO.Server.Implementation
 				bool authenticated = result == ClientAuthenticationResult.LoginSuccess ||
 									 result == ClientAuthenticationResult.WorldLoginSuccess ||
 									 result == ClientAuthenticationResult.SceneLoginSuccess;
-				// Marshal final broadcast + authentication events to main thread
+				// Marshal final broadcast + authentication events to main thread.
+				// TTL-SWEEP WINDOW: Between EnqueueMainThread and main-thread drain, the
+				// connection sits in AuthState.TokenPending. If the stale-auth sweep fires
+				// in that gap it could purge a legitimately authenticated connection.
+				// Under normal load the window is one frame; under queue backlog it grows.
+				// Mitigated by OnAuthentication clearing TTL tracking inside the lambda.
 				EnqueueMainThread(() =>
 				{
 					if (conn.IsActive)
@@ -415,6 +442,9 @@ namespace FishMMO.Server.Implementation
 			{
 				if (rawToken != null) CryptographicOperations.ZeroMemory(rawToken);
 				await Log.Error(LogPrefix, $"Error during token auth: {ex}");
+				// NOTE: This catch block intentionally does NOT use RejectAndPurge because
+				// it needs to log the error before purging, and the error path here predates
+				// the normal result broadcast. The effect is identical: Disconnect + Purge.
 				EnqueueMainThread(() =>
 				{
 					if (conn.IsActive) conn.Disconnect(false);

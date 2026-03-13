@@ -188,5 +188,16 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A list of selected CharacterData, one per account that has a selected character.</returns>
 		Task<DatabaseResult<IReadOnlyList<CharacterData>>> FetchSelectedCharactersByAccountsAsync(List<string> accounts, int maxBatchSize = 1000, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Checks whether any non-deleted character on the given account is currently online.
+		/// </summary>
+		/// <param name="account">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing <c>true</c> if at least one character is online,
+		/// <c>false</c> otherwise.
+		/// </returns>
+		Task<DatabaseResult<bool>> AnyOnlineAsync(string account, CancellationToken cancellationToken = default);
 	}
 }

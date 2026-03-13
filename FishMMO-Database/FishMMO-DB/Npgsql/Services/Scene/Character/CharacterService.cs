@@ -908,6 +908,24 @@ namespace FishMMO.Database.Npgsql.Services
 			return DatabaseResult<IReadOnlyList<CharacterData>>.Success(allResults);
 		}
 
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> AnyOnlineAsync(string account, CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(account))
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			var result = await ExecuteReadAsync(async dbContext =>
+			{
+				return await dbContext.Characters
+					.AsNoTracking()
+					.AnyAsync(c => c.Account == account && !c.Deleted && c.SessionState != CharacterSessionState.Offline, cancellationToken)
+					.ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			return result;
+		}
+
 		/// <summary>
 		/// Maps a CharacterEntity to CharacterData DTO.
 		/// </summary>

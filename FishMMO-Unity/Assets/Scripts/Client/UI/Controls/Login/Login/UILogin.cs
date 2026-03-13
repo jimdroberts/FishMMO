@@ -161,6 +161,12 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.AccountVerified:
 					OnAccountVerified();
 					break;
+				case ClientAuthenticationResult.TwoFactorRequired:
+					OnTwoFactorRequired();
+					break;
+				case ClientAuthenticationResult.TwoFactorInvalid:
+					OnTwoFactorInvalid();
+					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					OnLoginSuccess();
 					break;
@@ -176,9 +182,21 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Handles AccountUnverified: stays connected and opens the verification code input dialog.
+		/// Sets <see cref="pendingVerifyUsername"/> only now — not eagerly in OnClick_Login —
+		/// so the identifier doesn't linger in memory if the connection drops before this point.
 		/// </summary>
 		private void OnAccountUnverified()
 		{
+			// Capture identifier from authenticator (still set at this point; cleared only after SRP proof).
+			string identifier = Client.LoginAuthenticator.PendingLoginIdentifier;
+			if (string.IsNullOrEmpty(identifier))
+			{
+				// Identifier already cleared — can't verify. Return to login.
+				Client.ForceDisconnect();
+				SetSignInLocked(false);
+				return;
+			}
+			pendingVerifyUsername = identifier;
 			SetSignInLocked(true);
 			Hide();
 
@@ -217,6 +235,50 @@ namespace FishMMO.Client
 				uiDialogBox.Open("Your account has been verified! You may now log in.");
 			}
 			Show();
+		}
+
+		/// <summary>
+		/// Handles TwoFactorRequired: opens a TOTP code input dialog.
+		/// </summary>
+		private void OnTwoFactorRequired()
+		{
+			SetSignInLocked(true);
+			Hide();
+			OpenTotpDialog("Enter the 6-digit code from your authenticator app.");
+		}
+
+		/// <summary>
+		/// Handles TwoFactorInvalid: re-opens the TOTP dialog with an error message.
+		/// </summary>
+		private void OnTwoFactorInvalid()
+		{
+			OpenTotpDialog("Invalid code. Please try again.");
+		}
+
+		/// <summary>
+		/// Opens the TOTP code input dialog with the specified prompt.
+		/// </summary>
+		private void OpenTotpDialog(string message)
+		{
+			if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox uiDialogInputBox))
+			{
+				uiDialogInputBox.Open(
+					message,
+					(code) =>
+					{
+						if (!string.IsNullOrWhiteSpace(code))
+						{
+							Client.LoginAuthenticator.SendTotpCode(code.Trim());
+						}
+					},
+					() =>
+					{
+						pendingVerifyUsername = null;
+						Client.ForceDisconnect();
+						SetSignInLocked(false);
+						Show();
+					});
+			}
 		}
 
 		/// <summary>
@@ -331,7 +393,6 @@ namespace FishMMO.Client
 			},
 			(servers) =>
 			{
-				pendingVerifyUsername = identifier;
 				Connect("Connecting...", identifier, password);
 			}));
 		}

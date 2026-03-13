@@ -69,6 +69,23 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> HasPendingAsync(string accountName, CancellationToken cancellationToken = default)
+		{
+			if (string.IsNullOrWhiteSpace(accountName))
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Account name must not be empty.");
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				return await dbContext.KickRequests
+					.AsNoTracking()
+					.AnyAsync(kr => kr.AccountName == accountName, cancellationToken)
+					.ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult<List<KickRequestData>>> FetchAsync(
 			DateTime lastFetch,
 			long lastPosition,

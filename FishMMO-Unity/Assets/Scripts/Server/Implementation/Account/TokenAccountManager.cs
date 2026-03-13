@@ -1,3 +1,4 @@
+using System;
 using FishNet.Connection;
 using FishMMO.Server.Core.Account;
 using FishMMO.Shared;
@@ -32,13 +33,23 @@ namespace FishMMO.Server.Implementation
 				}
 				else
 				{
-					// Defensive fallback: create AccountData if it doesn't exist (shouldn't happen).
-					connectionAccountData[connection] = new AccountData(accessLevel, null);
+					// Missing AccountData means the handshake path failed to create it.
+					// Creating a fallback here would leave the connection with AuthState.None,
+					// bypassing the entire auth state machine and permanently stalling login.
+					// Treat this as a hard error — callers must handle the exception.
+					UnityEngine.Debug.LogError($"[TokenAccountManager] AddConnectionAccount: no AccountData for clientId={connection.ClientId}. Handshake may have been skipped or purged.");
+					throw new InvalidOperationException($"No AccountData found for connection {connection.ClientId}. Cannot register account '{accountName}' without prior handshake state.");
 				}
 
 				connectionAccounts.Remove(connection);
 				connectionAccounts.Add(connection, accountName);
 
+				// Silently replaces if the same account is already mapped to a different
+				// connection (narrow race with online-check). Log for diagnostics.
+				if (accountConnections.TryGetValue(accountName, out NetworkConnection existingConn) && existingConn != connection)
+				{
+					UnityEngine.Debug.LogWarning($"[TokenAccountManager] Replacing existing connection for account '{accountName}' (old clientId={existingConn.ClientId}, new clientId={connection.ClientId}).");
+				}
 				accountConnections.Remove(accountName);
 				accountConnections.Add(accountName, connection);
 			}

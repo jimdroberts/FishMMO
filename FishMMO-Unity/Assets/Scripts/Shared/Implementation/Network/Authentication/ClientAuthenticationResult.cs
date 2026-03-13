@@ -74,5 +74,13 @@
 		/// Account has been successfully verified with the correct verification code.
 		/// </summary>
 		AccountVerified,
+		/// <summary>
+		/// Login requires TOTP two-factor authentication. The client must provide a valid TOTP code.
+		/// </summary>
+		TwoFactorRequired,
+		/// <summary>
+		/// The submitted TOTP code was invalid or has already been used (anti-replay).
+		/// </summary>
+		TwoFactorInvalid,
 	}
 }

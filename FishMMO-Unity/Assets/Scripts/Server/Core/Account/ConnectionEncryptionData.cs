@@ -74,14 +74,14 @@ namespace FishMMO.Server.Core.Account
 		}
 
 		/// <summary>
-		/// Atomically increments and returns the next send sequence number.
-		/// Also builds the corresponding nonce internally (use <see cref="NextSendNonce"/> for both).
+		/// Atomically increments and returns the next send sequence number without
+		/// building a nonce. Use when the sequence is needed for AAD construction
+		/// and the nonce will be built separately via <see cref="BuildSendNonce"/>.
 		/// </summary>
 		/// <returns>The next send sequence number.</returns>
 		public uint NextSendSequence()
 		{
-			var (_, seq) = SendNonceCtx.NextNonce();
-			return seq;
+			return SendNonceCtx.NextSequenceOnly();
 		}
 
 		/// <summary>
@@ -163,10 +163,10 @@ namespace FishMMO.Server.Core.Account
 			ServerToClientKey = keys.ServerToClientKey;
 
 			// Create nonce contexts that own copies of the session prefixes.
-			// Server send = serverToClient:true, uses ServerPrefix
-			// Server receive = serverToClient:false (client→server), uses ClientPrefix
-			SendNonceCtx = new CryptoHelper.GcmNonceContext(keys.ServerPrefix, serverToClient: true);
-			ReceiveNonceCtx = new CryptoHelper.GcmNonceContext(keys.ClientPrefix, serverToClient: false);
+			// Server send = server→client direction, uses ServerPrefix
+			// Server receive = client→server direction, uses ClientPrefix
+			SendNonceCtx = new CryptoHelper.GcmNonceContext(keys.ServerPrefix, CryptoHelper.NonceSide.ServerToClient);
+			ReceiveNonceCtx = new CryptoHelper.GcmNonceContext(keys.ClientPrefix, CryptoHelper.NonceSide.ClientToServer);
 
 			// Zero and drop master secret
 			if (MasterSecret != null)

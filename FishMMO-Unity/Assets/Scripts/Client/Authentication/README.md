@@ -29,6 +29,8 @@ With the encrypted channel in place, the authenticator supports three flows:
 
 3. **Token-based reconnection** — After a successful SRP login with the LoginServer, the client stores an encrypted auth token. On subsequent connections to World/Scene servers, the stored token is encrypted and sent via `TokenAuthBroadcast`, bypassing the full SRP flow.
 
+4. **Two-factor authentication** — If the server indicates `TwoFactorRequired` after SRP proof, the client prompts the user for a TOTP code (6-digit) or recovery code (XXXXX-XXXXX). The code is encrypted and sent via `TwoFactorVerifyBroadcast`. On success, the server completes login as normal. During account creation, the server sends a `TwoFactorSetupBroadcast` containing the encrypted otpauth URI and recovery codes, received via `OnTwoFactorSetupReceived`.
+
 `ClientSrpData` wraps the `SrpClient` library (2048-bit group, SHA-512) to generate ephemeral values, compute client proofs, generate salt/verifier pairs for registration, and verify server proofs. All SRP references are explicitly nulled on cleanup to allow GC collection of sensitive string data.
 
 All cryptographic operations use BouncyCastle under the hood via `CryptoHelper`. Every AES-GCM encrypt/decrypt call is wrapped in `try/catch (CryptographicException)` with immediate `ForceDisconnect()` and buffer zeroing on failure. Duplicate-message guards (`srpVerifyProcessed`, `srpSuccessProcessed`, `cookieEchoed`) prevent replay of critical protocol messages within a session.
@@ -58,6 +60,7 @@ All cryptographic operations use BouncyCastle under the hood via `CryptoHelper`.
 - **SRP-6a authentication (2048-bit, SHA-512)** — client generates ephemeral, receives encrypted salt + server ephemeral, computes proof, and verifies server proof via `ClientSrpData`.
 - **Account creation flow** — generates SRP salt and verifier, encrypts username/salt/verifier, and sends `CreateAccountBroadcast` with implicit sequence encoding (server derives per-field sequences from a single `Seq` value).
 - **Token-based reconnection** — after LoginServer SRP success, an encrypted auth token is stored and automatically sent via `TokenAuthBroadcast` on subsequent World/Scene server connections; token expiration is enforced server-side.
+- **Two-factor authentication** — `SendTotpCode(code)` encrypts and sends a TOTP or recovery code via `TwoFactorVerifyBroadcast`. The `code` parameter accepts both 6-digit TOTP codes and XXXXX-XXXXX recovery codes. `OnTwoFactorSetupReceived` fires during account creation with the otpauth URI and recovery codes.
 - **Token failure handling** — `ClientAuthResultBroadcast` with `TokenInvalid`, `TokenExpired`, or `TokenRevoked` results automatically clears the stored token via `ClearAuthToken()` to prevent infinite retry loops.
 - **Credential clearing** — `username` and `password` are nulled immediately after `SrpData.GetProof()` (the last point of use) and again as a safety net in `ClearKeyMaterial()` on disconnect.
 - **Key material zeroing** — `clientToServerKey`, `serverToClientKey`, all decrypted plaintext buffers (salt, ephemeral, proof), and `GcmNonceContext` session prefixes are zeroed with `CryptographicOperations.ZeroMemory()` on disconnect or after use.
@@ -76,7 +79,7 @@ All cryptographic operations use BouncyCastle under the hood via `CryptoHelper`.
 - `FishMMO.Shared.Authentication` — centralized validation rules (`IsAllowedUsername`: 3–32 chars, alphanumeric + underscores; `IsAllowedPassword`: 8–32 chars, expanded charset).
 - `Client` class — FishNet client wrapper providing `Broadcast()` and `ForceDisconnect()`.
 - `FishMMO.Logging` — structured logging via `Log.Warning()`, `Log.Error()`, `Log.Debug()`.
-- Shared broadcast message types: `ClientHandshake`, `ServerHandshake`, `SrpVerifyBroadcast`, `SrpProofBroadcast`, `SrpSuccessBroadcast`, `CreateAccountBroadcast`, `TokenAuthBroadcast`, `ClientAuthResultBroadcast`.
+- Shared broadcast message types: `ClientHandshake`, `ServerHandshake`, `SrpVerifyBroadcast`, `SrpProofBroadcast`, `SrpSuccessBroadcast`, `CreateAccountBroadcast`, `TokenAuthBroadcast`, `ClientAuthResultBroadcast`, `TwoFactorVerifyBroadcast`, `TwoFactorSetupBroadcast`.
 
 ## Installation / Build
 
@@ -108,6 +111,13 @@ Ensure `ClientLoginAuthenticator` is attached as the authenticator on the FishNe
 3. If the token is rejected (`TokenInvalid`, `TokenExpired`, `TokenRevoked`), the authenticator clears it automatically and `OnClientAuthenticationResult` fires with the failure reason.
 4. Call `ClearAuthToken()` explicitly on user logout.
 
+### Two-Factor Authentication
+
+1. Subscribe to `OnTwoFactorSetupReceived` for account-creation 2FA setup events (provides otpauth URI and recovery codes).
+2. During login, if `OnClientAuthenticationResult` fires with `TwoFactorRequired`, prompt the user for a TOTP code or recovery code.
+3. Call `authenticator.SendTotpCode(code)` with the 6-digit TOTP code or XXXXX-XXXXX recovery code.
+4. `OnClientAuthenticationResult` fires again with `LoginSuccess` (on valid code) or `TwoFactorInvalid` (on failure — retry allowed).
+
 ## Configuration
 
 ### ClientLoginAuthenticator Properties
@@ -124,6 +134,7 @@ Ensure `ClientLoginAuthenticator` is attached as the authenticator on the FishNe
 | `SetLoginCredentials()` | `string username, string password, bool register = false` | Sets login credentials and register flag before connection |
 | `SetClient()` | `Client client` | Assigns the FishNet client instance for broadcasting |
 | `ClearAuthToken()` | — | Zeroes and nulls the stored auth token |
+| `SendTotpCode()` | `string code` | Encrypts and sends a TOTP (6-digit) or recovery code (XXXXX-XXXXX) via `TwoFactorVerifyBroadcast` |
 
 ### Validation Rules (from `FishMMO.Shared.Authentication`)
 
@@ -300,6 +311,27 @@ Client                                         Server
   │  SrpData.Clear() — null all SRP references     │
 ```
 
+### Phase 3.5: Two-Factor Authentication (Conditional)
+
+If the server responds to the SRP proof with `TwoFactorRequired`, the login flow pauses for TOTP verification. `SrpSuccessBroadcast` is not sent until 2FA completes.
+
+```
+Client                                         Server
+  │                                               │
+  │◄── ClientAuthResultBroadcast ─────────────────│  { TwoFactorRequired }
+  │                                               │
+  │  Prompt user for TOTP code or recovery code    │
+  │  AES-GCM encrypt(code, AAD=TwoFactorVerify)   │
+  │── TwoFactorVerifyBroadcast { Code, Seq } ────►│
+  │                                               │
+  │  On success:                                   │
+  │◄── SrpSuccessBroadcast { Proof, Token, Res } ─│  Normal SRP success flow
+  │                                               │
+  │  On failure:                                   │
+  │◄── ClientAuthResultBroadcast ─────────────────│  { TwoFactorInvalid }
+  │  (Retry by calling SendTotpCode again)         │
+```
+
 ### Phase 4: Token-Based Reconnection
 
 ```
@@ -414,7 +446,8 @@ System.Object
 
 | Event | Fired When |
 |-------|-----------|
-| `OnClientAuthenticationResult` | Server sends `SrpSuccessBroadcast` (after successful SRP verification) or `ClientAuthResultBroadcast` (token auth result or other server-initiated result) |
+| `OnClientAuthenticationResult` | Server sends `SrpSuccessBroadcast` (after successful SRP verification) or `ClientAuthResultBroadcast` (token auth result, `TwoFactorRequired`, `TwoFactorInvalid`, or other server-initiated result) |
+| `OnTwoFactorSetupReceived` | During account creation, server sends `TwoFactorSetupBroadcast` with encrypted otpauth URI and recovery codes |
 
 ### External Dependencies
 

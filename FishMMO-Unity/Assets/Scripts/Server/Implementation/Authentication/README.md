@@ -88,6 +88,12 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>`, drained eac
 - **Token generation and issuance** — LoginServer generates HMAC-signed auth tokens with configurable expiration (default 10 min), encrypted with session keys, and persisted for revocation support.
 - **Token revocation** — World/Scene servers verify token revocation status via database hash lookup before granting access.
 - **Protocol version negotiation** — `CryptoHelper.NegotiateProtocolVersion` with version range binding in the ECDH transcript hash prevents downgrade attacks.
+- **TOTP two-factor authentication** — After SRP proof, accounts with 2FA enabled enter a TOTP verification phase. TOTP secrets are AES-256-GCM encrypted at rest with a server-side master key. Codes are verified with a ±1 step window and anti-replay via persisted last-used window.
+- **Recovery code login** — When the authenticator app is unavailable, users can submit a single-use recovery code (XXXXX-XXXXX hex format) instead of a 6-digit TOTP code. The code is verified against PBKDF2-SHA256 hashes via `ITwoFactorRecoveryCodeService` and consumed after use.
+- **Per-username TOTP brute-force protection** — Failed TOTP/recovery code attempts are tracked per username (lowercased, cross-connection). After 15 failures within a 30-minute window, further attempts are rejected until the lockout expires. A bounded sweep (64 max scan) evicts stale entries.
+- **Per-connection TOTP attempt cap** — Each connection is limited to 5 TOTP attempts via `TotpPendingState.Attempts`. Exceeding the cap disconnects the client.
+- **TOTP concurrency limiter** — A semaphore (`MaxConcurrentTotpVerifications = 4`) limits parallel TOTP/recovery code verifications to bound CPU cost from PBKDF2 operations.
+- **Email enumeration prevention** — For email-based login, unverified accounts receive the same fake SRP flow as non-existent accounts, preventing account-existence disclosure via the `AccountUnverified` response code. Username-based login still returns `AccountUnverified` for user-friendly UX.
 
 ## Prerequisites
 
@@ -99,7 +105,7 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>`, drained eac
 - **FishMMO.Shared.Authentication** — Centralized validation rules (`IsAllowedUsername`, `IsAllowedPassword`).
 - **FishMMO.Logging.Log** — Structured async logging.
 - **.NET 6+** — `System.Threading.Channels`, `System.Security.Cryptography` (AES-GCM, X25519, HKDF, HMAC-SHA256/512).
-- **NTP** — Hosts MUST run NTP (or equivalent) to keep the clock monotonically accurate. Wall-clock TTL enforcement, hard deadlines, and cookie expiration use `DateTime.UtcNow`.
+- **NTP** — Hosts MUST run NTP (or equivalent) to keep the clock monotonically accurate. Wall-clock TTL enforcement, hard deadlines, cookie expiration, and **TOTP verification windows** all use `DateTime.UtcNow`. Without NTP, TOTP codes may be rejected even when valid, and multi-server deployments will disagree on token expiration.
 
 ## Installation / Build
 
@@ -156,6 +162,17 @@ This module is an integrated part of the FishMMO Unity project. No separate inst
 | `AccountVerifyDebounceSeconds` | 2 s | Per-account SRP verify debounce |
 | `ConnectionIpCacheTtlSeconds` | 120 s | IP cache entry TTL |
 | `tokenExpirationMinutes` | 10 min | Auth token expiration (Inspector-configurable) |
+
+### ServerAuthenticator TOTP Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `MaxConcurrentTotpVerifications` | 4 | Semaphore limit for parallel TOTP/recovery verifications |
+| `MaxTotpAttempts` | 5 | Per-connection TOTP attempt cap (exceeding disconnects) |
+| `MaxTotpFailuresPerUsername` | 15 | Per-username failure threshold before lockout |
+| `TotpUsernameLockoutDuration` | 30 min | Lockout window for per-username failures |
+| `MaxTotpUsernameFailureEntries` | 10,000 | Hard cap on tracked username entries |
+| `TotpUsernameFailureSweepMaxScan` | 64 | Max entries scanned per sweep iteration |
 
 ### TokenServerAuthenticator Constants
 
@@ -308,6 +325,44 @@ Client                              Server
   │                                      │    • ClearSrpState()
 ```
 
+#### Phase 3.5: Two-Factor Authentication (Conditional)
+
+If the account has TOTP enabled (`accountData.TotpEnabled == true`), the SRP proof handler defers token issuance and enters a TOTP verification phase. The client receives `TwoFactorRequired` instead of `SrpSuccessBroadcast`.
+
+```
+Client                              Server
+  │                                      │
+  │◄── ClientAuthResultBroadcast ────── │  ProcessSrpProofAsync()
+  │   { TwoFactorRequired }             │    • SRP proof valid, 2FA enabled
+  │                                      │    • Create TotpPendingState (attempts, serverProof, accessLevel)
+  │                                      │    • State remains at SrpSuccess (not Authenticated)
+  │                                      │
+  │── TwoFactorVerifyBroadcast ────────► │  UDP Gate → totpSemaphore
+  │   { Code (encrypted), Seq }          │    • Increment TotpPendingState.Attempts (volatile)
+  │                                      │    • Acquire totpSemaphore (MaxConcurrent=4)
+  │                                      │
+  │                                      │  Worker: ProcessTwoFactorVerifyAsync()
+  │                                      │    • Consume seq: AES-GCM decrypt code
+  │                                      │    • Per-username lockout check (15 failures / 30 min)
+  │                                      │    • Detect code format:
+  │                                      │      ┌── 6-digit numeric → TOTP path
+  │                                      │      │   • Decrypt TOTP secret with master key
+  │                                      │      │   • VerifyTotpCode (±1 step, anti-replay)
+  │                                      │      │   • Persist last-used window
+  │                                      │      │
+  │                                      │      └── XXXXX-XXXXX hex → Recovery code path
+  │                                      │          • FetchUnusedByAccountAsync()
+  │                                      │          • VerifyRecoveryCode (PBKDF2-SHA256)
+  │                                      │          • ConsumeCodeAsync() on match
+  │                                      │
+  │                                      │    • On failure: track per-username, send TwoFactorInvalid
+  │                                      │    • On success: SrpSuccess → Authenticated
+  │                                      │    • Encrypt server proof + generate auth token
+  │◄── SrpSuccessBroadcast ──────────── │    • Enqueue → Main Thread Broadcast
+  │   { ServerProof (enc), Token (enc)} │    • OnAuthentication(conn, true)
+  │                                      │    • ClearSrpState()
+```
+
 ### Token Authentication (World/Scene Server)
 
 ```
@@ -405,6 +460,7 @@ Authenticator (FishNet)
 | `SrpProofBroadcast` | Client → Server | Encrypted client proof |
 | `SrpSuccessBroadcast` | Server → Client | Encrypted server proof + auth result + encrypted token |
 | `TokenAuthBroadcast` | Client → Server | Encrypted auth token |
+| `TwoFactorVerifyBroadcast` | Client → Server | Encrypted TOTP or recovery code + sequence number |
 | `ClientAuthResultBroadcast` | Server → Client | Authentication result code |
 
 ### Authentication Results
@@ -421,6 +477,9 @@ Authenticator (FishNet)
 | `SceneLoginSuccess` | Scene-server entry approved |
 | `ServerFull` | World server locked or at capacity |
 | `NoCharacterSelected` | No selected character for world entry |
+| `AccountUnverified` | Account exists but email not verified (username login only) |
+| `TwoFactorRequired` | SRP proof valid; TOTP/recovery code required to complete login |
+| `TwoFactorInvalid` | TOTP code or recovery code verification failed |
 | `TokenInvalid` | Token HMAC verification failed or structure invalid |
 | `TokenExpired` | Token past expiration time |
 | `TokenRevoked` | Token revoked in database |
@@ -438,6 +497,11 @@ Authenticator (FishNet)
 | Transcript binding | SHA-256 hash of `(domain‖clientPub‖serverPub‖versions)` fed into HKDF |
 | Cookie challenge | Stateless HMAC-SHA256, time-bucketed, fail-closed rotation |
 | Fake SRP state | Pre-computed verifier + per-username HMAC-SHA512 salt derivation |
+| Email enumeration prevention | Unverified accounts on email login use fake SRP (same as non-existent) |
+| TOTP anti-replay | Persisted last-used window; conditional DB update rejects same-window reuse |
+| Recovery code one-time use | Matched code consumed via `ConsumeCodeAsync` immediately after verification |
+| Per-username TOTP lockout | 15 failures / 30 min cross-connection; bounded tracker with sweep |
+| Cookie HMAC IP length prefix | 2-byte big-endian IP length prefix eliminates variable-length concatenation ambiguity |
 | Error indistinguishability | Generic failures, no protocol-level detail |
 
 ### Cleanup and Lifecycle
@@ -475,6 +539,7 @@ Authenticator (FishNet)
 | `IKickRequestService` | Database: persist kick requests for already-online accounts |
 | `IAuthTokenService` | Database: issue/fetch/revoke auth tokens by hash |
 | `ILoginServerSigningKeyService` | Database: fetch HMAC signing keys by LoginServer ID |
+| `ITwoFactorRecoveryCodeService` | Database: fetch unused recovery code hashes, consume used codes |
 | `ExpiringKeyTracker<T>` | Head-first expiry queue for bounded rate limiting |
 | `LastSeenCacheTracker<K, V>` | TTL cache with bounded sweep for IP/encryption caches |
 | `ArrivalOrderTracker<T>` | Oldest-first tracking for stale-connection sweeps |
