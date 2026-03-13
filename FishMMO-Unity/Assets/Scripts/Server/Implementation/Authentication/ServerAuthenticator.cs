@@ -327,6 +327,14 @@ namespace FishMMO.Server.Implementation
 			public string ServerProof;
 			public string Username;
 			public AccessLevel AccessLevel;
+
+			/// <summary>
+			/// Whether <see cref="Username"/> is an email address.
+			/// Preserved from SRP verify so that TOTP re-fetch uses the correct
+			/// <c>FetchForLoginAsync</c> overload (email vs username column lookup).
+			/// </summary>
+			public bool IsEmail;
+
 			/// <summary>
 			/// Failed TOTP attempt counter. Must be accessed exclusively via
 			/// <see cref="System.Threading.Interlocked"/> methods since the network thread
@@ -1268,6 +1276,7 @@ namespace FishMMO.Server.Implementation
 							ServerProof = serverProof,
 							Username = username,
 							AccessLevel = accessLevel,
+							IsEmail = username != null && username.Contains('@'),
 							Attempts = 0,
 						};
 
@@ -1569,7 +1578,7 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			var accountResult = await accountService.FetchForLoginAsync(pendingState.Username);
+			var accountResult = await accountService.FetchForLoginAsync(pendingState.Username, pendingState.IsEmail);
 			if (!accountResult.IsSuccess || string.IsNullOrEmpty(accountResult.Data.TotpSecret))
 			{
 				totpPendingStates.TryRemove(conn.ClientId, out _);

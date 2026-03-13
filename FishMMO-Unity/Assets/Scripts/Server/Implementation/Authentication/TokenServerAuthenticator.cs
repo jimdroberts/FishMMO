@@ -327,7 +327,10 @@ namespace FishMMO.Server.Implementation
 				}
 				else
 				{
-					hmacKey = keyResult.Data.HmacKey;
+					// Copy to a local buffer so ZeroMemory does not corrupt the DB result
+					// if the service layer caches LoginServerSigningKeyData objects.
+					hmacKey = new byte[keyResult.Data.HmacKey.Length];
+					Buffer.BlockCopy(keyResult.Data.HmacKey, 0, hmacKey, 0, keyResult.Data.HmacKey.Length);
 					keyFound = true;
 				}
 
