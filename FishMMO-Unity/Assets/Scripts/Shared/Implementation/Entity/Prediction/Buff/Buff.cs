@@ -222,4 +222,3 @@ namespace FishMMO.Shared
 		}
 	}
 }
-

@@ -341,6 +341,7 @@ Array delta serialization uses index-based compression: unchanged entries are sk
 Buff/
 ├── Buff.cs                        # Runtime buff instance (tick-based timing, stacks, template ref)
 ├── BuffController.cs              # Per-entity controller (CharacterBehaviour, IBuffController, IPredictableController Order=80)
+├── BuffReconcileEntry.cs          # Reconcile snapshot entry + index-delta array serialization (WriteArrayDelta/ReadArrayDelta)
 └── Template/
     ├── BaseBuffTemplate.cs            # Abstract ScriptableObject base for all buff templates
     ├── BuffAttributeTemplate.cs       # Serializable attribute+value pair for template configuration
