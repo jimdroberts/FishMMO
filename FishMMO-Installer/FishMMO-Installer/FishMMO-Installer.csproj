@@ -9,13 +9,13 @@
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);MSB3277</NoWarn>
 
-    <!-- Source Paths -->
-    <FishMMODatabaseSource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\FishMMO-Database'))</FishMMODatabaseSource>
-    <FishMMOSharedUtilitySource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\FishMMO-SharedUtility'))</FishMMOSharedUtilitySource>
+    <!-- Source Paths (evaluated in static phase; MSBuildProjectDirectory is always available). -->
+    <FishMMODatabaseSource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../FishMMO-Database'))</FishMMODatabaseSource>
+    <FishMMOSharedUtilitySource>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../FishMMO-SharedUtility'))</FishMMOSharedUtilitySource>
 
-    <!-- Output Paths -->
-    <FishMMODatabaseDest>$(OutputPath)FishMMO-Database</FishMMODatabaseDest>
-    <FishMMOSharedUtilityDest>$(OutputPath)FishMMO-SharedUtility</FishMMOSharedUtilityDest>
+    <!-- Stale-copy sentinel paths (project-dir subdirs written by old broken builds). -->
+    <FishMMODatabaseStale>$(MSBuildProjectDirectory)/FishMMO-Database</FishMMODatabaseStale>
+    <FishMMOSharedUtilityStale>$(MSBuildProjectDirectory)/FishMMO-SharedUtility</FishMMOSharedUtilityStale>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,14 +27,27 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.4" />
   </ItemGroup>
 
-  <!-- Clean previously copied trees -->
+  <!-- Clean previously copied trees (from previous builds) -->
   <Target Name="CleanCopiedSourceTrees" BeforeTargets="Build">
+    <!-- Dest is defined here so $(OutDir) is fully resolved at execution time. -->
+    <PropertyGroup>
+      <FishMMODatabaseDest>$(OutDir)FishMMO-Database</FishMMODatabaseDest>
+      <FishMMOSharedUtilityDest>$(OutDir)FishMMO-SharedUtility</FishMMOSharedUtilityDest>
+    </PropertyGroup>
+    <!-- Remove output-dir copies (incremental clean). -->
     <RemoveDir Directories="$(FishMMODatabaseDest)" Condition="Exists('$(FishMMODatabaseDest)')" />
     <RemoveDir Directories="$(FishMMOSharedUtilityDest)" Condition="Exists('$(FishMMOSharedUtilityDest)')" />
+    <!-- Remove any stale copies left in the project directory by old broken builds. -->
+    <RemoveDir Directories="$(FishMMODatabaseStale)" Condition="Exists('$(FishMMODatabaseStale)')" />
+    <RemoveDir Directories="$(FishMMOSharedUtilityStale)" Condition="Exists('$(FishMMOSharedUtilityStale)')" />
   </Target>
 
   <!-- Copy FishMMO-Database -->
-  <Target Name="CopyFishMMODatabase" AfterTargets="CleanCopiedSourceTrees">
+  <!-- Run after the project build completes so $(OutDir) points to the real build output. -->
+  <Target Name="CopyFishMMODatabase" AfterTargets="Build">
+    <PropertyGroup>
+      <FishMMODatabaseDest>$(OutDir)FishMMO-Database</FishMMODatabaseDest>
+    </PropertyGroup>
     <ItemGroup>
       <FishMMODatabaseFiles Include="$(FishMMODatabaseSource)\**\*.*"
         Exclude="
@@ -52,7 +65,11 @@
   </Target>
 
   <!-- Copy FishMMO-SharedUtility -->
+  <!-- Run after the database copy finishes (which runs after Build). -->
   <Target Name="CopyFishMMOSharedUtility" AfterTargets="CopyFishMMODatabase">
+    <PropertyGroup>
+      <FishMMOSharedUtilityDest>$(OutDir)FishMMO-SharedUtility</FishMMOSharedUtilityDest>
+    </PropertyGroup>
     <ItemGroup>
       <FishMMOSharedUtilityFiles Include="$(FishMMOSharedUtilitySource)\**\*.*"
         Exclude="
