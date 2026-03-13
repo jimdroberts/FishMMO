@@ -127,6 +127,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Delta reader for <see cref="CharacterReconcileData"/>.
 		/// Reads the bitmask and reconstructs only the changed fields.
+		/// Bits 9–15 of the flags are reserved for future fields.
+		/// Unknown bits are silently ignored for forward compatibility.
 		/// </summary>
 		private static CharacterReconcileData ReadDelta(
 			Reader reader,

@@ -112,21 +112,26 @@ namespace FishMMO.Shared
 					// Also fires after an addressable hot-reload: the OLD prefab's collider is
 					// still alive (not destroyed) but now belongs to a stale asset instance
 					// while template.AbilityObjectPrefab points to the newly loaded prefab.
-					// In that scenario the assertion trips, alerting the developer that the
-					// cache is stale. The fix is to call prefabColliderCache.Clear() when
-					// addressable bundles are reloaded (e.g., in an OnCatalogUpdated handler).
-					// The null-check stale path below only handles the case where Unity has
-					// fully destroyed the old prefab (collider == null).
-					Debug.Assert(
-						collider.gameObject == template.AbilityObjectPrefab,
-						$"[AbilityObject] prefabColliderCache ID {template.ID} maps to a collider from a different prefab. "
-						+ "Call prefabColliderCache.Clear() after addressable catalogue updates.");
-					return collider;
+					// In that scenario, self-heal by removing the stale entry and re-querying.
+					if (collider.gameObject != template.AbilityObjectPrefab)
+					{
+						Debug.LogWarning(
+							$"[AbilityObject] prefabColliderCache ID {template.ID} maps to a collider from a different prefab. "
+							+ "Self-healing. Call prefabColliderCache.Clear() after addressable catalogue updates to avoid this.");
+						prefabColliderCache.Remove(template.ID);
+						// Fall through to re-query below.
+					}
+					else
+					{
+						return collider;
+					}
 				}
-
-				// Stale entry — the old prefab was fully destroyed (addressable unload).
-				// Remove and re-query from the current template prefab below.
-				prefabColliderCache.Remove(template.ID);
+				else
+				{
+					// Stale entry — the old prefab was fully destroyed (addressable unload).
+					// Remove and re-query from the current template prefab below.
+					prefabColliderCache.Remove(template.ID);
+				}
 			}
 
 			collider = template.AbilityObjectPrefab.GetComponent<Collider>();
@@ -455,10 +460,7 @@ namespace FishMMO.Shared
 				ability.Objects = new Dictionary<int, Dictionary<int, AbilityObject>>();
 			}
 
-		if (!TryAllocateContainerID(ability, seed, spawnTick, out int containerID, out Dictionary<int, AbilityObject> spawnedAbilityObjects))
-			{
-				return;
-			}
+		TryAllocateContainerID(ability, seed, spawnTick, out int containerID, out Dictionary<int, AbilityObject> spawnedAbilityObjects);
 
 			ability.Objects.Add(containerID, spawnedAbilityObjects);
 			abilityObject.ContainerID = containerID;
@@ -522,8 +524,7 @@ namespace FishMMO.Shared
 		/// If a stale entry exists at the computed ID (leftover from a mispredicted spawn),
 		/// it is destroyed and replaced.
 		/// </summary>
-		/// <returns>True if a container ID was allocated, false if the spawn should be aborted.</returns>
-		private static bool TryAllocateContainerID(
+		private static void TryAllocateContainerID(
 			Ability ability,
 			int seed,
 			uint spawnTick,
@@ -536,13 +537,14 @@ namespace FishMMO.Shared
 			// If an existing entry occupies this slot, destroy it first.
 			// This handles two cases:
 			//   (1) A stale predicted entry leftover from a mispredicted spawn.
-			//   (2) A genuine hash collision — expected in multi-cast scenarios
-			//       where two abilities fire on the same tick with different seeds
-			//       (e.g., a proc triggers a second ability). The simple hash has
-			//       no collision probing, so identical (spawnTick, seed) pairs or
-			//       unlucky XOR results will land here. This is safe: the older
-			//       entry is destroyed and replaced, which is correct for both
-			//       stale cleanup and same-tick multi-cast.
+			//   (2) A genuine hash collision — the hash is seed XOR (tick * 1000003),
+			//       so identical (seed, tick) pairs trivially collide, and distinct
+			//       pairs can collide by chance (birthday-problem probability grows
+			//       with active ability count). Same-tick different-seed pairs do NOT
+			//       collide because XOR preserves seed uniqueness. The simple hash has
+			//       no collision probing, so collisions are resolved by destroying
+			//       the older entry and replacing it — safe for both stale cleanup
+			//       and rare same-tick multi-cast collisions.
 			if (ability.Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> staleContainer))
 			{
 				foreach (AbilityObject staleObj in staleContainer.Values)
@@ -555,8 +557,6 @@ namespace FishMMO.Shared
 				}
 				ability.Objects.Remove(containerID);
 			}
-
-			return true;
 		}
 
 		/// <summary>

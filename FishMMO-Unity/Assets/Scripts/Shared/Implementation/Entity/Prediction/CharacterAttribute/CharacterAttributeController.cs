@@ -293,12 +293,12 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
-			// Reset the regen accumulator so that a reconnect or scene transfer
+			// Reset the regen tick counter so that a reconnect or scene transfer
 			// does not carry over a stale partial-interval. Without this, the
 			// first Regenerate() call after reset would fire a tick early or late,
 			// causing a regen desync between client and server until the next
 			// reconcile corrects it.
-			accumulatedRegenDelta = 0.0f;
+			regenTickAccum = 0;
 
 			// Reset propagation state to prevent stale notifications.
 			propagationDepth = 0;
@@ -544,19 +544,6 @@ namespace FishMMO.Shared
 
 #if UNITY_SERVER
 		/// <summary>
-		/// Subscribes to network tick updates used to batch and flush dirty attribute state.
-		/// </summary>
-		public override void OnStartNetwork()
-		{
-			base.OnStartNetwork();
-
-			if (base.TimeManager != null)
-			{
-				base.TimeManager.OnTick += TimeManager_OnTick;
-			}
-		}
-
-		/// <summary>
 		/// Unsubscribes from network tick updates.
 		/// </summary>
 		public override void OnStopNetwork()
@@ -568,7 +555,30 @@ namespace FishMMO.Shared
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
 		}
+#endif
 
+		/// <summary>
+		/// Initializes the tick-based regen interval and (server only) subscribes to tick updates.
+		/// </summary>
+		public override void OnStartNetwork()
+		{
+			base.OnStartNetwork();
+
+			// Compute the integer regen interval once so both client and server
+			// agree on exactly which ticks produce a regen pulse. This eliminates
+			// the float-drift desync the old float accumulator caused.
+			if (base.TimeManager != null)
+			{
+				double td = base.TimeManager.TickDelta;
+				regenTickInterval = td > 0.0 ? (uint)Mathf.RoundToInt((float)(regenTickRate / td)) : 1u;
+
+#if UNITY_SERVER
+				base.TimeManager.OnTick += TimeManager_OnTick;
+#endif
+			}
+		}
+
+#if UNITY_SERVER
 		/// <summary>
 		/// Called on network tick to flush dirty attribute updates in batches.
 		/// </summary>
@@ -638,7 +648,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			List<CharacterAttributeUpdateBroadcast> updates = new List<CharacterAttributeUpdateBroadcast>(dirtyAttributeTemplateIDs.Count);
+			reusableAttributeUpdates.Clear();
 			foreach (int templateID in dirtyAttributeTemplateIDs)
 			{
 				if (!attributes.TryGetValue(templateID, out CharacterAttribute attribute) || attribute?.Template == null)
@@ -652,7 +662,7 @@ namespace FishMMO.Shared
 					continue;
 				}
 
-				updates.Add(new CharacterAttributeUpdateBroadcast()
+				reusableAttributeUpdates.Add(new CharacterAttributeUpdateBroadcast()
 				{
 					TemplateID = templateID,
 					Value = current,
@@ -661,7 +671,7 @@ namespace FishMMO.Shared
 			}
 
 			dirtyAttributeTemplateIDs.Clear();
-			SendAttributeUpdates(updates);
+			SendAttributeUpdates(reusableAttributeUpdates);
 		}
 
 		/// <summary>
@@ -674,7 +684,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			List<CharacterResourceAttributeUpdateBroadcast> updates = new List<CharacterResourceAttributeUpdateBroadcast>(dirtyResourceTemplateIDs.Count);
+			reusableResourceUpdates.Clear();
 			foreach (int templateID in dirtyResourceTemplateIDs)
 			{
 				if (!resourceAttributes.TryGetValue(templateID, out CharacterResourceAttribute resource) || resource?.Template == null)
@@ -692,7 +702,7 @@ namespace FishMMO.Shared
 					continue;
 				}
 
-				updates.Add(new CharacterResourceAttributeUpdateBroadcast()
+				reusableResourceUpdates.Add(new CharacterResourceAttributeUpdateBroadcast()
 				{
 					TemplateID = templateID,
 					CurrentValue = currentValue,
@@ -704,7 +714,7 @@ namespace FishMMO.Shared
 			}
 
 			dirtyResourceTemplateIDs.Clear();
-			SendResourceUpdates(updates);
+			SendResourceUpdates(reusableResourceUpdates);
 		}
 
 		/// <summary>
@@ -829,7 +839,6 @@ namespace FishMMO.Shared
 				observer.Broadcast(broadcast, true, channel);
 			}
 		}
-
 #endif
 
 		/// <summary>
@@ -845,9 +854,20 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Accumulated time since the last regeneration tick, in seconds.
+		/// Number of prediction ticks between resource regeneration pulses.
+		/// Computed once from <see cref="regenTickRate"/> / TickDelta in
+		/// <see cref="OnStartNetwork"/> (or first OnReplicate if not yet set).
+		/// Using integer ticks eliminates the float-drift desync that the old
+		/// float accumulator caused over ~300+ ticks.
 		/// </summary>
-		private float accumulatedRegenDelta = 0.0f;
+		private uint regenTickInterval;
+
+		/// <summary>
+		/// Current tick counter toward the next regeneration pulse.
+		/// When this reaches <see cref="regenTickInterval"/>, a regen fires and the counter resets.
+		/// Reconciled via <see cref="CharacterAttributeResourceState.RegenTickAccum"/>.
+		/// </summary>
+		private uint regenTickAccum;
 
 		/// <summary>
 		/// Cached regeneration dependency attribute references, resolved once during init
@@ -882,22 +902,21 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Processes resource regeneration for health, mana, and stamina.
-		/// Accumulates delta time and applies regeneration in discrete intervals
-		/// controlled by <see cref="regenTickRate"/>.
+		/// Counts prediction ticks and fires a regen pulse every
+		/// <see cref="regenTickInterval"/> ticks. Uses integer counting to
+		/// guarantee deterministic client/server agreement.
 		/// </summary>
-		/// <param name="deltaTime">Time elapsed since the last call, in seconds.</param>
-		public void Regenerate(float deltaTime)
+		public void Regenerate()
 		{
-			accumulatedRegenDelta += deltaTime;
+			if (regenTickInterval == 0) return;
 
-			if (accumulatedRegenDelta >= regenTickRate)
+			regenTickAccum++;
+			if (regenTickAccum >= regenTickInterval)
 			{
-				int intervals = (int)(accumulatedRegenDelta / regenTickRate);
-				accumulatedRegenDelta -= intervals * regenTickRate;
-
-				RegenerateResource(HealthResourceTemplate, cachedHealthRegen, intervals);
-				RegenerateResource(ManaResourceTemplate, cachedManaRegen, intervals);
-				RegenerateResource(StaminaResourceTemplate, cachedStaminaRegen, intervals);
+				regenTickAccum = 0;
+				RegenerateResource(HealthResourceTemplate, cachedHealthRegen, 1);
+				RegenerateResource(ManaResourceTemplate, cachedManaRegen, 1);
+				RegenerateResource(StaminaResourceTemplate, cachedStaminaRegen, 1);
 			}
 		}
 
@@ -929,7 +948,7 @@ namespace FishMMO.Shared
 				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute mana) &&
 				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))
 			{
-				accumulatedRegenDelta = resourceState.RegenDelta;
+				regenTickAccum = resourceState.RegenTickAccum;
 
 				// Batch all notifications so listeners see fully-settled values.
 				BeginPropagation();
@@ -981,7 +1000,7 @@ namespace FishMMO.Shared
 			{
 				return new CharacterAttributeResourceState()
 				{
-					RegenDelta = accumulatedRegenDelta,
+					RegenTickAccum = regenTickAccum,
 					Health = health.CurrentValue,
 					MaxHealth = health.FinalValue,
 					Mana = mana.CurrentValue,
@@ -1014,7 +1033,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			Regenerate((float)base.TimeManager.TickDelta);
+			Regenerate();
 		}
 
 		/// <summary>

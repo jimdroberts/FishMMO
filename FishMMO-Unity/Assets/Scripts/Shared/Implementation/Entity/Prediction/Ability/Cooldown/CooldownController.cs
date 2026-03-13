@@ -4,6 +4,7 @@ using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using UnityEngine;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -135,6 +136,11 @@ namespace FishMMO.Shared
 		/// already expired relative to <paramref name="currentTick"/>.
 		/// Wire format: int count, then per cooldown: long abilityID, uint startTick, uint durationTicks.
 		/// </summary>
+		/// <remarks>
+		/// This is a <b>payload / initial-sync</b> path (e.g., spawning, scene load),
+		/// not a prediction path. Prediction uses the delta serializer registered in
+		/// <see cref="CooldownReconcileEntry"/> via <c>WriteArrayDelta</c>/<c>ReadArrayDelta</c>.
+		/// </remarks>
 		/// <param name="reader">The network reader.</param>
 		/// <param name="currentTick">Current network tick used to discard expired entries.</param>
 		public void Read(Reader reader, uint currentTick)
@@ -147,6 +153,22 @@ namespace FishMMO.Shared
 			int cooldownCount = reader.ReadInt32();
 			if (cooldownCount < 0 || cooldownCount > maxPayloadCooldowns)
 			{
+				// Reader is shared with subsequent payload fields — drain the remaining
+				// cooldown bytes to keep the stream position valid. Without this,
+				// everything after this call reads corrupted data.
+				// Cap iterations to maxPayloadCooldowns — a corrupted count near
+				// int.MaxValue would hang the tick loop otherwise.
+				if (cooldownCount > 0)
+				{
+					Log.Warning("CooldownController", $"Payload cooldown count {cooldownCount} exceeds limit {maxPayloadCooldowns}. Draining up to {maxPayloadCooldowns} entries.");
+					int drainCount = System.Math.Min(cooldownCount, maxPayloadCooldowns);
+					for (int d = 0; d < drainCount; d++)
+					{
+						reader.ReadInt64();  // abilityID
+						reader.ReadUInt32(); // startTick
+						reader.ReadUInt32(); // durationTicks
+					}
+				}
 				return;
 			}
 
@@ -172,6 +194,9 @@ namespace FishMMO.Shared
 		/// Writes cooldown data to a network writer.
 		/// Wire format: int count, then per cooldown: long abilityID, uint startTick, uint durationTicks.
 		/// </summary>
+		/// <remarks>
+		/// This is a <b>payload / initial-sync</b> path. See <see cref="Read"/> remarks.
+		/// </remarks>
 		/// <param name="writer">The network writer.</param>
 		public void Write(Writer writer)
 		{
@@ -200,12 +225,11 @@ namespace FishMMO.Shared
 		/// <param name="currentTick">The current network tick.</param>
 		public void ExpireElapsed(uint currentTick)
 		{
+			keysToRemove.Clear();
 			if (cooldowns.Count == 0)
 			{
 				return;
 			}
-
-			keysToRemove.Clear();
 
 			foreach (KeyValuePair<long, CooldownInstance> pair in cooldowns)
 			{
@@ -219,6 +243,7 @@ namespace FishMMO.Shared
 			{
 				RemoveCooldown(keysToRemove[i]);
 			}
+			keysToRemove.Clear();
 		}
 
 		/// <summary>
@@ -311,6 +336,12 @@ namespace FishMMO.Shared
 		/// Returns the cached array when cooldowns haven't changed since the last call.
 		/// Returns null when no cooldowns are active.
 		/// </summary>
+		/// <remarks>
+		/// Always allocates a fresh array when dirty, even if the length matches.
+		/// The delta serializer holds a reference to the previous tick's snapshot;
+		/// mutating in-place would silently update that reference, making prev == next
+		/// and masking the change (zero bytes sent when bytes should have been sent).
+		/// </remarks>
 		public CooldownReconcileEntry[] CreateReconcileSnapshot()
 		{
 			if (cooldowns.Count == 0)
@@ -325,10 +356,8 @@ namespace FishMMO.Shared
 				return cachedSnapshot;
 			}
 
-			if (cachedSnapshot == null || cachedSnapshot.Length != cooldowns.Count)
-			{
-				cachedSnapshot = new CooldownReconcileEntry[cooldowns.Count];
-			}
+			// Always allocate fresh — never reuse the old array in-place.
+			cachedSnapshot = new CooldownReconcileEntry[cooldowns.Count];
 
 			int i = 0;
 			foreach (KeyValuePair<long, CooldownInstance> kvp in cooldowns)

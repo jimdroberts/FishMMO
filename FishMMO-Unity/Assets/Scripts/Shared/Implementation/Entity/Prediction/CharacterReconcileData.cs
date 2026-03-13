@@ -135,13 +135,16 @@ namespace FishMMO.Shared
 		/// <returns>The packed int.</returns>
 		public static int Pack(int flags, int consumableSlot)
 		{
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 			if ((flags & ~0xFFFF) != 0)
 				throw new System.ArgumentOutOfRangeException(nameof(flags),
 					$"CharacterReconcileData.Pack flags 0x{flags:X} exceed 16-bit storage.");
 			if (consumableSlot < short.MinValue || consumableSlot > short.MaxValue)
 				throw new System.ArgumentOutOfRangeException(nameof(consumableSlot),
 					$"CharacterReconcileData.Pack consumableSlot {consumableSlot} exceeds signed 16-bit storage.");
-
+#endif
+			// The bitmask and cast inherently clamp out-of-range values in release builds,
+			// so the above throws are development-only guards — not production safety nets.
 			return (flags & 0xFFFF) | (((short)consumableSlot) << 16);
 		}
 

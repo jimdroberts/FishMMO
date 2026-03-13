@@ -43,5 +43,15 @@
 		/// Indicates the activation is for a mount.
 		/// </summary>
 		IsMount,
+
+		/// <summary>
+		/// Server-authoritative denial flag. Set in <see cref="AbilityController.OnCreateReconcile"/>
+		/// when the server rejected the last queued activation (TryStartAbility/TryStartConsumable
+		/// failed but input had a queued ability). Clients check this in OnReconcile to fire
+		/// <see cref="AbilityController.OnAbilityDenied"/> accurately instead of relying on the
+		/// heuristic (currentAbilityID != NO_ABILITY &amp;&amp; rd.AbilityID == NO_ABILITY) which
+		/// false-fires on zero-duration abilities that complete before the reconcile tick.
+		/// </summary>
+		Denied,
 	}
 }

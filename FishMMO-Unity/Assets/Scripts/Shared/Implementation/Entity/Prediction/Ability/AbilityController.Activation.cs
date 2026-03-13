@@ -133,6 +133,15 @@ namespace FishMMO.Shared
 		/// Attempts to start a new ability from the queued activation data. Sets the current
 		/// ability, remaining time, and held state. Returns true if an ability was started.
 		/// </summary>
+		/// <remarks>
+		/// <c>remainingTicks</c> is computed once here using the current speed attribute
+		/// and never updated mid-cast. If a speed buff is applied or expires during the
+		/// cast, the actual cast duration won't change — only the UI cast bar in
+		/// <see cref="UpdateActivation"/> will show a different <c>totalTime</c> because
+		/// it recomputes from the current attribute each tick. This is intentional:
+		/// locking the tick count at cast start keeps client and server deterministic
+		/// without needing to reconcile a changing duration.
+		/// </remarks>
 		private bool TryStartAbility(AbilityActivationReplicateData activationData)
 		{
 			if (CanActivate(activationData.QueuedAbilityID, activationData.GetTick(), out Ability newAbility))
@@ -232,6 +241,10 @@ namespace FishMMO.Shared
 			//Log.Debug($"2 Activating {validatedAbility.ID} State: {state}");
 
 			// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
+			// NOTE: totalTime is recomputed from the current speed attribute, while
+			// remainingTicks was locked at cast start. If speed changed mid-cast the
+			// bar progress will drift. To fix, cache totalTicks in TryStartAbility
+			// and use (remainingTicks / (float)totalTicks) * totalTime here.
 			if (state.IsTickedCreated())
 			{
 				float tickDelta = (float)base.TimeManager.TickDelta;
@@ -351,8 +364,8 @@ namespace FishMMO.Shared
 			// This method is only called from ProcessActiveConsumable, which already
 			// returns early if !IsActivating. The assert catches call-order mistakes
 			// during development without paying a runtime cost in release builds.
-			Debug.Assert(IsActivating,
-				"[AbilityController] ValidateActiveConsumable called while no ability is active.");
+			if (!IsActivating)
+				Log.Warning("AbilityController", "ValidateActiveConsumable called while no ability is active.");
 			if (!IsActivating)
 			{
 				return false;
@@ -464,11 +477,13 @@ namespace FishMMO.Shared
 			remainingTicks = (uint)Mathf.CeilToInt(consumable.ActivationTime / (float)base.TimeManager.TickDelta);
 
 			// Lock the inventory slot to prevent movement during activation.
-			consumableSlot = item.Slot;
+			// consumableSlot is assigned AFTER LockSlot so that if LockSlot throws,
+			// Cancel() won't try to unlock a slot that was never locked.
 			if (cachedInventoryController != null)
 			{
-				cachedInventoryController.LockSlot(consumableSlot);
+				cachedInventoryController.LockSlot(item.Slot);
 			}
+			consumableSlot = item.Slot;
 			return true;
 		}
 
@@ -607,7 +622,8 @@ namespace FishMMO.Shared
 			// Runtime assertion: if the interface ever returns a different collection type
 			// (e.g., via a shim or mock), catch the determinism break immediately.
 			List<Item> items = cachedInventoryController.Items;
-			Debug.Assert(items != null, "FindConsumableItem: IInventoryController.Items returned null — determinism contract violated.");
+			if (items == null)
+				Log.Warning("AbilityController", "FindConsumableItem: IInventoryController.Items returned null — determinism contract violated.");
 			for (int i = 0; i < items.Count; ++i)
 			{
 				Item item = items[i];

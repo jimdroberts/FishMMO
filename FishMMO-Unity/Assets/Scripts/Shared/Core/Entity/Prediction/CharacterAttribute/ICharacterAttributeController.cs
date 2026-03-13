@@ -95,10 +95,10 @@ namespace FishMMO.Shared.Core
 		void AddAttribute(CharacterAttribute instance);
 
 		/// <summary>
-		/// Regenerates resource attributes (e.g., health, mana) over time.
+		/// Regenerates resource attributes (e.g., health, mana) by one tick.
+		/// Uses integer tick counting internally to avoid float-drift desync.
 		/// </summary>
-		/// <param name="deltaTime">Time elapsed since last regeneration tick.</param>
-		void Regenerate(float deltaTime);
+		void Regenerate();
 
 		/// <summary>
 		/// Applies a resource state (health, mana, stamina, regen delta) to the controller.

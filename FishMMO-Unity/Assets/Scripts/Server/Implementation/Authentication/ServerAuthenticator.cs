@@ -2,11 +2,9 @@ using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database;
-using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -129,7 +127,7 @@ namespace FishMMO.Server.Implementation
 		/// expire and be re-resolved, but the block is still active — causing a logic error where
 		/// the IP is looked up again (minor perf cost, no security breach). If this value is
 		/// ever made configurable, add a startup assertion:
-		/// <c>Debug.Assert(ConnectionIpCacheTtlSeconds >= AccountCreationSystem.ipBlockDurationSeconds)</c>.
+		/// <c>Log.Error(..., "ConnectionIpCacheTtlSeconds < AccountCreationSystem.ipBlockDurationSeconds")</c>.
 		/// </para>
 		/// </summary>
 		private const float ConnectionIpCacheTtlSeconds = 300f;
@@ -385,10 +383,9 @@ namespace FishMMO.Server.Implementation
 			// static fake salt. A mismatch would create a ciphertext-size oracle that
 			// leaks whether an account exists (length of encrypted salt differs).
 			string testDerivedSalt = DerivePerUsernameFakeSalt("__startup_length_check__");
-			UnityEngine.Debug.Assert(
-				testDerivedSalt.Length == FakeSrpTuple.Value.Salt.Length,
-				$"{LogPrefix}: Fake salt length mismatch — DerivePerUsernameFakeSalt produced {testDerivedSalt.Length} chars, FakeSrpTuple.Salt is {FakeSrpTuple.Value.Salt.Length} chars. " +
-				"This would create a ciphertext-size oracle leaking account existence.");
+			if (testDerivedSalt.Length != FakeSrpTuple.Value.Salt.Length)
+				Log.Error(LogPrefix, $"Fake salt length mismatch — DerivePerUsernameFakeSalt produced {testDerivedSalt.Length} chars, FakeSrpTuple.Salt is {FakeSrpTuple.Value.Salt.Length} chars. " +
+					"This would create a ciphertext-size oracle leaking account existence.");
 
 			// Initialize TOTP concurrency limiter.
 			totpSemaphore = new SemaphoreSlim(MaxConcurrentTotpVerifications, MaxConcurrentTotpVerifications);

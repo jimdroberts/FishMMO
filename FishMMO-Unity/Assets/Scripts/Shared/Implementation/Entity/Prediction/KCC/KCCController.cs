@@ -72,6 +72,24 @@ namespace FishMMO.Shared
 
 		private Animator animator = null;
 
+		/// <summary>
+		/// Cached ability controller reference to avoid per-tick dictionary lookups.
+		/// Lazily resolved when <see cref="Character"/> is first set.
+		/// </summary>
+		private IAbilityController cachedAbilityController;
+
+		/// <summary>
+		/// Cached attribute controller reference to avoid per-tick dictionary lookups.
+		/// Lazily resolved when <see cref="Character"/> is first set.
+		/// </summary>
+		private ICharacterAttributeController cachedAttributeController;
+
+		/// <summary>
+		/// Tracks which <see cref="Character"/> reference the cached components belong to.
+		/// Re-caches when the reference changes (e.g., NPC possession or respawn).
+		/// </summary>
+		private IPlayerCharacter lastCachedCharacter;
+
 		// Current frame input state
 		private Vector3 moveInputVector;
 		private Vector3 lookInputVector;
@@ -100,6 +118,26 @@ namespace FishMMO.Shared
 		{
 			moveInputVector = Vector3.zero;
 			lookInputVector = Vector3.zero;
+		}
+
+		/// <summary>
+		/// Lazily resolves and caches component references from <see cref="Character"/>.
+		/// Re-caches if the <see cref="Character"/> reference changes.
+		/// </summary>
+		private void EnsureCached()
+		{
+			if (Character == lastCachedCharacter && lastCachedCharacter != null) return;
+			lastCachedCharacter = Character;
+			if (Character != null)
+			{
+				Character.TryGet(out cachedAbilityController);
+				Character.TryGet(out cachedAttributeController);
+			}
+			else
+			{
+				cachedAbilityController = null;
+				cachedAttributeController = null;
+			}
 		}
 
 		/// <summary>
@@ -251,9 +289,9 @@ namespace FishMMO.Shared
 						{
 							float targetRotationY = Mathf.Atan2(lookInputVector.x, lookInputVector.z) * Mathf.Rad2Deg;
 
-							Quaternion targetQuarternion = Quaternion.Euler(0.0f, targetRotationY, 0.0f);
+							Quaternion targetQuaternion = Quaternion.Euler(0.0f, targetRotationY, 0.0f);
 
-							if (Mathf.Abs(Quaternion.Angle(Motor.TransientRotation, targetQuarternion) - 180f) <= 3f)
+							if (Mathf.Abs(Quaternion.Angle(Motor.TransientRotation, targetQuaternion) - 180f) <= 3f)
 							{
 								//Log.Debug("180 degree detected");
 								targetRotationY -= 10f;
@@ -312,10 +350,12 @@ namespace FishMMO.Shared
 
 						float moveInputMagnitude = moveInputVector.sqrMagnitude;
 
+						EnsureCached();
+
 						// Determine ability state
-						if (Character.TryGet(out IAbilityController abilityController))
+						if (cachedAbilityController != null)
 						{
-							abilityType = abilityController.GetCurrentAbilityType();
+							abilityType = cachedAbilityController.GetCurrentAbilityType();
 						}
 
 						// Ground movement
@@ -362,7 +402,7 @@ namespace FishMMO.Shared
 
 			float targetSpeed = Constants.Character.RunSpeed;
 
-			if (Character.TryGet(out ICharacterAttributeController attributeController))
+			if (cachedAttributeController != null)
 			{
 				if (isCrouching)
 				{
@@ -371,8 +411,8 @@ namespace FishMMO.Shared
 				else if (sprintInputDown &&
 						 SprintSpeedTemplate != null &&
 						 moveInputMagnitude > 0f &&
-						 attributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
-						 attributeController.TryGetAttribute(SprintSpeedTemplate, out CharacterAttribute sprintSpeedModifier))
+						 cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
+						 cachedAttributeController.TryGetAttribute(SprintSpeedTemplate, out CharacterAttribute sprintSpeedModifier))
 				{
 					float currentStaminaCost = Constants.Character.SprintStaminaCost * deltaTime;
 
@@ -383,11 +423,10 @@ namespace FishMMO.Shared
 					}
 				}
 				else if (MoveSpeedTemplate != null &&
-						 attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
+						 cachedAttributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
 				{
 					targetSpeed = Constants.Character.RunSpeed * moveSpeedModifier.FinalValueAsPct;
 				}
-
 			}
 			else
 			{
@@ -449,14 +488,13 @@ namespace FishMMO.Shared
 				currentVelocity += addedVelocity;
 			}
 
-			// Find the gravity attribute in the characters attribute controller
-			if (Character.TryGet(out ICharacterAttributeController attributeController))
+			if (cachedAttributeController != null)
 			{
 				// Gravity is not applied while an aerial attack is activating
 				if (abilityType != AbilityType.AerialPhysical &&
 					abilityType != AbilityType.AerialMagic &&
 					GravityTemplate != null &&
-					attributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
+					cachedAttributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
 				{
 					currentVelocity += Constants.Character.Gravity * gravityModifier.FinalValueAsPct * deltaTime;
 				}
@@ -464,7 +502,7 @@ namespace FishMMO.Shared
 				// Fast Fall
 				if (isCrouching &&
 					FastFallSpeedTemplate != null &&
-					attributeController.TryGetAttribute(FastFallSpeedTemplate, out CharacterAttribute fastFallModifier))
+					cachedAttributeController.TryGetAttribute(FastFallSpeedTemplate, out CharacterAttribute fastFallModifier))
 				{
 					currentVelocity.y += Constants.Character.Gravity.y * fastFallModifier.FinalValueAsPct * deltaTime;
 				}
@@ -488,8 +526,8 @@ namespace FishMMO.Shared
 			if (jumpRequested)
 			{
 				// See if we actually are allowed to jump
-				if (Character.TryGet(out ICharacterAttributeController attributeController) &&
-					attributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
+				if (cachedAttributeController != null &&
+					cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
 					stamina.CurrentValue >= Constants.Character.JumpStaminaCost &&
 					abilityType == AbilityType.None &&
 					(AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) &&
@@ -509,7 +547,7 @@ namespace FishMMO.Shared
 					// Add to the return velocity and reset jump state
 					float jumpSpeed = Constants.Character.JumpUpSpeed;
 					if (JumpSpeedTemplate != null &&
-						attributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
+						cachedAttributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
 					{
 						jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;
 					}
@@ -620,17 +658,7 @@ namespace FishMMO.Shared
 		/// <returns>True if valid for collision, false if ignored.</returns>
 		public bool IsColliderValidForCollisions(Collider coll)
 		{
-			if (IgnoredColliders.Count == 0)
-			{
-				return true;
-			}
-
-			if (IgnoredColliders.Contains(coll))
-			{
-				return false;
-			}
-
-			return true;
+			return IgnoredColliders.Count == 0 || !IgnoredColliders.Contains(coll);
 		}
 
 		/// <summary>

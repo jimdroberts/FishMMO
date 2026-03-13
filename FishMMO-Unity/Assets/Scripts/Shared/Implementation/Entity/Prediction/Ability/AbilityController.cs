@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -47,6 +48,15 @@ namespace FishMMO.Shared
 		/// ProcessActiveAbility, etc.) reads and writes this field.
 		/// </summary>
 		private int replicatedFlags;
+
+		/// <summary>
+		/// Server-side flag set when TryStartAbility or TryStartConsumable fails
+		/// despite the input having a queued ability. Included in the next reconcile
+		/// via <see cref="AbilityActivationFlags.Denied"/> so clients can fire
+		/// <see cref="OnAbilityDenied"/> authoritatively instead of heuristically.
+		/// Cleared after each <see cref="OnCreateReconcile"/>.
+		/// </summary>
+		private bool wasDenied;
 
 		/// <summary>
 		/// The ID of the next ability to activate after the current one, or NO_ABILITY if none.
@@ -154,6 +164,13 @@ namespace FishMMO.Shared
 		/// Event invoked to check if the character can manipulate abilities (e.g., not stunned).
 		/// Backed by a list to avoid per-call delegate array allocation.
 		/// </summary>
+		/// <remarks>
+		/// Handlers are iterated with a forward index loop. If a handler modifies the
+		/// list during its <c>Invoke()</c> (e.g., unsubscribes itself), the iteration
+		/// will skip or double-invoke entries. Current handlers are simple boolean
+		/// checks with no side-effects, so this is safe. If side-effecting handlers
+		/// are added in the future, switch to reverse iteration or snapshot the list.
+		/// </remarks>
 		public event Func<bool> OnCanManipulate
 		{
 			add { if (value != null) canManipulateHandlers.Add(value); }
@@ -275,6 +292,9 @@ namespace FishMMO.Shared
 			consumableSlot = -1;
 
 			// Reset observer prediction sentinel.
+			// Dispose is a no-op on CharacterReconcileData (struct, no unmanaged resources),
+			// but called for IReconcileData contract compliance. If Dispose ever gains
+			// a real implementation, this call ensures cleanup.
 			lastCreatedData.Dispose();
 			hasLastCreatedData = false;
 
@@ -398,13 +418,22 @@ namespace FishMMO.Shared
 			// If we aren't activating anything, try to start a new ability or consumable
 			if (!IsActivating)
 			{
+				bool tried = activationData.QueuedAbilityID != NO_ABILITY;
+				bool started;
+
 				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
 				{
-					TryStartConsumable(activationData);
+					started = TryStartConsumable(activationData);
 				}
 				else
 				{
-					TryStartAbility(activationData);
+					started = TryStartAbility(activationData);
+				}
+
+				// Server tracks denial so OnCreateReconcile can set the Denied flag.
+				if (base.IsServerStarted && tried && !started)
+				{
+					wasDenied = true;
 				}
 			}
 
@@ -463,6 +492,8 @@ namespace FishMMO.Shared
 				}
 				else if (state.ContainsTicked())
 				{
+					// No-op today (CharacterReconcileData has no unmanaged resources),
+					// but called for IReconcileData contract compliance.
 					lastCreatedData.Dispose();
 					lastCreatedData = activationData;
 					hasLastCreatedData = true;
@@ -473,8 +504,16 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public void OnCreateReconcile(ref CharacterReconcileData reconcileData)
 		{
-			Debug.Assert((replicatedFlags & ~0xFFFF) == 0,
-				$"replicatedFlags 0x{replicatedFlags:X} exceeds 16-bit Pack range");
+			// Include server-authoritative denial flag if the last tick denied an activation.
+			int flags = replicatedFlags;
+			if (wasDenied)
+			{
+				flags.EnableBit(AbilityActivationFlags.Denied);
+				wasDenied = false;
+			}
+
+			if ((flags & ~0xFFFF) != 0)
+				Log.Warning("AbilityController", $"replicatedFlags 0x{flags:X} exceeds 16-bit Pack range");
 
 			EnsureAbilitySeedGenerator();
 
@@ -483,7 +522,7 @@ namespace FishMMO.Shared
 			reconcileData.AbilityID = currentAbilityID;
 			reconcileData.RemainingTicks = remainingTicks;
 			reconcileData.Seed = currentSeed;
-			reconcileData.PackedFlagsAndSlot = CharacterReconcileData.Pack(replicatedFlags, consumableSlot);
+			reconcileData.PackedFlagsAndSlot = CharacterReconcileData.Pack(flags, consumableSlot);
 			reconcileData.RngS0 = rngS0;
 			reconcileData.RngS1 = rngS1;
 			reconcileData.RngS2 = rngS2;
@@ -503,21 +542,13 @@ namespace FishMMO.Shared
 				uint reconcileTick = rd.GetTick();
 				OnPredictionMismatch?.Invoke(reconcileTick);
 
-				// Distinguish denial from timing mismatch:
-				// If the client was predicting an ability but the server says NO_ABILITY,
-				// the server denied the activation entirely. Fire OnAbilityDenied so the UI
-				// can show an "interrupted" flash, restore predicted resources, etc.
-				// If both agree on the ability ID (or both are inactive), it's a timing
-				// mismatch — replay will correct it invisibly.
-				//
-				// Edge case: rd.AbilityID == NO_ABILITY could also mean the server started
-				// the ability and it completed before this reconcile arrived. This is
-				// unlikely at typical reconcile frequency (30 Hz) for abilities with
-				// non-trivial activation times, but fast-cast instant abilities could
-				// theoretically trigger a false denial. Subscribers should treat the
-				// denial flash as best-effort — the subsequent replay will restore the
-				// correct state regardless.
-				if (currentAbilityID != NO_ABILITY && rd.AbilityID == NO_ABILITY)
+				// Authoritative denial: the server sets the Denied flag when
+				// TryStartAbility/TryStartConsumable fails with a queued ability.
+				// This replaces the old heuristic (currentAbilityID != NO_ABILITY &&
+				// rd.AbilityID == NO_ABILITY) which false-fired on zero-duration
+				// abilities that completed within a single tick before the reconcile
+				// snapshot was captured.
+				if (rd.UnpackFlags.IsFlagged(AbilityActivationFlags.Denied))
 				{
 					OnAbilityDenied?.Invoke(currentAbilityID);
 				}

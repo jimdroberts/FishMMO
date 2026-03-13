@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -229,8 +229,8 @@ namespace FishMMO.Shared
 		{
 			if (minValue >= maxValue) return minValue;
 			long range = (long)maxValue - minValue;
-			Debug.Assert(range <= int.MaxValue,
-				$"DeterministicRNG.Next({minValue}, {maxValue}): range {range} exceeds int.MaxValue");
+			if (range > int.MaxValue)
+				Log.Warning("DeterministicRNG", $"Next({minValue}, {maxValue}): range {range} exceeds int.MaxValue");
 			if (range > int.MaxValue) range = int.MaxValue;
 			return minValue + Next((int)range);
 		}

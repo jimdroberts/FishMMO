@@ -94,6 +94,17 @@ namespace FishMMO.Shared
 		private byte goalIndex;
 
 		/// <summary>
+		/// Local-space offsets from the platform's initial position.
+		/// Converted to world-space goals in Awake.
+		/// </summary>
+		[SerializeField]
+		private List<Vector3> goalOffsets = new()
+		{
+			new Vector3(0f, 0f, 5f),
+			new Vector3(0f, 0f, -5f),
+		};
+
+		/// <summary>
 		/// Ordered list of world-space waypoints the platform cycles through.
 		/// </summary>
 		private List<Vector3> goals = new();
@@ -114,10 +125,12 @@ namespace FishMMO.Shared
 		{
 			GameObject = gameObject;
 
-			const float offset = 5f;
 			Vector3 position = transform.position;
-			goals.Add(position + new Vector3(0f, 0f, offset));
-			goals.Add(position + new Vector3(0f, 0f, -offset));
+			goals.Clear();
+			for (int i = 0; i < goalOffsets.Count; i++)
+			{
+				goals.Add(position + goalOffsets[i]);
+			}
 
 			if (platformCollider == null)
 			{

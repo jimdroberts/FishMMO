@@ -126,7 +126,7 @@ namespace FishMMO.Shared
 		public void AddAttribute(CharacterAttribute instance) { }
 
 		/// <inheritdoc/>
-		public void Regenerate(float deltaTime) { }
+		public void Regenerate() { }
 
 		/// <inheritdoc/>
 		public void ApplyResourceState(CharacterAttributeResourceState resourceState) { }

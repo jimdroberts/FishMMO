@@ -170,7 +170,7 @@ namespace FishMMO.Shared
 							if (tickDiff <= ObserverPredictionWindowTicks)
 							{
 								kccInput.MoveFlags = lastCreatedData.MoveFlags;
-								kccInput.MoveFlags.DisableBit(KCCMoveFlags.Jump);
+								KCCMoveFlagsHelper.ClearOneShotFlags(ref kccInput.MoveFlags);
 								kccInput.MoveFlags.EnableBit(KCCMoveFlags.IsActualData);
 								kccInput.CameraPosition = lastCreatedData.CameraPosition;
 								kccInput.CameraRotation = lastCreatedData.CameraRotation;
@@ -267,7 +267,7 @@ namespace FishMMO.Shared
 		/// Sets the orientation method for the character controller.
 		/// </summary>
 		/// <param name="method">Orientation method to set.</param>
-		[ServerRpc(RunLocally = true)]
+		[ServerRpc(RunLocally = true, RequireOwnership = true)]
 		public void SetOrientationMethod(OrientationMethod method)
 		{
 			CharacterController.OrientationMethod = method;

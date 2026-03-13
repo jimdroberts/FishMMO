@@ -113,6 +113,16 @@ namespace FishMMO.Shared
 
 			// Index-delta path: same length, single pass — reserve changedCount,
 			// write entries, then patch the count. Avoids double-iterating the array.
+			// FRAGILE: Relies on FishNet's Writer.Position supporting backward seeks
+			// without clearing bytes between countPos and endPos. Writer.Position is
+			// a plain int field (not a property) backed by a raw byte[], so rewinding
+			// just moves the offset — previously written bytes remain intact.
+			// Verified against FishNet 4.x. Re-validate on major FishNet upgrades.
+			// FAILURE MODE: If FishNet moves to a pooled-segment writer where Position
+			// is segment-relative, the patched count lands in the wrong segment,
+			// silently corrupting every reconcile packet downstream. The stream
+			// position after countPos is still valid but the count value is wrong.
+			// Safe alternative if this breaks: two-pass (count changes first, then write).
 			if (!forceWrite && prevCount == nextCount)
 			{
 				int countPos = writer.Position;
@@ -155,9 +165,15 @@ namespace FishMMO.Shared
 		/// Positive count = full array. Negative count = index-delta over prev.
 		/// </summary>
 		/// <remarks>
-		/// When count exceeds <see cref="MaxEntries"/>, remaining entry data is
+		/// <para>When count exceeds <see cref="MaxEntries"/>, remaining entry data is
 		/// drained from the reader to keep the stream position valid for subsequent
-		/// fields. The previous state is preserved.
+		/// fields. The previous state is preserved.</para>
+		/// <para><b>Allocation note:</b> Both full-array and index-delta paths allocate a
+		/// fresh array per call (intentional — see issue #6: mutating in-place would corrupt
+		/// the delta serializer’s <c>prev</c> reference). Full-array is rare (only when the
+		/// cooldown count changes). Index-delta copies are small. If profiling shows GC pressure,
+		/// consider <c>System.Buffers.ArrayPool&lt;CooldownReconcileEntry&gt;</c> with an explicit
+		/// count sidecar, since <c>Rent</c> may return oversized arrays.</para>
 		/// </remarks>
 		public static CooldownReconcileEntry[] ReadArrayDelta(Reader reader, CooldownReconcileEntry[] prev)
 		{

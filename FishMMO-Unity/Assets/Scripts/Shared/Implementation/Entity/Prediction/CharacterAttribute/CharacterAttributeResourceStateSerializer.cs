@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static void WriteCharacterAttributeResourceState(this Writer writer, CharacterAttributeResourceState value)
 		{
-			writer.WriteSingle(value.RegenDelta);
+			writer.WriteUInt32(value.RegenTickAccum);
 			writer.WriteSingle(value.Health);
 			writer.WriteInt32(value.MaxHealth);
 			writer.WriteSingle(value.Mana);
@@ -52,7 +52,7 @@ namespace FishMMO.Shared
 		{
 			return new CharacterAttributeResourceState()
 			{
-				RegenDelta = reader.ReadSingle(),
+				RegenTickAccum = reader.ReadUInt32(),
 				Health = reader.ReadSingle(),
 				MaxHealth = reader.ReadInt32(),
 				Mana = reader.ReadSingle(),
@@ -66,8 +66,8 @@ namespace FishMMO.Shared
 
 		#region Delta Serializer (prediction)
 
-		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.RegenDelta"/>.</summary>
-		private const byte REGEN_DELTA_BIT = 1 << 0;
+		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.RegenTickAccum"/>.</summary>
+		private const byte REGEN_ACCUM_BIT = 1 << 0;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Health"/>.</summary>
 		private const byte HEALTH_BIT      = 1 << 1;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.MaxHealth"/>.</summary>
@@ -98,10 +98,19 @@ namespace FishMMO.Shared
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
 		/// <remarks>
-		/// Float fields (RegenDelta, Health, Mana, Stamina) use raw <c>WriteSingle</c>
+		/// Float fields (Health, Mana, Stamina) use raw <c>WriteSingle</c>
 		/// with manual equality checks because FishNet does not expose a public
-		/// <c>WriteDeltaSingle</c> for scalar floats. Int fields (MaxHealth, MaxMana,
-		/// MaxStamina) use <c>WriteDeltaInt32</c> which benefits from varint delta encoding.
+		/// <c>WriteDeltaSingle</c> for scalar floats. Int/uint fields (RegenTickAccum,
+		/// MaxHealth, MaxMana, MaxStamina) use <c>WriteDeltaInt32</c> which benefits
+		/// from varint delta encoding.
+		///
+		/// <c>WriteDeltaInt32</c> returns <c>false</c> and writes nothing when
+		/// <c>prev == next</c> and <c>option == Unset</c>, so no bytes are wasted
+		/// for unchanged int fields. The <c>forceWrite</c> flag (option != Unset)
+		/// forces all fields to be written regardless — the bottom guard
+		/// (<c>flags != 0 || forceWrite</c>) ensures the bitmask byte is patched
+		/// and <c>true</c> is returned even when all values are equal but forced.
+		///
 		/// If FishNet adds a public float-delta API in the future, the float fields
 		/// should be migrated for better compression on small regen increments.
 		/// </remarks>
@@ -118,11 +127,8 @@ namespace FishMMO.Shared
 
 			bool forceWrite = option != DeltaSerializerOption.Unset;
 
-			if (forceWrite || prev.RegenDelta != next.RegenDelta)
-			{
-				writer.WriteSingle(next.RegenDelta);
-				flags |= REGEN_DELTA_BIT;
-			}
+			if (writer.WriteDeltaInt32((int)prev.RegenTickAccum, (int)next.RegenTickAccum, option))
+				flags |= REGEN_ACCUM_BIT;
 
 			if (forceWrite || prev.Health != next.Health)
 			{
@@ -151,6 +157,9 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32(prev.MaxStamina, next.MaxStamina, option))
 				flags |= MAX_STAMINA_BIT;
 
+			// When forceWrite is true, we must emit the bitmask even if flags==0
+			// (all values equal) so the reader knows a delta was written. When
+			// !forceWrite and flags==0, rewind past the placeholder bitmask byte.
 			if (flags != 0 || forceWrite)
 			{
 				int endPos = writer.Position;
@@ -176,8 +185,8 @@ namespace FishMMO.Shared
 			byte flags = reader.ReadUInt8Unpacked();
 			CharacterAttributeResourceState result = prev;
 
-			if ((flags & REGEN_DELTA_BIT) != 0)
-				result.RegenDelta = reader.ReadSingle();
+			if ((flags & REGEN_ACCUM_BIT) != 0)
+				result.RegenTickAccum = (uint)reader.ReadDeltaInt32((int)prev.RegenTickAccum);
 
 			if ((flags & HEALTH_BIT) != 0)
 				result.Health = reader.ReadSingle();

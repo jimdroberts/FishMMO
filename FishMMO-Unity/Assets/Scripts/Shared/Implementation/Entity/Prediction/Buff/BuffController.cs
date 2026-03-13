@@ -3,9 +3,11 @@ using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System.Collections.Generic;
+using UnityEngine;
 #if UNITY_SERVER
 using FishNet.Broadcast;
 #endif
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -38,6 +40,12 @@ namespace FishMMO.Shared
 		/// Reusable list of keys to remove after update loop (avoids allocation each frame).
 		/// </summary>
 		private readonly List<int> keysToRemove = new List<int>();
+
+		/// <summary>
+		/// Reusable list for <see cref="RemoveRandom"/> eligible-candidate collection.
+		/// Separate from <see cref="keysToRemove"/> to avoid contention if called from a Tick callback.
+		/// </summary>
+		private readonly List<int> eligibleBuffer = new List<int>();
 
 		/// <summary>
 		/// Reusable set for tracking buff IDs to remove during <see cref="RestoreFromReconcile"/>.
@@ -130,6 +138,21 @@ namespace FishMMO.Shared
 			int buffCount = reader.ReadInt32();
 			if (buffCount < 0 || buffCount > maxPayloadBuffs)
 			{
+				// Reader is shared with subsequent payload fields — drain the remaining
+				// buff bytes to keep the stream position valid. Cap iterations to
+				// maxPayloadBuffs to prevent a corrupted count from hanging the tick.
+				if (buffCount > 0)
+				{
+					int drainCount = System.Math.Min(buffCount, maxPayloadBuffs);
+					for (int d = 0; d < drainCount; d++)
+					{
+						reader.ReadInt32();  // templateID
+						reader.ReadUInt32(); // expiryTick
+						reader.ReadUInt32(); // nextTickTick
+						reader.ReadInt32();  // stacks
+						reader.ReadInt32();  // tickCount
+					}
+				}
 				return;
 			}
 			for (int i = 0; i < buffCount; ++i)
@@ -224,20 +247,33 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// <b>Tick source:</b> Uses <c>TimeManager.LocalTick</c> which tracks the current
 		/// simulation tick. During reconcile replay this equals the replayed tick, not wall-clock time.
-		/// If buff application is ever triggered outside the prediction pipeline (e.g., broadcast handlers),
-		/// consider plumbing the deterministic tick from <see cref="CharacterReplicateData.GetTick()"/>.
+		/// Outside the prediction pipeline (e.g., server broadcast handlers for observer buffs),
+		/// LocalTick reflects real server time — this is intentional. Observer buff visuals are
+		/// non-deterministic by design and do not participate in reconcile; using a different tick
+		/// source here would add complexity with no correctness benefit.
 		/// </remarks>
 		public void Apply(BaseBuffTemplate template)
 		{
 			if (template == null) return;
+
+			// Apply must NOT be called during reconcile replay — LocalTick during
+			// replay reflects the replayed tick, not the original application tick,
+			// which would compute a wrong ExpiryTick and desync client/server.
+			// If this fires, the caller must plumb the deterministic tick from
+			// CharacterReplicateData.GetTick() instead of relying on LocalTick.
+			if (base.PredictionManager != null && base.PredictionManager.IsReconciling)
+				Log.Warning("BuffController", "Apply called during reconcile replay — ExpiryTick will be wrong.");
+
 			snapshotDirty = true;
 
 			uint currentTick = base.TimeManager?.LocalTick ?? 0u;
 
+			bool isNew = false;
 			if (!buffs.TryGetValue(template.ID, out Buff buffInstance))
 			{
-				// New buff: constructor computes ExpiryTick from currentTick + duration.
-				// No separate ResetDuration call needed — the constructor handles it.
+				// New buff: constructor is the single source of truth for ExpiryTick.
+				// ResetDuration is NOT called here — it only runs for existing buffs below.
+				isNew = true;
 				buffInstance = new Buff(template.ID, currentTick, tickDelta);
 				buffInstance.Apply(Character);
 				buffs.Add(template.ID, buffInstance);
@@ -252,12 +288,18 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// Existing buff (or just-created): add a stack if under cap, always refresh duration.
 			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
 			{
 				buffInstance.AddStack(Character);
 			}
-			buffInstance.ResetDuration(currentTick, tickDelta);
+
+			// Only refresh duration for existing buffs. New buffs already have the
+			// correct ExpiryTick from the constructor — calling ResetDuration again
+			// would be redundant at best, and wrong if the two code paths ever diverge.
+			if (!isNew)
+			{
+				buffInstance.ResetDuration(currentTick, tickDelta);
+			}
 
 			template.OnApplyFX(buffInstance, Character);
 
@@ -342,9 +384,9 @@ namespace FishMMO.Shared
 		/// Uses a single pass to build eligible candidates, avoiding retry loops.
 		/// </summary>
 		/// <remarks>
-		/// Uses a local list instead of the shared <see cref="keysToRemove"/> to avoid
-		/// clearing mid-iteration if called from within a <see cref="Tick"/> callback
-		/// (e.g., a buff's OnTick triggers a dispel).
+		/// Uses a dedicated <see cref="eligibleBuffer"/> instead of the shared
+		/// <see cref="keysToRemove"/> to avoid clearing mid-iteration if called
+		/// from within a <see cref="Tick"/> callback (e.g., a buff's OnTick triggers a dispel).
 		/// </remarks>
 		/// <param name="rng">The random number generator to use.</param>
 		/// <param name="includeBuffs">Whether to include buffs in the selection.</param>
@@ -353,26 +395,25 @@ namespace FishMMO.Shared
 		{
 			if (rng == null || buffs.Count < 1) return;
 
-			// Use a local list to avoid contention with keysToRemove used by Tick/RemoveAll.
-			List<int> eligible = new List<int>();
+			eligibleBuffer.Clear();
 			foreach (var pair in buffs)
 			{
 				Buff buff = pair.Value;
 				if (buff.Template.IsPermanent) continue;
 				if (includeBuffs && !buff.Template.IsDebuff)
 				{
-					eligible.Add(pair.Key);
+					eligibleBuffer.Add(pair.Key);
 				}
 				else if (includeDebuffs && buff.Template.IsDebuff)
 				{
-					eligible.Add(pair.Key);
+					eligibleBuffer.Add(pair.Key);
 				}
 			}
 
-			if (eligible.Count > 0)
+			if (eligibleBuffer.Count > 0)
 			{
-				int index = rng.Next(0, eligible.Count);
-				Remove(eligible[index]);
+				int index = rng.Next(0, eligibleBuffer.Count);
+				Remove(eligibleBuffer[index]);
 			}
 		}
 
@@ -428,6 +469,12 @@ namespace FishMMO.Shared
 		/// Returns the cached array when buffs haven't changed since the last call.
 		/// Returns null when no buffs are active.
 		/// </summary>
+		/// <remarks>
+		/// Always allocates a fresh array when dirty, even if the length matches.
+		/// The delta serializer holds a reference to the previous tick's snapshot;
+		/// mutating in-place would silently update that reference, making prev == next
+		/// and masking the change (zero bytes sent when bytes should have been sent).
+		/// </remarks>
 		public BuffReconcileEntry[] CreateReconcileSnapshot()
 		{
 			if (buffs.Count == 0)
@@ -442,10 +489,8 @@ namespace FishMMO.Shared
 				return cachedSnapshot;
 			}
 
-			if (cachedSnapshot == null || cachedSnapshot.Length != buffs.Count)
-			{
-				cachedSnapshot = new BuffReconcileEntry[buffs.Count];
-			}
+			// Always allocate fresh — never reuse the old array in-place.
+			cachedSnapshot = new BuffReconcileEntry[buffs.Count];
 
 			int i = 0;
 			foreach (KeyValuePair<int, Buff> kvp in buffs)
@@ -515,6 +560,10 @@ namespace FishMMO.Shared
 					{
 						// Server has a buff we don't — construct with 0 stacks then AddStack
 						// incrementally so each OnApplyStack sees the correct Stacks value.
+						// Note: this path only runs for genuinely missing buffs (the
+						// TryGetValue check above prevents re-application for buffs that
+						// already exist on both sides). Stack modifiers are applied once
+						// when the buff is first added, not on every reconcile tick.
 						Buff buff = new Buff(
 							entry.TemplateID,
 							entry.ExpiryTick,
