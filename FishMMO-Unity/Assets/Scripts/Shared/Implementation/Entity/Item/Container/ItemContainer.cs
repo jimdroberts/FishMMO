@@ -28,6 +28,12 @@ namespace FishMMO.Shared
 		public event Action<IItemContainer, Item, int> OnSlotUpdated;
 
 		/// <summary>
+		/// Event triggered when a slot's lock state changes.
+		/// Parameters: container, slot index, isLocked.
+		/// </summary>
+		public event Action<IItemContainer, int, bool> OnSlotLockChanged;
+
+		/// <summary>
 		/// Gets the list of items contained in this container.
 		/// </summary>
 		public List<Item> Items { get { return items; } }
@@ -38,6 +44,7 @@ namespace FishMMO.Shared
 		public override void OnDestroying()
 		{
 			OnSlotUpdated = null;
+			OnSlotLockChanged = null;
 			lockedSlots?.Clear();
 		}
 
@@ -467,7 +474,10 @@ namespace FishMMO.Shared
 			{
 				lockedSlots = new HashSet<int>();
 			}
-			lockedSlots.Add(slot);
+			if (lockedSlots.Add(slot))
+			{
+				OnSlotLockChanged?.Invoke(this, slot, true);
+			}
 		}
 
 		/// <summary>
@@ -476,7 +486,10 @@ namespace FishMMO.Shared
 		/// <param name="slot">The slot index to unlock.</param>
 		public void UnlockSlot(int slot)
 		{
-			lockedSlots?.Remove(slot);
+			if (lockedSlots != null && lockedSlots.Remove(slot))
+			{
+				OnSlotLockChanged?.Invoke(this, slot, false);
+			}
 		}
 	}
 }

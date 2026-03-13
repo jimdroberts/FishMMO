@@ -15,6 +15,12 @@ namespace FishMMO.Shared.Core
 		event Action<IItemContainer, Item, int> OnSlotUpdated;
 
 		/// <summary>
+		/// Event triggered when a slot's lock state changes.
+		/// Parameters: container, slot index, isLocked.
+		/// </summary>
+		event Action<IItemContainer, int, bool> OnSlotLockChanged;
+
+		/// <summary>
 		/// Gets the list of items contained in this container.
 		/// </summary>
 		List<Item> Items { get; }

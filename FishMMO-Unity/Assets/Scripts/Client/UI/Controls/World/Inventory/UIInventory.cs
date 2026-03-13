@@ -54,6 +54,7 @@ namespace FishMMO.Client
 				Character.TryGet(out IInventoryController inventoryController))
 			{
 				inventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
+				inventoryController.OnSlotLockChanged -= OnInventorySlotLockChanged;
 			}
 		}
 
@@ -97,11 +98,13 @@ namespace FishMMO.Client
 						button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
 					}
 				}
+				button.SetLocked(inventoryController.IsSlotLocked(i));
 				button.gameObject.SetActive(true);
 				inventorySlots.Add(button);
 			}
 			// Subscribe to inventory slot updates to refresh button display
 			inventoryController.OnSlotUpdated += OnInventorySlotUpdated;
+			inventoryController.OnSlotLockChanged += OnInventorySlotLockChanged;
 		}
 
 		/// <summary>
@@ -110,6 +113,17 @@ namespace FishMMO.Client
 		/// <param name="container">The item container holding the inventory.</param>
 		/// <param name="item">The item in the updated slot.</param>
 		/// <param name="inventoryIndex">The index of the updated inventory slot.</param>
+		/// <summary>
+		/// Callback for when an inventory slot's lock state changes. Updates the corresponding button's interactability.
+		/// </summary>
+		public void OnInventorySlotLockChanged(IItemContainer container, int slot, bool isLocked)
+		{
+			if (inventorySlots != null && slot >= 0 && slot < inventorySlots.Count)
+			{
+				inventorySlots[slot].SetLocked(isLocked);
+			}
+		}
+
 		public void OnInventorySlotUpdated(IItemContainer container, Item item, int inventoryIndex)
 		{
 			if (inventorySlots == null)

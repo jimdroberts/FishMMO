@@ -37,6 +37,8 @@ namespace FishMMO.Shared
 
 		public event Action<IItemContainer, Item, int> OnSlotUpdated;
 
+		public event Action<IItemContainer, int, bool> OnSlotLockChanged;
+
 		public List<Item> Items { get { return items; } }
 
 		private string title = "Container";
@@ -376,7 +378,10 @@ namespace FishMMO.Shared
 				lockedSlots = new HashSet<int>();
 			}
 
-			lockedSlots.Add(slot);
+			if (lockedSlots.Add(slot))
+			{
+				OnSlotLockChanged?.Invoke(this, slot, true);
+			}
 		}
 
 		/// <summary>
@@ -385,7 +390,10 @@ namespace FishMMO.Shared
 		/// <param name="slot">The slot index to unlock.</param>
 		public void UnlockSlot(int slot)
 		{
-			lockedSlots?.Remove(slot);
+			if (lockedSlots != null && lockedSlots.Remove(slot))
+			{
+				OnSlotLockChanged?.Invoke(this, slot, false);
+			}
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)

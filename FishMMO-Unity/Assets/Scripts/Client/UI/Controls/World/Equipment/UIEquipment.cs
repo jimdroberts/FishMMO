@@ -153,6 +153,7 @@ namespace FishMMO.Client
 				Character.TryGet(out IEquipmentController equipmentController))
 			{
 				equipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
+				equipmentController.OnSlotLockChanged -= OnEquipmentSlotLockChanged;
 			}
 		}
 
@@ -169,6 +170,7 @@ namespace FishMMO.Client
 				Character.TryGet(out IEquipmentController equipmentController))
 			{
 				equipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
+				equipmentController.OnSlotLockChanged -= OnEquipmentSlotLockChanged;
 				foreach (UIEquipmentButton button in buttons)
 				{
 					button.Character = Character;
@@ -178,6 +180,7 @@ namespace FishMMO.Client
 					}
 				}
 				equipmentController.OnSlotUpdated += OnEquipmentSlotUpdated;
+				equipmentController.OnSlotLockChanged += OnEquipmentSlotLockChanged;
 			}
 
 			if (Character != null &&
@@ -326,6 +329,18 @@ namespace FishMMO.Client
 			{
 				// Clear the slot if no item
 				button.Clear();
+			}
+			button.SetLocked(container.IsSlotLocked((int)button.ItemSlotType));
+		}
+
+		/// <summary>
+		/// Callback for when an equipment slot's lock state changes. Updates the corresponding button's interactability.
+		/// </summary>
+		public void OnEquipmentSlotLockChanged(IItemContainer container, int slot, bool isLocked)
+		{
+			if (buttons != null && slot >= 0 && slot < buttons.Count && buttons[slot] != null)
+			{
+				buttons[slot].SetLocked(isLocked);
 			}
 		}
 

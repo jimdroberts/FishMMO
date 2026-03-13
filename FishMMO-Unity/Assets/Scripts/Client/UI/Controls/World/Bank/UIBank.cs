@@ -90,6 +90,7 @@ namespace FishMMO.Client
 				Character.TryGet(out IBankController bankController))
 			{
 				bankController.OnSlotUpdated -= OnBankSlotUpdated;
+				bankController.OnSlotLockChanged -= OnBankSlotLockChanged;
 			}
 		}
 
@@ -111,6 +112,7 @@ namespace FishMMO.Client
 
 			// Destroy the old slots and unsubscribe from previous events.
 			bankController.OnSlotUpdated -= OnBankSlotUpdated;
+			bankController.OnSlotLockChanged -= OnBankSlotLockChanged;
 			DestroySlots();
 
 			// Generate new bank slot buttons for each item in the bank.
@@ -132,11 +134,13 @@ namespace FishMMO.Client
 						button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
 					}
 				}
+				button.SetLocked(bankController.IsSlotLocked(i));
 				button.gameObject.SetActive(true);
 				bankSlots.Add(button);
 			}
 			// Subscribe to bank slot update events to keep buttons in sync.
 			bankController.OnSlotUpdated += OnBankSlotUpdated;
+			bankController.OnSlotLockChanged += OnBankSlotLockChanged;
 		}
 
 		/// <summary>
@@ -145,6 +149,17 @@ namespace FishMMO.Client
 		/// <param name="container">The item container (bank).</param>
 		/// <param name="item">The item in the slot.</param>
 		/// <param name="bankIndex">The index of the bank slot.</param>
+		/// <summary>
+		/// Callback for when a bank slot's lock state changes. Updates the corresponding button's interactability.
+		/// </summary>
+		public void OnBankSlotLockChanged(IItemContainer container, int slot, bool isLocked)
+		{
+			if (bankSlots != null && slot >= 0 && slot < bankSlots.Count)
+			{
+				bankSlots[slot].SetLocked(isLocked);
+			}
+		}
+
 		public void OnBankSlotUpdated(IItemContainer container, Item item, int bankIndex)
 		{
 			// If there are no bank slots, nothing to update.

@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using FishMMO.Client;
 
 namespace FishMMO.Client
 {
@@ -50,6 +51,13 @@ namespace FishMMO.Client
 		/// </summary>
 		[SerializeField]
 		public TMP_Text AmountText;
+
+		/// <summary>
+		/// Optional overlay image tinted to indicate a locked slot.
+		/// Assign in the prefab; when null the button simply becomes non-interactable.
+		/// </summary>
+		[SerializeField]
+		public Image LockOverlay;
 
 		/// <summary>
 		/// The player character associated with this button.
@@ -181,6 +189,20 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Sets the locked visual state of this button.
+		/// Locked buttons are non-interactable and show the lock overlay if assigned.
+		/// </summary>
+		/// <param name="locked">True to lock (grey-out), false to unlock.</param>
+		public void SetLocked(bool locked)
+		{
+			interactable = !locked;
+			if (LockOverlay != null)
+			{
+				LockOverlay.gameObject.SetActive(locked);
+			}
+		}
+
+		/// <summary>
 		/// Clears the button state, resets icon and text, and hides tooltip.
 		/// </summary>
 		public virtual void Clear()
@@ -190,6 +212,7 @@ namespace FishMMO.Client
 			if (Icon != null) Icon.sprite = DefaultIconSprite;
 			if (CooldownText != null) CooldownText.text = "";
 			if (AmountText != null) AmountText.text = "";
+			SetLocked(false);
 			ClearTooltip();
 		}
 	}
