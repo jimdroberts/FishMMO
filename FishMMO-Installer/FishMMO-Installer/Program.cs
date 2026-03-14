@@ -55,6 +55,7 @@ namespace FishMMO.Installer
 			LoadAppSettings(environmentName);
 			await RunMenuLoop();
 			await Log.Shutdown();
+			Environment.Exit(Environment.ExitCode);
 		}
 
 		/// <summary>

@@ -16,6 +16,8 @@
     <!-- Stale-copy sentinel paths (project-dir subdirs written by old broken builds). -->
     <FishMMODatabaseStale>$(MSBuildProjectDirectory)/FishMMO-Database</FishMMODatabaseStale>
     <FishMMOSharedUtilityStale>$(MSBuildProjectDirectory)/FishMMO-SharedUtility</FishMMOSharedUtilityStale>
+    <!-- Temp stash location for runtime migrations; lives outside OutDir so clean can't touch it. -->
+    <MigrationsTmp>$(MSBuildProjectDirectory)/__migrations_tmp</MigrationsTmp>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +28,22 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.4" />
   </ItemGroup>
+
+  <!-- STEP 1: Stash runtime Migrations before the clean wipes OutDir/FishMMO-Database. -->
+  <Target Name="StashMigrations" BeforeTargets="CleanCopiedSourceTrees">
+    <PropertyGroup>
+      <MigrationsRuntimeDir>$(OutDir)FishMMO-Database/FishMMO-DB/Migrations</MigrationsRuntimeDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <MigrationFilesToStash Include="$(MigrationsRuntimeDir)/**/*.*" Condition="Exists('$(MigrationsRuntimeDir)')" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(MigrationFilesToStash)"
+      DestinationFiles="@(MigrationFilesToStash->'$(MigrationsTmp)/%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="false"
+      Condition="'@(MigrationFilesToStash)' != ''" />
+    <Message Text="[Migrations] Stashed $(MigrationsRuntimeDir) → $(MigrationsTmp)" Importance="high" Condition="'@(MigrationFilesToStash)' != ''" />
+  </Target>
 
   <!-- Clean previously copied trees (from previous builds) -->
   <Target Name="CleanCopiedSourceTrees" BeforeTargets="Build">
@@ -84,6 +102,23 @@
       SkipUnchangedFiles="true" />
 
     <Message Text="Copied FishMMO-SharedUtility to $(FishMMOSharedUtilityDest)" Importance="high" />
+  </Target>
+
+  <!-- STEP 5: Restore stashed Migrations into the freshly copied runtime tree. -->
+  <Target Name="RestoreMigrations" AfterTargets="CopyFishMMOSharedUtility">
+    <PropertyGroup>
+      <MigrationsRuntimeDir>$(OutDir)FishMMO-Database/FishMMO-DB/Migrations</MigrationsRuntimeDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <MigrationFilesToRestore Include="$(MigrationsTmp)/**/*.*" Condition="Exists('$(MigrationsTmp)')" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(MigrationFilesToRestore)"
+      DestinationFiles="@(MigrationFilesToRestore->'$(MigrationsRuntimeDir)/%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="false"
+      Condition="'@(MigrationFilesToRestore)' != ''" />
+    <RemoveDir Directories="$(MigrationsTmp)" Condition="Exists('$(MigrationsTmp)')" />
+    <Message Text="[Migrations] Restored → $(MigrationsRuntimeDir). Tmp cleaned up." Importance="high" Condition="'@(MigrationFilesToRestore)' != ''" />
   </Target>
 
 </Project>
