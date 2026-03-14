@@ -29,14 +29,18 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.4" />
   </ItemGroup>
 
-  <!-- STEP 1: Stash runtime Migrations before the clean wipes OutDir/FishMMO-Database. -->
-  <Target Name="StashMigrations" BeforeTargets="CleanCopiedSourceTrees">
+  <!-- STEP 1: Stash runtime Migrations before either a Clean or a Build wipes OutDir/FishMMO-Database.
+       BeforeTargets="Clean" handles: dotnet clean (removes bin/ entirely)
+       BeforeTargets="CleanCopiedSourceTrees" handles: dotnet build alone (CleanCopiedSourceTrees removes OutDir/FishMMO-Database) -->
+  <Target Name="StashMigrations" BeforeTargets="Clean;CleanCopiedSourceTrees">
     <PropertyGroup>
       <MigrationsRuntimeDir>$(OutDir)FishMMO-Database/FishMMO-DB/Migrations</MigrationsRuntimeDir>
     </PropertyGroup>
+    <Message Text="[Migrations] StashMigrations running. Checking: $(MigrationsRuntimeDir)" Importance="high" />
     <ItemGroup>
       <MigrationFilesToStash Include="$(MigrationsRuntimeDir)/**/*.*" Condition="Exists('$(MigrationsRuntimeDir)')" />
     </ItemGroup>
+    <Message Text="[Migrations] Nothing to stash (directory absent or empty)." Importance="high" Condition="'@(MigrationFilesToStash)' == ''" />
     <Copy
       SourceFiles="@(MigrationFilesToStash)"
       DestinationFiles="@(MigrationFilesToStash->'$(MigrationsTmp)/%(RecursiveDir)%(Filename)%(Extension)')"
@@ -109,9 +113,11 @@
     <PropertyGroup>
       <MigrationsRuntimeDir>$(OutDir)FishMMO-Database/FishMMO-DB/Migrations</MigrationsRuntimeDir>
     </PropertyGroup>
+    <Message Text="[Migrations] RestoreMigrations running. Checking stash: $(MigrationsTmp)" Importance="high" />
     <ItemGroup>
       <MigrationFilesToRestore Include="$(MigrationsTmp)/**/*.*" Condition="Exists('$(MigrationsTmp)')" />
     </ItemGroup>
+    <Message Text="[Migrations] No stash found — nothing to restore." Importance="high" Condition="'@(MigrationFilesToRestore)' == ''" />
     <Copy
       SourceFiles="@(MigrationFilesToRestore)"
       DestinationFiles="@(MigrationFilesToRestore->'$(MigrationsRuntimeDir)/%(RecursiveDir)%(Filename)%(Extension)')"
