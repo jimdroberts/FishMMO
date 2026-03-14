@@ -1,3 +1,4 @@
+using FishMMO.Logging;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -16,11 +17,11 @@ namespace FishMMO.Installer
 		public static async Task InstallLetsEncryptCertificate()
 		{
 			Console.Clear();
-			InstallerProcessHelper.Log("--- Install / Renew Let's Encrypt Certificate ---");
+			await Log.Info("FishMMOInstaller", "--- Install / Renew Let's Encrypt Certificate ---");
 
 			if (!await NGINXInstaller.IsNGINXInstalledAsync())
 			{
-				InstallerProcessHelper.Log("NGINX was not detected. Install and configure NGINX before requesting certificates.");
+				await Log.Info("FishMMOInstaller", "NGINX was not detected. Install and configure NGINX before requesting certificates.");
 				return;
 			}
 
@@ -28,14 +29,14 @@ namespace FishMMO.Installer
 			string[] domains = ParseDomains(domainInput);
 			if (domains.Length == 0)
 			{
-				InstallerProcessHelper.Log("No valid domains were provided. Certificate operation cancelled.");
+				await Log.Info("FishMMOInstaller", "No valid domains were provided. Certificate operation cancelled.");
 				return;
 			}
 
 			string email = (InstallerProcessHelper.PromptForInput("Enter email for Let's Encrypt registration: ") ?? string.Empty).Trim();
 			if (string.IsNullOrWhiteSpace(email))
 			{
-				InstallerProcessHelper.Log("Email is required. Certificate operation cancelled.");
+				await Log.Info("FishMMOInstaller", "Email is required. Certificate operation cancelled.");
 				return;
 			}
 
@@ -60,7 +61,7 @@ namespace FishMMO.Installer
 			}
 			else
 			{
-				InstallerProcessHelper.Log("Unsupported operating system for Let's Encrypt certificate automation.");
+				await Log.Warning("FishMMOInstaller", "Unsupported operating system for Let's Encrypt certificate automation.");
 			}
 		}
 
@@ -81,7 +82,7 @@ namespace FishMMO.Installer
 			string webServersPath,
 			bool useStaging)
 		{
-			InstallerProcessHelper.Log("Configuring Let's Encrypt on Linux...");
+			await Log.Info("FishMMOInstaller", "Configuring Let's Encrypt on Linux...");
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 
 			var packageNames = new Dictionary<string, string>
@@ -95,12 +96,12 @@ namespace FishMMO.Installer
 			var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
 			if (detected == null)
 			{
-				InstallerProcessHelper.Log("No supported package manager found for certbot installation.");
+				await Log.Warning("FishMMOInstaller", "No supported package manager found for certbot installation.");
 				return;
 			}
 
 			var (updateCommand, installCommand, managerName) = detected.Value;
-			InstallerProcessHelper.Log($"Using {managerName} to install certbot dependencies.");
+			await Log.Info("FishMMOInstaller", $"Using {managerName} to install certbot dependencies.");
 
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCommand, "Failed to update package metadata for certbot."))
 			{
@@ -114,7 +115,7 @@ namespace FishMMO.Installer
 
 			if (!Directory.Exists(webServersPath))
 			{
-				InstallerProcessHelper.Log($"Warning: Web servers path '{webServersPath}' was not found. Verify deployment layout before proceeding.");
+				await Log.Warning("FishMMOInstaller", $"Warning: Web servers path '{webServersPath}' was not found. Verify deployment layout before proceeding.");
 			}
 
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, $"sudo mkdir -p \"{webRootPath}\"", "Failed to create certbot web root directory."))
@@ -144,7 +145,7 @@ namespace FishMMO.Installer
 				return;
 			}
 
-			InstallerProcessHelper.Log("Let's Encrypt certificate was installed/renewed and NGINX was reloaded.");
+			await Log.Info("FishMMOInstaller", "Let's Encrypt certificate was installed/renewed and NGINX was reloaded.");
 		}
 
 		/// <summary>
@@ -162,7 +163,7 @@ namespace FishMMO.Installer
 			string webRootPath,
 			bool useStaging)
 		{
-			InstallerProcessHelper.Log("Configuring Let's Encrypt on Windows using win-acme...");
+			await Log.Info("FishMMOInstaller", "Configuring Let's Encrypt on Windows using win-acme...");
 
 			string downloadPath = await InstallerProcessHelper.DownloadFileAsync(InstallationConstants.WinAcmeDownloadUrl, InstallationConstants.WinAcmeFileName);
 			string winAcmeExtractDirectory = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), "win-acme");
@@ -180,7 +181,7 @@ namespace FishMMO.Installer
 
 			if (!File.Exists(winAcmeExecutablePath))
 			{
-				InstallerProcessHelper.Log($"win-acme executable was not found at '{winAcmeExecutablePath}'.");
+				await Log.Info("FishMMOInstaller", $"win-acme executable was not found at '{winAcmeExecutablePath}'.");
 				return;
 			}
 
@@ -206,14 +207,14 @@ namespace FishMMO.Installer
 
 			if (!certificateInstalled)
 			{
-				InstallerProcessHelper.Log("win-acme failed to request/renew certificate. Verify DNS and port 80 reachability.");
+				await Log.Error("FishMMOInstaller", "win-acme failed to request/renew certificate. Verify DNS and port 80 reachability.");
 				return;
 			}
 
 			(string certificatePath, string privateKeyPath) = ResolveWindowsCertificatePaths(certificateOutputDirectory);
 			if (string.IsNullOrWhiteSpace(certificatePath) || string.IsNullOrWhiteSpace(privateKeyPath))
 			{
-				InstallerProcessHelper.Log("Could not locate generated PEM certificate files from win-acme output.");
+				await Log.Error("FishMMOInstaller", "Could not locate generated PEM certificate files from win-acme output.");
 				return;
 			}
 
@@ -222,20 +223,20 @@ namespace FishMMO.Installer
 			string nginxExecutablePath = Path.Combine(NGINXInstaller.GetExpectedWindowsNginxHomePath(), "nginx.exe");
 			if (!File.Exists(nginxExecutablePath))
 			{
-				InstallerProcessHelper.Log($"NGINX executable was not found at '{nginxExecutablePath}'. Install NGINX first.");
+				await Log.Error("FishMMOInstaller", $"NGINX executable was not found at '{nginxExecutablePath}'. Install NGINX first.");
 				return;
 			}
 
 			if (!await InstallerProcessHelper.RunProcessAsync(nginxExecutablePath, "-t", (exitCode, output, error) => exitCode == 0))
 			{
-				InstallerProcessHelper.Log("NGINX config test failed after certificate updates.");
+				await Log.Error("FishMMOInstaller", "NGINX config test failed after certificate updates.");
 				return;
 			}
 
 			await InstallerProcessHelper.RunProcessAsync(nginxExecutablePath, "-s reload");
 			await InstallerProcessHelper.RunProcessAsync("sc.exe", $"start \"{InstallationConstants.NGINXWindowsServiceName}\"");
 
-			InstallerProcessHelper.Log("Let's Encrypt certificate was installed/renewed and NGINX was reloaded.");
+			await Log.Info("FishMMOInstaller", "Let's Encrypt certificate was installed/renewed and NGINX was reloaded.");
 		}
 
 		/// <summary>
@@ -248,7 +249,7 @@ namespace FishMMO.Installer
 		{
 			if (!File.Exists(nginxConfPath))
 			{
-				InstallerProcessHelper.Log($"Skipping nginx.conf update because file '{nginxConfPath}' does not exist.");
+				_ = Log.Warning("FishMMOInstaller", $"Skipping nginx.conf update because file '{nginxConfPath}' does not exist.");
 				return;
 			}
 
@@ -268,7 +269,7 @@ namespace FishMMO.Installer
 
 				if (string.IsNullOrWhiteSpace(certificatePath) || string.IsNullOrWhiteSpace(privateKeyPath))
 				{
-					InstallerProcessHelper.Log("Skipping nginx.conf update because generated Windows PEM files were not found.");
+					_ = Log.Warning("FishMMOInstaller", "Skipping nginx.conf update because generated Windows PEM files were not found.");
 					return;
 				}
 			}
@@ -286,7 +287,7 @@ namespace FishMMO.Installer
 		{
 			if (!File.Exists(nginxConfPath))
 			{
-				InstallerProcessHelper.Log($"Skipping nginx.conf update because file '{nginxConfPath}' does not exist.");
+				_ = Log.Warning("FishMMOInstaller", $"Skipping nginx.conf update because file '{nginxConfPath}' does not exist.");
 				return;
 			}
 
@@ -309,11 +310,11 @@ namespace FishMMO.Installer
 			if (updatedContent != nginxConfigContent)
 			{
 				File.WriteAllText(nginxConfPath, updatedContent);
-				InstallerProcessHelper.Log($"Updated certificate paths in '{nginxConfPath}'.");
+				_ = Log.Info("FishMMOInstaller", $"Updated certificate paths in '{nginxConfPath}'.");
 			}
 			else
 			{
-				InstallerProcessHelper.Log("No SSL directives were updated in nginx.conf (directives not found or already up to date).");
+				_ = Log.Warning("FishMMOInstaller", "No SSL directives were updated in nginx.conf (directives not found or already up to date).");
 			}
 		}
 
@@ -374,7 +375,7 @@ namespace FishMMO.Installer
 		{
 			if (!File.Exists(nginxConfPath))
 			{
-				InstallerProcessHelper.Log($"Warning: nginx.conf was not found at '{nginxConfPath}'. Skipping ACME location validation.");
+				_ = Log.Warning("FishMMOInstaller", $"Warning: nginx.conf was not found at '{nginxConfPath}'. Skipping ACME location validation.");
 				return;
 			}
 
@@ -384,7 +385,7 @@ namespace FishMMO.Installer
 
 			if (!hasAcmeLocation || !hasExpectedRoot)
 			{
-				InstallerProcessHelper.Log("Warning: nginx.conf ACME challenge location/root does not match provided web root. Cert issuance/renewal may fail.");
+				_ = Log.Warning("FishMMOInstaller", "Warning: nginx.conf ACME challenge location/root does not match provided web root. Cert issuance/renewal may fail.");
 			}
 		}
 

@@ -1,3 +1,4 @@
+using FishMMO.Logging;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -20,6 +21,12 @@ namespace FishMMO.Installer
 		/// <param name="appSettings">Application settings for database configuration.</param>
 		public static async Task InstallPostgreSQL(AppSettings appSettings)
 		{
+			if (await IsPostgreSQLInstalledAsync())
+			{
+				await Log.Warning("FishMMOInstaller", "PostgreSQL is already installed.");
+				return;
+			}
+
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
 				await InstallPostgreSQLWindows(appSettings);
@@ -30,7 +37,30 @@ namespace FishMMO.Installer
 			}
 			else
 			{
-				InstallerProcessHelper.Log("Unsupported operating system for PostgreSQL installation.");
+				await Log.Warning("FishMMOInstaller", "Unsupported operating system for PostgreSQL installation.");
+			}
+		}
+
+		/// <summary>
+		/// Returns true if the pg_isready or psql binary is accessible, indicating PostgreSQL is installed.
+		/// </summary>
+		public static async Task<bool> IsPostgreSQLInstalledAsync()
+		{
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+				return await InstallerProcessHelper.RunProcessAsync(
+					shell,
+					$"{argPrefix} \"where psql\"",
+					(exitCode, _, _) => exitCode == 0);
+			}
+			else
+			{
+				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+				return await InstallerProcessHelper.RunProcessAsync(
+					shell,
+					$"{argPrefix} \"command -v pg_isready\"",
+					(exitCode, _, _) => exitCode == 0);
 			}
 		}
 
@@ -87,7 +117,7 @@ namespace FishMMO.Installer
 				return false;
 			}
 
-			InstallerProcessHelper.Log("Installing PostgreSQL...");
+			await Log.Info("FishMMOInstaller", "Installing PostgreSQL...");
 
 			string installerPath;
 			try
@@ -98,7 +128,7 @@ namespace FishMMO.Installer
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Failed to download PostgreSQL installer: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Failed to download PostgreSQL installer", ex);
 				return false;
 			}
 
@@ -126,7 +156,7 @@ namespace FishMMO.Installer
 				Process? process = Process.Start(startInfo);
 				if (process == null)
 				{
-					InstallerProcessHelper.Log("Failed to start PostgreSQL installer process.");
+					await Log.Error("FishMMOInstaller", "Failed to start PostgreSQL installer process.");
 					return false;
 				}
 				await process.WaitForExitAsync();
@@ -134,18 +164,18 @@ namespace FishMMO.Installer
 				int exitCode = process.ExitCode;
 				if (exitCode == 0)
 				{
-					InstallerProcessHelper.Log("PostgreSQL installation successful.");
+					await Log.Info("FishMMOInstaller", "PostgreSQL installation successful.");
 					return true;
 				}
 				else
 				{
-					InstallerProcessHelper.Log($"PostgreSQL installation failed with exit code {exitCode}. Please check installer logs or try running the installer manually.");
+					await Log.Error("FishMMOInstaller", $"PostgreSQL installation failed with exit code {exitCode}. Please check installer logs or try running the installer manually.");
 					return false;
 				}
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Error installing PostgreSQL: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Error installing PostgreSQL", ex);
 				return false;
 			}
 		}
@@ -153,6 +183,11 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Installs PostgreSQL on Linux using the appropriate system package manager.
 		/// Detects pacman (Arch/CachyOS), apt-get (Debian/Ubuntu), dnf, and yum.
+		/// On Arch/CachyOS the data directory is initialized via initdb with scram-sha-256
+		/// enforced for both local and host connections; the superuser password is set
+		/// interactively by initdb's --pwprompt flag so no post-install ALTER USER step
+		/// is needed. On other distributions the superuser password can be updated after
+		/// the service starts.
 		/// </summary>
 		/// <returns>True if installation succeeded, otherwise false.</returns>
 		private static async Task<bool> InstallPostgreSQLLinux()
@@ -162,7 +197,7 @@ namespace FishMMO.Installer
 				return false;
 			}
 
-			InstallerProcessHelper.Log("Installing PostgreSQL...");
+			await Log.Info("FishMMOInstaller", "Installing PostgreSQL...");
 
 			try
 			{
@@ -179,12 +214,12 @@ namespace FishMMO.Installer
 				var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
 				if (detected == null)
 				{
-					InstallerProcessHelper.Log("No supported package manager (pacman, apt-get, dnf, yum) found. Please install PostgreSQL manually.");
+					await Log.Warning("FishMMOInstaller", "No supported package manager (pacman, apt-get, dnf, yum) found. Please install PostgreSQL manually.");
 					return false;
 				}
 
 				var (updateCommand, installCommand, managerName) = detected.Value;
-				InstallerProcessHelper.Log($"Using {managerName} for PostgreSQL installation.");
+				await Log.Info("FishMMOInstaller", $"Using {managerName} for PostgreSQL installation.");
 
 				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCommand, "Failed to update package lists."))
 					return false;
@@ -192,14 +227,22 @@ namespace FishMMO.Installer
 				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, installCommand, "Failed to install PostgreSQL."))
 					return false;
 
-				if (managerName.Contains("pacman"))
+				bool isArch = managerName.Contains("pacman");
+
+				if (isArch)
 				{
-					InstallerProcessHelper.Log("Arch/CachyOS detected. Initializing PostgreSQL data directory...");
+					await Log.Info("FishMMOInstaller", "Arch/CachyOS detected. Initializing PostgreSQL data directory with scram-sha-256 authentication...");
+					await Log.Info("FishMMOInstaller", "You will be prompted to set the PostgreSQL superuser password during initdb.");
 					if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
-						"sudo -u postgres initdb -D /var/lib/postgres/data",
+						"sudo -u postgres initdb -D /var/lib/postgres/data " +
+						"--auth-local=scram-sha-256 " +
+						"--auth-host=scram-sha-256 " +
+						"--pwprompt",
 						"Failed to initialize PostgreSQL data directory. It may already be initialized."))
 					{
-						InstallerProcessHelper.Log("Continuing anyway. If PostgreSQL fails to start, run 'sudo -u postgres initdb -D /var/lib/postgres/data' manually.");
+						await Log.Warning("FishMMOInstaller",
+							"Continuing anyway. If PostgreSQL fails to start, run manually: " +
+							"sudo -u postgres initdb -D /var/lib/postgres/data --auth-local=scram-sha-256 --auth-host=scram-sha-256 --pwprompt");
 					}
 				}
 
@@ -209,7 +252,9 @@ namespace FishMMO.Installer
 				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo systemctl enable postgresql", "Failed to enable PostgreSQL to start on boot."))
 					return false;
 
-				if (InstallerProcessHelper.PromptForYesNo("Update PostgreSQL Superuser Password?"))
+				// On Arch/CachyOS the superuser password was already set by initdb --pwprompt.
+				// Only prompt for a password change on other distributions.
+				if (!isArch && InstallerProcessHelper.PromptForYesNo("Update PostgreSQL Superuser Password?"))
 				{
 					string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
 					string superPassword = InstallerProcessHelper.PromptForPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
@@ -219,12 +264,12 @@ namespace FishMMO.Installer
 						return false;
 				}
 
-				InstallerProcessHelper.Log("PostgreSQL installation successful.");
+				await Log.Info("FishMMOInstaller", "PostgreSQL installation successful.");
 				return true;
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Error installing PostgreSQL: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Error installing PostgreSQL", ex);
 				return false;
 			}
 		}
@@ -243,13 +288,14 @@ namespace FishMMO.Installer
 				ValidateIdentifier(appSettings.Npgsql.Database, nameof(appSettings.Npgsql.Database), "database name");
 				ValidateIdentifier(appSettings.Npgsql.Username, nameof(appSettings.Npgsql.Username), "username");
 
-				InstallerProcessHelper.Log($"Attempting to connect to PostgreSQL at {appSettings.Npgsql.Host}:{appSettings.Npgsql.Port}");
+				await Log.Info("FishMMOInstaller", $"Attempting to connect to PostgreSQL at {appSettings.Npgsql.Host}:{appSettings.Npgsql.Port}");
 				string connectionString = BuildConnectionString(appSettings.Npgsql.Host, appSettings.Npgsql.Port, superUsername, superPassword, InstallationConstants.PostgreSQLDefaultAdminDb);
 
 				using (var connection = new NpgsqlConnection(connectionString))
 				{
 					await connection.OpenAsync();
-					InstallerProcessHelper.Log("Successfully connected to PostgreSQL server.");
+					await WarnIfTrustAuthAsync(connection);
+					await Log.Info("FishMMOInstaller", "Successfully connected to PostgreSQL server.");
 
 					if (InstallerProcessHelper.PromptForYesNo($"Create Database '{appSettings.Npgsql.Database}'?"))
 					{
@@ -259,13 +305,13 @@ namespace FishMMO.Installer
 							var result = await checkDbCommand.ExecuteScalarAsync();
 							if (result != null)
 							{
-								InstallerProcessHelper.Log($"Database '{appSettings.Npgsql.Database}' already exists. Skipping creation.");
+								await Log.Info("FishMMOInstaller", $"Database '{appSettings.Npgsql.Database}' already exists. Skipping creation.");
 							}
 							else
 							{
-								InstallerProcessHelper.Log($"Creating database '{appSettings.Npgsql.Database}'...");
+								await Log.Info("FishMMOInstaller", $"Creating database '{appSettings.Npgsql.Database}'...");
 								await CreateDatabase(connection, appSettings.Npgsql.Database);
-								InstallerProcessHelper.Log($"Database '{appSettings.Npgsql.Database}' created successfully.");
+								await Log.Info("FishMMOInstaller", $"Database '{appSettings.Npgsql.Database}' created successfully.");
 							}
 						}
 					}
@@ -278,21 +324,21 @@ namespace FishMMO.Installer
 							var result = await checkUserCommand.ExecuteScalarAsync();
 							if (result != null)
 							{
-								InstallerProcessHelper.Log($"User role '{appSettings.Npgsql.Username}' already exists. Skipping creation.");
+								await Log.Info("FishMMOInstaller", $"User role '{appSettings.Npgsql.Username}' already exists. Skipping creation.");
 							}
 							else
 							{
-								InstallerProcessHelper.Log($"Creating user role '{appSettings.Npgsql.Username}'...");
+								await Log.Info("FishMMOInstaller", $"Creating user role '{appSettings.Npgsql.Username}'...");
 								await CreateUser(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Password);
-								InstallerProcessHelper.Log($"User role '{appSettings.Npgsql.Username}' created successfully.");
+								await Log.Info("FishMMOInstaller", $"User role '{appSettings.Npgsql.Username}' created successfully.");
 							}
 						}
-						InstallerProcessHelper.Log($"Granting privileges on database '{appSettings.Npgsql.Database}' to user '{appSettings.Npgsql.Username}'...");
+						await Log.Info("FishMMOInstaller", $"Granting privileges on database '{appSettings.Npgsql.Database}' to user '{appSettings.Npgsql.Username}'...");
 						await GrantPrivileges(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Database);
-						InstallerProcessHelper.Log("Privileges granted successfully.");
+						await Log.Info("FishMMOInstaller", "Privileges granted successfully.");
 					}
 
-					InstallerProcessHelper.Log("FishMMO Database components installed/configured.");
+					await Log.Info("FishMMOInstaller", "FishMMO Database components installed/configured.");
 				}
 
 				if (InstallerProcessHelper.PromptForYesNo("Create Initial Migration and apply to database?"))
@@ -301,7 +347,7 @@ namespace FishMMO.Installer
 					bool initialMigrationCreated = await DotNetInstaller.RunEFMigrationAsync("Initial");
 					if (!initialMigrationCreated)
 					{
-						InstallerProcessHelper.Log("Failed to create the initial migration.");
+						await Log.Error("FishMMOInstaller", "Failed to create the initial migration.");
 						return;
 					}
 
@@ -309,20 +355,20 @@ namespace FishMMO.Installer
 					bool initialMigrationApplied = await DotNetInstaller.RunEFDatabaseUpdateAsync();
 					if (!initialMigrationApplied)
 					{
-						InstallerProcessHelper.Log("Initial migration was created but database update failed.");
+						await Log.Error("FishMMOInstaller", "Initial migration was created but database update failed.");
 						return;
 					}
 
-					InstallerProcessHelper.Log("Initial Migration completed and applied.");
+					await Log.Info("FishMMOInstaller", "Initial Migration completed and applied.");
 				}
 			}
 			catch (NpgsqlException npgEx)
 			{
-				InstallerProcessHelper.Log($"PostgreSQL connection or database operation error: {npgEx.Message}. Check your appsettings.json and PostgreSQL server status.");
+				await Log.Error("FishMMOInstaller", "PostgreSQL connection or database operation error: . Check your appsettings.json and PostgreSQL server status", npgEx);
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"General error installing FishMMO database components: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "General error installing FishMMO database components", ex);
 			}
 		}
 
@@ -336,37 +382,37 @@ namespace FishMMO.Installer
 			string? migrationName = InstallerProcessHelper.PromptForInput("Enter a name for the new migration (e.g., 'AddPlayerInventory'): ");
 			if (string.IsNullOrWhiteSpace(migrationName))
 			{
-				InstallerProcessHelper.Log("Migration name cannot be empty. Aborting migration creation.");
+				await Log.Info("FishMMOInstaller", "Migration name cannot be empty. Aborting migration creation.");
 				return;
 			}
 
 			if (!Regex.IsMatch(migrationName, "^[A-Za-z][A-Za-z0-9]*$"))
 			{
-				InstallerProcessHelper.Log("Invalid migration name. Use alphanumeric characters only and start with a letter.");
+				await Log.Warning("FishMMOInstaller", "Invalid migration name. Use alphanumeric characters only and start with a letter.");
 				return;
 			}
 
-			InstallerProcessHelper.Log($"Creating a new migration '{migrationName}'...");
+			await Log.Info("FishMMOInstaller", $"Creating a new migration '{migrationName}'...");
 
 			bool migrationSuccess = await DotNetInstaller.RunEFMigrationAsync(migrationName);
 
 			if (!migrationSuccess)
 			{
-				InstallerProcessHelper.Log($"Failed to create migration '{migrationName}'. Please check the console output for details.");
+				await Log.Error("FishMMOInstaller", $"Failed to create migration '{migrationName}'. Please check the console output for details.");
 				return;
 			}
 
-			InstallerProcessHelper.Log($"Updating the database with migration '{migrationName}'...");
+			await Log.Info("FishMMOInstaller", $"Updating the database with migration '{migrationName}'...");
 
 			bool updateSuccess = await DotNetInstaller.RunEFDatabaseUpdateAsync();
 
 			if (updateSuccess)
 			{
-				InstallerProcessHelper.Log($"Migration '{migrationName}' created and applied successfully.");
+				await Log.Info("FishMMOInstaller", $"Migration '{migrationName}' created and applied successfully.");
 			}
 			else
 			{
-				InstallerProcessHelper.Log($"Failed to apply migration '{migrationName}' to the database. Please check the console output for details.");
+				await Log.Error("FishMMOInstaller", $"Failed to apply migration '{migrationName}' to the database. Please check the console output for details.");
 			}
 		}
 
@@ -389,7 +435,7 @@ namespace FishMMO.Installer
 			string? confirmationInput = InstallerProcessHelper.PromptForInput("Type 'DELETE' (all caps) to confirm: ");
 			if (confirmationInput?.Trim().Equals("DELETE", StringComparison.Ordinal) != true)
 			{
-				InstallerProcessHelper.Log("Database deletion cancelled by user.");
+				await Log.Info("FishMMOInstaller", "Database deletion cancelled by user.");
 				return;
 			}
 
@@ -400,18 +446,19 @@ namespace FishMMO.Installer
 				using (var connection = new NpgsqlConnection(adminConnectionString))
 				{
 					await connection.OpenAsync();
-					InstallerProcessHelper.Log($"Connected to '{InstallationConstants.PostgreSQLDefaultAdminDb}' database as superuser.");
+					await WarnIfTrustAuthAsync(connection);
+					await Log.Info("FishMMOInstaller", $"Connected to '{InstallationConstants.PostgreSQLDefaultAdminDb}' database as superuser.");
 
-					InstallerProcessHelper.Log($"Terminating active connections to database '{databaseToDelete}'...");
+					await Log.Info("FishMMOInstaller", $"Terminating active connections to database '{databaseToDelete}'...");
 					using (var terminateCommand = new NpgsqlCommand(
 						$"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = @dbName;", connection))
 					{
 						terminateCommand.Parameters.AddWithValue("dbName", databaseToDelete);
 						await terminateCommand.ExecuteNonQueryAsync();
-						InstallerProcessHelper.Log("Active connections terminated.");
+						await Log.Info("FishMMOInstaller", "Active connections terminated.");
 					}
 
-					InstallerProcessHelper.Log($"Attempting to drop database '{databaseToDelete}'...");
+					await Log.Info("FishMMOInstaller", $"Attempting to drop database '{databaseToDelete}'...");
 					string dropSql;
 					using (var dropSqlCommand = new NpgsqlCommand("SELECT format('DROP DATABASE %I', @dbName)", connection))
 					{
@@ -422,17 +469,17 @@ namespace FishMMO.Installer
 					using (var dropCommand = new NpgsqlCommand(dropSql, connection))
 					{
 						await dropCommand.ExecuteNonQueryAsync();
-						InstallerProcessHelper.Log($"Database '{databaseToDelete}' deleted successfully.");
+						await Log.Info("FishMMOInstaller", $"Database '{databaseToDelete}' deleted successfully.");
 					}
 				}
 			}
 			catch (NpgsqlException npgEx)
 			{
-				InstallerProcessHelper.Log($"PostgreSQL error during database deletion: {npgEx.Message}. Ensure correct superuser password and permissions.");
+				await Log.Error("FishMMOInstaller", "PostgreSQL error during database deletion: . Ensure correct superuser password and permissions", npgEx);
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"An unexpected error occurred during database deletion: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "An unexpected error occurred during database deletion", ex);
 			}
 		}
 
@@ -446,7 +493,7 @@ namespace FishMMO.Installer
 		public static async Task GrantUserPermissions(string superUsername, string superPassword, AppSettings appSettings)
 		{
 			Console.Clear();
-			InstallerProcessHelper.Log("--- Grant User Permissions ---");
+			await Log.Info("FishMMOInstaller", "--- Grant User Permissions ---");
 
 			string defaultDbName = appSettings.Npgsql.Database ?? "fishmmo_database";
 			string? dbName = InstallerProcessHelper.PromptForInput($"Enter database name to grant permissions on (default: {defaultDbName}): ");
@@ -467,9 +514,10 @@ namespace FishMMO.Installer
 				using (var connection = new NpgsqlConnection(connectionString))
 				{
 					await connection.OpenAsync();
-					InstallerProcessHelper.Log($"Successfully connected to database '{dbName}' as superuser.");
+					await WarnIfTrustAuthAsync(connection);
+					await Log.Info("FishMMOInstaller", $"Successfully connected to database '{dbName}' as superuser.");
 
-					InstallerProcessHelper.Log($"Granting comprehensive permissions to '{usernameToGrant}' on '{dbName}'...");
+					await Log.Info("FishMMOInstaller", $"Granting comprehensive permissions to '{usernameToGrant}' on '{dbName}'...");
 
 					string formatSql =
 						"SELECT format('" +
@@ -495,16 +543,45 @@ namespace FishMMO.Installer
 						await cmd.ExecuteNonQueryAsync();
 					}
 
-					InstallerProcessHelper.Log($"Successfully granted comprehensive permissions to user '{usernameToGrant}' on database '{dbName}'.");
+					await Log.Info("FishMMOInstaller", $"Successfully granted comprehensive permissions to user '{usernameToGrant}' on database '{dbName}'.");
 				}
 			}
 			catch (NpgsqlException npgEx)
 			{
-				InstallerProcessHelper.Log($"PostgreSQL error granting permissions: {npgEx.Message}. Ensure database '{dbName}' exists and superuser credentials are correct.");
+				await Log.Error("FishMMOInstaller", "PostgreSQL error granting permissions: . Ensure database '{dbName}' exists and superuser credentials are correct", npgEx);
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"An unexpected error occurred during permission granting: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "An unexpected error occurred during permission granting", ex);
+			}
+		}
+
+		/// <summary>
+		/// Checks pg_hba_file_rules for TCP 'trust' authentication entries and logs a warning
+		/// if found. Local Unix-socket trust entries are normal on many distros and are excluded.
+		/// On default Arch/CachyOS installs, TCP trust auth means the supplied password
+		/// is never verified by the server for network connections.
+		/// </summary>
+		private static async Task WarnIfTrustAuthAsync(NpgsqlConnection connection)
+		{
+			try
+			{
+				// Only warn for host/hostssl/hostnossl entries — local socket trust is expected.
+				using var cmd = new NpgsqlCommand(
+					"SELECT EXISTS(SELECT 1 FROM pg_hba_file_rules WHERE auth_method = 'trust' AND type != 'local')",
+					connection);
+				var result = await cmd.ExecuteScalarAsync();
+				if (result is true)
+				{
+					await Log.Info("FishMMOInstaller", 
+						"WARNING: pg_hba.conf has 'trust' authentication for TCP/network connections. " +
+						"Passwords for those entries are NOT verified by the server. " +
+						"Consider changing pg_hba.conf to 'scram-sha-256' for security.");
+				}
+			}
+			catch
+			{
+				// pg_hba_file_rules requires PostgreSQL 10+ and superuser; silently skip if unavailable.
 			}
 		}
 

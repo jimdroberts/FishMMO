@@ -1,3 +1,4 @@
+using FishMMO.Logging;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -16,17 +17,17 @@ namespace FishMMO.Installer
 		public static async Task InstallUnityHub()
 		{
 			Console.Clear();
-			InstallerProcessHelper.Log("--- Install Unity Hub ---");
+			await Log.Info("FishMMOInstaller", "--- Install Unity Hub ---");
 
 			if (await IsUnityHubInstalledAsync())
 			{
-				InstallerProcessHelper.Log("Unity Hub is already installed.");
+				await Log.Info("FishMMOInstaller", "Unity Hub is already installed.");
 				return;
 			}
 
 			if (!InstallerProcessHelper.PromptForYesNo("Unity Hub is not detected. Would you like to install it?"))
 			{
-				InstallerProcessHelper.Log("Unity Hub installation cancelled by user.");
+				await Log.Info("FishMMOInstaller", "Unity Hub installation cancelled by user.");
 				return;
 			}
 
@@ -40,7 +41,7 @@ namespace FishMMO.Installer
 			}
 			else
 			{
-				InstallerProcessHelper.Log("Unsupported operating system for Unity Hub installation.");
+				await Log.Warning("FishMMOInstaller", "Unsupported operating system for Unity Hub installation.");
 			}
 		}
 
@@ -51,11 +52,11 @@ namespace FishMMO.Installer
 		public static async Task InstallUnityVersion()
 		{
 			Console.Clear();
-			InstallerProcessHelper.Log("--- Install Unity Editor ---");
+			await Log.Info("FishMMOInstaller", "--- Install Unity Editor ---");
 
 			if (!await IsUnityHubInstalledAsync())
 			{
-				InstallerProcessHelper.Log("Unity Hub is not installed. Please install Unity Hub first (menu option for Unity Hub).");
+				await Log.Info("FishMMOInstaller", "Unity Hub is not installed. Please install Unity Hub first (menu option for Unity Hub).");
 				return;
 			}
 
@@ -68,12 +69,12 @@ namespace FishMMO.Installer
 				version = InstallationConstants.UnityDefaultVersion;
 			}
 
-			InstallerProcessHelper.Log($"Unity version: {version}");
+			await Log.Info("FishMMOInstaller", $"Unity version: {version}");
 
 			// Check if this version is already installed
 			if (await IsUnityEditorInstalledAsync(version))
 			{
-				InstallerProcessHelper.Log($"Unity {version} is already installed.");
+				await Log.Info("FishMMOInstaller", $"Unity {version} is already installed.");
 				if (!InstallerProcessHelper.PromptForYesNo($"Would you like to reinstall or add modules to Unity {version}?"))
 				{
 					return;
@@ -84,7 +85,7 @@ namespace FishMMO.Installer
 
 			if (!InstallerProcessHelper.PromptForYesNo($"Install Unity {version} with {selectedModules.Count} module(s)?"))
 			{
-				InstallerProcessHelper.Log("Unity Editor installation cancelled by user.");
+				await Log.Info("FishMMOInstaller", "Unity Editor installation cancelled by user.");
 				return;
 			}
 
@@ -111,7 +112,7 @@ namespace FishMMO.Installer
 
 				if (found)
 				{
-					InstallerProcessHelper.Log("Unity Hub detected.");
+					await Log.Info("FishMMOInstaller", "Unity Hub detected.");
 				}
 				return found;
 			}
@@ -120,7 +121,7 @@ namespace FishMMO.Installer
 				// On Windows, check the expected install path
 				if (File.Exists(hubPath))
 				{
-					InstallerProcessHelper.Log("Unity Hub detected.");
+					await Log.Info("FishMMOInstaller", "Unity Hub detected.");
 					return true;
 				}
 				return false;
@@ -181,7 +182,7 @@ namespace FishMMO.Installer
 		/// </summary>
 		private static async Task InstallUnityHubWindows()
 		{
-			InstallerProcessHelper.Log("Installing Unity Hub on Windows...");
+			await Log.Info("FishMMOInstaller", "Installing Unity Hub on Windows...");
 			try
 			{
 				string installerPath = await InstallerProcessHelper.DownloadFileAsync(
@@ -202,23 +203,23 @@ namespace FishMMO.Installer
 				Process? process = Process.Start(startInfo);
 				if (process == null)
 				{
-					InstallerProcessHelper.Log("Failed to start Unity Hub installer process.");
+					await Log.Error("FishMMOInstaller", "Failed to start Unity Hub installer process.");
 					return;
 				}
 				await process.WaitForExitAsync();
 
 				if (process.ExitCode == 0)
 				{
-					InstallerProcessHelper.Log("Unity Hub installed successfully on Windows.");
+					await Log.Info("FishMMOInstaller", "Unity Hub installed successfully on Windows.");
 				}
 				else
 				{
-					InstallerProcessHelper.Log($"Unity Hub installer exited with code {process.ExitCode}.");
+					await Log.Info("FishMMOInstaller", $"Unity Hub installer exited with code {process.ExitCode}.");
 				}
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Error installing Unity Hub on Windows: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Error installing Unity Hub on Windows", ex);
 			}
 		}
 
@@ -229,7 +230,7 @@ namespace FishMMO.Installer
 		/// </summary>
 		private static async Task InstallUnityHubLinux()
 		{
-			InstallerProcessHelper.Log("Installing Unity Hub on Linux...");
+			await Log.Info("FishMMOInstaller", "Installing Unity Hub on Linux...");
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 
 			// Detect package manager to determine distro family
@@ -242,7 +243,7 @@ namespace FishMMO.Installer
 			var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
 			if (detected == null)
 			{
-				InstallerProcessHelper.Log("No supported package manager found. Please install Unity Hub manually from https://unity.com/download.");
+				await Log.Warning("FishMMOInstaller", "No supported package manager found. Please install Unity Hub manually from https://unity.com/download.");
 				return;
 			}
 
@@ -260,12 +261,12 @@ namespace FishMMO.Installer
 				}
 				else
 				{
-					InstallerProcessHelper.Log($"Automatic Unity Hub installation is not supported for {managerName}. Please install manually from https://unity.com/download.");
+					await Log.Info("FishMMOInstaller", $"Automatic Unity Hub installation is not supported for {managerName}. Please install manually from https://unity.com/download.");
 				}
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Error during Unity Hub installation on Linux: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Error during Unity Hub installation on Linux", ex);
 			}
 		}
 
@@ -276,7 +277,7 @@ namespace FishMMO.Installer
 		/// <param name="argPrefix">Shell argument prefix.</param>
 		private static async Task InstallUnityHubDebian(string shell, string argPrefix)
 		{
-			InstallerProcessHelper.Log("Adding Unity Hub repository for Debian/Ubuntu...");
+			await Log.Info("FishMMOInstaller", "Adding Unity Hub repository for Debian/Ubuntu...");
 
 			// Add Unity GPG key
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
@@ -299,7 +300,7 @@ namespace FishMMO.Installer
 				"sudo apt-get update",
 				"Failed to update package lists."))
 			{
-				InstallerProcessHelper.Log("Continuing anyway...");
+				await Log.Warning("FishMMOInstaller", "Continuing anyway...");
 			}
 
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
@@ -309,7 +310,7 @@ namespace FishMMO.Installer
 				return;
 			}
 
-			InstallerProcessHelper.Log("Unity Hub installed successfully on Debian/Ubuntu.");
+			await Log.Info("FishMMOInstaller", "Unity Hub installed successfully on Debian/Ubuntu.");
 		}
 
 		/// <summary>
@@ -319,7 +320,7 @@ namespace FishMMO.Installer
 		/// <param name="argPrefix">Shell argument prefix.</param>
 		private static async Task InstallUnityHubArch(string shell, string argPrefix)
 		{
-			InstallerProcessHelper.Log("Installing Unity Hub from AUR for Arch/CachyOS...");
+			await Log.Info("FishMMOInstaller", "Installing Unity Hub from AUR for Arch/CachyOS...");
 
 			// Detect AUR helper
 			string? aurHelper = null;
@@ -335,11 +336,11 @@ namespace FishMMO.Installer
 
 			if (aurHelper == null)
 			{
-				InstallerProcessHelper.Log("No AUR helper (yay or paru) found. Please install yay or paru first, then run: yay -S unityhub");
+				await Log.Info("FishMMOInstaller", "No AUR helper (yay or paru) found. Please install yay or paru first, then run: yay -S unityhub");
 				return;
 			}
 
-			InstallerProcessHelper.Log($"Using {aurHelper} to install Unity Hub from AUR...");
+			await Log.Info("FishMMOInstaller", $"Using {aurHelper} to install Unity Hub from AUR...");
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
 				$"{aurHelper} -S --noconfirm unityhub",
 				$"Failed to install Unity Hub via {aurHelper}."))
@@ -347,7 +348,7 @@ namespace FishMMO.Installer
 				return;
 			}
 
-			InstallerProcessHelper.Log("Unity Hub installed successfully on Arch/CachyOS.");
+			await Log.Info("FishMMOInstaller", "Unity Hub installed successfully on Arch/CachyOS.");
 		}
 
 		/// <summary>
@@ -374,7 +375,7 @@ namespace FishMMO.Installer
 
 			if (string.IsNullOrWhiteSpace(input))
 			{
-				InstallerProcessHelper.Log("Using default modules.");
+				_ = Log.Info("FishMMOInstaller", "Using default modules.");
 				return new List<string>(InstallationConstants.UnityDefaultModules);
 			}
 
@@ -395,13 +396,13 @@ namespace FishMMO.Installer
 				}
 				else
 				{
-					InstallerProcessHelper.Log($"Skipping invalid selection: '{part}'");
+					_ = Log.Warning("FishMMOInstaller", $"Skipping invalid selection: '{part}'");
 				}
 			}
 
 			if (selected.Count == 0)
 			{
-				InstallerProcessHelper.Log("No valid modules selected. Using default modules.");
+				_ = Log.Warning("FishMMOInstaller", "No valid modules selected. Using default modules.");
 				return new List<string>(InstallationConstants.UnityDefaultModules);
 			}
 
@@ -432,8 +433,8 @@ namespace FishMMO.Installer
 
 			string installCommand = $"\\\"{hubPath}\\\" -- --headless install --version {version} {moduleArgs}".Trim();
 
-			InstallerProcessHelper.Log($"Installing Unity {version} with modules: {string.Join(", ", modules)}");
-			InstallerProcessHelper.Log("This may take a while depending on your internet connection and selected modules...");
+			await Log.Info("FishMMOInstaller", $"Installing Unity {version} with modules: {string.Join(", ", modules)}");
+			await Log.Info("FishMMOInstaller", "This may take a while depending on your internet connection and selected modules...");
 
 			bool success = await InstallerProcessHelper.RunProcessAsync(shell, $"{argPrefix} \"{installCommand}\"",
 				(exitCode, output, error) =>
@@ -444,19 +445,19 @@ namespace FishMMO.Installer
 					}
 					if (!string.IsNullOrWhiteSpace(error))
 					{
-						InstallerProcessHelper.Log($"Unity Hub Error: {error}");
+						_ = Log.Warning("FishMMOInstaller", $"Unity Hub Error: {error}");
 					}
 					return exitCode == 0;
 				});
 
 			if (success)
 			{
-				InstallerProcessHelper.Log($"Unity {version} installed successfully.");
+				await Log.Info("FishMMOInstaller", $"Unity {version} installed successfully.");
 			}
 			else
 			{
-				InstallerProcessHelper.Log($"Unity {version} installation failed. Check the errors above.");
-				InstallerProcessHelper.Log("You may also try installing manually via Unity Hub UI.");
+				await Log.Error("FishMMOInstaller", $"Unity {version} installation failed. Check the errors above.");
+				await Log.Info("FishMMOInstaller", "You may also try installing manually via Unity Hub UI.");
 			}
 		}
 	}

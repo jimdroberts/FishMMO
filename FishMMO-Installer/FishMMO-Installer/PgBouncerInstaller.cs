@@ -1,3 +1,4 @@
+using FishMMO.Logging;
 using System.Runtime.InteropServices;
 using FishMMO.Database;
 
@@ -10,13 +11,24 @@ namespace FishMMO.Installer
 	public static class PgBouncerInstaller
 	{
 		/// <summary>
+		/// Returns true if the pgbouncer binary is present on PATH.
+		/// </summary>
+		public static async Task<bool> IsPgBouncerInstalledAsync()
+		{
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+			return await InstallerProcessHelper.RunProcessAsync(
+				shell,
+				$"{argPrefix} \"command -v pgbouncer\"",
+				(exitCode, _, _) => exitCode == 0);
+		}
+		/// <summary>
 		/// Installs PgBouncer on the current platform and attempts to enable/start the service.
 		/// </summary>
 		/// <param name="appSettings">Application settings used for post-install guidance.</param>
 		public static async Task InstallPgBouncer(AppSettings appSettings)
 		{
 			Console.Clear();
-			InstallerProcessHelper.Log("--- Install PgBouncer ---");
+			await Log.Info("FishMMOInstaller", "--- Install PgBouncer ---");
 
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
@@ -30,7 +42,7 @@ namespace FishMMO.Installer
 				return;
 			}
 
-			InstallerProcessHelper.Log("Unsupported operating system for PgBouncer installation.");
+			await Log.Warning("FishMMOInstaller", "Unsupported operating system for PgBouncer installation.");
 		}
 
 		/// <summary>
@@ -38,9 +50,16 @@ namespace FishMMO.Installer
 		/// </summary>
 		private static async Task InstallPgBouncerLinux(AppSettings appSettings)
 		{
+			if (await IsPgBouncerInstalledAsync())
+			{
+				await Log.Info("FishMMOInstaller", "PgBouncer is already installed.");
+				PrintPostInstallHints(appSettings, isWindows: false);
+				return;
+			}
+
 			if (!InstallerProcessHelper.PromptForYesNo("Install PgBouncer connection pooler?"))
 			{
-				InstallerProcessHelper.Log("PgBouncer installation cancelled by user.");
+				await Log.Info("FishMMOInstaller", "PgBouncer installation cancelled by user.");
 				return;
 			}
 
@@ -57,12 +76,12 @@ namespace FishMMO.Installer
 			var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
 			if (detected == null)
 			{
-				InstallerProcessHelper.Log("No supported package manager (pacman, apt-get, dnf, yum) found. Please install PgBouncer manually.");
+				await Log.Warning("FishMMOInstaller", "No supported package manager (pacman, apt-get, dnf, yum) found. Please install PgBouncer manually.");
 				return;
 			}
 
 			var (updateCommand, installCommand, managerName) = detected.Value;
-			InstallerProcessHelper.Log($"Using {managerName} for PgBouncer installation.");
+			await Log.Info("FishMMOInstaller", $"Using {managerName} for PgBouncer installation.");
 
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCommand, "Failed to update package metadata."))
 			{
@@ -82,7 +101,7 @@ namespace FishMMO.Installer
 
 			if (!serviceEnabled)
 			{
-				InstallerProcessHelper.Log("This is often caused by missing or incomplete /etc/pgbouncer configuration. Finish config, then run 'sudo systemctl restart pgbouncer'.");
+				await Log.Info("FishMMOInstaller", "This is often caused by missing or incomplete /etc/pgbouncer configuration. Finish config, then run 'sudo systemctl restart pgbouncer'.");
 			}
 
 			PrintPostInstallHints(appSettings, isWindows: false);
@@ -95,7 +114,7 @@ namespace FishMMO.Installer
 		{
 			if (!InstallerProcessHelper.PromptForYesNo("Install PgBouncer connection pooler?"))
 			{
-				InstallerProcessHelper.Log("PgBouncer installation cancelled by user.");
+				await Log.Info("FishMMOInstaller", "PgBouncer installation cancelled by user.");
 				return;
 			}
 
@@ -121,7 +140,7 @@ namespace FishMMO.Installer
 
 					if (installed)
 					{
-						InstallerProcessHelper.Log($"PgBouncer installed via winget package '{packageId}'.");
+						await Log.Info("FishMMOInstaller", $"PgBouncer installed via winget package '{packageId}'.");
 						break;
 					}
 				}
@@ -142,13 +161,13 @@ namespace FishMMO.Installer
 
 			if (!installed)
 			{
-				InstallerProcessHelper.Log("Automatic Windows installation was not successful. Install PgBouncer manually, then re-run this menu option for guidance.");
-				InstallerProcessHelper.Log("Suggested sources: winget packages for pgBouncer or Chocolatey package 'pgbouncer'.");
+				await Log.Info("FishMMOInstaller", "Automatic Windows installation was not successful. Install PgBouncer manually, then re-run this menu option for guidance.");
+				await Log.Info("FishMMOInstaller", "Suggested sources: winget packages for pgBouncer or Chocolatey package 'pgbouncer'.");
 				PrintPostInstallHints(appSettings, isWindows: true);
 				return;
 			}
 
-			InstallerProcessHelper.Log("PgBouncer installation attempt completed on Windows.");
+			await Log.Info("FishMMOInstaller", "PgBouncer installation attempt completed on Windows.");
 			PrintPostInstallHints(appSettings, isWindows: true);
 		}
 
@@ -162,20 +181,20 @@ namespace FishMMO.Installer
 			string dbPort = appSettings.Npgsql?.Port ?? "5432";
 			string dbUser = appSettings.Npgsql?.Username ?? "fishmmo";
 
-			InstallerProcessHelper.Log("PgBouncer next-step checklist:");
-			InstallerProcessHelper.Log($" - Listen on localhost:{InstallationConstants.PgBouncerDefaultPort}");
-			InstallerProcessHelper.Log($" - Map database '{dbName}' => host={dbHost} port={dbPort} dbname={dbName}");
-			InstallerProcessHelper.Log($" - Ensure pool user '{dbUser}' exists in PgBouncer auth file/mechanism");
+			_ = Log.Info("FishMMOInstaller", "PgBouncer next-step checklist:");
+			_ = Log.Info("FishMMOInstaller", $" - Listen on localhost:{InstallationConstants.PgBouncerDefaultPort}");
+			_ = Log.Info("FishMMOInstaller", $" - Map database '{dbName}' => host={dbHost} port={dbPort} dbname={dbName}");
+			_ = Log.Info("FishMMOInstaller", $" - Ensure pool user '{dbUser}' exists in PgBouncer auth file/mechanism");
 
 			if (isWindows)
 			{
-				InstallerProcessHelper.Log(" - Typical config files: pgbouncer.ini and userlist.txt (install-path dependent)");
-				InstallerProcessHelper.Log(" - If installed as a Windows service, verify with: sc.exe query pgbouncer");
+				_ = Log.Info("FishMMOInstaller", " - Typical config files: pgbouncer.ini and userlist.txt (install-path dependent)");
+				_ = Log.Info("FishMMOInstaller", " - If installed as a Windows service, verify with: sc.exe query pgbouncer");
 			}
 			else
 			{
-				InstallerProcessHelper.Log(" - Typical config paths: /etc/pgbouncer/pgbouncer.ini and /etc/pgbouncer/userlist.txt");
-				InstallerProcessHelper.Log(" - Service checks: sudo systemctl status pgbouncer && sudo systemctl restart pgbouncer");
+				_ = Log.Info("FishMMOInstaller", " - Typical config paths: /etc/pgbouncer/pgbouncer.ini and /etc/pgbouncer/userlist.txt");
+				_ = Log.Info("FishMMOInstaller", " - Service checks: sudo systemctl status pgbouncer && sudo systemctl restart pgbouncer");
 			}
 		}
 	}

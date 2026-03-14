@@ -1,3 +1,4 @@
+using FishMMO.Logging;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 
@@ -25,11 +26,11 @@ namespace FishMMO.Installer
 		public static async Task InstallNGINX()
 		{
 			Console.Clear();
-			InstallerProcessHelper.Log("--- Install NGINX ---");
+			await Log.Info("FishMMOInstaller", "--- Install NGINX ---");
 
 			if (await IsNGINXInstalledAsync())
 			{
-				InstallerProcessHelper.Log("NGINX appears to be already installed. Ensuring service is configured and enabled.");
+				await Log.Info("FishMMOInstaller", "NGINX appears to be already installed. Ensuring service is configured and enabled.");
 
 				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 				{
@@ -45,7 +46,7 @@ namespace FishMMO.Installer
 
 			if (!InstallerProcessHelper.PromptForYesNo("NGINX is not detected. Would you like to install it?"))
 			{
-				InstallerProcessHelper.Log("NGINX installation cancelled by user.");
+				await Log.Info("FishMMOInstaller", "NGINX installation cancelled by user.");
 				return;
 			}
 
@@ -59,7 +60,7 @@ namespace FishMMO.Installer
 			}
 			else
 			{
-				InstallerProcessHelper.Log("Unsupported operating system for NGINX installation.");
+				await Log.Warning("FishMMOInstaller", "Unsupported operating system for NGINX installation.");
 			}
 		}
 
@@ -82,7 +83,7 @@ namespace FishMMO.Installer
 
 					if (installedFromKnownPath)
 					{
-						InstallerProcessHelper.Log("NGINX detected from managed Windows installation path.");
+						await Log.Info("FishMMOInstaller", "NGINX detected from managed Windows installation path.");
 						return true;
 					}
 				}
@@ -99,7 +100,7 @@ namespace FishMMO.Installer
 
 			if (installed)
 			{
-				InstallerProcessHelper.Log("NGINX detected. (Run 'nginx -v' to confirm version)");
+				await Log.Info("FishMMOInstaller", "NGINX detected. (Run 'nginx -v' to confirm version)");
 			}
 			return installed;
 		}
@@ -109,7 +110,7 @@ namespace FishMMO.Installer
 		/// </summary>
 		private static async Task InstallNGINXWindows()
 		{
-			InstallerProcessHelper.Log("Installing NGINX on Windows...");
+			await Log.Info("FishMMOInstaller", "Installing NGINX on Windows...");
 			try
 			{
 				string downloadPath = await InstallerProcessHelper.DownloadFileAsync(
@@ -122,26 +123,26 @@ namespace FishMMO.Installer
 
 				if (Directory.Exists(nginxHomeDirectory))
 				{
-					InstallerProcessHelper.Log($"Detected existing NGINX directory at '{nginxHomeDirectory}'.");
+					await Log.Info("FishMMOInstaller", $"Detected existing NGINX directory at '{nginxHomeDirectory}'.");
 					if (InstallerProcessHelper.PromptForYesNo("Delete the existing NGINX directory for a clean reinstall?"))
 					{
 						Directory.Delete(nginxHomeDirectory, true);
 					}
 					else if (!InstallerProcessHelper.PromptForYesNo("Continue and overwrite existing files where possible?"))
 					{
-						InstallerProcessHelper.Log("NGINX installation cancelled.");
+						await Log.Info("FishMMOInstaller", "NGINX installation cancelled.");
 						return;
 					}
 				}
 
 				ZipFile.ExtractToDirectory(downloadPath, extractDirectory, true);
-				InstallerProcessHelper.Log($"NGINX successfully extracted to '{nginxHomeDirectory}'.");
+				await Log.Info("FishMMOInstaller", $"NGINX successfully extracted to '{nginxHomeDirectory}'.");
 
 				await EnsureWindowsServiceConfiguredAsync(nginxHomeDirectory);
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Error installing NGINX on Windows: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Error installing NGINX on Windows", ex);
 			}
 		}
 
@@ -151,7 +152,7 @@ namespace FishMMO.Installer
 		/// </summary>
 		private static async Task InstallNGINXLinux()
 		{
-			InstallerProcessHelper.Log("Installing NGINX on Linux...");
+			await Log.Info("FishMMOInstaller", "Installing NGINX on Linux...");
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 
 			var packageNames = new Dictionary<string, string>
@@ -165,35 +166,35 @@ namespace FishMMO.Installer
 			var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
 			if (detected == null)
 			{
-				InstallerProcessHelper.Log("No supported package manager (pacman, apt-get, yum, dnf) found. Please install NGINX manually.");
+				await Log.Warning("FishMMOInstaller", "No supported package manager (pacman, apt-get, yum, dnf) found. Please install NGINX manually.");
 				return;
 			}
 
 			var (updateCommand, installCommand, managerName) = detected.Value;
-			InstallerProcessHelper.Log($"Using {managerName} for NGINX installation.");
+			await Log.Info("FishMMOInstaller", $"Using {managerName} for NGINX installation.");
 
 			try
 			{
-				InstallerProcessHelper.Log("Updating package lists...");
+				await Log.Info("FishMMOInstaller", "Updating package lists...");
 				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCommand, "Failed to update package lists."))
 				{
-					InstallerProcessHelper.Log("Continuing anyway, but installation might fail.");
+					await Log.Warning("FishMMOInstaller", "Continuing anyway, but installation might fail.");
 				}
 
-				InstallerProcessHelper.Log("Installing NGINX...");
+				await Log.Info("FishMMOInstaller", "Installing NGINX...");
 				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, installCommand, "Failed to install NGINX."))
 				{
-					InstallerProcessHelper.Log("Check for errors above.");
+					await Log.Warning("FishMMOInstaller", "Check for errors above.");
 					return;
 				}
 
 				await EnsureLinuxServiceConfiguredAsync();
 
-				InstallerProcessHelper.Log("NGINX installed and configured on Linux. Check its status with 'sudo systemctl status nginx'.");
+				await Log.Info("FishMMOInstaller", "NGINX installed and configured on Linux. Check its status with 'sudo systemctl status nginx'.");
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Error during NGINX installation on Linux: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Error during NGINX installation on Linux", ex);
 			}
 		}
 
@@ -204,10 +205,10 @@ namespace FishMMO.Installer
 		{
 			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 
-			InstallerProcessHelper.Log("Enabling and starting NGINX service via systemd...");
+			await Log.Info("FishMMOInstaller", "Enabling and starting NGINX service via systemd...");
 			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, "sudo systemctl enable --now nginx", "Failed to enable and start NGINX service."))
 			{
-				InstallerProcessHelper.Log("You may need to run: 'sudo systemctl enable --now nginx'");
+				await Log.Warning("FishMMOInstaller", "You may need to run: 'sudo systemctl enable --now nginx'");
 				return;
 			}
 
@@ -216,11 +217,11 @@ namespace FishMMO.Installer
 
 			if (isEnabled && isActive)
 			{
-				InstallerProcessHelper.Log("NGINX service is enabled and active.");
+				await Log.Info("FishMMOInstaller", "NGINX service is enabled and active.");
 			}
 			else
 			{
-				InstallerProcessHelper.Log("NGINX service verification failed. Check with 'systemctl status nginx'.");
+				await Log.Warning("FishMMOInstaller", "NGINX service verification failed. Check with 'systemctl status nginx'.");
 			}
 		}
 
@@ -235,13 +236,13 @@ namespace FishMMO.Installer
 
 			if (!File.Exists(nginxExecutablePath))
 			{
-				InstallerProcessHelper.Log($"Cannot configure Windows service because '{nginxExecutablePath}' does not exist.");
+				await Log.Error("FishMMOInstaller", $"Cannot configure Windows service because '{nginxExecutablePath}' does not exist.");
 				return;
 			}
 
 			if (!File.Exists(nginxConfigurationPath))
 			{
-				InstallerProcessHelper.Log($"Cannot configure Windows service because '{nginxConfigurationPath}' does not exist.");
+				await Log.Error("FishMMOInstaller", $"Cannot configure Windows service because '{nginxConfigurationPath}' does not exist.");
 				return;
 			}
 
@@ -249,7 +250,7 @@ namespace FishMMO.Installer
 			string nssmExecutablePath = await EnsureNssmInstalledAsync();
 			if (string.IsNullOrWhiteSpace(nssmExecutablePath) || !File.Exists(nssmExecutablePath))
 			{
-				InstallerProcessHelper.Log("Failed to locate NSSM. Cannot configure Windows NGINX service reliably.");
+				await Log.Error("FishMMOInstaller", "Failed to locate NSSM. Cannot configure Windows NGINX service reliably.");
 				return;
 			}
 
@@ -258,7 +259,7 @@ namespace FishMMO.Installer
 
 			if (!serviceExists)
 			{
-				InstallerProcessHelper.Log($"Creating Windows service '{serviceName}' for NGINX...");
+				await Log.Info("FishMMOInstaller", $"Creating Windows service '{serviceName}' for NGINX...");
 				bool created = await InstallerProcessHelper.RunProcessAsync(
 					nssmExecutablePath,
 					$"install \"{serviceName}\" \"{nginxExecutablePath}\"",
@@ -266,7 +267,7 @@ namespace FishMMO.Installer
 
 				if (!created)
 				{
-					InstallerProcessHelper.Log("Failed to create NGINX Windows service. Run installer as administrator.");
+					await Log.Error("FishMMOInstaller", "Failed to create NGINX Windows service. Run installer as administrator.");
 					return;
 				}
 			}
@@ -276,7 +277,7 @@ namespace FishMMO.Installer
 			await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"set \"{serviceName}\" Start SERVICE_AUTO_START");
 			await InstallerProcessHelper.RunProcessAsync("sc.exe", $"description \"{serviceName}\" \"FishMMO NGINX reverse proxy service\"");
 
-			InstallerProcessHelper.Log("Starting Windows NGINX service...");
+			await Log.Info("FishMMOInstaller", "Starting Windows NGINX service...");
 			bool serviceStarted = await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"start \"{serviceName}\"", (exitCode, output, error) =>
 				exitCode == 0 ||
 				output.Contains("SERVICE_ALREADY_RUNNING", StringComparison.OrdinalIgnoreCase) ||
@@ -284,11 +285,11 @@ namespace FishMMO.Installer
 
 			if (!serviceStarted)
 			{
-				InstallerProcessHelper.Log("Failed to start NGINX Windows service. Verify service account permissions and run as administrator.");
+				await Log.Error("FishMMOInstaller", "Failed to start NGINX Windows service. Verify service account permissions and run as administrator.");
 				return;
 			}
 
-			InstallerProcessHelper.Log($"Windows service '{serviceName}' is configured, enabled, and running.");
+			await Log.Info("FishMMOInstaller", $"Windows service '{serviceName}' is configured, enabled, and running.");
 		}
 
 		/// <summary>
@@ -326,7 +327,7 @@ namespace FishMMO.Installer
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Failed to prepare NSSM: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Failed to prepare NSSM", ex);
 			}
 
 			return string.Empty;

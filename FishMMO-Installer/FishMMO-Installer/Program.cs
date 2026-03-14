@@ -1,4 +1,5 @@
 using FishMMO.Database;
+using FishMMO.Logging;
 using Microsoft.Extensions.Configuration;
 
 namespace FishMMO.Installer
@@ -14,6 +15,11 @@ namespace FishMMO.Installer
 	public static class Program
 	{
 		/// <summary>
+		/// Name of the logging configuration file.
+		/// </summary>
+		private const string LoggingConfigName = "logging.json";
+
+		/// <summary>
 		/// Stores the loaded application settings from appsettings.json.
 		/// </summary>
 		private static AppSettings appSettings = new AppSettings();
@@ -23,6 +29,9 @@ namespace FishMMO.Installer
 		/// </summary>
 		public static async Task Main(string[] args)
 		{
+			/// Set the working directory to the EXE location to ensure relative paths work correctly.
+			string applicationBaseDirectory = AppContext.BaseDirectory;
+
 			// Normalize environment selection once and propagate to standard variables.
 			string environmentName = DatabaseConfigurationHelper.ResolveEnvironmentName();
 
@@ -30,28 +39,53 @@ namespace FishMMO.Installer
 			Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", environmentName);
 			Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", environmentName);
 
+			string configFilePath = Path.Combine(applicationBaseDirectory, LoggingConfigName);
+			try
+			{
+				await Log.Initialize(configFilePath, new ConsoleFormatter());
+			}
+			catch (Exception ex)
+			{
+				Console.Error.WriteLine($"Failed to initialize logging from '{LoggingConfigName}': {ex.Message}");
+				Console.Error.WriteLine($"Ensure {LoggingConfigName} exists in '{applicationBaseDirectory}' and contains valid JSON.");
+				Environment.ExitCode = 1;
+				return;
+			}
+
 			LoadAppSettings(environmentName);
 			await RunMenuLoop();
+			await Log.Shutdown();
 		}
 
 		/// <summary>
 		/// Loads application settings using ConfigurationBuilder.
-		/// appsettings.json is treated as the default source and optional
-		/// appsettings.{Environment}.json overlays values when an environment is provided.
+		/// Looks first in the EXE directory for appsettings.json, then falls back to
+		/// FishMMO-Database/FishMMO-DB/ where the canonical settings live after a build copy.
 		/// </summary>
 		private static void LoadAppSettings(string environmentName)
 		{
+			string exeDir = InstallerProcessHelper.GetWorkingDirectory();
+			string dbSubDir = Path.Combine(exeDir, "FishMMO-Database", "FishMMO-DB");
+
+			// Prefer the EXE dir; fall back to the database sub-directory.
+			string basePath = File.Exists(Path.Combine(exeDir, "appsettings.json"))
+				? exeDir
+				: dbSubDir;
+
+			_ = Log.Debug("FishMMOInstaller", $"Loading configuration from: {basePath}");
+
 			try
 			{
-				IConfiguration configuration = DatabaseConfigurationHelper.BuildDesignTimeConfiguration();
+				IConfiguration configuration = DatabaseConfigurationHelper.BuildDesignTimeConfiguration(basePath);
 
 				appSettings = configuration.Get<AppSettings>() ?? new AppSettings();
 
-				InstallerProcessHelper.Log($"Configuration successfully loaded for Environment: {environmentName}");
+				_ = Log.Info("FishMMOInstaller", $"Configuration successfully loaded for Environment: {environmentName}");
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Critical error loading configuration: {ex.Message}");
+				_ = Log.Error("FishMMOInstaller", "Critical error loading configuration", ex);
+				_ = Log.Warning("FishMMOInstaller", $"Ensure appsettings.json exists in '{exeDir}' or '{dbSubDir}'.");
 				appSettings = new AppSettings();
 			}
 		}
@@ -137,8 +171,15 @@ namespace FishMMO.Installer
 							PostgreSQLInstaller.DeleteFishMMODatabase);
 						break;
 					case ConsoleKey.D0:
+					case ConsoleKey.NumPad0:
 						return;
 					default:
+						// KeyChar fallback: some Linux terminals (e.g. Konsole + fish) send
+						// raw char '0' without mapping it to ConsoleKey.D0/NumPad0.
+						if (key.KeyChar == '0')
+						{
+							return;
+						}
 						Console.WriteLine("Invalid input. Please enter a valid option.");
 						break;
 				}
@@ -161,7 +202,7 @@ namespace FishMMO.Installer
 		{
 			if (string.IsNullOrWhiteSpace(requiredField(appSettings)))
 			{
-				InstallerProcessHelper.Log($"appsettings.json is not loaded or {fieldDescription} is not defined. Cannot proceed without configuration.");
+				await Log.Warning("FishMMOInstaller", $"appsettings.json is not loaded or {fieldDescription} is not defined. Cannot proceed without configuration.");
 				return;
 			}
 			await handler(appSettings);
@@ -180,7 +221,7 @@ namespace FishMMO.Installer
 		{
 			if (string.IsNullOrWhiteSpace(requiredField(appSettings)))
 			{
-				InstallerProcessHelper.Log($"appsettings.json is not loaded or {fieldDescription} is not defined. Cannot proceed without configuration.");
+				await Log.Warning("FishMMOInstaller", $"appsettings.json is not loaded or {fieldDescription} is not defined. Cannot proceed without configuration.");
 				return;
 			}
 			string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;

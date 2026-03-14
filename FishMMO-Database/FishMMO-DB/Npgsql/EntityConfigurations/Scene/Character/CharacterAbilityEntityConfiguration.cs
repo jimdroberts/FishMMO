@@ -27,7 +27,7 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.AbilityEvents)
 				.IsRequired()
-				.HasDefaultValue(new System.Collections.Generic.List<int>());
+				.HasDefaultValueSql("'{}'");
 
 			builder.Property(e => e.Cooldown)
 				.IsRequired()

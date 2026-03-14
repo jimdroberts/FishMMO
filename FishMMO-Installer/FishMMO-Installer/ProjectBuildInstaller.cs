@@ -1,3 +1,5 @@
+using FishMMO.Logging;
+
 namespace FishMMO.Installer
 {
 	/// <summary>
@@ -34,37 +36,37 @@ namespace FishMMO.Installer
 		public static async Task BuildAllProjectsInSelectedRootAsync()
 		{
 			Console.Clear();
-			InstallerProcessHelper.Log("--- Build All C# Projects ---");
+			await Log.Info("FishMMOInstaller", "--- Build All C# Projects ---");
 
 			string defaultRootDirectory = ResolveDefaultRootDirectory();
 			string selectedRootDirectory = PromptRootDirectory(defaultRootDirectory);
 
 			if (!Directory.Exists(selectedRootDirectory))
 			{
-				InstallerProcessHelper.Log($"Directory '{selectedRootDirectory}' does not exist.");
+				await Log.Warning("FishMMOInstaller", $"Directory '{selectedRootDirectory}' does not exist.");
 				return;
 			}
 
 			List<string> projectPaths = FindProjectPaths(selectedRootDirectory);
 			if (projectPaths.Count == 0)
 			{
-				InstallerProcessHelper.Log("No .csproj files were found under the selected directory.");
+				await Log.Warning("FishMMOInstaller", "No .csproj files were found under the selected directory.");
 				return;
 			}
 
-			InstallerProcessHelper.Log($"Found {projectPaths.Count} project(s):");
+			await Log.Info("FishMMOInstaller", $"Found {projectPaths.Count} project(s):");
 			foreach (string projectPath in projectPaths)
 			{
-				InstallerProcessHelper.Log($" - {projectPath}");
+				await Log.Info("FishMMOInstaller", $" - {projectPath}");
 			}
 
 			if (!InstallerProcessHelper.PromptForYesNo($"Build all {projectPaths.Count} project(s) now?"))
 			{
-				InstallerProcessHelper.Log("Build operation cancelled by user.");
+				await Log.Info("FishMMOInstaller", "Build operation cancelled by user.");
 				return;
 			}
 
-			InstallerProcessHelper.Log("Starting parallel build for all discovered projects...");
+			await Log.Info("FishMMOInstaller", "Starting parallel build for all discovered projects...");
 
 			List<Task<ProjectBuildResult>> buildTasks = projectPaths
 				.Select(BuildProjectAsync)
@@ -78,18 +80,23 @@ namespace FishMMO.Installer
 				.Where(result => !result.succeeded)
 				.ToList();
 
-			InstallerProcessHelper.Log($"Build summary: {successCount} succeeded, {failureCount} failed.");
+			await Log.Info("FishMMOInstaller", $"Build summary: {successCount} succeeded, {failureCount} failed.");
 			if (failedResults.Count > 0)
 			{
-				InstallerProcessHelper.Log("Failed projects:");
+				await Log.Warning("FishMMOInstaller", "Failed projects:");
 				foreach (ProjectBuildResult failedResult in failedResults)
 				{
-					InstallerProcessHelper.Log($" - {failedResult.projectPath}");
+					await Log.Info("FishMMOInstaller", $" - {failedResult.projectPath}");
 					if (!string.IsNullOrWhiteSpace(failedResult.errorOutput))
 					{
-						InstallerProcessHelper.Log(failedResult.errorOutput.Trim());
+						await Log.Info("FishMMOInstaller", failedResult.errorOutput.Trim());
 					}
 				}
+			}
+
+			if (successCount > 0)
+			{
+				await CopyRuntimeSourceDirectoriesAsync(selectedRootDirectory);
 			}
 		}
 
@@ -100,7 +107,7 @@ namespace FishMMO.Installer
 		/// <returns>Build outcome payload for the requested project.</returns>
 		private static async Task<ProjectBuildResult> BuildProjectAsync(string projectPath)
 		{
-			InstallerProcessHelper.Log($"Cleaning: {projectPath}");
+			await Log.Info("FishMMOInstaller", $"Cleaning: {projectPath}");
 
 			var result = new ProjectBuildResult
 			{
@@ -134,7 +141,7 @@ namespace FishMMO.Installer
 				return result;
 			}
 
-			InstallerProcessHelper.Log($"Building: {projectPath}");
+			await Log.Info("FishMMOInstaller", $"Building: {projectPath}");
 
 			result.succeeded = await DotNetInstaller.RunDotNetCommandAsync(
 				$"build \"{projectPath}\" -nologo",
@@ -154,6 +161,95 @@ namespace FishMMO.Installer
 				});
 
 			return result;
+		}
+
+		/// <summary>
+		/// Copies FishMMO-Database and FishMMO-SharedUtility source trees from the build root
+		/// into the installer's runtime directory so migration services can resolve them at runtime.
+		/// Skips bin, obj, .git and .vs subdirectories.
+		/// Migration files inside FishMMO-Database/FishMMO-DB/Migrations/ are preserved across copies
+		/// so that previously-created migrations are not lost when the source tree is refreshed.
+		/// </summary>
+		/// <param name="rootDirectory">The root directory that was scanned for projects.</param>
+		private static async Task CopyRuntimeSourceDirectoriesAsync(string rootDirectory)
+		{
+			string runtimeDirectory = InstallerProcessHelper.GetWorkingDirectory();
+			string[] sourceDirectoryNames = ["FishMMO-Database", "FishMMO-SharedUtility"];
+
+			foreach (string dirName in sourceDirectoryNames)
+			{
+				string sourceDir = Path.Combine(rootDirectory, dirName);
+				string destDir = Path.Combine(runtimeDirectory, dirName);
+
+				if (!Directory.Exists(sourceDir))
+				{
+					await Log.Info("FishMMOInstaller", $"Skipping runtime copy — source not found: {sourceDir}");
+					continue;
+				}
+
+				await Log.Info("FishMMOInstaller", $"Copying {dirName} to runtime directory...");
+
+				// Snapshot any migration files before wiping the destination so they survive the refresh.
+				var savedMigrations = new Dictionary<string, byte[]>();
+				if (dirName.Equals("FishMMO-Database", StringComparison.OrdinalIgnoreCase) && Directory.Exists(destDir))
+				{
+					string migrationsDir = Path.Combine(destDir, "FishMMO-DB", InstallationConstants.MigrationsOutputDirectory);
+					if (Directory.Exists(migrationsDir))
+					{
+						foreach (string file in Directory.EnumerateFiles(migrationsDir, "*", SearchOption.AllDirectories))
+						{
+							savedMigrations[Path.GetRelativePath(destDir, file)] = File.ReadAllBytes(file);
+						}
+					}
+				}
+
+				if (Directory.Exists(destDir))
+				{
+					Directory.Delete(destDir, recursive: true);
+				}
+
+				await Task.Run(() => CopyDirectoryRecursive(sourceDir, destDir));
+				await Log.Info("FishMMOInstaller", $"Copied {dirName} → {destDir}");
+
+				// Restore migration files that were present before the copy.
+				if (savedMigrations.Count > 0)
+				{
+					foreach (var (relativePath, content) in savedMigrations)
+					{
+						string restoredPath = Path.Combine(destDir, relativePath);
+						Directory.CreateDirectory(Path.GetDirectoryName(restoredPath)!);
+						File.WriteAllBytes(restoredPath, content);
+					}
+					await Log.Info("FishMMOInstaller", $"Restored {savedMigrations.Count} migration file(s) in {dirName}.");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Recursively copies a directory tree, skipping common non-source subdirectories.
+		/// </summary>
+		private static void CopyDirectoryRecursive(string sourceDir, string destDir)
+		{
+			Directory.CreateDirectory(destDir);
+
+			foreach (string file in Directory.EnumerateFiles(sourceDir))
+			{
+				File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), overwrite: true);
+			}
+
+			foreach (string subDir in Directory.EnumerateDirectories(sourceDir))
+			{
+				string subDirName = Path.GetFileName(subDir);
+				if (subDirName.Equals("bin", StringComparison.OrdinalIgnoreCase)
+					|| subDirName.Equals("obj", StringComparison.OrdinalIgnoreCase)
+					|| subDirName.Equals(".git", StringComparison.OrdinalIgnoreCase)
+					|| subDirName.Equals(".vs", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				CopyDirectoryRecursive(subDir, Path.Combine(destDir, subDirName));
+			}
 		}
 
 		/// <summary>
@@ -228,11 +324,11 @@ namespace FishMMO.Installer
 				}
 				catch (UnauthorizedAccessException)
 				{
-					InstallerProcessHelper.Log($"Skipping inaccessible directory: {currentDirectory}");
+					_ = Log.Warning("FishMMOInstaller", $"Skipping inaccessible directory: {currentDirectory}");
 				}
 				catch (IOException)
 				{
-					InstallerProcessHelper.Log($"Skipping directory due to IO error: {currentDirectory}");
+					_ = Log.Warning("FishMMOInstaller", $"Skipping directory due to IO error: {currentDirectory}");
 				}
 			}
 

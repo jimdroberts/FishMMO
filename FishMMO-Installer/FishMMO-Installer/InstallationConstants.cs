@@ -193,5 +193,13 @@ namespace FishMMO.Installer
 		/// Relative path to the FishMMO-DB-Migrator startup project for EF Core commands.
 		/// </summary>
 		public static readonly string StartupProject = Path.Combine(".", "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj");
+
+		/// <summary>
+		/// Directory name for EF Core migration output, relative to the FishMMO-DB project file.
+		/// EF Core resolves this against the project directory, placing generated files inside
+		/// FishMMO-Database/FishMMO-DB/Migrations/ so they are compiled into the project assembly
+		/// and discovered by dotnet ef database update.
+		/// </summary>
+		public const string MigrationsOutputDirectory = "Migrations";
 	}
 }

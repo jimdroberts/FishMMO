@@ -1,3 +1,4 @@
+using FishMMO.Logging;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -17,17 +18,17 @@ namespace FishMMO.Installer
 		public static async Task InstallVSBuildTools()
 		{
 			Console.Clear();
-			InstallerProcessHelper.Log("--- Install Visual Studio Build Tools ---");
+			await Log.Info("FishMMOInstaller", "--- Install Visual Studio Build Tools ---");
 
 			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				InstallerProcessHelper.Log("Visual Studio Build Tools can only be installed on Windows. Skipping.");
+				await Log.Info("FishMMOInstaller", "Visual Studio Build Tools can only be installed on Windows. Skipping.");
 				return;
 			}
 
 			if (!InstallerProcessHelper.PromptForYesNo("This option will download and launch the Visual Studio Build Tools installer. Would you like to proceed?"))
 			{
-				InstallerProcessHelper.Log("Visual Studio Build Tools installation cancelled by user.");
+				await Log.Info("FishMMOInstaller", "Visual Studio Build Tools installation cancelled by user.");
 				return;
 			}
 
@@ -37,12 +38,12 @@ namespace FishMMO.Installer
 					InstallationConstants.VSBuildToolsUrl,
 					InstallationConstants.VSBuildToolsFileName);
 
-				InstallerProcessHelper.Log("Automated installation of Visual Studio Build Tools will begin.");
-				InstallerProcessHelper.Log("The following workloads and components will be installed:");
-				InstallerProcessHelper.Log("  1. '.NET desktop development' workload (includes .NET Framework development tools)");
-				InstallerProcessHelper.Log("  2. 'Desktop development with C++' workload (MSVC 64-bit compiler for x86, x64, ARM, and ARM64)");
-				InstallerProcessHelper.Log("  3. Windows 10 SDK");
-				InstallerProcessHelper.Log("After installation, restart your computer if prompted by the installer.");
+				await Log.Info("FishMMOInstaller", "Automated installation of Visual Studio Build Tools will begin.");
+				await Log.Info("FishMMOInstaller", "The following workloads and components will be installed:");
+				await Log.Info("FishMMOInstaller", "  1. '.NET desktop development' workload (includes .NET Framework development tools)");
+				await Log.Info("FishMMOInstaller", "  2. 'Desktop development with C++' workload (MSVC 64-bit compiler for x86, x64, ARM, and ARM64)");
+				await Log.Info("FishMMOInstaller", "  3. Windows 10 SDK");
+				await Log.Info("FishMMOInstaller", "After installation, restart your computer if prompted by the installer.");
 
 				string arguments = "--quiet --wait --norestart --nocache " +
 					"--add Microsoft.VisualStudio.Workload.ManagedDesktop " +
@@ -61,20 +62,20 @@ namespace FishMMO.Installer
 					Verb = "runas"
 				};
 
-				InstallerProcessHelper.Log($"Launching installer with arguments: {arguments}");
+				await Log.Info("FishMMOInstaller", $"Launching installer with arguments: {arguments}");
 				Process? process = Process.Start(startInfo);
 				if (process == null)
 				{
-					InstallerProcessHelper.Log("Failed to start Visual Studio Build Tools installer process.");
+					await Log.Error("FishMMOInstaller", "Failed to start Visual Studio Build Tools installer process.");
 					return;
 				}
 				await process.WaitForExitAsync();
 
-				InstallerProcessHelper.Log("Visual Studio Build Tools automated installation finished. Please verify the installation and restart your computer if required.");
+				await Log.Info("FishMMOInstaller", "Visual Studio Build Tools automated installation finished. Please verify the installation and restart your computer if required.");
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Error installing Visual Studio Build Tools: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Error installing Visual Studio Build Tools", ex);
 			}
 		}
 	}

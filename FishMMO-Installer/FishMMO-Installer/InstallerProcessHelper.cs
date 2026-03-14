@@ -69,7 +69,7 @@ namespace FishMMO.Installer
 			{
 				if (exitCode != 0)
 				{
-					Log($"{errorMessage} Error: {error}");
+					_ = FishMMO.Logging.Log.Warning("FishMMOInstaller", $"{errorMessage} Error: {error}");
 					return false;
 				}
 				return true;
@@ -89,22 +89,25 @@ namespace FishMMO.Installer
 			if (packageNames.ContainsKey("pacman") &&
 				await RunProcessAsync(shell, $"{argPrefix} \"command -v pacman\"", (e, o, err) => e == 0))
 			{
-				return ("sudo pacman -Syu --noconfirm", $"sudo pacman -S --noconfirm {packageNames["pacman"]}", "pacman (Arch/CachyOS)");
+				// -Sy syncs the package database without upgrading the whole system (-Syu would be a full upgrade).
+				return ("sudo pacman -Sy --noconfirm", $"sudo pacman -S --noconfirm --needed {packageNames["pacman"]}", "pacman (Arch/CachyOS)");
 			}
 			if (packageNames.ContainsKey("apt-get") &&
 				await RunProcessAsync(shell, $"{argPrefix} \"command -v apt-get\"", (e, o, err) => e == 0))
 			{
-				return ("sudo apt-get update", $"sudo apt-get install -y {packageNames["apt-get"]}", "apt-get (Debian/Ubuntu)");
+				return ("sudo apt-get update -qq", $"sudo apt-get install -y {packageNames["apt-get"]}", "apt-get (Debian/Ubuntu)");
 			}
 			if (packageNames.ContainsKey("dnf") &&
 				await RunProcessAsync(shell, $"{argPrefix} \"command -v dnf\"", (e, o, err) => e == 0))
 			{
-				return ("sudo dnf check-update", $"sudo dnf install -y {packageNames["dnf"]}", "dnf");
+				// dnf check-update exits 100 when updates are available (not an error); use makecache instead.
+				return ("sudo dnf makecache", $"sudo dnf install -y {packageNames["dnf"]}", "dnf");
 			}
 			if (packageNames.ContainsKey("yum") &&
 				await RunProcessAsync(shell, $"{argPrefix} \"command -v yum\"", (e, o, err) => e == 0))
 			{
-				return ("sudo yum check-update", $"sudo yum install -y {packageNames["yum"]}", "yum");
+				// yum check-update exits 100 when updates are available (not an error); use makecache instead.
+				return ("sudo yum makecache", $"sudo yum install -y {packageNames["yum"]}", "yum");
 			}
 
 			return null;
@@ -141,7 +144,7 @@ namespace FishMMO.Installer
 				string homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 				if (string.IsNullOrWhiteSpace(homePath))
 				{
-					Log("Warning: The HOME environment variable is not set. DotNet commands may fail.");
+					_ = FishMMO.Logging.Log.Warning("FishMMOInstaller", "The HOME environment variable is not set. DotNet commands may fail.");
 					dotNetEnvironmentPrepared = true;
 					return;
 				}
@@ -160,7 +163,7 @@ namespace FishMMO.Installer
 					currentPath = string.IsNullOrWhiteSpace(currentPath)
 						? dotnetPath
 						: $"{currentPath}:{dotnetPath}";
-					Log($"Updated PATH to include: {dotnetPath}");
+					_ = FishMMO.Logging.Log.Debug("FishMMOInstaller", $"Updated PATH to include: {dotnetPath}");
 				}
 
 				if (!pathEntries.Contains(dotnetToolsPath))
@@ -168,7 +171,7 @@ namespace FishMMO.Installer
 					currentPath = string.IsNullOrWhiteSpace(currentPath)
 						? dotnetToolsPath
 						: $"{currentPath}:{dotnetToolsPath}";
-					Log($"Updated PATH to include: {dotnetToolsPath}");
+					_ = FishMMO.Logging.Log.Debug("FishMMOInstaller", $"Updated PATH to include: {dotnetToolsPath}");
 				}
 
 				Environment.SetEnvironmentVariable("PATH", currentPath);
@@ -177,7 +180,7 @@ namespace FishMMO.Installer
 				if (Directory.Exists(userDotnetRoot))
 				{
 					Environment.SetEnvironmentVariable("DOTNET_ROOT", userDotnetRoot);
-					Log($"Set DOTNET_ROOT to: {userDotnetRoot}");
+					_ = FishMMO.Logging.Log.Debug("FishMMOInstaller", $"Set DOTNET_ROOT to: {userDotnetRoot}");
 				}
 				else
 				{
@@ -185,7 +188,7 @@ namespace FishMMO.Installer
 					if (Directory.Exists(systemDotnetRoot))
 					{
 						Environment.SetEnvironmentVariable("DOTNET_ROOT", systemDotnetRoot);
-						Log($"Set DOTNET_ROOT to: {systemDotnetRoot}");
+						_ = FishMMO.Logging.Log.Debug("FishMMOInstaller", $"Set DOTNET_ROOT to: {systemDotnetRoot}");
 					}
 				}
 
@@ -209,7 +212,7 @@ namespace FishMMO.Installer
 			}
 			catch (Exception ex)
 			{
-				Log($"Failed to run 'dotnet {arguments}': {ex.Message}");
+				await FishMMO.Logging.Log.Error("FishMMOInstaller", $"Failed to run 'dotnet {arguments}'", ex);
 				return false;
 			}
 		}
@@ -225,7 +228,7 @@ namespace FishMMO.Installer
 				return;
 			}
 
-			Log($"Note: '{processName}' runs elevated (UAC) and may not inherit this process's temporary environment-variable overrides.");
+			_ = FishMMO.Logging.Log.Warning("FishMMOInstaller", $"Note: '{processName}' runs elevated (UAC) and may not inherit this process's temporary environment-variable overrides.");
 		}
 
 		/// <summary>
@@ -340,30 +343,6 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Logs a message to the console and to FishMMO.Logging if available.
-		/// </summary>
-		/// <param name="message">Message to log.</param>
-		/// <param name="logTime">Whether to include a timestamp prefix.</param>
-		public static void Log(string message, bool logTime = false)
-		{
-			if (string.IsNullOrWhiteSpace(message))
-			{
-				return;
-			}
-			if (logTime)
-			{
-				string formatted = $"{DateTime.Now}: {message}";
-				Console.WriteLine(formatted);
-				FishMMO.Logging.Log.Debug("FishMMOInstaller", formatted);
-			}
-			else
-			{
-				Console.WriteLine(message);
-				FishMMO.Logging.Log.Debug("FishMMOInstaller", message);
-			}
-		}
-
-		/// <summary>
 		/// Downloads a file asynchronously from the specified URL to the working directory.
 		/// If the file already exists locally, the download is skipped.
 		/// </summary>
@@ -377,14 +356,14 @@ namespace FishMMO.Installer
 				string tempDir = GetWorkingDirectory();
 				string outputPath = Path.Combine(tempDir, fileName);
 
-				if (File.Exists(outputPath))
+					if (File.Exists(outputPath))
 				{
-					Log(outputPath + " already exists... Skipping download.");
+					await FishMMO.Logging.Log.Info("FishMMOInstaller", outputPath + " already exists... Skipping download.");
 					return outputPath;
 				}
 
-				Log($"Downloading file from {url}");
-				Log("Please wait...");
+				await FishMMO.Logging.Log.Info("FishMMOInstaller", $"Downloading file from {url}");
+				await FishMMO.Logging.Log.Info("FishMMOInstaller", "Please wait...");
 				using (HttpResponseMessage response = await SharedHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
 				{
 					response.EnsureSuccessStatusCode();
@@ -404,7 +383,7 @@ namespace FishMMO.Installer
 							await streamToReadFrom.CopyToAsync(streamToWriteTo);
 						}
 					}
-					Log($"File successfully downloaded to {outputPath}");
+						await FishMMO.Logging.Log.Info("FishMMOInstaller", $"File successfully downloaded to {outputPath}");
 					return outputPath;
 				}
 			}

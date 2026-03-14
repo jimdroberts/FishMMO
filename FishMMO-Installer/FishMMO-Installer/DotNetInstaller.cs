@@ -1,3 +1,4 @@
+using FishMMO.Logging;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -20,11 +21,11 @@ namespace FishMMO.Installer
 
 			if (!await IsDotNetInstalledAsync())
 			{
-				if (InstallerProcessHelper.PromptForYesNo("DotNet 8 is not installed, would you like to install it?"))
+				if (InstallerProcessHelper.PromptForYesNo($"DotNet {InstallationConstants.DotNetSDKMajorVersion} or later is not installed, would you like to install it?"))
 				{
-					InstallerProcessHelper.Log("Installing DotNet...");
+					await Log.Info("FishMMOInstaller", "Installing DotNet...");
 					await DownloadAndInstallDotNetAsync();
-					InstallerProcessHelper.Log("DotNet has been installed.");
+					await Log.Info("FishMMOInstaller", "DotNet has been installed.");
 					sdkJustInstalled = true;
 				}
 				else
@@ -34,22 +35,22 @@ namespace FishMMO.Installer
 			}
 			else
 			{
-				InstallerProcessHelper.Log("DotNet is already installed.");
+				await Log.Info("FishMMOInstaller", "DotNet is already installed.");
 			}
 
 			if (!await IsDotNetEFInstalledAsync())
 			{
 				if (InstallerProcessHelper.PromptForYesNo("DotNet-EF is not installed, would you like to install it?"))
 				{
-					InstallerProcessHelper.Log($"Installing DotNet-EF v{InstallationConstants.DotNetEFVersion}...");
+					await Log.Info("FishMMOInstaller", $"Installing DotNet-EF v{InstallationConstants.DotNetEFVersion}...");
 					bool efInstalled = await RunDotNetCommandAsync($"tool install --global dotnet-ef --version {InstallationConstants.DotNetEFVersion}");
 					if (!efInstalled)
 					{
-						InstallerProcessHelper.Log("DotNet-EF installation failed.");
+						await Log.Error("FishMMOInstaller", "DotNet-EF installation failed.");
 						return false;
 					}
 
-					InstallerProcessHelper.Log("DotNet-EF has been installed.");
+					await Log.Info("FishMMOInstaller", "DotNet-EF has been installed.");
 					return true;
 				}
 
@@ -57,7 +58,7 @@ namespace FishMMO.Installer
 			}
 			else
 			{
-				InstallerProcessHelper.Log("DotNet-EF is already installed.");
+				await Log.Info("FishMMOInstaller", "DotNet-EF is already installed.");
 				return true;
 			}
 		}
@@ -73,12 +74,17 @@ namespace FishMMO.Installer
 			{
 				if (e != 0) return false;
 
-				// Each line looks like: "8.0.302 [/usr/share/dotnet/sdk]"
+				// Parse the required minimum major version (e.g. "8" from "8.0").
+				if (!int.TryParse(InstallationConstants.DotNetSDKMajorVersion.Split('.')[0], out int requiredMajor))
+					return false;
+
+				// Each line looks like: "8.0.302 [/usr/share/dotnet/sdk]" or "10.0.104 [/usr/share/dotnet/sdk]"
 				using var reader = new StringReader(o);
 				string? line;
 				while ((line = reader.ReadLine()) != null)
 				{
-					if (line.StartsWith(InstallationConstants.DotNetSDKMajorVersion + ".", StringComparison.Ordinal))
+					string versionPart = line.Split(' ')[0];
+					if (int.TryParse(versionPart.Split('.')[0], out int installedMajor) && installedMajor >= requiredMajor)
 					{
 						return true;
 					}
@@ -116,7 +122,7 @@ namespace FishMMO.Installer
 					Process? process = Process.Start(startInfo);
 					if (process == null)
 					{
-						InstallerProcessHelper.Log("Failed to start DotNet installer process.");
+						await Log.Error("FishMMOInstaller", "Failed to start DotNet installer process.");
 						return;
 					}
 					await process.WaitForExitAsync();
@@ -124,16 +130,16 @@ namespace FishMMO.Installer
 					int exitCode = process.ExitCode;
 					if (exitCode == 0)
 					{
-						InstallerProcessHelper.Log("DotNet installation successful.");
+						await Log.Info("FishMMOInstaller", "DotNet installation successful.");
 					}
 					else
 					{
-						InstallerProcessHelper.Log($"DotNet installation failed with exit code {exitCode}.");
+						await Log.Error("FishMMOInstaller", $"DotNet installation failed with exit code {exitCode}.");
 					}
 				}
 				catch (Exception ex)
 				{
-					InstallerProcessHelper.Log($"Error installing DotNet: {ex.Message}");
+					await Log.Error("FishMMOInstaller", "Error installing DotNet", ex);
 				}
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -176,7 +182,7 @@ namespace FishMMO.Installer
 			}
 			catch (Exception ex)
 			{
-				InstallerProcessHelper.Log($"Error checking dotnet-ef tool: {ex.Message}");
+				await Log.Error("FishMMOInstaller", "Error checking dotnet-ef tool", ex);
 				return false;
 			}
 		}
@@ -202,7 +208,7 @@ namespace FishMMO.Installer
 					}
 					if (!string.IsNullOrWhiteSpace(error))
 					{
-						InstallerProcessHelper.Log($"Process Error: {error}");
+						_ = Log.Warning("FishMMOInstaller", $"Process Error: {error}");
 					}
 
 					if (customProcessResult != null)
@@ -217,7 +223,7 @@ namespace FishMMO.Installer
 
 			if (!success)
 			{
-				InstallerProcessHelper.Log($"DotNet command 'dotnet {arguments}' failed.");
+				await Log.Error("FishMMOInstaller", $"DotNet command 'dotnet {arguments}' failed.");
 			}
 			return success;
 		}
@@ -231,12 +237,12 @@ namespace FishMMO.Installer
 		{
 			if (!Regex.IsMatch(migrationName, "^[A-Za-z][A-Za-z0-9]*$"))
 			{
-				InstallerProcessHelper.Log("Invalid migration name. Use alphanumeric characters only and start with a letter.");
+				await Log.Warning("FishMMOInstaller", "Invalid migration name. Use alphanumeric characters only and start with a letter.");
 				return false;
 			}
 
 			return await RunDotNetCommandAsync(
-				$"ef migrations add {migrationName} -p \"{InstallationConstants.ProjectPath}\" -s \"{InstallationConstants.StartupProject}\"");
+				$"ef migrations add {migrationName} -p \"{InstallationConstants.ProjectPath}\" -s \"{InstallationConstants.StartupProject}\" --output-dir \"{InstallationConstants.MigrationsOutputDirectory}\"");
 		}
 
 		/// <summary>
