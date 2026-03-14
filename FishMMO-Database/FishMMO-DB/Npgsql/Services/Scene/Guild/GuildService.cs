@@ -105,13 +105,13 @@ namespace FishMMO.Database.Npgsql.Services
 						(SELECT id FROM {TableName} WHERE name_lowercase = {{2}})
 					)::bigint AS value";
 
-				var idRow = await dbContext.Set<SqlLongValue>()
-					.FromSqlRaw(sql, new object[] { name, now, nameLowercase })
-					.AsNoTracking()
-					.SingleAsync(cancellationToken)
-					.ConfigureAwait(false);
+				var id = await ExecuteScalarLongAsync(
+					dbContext,
+					sql,
+					new object[] { name, now, nameLowercase },
+					cancellationToken).ConfigureAwait(false);
 
-				return (long?)idRow.Value;
+				return (long?)id;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}

@@ -164,20 +164,19 @@ namespace FishMMO.Database.Npgsql.Services
 							ELSE 4
 						END AS value";
 
-				var status = await dbContext.Set<SqlIntValue>()
-					.FromSqlRaw(
-						sql,
+				return await ExecuteScalarIntAsync(
+					dbContext,
+					sql,
+					new object[]
+					{
 						partyData.CharacterID,
 						partyData.PartyID,
 						maxCapacity,
 						partyData.Rank,
 						partyData.HealthPCT,
-						partyData.Version)
-					.AsNoTracking()
-					.SingleAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				return status.Value;
+						partyData.Version
+					},
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)

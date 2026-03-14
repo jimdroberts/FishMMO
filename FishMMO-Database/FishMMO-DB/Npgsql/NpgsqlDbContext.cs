@@ -105,14 +105,14 @@ namespace FishMMO.Database.Npgsql
 		{
 			base.OnModelCreating(modelBuilder);
 
-			modelBuilder.Entity<SqlIntValue>().HasNoKey();
-			modelBuilder.Entity<SqlLongValue>().HasNoKey();
-
 			// Set default schema for all entities
 			modelBuilder.HasDefaultSchema(Schema);
 
 			// Apply all configurations in the assembly
 			modelBuilder.ApplyConfigurationsFromAssembly(typeof(NpgsqlDbContext).Assembly);
+
+			modelBuilder.Ignore<SqlIntValue>();
+			modelBuilder.Ignore<SqlLongValue>();
 
 			ApplyLogicalVersionConventions(modelBuilder);
 			ApplyTimeCreatedConventions(modelBuilder);

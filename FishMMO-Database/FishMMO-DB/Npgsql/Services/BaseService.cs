@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System;
+using System.Data;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Npgsql.Entities;
@@ -980,16 +982,70 @@ namespace FishMMO.Database.Npgsql.Services
 			)
 			SELECT COUNT(*)::integer AS value FROM upserted";
 
-			var countRow = await dbContext.Set<SqlIntValue>()
-				.FromSqlRaw(countSql, parameters)
-				.AsNoTracking()
-				.SingleAsync(cancellationToken)
-				.ConfigureAwait(false);
+			var count = await ExecuteScalarIntAsync(dbContext, countSql, parameters, cancellationToken).ConfigureAwait(false);
 
-			if (countRow.Value != expectedRowsAffected)
+			if (count != expectedRowsAffected)
 			{
 				throw new StaleStateException(staleStateMessage);
 			}
+		}
+
+		private static readonly Regex ParameterPlaceholderRegex =
+			new Regex(@"\{(\d+)\}", RegexOptions.Compiled);
+
+		/// <summary>
+		/// Executes a raw SQL query that returns a single integer scalar value using ADO.NET,
+		/// bypassing EF Core entity mapping entirely.
+		/// </summary>
+		protected static async Task<int> ExecuteScalarIntAsync(
+			NpgsqlDbContext dbContext,
+			string sql,
+			object[] parameters,
+			CancellationToken cancellationToken)
+		{
+			var result = await ExecuteScalarCoreAsync(dbContext, sql, parameters, cancellationToken).ConfigureAwait(false);
+			return Convert.ToInt32(result);
+		}
+
+		/// <summary>
+		/// Executes a raw SQL query that returns a single bigint scalar value using ADO.NET,
+		/// bypassing EF Core entity mapping entirely.
+		/// </summary>
+		protected static async Task<long> ExecuteScalarLongAsync(
+			NpgsqlDbContext dbContext,
+			string sql,
+			object[] parameters,
+			CancellationToken cancellationToken)
+		{
+			var result = await ExecuteScalarCoreAsync(dbContext, sql, parameters, cancellationToken).ConfigureAwait(false);
+			return Convert.ToInt64(result);
+		}
+
+		private static async Task<object> ExecuteScalarCoreAsync(
+			NpgsqlDbContext dbContext,
+			string sql,
+			object[] parameters,
+			CancellationToken cancellationToken)
+		{
+			var connection = dbContext.Database.GetDbConnection();
+			if (connection.State != ConnectionState.Open)
+			{
+				await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+			}
+
+			using var command = connection.CreateCommand();
+			command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
+			command.CommandText = ParameterPlaceholderRegex.Replace(sql, "@p$1");
+
+			for (int i = 0; i < parameters.Length; i++)
+			{
+				var param = command.CreateParameter();
+				param.ParameterName = "@p" + i;
+				param.Value = parameters[i] ?? DBNull.Value;
+				command.Parameters.Add(param);
+			}
+
+			return await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

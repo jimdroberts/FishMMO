@@ -230,9 +230,11 @@ namespace FishMMO.Database.Npgsql.Services
 					)
 					SELECT COALESCE((SELECT id FROM inserted LIMIT 1), -1)::bigint AS value";
 
-				var idRow = await dbContext.Set<SqlLongValue>()
-					.FromSqlRaw(
-						sql,
+				var id = await ExecuteScalarLongAsync(
+					dbContext,
+					sql,
+					new object[]
+					{
 						characterData.Name,
 						characterData.Account,
 						characterData.Selected,
@@ -265,19 +267,18 @@ namespace FishMMO.Database.Npgsql.Services
 						DateTime.UnixEpoch,
 						characterData.Flags,
 						now,
-						now)
-					.AsNoTracking()
-					.SingleAsync(cancellationToken)
-					.ConfigureAwait(false);
+						now
+					},
+					cancellationToken).ConfigureAwait(false);
 
-				if (idRow.Value <= 0)
+				if (id <= 0)
 				{
 					throw new DatabaseException(
 						"Character name already exists.",
 						errorCode: DatabaseErrorCodes.AlreadyExists);
 				}
 
-				return idRow.Value;
+				return id;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}

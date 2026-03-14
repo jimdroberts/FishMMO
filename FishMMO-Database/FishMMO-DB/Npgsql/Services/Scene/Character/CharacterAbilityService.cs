@@ -112,18 +112,18 @@ namespace FishMMO.Database.Npgsql.Services
 					)
 					SELECT COALESCE((SELECT id FROM upserted LIMIT 1), 0)::bigint AS value";
 
-				var idRow = await dbContext.Set<SqlLongValue>()
-					.FromSqlRaw(sql, abilityData.CharacterID, abilityData.TemplateID, abilityData.Version, abilityEvents, abilityData.Cooldown, now)
-					.AsNoTracking()
-					.SingleAsync(cancellationToken)
-					.ConfigureAwait(false);
+				var id = await ExecuteScalarLongAsync(
+					dbContext,
+					sql,
+					new object[] { abilityData.CharacterID, abilityData.TemplateID, abilityData.Version, abilityEvents, abilityData.Cooldown, now },
+					cancellationToken).ConfigureAwait(false);
 
-				if (idRow.Value <= 0)
+				if (id <= 0)
 				{
 					throw new StaleStateException("Ability persist rejected due to a stale Version.");
 				}
 
-				return idRow.Value;
+				return id;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}
