@@ -185,27 +185,27 @@ SrpService.ClientEncryptEphemeral(
 
 ## Operational Checks
 Use this checklist when validating a deployment or integration:
-- Handshake checks:
+### Handshake checks:
 - Verify cookie challenge enabled and validated with rollover support.
 - Ensure per-IP and global handshake throttling exists in transport layer.
 - Confirm negotiated protocol version falls within supported range.
 - Verify key confirmation MACs are validated before accepting encrypted auth traffic.
 
-- Sequence/nonce checks:
+### Sequence/nonce checks:
 - Reject duplicated or out-of-order sequences (`TryConsumeReceiveSequence`).
 - Tear down connections on SRP sequence atomicity failures during multi-field decrypt.
 
-- Token checks:
+### Token checks:
 - Use `TryDecryptAndPartialParse` before DB key lookup.
 - Always run `VerifyToken`, including dummy-key timing path when key missing.
 - Enforce expiration and revocation checks before marking authenticated.
 
-- Secret hygiene checks:
+### Secret hygiene checks:
 - Zero raw tokens and temporary sensitive byte buffers after use.
 - Clear per-connection SRP state after successful SRP auth.
 - Rotate signing and cookie keys according to your security policy.
 
-- 2FA checks:
+### 2FA checks:
 - Track and enforce anti-replay window (`lastWindow`) for TOTP validation.
 - Store only encrypted TOTP secrets and hashed recovery codes.
 
