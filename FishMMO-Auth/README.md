@@ -35,39 +35,39 @@ A transport-agnostic .NET authentication library for FishMMO that provides secur
 - Unity integration is supported through the post-build copy target that places `FishMMO-Auth.dll` into `FishMMO-Unity/Assets/Dependencies`.
 
 ## Features / Capabilities / Security Features
-# Handshake and session establishment:
+### Handshake and session establishment:
 - Stateless HMAC cookie challenge with rollover validation (`ComputeHandshakeCookie`, `VerifyHandshakeCookieWithRollover`).
 - IP normalization for consistent identity/rate-limit binding (`NormalizeIp`).
 - X25519 ECDH ephemeral key agreement for forward secrecy.
 - Protocol version negotiation and transcript binding with crypto-suite binding.
 - Bidirectional key confirmation MAC verification.
 
-# SRP authentication:
+### SRP authentication:
 - SRP-6a client/server support (`ClientSrpData`, `ServerSrpData`).
 - Encrypted SRP verify/proof payload support with strict sequence ordering.
 - Fake SRP data support to reduce account-enumeration signal.
 - Deterministic per-username fake salt derivation (HMAC-SHA512).
 
-# Token auth:
+### Token auth:
 - Signed auth token generation and verification (HMAC-SHA256 envelope).
 - Token hash generation for revocation indexing.
 - Decrypt + partial parse + full verify pipeline with timing-equalization path for missing signing keys.
 - Access level and expiration checks built into verify flow.
 
-# 2FA and account verification:
+### 2FA and account verification:
 - TOTP secret generation, encryption/decryption, URI generation, and code validation helpers.
 - Recovery code generation, hashing, and verification helpers.
 - Encrypted 2FA setup payload handling.
 - Encrypted account verification payload handling.
 
-# Defensive cryptography and state handling:
+### Defensive cryptography and state handling:
 - AES-GCM with AAD bound to message type/version/sequence.
 - Strict UTF-8 decoding for decrypted payload validation.
 - Constant-time comparisons for MAC/token checks.
 - Sequence and nonce contexts to detect out-of-order/duplicate messages.
 - Sensitive `byte[]` cleanup with `CryptographicOperations.ZeroMemory` where possible.
 
-## Prerequisites
+### Prerequisites
 - .NET SDK that supports `netstandard2.1` builds (recommended: .NET 8 SDK installed locally).
 - NuGet package restore access.
 - Referenced sibling project available at:
