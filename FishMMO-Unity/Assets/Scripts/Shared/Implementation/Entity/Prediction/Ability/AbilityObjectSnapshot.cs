@@ -12,6 +12,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	public sealed class AbilityObjectSnapshot
 	{
+		private static readonly IReadOnlyDictionary<int, AbilityOnTickEvent> emptyOnTickEvents = new Dictionary<int, AbilityOnTickEvent>(0);
+		private static readonly IReadOnlyDictionary<int, AbilityOnHitEvent> emptyOnHitEvents = new Dictionary<int, AbilityOnHitEvent>(0);
+		private static readonly IReadOnlyDictionary<int, AbilityOnDestroyEvent> emptyOnDestroyEvents = new Dictionary<int, AbilityOnDestroyEvent>(0);
+
 		/// <summary>
 		/// Speed of the ability, used for movement actions.
 		/// </summary>
@@ -66,10 +70,26 @@ namespace FishMMO.Shared
 			// Copy each dictionary structure so the snapshot is isolated from live mutations.
 			// The dictionary keys/values (ScriptableObject event template references) are shared,
 			// not deep-copied — they are immutable and safe to share.
-			OnTickEvents = new Dictionary<int, AbilityOnTickEvent>(ability.OnTickEvents);
-			OnHitEvents = new Dictionary<int, AbilityOnHitEvent>(ability.OnHitEvents);
-			OnDestroyEvents = new Dictionary<int, AbilityOnDestroyEvent>(ability.OnDestroyEvents);
+			OnTickEvents = CopyOrEmpty(ability.OnTickEvents, emptyOnTickEvents);
+			OnHitEvents = CopyOrEmpty(ability.OnHitEvents, emptyOnHitEvents);
+			OnDestroyEvents = CopyOrEmpty(ability.OnDestroyEvents, emptyOnDestroyEvents);
 			TargetTrigger = ability.Template?.TargetTrigger;
+		}
+
+		/// <summary>
+		/// Copies a source event map into an isolated dictionary, or returns a shared
+		/// empty instance when the source is null or empty.
+		/// </summary>
+		private static IReadOnlyDictionary<int, TEvent> CopyOrEmpty<TEvent>(
+			IReadOnlyDictionary<int, TEvent> source,
+			IReadOnlyDictionary<int, TEvent> empty)
+		{
+			if (source == null || source.Count == 0)
+			{
+				return empty;
+			}
+
+			return new Dictionary<int, TEvent>(source);
 		}
 
 	}

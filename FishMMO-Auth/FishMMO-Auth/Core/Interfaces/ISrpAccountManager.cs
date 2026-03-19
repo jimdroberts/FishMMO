@@ -1,7 +1,6 @@
 using System;
-using FishMMO.Shared;
 
-namespace FishMMO.Server.Core.Account
+namespace FishMMO.Auth.Core
 {
 	/// <summary>
 	/// Extended account manager interface for SRP-based authentication on the LoginServer.
@@ -42,7 +41,7 @@ namespace FishMMO.Server.Core.Account
 
 		/// <summary>
 		/// Clears SRP state for a connection while preserving account mappings and access level.
-		/// Calls <see cref="ServerSrpData.Clear"/> to null sensitive string references,
+		/// Calls ServerSrpData.Clear to null sensitive string references,
 		/// then nulls the SrpData reference itself.
 		/// Use this after SRP success to remove sensitive SRP material from memory.
 		/// </summary>

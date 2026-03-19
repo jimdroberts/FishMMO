@@ -9,6 +9,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.WorldServer;
 using FishMMO.Shared;
+using FishMMO.Auth.Core;
 using FishMMO.Logging;
 using UnityEngine;
 

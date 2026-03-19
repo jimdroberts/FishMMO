@@ -533,6 +533,8 @@ namespace FishMMO.Shared
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
 			//Log.Debug($"Reconciled: {rd.GetTick()}");
+			long previousAbilityID = currentAbilityID;
+			bool denied = rd.UnpackFlags.IsFlagged(AbilityActivationFlags.Denied);
 
 			// Detect prediction mismatch: if the server's seed differs from the client's,
 			// the client mispredicted an ability activation. Destroy any ability objects
@@ -542,21 +544,18 @@ namespace FishMMO.Shared
 				uint reconcileTick = rd.GetTick();
 				OnPredictionMismatch?.Invoke(reconcileTick);
 
-				// Authoritative denial: the server sets the Denied flag when
-				// TryStartAbility/TryStartConsumable fails with a queued ability.
-				// This replaces the old heuristic (currentAbilityID != NO_ABILITY &&
-				// rd.AbilityID == NO_ABILITY) which false-fired on zero-duration
-				// abilities that completed within a single tick before the reconcile
-				// snapshot was captured.
-				if (rd.UnpackFlags.IsFlagged(AbilityActivationFlags.Denied))
-				{
-					OnAbilityDenied?.Invoke(currentAbilityID);
-				}
-
 				foreach (Ability ability in KnownAbilities.Values)
 				{
 					ability.DestroyAbilityObjectsAfterTick(reconcileTick);
 				}
+			}
+
+			// The denial flag is authoritative and independent from RNG state.
+			// A rejected activation can occur before any seed advance, so tying
+			// this callback to seed mismatch drops legitimate denial corrections.
+			if (denied && previousAbilityID != NO_ABILITY)
+			{
+				OnAbilityDenied?.Invoke(previousAbilityID);
 			}
 
 			currentAbilityID = rd.AbilityID;
@@ -583,6 +582,7 @@ namespace FishMMO.Shared
 			// localInputFlags is NOT touched — any input queued since the last tick
 			// (e.g. Release() or Interrupt()) is preserved.
 			replicatedFlags = rd.UnpackFlags;
+			replicatedFlags.DisableBit(AbilityActivationFlags.Denied);
 
 			// Restore consumable slot lock state from server.
 			// Unlock the old predicted slot (may differ from server) and lock the authoritative one.

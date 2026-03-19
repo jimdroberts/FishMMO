@@ -1,5 +1,5 @@
-using FishNet.Serializing;
 using UnityEngine;
+using FishNet.Serializing;
 
 namespace FishMMO.Shared
 {

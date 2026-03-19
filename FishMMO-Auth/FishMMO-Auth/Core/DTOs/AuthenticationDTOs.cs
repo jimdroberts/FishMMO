@@ -1,12 +1,15 @@
-using FishNet.Broadcast;
-using FishMMO.Auth.Core;
-
-namespace FishMMO.Shared
+namespace FishMMO.Auth.Core
 {
 	/// <summary>
-	/// Broadcast sent by the client to create a new account, containing SRP username, salt, and verifier.
+	/// Transport-agnostic DTOs mirroring the FishNet authentication broadcast structs.
+	/// These contain no engine or networking framework dependencies.
 	/// </summary>
-	public struct CreateAccountBroadcast : IBroadcast
+	/// 
+	/// <summary>
+	/// DTO for account creation, containing SRP username, salt, and verifier.
+	/// Mirrors <c>CreateAccountBroadcast</c>.
+	/// </summary>
+	public struct CreateAccountDto
 	{
 		/// <summary>SRP username as a byte array.</summary>
 		public byte[] Username;
@@ -18,170 +21,142 @@ namespace FishMMO.Shared
 		public byte[] Salt;
 		/// <summary>SRP verifier for password authentication.</summary>
 		public byte[] Verifier;
-
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the client to initiate a handshake, containing the ephemeral
+	/// DTO for client handshake initiation, containing the ephemeral
 	/// X25519 public key for ECDH key agreement and supported protocol version range.
+	/// Mirrors <c>ClientHandshake</c>.
 	/// </summary>
-	public struct ClientHandshake : IBroadcast
+	public struct ClientHandshakeDto
 	{
 		/// <summary>Client's ephemeral X25519 public key (32 bytes).</summary>
 		public byte[] PublicKey;
-
-		/// <summary>
-		/// Stateless cookie echoed from a prior <see cref="ServerHandshake"/> challenge.
-		/// Null on the initial handshake; set when retrying after a cookie challenge.
-		/// </summary>
+		/// <summary>Stateless cookie echoed from a prior server challenge. Null on initial handshake.</summary>
 		public byte[] Cookie;
-
-		/// <summary>
-		/// Minimum protocol version supported by this client.
-		/// </summary>
+		/// <summary>Minimum protocol version supported by this client.</summary>
 		public ushort MinVersion;
-
-		/// <summary>
-		/// Maximum protocol version supported by this client.
-		/// </summary>
+		/// <summary>Maximum protocol version supported by this client.</summary>
 		public ushort MaxVersion;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the server to complete the handshake, containing the server's
+	/// DTO for server handshake response, containing the server's
 	/// X25519 public key for ECDH key agreement and the negotiated protocol version.
+	/// Mirrors <c>ServerHandshake</c>.
 	/// </summary>
-	public struct ServerHandshake : IBroadcast
+	public struct ServerHandshakeDto
 	{
-		/// <summary>
-		/// Server's ephemeral X25519 public key (32 bytes).
-		/// Null when this message is a cookie challenge (proof-of-reachability).
-		/// </summary>
+		/// <summary>Server's ephemeral X25519 public key (32 bytes). Null when this is a cookie challenge.</summary>
 		public byte[] PublicKey;
-
-		/// <summary>
-		/// Stateless HMAC challenge cookie. The client must echo this in a subsequent
-		/// <see cref="ClientHandshake"/> to prove it can receive replies from the server.
-		/// Null when this message contains the final handshake response.
-		/// </summary>
+		/// <summary>Stateless HMAC challenge cookie. Null when this is the final handshake response.</summary>
 		public byte[] Cookie;
-
-		/// <summary>
-		/// Negotiated protocol version agreed during handshake.
-		/// Both sides use this version in AAD and HKDF labels for all subsequent messages.
-		/// </summary>
+		/// <summary>Negotiated protocol version agreed during handshake.</summary>
 		public ushort AgreedVersion;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the client to verify SRP authentication, containing salt and public ephemeral value.
+	/// DTO for SRP verify step, containing salt/identifier and public ephemeral value.
+	/// Mirrors <c>SrpVerifyBroadcast</c>.
 	/// </summary>
-	public struct SrpVerifyBroadcast : IBroadcast
+	public struct SrpVerifyDto
 	{
 		/// <summary>SRP salt value (or encrypted username/email on client->server).</summary>
 		public byte[] S;
 		/// <summary>SRP public ephemeral value.</summary>
 		public byte[] PublicEphemeral;
-
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the client to prove SRP authentication, containing the proof value.
+	/// DTO for SRP proof step, containing the proof value.
+	/// Mirrors <c>SrpProofBroadcast</c>.
 	/// </summary>
-	public struct SrpProofBroadcast : IBroadcast
+	public struct SrpProofDto
 	{
 		/// <summary>SRP proof value for authentication.</summary>
 		public byte[] Proof;
-
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the server to indicate successful SRP authentication, containing proof and result.
+	/// DTO for successful SRP authentication, containing proof and result.
+	/// Mirrors <c>SrpSuccessBroadcast</c>.
 	/// </summary>
-	public struct SrpSuccessBroadcast : IBroadcast
+	public struct SrpSuccessDto
 	{
 		/// <summary>SRP proof value for successful authentication.</summary>
 		public byte[] Proof;
 		/// <summary>Result of client authentication.</summary>
 		public ClientAuthenticationResult Result;
-
 		/// <summary>Explicit message sequence number (server->client).</summary>
 		public uint Seq;
-
-		/// <summary>Encrypted signed auth token for World/Scene server authentication. Null if token issuance is not enabled.</summary>
+		/// <summary>Encrypted signed auth token for World/Scene server authentication. Null if not enabled.</summary>
 		public byte[] Token;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the server to communicate the result of client authentication.
+	/// DTO for communicating the result of client authentication.
+	/// Mirrors <c>ClientAuthResultBroadcast</c>.
 	/// </summary>
-	public struct ClientAuthResultBroadcast : IBroadcast
+	public struct ClientAuthResultDto
 	{
 		/// <summary>Result of client authentication.</summary>
 		public ClientAuthenticationResult Result;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the client to authenticate with a World or Scene server using
-	/// a signed token issued by the LoginServer after SRP success.
+	/// DTO for token-based authentication with a World or Scene server.
+	/// Mirrors <c>TokenAuthBroadcast</c>.
 	/// </summary>
-	public struct TokenAuthBroadcast : IBroadcast
+	public struct TokenAuthDto
 	{
 		/// <summary>AES-GCM encrypted signed auth token.</summary>
 		public byte[] Token;
-
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the client to verify an account using a verification code
-	/// received after account creation.
+	/// DTO for account verification using a verification code.
+	/// Mirrors <c>AccountVerifyBroadcast</c>.
 	/// </summary>
-	public struct AccountVerifyBroadcast : IBroadcast
+	public struct AccountVerifyDto
 	{
 		/// <summary>Encrypted account username (AES-GCM).</summary>
 		public byte[] Username;
 		/// <summary>Encrypted verification code as UTF-8 string bytes (AES-GCM).</summary>
 		public byte[] VerifyCode;
-
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the server after account creation containing encrypted TOTP
-	/// setup data (otpauth URI and recovery codes) for two-factor authentication.
+	/// DTO for two-factor setup data sent after account creation.
+	/// Mirrors <c>TwoFactorSetupBroadcast</c>.
 	/// </summary>
-	public struct TwoFactorSetupBroadcast : IBroadcast
+	public struct TwoFactorSetupDto
 	{
 		/// <summary>Encrypted otpauth:// URI for authenticator app setup (AES-GCM, server->client).</summary>
 		public byte[] OtpauthUri;
 		/// <summary>Encrypted newline-delimited plaintext recovery codes (AES-GCM, server->client).</summary>
 		public byte[] RecoveryCodes;
-
-		/// <summary>
-		/// Explicit message sequence number (server->client).
-		/// The server derives: otpauthUri_seq = Seq - 1, recoveryCodes_seq = Seq.
-		/// </summary>
+		/// <summary>Explicit message sequence number (server->client). Server derives: otpauthUri_seq = Seq - 1, recoveryCodes_seq = Seq.</summary>
 		public uint Seq;
 	}
 
 	/// <summary>
-	/// Broadcast sent by the client to submit a TOTP code during login when
-	/// two-factor authentication is required.
+	/// DTO for submitting a TOTP code during login when two-factor authentication is required.
+	/// Mirrors <c>TwoFactorVerifyBroadcast</c>.
 	/// </summary>
-	public struct TwoFactorVerifyBroadcast : IBroadcast
+	public struct TwoFactorVerifyDto
 	{
 		/// <summary>Encrypted 6-digit TOTP code as UTF-8 string bytes (AES-GCM).</summary>
 		public byte[] Code;
-
 		/// <summary>Explicit message sequence number (client->server).</summary>
 		public uint Seq;
 	}

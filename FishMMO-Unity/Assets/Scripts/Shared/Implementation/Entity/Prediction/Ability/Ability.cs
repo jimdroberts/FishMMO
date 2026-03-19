@@ -641,6 +641,7 @@ namespace FishMMO.Shared
 			// Create a single phantom caster to replace the live caster reference in all detached objects,
 			// preserving identity and attribute data for stat-scaled calculations while gracefully degrading other behaviour lookups.
 			SnapshotCharacter phantomCaster = null;
+			AbilityObjectSnapshot sharedSnapshot = null;
 
 			foreach (Dictionary<int, AbilityObject> container in Objects.Values)
 			{
@@ -658,10 +659,10 @@ namespace FishMMO.Shared
 						// and attribute data for stat-scaled calculations.
 						obj.Caster = phantomCaster;
 
-						// Lazily create the snapshot before nulling the Ability reference.
-						// The object uses the snapshot as a fallback for event dispatch,
-						// lifetime checks, and collision handling after detach.
-						obj.Snapshot ??= new AbilityObjectSnapshot(this);
+						// All detached objects from the same ability share the same immutable
+						// ability data, so create one snapshot and reuse it across the detach pass.
+						sharedSnapshot ??= new AbilityObjectSnapshot(this);
+						obj.Snapshot ??= sharedSnapshot;
 						obj.Ability = null;
 					}
 				}

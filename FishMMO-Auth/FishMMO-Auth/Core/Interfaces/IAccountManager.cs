@@ -1,6 +1,7 @@
 using System;
+using FishMMO.Auth.Implementation;
 
-namespace FishMMO.Server.Core.Account
+namespace FishMMO.Auth.Core
 {
 	/// <summary>
 	/// Base interface for managing account and connection data shared by all server types.

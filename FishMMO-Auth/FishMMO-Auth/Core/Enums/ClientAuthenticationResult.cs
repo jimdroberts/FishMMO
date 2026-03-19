@@ -1,4 +1,4 @@
-﻿namespace FishMMO.Shared
+namespace FishMMO.Auth.Core
 {
 	/// <summary>
 	/// Enum representing possible outcomes of client authentication attempts.

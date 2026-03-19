@@ -1,3 +1,4 @@
+using System;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
@@ -14,7 +15,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class CharacterPredictionController : NetworkBehaviour
 	{
-		private IPredictableController[] controllers;
+		private IPredictableController[] controllers = Array.Empty<IPredictableController>();
 
 		private void Awake()
 		{
@@ -36,12 +37,12 @@ namespace FishMMO.Shared
 
 		public override void OnStopNetwork()
 		{
-			base.OnStopNetwork();
-
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
+
+			base.OnStopNetwork();
 		}
 
 		private void TimeManager_OnTick()

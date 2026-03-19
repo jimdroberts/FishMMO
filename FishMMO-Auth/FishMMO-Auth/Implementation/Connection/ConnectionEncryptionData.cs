@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
-using FishMMO.Shared;
 
-namespace FishMMO.Server.Core.Account
+namespace FishMMO.Auth.Implementation
 {
 	/// <summary>
 	/// Holds per-connection encryption state including directional AES keys, nonce contexts,

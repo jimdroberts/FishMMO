@@ -14,7 +14,7 @@ using FishMMO.Database;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Shared;
-using FishMMO.Server.Core.Account;
+using FishMMO.Auth.Core;
 using FishNet.Connection;
 
 namespace FishMMO.Server.Implementation

@@ -1,4 +1,4 @@
-﻿namespace FishMMO.Server.Core.Account
+namespace FishMMO.Auth.Core
 {
 	/// <summary>
 	/// Unified authentication state for all server types.
@@ -31,19 +31,16 @@
 
 		/// <summary>
 		/// SRP verify request enqueued for async worker processing.
-		/// Replaces the former <c>verifyInFlightByClientId</c> dictionary.
 		/// </summary>
 		VerifyPending = 2,
 
 		/// <summary>
 		/// SRP verify completed, SRP data established. Waiting for client proof.
-		/// Replaces the former <c>SrpState.SrpVerify</c> "ready for proof" semantics.
 		/// </summary>
 		WaitingForProof = 3,
 
 		/// <summary>
 		/// SRP proof request enqueued for async worker processing.
-		/// Replaces the former <c>proofInFlightByClientId</c> dictionary.
 		/// </summary>
 		ProofPending = 4,
 
@@ -54,7 +51,6 @@
 
 		/// <summary>
 		/// Token auth request enqueued for async worker processing.
-		/// Replaces the former <c>tokenInFlightByClientId</c> dictionary.
 		/// </summary>
 		TokenPending = 6,
 

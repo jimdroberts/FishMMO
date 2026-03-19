@@ -2,9 +2,8 @@ using FishNet.Connection;
 using System;
 using System.Security.Cryptography;
 using SecureRemotePassword;
-using FishMMO.Server.Core.Account;
-using FishMMO.Server.Core.Account.SRP;
-using FishMMO.Shared;
+using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 
 namespace FishMMO.Server.Implementation
 {

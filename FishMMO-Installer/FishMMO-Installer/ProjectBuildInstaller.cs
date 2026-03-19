@@ -66,16 +66,38 @@ namespace FishMMO.Installer
 				return;
 			}
 
-			await Log.Info("FishMMOInstaller", "Starting parallel build for all discovered projects...");
+			await Log.Info("FishMMOInstaller", "Starting staged build: synchronous for prioritized projects, parallel for remaining projects...");
 
-			List<Task<ProjectBuildResult>> buildTasks = projectPaths
-				.Select(BuildProjectAsync)
-				.ToList();
+			var buildResults = new List<ProjectBuildResult>(projectPaths.Count);
+			int firstAsyncIndex = projectPaths.FindIndex(path => GetProjectBuildPriority(path) >= 6);
 
-			ProjectBuildResult[] buildResults = await Task.WhenAll(buildTasks);
+			int synchronousBuildCount = firstAsyncIndex == -1 ? projectPaths.Count : firstAsyncIndex;
+			for (int i = 0; i < synchronousBuildCount; i++)
+			{
+				string projectPath = projectPaths[i];
+				await Log.Info("FishMMOInstaller", $"[{i + 1}/{projectPaths.Count}] Building synchronously (priority < 6): {projectPath}");
+				buildResults.Add(await BuildProjectAsync(projectPath));
+			}
+
+			if (synchronousBuildCount < projectPaths.Count)
+			{
+				int asyncBuildCount = projectPaths.Count - synchronousBuildCount;
+				await Log.Info("FishMMOInstaller", $"Starting parallel build for {asyncBuildCount} remaining project(s) (priority >= 6)...");
+
+				List<Task<ProjectBuildResult>> asyncBuildTasks = projectPaths
+					.Skip(synchronousBuildCount)
+					.Select((projectPath, asyncIndex) => BuildProjectWithPhaseLoggingAsync(
+						projectPath,
+						synchronousBuildCount + asyncIndex + 1,
+						projectPaths.Count))
+					.ToList();
+
+				ProjectBuildResult[] asyncBuildResults = await Task.WhenAll(asyncBuildTasks);
+				buildResults.AddRange(asyncBuildResults);
+			}
 
 			int successCount = buildResults.Count(result => result.succeeded);
-			int failureCount = buildResults.Length - successCount;
+			int failureCount = buildResults.Count - successCount;
 			List<ProjectBuildResult> failedResults = buildResults
 				.Where(result => !result.succeeded)
 				.ToList();
@@ -161,6 +183,15 @@ namespace FishMMO.Installer
 				});
 
 			return result;
+		}
+
+		/// <summary>
+		/// Builds one project while emitting phase-specific progress logging.
+		/// </summary>
+		private static async Task<ProjectBuildResult> BuildProjectWithPhaseLoggingAsync(string projectPath, int buildIndex, int totalBuildCount)
+		{
+			await Log.Info("FishMMOInstaller", $"[{buildIndex}/{totalBuildCount}] Building in parallel bucket (priority >= 6): {projectPath}");
+			return await BuildProjectAsync(projectPath);
 		}
 
 		/// <summary>
@@ -332,8 +363,66 @@ namespace FishMMO.Installer
 				}
 			}
 
-			projectPaths.Sort(StringComparer.OrdinalIgnoreCase);
+			projectPaths.Sort((left, right) =>
+			{
+				int leftPriority = GetProjectBuildPriority(left);
+				int rightPriority = GetProjectBuildPriority(right);
+				int priorityComparison = leftPriority.CompareTo(rightPriority);
+				if (priorityComparison != 0)
+				{
+					return priorityComparison;
+				}
+
+				return StringComparer.OrdinalIgnoreCase.Compare(left, right);
+			});
 			return projectPaths;
+		}
+
+		/// <summary>
+		/// Assigns a priority bucket to each project so dependency projects build first.
+		/// Lower numbers are built earlier.
+		/// </summary>
+		/// <param name="projectPath">Absolute path to a project file.</param>
+		/// <returns>Priority bucket for build ordering.</returns>
+		private static int GetProjectBuildPriority(string projectPath)
+		{
+			string normalizedPath = projectPath.Replace('\\', '/').ToLowerInvariant();
+			string projectName = Path.GetFileNameWithoutExtension(projectPath).ToLowerInvariant();
+
+			if (projectName.Contains("fishmmo-dependencies") || normalizedPath.Contains("fishmmo-dependencies"))
+			{
+				return 0;
+			}
+
+			if (projectName.Contains("fishmmo-logger") || normalizedPath.Contains("fishmmo-logger"))
+			{
+				return 1;
+			}
+
+			if (projectName.Contains("fishmmo-database")
+				|| projectName.Contains("fishmmo-db")
+				|| normalizedPath.Contains("fishmmo-database")
+				|| normalizedPath.Contains("fishmmo-db"))
+			{
+				return 2;
+			}
+
+			if (projectName.Contains("fishmmo-sharedutility") || normalizedPath.Contains("fishmmo-sharedutility"))
+			{
+				return 3;
+			}
+
+			if (projectName.Contains("fishmmo-auth") || normalizedPath.Contains("fishmmo-auth"))
+			{
+				return 4;
+			}
+
+			if (projectName.Contains("fishmmo-cms") || normalizedPath.Contains("fishmmo-cms"))
+			{
+				return 5;
+			}
+
+			return 6;
 		}
 
 		/// <summary>

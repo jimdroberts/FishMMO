@@ -1,7 +1,8 @@
 using FishNet.Connection;
 using System;
 using System.Collections.Generic;
-using FishMMO.Server.Core.Account;
+using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 using FishMMO.Server.Core.Collections;
 
 namespace FishMMO.Server.Implementation

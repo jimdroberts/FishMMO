@@ -1,6 +1,6 @@
 using System.Threading;
 using FishMMO.Server.Core;
-using FishMMO.Server.Core.Account;
+using FishMMO.Auth.Implementation;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.LoginServer;
 

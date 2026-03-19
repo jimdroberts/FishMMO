@@ -4,14 +4,12 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
-using System.Net;
-using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Server.Core;
-using FishMMO.Server.Core.Account;
+using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -141,34 +139,8 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private const int HandshakeRateLimitSweepMaxRemovals = 2048;
 
-		/// <summary>
-		/// Time bucket width in seconds for stateless handshake cookies.
-		/// Cookies are valid for the current bucket and the immediately preceding one,
-		/// giving a maximum validity window of 2× this value.
-		/// </summary>
-		private const int CookieTimeBucketSeconds = 30;
-
-		/// <summary>
-		/// Maximum X25519 handshakes completed globally per second.
-		/// Bounds total ECDH CPU regardless of IP diversity (botnet defence).
-		/// The cookie challenge filters spoofed IPs before this counter is checked.
-		/// </summary>
-		/// <remarks>
-		/// The counter reset and increment are not fully atomic across the window boundary,
-		/// so up to ~2× this value may be admitted in a brief burst when the window rolls over.
-		/// This is acceptable for a soft DoS defence — the cookie challenge is the primary gate.
-		/// </remarks>
 		private const int MaxGlobalHandshakesPerSecond = 500;
 
-		/// <summary>
-		/// Domain separator prepended to cookie HMAC input to prevent cross-purpose
-		/// key reuse if the same HMAC key were accidentally shared with another subsystem.
-		/// </summary>
-		private static readonly byte[] CookieDomainSeparator = Encoding.ASCII.GetBytes("fishmmo-cookie-v1:");
-
-		/// <summary>
-		/// Cancellation token source for signalling graceful shutdown of all async workers.
-		/// </summary>
 		protected CancellationTokenSource workerCts;
 
 		/// <summary>
@@ -524,8 +496,8 @@ namespace FishMMO.Server.Implementation
 			// Only one HMAC computation runs — no X25519, no state allocation.
 			if (msg.Cookie == null)
 			{
-				string challengeIp = NormalizeIp(conn.GetAddress());
-				byte[] cookie = ComputeHandshakeCookie(challengeIp, msg.PublicKey, GetTimeBucket(), hmacKeySnapshot);
+				string challengeIp = HandshakeService.NormalizeIp(conn.GetAddress());
+				byte[] cookie = HandshakeService.ComputeHandshakeCookie(challengeIp, msg.PublicKey, HandshakeService.GetTimeBucket(), hmacKeySnapshot);
 				NetworkManager.ServerManager.Broadcast(conn, new ServerHandshake()
 				{
 					PublicKey = null,
@@ -537,15 +509,11 @@ namespace FishMMO.Server.Implementation
 			// ── Phase 2: Cookie verification ────────────────────────────────
 			// Client echoed a cookie. Verify against the current and immediately
 			// preceding time bucket to tolerate bucket-boundary crossings.
-			string remoteIp = NormalizeIp(conn.GetAddress());
+			string remoteIp = HandshakeService.NormalizeIp(conn.GetAddress());
+			if (!HandshakeService.VerifyHandshakeCookieWithRollover(msg.Cookie, remoteIp, msg.PublicKey, hmacKeySnapshot))
 			{
-				uint currentBucket = GetTimeBucket();
-				if (!VerifyHandshakeCookie(msg.Cookie, remoteIp, msg.PublicKey, currentBucket, hmacKeySnapshot) &&
-					!VerifyHandshakeCookie(msg.Cookie, remoteIp, msg.PublicKey, currentBucket - 1, hmacKeySnapshot))
-				{
-					conn.Disconnect(true);
-					return;
-				}
+				conn.Disconnect(true);
+				return;
 			}
 
 			// ── Per-IP rate limit ───────────────────────────────────────────
@@ -596,14 +564,9 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			// ── X25519 ECDH key agreement ───────────────────────────────────
-			// Negotiate protocol version from client's advertised range.
-			ushort agreedVersion;
-			try
-			{
-				agreedVersion = CryptoHelper.NegotiateProtocolVersion(msg.MinVersion, msg.MaxVersion);
-			}
-			catch (CryptographicException)
+			// ── X25519 ECDH key agreement via HandshakeService ────────────
+			var kaResult = HandshakeService.ServerPerformKeyAgreement(msg.PublicKey, msg.MinVersion, msg.MaxVersion);
+			if (!kaResult.Success)
 			{
 				Interlocked.Decrement(ref globalHandshakeCount);
 				conn.Disconnect(true);
@@ -615,8 +578,6 @@ namespace FishMMO.Server.Implementation
 			// we silently drop — the first packet's ECDH result wins.
 			if (!Server.AccountManager.TryAddConnectionEncryptionData(conn, msg.PublicKey))
 			{
-				// Clean up TTL tracking entries added by TrackAuthStart; otherwise the
-				// stale entry consumes a MaxPendingAuthConnections slot until the sweep.
 				ClearTransientAuthState(conn.ClientId);
 				Interlocked.Decrement(ref globalHandshakeCount);
 				return;
@@ -624,170 +585,20 @@ namespace FishMMO.Server.Implementation
 
 			if (Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
-				encryptionData.AgreedVersion = agreedVersion;
+				encryptionData.AgreedVersion = kaResult.AgreedVersion;
+				encryptionData.PromoteToDirectional(kaResult.SessionKeys);
 
-				try
+				NetworkManager.ServerManager.Broadcast(conn, new ServerHandshake()
 				{
-					// Generate ephemeral server X25519 keypair — private key is never exposed.
-					using var serverKeyPair = new CryptoHelper.X25519EphemeralKeyPair();
-
-					// Compute transcript hash with domain separation and version binding
-					// to prevent cross-protocol replay and version downgrade attacks.
-					// Layout: SHA256(domain || clientPub || serverPub || clientMin(2B) || clientMax(2B) || agreed(2B))
-					byte[] transcriptHash;
-					using (var sha = SHA256.Create())
-					{
-						sha.TransformBlock(CryptoHelper.HandshakeDomainSeparator, 0, CryptoHelper.HandshakeDomainSeparator.Length, null, 0);
-						sha.TransformBlock(msg.PublicKey, 0, msg.PublicKey.Length, null, 0);
-						sha.TransformBlock(serverKeyPair.PublicKey, 0, serverKeyPair.PublicKey.Length, null, 0);
-						// Bind the client's advertised version range and the negotiated version
-						// so that any MITM modification causes a transcript mismatch → key mismatch.
-						byte[] versionBytes = new byte[6];
-						versionBytes[0] = (byte)(msg.MinVersion >> 8);
-						versionBytes[1] = (byte)msg.MinVersion;
-						versionBytes[2] = (byte)(msg.MaxVersion >> 8);
-						versionBytes[3] = (byte)msg.MaxVersion;
-						versionBytes[4] = (byte)(agreedVersion >> 8);
-						versionBytes[5] = (byte)agreedVersion;
-						sha.TransformFinalBlock(versionBytes, 0, versionBytes.Length);
-						transcriptHash = sha.Hash;
-					}
-
-					// Derive shared secret via X25519 ECDH + HKDF.
-					// DeriveSharedSecret auto-zeros the private key after use (single-use).
-					byte[] sharedSecret = serverKeyPair.DeriveSharedSecret(msg.PublicKey, transcriptHash);
-
-					// Derive directional session keys from shared secret + transcript hash.
-					// DeriveSessionKeys zeroes masterSecret (sharedSecret) internally.
-					var sessionKeys = CryptoHelper.DeriveSessionKeys(sharedSecret, transcriptHash);
-					// sharedSecret already zeroed by DeriveSessionKeys.
-
-					// Zero transcript hash — no longer needed for key derivation.
-					CryptographicOperations.ZeroMemory(transcriptHash);
-
-					encryptionData.PromoteToDirectional(sessionKeys);
-
-					// serverKeyPair.PublicKey is broadcast to the client — it is public, not secret.
-					NetworkManager.ServerManager.Broadcast(conn, new ServerHandshake()
-					{
-						PublicKey = serverKeyPair.PublicKey,
-						AgreedVersion = agreedVersion,
-					}, false, Channel.Reliable);
-				}
-				catch (Exception ex)
-				{
-					Log.Warning(LogPrefix, $"X25519 handshake failed: {ex.Message}");
-					Server.AccountManager.RemoveConnectionAccount(conn);
-					conn.Disconnect(true);
-				}
+					PublicKey = kaResult.ServerPublicKey,
+					AgreedVersion = kaResult.AgreedVersion,
+				}, false, Channel.Reliable);
 			}
 			else
 			{
 				Log.Warning(LogPrefix, "Failed to create encryption data for connection.");
 				conn.Disconnect(true);
 			}
-		}
-
-		/// <summary>
-		/// Returns the current UTC time bucket index used for cookie expiration.
-		/// </summary>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private static uint GetTimeBucket()
-		{
-			return (uint)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() / CookieTimeBucketSeconds);
-		}
-
-		/// <summary>
-		/// Computes a stateless HMAC-SHA256 handshake cookie binding the client's IP,
-		/// public key, and time bucket. The server stores no state — validity is
-		/// re-derived on echo.
-		/// </summary>
-		/// <remarks>
-		/// <para><b>Input structure:</b> The HMAC input is [domain‖timeBucket(4B)‖ipBytes‖publicKey].
-		/// No explicit length delimiter separates IP from public key; this is safe because
-		/// the public key is fixed at <see cref="CryptoHelper.X25519PublicKeyLength"/> bytes
-		/// (validated before reaching this method) and the domain separator + time bucket
-		/// are fixed-width, so the boundary between IP and key is unambiguous.</para>
-		/// <para><b>Replay:</b> Cookies are not single-use — a valid cookie may be replayed
-		/// within its validity window (up to 2× <see cref="CookieTimeBucketSeconds"/>).
-		/// Replay only permits re-attempting the ECDH handshake, which is still gated by
-		/// per-IP and global rate limits. This is the standard SYN-cookie trade-off:
-		/// statelessness in exchange for bounded replay.</para>
-		/// </remarks>
-		private byte[] ComputeHandshakeCookie(string remoteIp, byte[] clientPublicKey, uint timeBucket, byte[] hmacKey)
-		{
-			byte[] ipBytes = string.IsNullOrEmpty(remoteIp) ? Array.Empty<byte>() : Encoding.ASCII.GetBytes(remoteIp);
-			// +2 for IP length prefix to eliminate concatenation ambiguity between
-			// variable-length IP strings (7–45 chars) and the fixed-width public key.
-			int dataLen = CookieDomainSeparator.Length + 4 + 2 + ipBytes.Length + clientPublicKey.Length;
-			byte[] data = new byte[dataLen];
-			int offset = 0;
-
-			// Domain separator prevents cross-purpose key reuse.
-			Buffer.BlockCopy(CookieDomainSeparator, 0, data, offset, CookieDomainSeparator.Length);
-			offset += CookieDomainSeparator.Length;
-
-			// Time bucket (4 bytes big-endian)
-			data[offset++] = (byte)(timeBucket >> 24);
-			data[offset++] = (byte)(timeBucket >> 16);
-			data[offset++] = (byte)(timeBucket >> 8);
-			data[offset++] = (byte)timeBucket;
-
-			// IP length prefix (2 bytes big-endian) disambiguates the boundary
-			// between the variable-length IP and the fixed-width public key.
-			data[offset++] = (byte)(ipBytes.Length >> 8);
-			data[offset++] = (byte)ipBytes.Length;
-
-			Buffer.BlockCopy(ipBytes, 0, data, offset, ipBytes.Length);
-			offset += ipBytes.Length;
-			Buffer.BlockCopy(clientPublicKey, 0, data, offset, clientPublicKey.Length);
-
-			byte[] cookie;
-			using (var hmac = new HMACSHA256(hmacKey))
-			{
-				cookie = hmac.ComputeHash(data);
-			}
-			CryptographicOperations.ZeroMemory(data);
-			return cookie;
-		}
-
-		/// <summary>
-		/// Verifies a handshake cookie against a specific time bucket in constant time.
-		/// </summary>
-		/// <remarks>
-		/// <para><b>Two-bucket check:</b> The caller checks current and previous buckets via
-		/// short-circuit <c>&amp;&amp;</c>. If the current-bucket check succeeds, the previous-bucket
-		/// check is skipped, leaking approximately which 30-second bucket issued the cookie.
-		/// This is acceptable because the time bucket is not secret — it is derivable from
-		/// public wall-clock time.</para>
-		/// </remarks>
-		private bool VerifyHandshakeCookie(byte[] cookie, string remoteIp, byte[] clientPublicKey, uint timeBucket, byte[] hmacKey)
-		{
-			if (cookie == null || cookie.Length != CryptoHelper.HmacTagLength)
-				return false;
-			byte[] expected = ComputeHandshakeCookie(remoteIp, clientPublicKey, timeBucket, hmacKey);
-			bool valid = CryptoHelper.FixedTimeEquals(cookie, expected);
-			CryptographicOperations.ZeroMemory(expected);
-			return valid;
-		}
-
-		/// <summary>
-		/// Normalises a raw IP address string to its canonical form via <see cref="IPAddress"/>.
-		/// IPv4-mapped IPv6 addresses (e.g., <c>::ffff:192.168.1.1</c>) are collapsed to plain IPv4
-		/// so that both representations share a single rate-limit and cookie identity.
-		/// Returns an empty string for null/unparseable input to prevent malformed IP strings
-		/// from bypassing rate-limit and cookie identity checks.
-		/// </summary>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected static string NormalizeIp(string rawIp)
-		{
-			if (string.IsNullOrEmpty(rawIp))
-				return string.Empty;
-			if (!IPAddress.TryParse(rawIp, out IPAddress parsed))
-				return string.Empty;
-			if (parsed.IsIPv4MappedToIPv6)
-				parsed = parsed.MapToIPv4();
-			return parsed.ToString();
 		}
 
 		#endregion

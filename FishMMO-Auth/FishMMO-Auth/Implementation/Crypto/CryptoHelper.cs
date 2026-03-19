@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,8 +10,9 @@ using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Security;
+using FishMMO.Auth.Core;
 
-namespace FishMMO.Shared
+namespace FishMMO.Auth.Implementation
 {
 	/// <summary>
 	/// Static class providing cryptographic helper methods for X25519 ECDH key agreement,
@@ -613,11 +613,6 @@ namespace FishMMO.Shared
 			}
 
 			/// <summary>
-			/// Atomically validates and consumes an expected receive sequence number.
-			/// Returns <c>true</c> and advances the counter if <paramref name="seq"/> is exactly
-			/// one greater than the current counter. Returns <c>false</c> for duplicates or gaps.
-			/// </summary>
-			/// <summary>
 			/// Maximum CAS retry iterations before giving up. Bounds the spin loop to
 			/// prevent pathological spinning under extreme contention (e.g., many threads
 			/// racing on the same context). 16 iterations is generous — under normal
@@ -625,6 +620,22 @@ namespace FishMMO.Shared
 			/// </summary>
 			private const int MaxCasRetries = 16;
 
+			/// <summary>
+			/// Atomically validates and consumes an expected receive sequence number.
+			/// Returns <c>true</c> and advances the counter if <paramref name="seq"/> is exactly
+			/// one greater than the current counter. Returns <c>false</c> for duplicates or gaps.
+			/// </summary>
+			/// <remarks>
+			/// <para><b>Threading model:</b> This method is designed for a <b>single-producer</b>
+			/// receive path — typically one thread processing inbound messages per connection.
+			/// The CAS loop exists as a safety net, not as a concurrency strategy. If multiple
+			/// threads call this concurrently on the same context, the strict in-order requirement
+			/// (seq == current + 1) means at most one can succeed per round — the others will
+			/// return <c>false</c> or retry. Under genuine multi-producer contention, legitimate
+			/// messages may be spuriously rejected after <see cref="MaxCasRetries"/> iterations.</para>
+			/// <para>If concurrent receive processing is needed, serialise calls to this method
+			/// behind a lock or channel, or use a single-threaded receive loop.</para>
+			/// </remarks>
 			/// <param name="seq">The expected incoming sequence number.</param>
 			/// <returns><c>true</c> if consumed; <c>false</c> otherwise.</returns>
 			public bool TryConsumeSequence(uint seq)
@@ -646,9 +657,6 @@ namespace FishMMO.Shared
 							return true;
 						// CAS failed — another thread advanced the counter concurrently. Retry.
 						// Under normal single-producer usage this should never happen.
-						// NOTE: Debug.Assert is a no-op in Release/IL2CPP builds.
-						// Use UnityEngine.Debug.LogWarning so contention is observable in production.
-						UnityEngine.Debug.LogWarning($"[GcmNonceContext] TryConsumeSequence CAS retry at attempt {attempt} — unexpected contention.");
 					}
 					else
 					{
@@ -936,11 +944,11 @@ namespace FishMMO.Shared
 			if (expiresUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("expiresUtc must be UTC.", nameof(expiresUtc));
 			if (hmacKey == null || hmacKey.Length != HmacKeyLength) throw new ArgumentException($"hmacKey must be {HmacKeyLength} bytes.", nameof(hmacKey));
 
-			double lifetimeMinutes = (expiresUtc - DateTime.UtcNow).TotalMinutes;
-			if (lifetimeMinutes <= 0)
+			TimeSpan lifetime = expiresUtc - DateTime.UtcNow;
+			if (lifetime <= TimeSpan.Zero)
 				throw new ArgumentOutOfRangeException(nameof(expiresUtc), "Token has already expired.");
-			if (lifetimeMinutes > MaxTokenLifetimeMinutes)
-				throw new ArgumentOutOfRangeException(nameof(expiresUtc), $"Token lifetime ({lifetimeMinutes:F0} min) exceeds maximum ({MaxTokenLifetimeMinutes} min).");
+			if (lifetime > TimeSpan.FromMinutes(MaxTokenLifetimeMinutes))
+				throw new ArgumentOutOfRangeException(nameof(expiresUtc), $"Token lifetime ({lifetime.TotalMinutes:F0} min) exceeds maximum ({MaxTokenLifetimeMinutes} min).");
 
 			byte[] nameBytes = Encoding.UTF8.GetBytes(accountName);
 			if (nameBytes.Length > ushort.MaxValue)
@@ -1363,8 +1371,11 @@ namespace FishMMO.Shared
 			/// <paramref name="plaintextSecret"/> into an internal managed array that cannot
 			/// be zeroed without reflection. The <c>Totp</c> object becomes GC-eligible once
 			/// this method returns, and the caller is expected to zero <paramref name="plaintextSecret"/>
-			/// in its <c>finally</c> block (after any DB persistence calls complete). Pinning and manual zeroing of the OtpNet internal field is not
-			/// worthwhile given the narrow time window and the already-encrypted-at-rest storage.</para>
+			/// in its <c>finally</c> block (after any DB persistence calls complete). Pinning and
+			/// manual zeroing of the OtpNet internal field is not worthwhile given the narrow time
+			/// window and the already-encrypted-at-rest storage.</para>
+			/// <para><b>TODO:</b> If a future OtpNet release exposes <c>IDisposable</c> or a zeroing
+			/// API on <c>Totp</c>, adopt it here to eliminate the residual heap copy.</para>
 			/// </remarks>
 			public static (bool Valid, long WindowUsed) VerifyTotpCode(byte[] plaintextSecret, string submittedCode, long lastWindow)
 			{

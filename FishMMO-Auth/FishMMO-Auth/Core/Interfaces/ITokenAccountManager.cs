@@ -1,6 +1,4 @@
-using FishMMO.Shared;
-
-namespace FishMMO.Server.Core.Account
+namespace FishMMO.Auth.Core
 {
 	/// <summary>
 	/// Extended account manager interface for token-based authentication on World and Scene servers.

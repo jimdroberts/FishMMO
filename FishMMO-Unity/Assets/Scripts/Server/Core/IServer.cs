@@ -1,5 +1,5 @@
 using FishMMO.Database;
-using FishMMO.Server.Core.Account;
+using FishMMO.Auth.Core;
 
 namespace FishMMO.Server.Core
 {

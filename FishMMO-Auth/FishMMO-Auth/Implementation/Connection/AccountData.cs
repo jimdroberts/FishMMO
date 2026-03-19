@@ -1,7 +1,6 @@
-using FishMMO.Shared;
-using FishMMO.Server.Core.Account.SRP;
+using FishMMO.Auth.Core;
 
-namespace FishMMO.Server.Core.Account
+namespace FishMMO.Auth.Implementation
 {
 	/// <summary>
 	/// Holds account-related data for a server session, including authentication state,

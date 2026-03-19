@@ -548,12 +548,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnStopNetwork()
 		{
-			base.OnStopNetwork();
-
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
+
+			base.OnStopNetwork();
 		}
 #endif
 
@@ -570,7 +570,7 @@ namespace FishMMO.Shared
 			if (base.TimeManager != null)
 			{
 				double td = base.TimeManager.TickDelta;
-				regenTickInterval = td > 0.0 ? (uint)Mathf.RoundToInt((float)(regenTickRate / td)) : 1u;
+				regenTickInterval = td > 0.0 ? (uint)Mathf.Max(1, Mathf.CeilToInt((float)(regenTickRate / td))) : 1u;
 
 #if UNITY_SERVER
 				base.TimeManager.OnTick += TimeManager_OnTick;
@@ -944,11 +944,22 @@ namespace FishMMO.Shared
 		/// <param name="resourceState">The resource state snapshot to apply.</param>
 		public void ApplyResourceState(CharacterAttributeResourceState resourceState)
 		{
+			if (HealthResourceTemplate == null || ManaResourceTemplate == null || StaminaResourceTemplate == null)
+			{
+				return;
+			}
+
 			if (resourceAttributes.TryGetValue(HealthResourceTemplate.ID, out CharacterResourceAttribute health) &&
 				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute mana) &&
 				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))
 			{
 				regenTickAccum = resourceState.RegenTickAccum;
+				float previousHealth = health.CurrentValue;
+				int previousMaxHealth = health.FinalValue;
+				float previousMana = mana.CurrentValue;
+				int previousMaxMana = mana.FinalValue;
+				float previousStamina = stamina.CurrentValue;
+				int previousMaxStamina = stamina.FinalValue;
 
 				// Batch all notifications so listeners see fully-settled values.
 				BeginPropagation();
@@ -965,10 +976,24 @@ namespace FishMMO.Shared
 				PropagateToParents(mana);
 				PropagateToParents(stamina);
 
-				health.SetCurrentValue(resourceState.Health);
-				// Skipping internal UI update here fixes an issue with Replicate/Reconcile fighting over UI updates.
+				// Apply all current values without immediate callbacks so reconcile does not
+				// spam intermediate UI updates. Notifications are re-enqueued once below.
+				health.SetCurrentValue(resourceState.Health, false);
 				mana.SetCurrentValue(resourceState.Mana, false);
-				stamina.SetCurrentValue(resourceState.Stamina);
+				stamina.SetCurrentValue(resourceState.Stamina, false);
+
+				if (previousMaxHealth != health.FinalValue || previousHealth != health.CurrentValue)
+				{
+					EnqueueNotification(health);
+				}
+				if (previousMaxMana != mana.FinalValue || previousMana != mana.CurrentValue)
+				{
+					EnqueueNotification(mana);
+				}
+				if (previousMaxStamina != stamina.FinalValue || previousStamina != stamina.CurrentValue)
+				{
+					EnqueueNotification(stamina);
+				}
 
 				EndPropagation();
 			}
@@ -994,6 +1019,11 @@ namespace FishMMO.Shared
 		/// <returns>A snapshot containing the current health, mana, stamina, and regeneration delta.</returns>
 		public CharacterAttributeResourceState GetResourceState()
 		{
+			if (HealthResourceTemplate == null || ManaResourceTemplate == null || StaminaResourceTemplate == null)
+			{
+				return default;
+			}
+
 			if (resourceAttributes.TryGetValue(HealthResourceTemplate.ID, out CharacterResourceAttribute health) &&
 				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute mana) &&
 				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))

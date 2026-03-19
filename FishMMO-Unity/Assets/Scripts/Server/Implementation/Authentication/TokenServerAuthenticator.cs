@@ -8,7 +8,8 @@ using System;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using FishMMO.Server.Core.Account;
+using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
 
@@ -229,49 +230,19 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Processes a single token auth request asynchronously.
-		/// Decrypts token, verifies HMAC, checks expiration/revocation, and finalizes authentication.
+		/// Delegates crypto to <see cref="TokenService"/>, handles DB lookups, revocation, and finalization.
 		/// </summary>
 		private async Task ProcessTokenAuthAsync(TokenAuthRequest request)
 		{
 			NetworkConnection conn = request.Connection;
-			int clientId = conn.ClientId;
 			byte[] rawToken = null;
 
 			try
 			{
-				// Validate and consume explicit client→server sequence
-				if (request.Seq == 0 || !request.EncryptionData.TryConsumeReceiveSequence(request.Seq))
+				// Decrypt and partially parse token to extract loginServerId for signing key lookup.
+				if (!TokenService.TryDecryptAndPartialParse(request.EncryptedToken, request.EncryptionData, request.Seq, out rawToken, out long loginServerId))
 				{
-					await Log.Warning(LogPrefix, "Token auth sequence invalid or duplicate.");
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-
-				// Decrypt the token on the worker thread
-				try
-				{
-					byte[] nonce = request.EncryptionData.BuildReceiveNonce(request.Seq);
-					byte[] aad = new byte[CryptoHelper.AadLength];
-					CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.TokenAuth, request.EncryptionData.AgreedVersion, request.Seq);
-					rawToken = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce, request.EncryptedToken, aad);
-				}
-				catch (CryptographicException)
-				{
-					await Log.Warning(LogPrefix, "AES decryption failed for token auth.");
-					rawToken = null;
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-
-				// Validate minimum token structure length.
-				// MinSignedTokenLength (69 bytes) guarantees at least 1 byte of account name
-				// plus all fixed fields. The subsequent nameLen extraction (rawToken[2..3])
-				// relies on rawToken having at least 4 bytes, which is always true since
-				// MinSignedTokenLength > 4.
-				if (rawToken.Length < CryptoHelper.MinSignedTokenLength)
-				{
-					await Log.Warning(LogPrefix, "Token too short.");
-					CryptographicOperations.ZeroMemory(rawToken);
+					await Log.Warning(LogPrefix, "Token decryption or parse failed.");
 					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
@@ -286,37 +257,18 @@ namespace FishMMO.Server.Implementation
 					return;
 				}
 
-				// Extract loginServerId from token payload (partial parse to look up signing key).
-				// Token format: [1B version][1B tokenType][2B nameLen BE][name][1B accessLevel][8B serverId]...
-				int nameLen = (rawToken[2] << 8) | rawToken[3];
-				if (nameLen <= 0 || 4 + nameLen + 1 + 8 + 8 + 16 + CryptoHelper.HmacTagLength > rawToken.Length)
-				{
-					CryptographicOperations.ZeroMemory(rawToken);
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-
-				int serverIdOffset = 4 + nameLen + 1;
-				long loginServerId = 0;
-				for (int i = 0; i < 8; i++)
-					loginServerId = (loginServerId << 8) | rawToken[serverIdOffset + i];
-
 				// Fetch the HMAC signing key for the issuing LoginServer
 				DatabaseResult<LoginServerSigningKeyData> keyResult = await signingKeyService.FetchByLoginServerIdAsync(loginServerId);
-
-				// Refresh TTL after potentially slow database fetch.
 				RefreshAuthTtl(conn);
 
-				// Equalize timing between "key not found" and "HMAC invalid" paths
+				// Equalize timing: use a random dummy key if signing key not found
 				// to prevent loginServerId enumeration via response-time oracle.
 				byte[] hmacKey;
 				bool keyFound;
 				if (!keyResult.IsSuccess || keyResult.Data.HmacKey == null || keyResult.Data.HmacKey.Length < CryptoHelper.HmacKeyLength)
 				{
-					// Use a throw-away random key so TryParseAndVerifyAuthToken still runs,
-					// equalizing CPU cost with the success path.
 					hmacKey = new byte[CryptoHelper.HmacKeyLength];
-					using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+					using (var rng = RandomNumberGenerator.Create())
 						rng.GetBytes(hmacKey);
 					keyFound = false;
 
@@ -327,48 +279,28 @@ namespace FishMMO.Server.Implementation
 				}
 				else
 				{
-					// Copy to a local buffer so ZeroMemory does not corrupt the DB result
-					// if the service layer caches LoginServerSigningKeyData objects.
 					hmacKey = new byte[keyResult.Data.HmacKey.Length];
 					Buffer.BlockCopy(keyResult.Data.HmacKey, 0, hmacKey, 0, keyResult.Data.HmacKey.Length);
 					keyFound = true;
 				}
 
-				// Verify HMAC and parse token fields
-				bool hmacValid = CryptoHelper.TryParseAndVerifyAuthToken(rawToken, hmacKey, out string accountName, out long parsedServerId, out AccessLevel parsedAccessLevel, out DateTime expiresUtc);
+				// Verify HMAC, cross-check loginServerId, and check expiration via TokenService.
+				var verifyResult = TokenService.VerifyToken(rawToken, hmacKey, keyFound, loginServerId);
 				CryptographicOperations.ZeroMemory(hmacKey);
-
-				if (!keyFound || !hmacValid)
-				{
-					CryptographicOperations.ZeroMemory(rawToken);
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-
-				// Cross-check: parsedServerId inside HMAC envelope must match the
-				// pre-HMAC partial parse to detect token tampering.
-				if (parsedServerId != loginServerId)
-				{
-					CryptographicOperations.ZeroMemory(rawToken);
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-
-				// Check expiration
-				if (DateTime.UtcNow >= expiresUtc)
-				{
-					CryptographicOperations.ZeroMemory(rawToken);
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenExpired);
-					return;
-				}
-
-				// Check revocation via token hash
-				string tokenHash = CryptoHelper.HashTokenHex(rawToken);
 				CryptographicOperations.ZeroMemory(rawToken);
+				rawToken = null;
 
-				DatabaseResult<AuthTokenData> tokenResult = await authTokenService.FetchByHashAsync(tokenHash);
+				if (!verifyResult.IsValid)
+				{
+					if (verifyResult.SigningKeyFound && verifyResult.ExpiresUtc != default && DateTime.UtcNow >= verifyResult.ExpiresUtc)
+						RejectAndPurge(conn, ClientAuthenticationResult.TokenExpired);
+					else
+						RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
+					return;
+				}
 
-				// Refresh TTL after potentially slow revocation lookup.
+				// Check revocation via token hash (computed by VerifyToken on success).
+				DatabaseResult<AuthTokenData> tokenResult = await authTokenService.FetchByHashAsync(verifyResult.TokenHash);
 				RefreshAuthTtl(conn);
 
 				if (!tokenResult.IsSuccess)
@@ -383,37 +315,25 @@ namespace FishMMO.Server.Implementation
 					return;
 				}
 
-				// accountName and parsedAccessLevel are extracted from the HMAC-verified token payload.
-				// Canonicalization (e.g., case normalization) must match the LoginServer's
-				// token issuance to ensure consistent identity across server types.
+				// Register account from HMAC-verified token payload.
 				try
 				{
-					tokenAccountManager.AddConnectionAccount(conn, accountName, parsedAccessLevel);
+					tokenAccountManager.AddConnectionAccount(conn, verifyResult.AccountName, verifyResult.AccessLevel);
 				}
 				catch (InvalidOperationException addEx)
 				{
-					// AddConnectionAccount throws when no AccountData was pre-initialised during
-					// handshake. rawToken is already zeroed at this point, so skip ZeroMemory.
 					await Log.Error(LogPrefix, $"AddConnectionAccount failed: {addEx.Message}");
 					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
 				// Attempt login (virtual — overridden by WorldServer/SceneServer)
-				ClientAuthenticationResult result = await TryLoginAsync(ClientAuthenticationResult.LoginSuccess, accountName);
+				ClientAuthenticationResult result = await TryLoginAsync(ClientAuthenticationResult.LoginSuccess, verifyResult.AccountName);
 
-				// Inclusion list: LoginSuccess, WorldLoginSuccess, and SceneLoginSuccess
-				// are authenticated. All other result codes (including future additions)
-				// default to unauthenticated.
 				bool authenticated = result == ClientAuthenticationResult.LoginSuccess ||
 									 result == ClientAuthenticationResult.WorldLoginSuccess ||
 									 result == ClientAuthenticationResult.SceneLoginSuccess;
-				// Marshal final broadcast + authentication events to main thread.
-				// TTL-SWEEP WINDOW: Between EnqueueMainThread and main-thread drain, the
-				// connection sits in AuthState.TokenPending. If the stale-auth sweep fires
-				// in that gap it could purge a legitimately authenticated connection.
-				// Under normal load the window is one frame; under queue backlog it grows.
-				// Mitigated by OnAuthentication clearing TTL tracking inside the lambda.
+
 				EnqueueMainThread(() =>
 				{
 					if (conn.IsActive)
@@ -424,15 +344,11 @@ namespace FishMMO.Server.Implementation
 						}, false, Channel.Reliable);
 					}
 
-					/* Invoke result. This is handled internally to complete the connection authentication or kick client.
-					 * It's important to call this after sending the broadcast so that the broadcast
-					 * makes it out to the client before the kick. */
 					OnAuthentication(conn, authenticated);
 					InvokeClientAuthenticationResult(conn, authenticated);
 
 					if (authenticated)
 					{
-						// Advance to terminal Authenticated state.
 						Server.AccountManager.TryAdvanceAuthState(conn, AuthState.TokenPending, AuthState.Authenticated);
 					}
 					else
@@ -445,9 +361,6 @@ namespace FishMMO.Server.Implementation
 			{
 				if (rawToken != null) CryptographicOperations.ZeroMemory(rawToken);
 				await Log.Error(LogPrefix, $"Error during token auth: {ex}");
-				// NOTE: This catch block intentionally does NOT use RejectAndPurge because
-				// it needs to log the error before purging, and the error path here predates
-				// the normal result broadcast. The effect is identical: Disconnect + Purge.
 				EnqueueMainThread(() =>
 				{
 					if (conn.IsActive) conn.Disconnect(false);

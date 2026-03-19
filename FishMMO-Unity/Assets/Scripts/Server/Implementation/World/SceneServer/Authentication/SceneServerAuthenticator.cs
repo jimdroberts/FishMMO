@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using FishMMO.Auth.Core;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation.World.SceneServer

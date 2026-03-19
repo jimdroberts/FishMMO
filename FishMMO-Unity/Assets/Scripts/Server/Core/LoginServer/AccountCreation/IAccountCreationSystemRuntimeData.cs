@@ -1,4 +1,4 @@
-using FishMMO.Server.Core.Account;
+using FishMMO.Auth.Implementation;
 using FishMMO.Server.Core.Collections;
 
 namespace FishMMO.Server.Core.LoginServer

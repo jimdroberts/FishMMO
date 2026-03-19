@@ -4,9 +4,10 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Security.Cryptography;
-using System.Text;
 using SecureRemotePassword;
 using FishMMO.Shared;
+using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 using FishMMO.Logging;
 using System.Runtime.CompilerServices;
 
@@ -285,48 +286,27 @@ namespace FishMMO.Client
 
 			try
 			{
-				// Compute transcript hash with domain separation and version binding, matching server order:
-				// SHA256(domain || clientPub || serverPub || clientMin(2B) || clientMax(2B) || agreed(2B))
-				byte[] transcriptHash;
-				using (var sha = SHA256.Create())
-				{
-					sha.TransformBlock(CryptoHelper.HandshakeDomainSeparator, 0, CryptoHelper.HandshakeDomainSeparator.Length, null, 0);
-					sha.TransformBlock(ephemeralKeyPair.PublicKey, 0, ephemeralKeyPair.PublicKey.Length, null, 0);
-					sha.TransformBlock(msg.PublicKey, 0, msg.PublicKey.Length, null, 0);
-					// Bind version negotiation into the transcript to match the server's computation.
-					byte[] versionBytes = new byte[6];
-					versionBytes[0] = (byte)(CryptoHelper.MinSupportedProtocolVersion >> 8);
-					versionBytes[1] = (byte)CryptoHelper.MinSupportedProtocolVersion;
-					versionBytes[2] = (byte)(CryptoHelper.MaxSupportedProtocolVersion >> 8);
-					versionBytes[3] = (byte)CryptoHelper.MaxSupportedProtocolVersion;
-					versionBytes[4] = (byte)(agreedVersion >> 8);
-					versionBytes[5] = (byte)agreedVersion;
-					sha.TransformFinalBlock(versionBytes, 0, versionBytes.Length);
-					transcriptHash = sha.Hash;
-				}
+				var kaResult = HandshakeService.ClientPerformKeyAgreement(
+					msg.PublicKey, ephemeralKeyPair,
+					CryptoHelper.MinSupportedProtocolVersion, CryptoHelper.MaxSupportedProtocolVersion,
+					agreedVersion);
 
-				// Derive shared secret via X25519 ECDH + HKDF.
-				// DeriveSharedSecret auto-zeros the private key after use (single-use).
-				byte[] sharedSecret = ephemeralKeyPair.DeriveSharedSecret(msg.PublicKey, transcriptHash);
 				ephemeralKeyPair.Dispose();
 				ephemeralKeyPair = null;
 
-				// Derive directional session keys from shared secret + transcript hash.
-				// DeriveSessionKeys zeroes masterSecret (sharedSecret) internally.
-				var sessionKeys = CryptoHelper.DeriveSessionKeys(sharedSecret, transcriptHash);
-				clientToServerKey = sessionKeys.ClientToServerKey;
-				serverToClientKey = sessionKeys.ServerToClientKey;
+				if (!kaResult.Success)
+				{
+					Log.Warning("ClientLoginAuthenticator", "X25519 handshake key agreement failed.");
+					ClearKeyMaterial();
+					Client.ForceDisconnect();
+					return;
+				}
 
-				// Create nonce contexts that own copies of the session prefixes.
-				// Client send = client→server direction
-				// Client receive = server→client direction
-				sendNonceCtx = new CryptoHelper.GcmNonceContext(sessionKeys.ClientPrefix, CryptoHelper.NonceSide.ClientToServer);
-				receiveNonceCtx = new CryptoHelper.GcmNonceContext(sessionKeys.ServerPrefix, CryptoHelper.NonceSide.ServerToClient);
+				clientToServerKey = kaResult.SessionKeys.ClientToServerKey;
+				serverToClientKey = kaResult.SessionKeys.ServerToClientKey;
 
-				// sharedSecret already zeroed by DeriveSessionKeys.
-
-				// Zero transcript hash — no longer needed for key derivation.
-				CryptographicOperations.ZeroMemory(transcriptHash);
+				sendNonceCtx = new CryptoHelper.GcmNonceContext(kaResult.SessionKeys.ClientPrefix, CryptoHelper.NonceSide.ClientToServer);
+				receiveNonceCtx = new CryptoHelper.GcmNonceContext(kaResult.SessionKeys.ServerPrefix, CryptoHelper.NonceSide.ServerToClient);
 			}
 			catch (CryptographicException ex)
 			{
@@ -349,9 +329,7 @@ namespace FishMMO.Client
 			{
 				try
 				{
-					var (nonce, seq) = sendNonceCtx.NextNonce();
-					byte[] aad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TokenAuth, agreedVersion, seq);
-					byte[] encryptedToken = CryptoHelper.EncryptAES(clientToServerKey, nonce, storedAuthToken, aad);
+					TokenService.ClientEncryptToken(storedAuthToken, clientToServerKey, sendNonceCtx, agreedVersion, out byte[] encryptedToken, out uint seq);
 
 					Client.Broadcast(new TokenAuthBroadcast()
 					{
@@ -395,20 +373,11 @@ namespace FishMMO.Client
 			}
 
 			// Encrypt the username before sending using an explicit sequence number.
-			byte[] usernameBytes = Encoding.UTF8.GetBytes(this.username);
 			byte[] encryptedUsername;
+			uint usernameSeq;
 			try
 			{
-				var (nonce, seq) = sendNonceCtx.NextNonce();
-				// Registration encrypts username with CreateAccount AAD (server-side expectation).
-				// Login encrypts with SrpVerify AAD to match ServerAuthenticator's decrypt.
-				var aadType = register
-					? CryptoHelper.AuthMessageType.CreateAccount
-					: CryptoHelper.AuthMessageType.SrpVerify;
-				byte[] aad = CryptoHelper.BuildAad((byte)aadType, agreedVersion, seq);
-				encryptedUsername = CryptoHelper.EncryptAES(clientToServerKey, nonce, usernameBytes, aad);
-				// include Seq in broadcast
-				// Note: CreateAccount/SrpVerify will get Seq set below when broadcasting
+				SrpService.ClientEncryptUsername(this.username, clientToServerKey, sendNonceCtx, agreedVersion, register, out encryptedUsername, out usernameSeq);
 			}
 			catch (CryptographicException ex)
 			{
@@ -416,10 +385,6 @@ namespace FishMMO.Client
 				ClearKeyMaterial();
 				Client.ForceDisconnect();
 				return;
-			}
-			finally
-			{
-				CryptographicOperations.ZeroMemory(usernameBytes);
 			}
 
 			// Register a new account
@@ -434,61 +399,25 @@ namespace FishMMO.Client
 				// .NET string/SRP library constraint; the byte[] intermediates are zeroed below.
 				SrpData.GetSaltAndVerifier(username, password, out string salt, out string verifier);
 
-				// Encrypt email and age before sending
-				byte[] emailBytes = Encoding.UTF8.GetBytes(this.email ?? "");
-				byte[] ageBytes = Encoding.UTF8.GetBytes(this.age.ToString());
 				byte[] encryptedEmail;
 				byte[] encryptedAge;
-				try
-				{
-					var (nonceE, seqE) = sendNonceCtx.NextNonce();
-					byte[] aadE = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, seqE);
-					encryptedEmail = CryptoHelper.EncryptAES(clientToServerKey, nonceE, emailBytes, aadE);
-
-					var (nonceA, seqA) = sendNonceCtx.NextNonce();
-					byte[] aadA = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, seqA);
-					encryptedAge = CryptoHelper.EncryptAES(clientToServerKey, nonceA, ageBytes, aadA);
-				}
-				catch (CryptographicException ex)
-				{
-					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for email/age: {ex.Message}");
-					ClearKeyMaterial();
-					Client.ForceDisconnect();
-					CryptographicOperations.ZeroMemory(emailBytes);
-					CryptographicOperations.ZeroMemory(ageBytes);
-					return;
-				}
-				CryptographicOperations.ZeroMemory(emailBytes);
-				CryptographicOperations.ZeroMemory(ageBytes);
-
-				// Encrypt the salt and verifier before sending
-				byte[] saltBytes = Encoding.UTF8.GetBytes(salt);
-				byte[] verifierBytes = Encoding.UTF8.GetBytes(verifier);
 				byte[] encryptedSalt;
 				byte[] encryptedVerifier;
-				uint createAccountSeq = 0;
+				uint createAccountSeq;
 				try
 				{
-					var (nonce1, seq1) = sendNonceCtx.NextNonce();
-					byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, seq1);
-					encryptedSalt = CryptoHelper.EncryptAES(clientToServerKey, nonce1, saltBytes, aad1);
-
-					var (nonce2, seq2) = sendNonceCtx.NextNonce();
-					createAccountSeq = seq2;
-					byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.CreateAccount, agreedVersion, createAccountSeq);
-					encryptedVerifier = CryptoHelper.EncryptAES(clientToServerKey, nonce2, verifierBytes, aad2);
+					SrpService.ClientEncryptRegistrationFields(
+						this.email, this.age, salt, verifier,
+						clientToServerKey, sendNonceCtx, agreedVersion,
+						out encryptedEmail, out encryptedAge, out encryptedSalt, out encryptedVerifier, out createAccountSeq);
 				}
 				catch (CryptographicException ex)
 				{
-					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for salt/verifier: {ex.Message}");
+					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for registration fields: {ex.Message}");
 					ClearKeyMaterial();
 					Client.ForceDisconnect();
-					CryptographicOperations.ZeroMemory(saltBytes);
-					CryptographicOperations.ZeroMemory(verifierBytes);
 					return;
 				}
-				CryptographicOperations.ZeroMemory(saltBytes);
-				CryptographicOperations.ZeroMemory(verifierBytes);
 
 				// PROTOCOL NOTE — CreateAccountBroadcast implicit sequence encoding:
 				// Seq is the verifier’s sequence. The server derives:
@@ -509,25 +438,19 @@ namespace FishMMO.Client
 			// Try to login
 			else
 			{
-				byte[] clientEphemeralBytes = Encoding.UTF8.GetBytes(SrpData.ClientEphemeral.Public);
 				byte[] encryptedClientEphemeral;
-				uint seqClientEphemeral = 0;
+				uint seqClientEphemeral;
 				try
 				{
-					var (nonce, seq) = sendNonceCtx.NextNonce();
-					seqClientEphemeral = seq;
-					byte[] aadEphemeral = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerify, agreedVersion, seqClientEphemeral);
-					encryptedClientEphemeral = CryptoHelper.EncryptAES(clientToServerKey, nonce, clientEphemeralBytes, aadEphemeral);
+					SrpService.ClientEncryptEphemeral(SrpData.ClientEphemeral.Public, clientToServerKey, sendNonceCtx, agreedVersion, out encryptedClientEphemeral, out seqClientEphemeral);
 				}
 				catch (CryptographicException ex)
 				{
 					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for client ephemeral: {ex.Message}");
 					ClearKeyMaterial();
 					Client.ForceDisconnect();
-					CryptographicOperations.ZeroMemory(clientEphemeralBytes);
 					return;
 				}
-				CryptographicOperations.ZeroMemory(clientEphemeralBytes);
 
 				// PROTOCOL NOTE — SrpVerifyBroadcast implicit sequence encoding:
 				// Seq is the ephemeral's sequence. The server derives:
@@ -568,68 +491,26 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] decryptedSalt = null;
-			byte[] decryptedRawPublicEphemeral = null;
+			string salt;
+			string publicServerEphemeral;
 			try
 			{
-				var (nonce1, rseq) = receiveNonceCtx.NextNonce();
-				if (msg.S == null || msg.S.Length > CryptoHelper.MaxSrpPayloadBytes)
+				if (msg.S == null || msg.S.Length > CryptoHelper.MaxSrpPayloadBytes ||
+					msg.PublicEphemeral == null || msg.PublicEphemeral.Length > CryptoHelper.MaxSrpPayloadBytes)
 				{
 					ClearKeyMaterial();
 					Client.ForceDisconnect();
 					return;
 				}
-				byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, agreedVersion, rseq);
-				decryptedSalt = CryptoHelper.DecryptAES(serverToClientKey, nonce1, msg.S, aad1);
-
-				var (nonce2, rseq2) = receiveNonceCtx.NextNonce();
-				if (msg.PublicEphemeral == null || msg.PublicEphemeral.Length > CryptoHelper.MaxSrpPayloadBytes)
-				{
-					ClearKeyMaterial();
-					Client.ForceDisconnect();
-					return;
-				}
-				byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, agreedVersion, rseq2);
-				decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(serverToClientKey, nonce2, msg.PublicEphemeral, aad2);
+				SrpService.ClientDecryptVerifyResponse(msg.S, msg.PublicEphemeral, serverToClientKey, receiveNonceCtx, agreedVersion, out salt, out publicServerEphemeral);
 			}
 			catch (CryptographicException)
 			{
 				Log.Warning("ClientLoginAuthenticator", "AES decryption/authentication failed for SRP verify.");
 				ClearKeyMaterial();
-				if (decryptedSalt != null) CryptographicOperations.ZeroMemory(decryptedSalt);
-				if (decryptedRawPublicEphemeral != null) CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
 				Client.ForceDisconnect();
 				return;
 			}
-
-			if (decryptedSalt == null || decryptedSalt.Length == 0 || decryptedSalt.Length > CryptoHelper.MaxSrpPayloadBytes ||
-				decryptedRawPublicEphemeral == null || decryptedRawPublicEphemeral.Length == 0 || decryptedRawPublicEphemeral.Length > CryptoHelper.MaxSrpPayloadBytes)
-			{
-				CryptographicOperations.ZeroMemory(decryptedSalt);
-				CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
-				ClearKeyMaterial();
-				Client.ForceDisconnect();
-				return;
-			}
-
-			string salt;
-			string publicServerEphemeral;
-			try
-			{
-				salt = CryptoHelper.StrictUtf8.GetString(decryptedSalt);
-				publicServerEphemeral = CryptoHelper.StrictUtf8.GetString(decryptedRawPublicEphemeral);
-			}
-			catch (DecoderFallbackException)
-			{
-				Log.Warning("ClientLoginAuthenticator", "Malformed UTF-8 in SRP verify response.");
-				CryptographicOperations.ZeroMemory(decryptedSalt);
-				CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
-				ClearKeyMaterial();
-				Client.ForceDisconnect();
-				return;
-			}
-			CryptographicOperations.ZeroMemory(decryptedSalt);
-			CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
 
 			if (SrpData.GetProof(this.username, this.password, salt, publicServerEphemeral, out string proof))
 			{
@@ -639,24 +520,18 @@ namespace FishMMO.Client
 				email = null;
 				age = 0;
 
-				byte[] proofBytes = Encoding.UTF8.GetBytes(proof);
 				byte[] encryptedProof;
-				uint seqProof = 0;
+				uint seqProof;
 				try
 				{
-					var (nonce, seq) = sendNonceCtx.NextNonce();
-					seqProof = seq;
-					byte[] aadProof = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpProof, agreedVersion, seqProof);
-					encryptedProof = CryptoHelper.EncryptAES(clientToServerKey, nonce, proofBytes, aadProof);
+					SrpService.ClientEncryptProof(proof, clientToServerKey, sendNonceCtx, agreedVersion, out encryptedProof, out seqProof);
 				}
 				catch (CryptographicException ex)
 				{
 					Log.Error("ClientLoginAuthenticator", $"AES encryption failed for client proof: {ex.Message}");
 					Client.ForceDisconnect();
-					CryptographicOperations.ZeroMemory(proofBytes);
 					return;
 				}
-				CryptographicOperations.ZeroMemory(proofBytes);
 
 				Client.Broadcast(new SrpProofBroadcast()
 				{
@@ -701,50 +576,24 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] decryptedProof = null;
+			string proof;
 			try
 			{
-				var (nonce, rseq) = receiveNonceCtx.NextNonce();
 				if (msg.Proof == null || msg.Proof.Length > CryptoHelper.MaxSrpPayloadBytes)
 				{
 					ClearKeyMaterial();
 					Client.ForceDisconnect();
 					return;
 				}
-				byte[] aadProof = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpSuccess, agreedVersion, rseq);
-				decryptedProof = CryptoHelper.DecryptAES(serverToClientKey, nonce, msg.Proof, aadProof);
+				proof = SrpService.ClientDecryptServerProof(msg.Proof, serverToClientKey, receiveNonceCtx, agreedVersion);
 			}
 			catch (CryptographicException)
 			{
 				Log.Warning("ClientLoginAuthenticator", "AES decryption/authentication failed for SRP success.");
 				ClearKeyMaterial();
-				if (decryptedProof != null) CryptographicOperations.ZeroMemory(decryptedProof);
 				Client.ForceDisconnect();
 				return;
 			}
-
-			if (decryptedProof == null || decryptedProof.Length == 0 || decryptedProof.Length > CryptoHelper.MaxSrpPayloadBytes)
-			{
-				if (decryptedProof != null) CryptographicOperations.ZeroMemory(decryptedProof);
-				ClearKeyMaterial();
-				Client.ForceDisconnect();
-				return;
-			}
-
-			string proof;
-			try
-			{
-				proof = CryptoHelper.StrictUtf8.GetString(decryptedProof);
-			}
-			catch (DecoderFallbackException)
-			{
-				Log.Warning("ClientLoginAuthenticator", "Malformed UTF-8 in SRP success proof.");
-				CryptographicOperations.ZeroMemory(decryptedProof);
-				ClearKeyMaterial();
-				Client.ForceDisconnect();
-				return;
-			}
-			CryptographicOperations.ZeroMemory(decryptedProof);
 
 			// Verify the client session
 			if (SrpData.Verify(proof, out string result))
@@ -772,9 +621,7 @@ namespace FishMMO.Client
 				{
 					try
 					{
-						var (tokenNonce, tokenRseq) = receiveNonceCtx.NextNonce();
-						byte[] tokenAad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpSuccess, agreedVersion, tokenRseq);
-						storedAuthToken = CryptoHelper.DecryptAES(serverToClientKey, tokenNonce, msg.Token, tokenAad);
+						storedAuthToken = SrpService.ClientDecryptAuthToken(msg.Token, serverToClientKey, receiveNonceCtx, agreedVersion);
 					}
 					catch (CryptographicException tokenEx)
 					{
@@ -880,33 +727,20 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] usernameBytes = Encoding.UTF8.GetBytes(username);
-			byte[] codeBytes = Encoding.UTF8.GetBytes(verifyCode);
 			byte[] encryptedUsername;
 			byte[] encryptedCode;
 			uint accountVerifySeq;
 			try
 			{
-				var (nonceU, seqU) = sendNonceCtx.NextNonce();
-				byte[] aadU = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.AccountVerify, agreedVersion, seqU);
-				encryptedUsername = CryptoHelper.EncryptAES(clientToServerKey, nonceU, usernameBytes, aadU);
-
-				var (nonceC, seqC) = sendNonceCtx.NextNonce();
-				accountVerifySeq = seqC;
-				byte[] aadC = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.AccountVerify, agreedVersion, seqC);
-				encryptedCode = CryptoHelper.EncryptAES(clientToServerKey, nonceC, codeBytes, aadC);
+				SrpService.ClientEncryptAccountVerify(username, verifyCode, clientToServerKey, sendNonceCtx, agreedVersion, out encryptedUsername, out encryptedCode, out accountVerifySeq);
 			}
 			catch (CryptographicException ex)
 			{
 				Log.Error("ClientLoginAuthenticator", $"AES encryption failed for verify code: {ex.Message}");
 				ClearKeyMaterial();
 				Client.ForceDisconnect();
-				CryptographicOperations.ZeroMemory(usernameBytes);
-				CryptographicOperations.ZeroMemory(codeBytes);
 				return;
 			}
-			CryptographicOperations.ZeroMemory(usernameBytes);
-			CryptographicOperations.ZeroMemory(codeBytes);
 
 			// PROTOCOL NOTE — AccountVerifyBroadcast implicit sequence encoding:
 			// Seq is the verifyCode's sequence. The server derives:
@@ -936,43 +770,17 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] decryptedUri = null;
-			byte[] decryptedCodes = null;
-			try
-			{
-				var (nonce1, rseq1) = receiveNonceCtx.NextNonce();
-				byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, agreedVersion, rseq1);
-				decryptedUri = CryptoHelper.DecryptAES(serverToClientKey, nonce1, msg.OtpauthUri, aad1);
-
-				var (nonce2, rseq2) = receiveNonceCtx.NextNonce();
-				byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, agreedVersion, rseq2);
-				decryptedCodes = CryptoHelper.DecryptAES(serverToClientKey, nonce2, msg.RecoveryCodes, aad2);
-			}
-			catch (CryptographicException)
-			{
-				Log.Warning("ClientLoginAuthenticator", "AES decryption failed for 2FA setup data.");
-				if (decryptedUri != null) CryptographicOperations.ZeroMemory(decryptedUri);
-				if (decryptedCodes != null) CryptographicOperations.ZeroMemory(decryptedCodes);
-				return;
-			}
-
 			string otpauthUri;
 			string[] recoveryCodes;
 			try
 			{
-				otpauthUri = CryptoHelper.StrictUtf8.GetString(decryptedUri);
-				string codesStr = CryptoHelper.StrictUtf8.GetString(decryptedCodes);
-				recoveryCodes = codesStr.Split('\n');
+				SrpService.ClientDecryptTwoFactorSetup(msg.OtpauthUri, msg.RecoveryCodes, serverToClientKey, receiveNonceCtx, agreedVersion, out otpauthUri, out recoveryCodes);
 			}
-			catch (DecoderFallbackException)
+			catch (CryptographicException)
 			{
-				Log.Warning("ClientLoginAuthenticator", "Malformed UTF-8 in 2FA setup data.");
-				CryptographicOperations.ZeroMemory(decryptedUri);
-				CryptographicOperations.ZeroMemory(decryptedCodes);
+				Log.Warning("ClientLoginAuthenticator", "AES decryption failed for 2FA setup data.");
 				return;
 			}
-			CryptographicOperations.ZeroMemory(decryptedUri);
-			CryptographicOperations.ZeroMemory(decryptedCodes);
 
 			OnTwoFactorSetupReceived?.Invoke(otpauthUri, recoveryCodes);
 		}
@@ -994,25 +802,19 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] codeBytes = Encoding.UTF8.GetBytes(code);
 			byte[] encryptedCode;
 			uint totpSeq;
 			try
 			{
-				var (nonce, seq) = sendNonceCtx.NextNonce();
-				totpSeq = seq;
-				byte[] aad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorVerify, agreedVersion, totpSeq);
-				encryptedCode = CryptoHelper.EncryptAES(clientToServerKey, nonce, codeBytes, aad);
+				SrpService.ClientEncryptTotpCode(code, clientToServerKey, sendNonceCtx, agreedVersion, out encryptedCode, out totpSeq);
 			}
 			catch (CryptographicException ex)
 			{
 				Log.Error("ClientLoginAuthenticator", $"AES encryption failed for TOTP code: {ex.Message}");
 				ClearKeyMaterial();
 				Client.ForceDisconnect();
-				CryptographicOperations.ZeroMemory(codeBytes);
 				return;
 			}
-			CryptographicOperations.ZeroMemory(codeBytes);
 
 			Client.Broadcast(new TwoFactorVerifyBroadcast()
 			{

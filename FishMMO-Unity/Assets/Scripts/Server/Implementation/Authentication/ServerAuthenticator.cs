@@ -9,8 +9,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using FishMMO.Server.Core.Account;
-using FishMMO.Server.Core.Authentication;
+using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -131,32 +131,6 @@ namespace FishMMO.Server.Implementation
 		/// </para>
 		/// </summary>
 		private const float ConnectionIpCacheTtlSeconds = 300f;
-
-		/// <summary>
-		/// Pre-computed fake SRP salt/verifier for non-existent accounts.
-		/// Avoids per-request SRP math during credential-stuffing attacks.
-		/// The salt is AES-GCM encrypted before transmission, so reuse is unobservable on the wire.
-		/// The SRP server session (modular exponentiation) still dominates timing,
-		/// preserving indistinguishability from real accounts.
-		/// </summary>
-		/// <remarks>
-		/// <para><b>Verifier correlation:</b> The verifier is static across all fake accounts.
-		/// Because SRP server ephemeral <c>B = kv + g^b</c> includes a random <c>b</c>, different
-		/// sessions produce different <c>B</c> values even with the same verifier. The static <c>v</c>
-		/// component is masked by the random term, making correlation impractical without solving DLP.</para>
-		/// <para><b>Salt uniqueness:</b> Per-username salts are derived via <see cref="DerivePerUsernameFakeSalt"/>
-		/// using HMAC-SHA256, so each non-existent username receives a distinct salt.</para>
-		/// </remarks>
-		private static readonly Lazy<(string Salt, string Verifier)> FakeSrpTuple =
-			new Lazy<(string, string)>(() =>
-			{
-				var client = new SecureRemotePassword.SrpClient(
-					SecureRemotePassword.SrpParameters.Create2048<System.Security.Cryptography.SHA512>());
-				string salt = client.GenerateSalt();
-				string priv = client.DerivePrivateKey(salt, "fake_user", "fake_password");
-				string verifier = client.DeriveVerifier(priv);
-				return (salt, verifier);
-			});
 
 		/// <summary>
 		/// Bounded channel for queuing SRP verify requests for async worker processing.
@@ -377,14 +351,15 @@ namespace FishMMO.Server.Implementation
 
 			// Force FakeSrpTuple initialization now to prevent first-use timing
 			// side-channel on the first non-existent account lookup.
-			_ = FakeSrpTuple.Value;
+			_ = SrpService.GetStaticFakeData();
 
 			// Validate that per-username derived fake salts match the length of the
 			// static fake salt. A mismatch would create a ciphertext-size oracle that
 			// leaks whether an account exists (length of encrypted salt differs).
-			string testDerivedSalt = DerivePerUsernameFakeSalt("__startup_length_check__");
-			if (testDerivedSalt.Length != FakeSrpTuple.Value.Salt.Length)
-				Log.Error(LogPrefix, $"Fake salt length mismatch — DerivePerUsernameFakeSalt produced {testDerivedSalt.Length} chars, FakeSrpTuple.Salt is {FakeSrpTuple.Value.Salt.Length} chars. " +
+			var fakeData = SrpService.GetStaticFakeData();
+			string testDerivedSalt = SrpService.DerivePerUsernameFakeSalt("__startup_length_check__", fakeSaltKey);
+			if (testDerivedSalt.Length != fakeData.Salt.Length)
+				Log.Error(LogPrefix, $"Fake salt length mismatch — DerivePerUsernameFakeSalt produced {testDerivedSalt.Length} chars, FakeSrpTuple.Salt is {fakeData.Salt.Length} chars. " +
 					"This would create a ciphertext-size oracle leaking account existence.");
 
 			// Initialize TOTP concurrency limiter.
@@ -795,60 +770,18 @@ namespace FishMMO.Server.Implementation
 			ClientAuthenticationResult result;
 			bool waitingForProof = false;
 
-			// Decrypt the username (or email) and public ephemeral on worker thread using explicit sequence numbers.
+			// Decrypt the username (or email) and public ephemeral on worker thread.
 			string username;
+			string publicEphemeral;
 			uint seq = request.Seq;
-
-			// Guard: ValidateSequenceRange ensures seq is large enough for the 2-field
-			// protocol encoding (seq-1: username, seq: public ephemeral) without uint underflow.
-			if (!CryptoHelper.ValidateSequenceRange(seq, 2))
-			{
-				await Log.Warning(LogPrefix, "Invalid SRP verify sequence received (too low for 2-field encoding).");
-				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
-				return;
-			}
 
 			try
 			{
-				// ┌──────────────────────────────────────────────────────────────┐
-				// │ PROTOCOL RULE — SRP Verify two-sequence encoding:            │
-				// │   seq-1 : AES-GCM encrypted identifier (username or email)   │
-				// │   seq   : AES-GCM encrypted public ephemeral                 │
-				// │ All sequences are consumed and nonce-bound independently.     │
-				// │ DO NOT reorder, collapse, or reuse — replay safety depends    │
-				// │ on each field having a unique (nonce, AAD) pair.              │
-				// └──────────────────────────────────────────────────────────────┘
-				uint seqUsername = seq - 1;
-				if (!request.EncryptionData.TryConsumeReceiveSequence(seqUsername))
+				if (!SrpService.TryDecryptVerifyFields(
+					request.EncryptedUsername, request.EncryptedPublicEphemeral,
+					request.EncryptionData, seq, out username, out publicEphemeral))
 				{
-					await Log.Warning(LogPrefix, "SRP verify username sequence out-of-order or duplicate.");
-					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
-					return;
-				}
-
-				byte[] nonce1 = request.EncryptionData.BuildReceiveNonce(seqUsername);
-				byte[] aad1 = new byte[CryptoHelper.AadLength];
-				// NOTE: WriteAad and BuildAad serve the same purpose (version + messageType + seq).
-				// WriteAad writes into a caller-supplied buffer; BuildAad allocates and returns one.
-				// A future Span<byte> migration could unify them. Until then, prefer WriteAad on hot
-				// paths to avoid the extra allocation.
-				CryptoHelper.WriteAad(aad1, (byte)CryptoHelper.AuthMessageType.SrpVerify, request.EncryptionData.AgreedVersion, seqUsername);
-				byte[] decryptedRawUsername = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce1, request.EncryptedUsername, aad1);
-				try
-				{
-					username = CryptoHelper.StrictUtf8.GetString(decryptedRawUsername);
-				}
-				catch (DecoderFallbackException)
-				{
-					CryptographicOperations.ZeroMemory(decryptedRawUsername);
-					throw new CryptographicException("Malformed UTF-8 in decrypted username.");
-				}
-				CryptographicOperations.ZeroMemory(decryptedRawUsername);
-
-				// Consume sequence for the public ephemeral and decrypt it below when needed.
-				if (!request.EncryptionData.TryConsumeReceiveSequence(seq))
-				{
-					await Log.Warning(LogPrefix, "SRP verify public ephemeral sequence out-of-order or duplicate.");
+					await Log.Warning(LogPrefix, "SRP verify field decryption failed.");
 					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 					return;
 				}
@@ -900,32 +833,6 @@ namespace FishMMO.Server.Implementation
 					// to prevent account-existence enumeration. Before proof, both real and
 					// non-existent accounts proceed through indistinguishable SRP exchanges.
 
-					// Decrypt the public ephemeral value (consumer sequence already advanced above).
-					string publicEphemeral;
-					try
-					{
-						byte[] nonce2 = request.EncryptionData.BuildReceiveNonce(request.Seq);
-						byte[] aad2 = new byte[CryptoHelper.AadLength];
-						CryptoHelper.WriteAad(aad2, (byte)CryptoHelper.AuthMessageType.SrpVerify, request.EncryptionData.AgreedVersion, request.Seq);
-						byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce2, request.EncryptedPublicEphemeral, aad2);
-						try
-						{
-							publicEphemeral = CryptoHelper.StrictUtf8.GetString(decryptedRawPublicEphemeral);
-						}
-						catch (DecoderFallbackException)
-						{
-							CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
-							throw new CryptographicException("Malformed UTF-8 in decrypted public ephemeral.");
-						}
-						CryptographicOperations.ZeroMemory(decryptedRawPublicEphemeral);
-					}
-					catch (CryptographicException)
-					{
-						await Log.Warning(LogPrefix, "AES decryption/authentication failed for public ephemeral.");
-						RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
-						return;
-					}
-
 					// Fetch account for login from database (identifier is username or email).
 					DatabaseResult<Database.Data.AccountData> loginResult = await accountService.FetchForLoginAsync(username, isEmail);
 
@@ -947,8 +854,8 @@ namespace FishMMO.Server.Implementation
 						// transmission so the value is unobservable on the wire. The SRP
 						// server session (modular exponentiation) still dominates timing,
 						// preserving indistinguishability from real accounts.
-						salt = DerivePerUsernameFakeSalt(username);
-						verifier = FakeSrpTuple.Value.Verifier;
+						salt = SrpService.DerivePerUsernameFakeSalt(username, fakeSaltKey);
+						verifier = SrpService.GetStaticFakeData().Verifier;
 						accessLevel = AccessLevel.Player;
 						await Log.Debug(LogPrefix, $"Using pre-computed fake SRP state for non-existent account '{username}' to avoid enumeration.");
 					}
@@ -967,8 +874,8 @@ namespace FishMMO.Server.Implementation
 								// a non-existent account. Legitimate users should verify their
 								// account first, or log in by username (which still shows
 								// AccountUnverified for clear UX feedback).
-								salt = DerivePerUsernameFakeSalt(username);
-								verifier = FakeSrpTuple.Value.Verifier;
+								salt = SrpService.DerivePerUsernameFakeSalt(username, fakeSaltKey);
+								verifier = SrpService.GetStaticFakeData().Verifier;
 								accessLevel = AccessLevel.Player;
 								await Log.Debug(LogPrefix, $"Using fake SRP state for unverified email-based login to prevent enumeration.");
 							}
@@ -1021,22 +928,7 @@ namespace FishMMO.Server.Implementation
 						byte[] encryptedPublicServerEphemeral;
 						try
 						{
-							// Acquire explicit send sequence and build nonce + AAD for each field
-							uint sendSeq1 = request.EncryptionData.NextSendSequence();
-							byte[] sendNonce1 = request.EncryptionData.BuildSendNonce(sendSeq1);
-							byte[] aadSend1 = new byte[CryptoHelper.AadLength];
-							CryptoHelper.WriteAad(aadSend1, (byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, request.EncryptionData.AgreedVersion, sendSeq1);
-							byte[] srpSaltBytes = Encoding.UTF8.GetBytes(srpSalt);
-							encryptedSalt = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce1, srpSaltBytes, aadSend1);
-							CryptographicOperations.ZeroMemory(srpSaltBytes);
-
-							uint sendSeq2 = request.EncryptionData.NextSendSequence();
-							byte[] sendNonce2 = request.EncryptionData.BuildSendNonce(sendSeq2);
-							byte[] aadSend2 = new byte[CryptoHelper.AadLength];
-							CryptoHelper.WriteAad(aadSend2, (byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, request.EncryptionData.AgreedVersion, sendSeq2);
-							byte[] srpEphemeralBytes = Encoding.UTF8.GetBytes(srpPublicServerEphemeral);
-							encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce2, srpEphemeralBytes, aadSend2);
-							CryptographicOperations.ZeroMemory(srpEphemeralBytes);
+							SrpService.EncryptVerifyResponse(srpSalt, srpPublicServerEphemeral, request.EncryptionData, out encryptedSalt, out encryptedPublicServerEphemeral);
 						}
 						catch (CryptographicException ex)
 						{
@@ -1110,33 +1002,10 @@ namespace FishMMO.Server.Implementation
 			}
 
 			// Decrypt client proof on worker thread.
-			// Note: clientProof is a managed string and cannot be deterministically zeroed.
-			// See "Design note — String zeroization" above.
 			string clientProof;
 			try
 			{
-				// Validate and consume explicit client->server sequence before decrypting.
-				if (!request.EncryptionData.TryConsumeReceiveSequence(request.Seq))
-				{
-					await Log.Warning(LogPrefix, "SRP proof sequence out-of-order or duplicate.");
-					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
-					return;
-				}
-
-				byte[] nonce = request.EncryptionData.BuildReceiveNonce(request.Seq);
-				byte[] aad = new byte[CryptoHelper.AadLength];
-				CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.SrpProof, request.EncryptionData.AgreedVersion, request.Seq);
-				byte[] decryptedClientProof = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonce, request.EncryptedClientProof, aad);
-				try
-				{
-					clientProof = CryptoHelper.StrictUtf8.GetString(decryptedClientProof);
-				}
-				catch (DecoderFallbackException)
-				{
-					CryptographicOperations.ZeroMemory(decryptedClientProof);
-					throw new CryptographicException("Malformed UTF-8 in decrypted client proof.");
-				}
-				CryptographicOperations.ZeroMemory(decryptedClientProof);
+				clientProof = SrpService.DecryptProof(request.EncryptedClientProof, request.EncryptionData, request.Seq);
 			}
 			catch (CryptographicException)
 			{
@@ -1295,14 +1164,8 @@ namespace FishMMO.Server.Implementation
 				// (including future new codes) default to unauthenticated.
 				bool authenticated = result == ClientAuthenticationResult.LoginSuccess;
 
-				// NOTE: Both server proof and token use SrpSuccess AAD type discriminator.
-				// This is safe because each has a unique sequence number → unique (nonce, AAD) pair.
 				// Encrypt server proof on worker thread.
-				uint sendSeq = request.EncryptionData.NextSendSequence();
-				byte[] sendNonce = request.EncryptionData.BuildSendNonce(sendSeq);
-				byte[] aadSend = new byte[CryptoHelper.AadLength];
-				CryptoHelper.WriteAad(aadSend, (byte)CryptoHelper.AuthMessageType.SrpSuccess, request.EncryptionData.AgreedVersion, sendSeq);
-				byte[] encryptedServerProof = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, sendNonce, Encoding.UTF8.GetBytes(serverProof), aadSend);
+				byte[] encryptedServerProof = SrpService.EncryptServerProof(serverProof, request.EncryptionData);
 
 				// Generate and encrypt auth token if signing key is available.
 				// Note: encryptedToken is ciphertext — not sensitive even if the lambda
@@ -1744,11 +1607,7 @@ namespace FishMMO.Server.Implementation
 			RefreshAuthTtl(conn);
 
 			// Encrypt server proof.
-			uint sendSeq = pendingState.EncryptionData.NextSendSequence();
-			byte[] sendNonce = pendingState.EncryptionData.BuildSendNonce(sendSeq);
-			byte[] aadSend = new byte[CryptoHelper.AadLength];
-			CryptoHelper.WriteAad(aadSend, (byte)CryptoHelper.AuthMessageType.SrpSuccess, pendingState.EncryptionData.AgreedVersion, sendSeq);
-			byte[] encryptedServerProof = CryptoHelper.EncryptAES(pendingState.EncryptionData.ServerToClientKey, sendNonce, Encoding.UTF8.GetBytes(serverProof), aadSend);
+			byte[] encryptedServerProof = SrpService.EncryptServerProof(serverProof, pendingState.EncryptionData);
 
 			// Generate and encrypt auth token.
 			byte[] encryptedToken = await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, username, accessLevel);
@@ -1818,36 +1677,6 @@ namespace FishMMO.Server.Implementation
 		// SceneServerAuthenticator) override TryLoginAsync for server-type-specific checks.
 
 		/// <summary>
-		/// Derives a deterministic per-username fake SRP salt via HMAC-SHA512
-		/// so that each non-existent username receives a unique but repeatable salt.
-		/// This prevents attackers from detecting salt reuse across different fake accounts
-		/// if AES-GCM encryption were somehow compromised.
-		/// </summary>
-		/// <remarks>
-		/// <para><b>Key snapshot:</b> A local reference to <see cref="fakeSaltKey"/> is captured
-		/// to prevent a race with <see cref="ShutdownWorkersCore"/> zeroing the array mid-HMAC.</para>
-		/// <para><b>Format note:</b> The output is a 128-character lowercase hex string derived from
-		/// HMAC-SHA512, matching the length of real SRP salts produced by the SRP library with
-		/// SHA-512 parameters. This prevents ciphertext-size oracles from leaking account existence.</para>
-		/// </remarks>
-		/// <param name="username">The username to derive a fake salt for.</param>
-		/// <returns>Hex-encoded fake salt string, or the static fake salt if the key was already zeroed.</returns>
-		private string DerivePerUsernameFakeSalt(string username)
-		{
-			byte[] keySnapshot = fakeSaltKey;
-			if (keySnapshot == null || keySnapshot.Length < CryptoHelper.HmacSha512KeyLength)
-			{
-				// Key already zeroed during shutdown — fall back to static fake salt.
-				return FakeSrpTuple.Value.Salt;
-			}
-			using (var hmac = new HMACSHA512(keySnapshot))
-			{
-				byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(username));
-				return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-			}
-		}
-
-		/// <summary>
 		/// Clears the connection IP cache during connection purge.
 		/// </summary>
 		/// <param name="conn">The connection being purged.</param>
@@ -1880,7 +1709,7 @@ namespace FishMMO.Server.Implementation
 
 			// Normalize to canonical form (collapses IPv4-mapped IPv6) to ensure
 			// consistent rate-limit and debounce identity with the base handshake layer.
-			string ip = NormalizeIp(conn.GetAddress());
+			string ip = HandshakeService.NormalizeIp(conn.GetAddress());
 			if (string.IsNullOrWhiteSpace(ip))
 			{
 				return string.Empty;
@@ -1982,23 +1811,27 @@ namespace FishMMO.Server.Implementation
 
 			try
 			{
-				DateTime expiresUtc = DateTime.UtcNow.AddMinutes(tokenExpirationMinutes);
-				byte[] rawToken = CryptoHelper.BuildAuthToken(username, LoginServerId, expiresUtc, signingKeySnapshot, accessLevel);
+				byte[] encryptedToken = TokenService.GenerateAndEncryptToken(
+					encryptionData, username, LoginServerId, (int)tokenExpirationMinutes,
+					signingKeySnapshot, accessLevel, out byte[] rawToken);
 
-				string tokenHash = CryptoHelper.HashTokenHex(rawToken);
-				if (Server.Database?.ServiceRegistry != null &&
-					Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var authTokenService))
+				if (encryptedToken == null)
+					return null;
+
+				try
 				{
-					await authTokenService.IssueAsync(tokenHash, username, LoginServerId, expiresUtc);
+					string tokenHash = TokenService.HashToken(rawToken);
+					if (Server.Database?.ServiceRegistry != null &&
+						Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var authTokenService))
+					{
+						await authTokenService.IssueAsync(tokenHash, username, LoginServerId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes));
+					}
+				}
+				finally
+				{
+					CryptographicOperations.ZeroMemory(rawToken);
 				}
 
-				uint tokenSeq = encryptionData.NextSendSequence();
-				byte[] tokenNonce = encryptionData.BuildSendNonce(tokenSeq);
-				byte[] tokenAad = new byte[CryptoHelper.AadLength];
-				CryptoHelper.WriteAad(tokenAad, (byte)CryptoHelper.AuthMessageType.SrpSuccess, encryptionData.AgreedVersion, tokenSeq);
-				byte[] encryptedToken = CryptoHelper.EncryptAES(encryptionData.ServerToClientKey, tokenNonce, rawToken, tokenAad);
-
-				CryptographicOperations.ZeroMemory(rawToken);
 				return encryptedToken;
 			}
 			catch (Exception tokenEx)

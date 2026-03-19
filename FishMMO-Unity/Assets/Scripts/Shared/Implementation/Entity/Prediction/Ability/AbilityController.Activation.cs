@@ -623,7 +623,10 @@ namespace FishMMO.Shared
 			// (e.g., via a shim or mock), catch the determinism break immediately.
 			List<Item> items = cachedInventoryController.Items;
 			if (items == null)
+			{
 				Log.Warning("AbilityController", "FindConsumableItem: IInventoryController.Items returned null — determinism contract violated.");
+				return null;
+			}
 			for (int i = 0; i < items.Count; ++i)
 			{
 				Item item = items[i];

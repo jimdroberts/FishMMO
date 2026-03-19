@@ -8,6 +8,7 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
 using FishMMO.Shared;
+using FishMMO.Auth.Implementation;
 using FishMMO.Logging;
 using UnityEngine;
 

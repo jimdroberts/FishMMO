@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using FishMMO.Auth.Core;
 using KinematicCharacterController;
 using UnityEngine;
 #if !UNITY_SERVER

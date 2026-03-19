@@ -1,4 +1,4 @@
-namespace FishMMO.Shared
+namespace FishMMO.Auth.Core
 {
 	/// <summary>
 	/// Account and character access levels.

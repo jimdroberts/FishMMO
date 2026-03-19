@@ -10,6 +10,7 @@ using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Implementation.World.SceneServer.Character;
 using FishMMO.Shared;
+using FishMMO.Auth.Core;
 using FishMMO.Logging;
 using UnityEngine;
 using UnityEngine.SceneManagement;

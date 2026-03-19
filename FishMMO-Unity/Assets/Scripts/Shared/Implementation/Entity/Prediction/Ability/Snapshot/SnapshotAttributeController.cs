@@ -15,6 +15,8 @@ namespace FishMMO.Shared
 	/// </summary>
 	public sealed class SnapshotAttributeController : ICharacterAttributeController
 	{
+		private static readonly Dictionary<int, CharacterResourceAttribute> emptyResourceAttributes = new Dictionary<int, CharacterResourceAttribute>(0);
+
 		/// <inheritdoc/>
 		public ICharacter Character { get; private set; }
 
@@ -39,8 +41,10 @@ namespace FishMMO.Shared
 		public SnapshotAttributeController(ICharacterAttributeController live, ICharacter owner)
 		{
 			Character = owner;
-			Attributes = new Dictionary<int, CharacterAttribute>();
-			ResourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
+			int attributeCount = live?.Attributes?.Count ?? 0;
+			int resourceAttributeCount = live?.ResourceAttributes?.Count ?? 0;
+			Attributes = new Dictionary<int, CharacterAttribute>(attributeCount + resourceAttributeCount);
+			ResourceAttributes = emptyResourceAttributes;
 
 			if (live?.Attributes != null)
 			{

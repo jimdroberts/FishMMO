@@ -7,6 +7,7 @@ using FishNet.Transporting.Tugboat;
 using FishNet.Transporting.Bayou;
 using FishNet.Managing.Scened;
 using FishMMO.Shared;
+using FishMMO.Auth.Core;
 using FishMMO.Shared.Core;
 using FishMMO.Logging;
 using System.Collections;

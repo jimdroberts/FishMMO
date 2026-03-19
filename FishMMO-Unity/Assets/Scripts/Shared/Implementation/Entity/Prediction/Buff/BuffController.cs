@@ -79,13 +79,6 @@ namespace FishMMO.Shared
 			{
 				tickDelta = (float)base.TimeManager.TickDelta;
 			}
-
-		}
-
-		public override void OnStopNetwork()
-		{
-			base.OnStopNetwork();
-
 		}
 
 		/// <summary>
@@ -134,6 +127,12 @@ namespace FishMMO.Shared
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			const int maxPayloadBuffs = 4096;
+
+			// Payload sync is authoritative. Clear any previous local state first so
+			// stale buffs from an earlier spawn, scene, or character state do not survive.
+			RemoveAll(ignoreInvokeRemove: true);
+			cachedSnapshot = null;
+			snapshotDirty = true;
 
 			int buffCount = reader.ReadInt32();
 			if (buffCount < 0 || buffCount > maxPayloadBuffs)
@@ -323,6 +322,7 @@ namespace FishMMO.Shared
 
 			if (!buffs.ContainsKey(buff.Template.ID))
 			{
+				snapshotDirty = true;
 				buff.Apply(Character);
 				buffs.Add(buff.Template.ID, buff);
 

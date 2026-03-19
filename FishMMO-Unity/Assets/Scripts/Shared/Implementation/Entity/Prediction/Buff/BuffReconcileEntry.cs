@@ -99,9 +99,9 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Compares and writes buff arrays using index-delta compression.
-		/// When the array length is unchanged, only changed entries are written
-		/// (negative count signals index-delta mode). When the length differs or
-		/// on a forced tick, the full array is written (positive count).
+		/// The wire header is a packed 16-bit value: high bit = delta mode,
+		/// low 15 bits = entry count. <see cref="MaxEntries"/> is 4096, so this
+		/// saves 2 bytes per array header and 2 bytes per changed index.
 		/// </summary>
 		/// <remarks>
 		/// <para><b>Null / empty equivalence:</b> both <c>null</c> and empty arrays
@@ -124,30 +124,25 @@ namespace FishMMO.Shared
 
 			int prevCount = prev?.Length ?? 0;
 			int nextCount = next?.Length ?? 0;
+			if (nextCount > MaxEntries)
+			{
+				Log.Warning("BuffReconcileEntry", $"WriteArrayDelta nextCount {nextCount} exceeds limit {MaxEntries}. Truncating to preserve stream integrity.");
+				nextCount = MaxEntries;
+			}
 
 			// Index-delta path: same length, single pass — reserve changedCount,
-			// write entries, then patch the count. Avoids double-iterating the array.
-			// FRAGILE: Relies on FishNet's Writer.Position supporting backward seeks
-			// without clearing bytes between countPos and endPos. Writer.Position is
-			// a plain int field (not a property) backed by a raw byte[], so rewinding
-			// just moves the offset — previously written bytes remain intact.
-			// Verified against FishNet 4.x. Re-validate on major FishNet upgrades.
-			// FAILURE MODE: If FishNet moves to a pooled-segment writer where Position
-			// is segment-relative, the patched count lands in the wrong segment,
-			// silently corrupting every reconcile packet downstream. The stream
-			// position after countPos is still valid but the count value is wrong.
-			// Safe alternative if this breaks: two-pass (count changes first, then write).
+			// write entries, then patch the header. Avoids double-iterating the array.
 			if (!forceWrite && prevCount == nextCount)
 			{
 				int countPos = writer.Position;
-				writer.WriteInt32(0); // placeholder for -changedCount
+				writer.WriteUInt16(0); // placeholder for packed header
 
 				int changedCount = 0;
 				for (int i = 0; i < nextCount; i++)
 				{
 					if (!prev[i].Equals(next[i]))
 					{
-						writer.WriteInt32(i);
+						writer.WriteUInt16((ushort)i);
 						next[i].WriteTo(writer);
 						changedCount++;
 					}
@@ -161,12 +156,12 @@ namespace FishMMO.Shared
 
 				int endPos = writer.Position;
 				writer.Position = countPos;
-				writer.WriteInt32(-changedCount);
+				writer.WriteUInt16(BuildHeader(changedCount, true));
 				writer.Position = endPos;
 				return true;
 			}
 
-			writer.WriteInt32(nextCount);
+			writer.WriteUInt16(BuildHeader(nextCount, false));
 			for (int i = 0; i < nextCount; i++)
 			{
 				next[i].WriteTo(writer);
@@ -176,7 +171,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Reads a buff array from the delta stream.
-		/// Positive count = full array. Negative count = index-delta over prev.
+		/// High header bit = index-delta over prev, otherwise full array.
 		/// </summary>
 		/// <remarks>
 		/// <para>When count exceeds <see cref="MaxEntries"/>, remaining entry data is
@@ -190,11 +185,13 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public static BuffReconcileEntry[] ReadArrayDelta(Reader reader, BuffReconcileEntry[] prev)
 		{
-			int count = reader.ReadInt32();
+			ushort header = reader.ReadUInt16();
+			bool isDelta = (header & 0x8000) != 0;
+			int count = header & 0x7FFF;
 
-			if (count < 0)
+			if (isDelta)
 			{
-				int changedCount = -count;
+				int changedCount = count;
 				if (changedCount > MaxEntries)
 				{
 					Log.Warning("BuffReconcileEntry", $"Index-delta count {changedCount} exceeds limit {MaxEntries}. Draining entries and preserving previous state.");
@@ -209,7 +206,7 @@ namespace FishMMO.Shared
 
 				for (int i = 0; i < changedCount; i++)
 				{
-					int index = reader.ReadInt32();
+					int index = reader.ReadUInt16();
 					BuffReconcileEntry entry = ReadFrom(reader);
 					if (index >= 0 && index < prevLength)
 					{
@@ -243,15 +240,23 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Drains index-delta entries from the reader to keep the stream position valid.
-		/// Each entry consists of an int32 index + the entry fields.
+		/// Each entry consists of a uint16 index + the entry fields.
 		/// </summary>
 		private static void DrainIndexDeltaEntries(Reader reader, int changedCount)
 		{
 			for (int i = 0; i < changedCount; i++)
 			{
-				reader.ReadInt32(); // index
+				reader.ReadUInt16(); // index
 				ReadFrom(reader);   // entry fields
 			}
+		}
+
+		/// <summary>
+		/// Packs the delta/full mode flag and count into a 16-bit header.
+		/// </summary>
+		private static ushort BuildHeader(int count, bool isDelta)
+		{
+			return (ushort)((isDelta ? 0x8000 : 0) | (count & 0x7FFF));
 		}
 
 		/// <summary>

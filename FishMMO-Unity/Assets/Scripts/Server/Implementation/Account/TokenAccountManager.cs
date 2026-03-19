@@ -1,7 +1,7 @@
 using System;
 using FishNet.Connection;
-using FishMMO.Server.Core.Account;
-using FishMMO.Shared;
+using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 
 namespace FishMMO.Server.Implementation
 {

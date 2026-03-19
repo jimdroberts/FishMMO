@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Channels;
+using FishMMO.Auth.Implementation;
 
 namespace FishMMO.Server.Core.Authentication
 {

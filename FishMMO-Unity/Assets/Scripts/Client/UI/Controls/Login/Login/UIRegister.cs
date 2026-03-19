@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Auth.Core;
 using FishMMO.Logging;
 using System.IO;
 

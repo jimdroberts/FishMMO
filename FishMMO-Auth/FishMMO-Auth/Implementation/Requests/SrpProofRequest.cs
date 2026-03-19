@@ -1,6 +1,4 @@
-using FishMMO.Server.Core.Account;
-
-namespace FishMMO.Server.Core.Authentication
+namespace FishMMO.Auth.Implementation
 {
 	/// <summary>
 	/// Immutable request data for async SRP proof processing.

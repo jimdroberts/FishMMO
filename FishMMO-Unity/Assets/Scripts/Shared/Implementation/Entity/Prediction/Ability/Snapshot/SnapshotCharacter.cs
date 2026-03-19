@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Connection;
@@ -25,7 +24,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public sealed class SnapshotCharacter : ICharacter
 	{
-		private readonly Dictionary<Type, ICharacterBehaviour> behaviours = new Dictionary<Type, ICharacterBehaviour>();
+		private ICharacterAttributeController attributeController;
 
 		/// <inheritdoc/>
 		public long ID { get; set; }
@@ -133,7 +132,7 @@ namespace FishMMO.Shared
 			if (liveCharacter.TryGet(out ICharacterAttributeController liveAttributes))
 			{
 				SnapshotAttributeController snapshotAttributes = new SnapshotAttributeController(liveAttributes, this);
-				behaviours[typeof(ICharacterAttributeController)] = snapshotAttributes;
+				attributeController = snapshotAttributes;
 			}
 		}
 
@@ -147,7 +146,7 @@ namespace FishMMO.Shared
 		{
 			if (behaviour is ICharacterAttributeController attributeController)
 			{
-				behaviours[typeof(ICharacterAttributeController)] = attributeController;
+				this.attributeController = attributeController;
 			}
 		}
 
@@ -158,21 +157,18 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public void UnregisterCharacterBehaviour(ICharacterBehaviour behaviour)
 		{
-			if (behaviour is ICharacterAttributeController &&
-				behaviours.TryGetValue(typeof(ICharacterAttributeController), out ICharacterBehaviour existing) &&
-				existing == behaviour)
+			if (ReferenceEquals(attributeController, behaviour))
 			{
-				behaviours.Remove(typeof(ICharacterAttributeController));
+				attributeController = null;
 			}
 		}
 
 		/// <inheritdoc/>
 		public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour
 		{
-			Type type = typeof(T);
-			if (behaviours.TryGetValue(type, out ICharacterBehaviour result))
+			if (typeof(T) == typeof(ICharacterAttributeController) && attributeController != null)
 			{
-				control = result as T;
+				control = attributeController as T;
 				if (control != null)
 				{
 					return true;

@@ -1,4 +1,5 @@
 ﻿using KinematicCharacterController;
+using FishMMO.Auth.Core;
 using UnityEngine;
 using System;
 using FishNet.Connection;

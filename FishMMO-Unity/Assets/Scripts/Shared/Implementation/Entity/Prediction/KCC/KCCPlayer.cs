@@ -51,6 +51,14 @@ namespace FishMMO.Shared
 		private Vector3 lastPlatformPosition;
 
 		/// <summary>
+		/// Platform ID received from reconcile when the actual <see cref="KCCPlatform"/>
+		/// is not yet resolvable from <see cref="SceneObject.Objects"/>.
+		/// This happens during scene-transfer or spawn ordering races where character
+		/// reconcile can arrive before the client has registered the platform scene object.
+		/// </summary>
+		private long pendingPlatformID;
+
+		/// <summary>
 		/// Stores the last received input data for observer future-state prediction.
 		/// </summary>
 		private KCCInputReplicateData lastCreatedData;
@@ -80,6 +88,7 @@ namespace FishMMO.Shared
 		public void SetPlatform(KCCPlatform platform)
 		{
 			currentPlatform = platform;
+			pendingPlatformID = platform != null ? platform.ID : 0;
 			if (currentPlatform != null)
 			{
 				lastPlatformPosition = currentPlatform.transform.position;
@@ -147,6 +156,8 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
 		{
+			TryResolvePendingPlatform();
+
 			KCCInputReplicateData kccInput = new KCCInputReplicateData(
 				input.MoveAxisForward, input.MoveAxisRight, input.MoveFlags,
 				input.CameraPosition, input.CameraRotation);
@@ -180,7 +191,7 @@ namespace FishMMO.Shared
 						}
 					}
 				}
-				else if (state.ContainsTicked())
+				else if (state.ContainsTicked() && kccInput.MoveFlags.IsFlagged(KCCMoveFlags.IsActualData))
 				{
 					lastCreatedData.Dispose();
 					lastCreatedData = kccInput;
@@ -226,15 +237,11 @@ namespace FishMMO.Shared
 		{
 			CharacterController.ApplyState(rd.MotorState);
 
-			if (rd.MotorState.CurrentPlatformID != 0 &&
-				SceneObject.Objects.TryGetValue(rd.MotorState.CurrentPlatformID, out ISceneObject sceneObject) &&
-				sceneObject.GameObject != null)
+			pendingPlatformID = rd.MotorState.CurrentPlatformID;
+			currentPlatform = ResolvePlatform(pendingPlatformID);
+			if (currentPlatform != null)
 			{
-				currentPlatform = sceneObject.GameObject.GetComponent<KCCPlatform>();
-			}
-			else
-			{
-				currentPlatform = null;
+				pendingPlatformID = 0;
 			}
 
 			lastPlatformPosition = rd.MotorState.LastPlatformPosition;
@@ -250,6 +257,49 @@ namespace FishMMO.Shared
 
 			lastCreatedData.Dispose();
 			hasLastCreatedData = false;
+			currentPlatform = null;
+			pendingPlatformID = 0;
+			lastPlatformPosition = Vector3.zero;
+		}
+
+		/// <summary>
+		/// Resolves any pending platform reference after a reconcile or scene-object registration race.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private void TryResolvePendingPlatform()
+		{
+			if (currentPlatform != null || pendingPlatformID == 0)
+			{
+				return;
+			}
+
+			currentPlatform = ResolvePlatform(pendingPlatformID);
+			if (currentPlatform != null)
+			{
+				pendingPlatformID = 0;
+			}
+		}
+
+		/// <summary>
+		/// Resolves a <see cref="KCCPlatform"/> from a scene-object ID.
+		/// </summary>
+		/// <param name="platformID">The platform scene-object ID.</param>
+		/// <returns>The resolved platform, or null if unavailable.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static KCCPlatform ResolvePlatform(long platformID)
+		{
+			if (platformID == 0)
+			{
+				return null;
+			}
+
+			if (SceneObject.Objects.TryGetValue(platformID, out ISceneObject sceneObject) &&
+				sceneObject.GameObject != null)
+			{
+				return sceneObject.GameObject.GetComponent<KCCPlatform>();
+			}
+
+			return null;
 		}
 
 		/// <summary>
