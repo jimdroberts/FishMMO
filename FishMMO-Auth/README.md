@@ -21,8 +21,6 @@ A transport-agnostic .NET authentication library for FishMMO that provides secur
 `FishMMO-Auth` targets `netstandard2.1` and is organized into two major areas:
 - `Core`: protocol DTOs, auth/result enums, and account-management interfaces.
 - `Implementation`: concrete cryptographic and protocol helpers for handshake, SRP, token auth, and 2FA-related encrypted payload handling.
-
-Code analysis highlights:
 - DTOs in `Core/DTOs/AuthenticationDTOs.cs` mirror network broadcast payloads while remaining engine-independent.
 - Interfaces in `Core/Interfaces` define account state transitions (`AuthState`) and separate SRP-specific vs token-specific account manager behaviors.
 - `Implementation/Services/HandshakeService.cs` handles X25519 ECDH key agreement, cookie challenge/verification, protocol negotiation, and key confirmation MACs.
@@ -37,7 +35,7 @@ Code analysis highlights:
 - Unity integration is supported through the post-build copy target that places `FishMMO-Auth.dll` into `FishMMO-Unity/Assets/Dependencies`.
 
 ## Features / Capabilities / Security Features
-- Handshake and session establishment:
+## Handshake and session establishment:
 - Stateless HMAC cookie challenge with rollover validation (`ComputeHandshakeCookie`, `VerifyHandshakeCookieWithRollover`).
 - IP normalization for consistent identity/rate-limit binding (`NormalizeIp`).
 - X25519 ECDH ephemeral key agreement for forward secrecy.
