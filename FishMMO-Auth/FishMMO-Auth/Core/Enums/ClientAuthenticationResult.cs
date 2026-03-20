@@ -82,5 +82,11 @@ namespace FishMMO.Auth.Core
 		/// The submitted TOTP code was invalid or has already been used (anti-replay).
 		/// </summary>
 		TwoFactorInvalid,
+		/// <summary>
+		/// Client-only: Auth token decryption failed after otherwise-successful SRP login.
+		/// The user is authenticated at the Login server but will be unable to connect to
+		/// World/Scene servers until re-authenticating. Not sent over the wire.
+		/// </summary>
+		TokenDecryptFailed,
 	}
 }

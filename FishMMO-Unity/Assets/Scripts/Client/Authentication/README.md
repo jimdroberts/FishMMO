@@ -31,9 +31,15 @@ With the encrypted channel in place, the authenticator supports three flows:
 
 4. **Two-factor authentication** — If the server indicates `TwoFactorRequired` after SRP proof, the client prompts the user for a TOTP code (6-digit) or recovery code (XXXXX-XXXXX). The code is encrypted and sent via `TwoFactorVerifyBroadcast`. On success, the server completes login as normal. During account creation, the server sends a `TwoFactorSetupBroadcast` containing the encrypted otpauth URI and recovery codes, received via `OnTwoFactorSetupReceived`.
 
-`ClientSrpData` wraps the `SrpClient` library (2048-bit group, SHA-512) to generate ephemeral values, compute client proofs, generate salt/verifier pairs for registration, and verify server proofs. All SRP references are explicitly nulled on cleanup to allow GC collection of sensitive string data.
+`ClientSrpData` (from `FishMMO.Auth.Core`) wraps the `SrpClient` library (2048-bit group, SHA-512) to generate ephemeral values, compute client proofs, generate salt/verifier pairs for registration, and verify server proofs. All SRP references are explicitly nulled on cleanup to allow GC collection of sensitive string data.
 
-All cryptographic operations use BouncyCastle under the hood via `CryptoHelper`. Every AES-GCM encrypt/decrypt call is wrapped in `try/catch (CryptographicException)` with immediate `ForceDisconnect()` and buffer zeroing on failure. Duplicate-message guards (`srpVerifyProcessed`, `srpSuccessProcessed`, `cookieEchoed`) prevent replay of critical protocol messages within a session.
+All cryptographic operations are delegated to three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped via the `FishMMO-Auth.dll` shared library):
+
+- **`HandshakeService`** — X25519 ECDH key agreement and transcript-hash computation.
+- **`SrpService`** — Client-side SRP field encryption/decryption (username, ephemeral, proof, salt, registration fields, TOTP, 2FA setup, account verify, auth token).
+- **`TokenService`** — Client-side token encryption for World/Scene server authentication.
+
+The authenticator itself is a thin wrapper: it orchestrates the FishNet broadcast flow, manages connection state and guards, and delegates all crypto to the services above. Every AES-GCM encrypt/decrypt call is wrapped in `try/catch (CryptographicException)` with immediate `ForceDisconnect()` and buffer zeroing on failure. Duplicate-message guards (`srpVerifyProcessed`, `srpSuccessProcessed`, `cookieEchoed`) prevent replay of critical protocol messages within a session.
 
 ## Supported Platforms
 
@@ -75,7 +81,9 @@ All cryptographic operations use BouncyCastle under the hood via `CryptoHelper`.
 - Unity 6.3 LTS with IL2CPP scripting backend.
 - FishNet Networking framework (`FishNet.Authenticating.Authenticator` base class, `NetworkManager`, `ClientManager`, `Broadcast` system).
 - `SecureRemotePassword` library — provides `SrpClient`, `SrpParameters`, `SrpEphemeral`, `SrpSession` for 2048-bit SHA-512 SRP-6a.
-- `CryptoHelper` (from `FishMMO.Shared`) — AES-256-GCM with AAD, X25519 ECDH + HKDF-SHA256, `GcmNonceContext`, `StrictUtf8`, `BuildAad()`, `MaxSrpPayloadBytes`, protocol version constants.
+- `FishMMO-Auth.dll` — Shared authentication library providing:
+  - `FishMMO.Auth.Core`: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, `StrictUtf8`, nonce builder, protocol version constants), `ClientSrpData`, `ClientAuthenticationResult`, `AccessLevel`.
+  - `FishMMO.Auth.Implementation`: `HandshakeService`, `SrpService`, `TokenService` — static service classes that encapsulate all client-side crypto operations.
 - `FishMMO.Shared.Authentication` — centralized validation rules (`IsAllowedUsername`: 3–32 chars, alphanumeric + underscores; `IsAllowedPassword`: 8–32 chars, expanded charset).
 - `Client` class — FishNet client wrapper providing `Broadcast()` and `ForceDisconnect()`.
 - `FishMMO.Logging` — structured logging via `Log.Warning()`, `Log.Error()`, `Log.Debug()`.
@@ -83,7 +91,7 @@ All cryptographic operations use BouncyCastle under the hood via `CryptoHelper`.
 
 ## Installation / Build
 
-This is an integrated module within the FishMMO Unity project. No separate installation steps are required. The client authentication classes are compiled as part of the client assembly and depend on the shared `CryptoHelper` and `Authentication` utilities.
+This is an integrated module within the FishMMO Unity project. The client authentication classes are compiled as part of the client assembly. They depend on `FishMMO-Auth.dll` (auto-copied to `Assets/Dependencies/` by the FishMMO-Auth build) for all crypto service classes and core types, and on the shared `Authentication` validation utilities.
 
 Ensure `ClientLoginAuthenticator` is attached as the authenticator on the FishNet `NetworkManager` used for client connections, and that `SetClient()` is called with a valid `Client` instance before any connection attempt.
 
@@ -391,17 +399,31 @@ LocalConnectionState.Stopping / Stopped
 
 ```
 Client/Authentication/
-├── ClientLoginAuthenticator.cs   # Client-side SRP authentication + token auth + account creation flow
-├── ClientSrpData.cs              # Client SRP state (ephemeral, proof, session verify, salt/verifier generation)
+├── ClientLoginAuthenticator.cs   # Client-side auth orchestrator (thin wrapper around FishMMO-Auth services)
 └── README.md                     # This file
+```
+
+### FishMMO-Auth DLL (shared library)
+
+Core types and crypto services consumed by the authenticator. Built from the `FishMMO-Auth` project and auto-copied to `Assets/Dependencies/FishMMO-Auth.dll`.
+
+```
+FishMMO-Auth/
+├── Core/
+│   ├── CryptoHelper.cs                # AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, GcmNonceContext, nonce builder
+│   ├── ClientSrpData.cs               # Client SRP state (ephemeral, proof, session verify, salt/verifier generation)
+│   ├── ClientAuthenticationResult.cs  # Enum: auth result codes (LoginSuccess, TokenDecryptFailed, etc.)
+│   └── AccessLevel.cs                 # Enum: Player, Moderator, Admin, etc.
+│
+└── Implementation/Services/
+    ├── HandshakeService.cs            # X25519 ECDH key agreement (client + server sides)
+    ├── SrpService.cs                  # Client-side SRP encrypt/decrypt (username, ephemeral, proof, registration, TOTP, 2FA)
+    └── TokenService.cs                # Client-side token encryption for World/Scene server auth
 ```
 
 ### Related Modules
 
 ```
-Shared/Implementation/Tools/Extensions/Crypto/
-└── CryptoHelper.cs               # AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, GcmNonceContext, BuildAad
-
 Shared/Implementation/Network/Authentication/
 ├── ClientHandshake.cs            # Broadcast: client public key + cookie + version range
 ├── ServerHandshake.cs            # Broadcast: server public key + cookie + agreed version
@@ -421,14 +443,15 @@ FishMMO-SharedUtility/
 ```
 FishNet.Authenticating.Authenticator (abstract)
 └── ClientLoginAuthenticator
-        ├── Manages: ClientSrpData (composition)
-        ├── Manages: CryptoHelper.X25519EphemeralKeyPair (composition)
-        ├── Manages: CryptoHelper.GcmNonceContext × 2 (send + receive)
-        └── Events: OnClientAuthenticationResult
+        ├── Manages: ClientSrpData (composition, from FishMMO-Auth)
+        ├── Manages: CryptoHelper.X25519EphemeralKeyPair (composition, from FishMMO-Auth)
+        ├── Manages: CryptoHelper.GcmNonceContext × 2 (send + receive, from FishMMO-Auth)
+        ├── Delegates to: HandshakeService, SrpService, TokenService (from FishMMO-Auth)
+        └── Events: OnClientAuthenticationResult, OnTwoFactorSetupReceived
 ```
 
 ```
-System.Object
+System.Object (from FishMMO-Auth)
 └── ClientSrpData
         ├── Wraps: SrpClient (SecureRemotePassword library)
         ├── Holds: SrpEphemeral (client ephemeral values)
@@ -439,14 +462,17 @@ System.Object
 
 | Type | Purpose |
 |------|---------|
-| `ClientLoginAuthenticator` | Orchestrates client-side auth flow: handshake, SRP verify/proof, account creation, token auth, key material lifecycle, nonce contexts, credential clearing |
-| `ClientSrpData` | Wraps `SrpClient` — generates ephemeral values, computes client proof, generates salt/verifier for registration, verifies server proof |
+| `ClientLoginAuthenticator` | Thin wrapper orchestrating client-side auth flow via FishMMO-Auth services: handshake, SRP verify/proof, account creation, token auth, key material lifecycle, nonce contexts, credential clearing |
+| `ClientSrpData` *(FishMMO-Auth)* | Wraps `SrpClient` — generates ephemeral values, computes client proof, generates salt/verifier for registration, verifies server proof |
+| `HandshakeService` *(FishMMO-Auth)* | X25519 ECDH key agreement and transcript-hash computation |
+| `SrpService` *(FishMMO-Auth)* | Client-side SRP encrypt/decrypt operations for all auth fields |
+| `TokenService` *(FishMMO-Auth)* | Client-side token encryption for World/Scene server auth |
 
 ### Events
 
 | Event | Fired When |
 |-------|-----------|
-| `OnClientAuthenticationResult` | Server sends `SrpSuccessBroadcast` (after successful SRP verification) or `ClientAuthResultBroadcast` (token auth result, `TwoFactorRequired`, `TwoFactorInvalid`, or other server-initiated result) |
+| `OnClientAuthenticationResult` | Server sends `SrpSuccessBroadcast` (fires for **all** `msg.Result` values — LoginSuccess, AlreadyOnline, ServerBusy, etc. — not just success), `ClientAuthResultBroadcast` (token auth result, `TwoFactorRequired`, `TwoFactorInvalid`, or other server-initiated result), or `TokenDecryptFailed` (non-fatal: SRP login succeeded but token decryption failed; fired after the primary result so subscribers can initialize before seeing the warning) |
 | `OnTwoFactorSetupReceived` | During account creation, server sends `TwoFactorSetupBroadcast` with encrypted otpauth URI and recovery codes |
 
 ### External Dependencies
@@ -456,7 +482,7 @@ System.Object
 | `FishNet.Authenticating.Authenticator` | Base class for client/server authentication in FishNet |
 | `FishNet.Managing.NetworkManager` | Provides `ClientManager` for broadcast registration and connection state events |
 | `SecureRemotePassword` | SRP-6a protocol library (2048-bit group, SHA-512): `SrpClient`, `SrpParameters`, `SrpEphemeral`, `SrpSession` |
-| `CryptoHelper` | AES-256-GCM with AAD, X25519 ECDH + HKDF-SHA256, `GcmNonceContext`, nonce builder, `StrictUtf8`, `BuildAad()`, `MaxSrpPayloadBytes`, protocol version constants, `HandshakeDomainSeparator` |
+| `FishMMO-Auth.dll` | Shared auth library: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, nonce builder, `StrictUtf8`), `ClientSrpData`, `ClientAuthenticationResult`, `AccessLevel`, `HandshakeService`, `SrpService`, `TokenService` |
 | `FishMMO.Shared.Authentication` | Centralized validation: `IsAllowedUsername` (3–32 chars, alphanumeric + underscores), `IsAllowedPassword` (8–32 chars, expanded charset) |
 | `Client` | FishNet client wrapper for `Broadcast()` and `ForceDisconnect()` |
 | `FishMMO.Logging` | Structured logging via `Log.Warning()`, `Log.Error()`, `Log.Debug()` |

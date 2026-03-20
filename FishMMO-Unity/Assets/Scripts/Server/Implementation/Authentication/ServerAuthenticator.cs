@@ -311,8 +311,10 @@ namespace FishMMO.Server.Implementation
 			/// Failed TOTP attempt counter. Must be accessed exclusively via
 			/// <see cref="System.Threading.Interlocked"/> methods since the network thread
 			/// and async workers may read/write concurrently.
+			/// Interlocked operations provide full memory barriers, so volatile is
+			/// not strictly required, but it documents the cross-thread intent.
 			/// </summary>
-			public volatile int Attempts;
+			public int Attempts;
 		}
 
 		/// <summary>
@@ -1168,9 +1170,13 @@ namespace FishMMO.Server.Implementation
 				byte[] encryptedServerProof = SrpService.EncryptServerProof(serverProof, request.EncryptionData);
 
 				// Generate and encrypt auth token if signing key is available.
+				// Guard: skip token generation if the connection dropped during the
+				// proof/login round-trip. Without this, GenerateEncryptedAuthTokenAsync
+				// persists a token hash via IssueAsync that will never be redeemed,
+				// creating orphaned DB records under disconnect floods.
 				// Note: encryptedToken is ciphertext — not sensitive even if the lambda
 				// is held alive during main-thread queue backlog.
-				byte[] encryptedToken = authenticated
+				byte[] encryptedToken = (authenticated && conn.IsActive)
 					? await GenerateEncryptedAuthTokenAsync(request.EncryptionData, username, accessLevel)
 					: null;
 
@@ -1266,6 +1272,13 @@ namespace FishMMO.Server.Implementation
 
 			// Per-username rate limit: prevents reconnect-and-retry from resetting
 			// the per-connection attempt cap. Entries expire after the lockout window.
+			//
+			// THREAD NOTE: This lazy eviction runs on the network thread, while
+			// SweepExpiredTotpUsernameFailures runs on the main thread. Both call
+			// TryRemove on the same ConcurrentDictionary, which is thread-safe.
+			// However, an entry that expired microseconds ago may still reject
+			// a legitimate TOTP attempt if the sweep hasn't run yet. This is a
+			// low-impact correctness edge case at bucket boundaries.
 			string userKey = pendingState.Username?.ToLowerInvariant();
 			if (userKey != null && totpUsernameFailures.TryGetValue(userKey, out var failInfo))
 			{
@@ -1610,7 +1623,11 @@ namespace FishMMO.Server.Implementation
 			byte[] encryptedServerProof = SrpService.EncryptServerProof(serverProof, pendingState.EncryptionData);
 
 			// Generate and encrypt auth token.
-			byte[] encryptedToken = await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, username, accessLevel);
+			// Guard: skip if the connection dropped during TOTP verification to avoid
+			// orphaned DB token records (same rationale as the SRP proof path).
+			byte[] encryptedToken = conn.IsActive
+				? await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, username, accessLevel)
+				: null;
 
 			// Marshal login success to main thread.
 			EnqueueMainThread(() =>

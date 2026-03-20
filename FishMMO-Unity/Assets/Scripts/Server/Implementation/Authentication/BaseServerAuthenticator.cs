@@ -762,6 +762,16 @@ namespace FishMMO.Server.Implementation
 
 				if (conn != null)
 				{
+					// RECYCLED-ID GUARD: If FishNet recycled this ClientId and the new
+					// connection already completed authentication, the stale entry belongs
+					// to the old session. Purging here would incorrectly tear down the new
+					// session. Skip and log so operators can monitor the frequency.
+					if (conn.IsAuthenticated)
+					{
+						Log.Warning(LogPrefix, $"SweepStaleAuthentication: ClientId {kvp.Key} is authenticated (likely recycled-ID) — skipping purge.");
+						continue;
+					}
+
 					OnPurgeConnectionState(conn);
 					Server?.AccountManager?.RemoveConnectionAccount(conn);
 					if (conn.IsActive)

@@ -39,6 +39,12 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Maximum allowed size in bytes for an encrypted token payload.
+		/// Tighter than <see cref="CryptoHelper.MaxAesCiphertextSize"/> (64 KB) because
+		/// the token format is: HMAC (64B) + loginServerId (8B) + expiry (8B) +
+		/// accountName (≤64B UTF-8) + accessLevel (4B) + AES-GCM overhead (28B),
+		/// totalling ~176 bytes at maximum. 2048 bytes is ~12× that — an intentionally
+		/// generous ceiling, not a tight bound. Do not raise without re-evaluating the
+		/// token format.
 		/// </summary>
 		private const int MaxTokenPayloadBytes = 2048;
 
@@ -236,6 +242,7 @@ namespace FishMMO.Server.Implementation
 		{
 			NetworkConnection conn = request.Connection;
 			byte[] rawToken = null;
+			byte[] hmacKey = null;
 
 			try
 			{
@@ -263,7 +270,6 @@ namespace FishMMO.Server.Implementation
 
 				// Equalize timing: use a random dummy key if signing key not found
 				// to prevent loginServerId enumeration via response-time oracle.
-				byte[] hmacKey;
 				bool keyFound;
 				if (!keyResult.IsSuccess || keyResult.Data.HmacKey == null || keyResult.Data.HmacKey.Length < CryptoHelper.HmacKeyLength)
 				{
@@ -285,8 +291,18 @@ namespace FishMMO.Server.Implementation
 				}
 
 				// Verify HMAC, cross-check loginServerId, and check expiration via TokenService.
-				var verifyResult = TokenService.VerifyToken(rawToken, hmacKey, keyFound, loginServerId);
-				CryptographicOperations.ZeroMemory(hmacKey);
+				// hmacKey is zeroed in a finally block so it is cleared even if VerifyToken
+				// or any subsequent call throws an unexpected exception.
+				TokenService.TokenVerifyResult verifyResult;
+				try
+				{
+					verifyResult = TokenService.VerifyToken(rawToken, hmacKey, keyFound, loginServerId);
+				}
+				finally
+				{
+					CryptographicOperations.ZeroMemory(hmacKey);
+					hmacKey = null;
+				}
 				CryptographicOperations.ZeroMemory(rawToken);
 				rawToken = null;
 
@@ -360,6 +376,7 @@ namespace FishMMO.Server.Implementation
 			catch (Exception ex)
 			{
 				if (rawToken != null) CryptographicOperations.ZeroMemory(rawToken);
+				if (hmacKey != null) CryptographicOperations.ZeroMemory(hmacKey);
 				await Log.Error(LogPrefix, $"Error during token auth: {ex}");
 				EnqueueMainThread(() =>
 				{

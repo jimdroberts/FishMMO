@@ -19,7 +19,15 @@
 
 ## Overview
 
-Server-side authentication with a bounded-channel architecture for high-throughput, non-blocking operation. Two authentication modes — **SRP-6a** (LoginServer) and **HMAC-signed token verification** (World/Scene servers) — share a common abstract base class (`BaseServerAuthenticator`) that provides X25519 ECDH key exchange, main-thread marshalling, stale-auth TTL sweeps, and connection lifecycle management. Broadcast handlers act as ultra-fast UDP receiver gates with zero blocking; all heavy crypto, database, and SRP/token work is offloaded to async workers via `System.Threading.Channels`. The system is split into transport-agnostic Core types and FishNet-specific Implementation types.
+Server-side authentication with a bounded-channel architecture for high-throughput, non-blocking operation. Two authentication modes — **SRP-6a** (LoginServer) and **HMAC-signed token verification** (World/Scene servers) — share a common abstract base class (`BaseServerAuthenticator`) that provides X25519 ECDH key exchange, main-thread marshalling, stale-auth TTL sweeps, and connection lifecycle management. Broadcast handlers act as ultra-fast UDP receiver gates with zero blocking; all heavy crypto, database, and SRP/token work is offloaded to async workers via `System.Threading.Channels`.
+
+All cryptographic operations are delegated to three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped via the `FishMMO-Auth.dll` shared library):
+
+- **`HandshakeService`** — X25519 ECDH key agreement, transcript-hash computation, and cookie HMAC generation/verification.
+- **`SrpService`** — Server-side SRP field encryption/decryption, fake SRP verifier generation, and all AES-GCM encrypt/decrypt for SRP broadcasts.
+- **`TokenService`** — Server-side token generation, HMAC signing, structure verification, and token encrypt/decrypt.
+
+The authenticator classes are thin wrappers: they orchestrate the FishNet broadcast flow, manage connection state and rate limiting, and delegate all crypto to the services above. Core types (`CryptoHelper`, `ConnectionEncryptionData`, `ServerSrpData`, `SrpVerifyRequest`, `SrpProofRequest`, `AuthState`, `IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`, `AccessLevel`, `ClientAuthenticationResult`) are provided by the `FishMMO.Auth.Core` namespace.
 
 ### Bounded-Channel Pipeline
 
@@ -99,9 +107,10 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>`, drained eac
 
 - **FishNet** — Networking framework providing `Authenticator` base class, `NetworkConnection`, `NetworkManager`, and broadcast infrastructure.
 - **SecureRemotePassword** — SRP-6a library (2048-bit group, SHA-512 parameters).
-- **CryptoHelper** — FishMMO shared crypto utilities: AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, constant-time compare, nonce builder.
+- **FishMMO-Auth.dll** — Shared authentication library providing:
+  - `FishMMO.Auth.Core`: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, `StrictUtf8`, constant-time compare, nonce builder, protocol version constants), `ConnectionEncryptionData`, `ServerSrpData`, `SrpVerifyRequest`, `SrpProofRequest`, `AuthState`, `IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`, `AccessLevel`, `ClientAuthenticationResult`.
+  - `FishMMO.Auth.Implementation`: `HandshakeService`, `SrpService`, `TokenService` — static service classes that encapsulate all server-side crypto operations.
 - **Database services** — `IAccountService` (fetch salt/verifier), `ICharacterService` (online check), `IKickRequestService` (kick persistence), `IAuthTokenService` (token hash CRUD), `ILoginServerSigningKeyService` (HMAC key fetch).
-- **IAccountManager** — Thread-safe account/connection/SRP state management: `ISrpAccountManager<NetworkConnection>` for LoginServer, `ITokenAccountManager<NetworkConnection>` for World/Scene servers.
 - **FishMMO.Shared.Authentication** — Centralized validation rules (`IsAllowedUsername`, `IsAllowedPassword`).
 - **FishMMO.Logging.Log** — Structured async logging.
 - **.NET 6+** — `System.Threading.Channels`, `System.Security.Cryptography` (AES-GCM, X25519, HKDF, HMAC-SHA256/512).
@@ -109,10 +118,10 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>`, drained eac
 
 ## Installation / Build
 
-This module is an integrated part of the FishMMO Unity project. No separate installation is required.
+This module is an integrated part of the FishMMO Unity project. The server authenticator classes are compiled as part of the server assembly and depend on `FishMMO-Auth.dll` (auto-copied to `Assets/Dependencies/` by the FishMMO-Auth build) for all crypto service classes and core types.
 
 1. Open the FishMMO-Unity project in Unity 6.3 LTS.
-2. Ensure FishNet, SecureRemotePassword, and all database service assemblies are present in the project.
+2. Ensure FishNet, SecureRemotePassword, `FishMMO-Auth.dll`, and all database service assemblies are present in the project.
 3. The authenticator components (`ServerAuthenticator`, `TokenServerAuthenticator`) are attached to server prefabs and configured via the Unity Inspector.
 4. Build using IL2CPP scripting backend for production deployment.
 
@@ -405,13 +414,8 @@ On failure at any step, workers call `RejectAndPurge(conn, result)` which atomic
 
 ```
 Server/
-├── Core/Authentication/                       # Transport-agnostic request types and interfaces
-│   ├── IAuthenticatorQueueData.cs             # Interface for bounded channels + CTS runtime data
-│   ├── SrpVerifyRequest.cs                    # Immutable request struct (encrypted credentials)
-│   └── SrpProofRequest.cs                     # Immutable request struct (encrypted proof)
-│
-├── Core/Account/
-│   └── ConnectionEncryptionData.cs            # Per-connection AES keys, nonce counters, sequence tracking
+├── Core/Authentication/
+│   └── IAuthenticatorQueueData.cs             # Interface for bounded channels + CTS runtime data
 │
 ├── Core/Collections/                          # Reusable bounded-sweep trackers
 │   ├── ExpiringKeyTracker.cs                  # Keyed debounce/rate-limit (head-first expiry queue)
@@ -421,15 +425,41 @@ Server/
 └── Implementation/Authentication/             # FishNet-specific authenticators (this directory)
     ├── IServerAuthenticator.cs                # Interface: Server ref + worker lifecycle
     ├── BaseServerAuthenticator.cs             # Abstract base: X25519 handshake, main-thread queue, TTL sweeps, RejectAndPurge
-    ├── ServerAuthenticator.cs                 # SRP-6a authenticator (LoginServer)
-    └── TokenServerAuthenticator.cs            # Token-based authenticator (World/Scene servers)
+    ├── ServerAuthenticator.cs                 # SRP-6a authenticator (LoginServer) — thin wrapper around FishMMO-Auth services
+    └── TokenServerAuthenticator.cs            # Token-based authenticator (World/Scene servers) — thin wrapper around FishMMO-Auth services
+```
 
-Shared/
-├── Implementation/Network/Authentication/
-│   └── AuthenticationBroadcasts.cs            # ClientHandshake, ServerHandshake, SrpVerify/Proof/Success, AuthResult
+### FishMMO-Auth DLL (shared library)
+
+Core types and crypto services consumed by the authenticators. Built from the `FishMMO-Auth` project and auto-copied to `Assets/Dependencies/FishMMO-Auth.dll`.
+
+```
+FishMMO-Auth/
+├── Core/
+│   ├── CryptoHelper.cs                        # AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, GcmNonceContext, nonce builder
+│   ├── ConnectionEncryptionData.cs            # Per-connection AES keys, nonce counters, sequence tracking
+│   ├── ServerSrpData.cs                       # Server SRP state (verifier, ephemeral, session)
+│   ├── SrpVerifyRequest.cs                    # Immutable request struct (encrypted credentials)
+│   ├── SrpProofRequest.cs                     # Immutable request struct (encrypted proof)
+│   ├── AuthState.cs                           # Enum: Handshake → VerifyPending → WaitingForProof → ProofPending → SrpSuccess → Authenticated
+│   ├── AccessLevel.cs                         # Enum: Player, Moderator, Admin, etc.
+│   ├── ClientAuthenticationResult.cs          # Enum: auth result codes (LoginSuccess, TokenDecryptFailed, etc.)
+│   ├── IAccountManager.cs                     # Thread-safe account/connection state management interface
+│   ├── ISrpAccountManager.cs                  # SRP-specific account manager (LoginServer)
+│   └── ITokenAccountManager.cs                # Token-specific account manager (World/Scene servers)
 │
-└── Implementation/Tools/Extensions/Crypto/
-    └── CryptoHelper.cs                        # AES-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, nonce builder
+└── Implementation/Services/
+    ├── HandshakeService.cs                    # X25519 ECDH key agreement, cookie HMAC (client + server sides)
+    ├── SrpService.cs                          # Server-side SRP encrypt/decrypt, fake SRP verifier generation
+    └── TokenService.cs                        # Token generation, HMAC signing, structure verification
+```
+
+### Related Modules
+
+```
+Shared/
+└── Implementation/Network/Authentication/
+    └── AuthenticationBroadcasts.cs            # ClientHandshake, ServerHandshake, SrpVerify/Proof/Success, AuthResult
 ```
 
 ### Inheritance Hierarchy
@@ -446,9 +476,9 @@ Authenticator (FishNet)
 ### Key Interfaces
 
 - **`IServerAuthenticator`** — Common interface exposing `Server` property, `InitializeWorkers()`, and `ShutdownWorkers()`.
-- **`BaseServerAuthenticator`** — Abstract base providing handshake, TTL tracking, main-thread queue, sweep infrastructure, `RejectAndPurge`, `RefreshAuthTtl`, `TryLoginAsync` (virtual).
-- **`ServerAuthenticator`** — SRP-6a implementation: bounded verify/proof channels, fake SRP verifier, per-IP/account debounce, IP cache, kick-request debounce, token generation.
-- **`TokenServerAuthenticator`** — Token-based implementation: bounded token channel, HMAC verification with timing equalization, expiration/revocation checks.
+- **`BaseServerAuthenticator`** — Abstract base providing handshake (via `HandshakeService`), TTL tracking, main-thread queue, sweep infrastructure, `RejectAndPurge`, `RefreshAuthTtl`, `TryLoginAsync` (virtual).
+- **`ServerAuthenticator`** — SRP-6a implementation: bounded verify/proof channels, fake SRP verifier (via `SrpService`), per-IP/account debounce, IP cache, kick-request debounce, token generation (via `TokenService`).
+- **`TokenServerAuthenticator`** — Token-based implementation: bounded token channel, HMAC verification with timing equalization (via `TokenService`), expiration/revocation checks.
 
 ### Broadcast Types
 
@@ -483,6 +513,7 @@ Authenticator (FishNet)
 | `TokenInvalid` | Token HMAC verification failed or structure invalid |
 | `TokenExpired` | Token past expiration time |
 | `TokenRevoked` | Token revoked in database |
+| `TokenDecryptFailed` | Client-only: SRP login succeeded but auth token decryption failed (non-fatal, not sent over wire) |
 
 ### Security Summary
 
@@ -531,9 +562,8 @@ Authenticator (FishNet)
 | `FishNet.Connection.NetworkConnection` | Connection type (`TConnection`) |
 | `System.Threading.Channels` | Bounded async producer-consumer queues |
 | `SecureRemotePassword` | SRP-6a library (2048-bit group, SHA-512) |
-| `CryptoHelper` | AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, constant-time compare |
+| `FishMMO-Auth.dll` | Shared auth library: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, nonce builder, `StrictUtf8`, constant-time compare), `ConnectionEncryptionData`, `ServerSrpData`, `SrpVerifyRequest`, `SrpProofRequest`, `AuthState`, `IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`, `AccessLevel`, `ClientAuthenticationResult`, `HandshakeService`, `SrpService`, `TokenService` |
 | `FishMMO.Shared.Authentication` | Centralized validation rules (`IsAllowedUsername`, `IsAllowedPassword`) |
-| `IAccountManager<NetworkConnection>` | Thread-safe account/connection/SRP state management |
 | `IAccountService` | Database: fetch account salt/verifier for SRP |
 | `ICharacterService` | Database: check online characters |
 | `IKickRequestService` | Database: persist kick requests for already-online accounts |

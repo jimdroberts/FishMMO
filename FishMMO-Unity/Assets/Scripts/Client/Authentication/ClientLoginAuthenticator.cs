@@ -15,6 +15,19 @@ namespace FishMMO.Client
 {
 	public class ClientLoginAuthenticator : Authenticator
 	{
+		// ── Credential field lifetime ──────────────────────────────────────────
+		// username, password, and email are set by SetLoginCredentials and persist
+		// across the entire handshake round-trip (connection → cookie echo →
+		// X25519 → SRP verify → SRP proof). They are cleared:
+		//   • On success: immediately after GetProof in OnClientSrpVerifyBroadcastReceived.
+		//   • On failure / disconnect: by ClearKeyMaterial (called from ClientManager_OnClientConnectionState).
+		// The window between SetLoginCredentials and clearing is the full
+		// handshake duration. This is unavoidable given the SRP multi-step
+		// protocol — the password is needed to compute the proof after the
+		// server's salt and ephemeral arrive. The managed-string constraint
+		// (see password field doc) prevents deterministic zeroization.
+		// ──────────────────────────────────────────────────────────────────────
+
 		/// <summary>
 		/// The username used for authentication or registration.
 		/// </summary>
@@ -630,8 +643,21 @@ namespace FishMMO.Client
 					}
 				}
 
-				// Invoke result on the client
+				// EVENT NOTE: This fires for ALL msg.Result values (LoginSuccess,
+				// AlreadyOnline, ServerBusy, etc.) — not just LoginSuccess.
+				// Subscribers must handle every result code. Do not add early-returns
+				// above that skip this invoke.
 				OnClientAuthenticationResult?.Invoke(msg.Result);
+
+				// Surface token-decrypt failure AFTER the primary result so subscribers
+				// that process LoginSuccess can initialize UI state before seeing the
+				// non-fatal TokenDecryptFailed warning. This avoids the ordering issue
+				// where a subscriber treating TokenDecryptFailed as terminal would tear
+				// down state before the LoginSuccess event arrives.
+				if (msg.Result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null)
+				{
+					OnClientAuthenticationResult?.Invoke(ClientAuthenticationResult.TokenDecryptFailed);
+				}
 				Log.Debug("ClientLoginAuthenticator", msg.Result.ToString());
 				// Clear SRP state now that authentication decision has been made.
 				SrpData.Clear();
