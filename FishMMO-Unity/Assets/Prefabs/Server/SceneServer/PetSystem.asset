@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 054d5938de48d9fc1ae363566ac585a4, type: 3}
+  m_Name: PetSystem
+  m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Server.Implementation.World.SceneServer.PetSystem
+  maxMainThreadActionsPerFrame: 100
+  ingressDebounceMilliseconds: 80
+  ingressSweepIntervalSeconds: 5
+  ingressEntryTtlSeconds: 30
+  ingressSweepMaxRemovals: 128
+  PetSummonAchievementTemplate: {fileID: 0}

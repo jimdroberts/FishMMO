@@ -1,8 +1,7 @@
 using System;
 using FishMMO.Server.Core;
-using FishMMO.Server.Core.World;
 
-namespace FishMMO.Server.Implementation.World
+namespace FishMMO.Server.Implementation
 {
 	/// <summary>
 	/// Runtime data container for kick request processing state.

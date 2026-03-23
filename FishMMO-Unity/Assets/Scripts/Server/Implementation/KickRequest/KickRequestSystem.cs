@@ -6,11 +6,10 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
-using FishMMO.Server.Core.World;
 using FishMMO.Logging;
 using UnityEngine;
 
-namespace FishMMO.Server.Implementation.World
+namespace FishMMO.Server.Implementation
 {
 	/// <summary>
 	/// System for processing kick requests from the database and disconnecting accounts as needed.

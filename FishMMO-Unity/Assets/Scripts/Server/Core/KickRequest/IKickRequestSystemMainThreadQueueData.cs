@@ -1,4 +1,4 @@
-namespace FishMMO.Server.Core.World
+namespace FishMMO.Server.Core
 {
 	/// <summary>
 	/// Main-thread queue data interface for KickRequestSystem.

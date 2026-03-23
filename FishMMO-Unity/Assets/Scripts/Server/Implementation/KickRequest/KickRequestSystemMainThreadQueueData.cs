@@ -1,6 +1,6 @@
-using FishMMO.Server.Core.World;
+using FishMMO.Server.Core;
 
-namespace FishMMO.Server.Implementation.World
+namespace FishMMO.Server.Implementation
 {
 	/// <summary>
 	/// Main-thread queue data container for KickRequestSystem.

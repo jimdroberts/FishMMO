@@ -1,6 +1,6 @@
 using System;
 
-namespace FishMMO.Server.Core.World
+namespace FishMMO.Server.Core
 {
 	/// <summary>
 	/// Runtime data container for kick request processing state.

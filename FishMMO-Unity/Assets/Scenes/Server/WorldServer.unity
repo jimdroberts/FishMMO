@@ -42,7 +42,8 @@ RenderSettings:
 --- !u!157 &3
 LightmapSettings:
   m_ObjectHideFlags: 0
-  serializedVersion: 12
+  serializedVersion: 13
+  m_BakeOnSceneLoad: 0
   m_GISettings:
     serializedVersion: 2
     m_BounceScale: 1
@@ -128,10 +129,6 @@ GameObject:
   m_Component:
   - component: {fileID: 403242370}
   - component: {fileID: 5067100453716751384}
-  - component: {fileID: 403242372}
-  - component: {fileID: 838785960550179767}
-  - component: {fileID: 4829848709659849943}
-  - component: {fileID: 2481864539687826685}
   m_Layer: 0
   m_Name: ServerSystems
   m_TagString: Untagged
@@ -154,21 +151,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &403242372
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 403242367}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2d4ee952c5a180845abb775163401c3d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  Title: 
-  UpdateRate: 2
-  NextUpdate: 0
 --- !u!114 &142982559366625886
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -219,7 +201,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d678b81cf0047640b4bb844b5f799ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxPlayers: 5000
+  maxMainThreadActionsPerUpdate: 100
+  maxPlayers: 5000
 --- !u!114 &567623045811336610
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -232,25 +215,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
+  _spawnablePrefabs: {fileID: 11400000, guid: 7d40862968a2aed4f859067648b24444, type: 2}
   _refreshDefaultPrefabs: 1
   _runInBackground: 1
   _dontDestroyOnLoad: 1
   _objectPool: {fileID: 0}
   _persistence: 0
-  _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
-  _spawnablePrefabs: {fileID: 11400000, guid: 7d40862968a2aed4f859067648b24444, type: 2}
---- !u!114 &838785960550179767
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 403242367}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fa6f1f6fbcb46fc4e863718e94eb7a99, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &984075724013670904
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -277,20 +248,6 @@ MonoBehaviour:
   _frameRate: 60
   _shareIds: 1
   _startOnHeadless: 0
---- !u!114 &2481864539687826685
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 403242367}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c6265c32a755fc941923340579f96fb7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  UpdatePumpRate: 5
-  UpdateFetchCount: 100
 --- !u!1 &2696072683140574242
 GameObject:
   m_ObjectHideFlags: 0
@@ -370,20 +327,6 @@ MonoBehaviour:
     _latency: 70
     _outOfOrder: 0
     _packetLoss: 0
---- !u!114 &4829848709659849943
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 403242367}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3fc59b50d486f3946b1a9625bb84bb31, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  WorldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
-    type: 2}
 --- !u!114 &5067100453716751384
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -398,6 +341,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   AddressOverride: 
   PortOverride: 0
+  serverBehaviours:
+  - {fileID: 11400000, guid: 3cfe401ccb6fbd445a4d7da9c623957d, type: 2}
+  - {fileID: 11400000, guid: 72b6fb8767c0656c98ba7177dd4a470a, type: 2}
+  - {fileID: 11400000, guid: cfab38130929316f08ac6e1f44fa64bd, type: 2}
+  - {fileID: 11400000, guid: dc4f8795668c259a198bd41e7f1285e7, type: 2}
 --- !u!114 &5291881772170593457
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7dede7e64740a51f6ab8ae52a6e6757d, type: 3}
+  m_Name: SceneServerSystem
+  m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Server.Implementation.World.SceneServer.SceneServerSystem
+  maxMainThreadActionsPerFrame: 100
+  pendingSceneTimeoutSeconds: 60
+  pendingSceneSweepIntervalSeconds: 2
+  pendingSceneSweepMaxRemovals: 64
+  maxScenesLoadedPerPulse: 3
+  pulseRate: 5
+  worldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
+    type: 2}

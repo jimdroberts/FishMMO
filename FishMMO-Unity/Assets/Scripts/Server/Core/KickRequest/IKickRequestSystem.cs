@@ -1,4 +1,4 @@
-namespace FishMMO.Server.Core.World
+namespace FishMMO.Server.Core
 {
 	/// <summary>
 	/// Engine-agnostic public API for the kick request processing system on a world server.

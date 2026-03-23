@@ -19,12 +19,12 @@
 
 ## Overview
 
-The Kick Request system enforces account disconnect requests issued through the database. It runs on the World Server as a `ServerBehaviour` and periodically polls for new kick requests using cursor-based pagination. Each request is validated against account last-login timestamps to filter stale entries (accounts that have already reconnected). Valid kick actions are marshalled to the Unity main thread through a dedicated `MainThreadQueueData` container, since FishNet's `NetworkConnection.Kick(...)` is not thread-safe.
+The Kick Request system enforces account disconnect requests issued through the database. It runs on any FishMMO server (Login, Scene, or World) as a `ServerBehaviour` and periodically polls for new kick requests using cursor-based pagination. Each request is validated against account last-login timestamps to filter stale entries (accounts that have already reconnected). Valid kick actions are marshalled to the Unity main thread through a dedicated `MainThreadQueueData` container, since FishNet's `NetworkConnection.Kick(...)` is not thread-safe.
 
 The system is split into a Core interface layer and an Implementation layer:
 
-- **Core layer** — Defines `IKickRequestSystem`, `IKickRequestSystemQueueData`, and `IKickRequestSystemMainThreadQueueData` as engine-agnostic contracts. Other systems can query or modify runtime pump parameters (`UpdatePumpRate`, `UpdateFetchCount`) without referencing the implementation.
-- **Implementation layer** — Provides three concrete classes:
+- **Core layer** (`Server/Core/World/KickRequest/`) — Defines `IKickRequestSystem`, `IKickRequestSystemQueueData`, and `IKickRequestSystemMainThreadQueueData` as engine-agnostic contracts. Other systems can query or modify runtime pump parameters (`UpdatePumpRate`, `UpdateFetchCount`) without referencing the implementation.
+- **Implementation layer** (`Server/Implementation/KickRequest/`) — Provides three concrete classes:
   - **`KickRequestSystem`** — Orchestrates polling, validation, and kick execution. Extends `ServerBehaviour` and implements `IKickRequestSystem`.
   - **`KickRequestSystemQueueData`** — Tracks polling cursor state (`LastFetchTime`, `LastPosition`) and an overlap gate (`IsProcessing`). Extends `RuntimeDataContainer`.
   - **`KickRequestSystemMainThreadQueueData`** — Per-system main-thread action queue container. Extends `SystemMainThreadQueueData`.
@@ -65,11 +65,11 @@ Database and polling work run asynchronously via `AsyncWorkerData`, while all Fi
 
 ## Installation / Build
 
-The Kick Request system is an integrated module within the FishMMO server architecture. It is included automatically when building the World Server and requires no separate installation steps.
+The Kick Request system is an integrated module within the FishMMO server architecture. It is included automatically when building any server (Login, Scene, or World) and requires no separate installation steps.
 
 1. Ensure the FishMMO Unity project is set up with all dependencies resolved.
 2. Create a `KickRequestSystem` ScriptableObject asset via **Assets → Create → FishMMO → Server → WorldServer → Kick Request System**.
-3. Assign the asset to the World Server's system list.
+3. Assign the asset to the target server's system list.
 4. Create `KickRequestSystemQueueData` and `KickRequestSystemMainThreadQueueData` data container assets and register them in the `DataContainerRegistry`.
 
 ## Quick Start Guides
@@ -243,18 +243,16 @@ if (database.ServiceRegistry.TryGet<IKickRequestService>(out var kickService))
 ```
 Server/
 ├── Core/
-│   └── World/
-│       └── KickRequest/
-│           ├── IKickRequestSystem.cs                    # Engine-agnostic public API (UpdatePumpRate, UpdateFetchCount)
-│           ├── IKickRequestSystemQueueData.cs           # Polling state contract (IsProcessing, LastFetchTime, LastPosition)
-│           └── IKickRequestSystemMainThreadQueueData.cs # Main-thread queue marker interface
+│   └── KickRequest/
+│       ├── IKickRequestSystem.cs                    # Engine-agnostic public API (UpdatePumpRate, UpdateFetchCount)
+│       ├── IKickRequestSystemQueueData.cs           # Polling state contract (IsProcessing, LastFetchTime, LastPosition)
+│       └── IKickRequestSystemMainThreadQueueData.cs # Main-thread queue marker interface
 └── Implementation/
-    └── World/
-        └── KickRequest/
-            ├── KickRequestSystem.cs                     # Polling, validation, and kick execution orchestration
-            ├── KickRequestSystemQueueData.cs            # Polling cursor + processing gate runtime state
-            ├── KickRequestSystemMainThreadQueueData.cs  # Per-system main-thread action queue container
-            └── README.md
+    └── KickRequest/
+        ├── KickRequestSystem.cs                     # Polling, validation, and kick execution orchestration
+        ├── KickRequestSystemQueueData.cs            # Polling cursor + processing gate runtime state
+        ├── KickRequestSystemMainThreadQueueData.cs  # Per-system main-thread action queue container
+        └── README.md
 ```
 
 ### Inheritance Hierarchies
