@@ -68,8 +68,20 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 				try
 				{
+					// SBP cannot build asset bundles under the Server subtarget.
+					// Temporarily switch to Player for the addressable build, then restore
+					// the requested subtarget for the player build.
+					if (subTarget == StandaloneBuildSubtarget.Server)
+					{
+						EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
+					}
+
 					Log.Debug("BuildLogger", "Configuring addressables...");
-					addressableManager.BuildAddressablesWithExclusions(excludedAddressableGroups);
+					bool isWebGL = buildTarget == BuildTarget.WebGL;
+					addressableManager.BuildAddressablesWithExclusions(excludedAddressableGroups, isWebGL, isWebGL);
+
+					// Restore the actual subtarget for the player build
+					EditorUserBuildSettings.standaloneBuildSubtarget = subTarget;
 
 					//Log.Debug("BuildLogger", "Generating linker file...");
 					//linkerGenerator.GenerateLinker(linkerRootPath, linkerDirectoryPath);
@@ -180,16 +192,20 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			bool enableCrc = (osTarget == OSTargetEnvironment.WebGL);
 			bool useUnityWebRequest = (osTarget == OSTargetEnvironment.WebGL);
 
-			BuildAddressablesWithExclusionsWrapper(excludedGroups, enableCrc, useUnityWebRequest);
+			BuildTarget buildTarget = BuildEnvironmentOptions.GetBuildTarget(osTarget);
+			BuildAddressablesWithExclusionsWrapper(excludedGroups, buildTarget, enableCrc, useUnityWebRequest);
 		}
 
 		/// <summary>
 		/// Helper method to build addressables with proper error handling and cleanup.
+		/// Asset bundles are always built for the Player subtarget — bundles are platform-specific
+		/// but not subtarget-specific, so Server vs Player distinction is irrelevant for content.
 		/// </summary>
 		/// <param name="excludeGroups">Array of group name substrings to exclude from the build.</param>
+		/// <param name="buildTarget">The build target platform (e.g. StandaloneLinux64, WebGL).</param>
 		/// <param name="enableCrcForRemoteLoading">If true, enables CRC checking for remote bundle loading (WebGL/CDN). If false, disables CRC for local StreamingAssets loading.</param>
 		/// <param name="useUnityWebRequestForLocal">If true, uses UnityWebRequest for local bundles (WebGL requirement). If false, uses LoadFromFileAsync (better performance for Windows/Linux).</param>
-		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups, bool enableCrcForRemoteLoading = false, bool useUnityWebRequestForLocal = false)
+		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups, BuildTarget buildTarget, bool enableCrcForRemoteLoading = false, bool useUnityWebRequestForLocal = false)
 		{
 			InitializeLogger();
 
@@ -198,11 +214,10 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 			try
 			{
-				// Get the current build target - addressables build for current platform
-				StandaloneBuildSubtarget currentSubTarget = EditorUserBuildSettings.standaloneBuildSubtarget;
-				BuildTarget currentTarget = EditorUserBuildSettings.activeBuildTarget;
-
-				configurator.Configure(currentSubTarget, currentTarget);
+				// Always use Player subtarget for addressable builds. Asset bundles contain
+				// assets, not code — the Server/Player distinction doesn't affect bundle content.
+				// Building with Server subtarget causes SBP failures.
+				configurator.Configure(StandaloneBuildSubtarget.Player, buildTarget);
 				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
 			}
 			catch (System.Exception ex)

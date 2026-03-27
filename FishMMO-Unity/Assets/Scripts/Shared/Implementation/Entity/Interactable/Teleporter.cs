@@ -15,6 +15,13 @@ namespace FishMMO.Shared
 		public Transform Target;
 
 		/// <summary>
+		/// The stable destination ID this teleporter connects to for cross-scene teleportation.
+		/// Used when Target is null. Selected via editor dropdown from the TeleporterCache.
+		/// </summary>
+		[SerializeField]
+		public string DestinationID;
+
+		/// <summary>
 		/// Achievement to increment when a player uses this teleporter.
 		/// </summary>
 		public AchievementTemplate AchievementTemplate;

@@ -12,3 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 53f7da6079aeaeb499571b6da4980297, type: 3}
   m_Name: FishMMO World Scene Details Reader
   m_EditorClassIdentifier: 
+  TeleporterCache: {fileID: 11400000, guid: 3a43eddc2e7096b9ba1e5d97c98932e0, type: 2}

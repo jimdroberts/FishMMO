@@ -12,14 +12,20 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// ScriptableObject responsible for reading and rebuilding world scene details from Unity scenes.
-	/// Scans all configured world scenes, extracts spawn positions, boundaries, teleporters, and destinations, and populates the cache dictionary.
+	/// Scans all configured world scenes, extracts spawn positions, boundaries, teleporters, and validates destinations against the TeleporterCache.
 	/// </summary>
 	[CreateAssetMenu(fileName = "FishMMO World Scene Details Reader", menuName = "FishMMO/World Scene Details Reader")]
 	public class WorldSceneDetailsCacheReader : ScriptableObject
 	{
 		/// <summary>
+		/// Reference to the TeleporterCache used to validate teleporter destination connections during rebuild.
+		/// </summary>
+		public TeleporterCache TeleporterCache;
+
+		/// <summary>
 		/// Scans all world scenes and rebuilds the provided scene details dictionary.
-		/// Extracts spawn positions, boundaries, teleporters, and teleporter destinations from each scene.
+		/// Extracts spawn positions, boundaries, and teleporters from each scene.
+		/// Teleporter destinations are validated against the TeleporterCache; missing destinations produce errors.
 		/// </summary>
 		/// <param name="worldSceneDetailsDictionary">Reference to the dictionary to populate with scene details.</param>
 		/// <returns>True if the rebuild process completes; otherwise, false.</returns>
@@ -34,10 +40,6 @@ namespace FishMMO.Shared
 			// Clear and reinitialize the dictionary to ensure a fresh rebuild.
 			worldSceneDetailsDictionary.Clear();
 			worldSceneDetailsDictionary = new WorldSceneDetailsDictionary();
-
-			// Caches for teleporters and their destinations, used to connect them after scanning.
-			Dictionary<string, Dictionary<string, SceneTeleporterDetails>> teleporterCache = new Dictionary<string, Dictionary<string, SceneTeleporterDetails>>();
-			Dictionary<string, TeleporterDestinationDetails> teleporterDestinationCache = new Dictionary<string, TeleporterDestinationDetails>();
 
 			// Get the initial scene so we can return to it after scanning.
 			Scene initialScene = EditorSceneManager.GetActiveScene();
@@ -138,62 +140,85 @@ namespace FishMMO.Shared
 						});
 					}
 
-					// Search for scene teleporters.
+					// Search for scene teleporters and validate against TeleporterCache.
 					SceneTeleporter[] teleports = GameObject.FindObjectsByType<SceneTeleporter>(FindObjectsSortMode.None);
 					foreach (SceneTeleporter obj in teleports)
 					{
 						obj.name = obj.name.Trim();
 
-						Log.Debug("WorldSceneDetailsCacheReader", $"Found new SceneTeleporter[{obj.name}]");
+						if (sceneDetails.Teleporters.ContainsKey(obj.name))
+						{
+							Log.Error("WorldSceneDetailsCacheReader", $"Duplicate teleporter name '{obj.name}' in scene '{currentScene.name}'. Teleporter names must be unique within a scene. Skipping duplicate.");
+							continue;
+						}
+
+						if (string.IsNullOrEmpty(obj.DestinationID))
+						{
+							Log.Error("WorldSceneDetailsCacheReader", $"SceneTeleporter '{obj.name}' in scene '{currentScene.name}' has no DestinationID assigned. Select a destination in the inspector.");
+							continue;
+						}
+
+						if (TeleporterCache == null || !TeleporterCache.Destinations.TryGetValue(obj.DestinationID, out TeleporterCacheEntry destinationEntry))
+						{
+							Log.Error("WorldSceneDetailsCacheReader", $"SceneTeleporter '{obj.name}' in scene '{currentScene.name}' references DestinationID '{obj.DestinationID}' which does not exist in the TeleporterCache. The destination may have been removed. Rebuild the TeleporterCache.");
+							continue;
+						}
+
+						Log.Debug("WorldSceneDetailsCacheReader", $"Found SceneTeleporter[{obj.name}] -> Destination[{destinationEntry.DisplayName} in {destinationEntry.SceneName}]");
 
 						SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
 						{
-							From = obj.name, // used for validation
-											 // Destination will be set later
+							From = obj.name,
+							ToScene = destinationEntry.SceneName,
+							ToPosition = destinationEntry.Position,
+							ToRotation = destinationEntry.Rotation,
 						};
 
-						if (!teleporterCache.TryGetValue(currentScene.name, out Dictionary<string, SceneTeleporterDetails> teleporters))
-						{
-							teleporterCache.Add(currentScene.name, teleporters = new Dictionary<string, SceneTeleporterDetails>());
-						}
-						teleporters.Add(obj.name, newDetails);
+						sceneDetails.Teleporters.Add(obj.name, newDetails);
 					}
 
-					// Search for interactable teleporters.
+					// Search for interactable teleporters and validate against TeleporterCache.
 					Teleporter[] interactableTeleporters = GameObject.FindObjectsByType<Teleporter>(FindObjectsSortMode.None);
 					foreach (Teleporter obj in interactableTeleporters)
 					{
 						obj.name = obj.name.Trim();
 
-						Log.Debug("WorldSceneDetailsCacheReader", $"Found new Teleporter[{obj.name}]");
+						if (sceneDetails.Teleporters.ContainsKey(obj.name))
+						{
+							Log.Error("WorldSceneDetailsCacheReader", $"Duplicate teleporter name '{obj.name}' in scene '{currentScene.name}'. Teleporter names must be unique within a scene. Skipping duplicate.");
+							continue;
+						}
+
+						if (string.IsNullOrEmpty(obj.DestinationID))
+						{
+							// Interactable teleporters with a direct Target don't need a DestinationID.
+							if (obj.Target != null)
+							{
+								Log.Debug("WorldSceneDetailsCacheReader", $"Teleporter '{obj.name}' in scene '{currentScene.name}' uses a direct Target. Skipping destination validation.");
+								continue;
+							}
+
+							Log.Error("WorldSceneDetailsCacheReader", $"Teleporter '{obj.name}' in scene '{currentScene.name}' has no DestinationID and no Target assigned. Select a destination in the inspector or assign a Target.");
+							continue;
+						}
+
+						if (TeleporterCache == null || !TeleporterCache.Destinations.TryGetValue(obj.DestinationID, out TeleporterCacheEntry destinationEntry))
+						{
+							Log.Error("WorldSceneDetailsCacheReader", $"Teleporter '{obj.name}' in scene '{currentScene.name}' references DestinationID '{obj.DestinationID}' which does not exist in the TeleporterCache. The destination may have been removed. Rebuild the TeleporterCache.");
+							continue;
+						}
+
+						Log.Debug("WorldSceneDetailsCacheReader", $"Found Teleporter[{obj.name}] -> Destination[{destinationEntry.DisplayName} in {destinationEntry.SceneName}]");
 
 						SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
 						{
-							From = obj.name, // used for validation
-											 // Destination will be set later
+							From = obj.name,
+							ToScene = destinationEntry.SceneName,
+							ToPosition = destinationEntry.Position,
+							ToRotation = destinationEntry.Rotation,
 						};
 
-						if (!teleporterCache.TryGetValue(currentScene.name, out Dictionary<string, SceneTeleporterDetails> teleporters))
-						{
-							teleporterCache.Add(currentScene.name, teleporters = new Dictionary<string, SceneTeleporterDetails>());
-						}
-						teleporters.Add(obj.name, newDetails);
-					}
-
-					// Search for teleporter destinations.
-					TeleporterDestination[] teleportDestinations = GameObject.FindObjectsByType<TeleporterDestination>(FindObjectsSortMode.None);
-					foreach (TeleporterDestination obj in teleportDestinations)
-					{
-						string teleporterDestinationName = obj.name.Trim();
-
-						Log.Debug("WorldSceneDetailsCacheReader", $"Found new Teleporter Destination[Destination:{teleporterDestinationName} {obj.transform.position}]");
-
-						teleporterDestinationCache.Add(teleporterDestinationName, new TeleporterDestinationDetails()
-						{
-							Scene = currentScene.name,
-							Position = obj.transform.position,
-							Rotation = obj.transform.rotation,
-						});
+						sceneDetails.Teleporters.Add(obj.name, newDetails);
 					}
 				}
 				// Unload the scene after scanning.
@@ -208,31 +233,6 @@ namespace FishMMO.Shared
 				EditorSceneManager.CloseScene(initialScene, true);
 			}
 
-			Log.Debug("WorldSceneDetailsCacheReader", "Connecting teleporters...");
-
-			// Assign teleporter destination positions to each teleporter.
-			foreach (KeyValuePair<string, Dictionary<string, SceneTeleporterDetails>> teleporterDetailsPair in teleporterCache)
-			{
-				foreach (KeyValuePair<string, SceneTeleporterDetails> pair in teleporterDetailsPair.Value)
-				{
-					string destinationName = "From" + pair.Value.From;
-
-					if (teleporterDestinationCache.TryGetValue(destinationName, out TeleporterDestinationDetails destination))
-					{
-						Log.Debug("WorldSceneDetailsCacheReader", $"Connecting {teleporterDetailsPair.Key} -> {destinationName}");
-						if (worldSceneDetailsDictionary.TryGetValue(teleporterDetailsPair.Key, out WorldSceneDetails sceneDetails))
-						{
-							pair.Value.ToScene = destination.Scene;
-							pair.Value.ToPosition = destination.Position;
-							pair.Value.ToRotation = destination.Rotation;
-
-							Log.Debug("WorldSceneDetailsCacheReader", $"Teleporter {pair.Key} connected to Scene[{destination.Scene}: Destination:From{pair.Value.From} Position:{pair.Value.ToPosition} Rotation:{pair.Value.ToRotation.eulerAngles}]");
-
-							sceneDetails.Teleporters.Add(pair.Key, pair.Value);
-						}
-					}
-				}
-			}
 			Log.Debug("WorldSceneDetailsCacheReader", "Rebuild Complete");
 #endif
 			return true;

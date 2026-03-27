@@ -1,4 +1,6 @@
 using UnityEngine;
+using FishMMO.Shared.Core;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -7,6 +9,12 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class SceneTeleporter : MonoBehaviour
 	{
+		/// <summary>
+		/// The stable destination ID this teleporter connects to. Selected via editor dropdown from the TeleporterCache.
+		/// </summary>
+		[SerializeField, HideInInspector]
+		public string DestinationID;
+
 #if UNITY_EDITOR
 		/// <summary>
 		/// The color used to draw the teleporter gizmo in the editor.

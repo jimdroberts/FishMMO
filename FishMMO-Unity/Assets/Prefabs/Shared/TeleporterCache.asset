@@ -1,0 +1,156 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2c76d2b60e793191bbfcd5a2bac8ef7, type: 3}
+  m_Name: TeleporterCache
+  m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Shared.TeleporterCache
+  Destinations:
+    m_keys:
+    - 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
+    - 8cc50df6-4bab-4505-84dc-28d5cf672c96
+    - e97dae04-89b3-47a3-9d9c-56d8f2f05b55
+    - 6459955d-9b23-40b1-8863-37e5616b1800
+    - 233ec218-7363-4d27-9e29-7645a4151c1c
+    - f5af695c-c112-48c1-b738-41522ab8b500
+    - 26b009fe-1369-4c28-baf0-8085c8b66300
+    - 72dbbbc0-3b12-4768-8206-16bac1b58f4f
+    - 798eff71-f469-46cb-9312-cc2cdf3c07ed
+    - 9c7e8c79-fd27-4e35-92bd-aec16302146e
+    - 79f661e5-9832-4446-8801-42b88b6d02b9
+    m_values:
+    - DestinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
+      SceneName: Dungeon
+      DisplayName: FromDungeon A 1
+      Position: {x: -130.84203, y: 17.6, z: 22.710613}
+      Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+    - DestinationID: 8cc50df6-4bab-4505-84dc-28d5cf672c96
+      SceneName: StartScene A
+      DisplayName: FromTutorial SpawnPoints Entrance
+      Position: {x: 15.661569, y: 30.904213, z: -41.275322}
+      Rotation: {x: -0, y: 1, z: -0, w: 0}
+    - DestinationID: e97dae04-89b3-47a3-9d9c-56d8f2f05b55
+      SceneName: StartScene A
+      DisplayName: FromTutorial Spawners Entrance
+      Position: {x: 29.111568, y: 30.904213, z: -41.27882}
+      Rotation: {x: -0, y: 1, z: -0, w: 0}
+    - DestinationID: 6459955d-9b23-40b1-8863-37e5616b1800
+      SceneName: StartScene A
+      DisplayName: FromTutorial Regions Entrance
+      Position: {x: 22.411568, y: 30.904213, z: -40.85532}
+      Rotation: {x: -0, y: 1, z: -0, w: 0}
+    - DestinationID: 233ec218-7363-4d27-9e29-7645a4151c1c
+      SceneName: StartScene A
+      DisplayName: FromStart Scene A 1 Teleporter
+      Position: {x: 8.641569, y: 30.904213, z: -75.23532}
+      Rotation: {x: -0, y: -0, z: -0, w: 1}
+    - DestinationID: f5af695c-c112-48c1-b738-41522ab8b500
+      SceneName: StartScene A
+      DisplayName: FromStart Scene A 1
+      Position: {x: 10.631569, y: 30.904213, z: -75.19532}
+      Rotation: {x: -0, y: -0, z: -0, w: 1}
+    - DestinationID: 26b009fe-1369-4c28-baf0-8085c8b66300
+      SceneName: StartScene B
+      DisplayName: FromDungeon A 1 Entrance
+      Position: {x: -2.5910993, y: 4.9199996, z: 27.954844}
+      Rotation: {x: -0, y: 1, z: -0, w: 0}
+    - DestinationID: 72dbbbc0-3b12-4768-8206-16bac1b58f4f
+      SceneName: StartScene B
+      DisplayName: FromStart Scene B 1
+      Position: {x: -150.54633, y: 9.4210825, z: 44.43602}
+      Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+    - DestinationID: 798eff71-f469-46cb-9312-cc2cdf3c07ed
+      SceneName: Tutorial Regions
+      DisplayName: FromTutorial Regions
+      Position: {x: -4.2100005, y: 0.1, z: 0}
+      Rotation: {x: -0, y: -0, z: -0, w: 1}
+    - DestinationID: 9c7e8c79-fd27-4e35-92bd-aec16302146e
+      SceneName: Tutorial SpawnPoints
+      DisplayName: FromTutorial SpawnPoints
+      Position: {x: -4.2100005, y: 0.1, z: 0}
+      Rotation: {x: -0, y: -0, z: -0, w: 1}
+    - DestinationID: 79f661e5-9832-4446-8801-42b88b6d02b9
+      SceneName: Tutorial Spawners
+      DisplayName: FromTutorial Spawners
+      Position: {x: -4.2100005, y: 0.1, z: 0}
+      Rotation: {x: -0, y: -0, z: -0, w: 1}
+  Teleporters:
+    m_keys:
+    - Dungeon/Dungeon A 1 Entrance
+    - StartScene A/Start Scene B 1
+    - StartScene A/Tutorial Spawners
+    - StartScene A/Tutorial SpawnPoints
+    - StartScene A/Tutorial Regions
+    - StartScene B/Start Scene A 1
+    - StartScene B/Dungeon A 1
+    - Tutorial Regions/Tutorial Regions Entrance
+    - Tutorial SpawnPoints/Tutorial SpawnPoints Entrance
+    - Tutorial Spawners/Tutorial Spawners Entrance
+    m_values:
+    - TeleporterName: Dungeon A 1 Entrance
+      SceneName: Dungeon
+      ScenePath: Assets/Scenes/WorldScene/Dungeon.unity
+      DestinationID: 26b009fe-1369-4c28-baf0-8085c8b66300
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-4421ff33e86120247a8ae615ef06f2c7-598504140-0
+      Position: {x: -133.71, y: 19.5, z: 22.919998}
+    - TeleporterName: Start Scene B 1
+      SceneName: StartScene A
+      ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
+      DestinationID: 72dbbbc0-3b12-4768-8206-16bac1b58f4f
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-2076367145-0
+      Position: {x: 9.568108, y: 32.120003, z: -78.00528}
+    - TeleporterName: Tutorial Spawners
+      SceneName: StartScene A
+      ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
+      DestinationID: 79f661e5-9832-4446-8801-42b88b6d02b9
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-1907630164-0
+      Position: {x: 29.091568, y: 32.650005, z: -36.84532}
+    - TeleporterName: Tutorial SpawnPoints
+      SceneName: StartScene A
+      ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
+      DestinationID: 9c7e8c79-fd27-4e35-92bd-aec16302146e
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-1602961390-0
+      Position: {x: 15.361568, y: 32.710003, z: -36.841824}
+    - TeleporterName: Tutorial Regions
+      SceneName: StartScene A
+      ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
+      DestinationID: 798eff71-f469-46cb-9312-cc2cdf3c07ed
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-2124318345-0
+      Position: {x: 22.171568, y: 32.610004, z: -36.84532}
+    - TeleporterName: Start Scene A 1
+      SceneName: StartScene B
+      ScenePath: Assets/Scenes/WorldScene/StartScene B.unity
+      DestinationID: f5af695c-c112-48c1-b738-41522ab8b500
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-3a3ad1e67809ba94c984635c5d313682-598504140-0
+      Position: {x: -152.6, y: 11.45, z: 44.51}
+    - TeleporterName: Dungeon A 1
+      SceneName: StartScene B
+      ScenePath: Assets/Scenes/WorldScene/StartScene B.unity
+      DestinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-3a3ad1e67809ba94c984635c5d313682-701074605-0
+      Position: {x: -2.52, y: 5.8199997, z: 30.28}
+    - TeleporterName: Tutorial Regions Entrance
+      SceneName: Tutorial Regions
+      ScenePath: Assets/Scenes/WorldScene/Tutorial Regions.unity
+      DestinationID: 6459955d-9b23-40b1-8863-37e5616b1800
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-65c498cad91e50048b976bfa2658ff29-451737118-0
+      Position: {x: 0, y: 2, z: 0}
+    - TeleporterName: Tutorial SpawnPoints Entrance
+      SceneName: Tutorial SpawnPoints
+      ScenePath: Assets/Scenes/WorldScene/Tutorial SpawnPoints.unity
+      DestinationID: 8cc50df6-4bab-4505-84dc-28d5cf672c96
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-b6a7b407afcf0a14e9b034d20ed554c8-451737118-0
+      Position: {x: 0, y: 2, z: 0}
+    - TeleporterName: Tutorial Spawners Entrance
+      SceneName: Tutorial Spawners
+      ScenePath: Assets/Scenes/WorldScene/Tutorial Spawners.unity
+      DestinationID: e97dae04-89b3-47a3-9d9c-56d8f2f05b55
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-7f7ae0a10fc88dd4a954d635460d9ca1-451737118-0
+      Position: {x: 0, y: 2, z: 0}

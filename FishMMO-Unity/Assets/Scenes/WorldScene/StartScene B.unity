@@ -755,6 +755,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _destinationID: 72dbbbc0-3b12-4768-8206-16bac1b58f4f
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &347432126
 GameObject:
@@ -1400,6 +1401,8 @@ MonoBehaviour:
   InteractionRange: 3.5
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 1770604219}
+  DestinationID: 
+  AchievementTemplate: {fileID: 0}
 --- !u!4 &520637841
 Transform:
   m_ObjectHideFlags: 0
@@ -1967,6 +1970,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a8272e41da552f4dbf9e4f8fd0dc769, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  DestinationID: f5af695c-c112-48c1-b738-41522ab8b500
   GizmoColor: {r: 1, g: 0, b: 1, a: 1}
 --- !u!1 &692402323
 GameObject:
@@ -2106,6 +2110,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a8272e41da552f4dbf9e4f8fd0dc769, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  DestinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
   GizmoColor: {r: 1, g: 0, b: 1, a: 1}
 --- !u!65 &701074608
 BoxCollider:
@@ -3607,6 +3612,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _destinationID: 26b009fe-1369-4c28-baf0-8085c8b66300
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &1305670805
 GameObject:
@@ -5824,6 +5830,8 @@ MonoBehaviour:
   InteractionRange: 3.5
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 0}
+  DestinationID: 233ec218-7363-4d27-9e29-7645a4151c1c
+  AchievementTemplate: {fileID: 0}
 --- !u!135 &2026365186
 SphereCollider:
   m_ObjectHideFlags: 0

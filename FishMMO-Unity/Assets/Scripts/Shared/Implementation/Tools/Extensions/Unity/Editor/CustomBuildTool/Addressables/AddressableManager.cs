@@ -1,6 +1,6 @@
 #if UNITY_EDITOR
 using System;
-using System.Linq;
+using System.IO;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Build;
@@ -46,8 +46,15 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 					continue;
 				}
 
-				bool exclude = excludeGroups.Any(exclusion =>
-					group.name.IndexOf(exclusion, StringComparison.OrdinalIgnoreCase) >= 0);
+				bool exclude = false;
+				for (int i = 0; i < excludeGroups.Length; i++)
+				{
+					if (group.name.IndexOf(excludeGroups[i], StringComparison.OrdinalIgnoreCase) >= 0)
+					{
+						exclude = true;
+						break;
+					}
+				}
 				schema.IncludeInBuild = !exclude;
 
 				// Configure CRC based on build type
@@ -90,6 +97,9 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 				Log.Warning("Addressables", $"Error during cleanup (non-fatal): {ex.Message}");
 			}
 
+			// Clean stale remote bundles from ServerData so switched-to-local groups don't linger
+			CleanServerDataDirectory(originalSettings);
+
 			// Start the Addressables build process
 			try
 			{
@@ -130,6 +140,42 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 
 			// Refresh the AssetDatabase after the build
 			AssetDatabase.Refresh();
+		}
+
+		/// <summary>
+		/// Deletes the ServerData/[BuildTarget] directory so stale remote bundles from
+		/// groups that have been switched to Local paths are not left behind.
+		/// The Addressables build will recreate the directory for any active Remote groups.
+		/// </summary>
+		/// <param name="settings">The addressable settings used to resolve the Remote.BuildPath.</param>
+		private static void CleanServerDataDirectory(AddressableAssetSettings settings)
+		{
+			try
+			{
+				string remoteBuildPath = settings.profileSettings.GetValueByName(
+					settings.activeProfileId, "Remote.BuildPath");
+
+				if (string.IsNullOrEmpty(remoteBuildPath))
+				{
+					return;
+				}
+
+				// Resolve profile variables like [BuildTarget]
+				remoteBuildPath = settings.profileSettings.EvaluateString(
+					settings.activeProfileId, remoteBuildPath);
+
+				if (string.IsNullOrEmpty(remoteBuildPath) || !Directory.Exists(remoteBuildPath))
+				{
+					return;
+				}
+
+				Directory.Delete(remoteBuildPath, true);
+				Log.Info("Addressables", $"Cleaned remote build directory: {remoteBuildPath}");
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("Addressables", $"Failed to clean ServerData directory (non-fatal): {ex.Message}");
+			}
 		}
 	}
 }

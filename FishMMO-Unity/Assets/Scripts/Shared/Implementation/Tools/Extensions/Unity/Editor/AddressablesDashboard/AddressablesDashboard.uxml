@@ -1,0 +1,92 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <Style src="AddressablesDashboard.uss" />
+    <ui:VisualElement name="root" style="flex-grow: 1;">
+
+        <!-- Toolbar -->
+        <uie:Toolbar name="toolbar" class="toolbar">
+            <uie:ToolbarSearchField name="search-field" class="toolbar-search" />
+            <uie:ToolbarButton name="refresh-button" text="Refresh" class="toolbar-button" />
+            <uie:ToolbarButton name="add-group-button" text="+ Group" class="toolbar-button" />
+            <uie:ToolbarButton name="analyze-button" text="Analyze" class="toolbar-button" />
+            <uie:ToolbarButton name="export-button" text="Export" class="toolbar-button" />
+        </uie:Toolbar>
+
+        <!-- Statistics Panel — Row 1 -->
+        <ui:VisualElement name="stats-panel" class="stats-panel">
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-groups" text="0" class="stat-value" />
+                <ui:Label text="Groups" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-assets" text="0" class="stat-value" />
+                <ui:Label text="Assets" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-size" text="0 B" class="stat-value" />
+                <ui:Label text="Total Size" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-labels" text="0" class="stat-value" />
+                <ui:Label text="Labels" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-duplicates" text="—" class="stat-value" />
+                <ui:Label text="Duplicate Deps" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-non-addressable-refs" text="—" class="stat-value" />
+                <ui:Label text="Non-Addr Refs" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-total-deps" text="—" class="stat-value" />
+                <ui:Label text="Total Deps" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-empty-groups" text="0" class="stat-value" />
+                <ui:Label text="Empty Groups" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-unused-labels" text="—" class="stat-value" />
+                <ui:Label text="Unused Labels" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-largest-asset" text="—" class="stat-value" />
+                <ui:Label text="Largest Asset" class="stat-label" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Detail/Issues Panel (collapsible) -->
+        <ui:Foldout name="detail-foldout" text="Analysis Details (click Analyze to populate)" class="detail-foldout" value="false">
+            <ui:ScrollView name="detail-scroll" class="detail-scroll">
+                <ui:Label name="detail-content" text="" class="detail-content" />
+            </ui:ScrollView>
+        </ui:Foldout>
+
+        <!-- Tree View -->
+        <ui:TreeView name="addressables-tree" class="tree-view-container" virtualization-method="DynamicHeight" selection-type="Single" />
+
+        <!-- Path Simulator -->
+        <ui:VisualElement name="path-simulator" class="path-simulator">
+            <ui:Label text="Path Simulator" class="path-simulator-title" />
+            <ui:VisualElement class="path-simulator-row">
+                <ui:Label text="Build Path:" class="path-simulator-label" />
+                <ui:Label name="path-sim-build" text="—" class="path-simulator-value path-simulator-resolved--build" />
+            </ui:VisualElement>
+            <ui:VisualElement class="path-simulator-row">
+                <ui:Label text="InternalId:" class="path-simulator-label" />
+                <ui:Label name="path-sim-internal-id" text="(select an asset)" class="path-simulator-value" />
+            </ui:VisualElement>
+            <ui:VisualElement class="path-simulator-row">
+                <ui:Label text="Client:" class="path-simulator-label" />
+                <ui:Label name="path-sim-client" text="—" class="path-simulator-value path-simulator-resolved--client" />
+            </ui:VisualElement>
+            <ui:VisualElement class="path-simulator-row">
+                <ui:Label text="Server:" class="path-simulator-label" />
+                <ui:Label name="path-sim-server" text="—" class="path-simulator-value path-simulator-resolved--server" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Status Bar -->
+        <ui:Label name="status-bar" text="Ready" class="status-bar" />
+    </ui:VisualElement>
+</ui:UXML>

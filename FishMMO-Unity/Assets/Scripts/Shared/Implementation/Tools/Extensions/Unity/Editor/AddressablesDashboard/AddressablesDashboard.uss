@@ -1,0 +1,268 @@
+/* AddressablesDashboard Stylesheet */
+
+/* ── Toolbar ── */
+.toolbar {
+    flex-direction: row;
+    height: 26px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(30, 30, 30);
+    background-color: rgb(56, 56, 56);
+}
+
+.toolbar-search {
+    flex-grow: 1;
+    margin: 2px 4px;
+}
+
+.toolbar-button {
+    width: 70px;
+    margin: 2px 2px;
+}
+
+/* ── Statistics Panel ── */
+.stats-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 6px 8px;
+    background-color: rgb(48, 48, 48);
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(30, 30, 30);
+}
+
+.stat-box {
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 12px;
+    margin: 2px 4px;
+    background-color: rgb(60, 60, 60);
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(40, 40, 40);
+    min-width: 100px;
+}
+
+.stat-value {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: rgb(200, 220, 255);
+}
+
+.stat-value--warning {
+    color: rgb(255, 200, 80);
+}
+
+.stat-value--error {
+    color: rgb(255, 100, 100);
+}
+
+.stat-label {
+    font-size: 10px;
+    color: rgb(160, 160, 160);
+    margin-top: 1px;
+}
+
+/* ── Tree View ── */
+.tree-view-container {
+    flex-grow: 1;
+    padding: 2px;
+}
+
+/* ── Row ── */
+.row-container {
+    flex-direction: row;
+    align-items: center;
+    padding: 2px 4px;
+    height: 22px;
+}
+
+.row-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+.row-name {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    -unity-text-overflow-position: end;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 60px;
+}
+
+.row-path {
+    color: rgb(140, 140, 140);
+    font-size: 10px;
+    flex-shrink: 1;
+    overflow: hidden;
+    -unity-text-overflow-position: end;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-left: 8px;
+    max-width: 300px;
+}
+
+.row-labels {
+    color: rgb(130, 180, 230);
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
+.row-size {
+    color: rgb(170, 170, 170);
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-left: 8px;
+    min-width: 50px;
+    -unity-text-align: middle-right;
+    white-space: nowrap;
+}
+
+/* ── Group Header ── */
+.group-header {
+    background-color: rgba(70, 96, 124, 0.25);
+    border-radius: 3px;
+    margin: 1px 0;
+    border-left-width: 3px;
+    border-left-color: rgba(160, 160, 160, 0.3);
+}
+
+.group-header .row-name {
+    -unity-font-style: bold;
+}
+
+/* ── Group Path Type Color Coding ── */
+.group-local {
+    background-color: rgba(60, 140, 80, 0.18);
+    border-left-color: rgb(80, 180, 100);
+}
+
+.group-local .row-path {
+    color: rgb(100, 190, 120);
+}
+
+.group-remote {
+    background-color: rgba(140, 80, 180, 0.18);
+    border-left-color: rgb(160, 110, 210);
+}
+
+.group-remote .row-path {
+    color: rgb(170, 130, 220);
+}
+
+.group-mixed {
+    background-color: rgba(180, 150, 60, 0.18);
+    border-left-color: rgb(210, 180, 80);
+}
+
+.group-mixed .row-path {
+    color: rgb(210, 180, 80);
+}
+
+/* ── Asset Row ── */
+.asset-entry {
+    margin: 0;
+}
+
+.asset-entry:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* ── Drag Highlight ── */
+.drop-highlight {
+    background-color: rgba(80, 140, 220, 0.2);
+    border-width: 1px;
+    border-color: rgba(80, 140, 220, 0.5);
+    border-radius: 3px;
+}
+
+/* ── Detail/Issues Foldout ── */
+.detail-foldout {
+    margin: 0;
+    padding: 0 4px;
+    background-color: rgb(44, 44, 44);
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(30, 30, 30);
+}
+
+.detail-foldout > .unity-foldout__toggle > .unity-toggle__input > .unity-label {
+    -unity-font-style: bold;
+    font-size: 11px;
+    color: rgb(180, 190, 210);
+}
+
+.detail-scroll {
+    max-height: 200px;
+    padding: 4px 8px;
+}
+
+.detail-content {
+    white-space: normal;
+    font-size: 11px;
+    color: rgb(190, 190, 190);
+}
+
+/* ── Status Bar ── */
+.status-bar {
+    height: 20px;
+    padding: 2px 8px;
+    border-top-width: 1px;
+    border-top-color: rgb(30, 30, 30);
+    background-color: rgb(56, 56, 56);
+    -unity-font-style: italic;
+    font-size: 11px;
+    color: rgb(180, 180, 180);
+}
+
+/* ── Path Simulator ── */
+.path-simulator {
+    padding: 6px 8px;
+    background-color: rgb(44, 44, 44);
+    border-top-width: 1px;
+    border-top-color: rgb(30, 30, 30);
+}
+
+.path-simulator-title {
+    -unity-font-style: bold;
+    font-size: 11px;
+    color: rgb(180, 190, 210);
+    margin-bottom: 4px;
+}
+
+.path-simulator-row {
+    flex-direction: row;
+    align-items: center;
+    margin: 1px 0;
+}
+
+.path-simulator-label {
+    font-size: 10px;
+    color: rgb(140, 140, 140);
+    min-width: 70px;
+    flex-shrink: 0;
+}
+
+.path-simulator-value {
+    font-size: 11px;
+    color: rgb(190, 190, 190);
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.path-simulator-resolved--build {
+    color: rgb(200, 180, 140);
+}
+
+.path-simulator-resolved--server {
+    color: rgb(100, 190, 120);
+}
+
+.path-simulator-resolved--client {
+    color: rgb(170, 130, 220);
+}

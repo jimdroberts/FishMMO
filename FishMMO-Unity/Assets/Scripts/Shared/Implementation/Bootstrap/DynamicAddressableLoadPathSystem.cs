@@ -16,10 +16,20 @@ namespace FishMMO.Shared
 		public string RuntimeBaseUrl;
 
 		/// <summary>
-		/// Unity Awake message. Sets the Addressables load path override when the object is initialized.
+		/// Unity Awake message. On server builds, overrides RuntimeBaseUrl to load from local StreamingAssets.
+		/// On client builds, RuntimeBaseUrl is expected to be set externally (e.g., CDN URL from config).
+		/// Then applies the Addressables load path override.
 		/// </summary>
 		void Awake()
 		{
+#if UNITY_SERVER
+			RuntimeBaseUrl = "file://" + Application.streamingAssetsPath + "/ServerData/";
+#endif
+			// Ensure the base URL ends with a slash so concatenation works every time
+			if (!string.IsNullOrEmpty(RuntimeBaseUrl) && !RuntimeBaseUrl.EndsWith("/"))
+			{
+				RuntimeBaseUrl += "/";
+			}
 			SetAddressablesLoadPathOverride();
 		}
 

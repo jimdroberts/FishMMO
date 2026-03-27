@@ -82,6 +82,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 					string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 					string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
 					CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath);
+					CopyRemoteAddressablesToBuild(buildPath, executableName, buildTarget, customBuildType);
 
 					if (buildTarget == BuildTarget.WebGL)
 					{
@@ -179,6 +180,71 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			if (customBuildType != CustomBuildType.Client)
 			{
 				FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
+			}
+		}
+
+		/// <summary>
+		/// Copies remote addressable bundles from the project-level ServerData directory
+		/// into the built player's StreamingAssets so the server can load them via file://.
+		/// Only executes for server builds where DynamicAddressableLoadPathSystem expects
+		/// bundles at StreamingAssets/ServerData/[BuildTarget]/.
+		/// </summary>
+		/// <param name="buildPath">The root build output path.</param>
+		/// <param name="executableName">The executable name (used to derive the _Data folder).</param>
+		/// <param name="buildTarget">The active build target (e.g. StandaloneLinux64).</param>
+		/// <param name="customBuildType">The build type — only server builds need the copy.</param>
+		private void CopyRemoteAddressablesToBuild(string buildPath, string executableName, BuildTarget buildTarget, CustomBuildType customBuildType)
+		{
+			if (customBuildType != CustomBuildType.Server)
+			{
+				return;
+			}
+
+			string buildTargetName = buildTarget.ToString();
+			string serverDataSource = Path.Combine(Directory.GetCurrentDirectory(), "ServerData", buildTargetName);
+
+			if (!Directory.Exists(serverDataSource))
+			{
+				Log.Debug("BuildExecutor", $"No ServerData directory at '{serverDataSource}'. Remote addressable copy skipped.");
+				return;
+			}
+
+			// Standalone builds place data in <buildPath>/<execName>_Data/StreamingAssets/
+			string dataFolderName = executableName + "_Data";
+			string streamingAssetsDest = Path.Combine(buildPath, dataFolderName, "StreamingAssets", "ServerData", buildTargetName);
+
+			try
+			{
+				CopyDirectoryRecursive(serverDataSource, streamingAssetsDest);
+				Log.Info("BuildExecutor", $"Copied remote addressable bundles from '{serverDataSource}' to '{streamingAssetsDest}'.");
+			}
+			catch (Exception ex)
+			{
+				Log.Error("BuildExecutor", $"Failed to copy remote addressable bundles: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Recursively copies all files and subdirectories from source to destination.
+		/// Creates the destination directory if it does not exist.
+		/// </summary>
+		/// <param name="sourceDir">The source directory path.</param>
+		/// <param name="destDir">The destination directory path.</param>
+		private static void CopyDirectoryRecursive(string sourceDir, string destDir)
+		{
+			Directory.CreateDirectory(destDir);
+
+			foreach (string filePath in Directory.GetFiles(sourceDir))
+			{
+				string fileName = Path.GetFileName(filePath);
+				string destFile = Path.Combine(destDir, fileName);
+				File.Copy(filePath, destFile, true);
+			}
+
+			foreach (string subDir in Directory.GetDirectories(sourceDir))
+			{
+				string dirName = Path.GetFileName(subDir);
+				CopyDirectoryRecursive(subDir, Path.Combine(destDir, dirName));
 			}
 		}
 

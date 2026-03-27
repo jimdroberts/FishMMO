@@ -15,8 +15,58 @@ MonoBehaviour:
   m_GroupName: ServerOnly
   m_GUID: f2edf6310b68f6b4bae56ba99aeaeab9
   m_SerializeEntries:
+  - m_GUID: 188aa9244eeba18cca6f90abf9bee2b2
+    m_Address: Assets/Prefabs/Server/SceneServer/PartySystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a68083bfef2f80fc8ca1af9c8369512
+    m_Address: Assets/Prefabs/Server/SceneServer/CharacterSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3cfe401ccb6fbd445a4d7da9c623957d
+    m_Address: Assets/Prefabs/Server/WorldServer/WorldServerSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4687cf31330e7c1499e44fba9490c8ac
     m_Address: ServerLauncher
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4d40e4ae150539895a659c9da4e7b15c
+    m_Address: Assets/Prefabs/Server/SceneServer/AchievementSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4ea1ea725a87cae669676026b040c884
+    m_Address: Assets/Prefabs/Server/SceneServer/SceneChannelSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 57662a393a0b3c42fb835c4b66b3710f
+    m_Address: Assets/Prefabs/Server/LoginServer/CharacterSelectSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6879c81059fb59d4aaae79190fc5c262
+    m_Address: Assets/Prefabs/Server/LoginServer/AccountCreationSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69f773f7b940a847d9e2ad75e2f1cd34
+    m_Address: Assets/Prefabs/Server/SceneServer/NamingSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 72b6fb8767c0656c98ba7177dd4a470a
+    m_Address: Assets/Prefabs/Server/WorldServer/WorldSceneSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7c1ca08ef1e69c690af41b67d7b5167e
+    m_Address: Assets/Prefabs/Server/LoginServer/LoginServerSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -25,13 +75,73 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 877efcded03164f809a7843e58a6db91
+    m_Address: Assets/Prefabs/Server/LoginServer/CharacterCreateSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8989a761202af17c98c3437f210f1826
+    m_Address: Assets/Prefabs/Server/SceneServer/PetSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b035132fe06520f09c29d98026d2a36
+    m_Address: Assets/Prefabs/Server/SceneServer/FriendSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 95d362574f2bba4e38b44204babd6b65
+    m_Address: Assets/Prefabs/Server/LoginServer/ServerSelectSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 96d1ab01343fd325a9a69edf8e103274
+    m_Address: Assets/Prefabs/Server/SceneServer/SceneServerSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ab11fc8547112b3f8b0737445814913c
+    m_Address: Assets/Prefabs/Server/SceneServer/ChatSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b71d352744ff0b27e8736d3f49fcc44f
+    m_Address: Assets/Prefabs/Server/SceneServer/HotkeySystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c2da67465d50a8ed8b0a146bc785ce23
+    m_Address: Assets/Prefabs/Server/SceneServer/InteractableSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c5c748f123bdc7e41bcb72c4f239ca6b
     m_Address: WorldServer
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfab38130929316f08ac6e1f44fa64bd
+    m_Address: Assets/Prefabs/Server/KickRequestSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dc4f8795668c259a198bd41e7f1285e7
+    m_Address: Assets/Prefabs/Server/ServerWindowTitleUpdater.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dfdce6e33e2616ef0b55cad7b8cd1a28
+    m_Address: Assets/Prefabs/Server/SceneServer/CharacterInventorySystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e4f01a5d084fafb47a77f7552e2af05e
     m_Address: LoginServer
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f854f419ab83b93908afd02eb77367aa
+    m_Address: Assets/Prefabs/Server/SceneServer/GuildSystem.asset
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

@@ -101,6 +101,16 @@ namespace FishMMO.Shared
 		private float regenTickRate = 5.0f;
 
 		/// <summary>
+		/// Accumulator for tracking time between regeneration ticks. Increments by deltaTime and triggers a tick when it exceeds regenTickRate.
+		/// </summary>
+		private List<CharacterAttributeUpdateBroadcast> reusableAttributeUpdates = new List<CharacterAttributeUpdateBroadcast>();
+
+		/// <summary>
+		/// Accumulator for tracking time between regeneration ticks. Increments by deltaTime and triggers a tick when it exceeds regenTickRate.
+		/// </summary>
+		private List<CharacterResourceAttributeUpdateBroadcast> reusableResourceUpdates = new List<CharacterResourceAttributeUpdateBroadcast>();
+
+		/// <summary>
 		/// Propagation depth counter for batched attribute graph updates.
 		/// While > 0, attribute change notifications are deferred.
 		/// </summary>
