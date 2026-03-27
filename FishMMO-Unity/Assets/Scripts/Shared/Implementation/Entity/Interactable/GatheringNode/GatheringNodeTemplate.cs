@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace FishMMO.Shared
 {
@@ -11,9 +13,20 @@ namespace FishMMO.Shared
 	public class GatheringNodeTemplate : CachedScriptableObject<GatheringNodeTemplate>, ICachedObject
 	{
 		/// <summary>
-		/// Optional icon for the gathering node in the UI.
+		/// Addressable reference to the icon sprite for this gathering node.
 		/// </summary>
-		public Sprite Icon;
+		public AssetReferenceSprite IconReference;
+
+		/// <summary>
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Sprite loadedIcon;
+
+		/// <summary>
+		/// The icon for this gathering node (loaded at runtime on client).
+		/// </summary>
+		public Sprite Icon { get { return this.loadedIcon; } }
 
 		/// <summary>
 		/// Description displayed in tooltips or UI.
@@ -43,5 +56,46 @@ namespace FishMMO.Shared
 		/// The display name of this gathering node template.
 		/// </summary>
 		public string Name { get { return this.name; } }
+
+		/// <summary>
+		/// Called when the gathering node template is loaded into cache. Loads the icon on the client.
+		/// </summary>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(GatheringNodeTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (IconReference != null && IconReference.RuntimeKeyIsValid())
+			{
+				IconReference.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the gathering node template is unloaded from cache. Releases the icon on the client.
+		/// </summary>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(GatheringNodeTemplate))
+			{
+#if !UNITY_SERVER
+				if (IconReference != null && IconReference.IsValid())
+				{
+					IconReference.ReleaseAsset();
+				}
+				loadedIcon = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
 	}
 }

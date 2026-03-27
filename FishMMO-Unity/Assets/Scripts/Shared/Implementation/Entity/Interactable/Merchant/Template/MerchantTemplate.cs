@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace FishMMO.Shared
 {
@@ -7,9 +9,15 @@ namespace FishMMO.Shared
 	public class MerchantTemplate : CachedScriptableObject<MerchantTemplate>, ICachedObject
 	{
 		/// <summary>
-		/// The icon representing this merchant in the UI.
+		/// Addressable reference to the icon sprite for this merchant.
 		/// </summary>
-		public Sprite icon;
+		public AssetReferenceSprite icon;
+
+		/// <summary>
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Sprite loadedIcon;
 
 		/// <summary>
 		/// Description of the merchant, used for tooltips and UI.
@@ -37,8 +45,49 @@ namespace FishMMO.Shared
 		public string Name { get { return this.name; } }
 
 		/// <summary>
-		/// The icon representing this merchant in the UI (property accessor).
+		/// The icon representing this merchant in the UI (loaded at runtime on client).
 		/// </summary>
-		public Sprite Icon { get { return this.icon; } }
+		public Sprite Icon { get { return this.loadedIcon; } }
+
+		/// <summary>
+		/// Called when the merchant template is loaded into cache. Loads the icon on the client.
+		/// </summary>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(MerchantTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (icon != null && icon.RuntimeKeyIsValid())
+			{
+				icon.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the merchant template is unloaded from cache. Releases the icon on the client.
+		/// </summary>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(MerchantTemplate))
+			{
+#if !UNITY_SERVER
+				if (icon != null && icon.IsValid())
+				{
+					icon.ReleaseAsset();
+				}
+				loadedIcon = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
 	}
 }

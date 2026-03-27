@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace FishMMO.Shared
 {
@@ -10,9 +12,20 @@ namespace FishMMO.Shared
 	public class AchievementTemplate : CachedScriptableObject<AchievementTemplate>, ICachedObject
 	{
 		/// <summary>
-		/// The icon representing this achievement in the UI.
+		/// Addressable reference to the icon sprite for this achievement.
 		/// </summary>
-		public Sprite Icon;
+		public AssetReferenceSprite IconReference;
+
+		/// <summary>
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Sprite loadedIcon;
+
+		/// <summary>
+		/// The icon for this achievement (loaded at runtime on client).
+		/// </summary>
+		public Sprite Icon { get { return this.loadedIcon; } }
 
 		/// <summary>
 		/// The category this achievement belongs to (e.g., Combat, Exploration).
@@ -33,5 +46,46 @@ namespace FishMMO.Shared
 		/// The name of this achievement template (from the ScriptableObject's name).
 		/// </summary>
 		public string Name { get { return this.name; } }
+
+		/// <summary>
+		/// Called when the achievement template is loaded into cache. Loads the icon on the client.
+		/// </summary>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(AchievementTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (IconReference != null && IconReference.RuntimeKeyIsValid())
+			{
+				IconReference.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the achievement template is unloaded from cache. Releases the icon on the client.
+		/// </summary>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(AchievementTemplate))
+			{
+#if !UNITY_SERVER
+				if (IconReference != null && IconReference.IsValid())
+				{
+					IconReference.ReleaseAsset();
+				}
+				loadedIcon = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
 	}
 }

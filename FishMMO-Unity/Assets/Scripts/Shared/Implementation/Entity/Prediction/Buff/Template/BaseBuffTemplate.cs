@@ -1,4 +1,6 @@
 ﻿using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -11,9 +13,15 @@ namespace FishMMO.Shared
 	public abstract class BaseBuffTemplate : CachedScriptableObject<BaseBuffTemplate>, ICachedObject, ITooltip
 	{
 		/// <summary>
-		/// The visual effect prefab to instantiate when the buff is applied.
+		/// Addressable reference to the visual effect prefab to instantiate when the buff is applied.
 		/// </summary>
-		public GameObject FXPrefab;
+		public AssetReferenceGameObject FXPrefabReference;
+
+		/// <summary>
+		/// The loaded FX prefab. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private GameObject loadedFXPrefab;
 
 		/// <summary>
 		/// The description of the buff, shown in tooltips.
@@ -21,10 +29,16 @@ namespace FishMMO.Shared
 		public string Description;
 
 		/// <summary>
-		/// The icon representing this buff in the UI.
+		/// Addressable reference to the icon sprite for this buff.
 		/// </summary>
 		[SerializeField]
-		private Sprite icon;
+		private AssetReferenceSprite icon;
+
+		/// <summary>
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Sprite loadedIcon;
 
 		/// <summary>
 		/// The duration of the buff in seconds. If 0, the buff may be permanent or event-driven.
@@ -57,9 +71,9 @@ namespace FishMMO.Shared
 		public string Name { get { return this.name; } }
 
 		/// <summary>
-		/// The icon for this buff template (from the serialized field).
+		/// The icon for this buff template (loaded at runtime on client).
 		/// </summary>
-		public Sprite Icon { get { return this.icon; } }
+		public Sprite Icon { get { return this.loadedIcon; } }
 
 		/// <summary>
 		/// Returns the tooltip string for this buff, including name, description, and secondary details.
@@ -95,6 +109,64 @@ namespace FishMMO.Shared
 		public virtual void SecondaryTooltip(TooltipBuilder builder) { }
 
 		/// <summary>
+		/// Called when the buff template is loaded into cache. Loads the icon and FX prefab on the client.
+		/// </summary>
+		/// <param name="typeName">The type name of the resource.</param>
+		/// <param name="resourceName">The resource name.</param>
+		/// <param name="resourceID">The resource ID.</param>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(BaseBuffTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (icon != null && icon.RuntimeKeyIsValid())
+			{
+				icon.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+
+			if (FXPrefabReference != null && FXPrefabReference.RuntimeKeyIsValid())
+			{
+				AddressableLoadProcessor.LoadPrefabAsync(FXPrefabReference, (go) => loadedFXPrefab = go);
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the buff template is unloaded from cache. Releases the icon and FX prefab on the client.
+		/// </summary>
+		/// <param name="typeName">The type name of the resource.</param>
+		/// <param name="resourceName">The resource name.</param>
+		/// <param name="resourceID">The resource ID.</param>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(BaseBuffTemplate))
+			{
+#if !UNITY_SERVER
+				if (icon != null && icon.IsValid())
+				{
+					icon.ReleaseAsset();
+				}
+				loadedIcon = null;
+
+				if (FXPrefabReference != null && FXPrefabReference.IsValid())
+				{
+					AddressableLoadProcessor.UnloadPrefab(FXPrefabReference);
+				}
+				loadedFXPrefab = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
+
+		/// <summary>
 		/// Instantiates the FXPrefab on the target when the buff is applied (client-side only).
 		/// </summary>
 		/// <param name="buff">The buff instance being applied.</param>
@@ -106,9 +178,9 @@ namespace FishMMO.Shared
 				return;
 			}
 #if !UNITY_SERVER
-			if (FXPrefab != null)
+			if (loadedFXPrefab != null)
 			{
-				Instantiate(FXPrefab, target.MeshRoot != null ? target.MeshRoot : target.Transform);
+				Instantiate(loadedFXPrefab, target.MeshRoot != null ? target.MeshRoot : target.Transform);
 			}
 #endif
 		}

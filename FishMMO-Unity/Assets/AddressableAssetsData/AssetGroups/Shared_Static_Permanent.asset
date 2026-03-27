@@ -20,6 +20,18 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 570b8e070c073834abac548a07706b47
+    m_Address: Human
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6f8938bbed1286347b54bf3f4889f32a
+    m_Address: Elf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 793ad9eb498a9224989b975a594d5a38
     m_Address: Human
     m_ReadOnly: 0
@@ -34,6 +46,12 @@ MonoBehaviour:
     m_Address: Ethan
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f1bedd6f4354a7e41be26aee87734d66
+    m_Address: Orc
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

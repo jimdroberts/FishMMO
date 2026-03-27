@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace FishMMO.Shared
 {
@@ -9,9 +11,20 @@ namespace FishMMO.Shared
 	public class CapturePointTemplate : CachedScriptableObject<CapturePointTemplate>, ICachedObject
 	{
 		/// <summary>
-		/// Optional icon for the capture point in the UI.
+		/// Addressable reference to the icon sprite for this capture point.
 		/// </summary>
-		public Sprite Icon;
+		public AssetReferenceSprite IconReference;
+
+		/// <summary>
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Sprite loadedIcon;
+
+		/// <summary>
+		/// The icon for this capture point (loaded at runtime on client).
+		/// </summary>
+		public Sprite Icon { get { return this.loadedIcon; } }
 
 		/// <summary>
 		/// Description displayed in tooltips or UI.
@@ -35,5 +48,46 @@ namespace FishMMO.Shared
 		/// The display name of this capture point template.
 		/// </summary>
 		public string Name { get { return this.name; } }
+
+		/// <summary>
+		/// Called when the capture point template is loaded into cache. Loads the icon on the client.
+		/// </summary>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(CapturePointTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (IconReference != null && IconReference.RuntimeKeyIsValid())
+			{
+				IconReference.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the capture point template is unloaded from cache. Releases the icon on the client.
+		/// </summary>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(CapturePointTemplate))
+			{
+#if !UNITY_SERVER
+				if (IconReference != null && IconReference.IsValid())
+				{
+					IconReference.ReleaseAsset();
+				}
+				loadedIcon = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
 	}
 }

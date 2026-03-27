@@ -1,4 +1,6 @@
 ﻿using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
 
@@ -36,14 +38,26 @@ namespace FishMMO.Shared
 		public int[] IconPools;
 
 		/// <summary>
-		/// The icon sprite representing this item in the UI.
+		/// Addressable reference to the icon sprite for this item.
 		/// </summary>
-		public Sprite icon;
+		public AssetReferenceSprite icon;
 
 		/// <summary>
-		/// The mesh used for 3D representation of the item.
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
 		/// </summary>
-		public Mesh Mesh;
+		[System.NonSerialized]
+		private Sprite loadedIcon;
+
+		/// <summary>
+		/// Addressable reference to the mesh for 3D representation of the item.
+		/// </summary>
+		public AssetReference MeshReference;
+
+		/// <summary>
+		/// The loaded mesh. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Mesh loadedMesh;
 
 		/// <summary>
 		/// The base attributes added to the item after generation.
@@ -62,9 +76,14 @@ namespace FishMMO.Shared
 		public bool IsStackable { get { return MaxStackSize > 1; } }
 
 		/// <summary>
-		/// Gets the icon sprite for this item.
+		/// Gets the icon sprite for this item (loaded at runtime on client).
 		/// </summary>
-		public Sprite Icon { get { return this.icon; } }
+		public Sprite Icon { get { return this.loadedIcon; } }
+
+		/// <summary>
+		/// Gets the mesh for this item (loaded at runtime on client).
+		/// </summary>
+		public Mesh Mesh { get { return this.loadedMesh; } }
 
 		/// <summary>
 		/// Returns the formatted tooltip string for this item, including name and price.
@@ -92,6 +111,68 @@ namespace FishMMO.Shared
 			{
 				builder.AddLine($"Price: {Price}", 80, TooltipColors.Label);
 			}
+		}
+
+		/// <summary>
+		/// Called when the item template is loaded into cache. Loads the icon and mesh on the client.
+		/// </summary>
+		/// <param name="typeName">The type name of the resource.</param>
+		/// <param name="resourceName">The resource name.</param>
+		/// <param name="resourceID">The resource ID.</param>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(BaseItemTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (icon != null && icon.RuntimeKeyIsValid())
+			{
+				icon.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+
+			if (MeshReference != null && MeshReference.RuntimeKeyIsValid())
+			{
+				MeshReference.LoadAssetAsync<Mesh>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedMesh = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the item template is unloaded from cache. Releases the icon and mesh on the client.
+		/// </summary>
+		/// <param name="typeName">The type name of the resource.</param>
+		/// <param name="resourceName">The resource name.</param>
+		/// <param name="resourceID">The resource ID.</param>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(BaseItemTemplate))
+			{
+#if !UNITY_SERVER
+				if (icon != null && icon.IsValid())
+				{
+					icon.ReleaseAsset();
+				}
+				loadedIcon = null;
+
+				if (MeshReference != null && MeshReference.IsValid())
+				{
+					MeshReference.ReleaseAsset();
+				}
+				loadedMesh = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
 		}
 	}
 }

@@ -52,7 +52,7 @@ namespace FishMMO.Client
 		/// Handler for when an addressable asset is loaded. Adds it to the cache if possible.
 		/// </summary>
 		/// <param name="addressable">The loaded addressable Unity object.</param>
-		public void AddressableLoadProcessor_OnAddressableLoaded(UnityEngine.Object addressable)
+		public void AddressableLoadProcessor_OnAddressableLoaded(Object addressable)
 		{
 			ICachedObject cachedObject = addressable as ICachedObject;
 			if (cachedObject != null)
@@ -65,7 +65,7 @@ namespace FishMMO.Client
 		/// Handler for when an addressable asset is unloaded. Removes it from the cache if possible.
 		/// </summary>
 		/// <param name="addressable">The unloaded addressable Unity object.</param>
-		public void AddressableLoadProcessor_OnAddressableUnloaded(UnityEngine.Object addressable)
+		public void AddressableLoadProcessor_OnAddressableUnloaded(Object addressable)
 		{
 			ICachedObject cachedObject = addressable as ICachedObject;
 			if (cachedObject != null)

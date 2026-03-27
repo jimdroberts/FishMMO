@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
 
@@ -16,9 +18,20 @@ namespace FishMMO.Shared
 		public NPCGuildTemplate NPCGuild;
 
 		/// <summary>
-		/// The icon representing this archetype in the UI.
+		/// Addressable reference to the icon sprite for this archetype.
 		/// </summary>
-		public Sprite Icon;
+		public AssetReferenceSprite IconReference;
+
+		/// <summary>
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Sprite loadedIcon;
+
+		/// <summary>
+		/// The icon for this archetype (loaded at runtime on client).
+		/// </summary>
+		public Sprite Icon { get { return this.loadedIcon; } }
 
 		/// <summary>
 		/// The description of the archetype, shown to the player.
@@ -61,7 +74,45 @@ namespace FishMMO.Shared
 		public string Name { get { return this.name; } }
 
 		/// <summary>
-		/// Checks if the given player character meets the requirements for this archetype.
+		/// Called when the archetype template is loaded into cache. Loads the icon on the client.
+		/// </summary>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(ArchetypeTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (IconReference != null && IconReference.RuntimeKeyIsValid())
+			{
+				IconReference.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the archetype template is unloaded from cache. Releases the icon on the client.
+		/// </summary>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(ArchetypeTemplate))
+			{
+#if !UNITY_SERVER
+				if (IconReference != null && IconReference.IsValid())
+				{
+					IconReference.ReleaseAsset();
+				}
+				loadedIcon = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
 		/// </summary>
 		/// <param name="playerCharacter">The player character to evaluate.</param>
 		/// <returns>True if requirements are met, or if no requirements are set; otherwise, false.</returns>

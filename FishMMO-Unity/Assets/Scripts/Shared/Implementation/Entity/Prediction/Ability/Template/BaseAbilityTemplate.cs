@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -12,10 +14,16 @@ namespace FishMMO.Shared
 	public abstract class BaseAbilityTemplate : CachedScriptableObject<BaseAbilityTemplate>, ICachedObject, ITooltip
 	{
 		/// <summary>
-		/// The icon representing the ability. Serialized for Unity inspector access.
+		/// Addressable reference to the icon sprite for this ability.
 		/// </summary>
 		[SerializeField]
-		private Sprite icon;
+		private AssetReferenceSprite icon;
+
+		/// <summary>
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Sprite loadedIcon;
 
 		/// <summary>
 		/// Description of the ability.
@@ -64,9 +72,56 @@ namespace FishMMO.Shared
 		public string Name { get { return this.name; } }
 
 		/// <summary>
-		/// The icon representing the ability (property accessor).
+		/// The icon representing the ability (loaded at runtime on client).
 		/// </summary>
-		public Sprite Icon { get { return this.icon; } }
+		public Sprite Icon { get { return this.loadedIcon; } }
+
+		/// <summary>
+		/// Called when the ability template is loaded into cache. Loads the icon sprite on the client.
+		/// </summary>
+		/// <param name="typeName">The type name of the resource.</param>
+		/// <param name="resourceName">The resource name.</param>
+		/// <param name="resourceID">The resource ID.</param>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(BaseAbilityTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (icon != null && icon.RuntimeKeyIsValid())
+			{
+				icon.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the ability template is unloaded from cache. Releases the icon sprite on the client.
+		/// </summary>
+		/// <param name="typeName">The type name of the resource.</param>
+		/// <param name="resourceName">The resource name.</param>
+		/// <param name="resourceID">The resource ID.</param>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(BaseAbilityTemplate))
+			{
+#if !UNITY_SERVER
+				if (icon != null && icon.IsValid())
+				{
+					icon.ReleaseAsset();
+				}
+				loadedIcon = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
 
 		/// <summary>
 		/// Returns the tooltip string for the ability.

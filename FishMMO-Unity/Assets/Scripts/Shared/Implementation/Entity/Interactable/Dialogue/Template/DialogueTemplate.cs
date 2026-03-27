@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace FishMMO.Shared
 {
@@ -17,9 +19,20 @@ namespace FishMMO.Shared
 		public const int MaxTrackedChoices = 16;
 
 		/// <summary>
-		/// Optional icon for the dialogue, displayed in UI or editor.
+		/// Addressable reference to the icon sprite for this dialogue.
 		/// </summary>
-		public Sprite Icon;
+		public AssetReferenceSprite IconReference;
+
+		/// <summary>
+		/// The loaded icon sprite. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Sprite loadedIcon;
+
+		/// <summary>
+		/// The icon for this dialogue (loaded at runtime on client).
+		/// </summary>
+		public Sprite Icon { get { return this.loadedIcon; } }
 
 		/// <summary>
 		/// Description of the dialogue, used for editor notes.
@@ -55,7 +68,45 @@ namespace FishMMO.Shared
 		public string Name { get { return this.name; } }
 
 		/// <summary>
-		/// Retrieves a dialogue node by its ID. Uses the cached node map for O(1) lookup.
+		/// Called when the dialogue template is loaded into cache. Loads the icon on the client.
+		/// </summary>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(DialogueTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (IconReference != null && IconReference.RuntimeKeyIsValid())
+			{
+				IconReference.LoadAssetAsync<Sprite>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the dialogue template is unloaded from cache. Releases the icon on the client.
+		/// </summary>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(DialogueTemplate))
+			{
+#if !UNITY_SERVER
+				if (IconReference != null && IconReference.IsValid())
+				{
+					IconReference.ReleaseAsset();
+				}
+				loadedIcon = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
 		/// </summary>
 		/// <param name="nodeId">The node ID to look up.</param>
 		/// <returns>The matching DialogueNode, or null if not found.</returns>

@@ -90,7 +90,10 @@ namespace FishMMO.Shared
 		public override void OnLoad(string typeName, string resourceName, int resourceID)
 		{
 			base.OnLoad(typeName, resourceName, resourceID);
+
+#if !UNITY_SERVER
 			LoadPlaceholderModel();
+#endif
 		}
 
 		/// <summary>
@@ -101,7 +104,10 @@ namespace FishMMO.Shared
 		/// <param name="resourceID">The resource ID.</param>
 		public override void OnUnload(string typeName, string resourceName, int resourceID)
 		{
+#if !UNITY_SERVER
 			UnloadPlaceholderModel();
+#endif
+
 			base.OnUnload(typeName, resourceName, resourceID);
 		}
 

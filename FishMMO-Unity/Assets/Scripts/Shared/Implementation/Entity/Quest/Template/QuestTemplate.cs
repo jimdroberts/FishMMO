@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -23,9 +25,20 @@ namespace FishMMO.Shared
 		public uint TimeToCompleteInSeconds;
 
 		/// <summary>
-		/// Icon representing the quest in UI.
+		/// Addressable reference to the icon texture for this quest.
 		/// </summary>
-		public Texture2D Icon;
+		public AssetReferenceTexture2D IconReference;
+
+		/// <summary>
+		/// The loaded icon texture. Only available on the client after OnLoad completes.
+		/// </summary>
+		[System.NonSerialized]
+		private Texture2D loadedIcon;
+
+		/// <summary>
+		/// The icon for this quest (loaded at runtime on client).
+		/// </summary>
+		public Texture2D Icon { get { return this.loadedIcon; } }
 
 		/// <summary>
 		/// Character attribute requirements needed to accept the quest.
@@ -56,6 +69,53 @@ namespace FishMMO.Shared
 		/// The name of the quest derived from the asset name.
 		/// </summary>
 		public string Name { get { return this.name; } }
+
+		/// <summary>
+		/// Called when the quest template is loaded into cache. Loads the icon on the client.
+		/// </summary>
+		/// <param name="typeName">The type name of the resource.</param>
+		/// <param name="resourceName">The resource name.</param>
+		/// <param name="resourceID">The resource ID.</param>
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			if (typeName != nameof(QuestTemplate))
+				return;
+
+#if !UNITY_SERVER
+			if (IconReference != null && IconReference.RuntimeKeyIsValid())
+			{
+				IconReference.LoadAssetAsync<Texture2D>().Completed += (handle) =>
+				{
+					if (handle.Status == AsyncOperationStatus.Succeeded)
+						loadedIcon = handle.Result;
+				};
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Called when the quest template is unloaded from cache. Releases the icon on the client.
+		/// </summary>
+		/// <param name="typeName">The type name of the resource.</param>
+		/// <param name="resourceName">The resource name.</param>
+		/// <param name="resourceID">The resource ID.</param>
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			if (typeName == nameof(QuestTemplate))
+			{
+#if !UNITY_SERVER
+				if (IconReference != null && IconReference.IsValid())
+				{
+					IconReference.ReleaseAsset();
+				}
+				loadedIcon = null;
+#endif
+			}
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
 
 		/// <summary>
 		/// Evaluates whether a player character meets all acceptance requirements.
