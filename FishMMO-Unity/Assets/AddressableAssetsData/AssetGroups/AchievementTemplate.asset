@@ -19,37 +19,37 @@ MonoBehaviour:
     m_Address: Damage Dealt
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AchievementTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 18e87e7a4d09c844fa3221b9ed8da77f
     m_Address: Killed
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AchievementTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c632e8771fab6a408fecc11015cc6a5
     m_Address: Kills
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AchievementTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a5692eafe24d1f48aa7f11be57a3892
     m_Address: Healed
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AchievementTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 558258f511eba114fb9daedea1d4dcc9
     m_Address: Healing Received
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AchievementTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f23c3b7a7b856de45b336f9ba28c3059
     m_Address: Damage Received
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AchievementTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

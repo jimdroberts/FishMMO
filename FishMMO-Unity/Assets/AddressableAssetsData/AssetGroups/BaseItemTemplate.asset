@@ -19,57 +19,43 @@ MonoBehaviour:
     m_Address: Test Helmet
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ArmorTemplate
-    - BaseItemTemplate
-    - EquippableItemTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1cc999ebd456f0943bbcfc4c09497b1b
     m_Address: Test Tunic
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ArmorTemplate
-    - BaseItemTemplate
-    - EquippableItemTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a666181fba14f54a8a1e2729e38e44e
     m_Address: Test Sword
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseItemTemplate
-    - EquippableItemTemplate
-    - WeaponTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4a7063529ee215d4a915672973d299db
     m_Address: Test Leggings
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ArmorTemplate
-    - BaseItemTemplate
-    - EquippableItemTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c44327c9e1311ab4289d7debd893f0b6
     m_Address: Test Shield
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ArmorTemplate
-    - BaseItemTemplate
-    - EquippableItemTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d4194c9fc4a87c84cbdde10c40a67656
     m_Address: Test Boots
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ArmorTemplate
-    - BaseItemTemplate
-    - EquippableItemTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f069d2a30c555ce42bb8079226fc8f14
     m_Address: Test Gloves
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ArmorTemplate
-    - BaseItemTemplate
-    - EquippableItemTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

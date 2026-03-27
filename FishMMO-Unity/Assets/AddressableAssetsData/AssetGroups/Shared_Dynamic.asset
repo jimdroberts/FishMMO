@@ -10,32 +10,28 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
-  m_Name: Trigger
-  m_EditorClassIdentifier: 
-  m_GroupName: Trigger
-  m_GUID: 1905701f2052d9f4c8af1c9cb0d420f6
+  m_Name: Shared_Dynamic
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Shared_Dynamic
+  m_GUID: c49c5cb7ebcee532e8ae3cf39921d60b
   m_SerializeEntries:
-  - m_GUID: b1b0ada2796be4c4ca8c95734c884fc2
-    m_Address: Minor Increase Armor Event
+  - m_GUID: 41f73c28208285445b37a7980665ead3
+    m_Address: GenericGameBackgroundDefaultLoadingScreen
     m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d00db1805f33b104b8b2198459b0a45d
-    m_Address: Ability On Hit Event
+  - m_GUID: 5c2d23be0cbdd4048a53de5b3b050809
+    m_Address: StartScene A Background
     m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e6d97319903785e4f8bbdbaa2ba21412
-    m_Address: Minor Movement Speed Event
+  - m_GUID: af9d2e8814f76f4498e2ed07cc8191ef
+    m_Address: StartScene B Background
     m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
   m_SchemaSet:
     m_Schemas:
-    - {fileID: 11400000, guid: fcac2279ffb978541be9be167225e2a1, type: 2}
-    - {fileID: 11400000, guid: 6b2f29e2fef046b4280c2e179ab61dd3, type: 2}
+    - {fileID: 11400000, guid: ca22d8e0f6224934e91d45ab09b4e34e, type: 2}

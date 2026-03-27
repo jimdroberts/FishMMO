@@ -56,6 +56,11 @@ namespace FishMMO.Shared
 		private Label pathSimClient;
 		private Label pathSimServer;
 
+		// Dependency Viewer
+		private Label depViewerAsset;
+		private VisualElement depDirectList;
+		private VisualElement depDupesList;
+
 		/// <summary>
 		/// Unique ID counter for TreeView items.
 		/// </summary>
@@ -143,6 +148,11 @@ namespace FishMMO.Shared
 			pathSimClient = rootVisualElement.Q<Label>("path-sim-client");
 			pathSimServer = rootVisualElement.Q<Label>("path-sim-server");
 
+			// Dependency Viewer
+			depViewerAsset = rootVisualElement.Q<Label>("dep-viewer-asset");
+			depDirectList = rootVisualElement.Q<VisualElement>("dep-direct-list");
+			depDupesList = rootVisualElement.Q<VisualElement>("dep-dupes-list");
+
 			if (treeView == null || searchField == null || statusBar == null)
 			{
 				Debug.LogError("[AddressablesDashboard] Required UI elements not found in UXML.");
@@ -176,6 +186,13 @@ namespace FishMMO.Shared
 			if (exportButton != null)
 			{
 				exportButton.clicked += ExportAnalysis;
+			}
+
+			// Fix All button
+			var fixAllButton = rootVisualElement.Q<ToolbarButton>("fix-all-button");
+			if (fixAllButton != null)
+			{
+				fixAllButton.clicked += FixAll;
 			}
 
 			// Add Group button
@@ -648,6 +665,7 @@ namespace FishMMO.Shared
 				// Map: dependency path → set of group names that reference it
 				var depToGroups = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 				var nonAddressableRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				var pluginRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 				var allUniqueDeps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 				// Track per-group non-addressable refs for the report
@@ -684,7 +702,20 @@ namespace FishMMO.Shared
 						string dep = deps[d];
 						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
 
+						// Skip scripts and packages — they are not bundled assets
+						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+						{
+							continue;
+						}
+
 						allUniqueDeps.Add(dep);
+
+						// Track plugin references — these are temporary and should be replaced
+						if (dep.Replace('\\', '/').StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
+						{
+							pluginRefs.Add(dep);
+						}
 
 						// Track cross-group duplicate deps
 						if (!depToGroups.TryGetValue(dep, out HashSet<string> groups))
@@ -694,10 +725,8 @@ namespace FishMMO.Shared
 						}
 						groups.Add(groupName);
 
-						// Track non-addressable references (skip built-in packages and scripts)
-						if (!addressablePaths.Contains(dep) &&
-							!dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) &&
-							!dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+						// Track non-addressable references
+						if (!addressablePaths.Contains(dep))
 						{
 							nonAddressableRefs.Add(dep);
 
@@ -716,7 +745,8 @@ namespace FishMMO.Shared
 				var duplicateDepList = new List<KeyValuePair<string, HashSet<string>>>();
 				foreach (var kvp in depToGroups)
 				{
-					if (kvp.Value.Count > 1)
+					if (kvp.Value.Count > 1 &&
+						!kvp.Key.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
 					{
 						duplicateDepCount++;
 						duplicateDepList.Add(kvp);
@@ -762,9 +792,31 @@ namespace FishMMO.Shared
 				report.AppendLine($"Total unique dependencies: {allUniqueDeps.Count}");
 				report.AppendLine($"Cross-group duplicate dependencies: {duplicateDepCount}");
 				report.AppendLine($"Non-addressable referenced assets: {nonAddressableRefs.Count}");
+				report.AppendLine($"Plugin asset references: {pluginRefs.Count}");
 				report.AppendLine($"Unused labels: {unusedLabels.Count}");
 				report.AppendLine($"Empty groups: {emptyGroups.Count}");
 				report.AppendLine();
+
+				// Plugin warnings — shown first since they need developer attention
+				if (pluginRefs.Count > 0)
+				{
+					report.AppendLine("═══ ⚠ PLUGIN ASSET REFERENCES ═══");
+					report.AppendLine("Assets under Assets/Plugins/ are temporary placeholders.");
+					report.AppendLine("Replace these with production assets. They will NOT be auto-fixed.\n");
+
+					int shown = 0;
+					foreach (string path in pluginRefs)
+					{
+						if (shown >= 20)
+						{
+							report.AppendLine($"  … and {pluginRefs.Count - shown} more");
+							break;
+						}
+						report.AppendLine($"  • {path}");
+						shown++;
+					}
+					report.AppendLine();
+				}
 
 				// Non-addressable references by group
 				if (nonAddressableRefs.Count > 0)
@@ -841,14 +893,14 @@ namespace FishMMO.Shared
 
 				// Also log summary to console
 				Debug.Log($"[AddressablesDashboard] Analysis complete — {duplicateDepCount} duplicate dep(s), " +
-					$"{nonAddressableRefs.Count} non-addressable ref(s), {unusedLabels.Count} unused label(s), " +
-					$"{allUniqueDeps.Count} total unique dep(s).");
+					$"{nonAddressableRefs.Count} non-addressable ref(s), {pluginRefs.Count} plugin ref(s), " +
+					$"{unusedLabels.Count} unused label(s), {allUniqueDeps.Count} total unique dep(s).");
 
 				SetStatus($"Analysis complete — {duplicateDepCount} dup dep(s), {nonAddressableRefs.Count} non-addr ref(s), " +
-					$"{unusedLabels.Count} unused label(s), {allUniqueDeps.Count} total dep(s).");
+					$"{pluginRefs.Count} plugin ref(s), {unusedLabels.Count} unused label(s), {allUniqueDeps.Count} total dep(s).");
 
 				// Auto-open detail foldout if there are issues
-				if (detailFoldout != null && (duplicateDepCount > 0 || nonAddressableRefs.Count > 0 || unusedLabels.Count > 0))
+				if (detailFoldout != null && (duplicateDepCount > 0 || nonAddressableRefs.Count > 0 || unusedLabels.Count > 0 || pluginRefs.Count > 0))
 				{
 					detailFoldout.value = true;
 				}
@@ -856,6 +908,494 @@ namespace FishMMO.Shared
 			finally
 			{
 				EditorUtility.ClearProgressBar();
+			}
+		}
+
+		private const string SharedDependenciesGroupName = "_SharedDependencies";
+
+		// ──────────────────────────────────────────────
+		// Smart Group Categorization
+		// ──────────────────────────────────────────────
+
+		/// <summary>
+		/// Target groups for smart asset categorization during Fix All.
+		/// </summary>
+		private static class SmartGroups
+		{
+			public const string ClientStaticPermanent = "Client_Static_Permanent";
+			public const string ServerStaticPermanent = "Server_Static_Permanent";
+			public const string SharedStaticPermanent = "Shared_Static_Permanent";
+			public const string ClientDynamic = "Client_Dynamic";
+			public const string ServerDynamic = "Server_Dynamic";
+			public const string SharedDynamic = "Shared_Dynamic";
+			public const string SceneShared = "Scene_Shared";
+			public const string SceneClient = "Scene_Client";
+			public const string SceneServer = "Scene_Server";
+		}
+
+		/// <summary>
+		/// Categorization result returned by the smart routing logic.
+		/// </summary>
+		private struct AssetCategory
+		{
+			public string GroupName;
+			public string Reason;
+			public bool IsPluginWarning;
+		}
+
+		/// <summary>
+		/// Determines which smart group an asset should be placed in based on its path
+		/// and which existing groups reference it.
+		/// </summary>
+		/// <param name="assetPath">The asset path to categorize.</param>
+		/// <param name="referencingGroupNames">Names of groups that reference this asset (null if unknown).</param>
+		/// <returns>The categorization result with target group name and reason.</returns>
+		private static AssetCategory CategorizeAsset(string assetPath, HashSet<string> referencingGroupNames)
+		{
+			// Normalize separators for reliable matching
+			string normalized = assetPath.Replace('\\', '/');
+
+			// ── Plugins: warn, do not fix ──
+			if (normalized.StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
+			{
+				return new AssetCategory
+				{
+					GroupName = null,
+					Reason = "Plugin asset — replace with production assets instead of making addressable",
+					IsPluginWarning = true,
+				};
+			}
+
+			// ── Templates: always shared + permanent ──
+			if (normalized.StartsWith("Assets/Templates/", StringComparison.OrdinalIgnoreCase))
+			{
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.SharedStaticPermanent,
+					Reason = "Template — required at all times by client and server",
+				};
+			}
+
+			// ── Scenes ──
+			if (normalized.EndsWith(".unity", StringComparison.OrdinalIgnoreCase) ||
+				normalized.StartsWith("Assets/Scenes/", StringComparison.OrdinalIgnoreCase))
+			{
+				if (ContainsSegment(normalized, "WorldScene"))
+				{
+					return new AssetCategory
+					{
+						GroupName = SmartGroups.SceneShared,
+						Reason = "World scene — shared between client and server",
+					};
+				}
+				if (ContainsSegment(normalized, "Client"))
+				{
+					return new AssetCategory
+					{
+						GroupName = SmartGroups.SceneClient,
+						Reason = "Client scene",
+					};
+				}
+				if (ContainsSegment(normalized, "Server") ||
+					ContainsSegment(normalized, "LoginServer") ||
+					ContainsSegment(normalized, "WorldServer") ||
+					ContainsSegment(normalized, "SceneServer"))
+				{
+					return new AssetCategory
+					{
+						GroupName = SmartGroups.SceneServer,
+						Reason = "Server scene",
+					};
+				}
+				// Fallback for scenes without clear ownership
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.SceneShared,
+					Reason = "Scene — no clear client/server indicator, defaulting to shared",
+				};
+			}
+
+			// ── Explicit Client paths ──
+			if (ContainsSegment(normalized, "Client"))
+			{
+				bool isStatic = ContainsSegment(normalized, "UI") ||
+								ContainsSegment(normalized, "Input") ||
+								ContainsSegment(normalized, "Launcher") ||
+								ContainsSegment(normalized, "FX");
+				return new AssetCategory
+				{
+					GroupName = isStatic ? SmartGroups.ClientStaticPermanent : SmartGroups.ClientDynamic,
+					Reason = isStatic ? "Client static asset (UI/Input/Launcher/FX)" : "Client dynamic asset",
+				};
+			}
+
+			// ── Explicit Server paths ──
+			if (ContainsSegment(normalized, "Server") ||
+				ContainsSegment(normalized, "LoginServer") ||
+				ContainsSegment(normalized, "WorldServer") ||
+				ContainsSegment(normalized, "SceneServer"))
+			{
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.ServerStaticPermanent,
+					Reason = "Server asset",
+				};
+			}
+
+			// ── Shared explicit paths ──
+			if (ContainsSegment(normalized, "Shared"))
+			{
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.SharedStaticPermanent,
+					Reason = "Shared asset (explicit Shared directory)",
+				};
+			}
+
+			// ── Infer from referencing groups ──
+			if (referencingGroupNames != null && referencingGroupNames.Count > 0)
+			{
+				bool hasClient = false;
+				bool hasServer = false;
+				foreach (string g in referencingGroupNames)
+				{
+					string gl = g.ToLowerInvariant();
+					if (gl.Contains("client")) hasClient = true;
+					if (gl.Contains("server")) hasServer = true;
+				}
+
+				if (hasClient && hasServer)
+				{
+					return new AssetCategory
+					{
+						GroupName = SmartGroups.SharedDynamic,
+						Reason = $"Referenced by both client and server groups",
+					};
+				}
+				if (hasClient)
+				{
+					return new AssetCategory
+					{
+						GroupName = SmartGroups.ClientDynamic,
+						Reason = "Referenced only by client groups",
+					};
+				}
+				if (hasServer)
+				{
+					return new AssetCategory
+					{
+						GroupName = SmartGroups.ServerDynamic,
+						Reason = "Referenced only by server groups",
+					};
+				}
+			}
+
+			// ── Default: shared dynamic ──
+			return new AssetCategory
+			{
+				GroupName = SmartGroups.SharedDynamic,
+				Reason = "No clear ownership — defaulting to shared dynamic",
+			};
+		}
+
+		/// <summary>
+		/// Checks if a path contains a directory segment (between '/' separators).
+		/// </summary>
+		private static bool ContainsSegment(string path, string segment)
+		{
+			int idx = path.IndexOf(segment, StringComparison.OrdinalIgnoreCase);
+			while (idx >= 0)
+			{
+				// Check the character before: must be '/' or start-of-string
+				bool startOk = idx == 0 || path[idx - 1] == '/';
+				int end = idx + segment.Length;
+				// Check the character after: must be '/' or end-of-string
+				bool endOk = end >= path.Length || path[end] == '/' || path[end] == '.';
+				if (startOk && endOk) return true;
+
+				idx = path.IndexOf(segment, end, StringComparison.OrdinalIgnoreCase);
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Finds an existing group by name or creates a new one with BundledAssetGroupSchema.
+		/// </summary>
+		private static AddressableAssetGroup GetOrCreateGroup(AddressableAssetSettings settings, string groupName,
+			Dictionary<string, AddressableAssetGroup> cache)
+		{
+			if (cache.TryGetValue(groupName, out AddressableAssetGroup cached))
+			{
+				return cached;
+			}
+
+			foreach (var group in settings.groups)
+			{
+				if (group != null && string.Equals(group.Name, groupName, StringComparison.OrdinalIgnoreCase))
+				{
+					cache[groupName] = group;
+					return group;
+				}
+			}
+
+			var newGroup = settings.CreateGroup(groupName, false, false, true, null, typeof(BundledAssetGroupSchema));
+			if (newGroup != null)
+			{
+				cache[groupName] = newGroup;
+			}
+			return newGroup;
+		}
+
+		/// <summary>
+		/// Fixes duplicate dependencies and non-addressable references by routing each asset
+		/// into a smart group based on its path and context. Shows per-asset confirmation dialogs
+		/// with the suggested group and reason, allowing the user to accept, skip, or accept all.
+		/// Assets under Plugins/ are warned about but never auto-fixed.
+		/// </summary>
+		private void FixAll()
+		{
+			if (cachedDuplicateCount == 0 && cachedNonAddressableRefCount == 0)
+			{
+				EditorUtility.DisplayDialog("Fix All",
+					"No issues to fix. Run Analyze first to detect duplicate dependencies and non-addressable references.",
+					"OK");
+				return;
+			}
+
+			var settings = AddressableAssetSettingsDefaultObject.Settings;
+			if (settings == null)
+			{
+				SetStatus("Cannot fix — Addressable settings not found.");
+				return;
+			}
+
+			// Collect all assets that need to be made addressable
+			var assetsToFix = new List<string>();
+			var addressablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			var depToGroups = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+			var pluginWarnings = new List<string>();
+
+			foreach (var group in settings.groups)
+			{
+				if (group == null) continue;
+				foreach (var entry in group.entries)
+				{
+					if (entry == null) continue;
+					addressablePaths.Add(entry.AssetPath);
+				}
+			}
+
+			foreach (var group in settings.groups)
+			{
+				if (group == null) continue;
+				foreach (var entry in group.entries)
+				{
+					if (entry == null) continue;
+
+					string[] deps = AssetDatabase.GetDependencies(entry.AssetPath, true);
+					string groupName = group.Name;
+
+					for (int d = 0; d < deps.Length; d++)
+					{
+						string dep = deps[d];
+						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
+
+						// Skip scripts and packages — they are not bundled assets
+						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+						{
+							continue;
+						}
+
+						// Track cross-group dependencies
+						if (!depToGroups.TryGetValue(dep, out HashSet<string> groups))
+						{
+							groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+							depToGroups[dep] = groups;
+						}
+						groups.Add(groupName);
+					}
+				}
+			}
+
+			// Gather non-addressable refs
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var kvp in depToGroups)
+			{
+				if (!addressablePaths.Contains(kvp.Key) && seen.Add(kvp.Key))
+				{
+					assetsToFix.Add(kvp.Key);
+				}
+			}
+
+			// Separate plugin warnings from fixable assets
+			for (int i = assetsToFix.Count - 1; i >= 0; i--)
+			{
+				if (assetsToFix[i].Replace('\\', '/').StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
+				{
+					pluginWarnings.Add(assetsToFix[i]);
+					assetsToFix.RemoveAt(i);
+				}
+			}
+
+			if (assetsToFix.Count == 0 && pluginWarnings.Count == 0)
+			{
+				EditorUtility.DisplayDialog("Fix All", "No fixable issues found.", "OK");
+				return;
+			}
+
+			// Show plugin warnings first
+			if (pluginWarnings.Count > 0)
+			{
+				var sb = new StringBuilder();
+				sb.AppendLine($"{pluginWarnings.Count} asset(s) under Assets/Plugins/ are referenced but should be replaced with production assets:\n");
+				int shown = 0;
+				for (int i = 0; i < pluginWarnings.Count; i++)
+				{
+					if (shown >= 20)
+					{
+						sb.AppendLine($"  … and {pluginWarnings.Count - shown} more");
+						break;
+					}
+					sb.AppendLine($"  • {pluginWarnings[i]}");
+					shown++;
+				}
+				Debug.LogWarning($"[AddressablesDashboard] Plugin assets referenced:\n{sb}");
+				EditorUtility.DisplayDialog("Plugin Assets Warning",
+					sb.ToString(),
+					"OK");
+			}
+
+			if (assetsToFix.Count == 0)
+			{
+				SetStatus($"No fixable assets (warned about {pluginWarnings.Count} plugin reference(s)).");
+				return;
+			}
+
+			if (!EditorUtility.DisplayDialog("Fix All",
+				$"Found {assetsToFix.Count} asset(s) to review.\n\n" +
+				"Each asset will be categorized into an appropriate group based on its path.\n" +
+				"You will be prompted for each asset individually.\n\n" +
+				"Begin review?",
+				"Begin", "Cancel"))
+			{
+				return;
+			}
+
+			try
+			{
+				var groupCache = new Dictionary<string, AddressableAssetGroup>(StringComparer.OrdinalIgnoreCase);
+				int fixedCount = 0;
+				int skippedCount = 0;
+				int deniedCount = 0;
+				bool acceptAll = false;
+
+				for (int i = 0; i < assetsToFix.Count; i++)
+				{
+					string assetPath = assetsToFix[i];
+					string guid = AssetDatabase.AssetPathToGUID(assetPath);
+					if (string.IsNullOrEmpty(guid))
+					{
+						skippedCount++;
+						continue;
+					}
+
+					// Skip if already addressable
+					AddressableAssetEntry existingEntry = settings.FindAssetEntry(guid);
+					if (existingEntry != null)
+					{
+						skippedCount++;
+						continue;
+					}
+
+					// Categorize the asset
+					depToGroups.TryGetValue(assetPath, out HashSet<string> referencingGroups);
+					AssetCategory category = CategorizeAsset(assetPath, referencingGroups);
+
+					// Plugin warning — should not reach here, but guard anyway
+					if (category.IsPluginWarning || string.IsNullOrEmpty(category.GroupName))
+					{
+						skippedCount++;
+						continue;
+					}
+
+					// Build reason with referencing group info
+					string reason = category.Reason;
+					if (referencingGroups != null && referencingGroups.Count > 1)
+					{
+						reason += $" (duplicated across {referencingGroups.Count} groups)";
+					}
+
+					// Per-asset confirmation unless user chose "Yes All"
+					if (!acceptAll)
+					{
+						// DisplayDialogComplex returns: 0 = OK, 1 = Cancel, 2 = Alt
+						int choice = EditorUtility.DisplayDialogComplex(
+							$"Fix All — {fixedCount + deniedCount + 1} of {assetsToFix.Count}",
+							$"{assetPath}\n\n" +
+							$"Reason: {reason}\n" +
+							$"Target group: {category.GroupName}",
+							"Yes",       // 0
+							"Skip",      // 1
+							"Yes All");  // 2
+
+						if (choice == 1)
+						{
+							deniedCount++;
+							continue;
+						}
+						if (choice == 2)
+						{
+							acceptAll = true;
+						}
+					}
+
+					AddressableAssetGroup targetGroup = GetOrCreateGroup(settings, category.GroupName, groupCache);
+					if (targetGroup == null)
+					{
+						Debug.LogWarning($"[AddressablesDashboard] Failed to create group '{category.GroupName}' for '{assetPath}'.");
+						skippedCount++;
+						continue;
+					}
+
+					AddressableAssetEntry newEntry = settings.CreateOrMoveEntry(guid, targetGroup, false, false);
+					if (newEntry != null)
+					{
+						newEntry.SetAddress(Path.GetFileNameWithoutExtension(assetPath));
+						fixedCount++;
+					}
+					else
+					{
+						skippedCount++;
+					}
+				}
+
+				EditorUtility.SetDirty(settings);
+
+				string message = $"Fixed {fixedCount} asset(s) across categorized groups.";
+				if (deniedCount > 0)
+				{
+					message += $" Skipped {deniedCount} (denied).";
+				}
+				if (skippedCount > 0)
+				{
+					message += $" Skipped {skippedCount} (already addressable or invalid).";
+				}
+				if (pluginWarnings.Count > 0)
+				{
+					message += $" Warned about {pluginWarnings.Count} plugin reference(s).";
+				}
+
+				Debug.Log($"[AddressablesDashboard] {message}");
+				SetStatus(message);
+
+				// Refresh tree to show updated state
+				RebuildTree();
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"[AddressablesDashboard] Fix All failed: {ex.Message}");
+				SetStatus($"Fix All failed: {ex.Message}");
 			}
 		}
 
@@ -954,13 +1494,15 @@ namespace FishMMO.Shared
 		{
 			if (group == null) return;
 
-			string newName = EditorInputDialog.Show("Rename Group", "Enter new group name:", group.Name);
-			if (string.IsNullOrEmpty(newName) || newName == group.Name) return;
+			EditorInputDialog.Show("Rename Group", "Enter new group name:", group.Name, (newName) =>
+			{
+				if (string.IsNullOrEmpty(newName) || newName == group.Name) return;
 
-			Undo.RecordObject(group, "Rename Addressable Group");
-			group.Name = newName;
-			EditorUtility.SetDirty(group);
-			RebuildTree();
+				Undo.RecordObject(group, "Rename Addressable Group");
+				group.Name = newName;
+				EditorUtility.SetDirty(group);
+				RebuildTree();
+			});
 		}
 
 		/// <summary>
@@ -1049,17 +1591,19 @@ namespace FishMMO.Shared
 		{
 			if (entry == null) return;
 
-			string newLabel = EditorInputDialog.Show("Add New Label", "Enter label name:", "");
-			if (string.IsNullOrEmpty(newLabel)) return;
+			EditorInputDialog.Show("Add New Label", "Enter label name:", "", (newLabel) =>
+			{
+				if (string.IsNullOrEmpty(newLabel)) return;
 
-			var settings = AddressableAssetSettingsDefaultObject.Settings;
-			if (settings == null) return;
+				var settings = AddressableAssetSettingsDefaultObject.Settings;
+				if (settings == null) return;
 
-			settings.AddLabel(newLabel);
-			entry.SetLabel(newLabel, true, true);
+				settings.AddLabel(newLabel);
+				entry.SetLabel(newLabel, true, true);
 
-			Debug.Log($"[AddressablesDashboard] Created label '{newLabel}' and applied to '{entry.address}'.");
-			RebuildTree();
+				Debug.Log($"[AddressablesDashboard] Created label '{newLabel}' and applied to '{entry.address}'.");
+				RebuildTree();
+			});
 		}
 
 		/// <summary>
@@ -1070,12 +1614,14 @@ namespace FishMMO.Shared
 		{
 			if (entry == null) return;
 
-			string newAddress = EditorInputDialog.Show("Change Address", "Enter new address:", entry.address);
-			if (string.IsNullOrEmpty(newAddress) || newAddress == entry.address) return;
+			EditorInputDialog.Show("Change Address", "Enter new address:", entry.address, (newAddress) =>
+			{
+				if (string.IsNullOrEmpty(newAddress) || newAddress == entry.address) return;
 
-			entry.SetAddress(newAddress);
-			Debug.Log($"[AddressablesDashboard] Changed address to '{newAddress}'.");
-			RebuildTree();
+				entry.SetAddress(newAddress);
+				Debug.Log($"[AddressablesDashboard] Changed address to '{newAddress}'.");
+				RebuildTree();
+			});
 		}
 
 		/// <summary>
@@ -1551,16 +2097,18 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			string groupName = EditorInputDialog.Show("Add Group", "Enter new group name:", "New Group");
-			if (string.IsNullOrEmpty(groupName)) return;
-
-			var newGroup = settings.CreateGroup(groupName, false, false, true, null, typeof(BundledAssetGroupSchema));
-			if (newGroup != null)
+			EditorInputDialog.Show("Add Group", "Enter new group name:", "New Group", (groupName) =>
 			{
-				Debug.Log($"[AddressablesDashboard] Created group '{groupName}'.");
-				EditorUtility.SetDirty(settings);
-				RebuildTree();
-			}
+				if (string.IsNullOrEmpty(groupName)) return;
+
+				var newGroup = settings.CreateGroup(groupName, false, false, true, null, typeof(BundledAssetGroupSchema));
+				if (newGroup != null)
+				{
+					Debug.Log($"[AddressablesDashboard] Created group '{groupName}'.");
+					EditorUtility.SetDirty(settings);
+					RebuildTree();
+				}
+			});
 		}
 
 		/// <summary>
@@ -1577,12 +2125,13 @@ namespace FishMMO.Shared
 		// ──────────────────────────────────────────────
 
 		/// <summary>
-		/// Handles TreeView selection changes to update the path simulator.
+		/// Handles TreeView selection changes to update the path simulator and dependency viewer.
 		/// </summary>
 		/// <param name="indices">The newly selected indices.</param>
 		private void OnTreeSelectionChanged(IEnumerable<int> indices)
 		{
 			UpdatePathSimulator();
+			UpdateDependencyViewer();
 		}
 
 		/// <summary>
@@ -1737,37 +2286,205 @@ namespace FishMMO.Shared
 
 			return baseUrl;
 		}
+
+		// ──────────────────────────────────────────────
+		// Dependency Viewer
+		// ──────────────────────────────────────────────
+
+		/// <summary>
+		/// Updates the Dependency Viewer panel for the currently selected asset.
+		/// Shows direct dependencies and highlights implicit duplicates (dependencies
+		/// that will be packed into multiple bundles because they are not addressable
+		/// and are referenced by more than one group).
+		/// </summary>
+		private void UpdateDependencyViewer()
+		{
+			if (depDirectList == null || depDupesList == null) return;
+
+			depDirectList.Clear();
+			depDupesList.Clear();
+
+			if (depViewerAsset != null)
+			{
+				depViewerAsset.text = "(select an asset)";
+			}
+
+			// Find selected entry
+			var selectedIndices = treeView.selectedIndices.ToList();
+			if (selectedIndices.Count == 0) return;
+
+			int selectedId = treeView.GetIdForIndex(selectedIndices[0]);
+			if (!idToEntry.TryGetValue(selectedId, out AddressableAssetEntry selectedEntry))
+			{
+				if (depViewerAsset != null)
+				{
+					depViewerAsset.text = "(select an asset, not a group)";
+				}
+				return;
+			}
+
+			if (depViewerAsset != null)
+			{
+				depViewerAsset.text = selectedEntry.AssetPath;
+			}
+
+			var settings = AddressableAssetSettingsDefaultObject.Settings;
+			if (settings == null) return;
+
+			// Get direct dependencies (non-recursive first level only would require manual walk;
+			// GetDependencies with recursive=false gives immediate deps)
+			string[] directDeps = AssetDatabase.GetDependencies(selectedEntry.AssetPath, false);
+
+			// Build addressable path set
+			var addressablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var group in settings.groups)
+			{
+				if (group == null) continue;
+				foreach (var entry in group.entries)
+				{
+					if (entry == null) continue;
+					addressablePaths.Add(entry.AssetPath);
+				}
+			}
+
+			// Build dep→groups map for all groups to detect cross-group duplicates
+			var depToGroupNames = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+			foreach (var group in settings.groups)
+			{
+				if (group == null) continue;
+				foreach (var entry in group.entries)
+				{
+					if (entry == null) continue;
+					string[] entryDeps = AssetDatabase.GetDependencies(entry.AssetPath, true);
+					for (int d = 0; d < entryDeps.Length; d++)
+					{
+						string dep = entryDeps[d];
+						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
+						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+						{
+							continue;
+						}
+
+						if (!depToGroupNames.TryGetValue(dep, out HashSet<string> groups))
+						{
+							groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+							depToGroupNames[dep] = groups;
+						}
+						groups.Add(group.Name);
+					}
+				}
+			}
+
+			// Populate direct dependencies list
+			int directCount = 0;
+			for (int i = 0; i < directDeps.Length; i++)
+			{
+				string dep = directDeps[i];
+				if (string.Equals(dep, selectedEntry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
+				if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+					dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				var label = new Label(dep);
+				label.AddToClassList("dep-viewer-item");
+
+				// Highlight if this dep is also a duplicate
+				if (!addressablePaths.Contains(dep) &&
+					depToGroupNames.TryGetValue(dep, out HashSet<string> groups) &&
+					groups.Count > 1)
+				{
+					label.AddToClassList("dep-viewer-item--duplicate");
+					label.tooltip = $"Duplicated across: {string.Join(", ", groups)}";
+				}
+				else if (addressablePaths.Contains(dep))
+				{
+					label.tooltip = "Addressable — bundled once";
+				}
+
+				depDirectList.Add(label);
+				directCount++;
+			}
+
+			if (directCount == 0)
+			{
+				var empty = new Label("No direct dependencies");
+				empty.AddToClassList("dep-viewer-empty");
+				depDirectList.Add(empty);
+			}
+
+			// Populate implicit duplicates list —
+			// all recursive deps of this entry that are NOT addressable and appear in >1 group
+			string[] allDeps = AssetDatabase.GetDependencies(selectedEntry.AssetPath, true);
+			int dupeCount = 0;
+
+			for (int i = 0; i < allDeps.Length; i++)
+			{
+				string dep = allDeps[i];
+				if (string.Equals(dep, selectedEntry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
+				if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+					dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				// Only show non-addressable deps that are referenced by multiple groups
+				if (addressablePaths.Contains(dep)) continue;
+				if (!depToGroupNames.TryGetValue(dep, out HashSet<string> dupeGroups) || dupeGroups.Count <= 1) continue;
+
+				var depLabel = new Label(dep);
+				depLabel.AddToClassList("dep-viewer-item");
+				depLabel.AddToClassList("dep-viewer-item--duplicate");
+				depDupesList.Add(depLabel);
+
+				var groupsLabel = new Label($"→ {string.Join(", ", dupeGroups)}");
+				groupsLabel.AddToClassList("dep-viewer-item--groups");
+				depDupesList.Add(groupsLabel);
+
+				dupeCount++;
+			}
+
+			if (dupeCount == 0)
+			{
+				var empty = new Label("No implicit duplicates");
+				empty.AddToClassList("dep-viewer-empty");
+				depDupesList.Add(empty);
+			}
+		}
 	}
 
 	/// <summary>
-	/// Simple modal input dialog for editor string prompts.
+	/// Callback-based input dialog using ShowUtility for reliable rendering on all platforms.
+	/// ShowModalUtility renders blank on Linux/Unity 6, so this uses a non-blocking utility
+	/// window with a callback that fires when the user confirms.
 	/// </summary>
 	public class EditorInputDialog : EditorWindow
 	{
 		private string inputValue = "";
 		private string promptMessage = "";
-		private bool confirmed;
-		private bool initialized;
-		private static string result;
+		private Action<string> onConfirm;
+		private bool focusPending = true;
 
 		/// <summary>
-		/// Shows a modal input dialog and returns the entered string, or null if cancelled.
+		/// Shows a floating input dialog. Calls onConfirm with the entered string on OK/Enter.
+		/// Does not invoke onConfirm when cancelled.
 		/// </summary>
 		/// <param name="title">Window title.</param>
 		/// <param name="message">Prompt message.</param>
 		/// <param name="defaultValue">Default input value.</param>
-		/// <returns>The entered string, or null if cancelled.</returns>
-		public static string Show(string title, string message, string defaultValue)
+		/// <param name="onConfirm">Callback invoked with the entered value on confirmation.</param>
+		public static void Show(string title, string message, string defaultValue, Action<string> onConfirm)
 		{
-			result = null;
 			var window = CreateInstance<EditorInputDialog>();
 			window.titleContent = new GUIContent(title);
 			window.promptMessage = message;
 			window.inputValue = defaultValue ?? "";
-			window.minSize = new Vector2(300, 100);
-			window.maxSize = new Vector2(500, 100);
-			window.ShowModal();
-			return result;
+			window.onConfirm = onConfirm;
+			window.minSize = new Vector2(350, 120);
+			window.maxSize = new Vector2(350, 120);
+			window.ShowUtility();
 		}
 
 		/// <summary>
@@ -1775,31 +2492,32 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnGUI()
 		{
-			if (!initialized)
-			{
-				GUI.FocusControl("InputField");
-				initialized = true;
-			}
-
-			EditorGUILayout.Space(8);
-			EditorGUILayout.LabelField(promptMessage);
+			EditorGUILayout.Space(10);
+			EditorGUILayout.LabelField(promptMessage, EditorStyles.wordWrappedLabel);
+			EditorGUILayout.Space(4);
 
 			GUI.SetNextControlName("InputField");
 			inputValue = EditorGUILayout.TextField(inputValue);
 
-			EditorGUILayout.Space(4);
+			// Auto-focus the text field on first repaint
+			if (focusPending && Event.current.type == EventType.Repaint)
+			{
+				EditorGUI.FocusTextInControl("InputField");
+				focusPending = false;
+			}
+
+			EditorGUILayout.Space(6);
 			EditorGUILayout.BeginHorizontal();
 			GUILayout.FlexibleSpace();
 
 			if (GUILayout.Button("OK", GUILayout.Width(80)))
 			{
-				result = inputValue;
+				onConfirm?.Invoke(inputValue);
 				Close();
 			}
 
 			if (GUILayout.Button("Cancel", GUILayout.Width(80)))
 			{
-				result = null;
 				Close();
 			}
 
@@ -1810,13 +2528,12 @@ namespace FishMMO.Shared
 			{
 				if (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter)
 				{
-					result = inputValue;
+					onConfirm?.Invoke(inputValue);
 					Close();
 					Event.current.Use();
 				}
 				else if (Event.current.keyCode == KeyCode.Escape)
 				{
-					result = null;
 					Close();
 					Event.current.Use();
 				}

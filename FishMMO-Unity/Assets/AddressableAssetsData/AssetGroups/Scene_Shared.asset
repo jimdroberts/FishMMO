@@ -10,20 +10,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
-  m_Name: MerchantTemplate
-  m_EditorClassIdentifier: 
-  m_GroupName: MerchantTemplate
-  m_GUID: bb25fcb1dfdc3b64295c8a3690694658
+  m_Name: Scene_Shared
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Scene_Shared
+  m_GUID: 78ff5ab0fb2e04bf384d2bb38bea229a
   m_SerializeEntries:
-  - m_GUID: 335c46c3e1940fa41a866740a873f64a
-    m_Address: GeneralGoods
+  - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
+    m_Address: NavMesh-Terrain
     m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
   m_SchemaSet:
     m_Schemas:
-    - {fileID: 11400000, guid: f55cec879e7acc849acbf94f8ff599c7, type: 2}
-    - {fileID: 11400000, guid: e9daaf9bc3632d34bb669606890e570a, type: 2}
+    - {fileID: 11400000, guid: 56b965763771e2f899ddd1701821f93b, type: 2}

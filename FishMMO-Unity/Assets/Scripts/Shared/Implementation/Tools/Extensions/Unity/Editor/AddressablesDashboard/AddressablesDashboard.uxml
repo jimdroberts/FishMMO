@@ -8,6 +8,7 @@
             <uie:ToolbarButton name="refresh-button" text="Refresh" class="toolbar-button" />
             <uie:ToolbarButton name="add-group-button" text="+ Group" class="toolbar-button" />
             <uie:ToolbarButton name="analyze-button" text="Analyze" class="toolbar-button" />
+            <uie:ToolbarButton name="fix-all-button" text="Fix All" class="toolbar-button toolbar-button--fix" />
             <uie:ToolbarButton name="export-button" text="Export" class="toolbar-button" />
         </uie:Toolbar>
 
@@ -64,6 +65,28 @@
 
         <!-- Tree View -->
         <ui:TreeView name="addressables-tree" class="tree-view-container" virtualization-method="DynamicHeight" selection-type="Single" />
+
+        <!-- Dependency Viewer -->
+        <ui:VisualElement name="dep-viewer" class="dep-viewer">
+            <ui:VisualElement class="dep-viewer-header">
+                <ui:Label text="Dependency Viewer" class="dep-viewer-title" />
+                <ui:Label name="dep-viewer-asset" text="(select an asset)" class="dep-viewer-asset" />
+            </ui:VisualElement>
+            <ui:VisualElement class="dep-viewer-columns">
+                <ui:VisualElement class="dep-viewer-column">
+                    <ui:Label text="Direct Dependencies" class="dep-viewer-section-title" />
+                    <ui:ScrollView name="dep-direct-scroll" class="dep-viewer-scroll">
+                        <ui:VisualElement name="dep-direct-list" class="dep-viewer-list" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+                <ui:VisualElement class="dep-viewer-column dep-viewer-column--alert">
+                    <ui:Label text="Implicit Duplicates" class="dep-viewer-section-title dep-viewer-section-title--alert" />
+                    <ui:ScrollView name="dep-dupes-scroll" class="dep-viewer-scroll">
+                        <ui:VisualElement name="dep-dupes-list" class="dep-viewer-list" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
 
         <!-- Path Simulator -->
         <ui:VisualElement name="path-simulator" class="path-simulator">

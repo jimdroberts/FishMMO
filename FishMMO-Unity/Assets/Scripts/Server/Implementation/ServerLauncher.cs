@@ -32,8 +32,9 @@ namespace FishMMO.Server.Implementation
 			// Subscribe to addressable asset load/unload events.
 			AddressableLoadProcessor.OnAddressableLoaded += AddressableLoadProcessor_OnAddressableLoaded;
 			AddressableLoadProcessor.OnAddressableUnloaded += AddressableLoadProcessor_OnAddressableUnloaded;
-			// Load the template type cache asset.
-			AddressableLoadProcessor.EnqueueLoad(Constants.TemplateTypeCache);
+
+			// Load static permanent addressables (e.g., templates) before loading scenes to ensure they're available in the cache.
+			AddressableLoadProcessor.EnqueueLoad(new List<string>() { Constants.SharedStaticLabel, });
 
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>();
 

@@ -19,37 +19,37 @@ MonoBehaviour:
     m_Address: Highborn Nations
     m_ReadOnly: 0
     m_SerializedLabels:
-    - FactionTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 531ed21f335ef6e4cab9440971452675
     m_Address: Sanctuary
     m_ReadOnly: 0
     m_SerializedLabels:
-    - FactionTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 77a3fb139fbe85a43a013e72d3b303a3
     m_Address: Kingdom of Men
     m_ReadOnly: 0
     m_SerializedLabels:
-    - FactionTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ba6fc6ea5873d2f4dbf7c973fdafb667
     m_Address: Lords of the Deep
     m_ReadOnly: 0
     m_SerializedLabels:
-    - FactionTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e5859044195c03e44adebc73805dd570
     m_Address: Orc Horde
     m_ReadOnly: 0
     m_SerializedLabels:
-    - FactionTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f48d7eb5d15b5104e943de8a94d65cc1
     m_Address: Undead Legion
     m_ReadOnly: 0
     m_SerializedLabels:
-    - FactionTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

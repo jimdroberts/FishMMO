@@ -19,55 +19,55 @@ MonoBehaviour:
     m_Address: Health Regeneration
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 23b76e39682ae764690280034e76f280
     m_Address: Tier1 Sword Attack Power
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a3df451e24ce964d940bc7b1ea071cc
     m_Address: Earth Resistance
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5d10e1ac3658ab248970a19c84e5eefb
     m_Address: Wind Resistance
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
     m_Address: Tier1 Sword Attack Speed
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9aa49e0922d75f341a2be18b3000840a
     m_Address: Water Resistance
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cb16e96639b06ca4d9f2ed6c038bc1a9
     m_Address: Armor
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e3e8b717b5d803248a6ff39ab30aa577
     m_Address: Mana Regeneration
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f6e937b757cf3074cb6781f142abab98
     m_Address: Fire Resistance
     m_ReadOnly: 0
     m_SerializedLabels:
-    - ItemAttributeTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

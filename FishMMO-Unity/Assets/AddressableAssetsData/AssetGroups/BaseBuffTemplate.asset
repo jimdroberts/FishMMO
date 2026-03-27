@@ -19,15 +19,13 @@ MonoBehaviour:
     m_Address: Minor Increase Armor
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AttributeBuffTemplate
-    - BaseBuffTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f382d90751b078548b47500f1817ff29
     m_Address: Minor Increase Move Speed
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AttributeBuffTemplate
-    - BaseBuffTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

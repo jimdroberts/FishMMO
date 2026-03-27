@@ -19,60 +19,49 @@ MonoBehaviour:
     m_Address: Summon Lesser Fire Elemental
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AbilityTemplate
-    - BaseAbilityTemplate
-    - PetAbilityTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2e669850a4855b9438e174f70db28d9a
     m_Address: Punch
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AbilityTemplate
-    - BaseAbilityTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 31fd812565fea7940b6681ede8b3797f
     m_Address: Physical Aerial Override
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AbilityEvent
-    - AbilityTypeOverrideEventType
-    - BaseAbilityTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c14874e3c902684a8d562913ed73c24
     m_Address: Lesser Flame
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AbilityTemplate
-    - BaseAbilityTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
     m_Address: Self Minor Armor
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AbilityTemplate
-    - BaseAbilityTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9a571cab03b3f684da8436e4391abdbb
     m_Address: Lesser Fireball
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AbilityTemplate
-    - BaseAbilityTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9ff935e98f3e2294ab9e0a838ad8ca5b
     m_Address: Magic Aerial Override
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AbilityEvent
-    - AbilityTypeOverrideEventType
-    - BaseAbilityTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f455d8a612b6da645b9a5f066502307b
     m_Address: Self Minor Movement Speed
     m_ReadOnly: 0
     m_SerializedLabels:
-    - AbilityTemplate
-    - BaseAbilityTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

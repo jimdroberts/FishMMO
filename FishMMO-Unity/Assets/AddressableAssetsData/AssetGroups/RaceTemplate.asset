@@ -19,19 +19,19 @@ MonoBehaviour:
     m_Address: Human
     m_ReadOnly: 0
     m_SerializedLabels:
-    - RaceTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6f8938bbed1286347b54bf3f4889f32a
     m_Address: Elf
     m_ReadOnly: 0
     m_SerializedLabels:
-    - RaceTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f1bedd6f4354a7e41be26aee87734d66
     m_Address: Orc
     m_ReadOnly: 0
     m_SerializedLabels:
-    - RaceTemplate
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

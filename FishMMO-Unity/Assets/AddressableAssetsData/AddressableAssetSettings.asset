@@ -66,6 +66,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 4c5689b203364d947894a9fd6f892499, type: 2}
   - {fileID: 11400000, guid: 49fc6a110bffa0b459439e8cade82f53, type: 2}
   - {fileID: 11400000, guid: cdf9e3e712e068e429e5d7c6dc7eb16e, type: 2}
+  - {fileID: 11400000, guid: c0dde3bd25c7dee33817f39da7f3be00, type: 2}
   - {fileID: 11400000, guid: 82fcad0f90602b44093341eea9bbb3f4, type: 2}
   - {fileID: 11400000, guid: 4d1edb18fd311ab4c8d7c53bcedc9678, type: 2}
   - {fileID: 11400000, guid: 6c2278f21e249d345878dbe7af59e217, type: 2}
@@ -73,6 +74,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5961a9f05afc3d84aaa4562d946364c0, type: 2}
   - {fileID: 11400000, guid: 25412db320dbb5c4b960881feb7f047d, type: 2}
   - {fileID: 11400000, guid: 49fccb1d5b3b5224bb114d701547f632, type: 2}
+  - {fileID: 11400000, guid: 1f533a41c54f946d18968c769e1c5533, type: 2}
   - {fileID: 11400000, guid: 480b6313063e3e04b9b55f8ed890c014, type: 2}
   - {fileID: 11400000, guid: 0923770f0a4268749b38890e1058e8f4, type: 2}
   - {fileID: 11400000, guid: 2dbd78b5603f9b14690876985bfd1573, type: 2}
@@ -82,6 +84,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 7f6edeed1903e1046b208909e012b137, type: 2}
   - {fileID: 11400000, guid: b75f0c23876ced4479023cd41fceb9a4, type: 2}
   - {fileID: 11400000, guid: e604abddb43f36346a601b66217e8915, type: 2}
+  - {fileID: 11400000, guid: 6c426359434945466a7204d09b26fa5b, type: 2}
   - {fileID: 11400000, guid: ddb75964898ba2b4599f42d9d18db11e, type: 2}
   - {fileID: 11400000, guid: 42fa0da6054b09f448b83aca4656fc3f, type: 2}
   - {fileID: 11400000, guid: fec61906aae27a148aa8945d4f898c83, type: 2}
@@ -103,7 +106,7 @@ MonoBehaviour:
       - m_Id: 4de63c742f3094045aefef9754699253
         m_Value: '{UnityEngine.AddressableAssets.Addressables.RuntimePath}/[BuildTarget]'
       - m_Id: 52b9905c13155c745839e4168ad2bd83
-        m_Value: '[UnityEngine.AddressableAssets.Addressables.BuildPath]/[BuildTarget]'
+        m_Value: 'ServerData/[BuildTarget]'
       - m_Id: 61dba0e620f8c984d91765e1f8a876ec
         m_Value: '{UnityEngine.AddressableAssets.Addressables.RuntimePath}/[BuildTarget]/WorldScenes'
       - m_Id: 913c806480406474492ea179a2a5b069
@@ -143,62 +146,9 @@ MonoBehaviour:
     m_ProfileVersion: 1
   m_LabelTable:
     m_LabelNames:
-    - default
-    - Shared
-    - Client
-    - LoginServer
-    - SceneServer
-    - WorldServer
-    - AbilityTemplate
-    - BaseAbilityTemplate
-    - PetAbilityTemplate
-    - AchievementTemplate
-    - AttributeBuffTemplate
-    - BaseBuffTemplate
-    - DamageAttributeTemplate
-    - CharacterAttributeTemplate
-    - ResistanceAttributeTemplate
-    - BuffHitEvent
-    - HitEvent
-    - DamageHitEvent
-    - KnockbackHitEvent
-    - ForwardMoveEvent
-    - MoveEvent
-    - AbilityTypeOverrideEventType
-    - AbilityEvent
-    - FactionTemplate
-    - MerchantTemplate
-    - ArmorTemplate
-    - EquippableItemTemplate
-    - BaseItemTemplate
-    - ItemAttributeTemplate
-    - WeaponTemplate
-    - BaseAttackingState
-    - BaseAIState
-    - GetBehindState
-    - IdleState
-    - OrbitState
-    - PatrolState
-    - PetIdleState
-    - RetreatState
-    - ReturnHomeState
-    - WanderState
-    - RaceTemplate
     - NameCache
-    - ArchetypeTemplate
     - MerchantTemplate
-    - ScriptableObject
-    - Object
-    - AbilityOnHitEvent
-    - Trigger
-    - HasResourceCondition
-    - BaseCondition
-    - AbilityApplyTargetAction
-    - BaseAction
-    - ApplyBuffAction
-    - ApplyDamageAction
-    - AbilityApplyAreaAction
-    - KnockbackHitAction
+    - Shared_Static_Permanent
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 2f9575764d1020448a25d0512380c601, type: 2}

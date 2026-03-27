@@ -1,31 +1,13 @@
 ﻿using UnityEngine;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
-using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
 	public static class Constants
 	{
-		public static List<string> TemplateTypeCache = new List<string>()
-		{
-			typeof(BaseBuffTemplate).Name,
-			typeof(FactionTemplate).Name,
-			typeof(AchievementTemplate).Name,
-			typeof(NameCache).Name,
-			typeof(ItemAttributeTemplate).Name,
-			typeof(BaseAbilityTemplate).Name,
-			typeof(RaceTemplate).Name,
-			typeof(BaseAIState).Name,
-			typeof(CharacterAttributeTemplate).Name,
-			typeof(BaseItemTemplate).Name,
-			typeof(ArchetypeTemplate).Name,
-			typeof(Trigger).Name,
-			typeof(BaseCondition).Name,
-			typeof(BaseAction).Name,
-		};
+		public const string SharedStaticLabel = "Shared_Static_Permanent";
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static string GetWorkingDirectory()

@@ -19,64 +19,55 @@ MonoBehaviour:
     m_Address: Basic Patrol State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - PatrolState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 51f855b3de8e6644eb22eee716657935
     m_Address: Basic Idle State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - IdleState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 533ddb9bdb34b7440a63e47f786a58ab
     m_Address: Basic PetIdle State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - PetIdleState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b56c55d686ceac4cac2a744a5bf0951
     m_Address: Basic Retreat State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - RetreatState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a188e3de8a5794043903352f3ce4a57d
     m_Address: Basic Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - BaseAttackingState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: acce2c15167bca3468900e3963385b1e
     m_Address: Basic GetBehind State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - GetBehindState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b4bee0c12e3b92c48b285850bd5d47c1
     m_Address: Basic Wander State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - WanderState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b646a6d9bc4f07d428f12e255af67366
     m_Address: Basic ReturnHome State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - ReturnHomeState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bfb81bf76967bb24098b2eb22e2a386e
     m_Address: Basic Orbit State
     m_ReadOnly: 0
     m_SerializedLabels:
-    - BaseAIState
-    - OrbitState
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
