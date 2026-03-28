@@ -11,6 +11,7 @@
             <uie:ToolbarButton name="fix-all-button" text="Fix All" class="toolbar-button toolbar-button--fix" />
             <uie:ToolbarButton name="smart-group-button" text="Smart Group" class="toolbar-button toolbar-button--smart" />
             <uie:ToolbarButton name="export-button" text="Export" class="toolbar-button" />
+            <uie:ToolbarButton name="build-button" text="Build" class="toolbar-button toolbar-button--build" />
         </uie:Toolbar>
 
         <!-- Statistics Panel — Row 1 -->
@@ -54,6 +55,14 @@
             <ui:VisualElement class="stat-box">
                 <ui:Label name="stat-largest-asset" text="—" class="stat-value" />
                 <ui:Label text="Largest Asset" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-address-collisions" text="—" class="stat-value" />
+                <ui:Label text="Addr Collisions" class="stat-label" />
+            </ui:VisualElement>
+            <ui:VisualElement class="stat-box">
+                <ui:Label name="stat-stale-entries" text="—" class="stat-value" />
+                <ui:Label text="Stale Entries" class="stat-label" />
             </ui:VisualElement>
         </ui:VisualElement>
 

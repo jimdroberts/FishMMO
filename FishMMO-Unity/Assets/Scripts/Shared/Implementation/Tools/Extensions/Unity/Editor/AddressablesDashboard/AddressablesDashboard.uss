@@ -30,6 +30,11 @@
     width: 90px;
 }
 
+.toolbar-button--build {
+    background-color: rgb(100, 70, 30);
+    color: rgb(255, 210, 140);
+}
+
 /* ── Statistics Panel ── */
 .stats-panel {
     flex-direction: row;

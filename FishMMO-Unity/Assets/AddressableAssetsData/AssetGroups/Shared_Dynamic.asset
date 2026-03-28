@@ -20,7 +20,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
-    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 41f73c28208285445b37a7980665ead3
     m_Address: GenericGameBackgroundDefaultLoadingScreen
@@ -32,7 +31,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
-    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5c2d23be0cbdd4048a53de5b3b050809
     m_Address: StartScene A Background
@@ -44,7 +42,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
-    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: af9d2e8814f76f4498e2ed07cc8191ef
     m_Address: StartScene B Background
@@ -56,7 +53,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
-    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

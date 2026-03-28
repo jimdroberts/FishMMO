@@ -39,44 +39,16 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 422ac1a06602ba841bd45b8b1c616098
-    m_Address: Fire
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6bed0c614c46964408373a65aba83a0e
-    m_Address: TestBuffFX
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9d03b89b0b5eb734eb6e3aea188b17bf
     m_Address: CharacterRenderTexture
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b3763d5e92357f74c8c29b08f426493f
-    m_Address: TestBuffFX 3
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b4012c6b79fc4f142860bb5fb688e83f
     m_Address: Damage Material
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cb25fb39d2ec2b646b6b18059ae87bce
-    m_Address: Explosion
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dc8cc64088072ae47872cf54e7cf6b6f
@@ -89,13 +61,6 @@ MonoBehaviour:
     m_Address: UIColorPicker
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: fc146935ca6612f4a816f8e9e2ad17c1
-    m_Address: TestBuffFX 2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0

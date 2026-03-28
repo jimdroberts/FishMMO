@@ -20,7 +20,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
-    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 36866adaddfae0c4e975f65903f11405
     m_Address: fm_teleporter_PLACEHOLDER
@@ -33,7 +32,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
-    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 422ac1a06602ba841bd45b8b1c616098
+    m_Address: Fire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4529eea60fb8b9949b7878bf2099b1e4
     m_Address: WaterMaterial_FromGraph
@@ -47,15 +51,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6bed0c614c46964408373a65aba83a0e
+    m_Address: TestBuffFX
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7737647c22c1fc64a88d5cd030c352ce
     m_Address: Ethan
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
-    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3763d5e92357f74c8c29b08f426493f
+    m_Address: TestBuffFX 3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb25fb39d2ec2b646b6b18059ae87bce
+    m_Address: Explosion
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d8f6edc9fd710ef48aa70267f52b0425
     m_Address: LoginTerrain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fc146935ca6612f4a816f8e9e2ad17c1
+    m_Address: TestBuffFX 2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
