@@ -455,7 +455,7 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b235179bd2a63d1468dd430670338c55
-    m_Address: Ethan
+    m_Address: Ethan.fbx
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

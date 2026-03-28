@@ -357,6 +357,37 @@ namespace FishMMO.Shared
 		}
 
 		// ──────────────────────────────────────────────
+		// Double-click
+		// ──────────────────────────────────────────────
+
+		/// <summary>
+		/// Handles double-click on a tree row to select the asset in the Project window,
+		/// or ping the group's ScriptableObject.
+		/// </summary>
+		/// <param name="evt">The pointer down event with clickCount == 2.</param>
+		private void OnTreeDoubleClick(PointerDownEvent evt)
+		{
+			if (evt.button != 0 || evt.clickCount != 2) return;
+
+			var selectedIndices = treeView.selectedIndices.ToList();
+			if (selectedIndices.Count == 0) return;
+
+			int selectedId = treeView.GetIdForIndex(selectedIndices[0]);
+
+			if (idToEntry.TryGetValue(selectedId, out AddressableAssetEntry entry))
+			{
+				SelectEntryInProject(entry);
+				evt.StopPropagation();
+			}
+			else if (idToGroup.TryGetValue(selectedId, out AddressableAssetGroup group))
+			{
+				EditorGUIUtility.PingObject(group);
+				Selection.activeObject = group;
+				evt.StopPropagation();
+			}
+		}
+
+		// ──────────────────────────────────────────────
 		// Drag and Drop
 		// ──────────────────────────────────────────────
 

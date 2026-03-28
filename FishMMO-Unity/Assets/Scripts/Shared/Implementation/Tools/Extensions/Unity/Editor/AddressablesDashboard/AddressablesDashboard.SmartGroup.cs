@@ -241,9 +241,16 @@ namespace FishMMO.Shared
 					}
 				}
 
+				// Resolve any address collisions introduced by filename-only addresses
+				int collisionsResolved = ResolveAddressCollisions(settings);
+
 				EditorUtility.SetDirty(settings);
 
 				string message = $"Fixed {fixedCount} asset(s) across categorized groups.";
+				if (collisionsResolved > 0)
+				{
+					message += $" Resolved {collisionsResolved} address collision(s).";
+				}
 				if (deniedCount > 0)
 				{
 					message += $" Skipped {deniedCount} (denied).";
@@ -267,6 +274,142 @@ namespace FishMMO.Shared
 			{
 				Debug.LogError($"[AddressablesDashboard] Fix All failed: {ex.Message}");
 				SetStatus($"Fix All failed: {ex.Message}");
+			}
+		}
+
+		// ──────────────────────────────────────────────
+		// Address Collision Resolution
+		// ──────────────────────────────────────────────
+
+		/// <summary>
+		/// Scans all addressable entries and resolves address collisions where multiple entries
+		/// of the same asset type share the same address. Disambiguates in two stages:
+		///   1. Try using the filename with extension (e.g. "Ethan.fbx" vs "Ethan.prefab").
+		///   2. If still colliding, progressively prepend parent directory segments.
+		/// Returns the number of addresses that were renamed.
+		/// </summary>
+		private static int ResolveAddressCollisions(AddressableAssetSettings settings)
+		{
+			// Collect all entries grouped by (address, mainAssetType)
+			var buckets = new Dictionary<(string address, Type type), List<AddressableAssetEntry>>();
+
+			foreach (var group in settings.groups)
+			{
+				if (group == null) continue;
+				foreach (var entry in group.entries)
+				{
+					if (entry == null) continue;
+
+					Type assetType = AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath);
+					var key = (entry.address, assetType);
+
+					if (!buckets.TryGetValue(key, out var list))
+					{
+						list = new List<AddressableAssetEntry>();
+						buckets[key] = list;
+					}
+					list.Add(entry);
+				}
+			}
+
+			int renamedCount = 0;
+
+			foreach (var kvp in buckets)
+			{
+				List<AddressableAssetEntry> entries = kvp.Value;
+				if (entries.Count < 2) continue;
+
+				// Stage 1: Try filename with extension (e.g. "Ethan" → "Ethan.fbx" / "Ethan.prefab")
+				var newAddresses = new string[entries.Count];
+				for (int i = 0; i < entries.Count; i++)
+				{
+					newAddresses[i] = Path.GetFileName(entries[i].AssetPath);
+				}
+
+				if (AreAllUnique(newAddresses))
+				{
+					ApplyAddresses(entries, newAddresses, ref renamedCount);
+					continue;
+				}
+
+				// Stage 2: Progressively prepend parent directory segments
+				// Reset to filename with extension as the base
+				var segmentLists = new string[entries.Count][];
+				for (int i = 0; i < entries.Count; i++)
+				{
+					string dir = Path.GetDirectoryName(entries[i].AssetPath);
+					if (dir != null)
+					{
+						dir = dir.Replace('\\', '/');
+						string[] parts = dir.Split('/');
+						// Reverse so index 0 = nearest parent
+						Array.Reverse(parts);
+						segmentLists[i] = parts;
+					}
+					else
+					{
+						segmentLists[i] = Array.Empty<string>();
+					}
+				}
+
+				int depth = 0;
+				int maxDepth = 0;
+				for (int i = 0; i < segmentLists.Length; i++)
+				{
+					if (segmentLists[i].Length > maxDepth)
+						maxDepth = segmentLists[i].Length;
+				}
+
+				while (depth < maxDepth)
+				{
+					if (AreAllUnique(newAddresses)) break;
+
+					for (int i = 0; i < entries.Count; i++)
+					{
+						if (depth < segmentLists[i].Length)
+						{
+							newAddresses[i] = segmentLists[i][depth] + "/" + newAddresses[i];
+						}
+					}
+					depth++;
+				}
+
+				ApplyAddresses(entries, newAddresses, ref renamedCount);
+			}
+
+			return renamedCount;
+		}
+
+		/// <summary>
+		/// Returns true if every string in the array is unique (case-insensitive).
+		/// </summary>
+		private static bool AreAllUnique(string[] values)
+		{
+			for (int i = 0; i < values.Length; i++)
+			{
+				for (int j = i + 1; j < values.Length; j++)
+				{
+					if (string.Equals(values[i], values[j], StringComparison.OrdinalIgnoreCase))
+					{
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Applies new addresses to entries, incrementing the renamed counter for each change.
+		/// </summary>
+		private static void ApplyAddresses(List<AddressableAssetEntry> entries, string[] newAddresses, ref int renamedCount)
+		{
+			for (int i = 0; i < entries.Count; i++)
+			{
+				if (!string.Equals(entries[i].address, newAddresses[i], StringComparison.Ordinal))
+				{
+					entries[i].SetAddress(newAddresses[i]);
+					renamedCount++;
+				}
 			}
 		}
 
@@ -530,6 +673,9 @@ namespace FishMMO.Shared
 					ApplyGroupPackingMode(kvp.Value, kvp.Key);
 				}
 
+				// Resolve any address collisions introduced by filename-only addresses
+				int collisionsResolved = ResolveAddressCollisions(settings);
+
 				// ── Clean up empty groups ──
 				int removedGroups = 0;
 				var groupsToRemove = new List<AddressableAssetGroup>();
@@ -582,6 +728,7 @@ namespace FishMMO.Shared
 
 				var sb = new StringBuilder();
 				sb.Append($"Smart Group complete. Created {created}, moved {moved}");
+				if (collisionsResolved > 0) sb.Append($", resolved {collisionsResolved} collision(s)");
 				if (labeled > 0) sb.Append($", labeled {labeled}");
 				if (removedGroups > 0) sb.Append($", removed {removedGroups} empty group(s)");
 				if (removedLabels > 0) sb.Append($", removed {removedLabels} unused label(s)");

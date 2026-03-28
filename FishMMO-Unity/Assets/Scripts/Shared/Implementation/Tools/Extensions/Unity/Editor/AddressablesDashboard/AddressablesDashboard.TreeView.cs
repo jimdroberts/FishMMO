@@ -326,7 +326,7 @@ namespace FishMMO.Shared
 				element.AddToClassList("asset-entry");
 
 				if (nameLabel != null) nameLabel.text = entry.address;
-				if (pathLabel != null) pathLabel.text = entry.AssetPath;
+				if (pathLabel != null) pathLabel.text = $"[{entry.address}]  {entry.AssetPath}";
 				if (labelsLabel != null) labelsLabel.text = FormatLabels(entry);
 				if (sizeLabel != null) sizeLabel.text = FormatBytes(GetAssetFileSize(entry.AssetPath));
 

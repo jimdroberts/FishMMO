@@ -154,8 +154,10 @@ namespace FishMMO.Shared
 				// Track which labels are actually used by entries
 				var usedLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-				// Detect address collisions: address → list of (group, path) tuples
-				var addressMap = new Dictionary<string, List<(string group, string path)>>(StringComparer.OrdinalIgnoreCase);
+				// Detect address collisions: (address, assetType) → list of (group, path) tuples.
+				// Different asset types at the same address are safely disambiguated by LoadAssetAsync<T>,
+				// so only same-type entries sharing an address are true collisions.
+				var addressMap = new Dictionary<(string address, System.Type type), List<(string group, string path)>>();
 
 				// Detect stale entries: entries whose source asset no longer exists
 				var staleEntries = new List<(string address, string group, string path)>();
@@ -180,14 +182,16 @@ namespace FishMMO.Shared
 						usedLabels.Add(entryLabel);
 					}
 
-					// Address collision detection
+					// Address collision detection (type-aware)
 					string address = entry.address;
 					string groupName = entry.parentGroup != null ? entry.parentGroup.Name : "Unknown";
+					System.Type assetType = AssetDatabase.GetMainAssetTypeAtPath(entry.AssetPath);
+					var addressKey = (address, assetType);
 
-					if (!addressMap.TryGetValue(address, out var addressEntries))
+					if (!addressMap.TryGetValue(addressKey, out var addressEntries))
 					{
 						addressEntries = new List<(string group, string path)>();
-						addressMap[address] = addressEntries;
+						addressMap[addressKey] = addressEntries;
 					}
 					addressEntries.Add((groupName, entry.AssetPath));
 
@@ -256,9 +260,9 @@ namespace FishMMO.Shared
 					}
 				}
 
-				// Count address collisions (addresses used by more than one entry)
+				// Count address collisions (same address + same type used by more than one entry)
 				int addressCollisionCount = 0;
-				var addressCollisions = new List<KeyValuePair<string, List<(string group, string path)>>>();
+				var addressCollisions = new List<KeyValuePair<(string address, System.Type type), List<(string group, string path)>>>();
 				foreach (var kvp in addressMap)
 				{
 					if (kvp.Value.Count > 1)
@@ -320,8 +324,8 @@ namespace FishMMO.Shared
 				if (addressCollisionCount > 0)
 				{
 					report.AppendLine("═══ ✖ ADDRESS COLLISIONS ═══");
-					report.AppendLine("Multiple entries share the same address. LoadAssetAsync will");
-					report.AppendLine("pick one arbitrarily, causing silent runtime bugs.\n");
+					report.AppendLine("Multiple entries of the same type share the same address.");
+					report.AppendLine("LoadAssetAsync<T> will pick one arbitrarily, causing silent runtime bugs.\n");
 
 					int shown = 0;
 					for (int i = 0; i < addressCollisions.Count; i++)
@@ -332,7 +336,8 @@ namespace FishMMO.Shared
 							break;
 						}
 						var kvp = addressCollisions[i];
-						report.AppendLine($"  Address: \"{kvp.Key}\"");
+						string typeName = kvp.Key.type != null ? kvp.Key.type.Name : "Unknown";
+						report.AppendLine($"  Address: \"{kvp.Key.address}\"  Type: {typeName}");
 						for (int j = 0; j < kvp.Value.Count; j++)
 						{
 							report.AppendLine($"    → [{kvp.Value[j].group}] {kvp.Value[j].path}");

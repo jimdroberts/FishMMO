@@ -218,6 +218,9 @@ namespace FishMMO.Shared
 				buildButton.clicked += BuildAddressables;
 			}
 
+			// Double-click to select in Project
+			treeView.RegisterCallback<PointerDownEvent>(OnTreeDoubleClick);
+
 			// Drag and drop
 			treeView.RegisterCallback<DragUpdatedEvent>(OnDragUpdated);
 			treeView.RegisterCallback<DragPerformEvent>(OnDragPerform);
