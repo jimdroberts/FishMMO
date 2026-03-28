@@ -15,10 +15,83 @@ MonoBehaviour:
   m_GroupName: Scene_Shared
   m_GUID: 78ff5ab0fb2e04bf384d2bb38bea229a
   m_SerializeEntries:
+  - m_GUID: 1543472ad0644ec4fbae5c4413d88243
+    m_Address: MainBootstrap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 372294cecb987eb418c8609b8fb4d289
+    m_Address: Test Dungeon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a3ad1e67809ba94c984635c5d313682
+    m_Address: StartScene B
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4421ff33e86120247a8ae615ef06f2c7
+    m_Address: Dungeon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 65c498cad91e50048b976bfa2658ff29
+    m_Address: Tutorial Regions
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7f7ae0a10fc88dd4a954d635460d9ca1
+    m_Address: Tutorial Spawners
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9bb793da43a030e459af61d22643af10
+    m_Address: NavMesh-Floor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6a7b407afcf0a14e9b034d20ed554c8
+    m_Address: Tutorial SpawnPoints
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
     m_Address: NavMesh-Terrain
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c43b6eb487815084ca437ada41086fa4
+    m_Address: NavMesh-Terrain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e8a5917e2e784024a83eee958f6f9689
+    m_Address: StartScene A
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e9b8b2a3c19045247a7b70f2b23b0ca1
+    m_Address: NavMesh-Terrain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f8dd271abfab0f44287f337e86b02aa5
+    m_Address: NavMesh-Terrain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

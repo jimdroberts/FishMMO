@@ -176,5 +176,16 @@ namespace FishMMO.Shared
 
 			IAchievementController.OnUpdateAchievement?.Invoke(Character, achievement);
 		}
+
+		/// <summary>
+		/// Increments the progress of an achievement by template ID, handling tier advancement and rewards.
+		/// </summary>
+		/// <param name="templateID">The template ID of the achievement.</param>
+		/// <param name="amount">The amount to increment the achievement's value by.</param>
+		public void Increment(int templateID, uint amount)
+		{
+			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(templateID);
+			Increment(template, amount);
+		}
 	}
 }

@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Client_Dynamic
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Client_Dynamic
+  m_GUID: e46cfb3a1a3f84c86ac0d2aeb16c01a7
+  m_SerializeEntries:
+  - m_GUID: 1a3fc9516df07da4ebbb643fe79bc80b
+    m_Address: Ethan
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 36866adaddfae0c4e975f65903f11405
+    m_Address: fm_teleporter_PLACEHOLDER
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 409d23918fda94d4daf83122bcb63ead
+    m_Address: EthanWhite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4529eea60fb8b9949b7878bf2099b1e4
+    m_Address: WaterMaterial_FromGraph
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
+    m_Address: MinimapRenderTexture
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7737647c22c1fc64a88d5cd030c352ce
+    m_Address: Ethan
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d8f6edc9fd710ef48aa70267f52b0425
+    m_Address: LoginTerrain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 5aeda03ef12adac07a260a61784686cf, type: 2}

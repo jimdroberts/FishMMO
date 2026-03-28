@@ -7,37 +7,45 @@ namespace FishMMO.Shared
 	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController
 	{
 		/// <summary>
-		/// Achievement template for dealing damage to another character.
+		/// Achievement template ID for dealing damage to another character.
 		/// </summary>
-		public AchievementTemplate DamageAchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int DamageAchievementTemplateID;
 		/// <summary>
-		/// Achievement template for receiving damage from another character.
+		/// Achievement template ID for receiving damage from another character.
 		/// </summary>
-		public AchievementTemplate DamagedAchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int DamagedAchievementTemplateID;
 		/// <summary>
-		/// Achievement template for killing another character.
+		/// Achievement template ID for killing another character.
 		/// </summary>
-		public AchievementTemplate KillAchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int KillAchievementTemplateID;
 		/// <summary>
-		/// Achievement template for being killed by another character.
+		/// Achievement template ID for being killed by another character.
 		/// </summary>
-		public AchievementTemplate KilledAchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int KilledAchievementTemplateID;
 		/// <summary>
-		/// Achievement template for healing another character.
+		/// Achievement template ID for healing another character.
 		/// </summary>
-		public AchievementTemplate HealAchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int HealAchievementTemplateID;
 		/// <summary>
-		/// Achievement template for being healed by another character.
+		/// Achievement template ID for being healed by another character.
 		/// </summary>
-		public AchievementTemplate HealedAchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int HealedAchievementTemplateID;
 		/// <summary>
-		/// Achievement template for resurrecting another character.
+		/// Achievement template ID for resurrecting another character.
 		/// </summary>
-		public AchievementTemplate ResurrectAchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int ResurrectAchievementTemplateID;
 		/// <summary>
-		/// Achievement template for being resurrected by another character.
+		/// Achievement template ID for being resurrected by another character.
 		/// </summary>
-		public AchievementTemplate ResurrectedAchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int ResurrectedAchievementTemplateID;
 
 		/// <summary>
 		/// If true, this character cannot be damaged or killed.
@@ -151,12 +159,12 @@ namespace FishMMO.Shared
 			{
 				if (attacker.TryGet(out IAchievementController attackerAchievementController))
 				{
-					attackerAchievementController.Increment(DamageAchievementTemplate, fullAmount);
+					attackerAchievementController.Increment(DamageAchievementTemplateID, fullAmount);
 				}
 
 				if (Character.TryGet(out IAchievementController defenderAchievementController))
 				{
-					defenderAchievementController.Increment(DamagedAchievementTemplate, fullAmount);
+					defenderAchievementController.Increment(DamagedAchievementTemplateID, fullAmount);
 				}
 			}
 
@@ -186,14 +194,14 @@ namespace FishMMO.Shared
 				// Reward the killer with kill achievements.
 				if (killer.TryGet(out IAchievementController killerAchievementController))
 				{
-					killerAchievementController.Increment(KillAchievementTemplate, 1);
+					killerAchievementController.Increment(KillAchievementTemplateID, 1);
 				}
 			}
 
 			// Reward the defender with death achievements.
 			if (Character.TryGet(out IAchievementController defenderAchievementController))
 			{
-				defenderAchievementController.Increment(KilledAchievementTemplate, 1);
+				defenderAchievementController.Increment(KilledAchievementTemplateID, 1);
 			}
 
 			// Remove all buffs
@@ -230,12 +238,12 @@ namespace FishMMO.Shared
 					if (healer != null &&
 					healer.TryGet(out IAchievementController healerAchievementController))
 					{
-						healerAchievementController.Increment(HealAchievementTemplate, fullAmount);
+						healerAchievementController.Increment(HealAchievementTemplateID, fullAmount);
 					}
 					if (Character != null &&
 						Character.TryGet(out IAchievementController healedAchievementController))
 					{
-						healedAchievementController.Increment(HealedAchievementTemplate, fullAmount);
+						healedAchievementController.Increment(HealedAchievementTemplateID, fullAmount);
 					}
 				}
 			}

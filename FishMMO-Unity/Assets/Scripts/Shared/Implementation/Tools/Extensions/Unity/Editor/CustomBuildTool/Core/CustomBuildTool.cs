@@ -245,8 +245,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		{
 			Constants.Configuration.BootstrapScenePath + "MainBootstrap.unity",
 		};
-		private static readonly string[] serverAddressableGroups = new string[] { "ServerOnly" };
-		private static readonly string[] clientAddressableGroups = new string[] { "ClientOnly" };
+		private static readonly string[] serverAddressableGroups = new string[] { "Server" };
+		private static readonly string[] clientAddressableGroups = new string[] { "Client" };
 
 		/// <summary>
 		/// Initializes the FishMMO Logger for Editor build tools with all log levels enabled.

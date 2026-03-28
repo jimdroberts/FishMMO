@@ -9,6 +9,7 @@
             <uie:ToolbarButton name="add-group-button" text="+ Group" class="toolbar-button" />
             <uie:ToolbarButton name="analyze-button" text="Analyze" class="toolbar-button" />
             <uie:ToolbarButton name="fix-all-button" text="Fix All" class="toolbar-button toolbar-button--fix" />
+            <uie:ToolbarButton name="smart-group-button" text="Smart Group" class="toolbar-button toolbar-button--smart" />
             <uie:ToolbarButton name="export-button" text="Export" class="toolbar-button" />
         </uie:Toolbar>
 

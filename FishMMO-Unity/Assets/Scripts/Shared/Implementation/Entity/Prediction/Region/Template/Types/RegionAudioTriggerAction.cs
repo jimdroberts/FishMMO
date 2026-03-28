@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -10,9 +11,16 @@ namespace FishMMO.Shared
 	public class RegionAudioTriggerAction : RegionAction
 	{
 		/// <summary>
-		/// The audio clip to play when the region action is triggered.
+		/// Addressable reference to the audio clip to play when the region action is triggered.
+		/// Loaded client-side only to avoid pulling audio into shared bundles.
 		/// </summary>
-		public AudioClip clip;
+		public AssetReference clipReference;
+
+		/// <summary>
+		/// Cached AudioClip loaded from the Addressable reference. Client-only.
+		/// </summary>
+		[System.NonSerialized]
+		private AudioClip cachedClip;
 
 		/// <summary>
 		/// Invokes the region action, playing the specified audio clip for the player character if conditions are met.
@@ -24,11 +32,12 @@ namespace FishMMO.Shared
 		{
 #if !UNITY_SERVER
 			// Only play the audio if:
-			// - The audio clip is assigned
+			// - The audio clip reference is assigned
 			// - The character is valid
 			// - The character is the owner of the network object (to avoid duplicate playback)
 			// - The action is not part of a reconciliation process
-			if (clip == null ||
+			if (clipReference == null ||
+				!clipReference.RuntimeKeyIsValid() ||
 				character == null ||
 				!character.NetworkObject.IsOwner ||
 				isReconciling)
@@ -36,6 +45,7 @@ namespace FishMMO.Shared
 				return;
 			}
 			// TODO: Implement audio playback for the character here.
+			// Use AddressableLoadProcessor or Addressables.LoadAssetAsync<AudioClip>(clipReference) to load and play.
 #endif
 		}
 	}

@@ -4789,7 +4789,7 @@ ParticleSystem:
     vectorLabel1_3: W
 --- !u!199 &6038260641680656892
 ParticleSystemRenderer:
-  serializedVersion: 6
+  serializedVersion: 7
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -4808,6 +4808,8 @@ ParticleSystemRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -4829,9 +4831,11 @@ ParticleSystemRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_RenderMode: 0
   m_MeshDistribution: 0
   m_SortMode: 0
@@ -4863,7 +4867,6 @@ ParticleSystemRenderer:
   m_MeshWeighting1: 1
   m_MeshWeighting2: 1
   m_MeshWeighting3: 1
-  m_MaskInteraction: 0
 --- !u!1 &2402337928924703834
 GameObject:
   m_ObjectHideFlags: 0
@@ -4915,6 +4918,7 @@ GameObject:
   - component: {fileID: 6630461006965550917}
   - component: {fileID: 2898743231479186744}
   - component: {fileID: 1969692536659621655}
+  - component: {fileID: 9168136948286660220}
   m_Layer: 6
   m_Name: a lesser fire elemental
   m_TagString: Untagged
@@ -4973,30 +4977,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  <IsNested>k__BackingField: 0
-  <ComponentIndex>k__BackingField: 0
-  <PredictedSpawn>k__BackingField: {fileID: 0}
-  <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 6437443601116110890}
-  - {fileID: 2119787057571980410}
-  - {fileID: 7824644601122125574}
-  - {fileID: 2150267445961412781}
-  - {fileID: 7970910599131371131}
-  - {fileID: 2898743231479186744}
-  InitializedParentNetworkBehaviour: {fileID: 0}
-  InitializedNestedNetworkObjects: []
-  RuntimeParentNetworkBehaviour: {fileID: 0}
-  RuntimeChildNetworkBehaviours: []
-  _isNetworked: 1
-  _isSpawnable: 1
-  _isGlobal: 0
-  _initializeOrder: 0
-  _preventDespawnOnDisconnect: 0
-  _defaultDespawnType: 0
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
@@ -5020,6 +5000,32 @@ MonoBehaviour:
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     Scale: {x: 0, y: 0, z: 0}
     IsValid: 0
+  <IsNested>k__BackingField: 0
+  WasActiveDuringEdit: 0
+  WasActiveDuringEdit_Set1: 1
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  <PredictedOwner>k__BackingField: {fileID: 0}
+  NetworkBehaviours:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 6437443601116110890}
+  - {fileID: 2119787057571980410}
+  - {fileID: 7824644601122125574}
+  - {fileID: 2150267445961412781}
+  - {fileID: 7970910599131371131}
+  - {fileID: 2898743231479186744}
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
+  _defaultDespawnType: 0
 --- !u!114 &6437443601116110890
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5035,6 +5041,27 @@ MonoBehaviour:
   _componentIndexCache: 3
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
+  SweepHits:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   EnemySweepRate: 1.5
   InitialState: {fileID: 11400000, guid: 533ddb9bdb34b7440a63e47f786a58ab, type: 2}
   AvoidancePriority: 25
@@ -5045,6 +5072,19 @@ MonoBehaviour:
   IdleState: {fileID: 11400000, guid: 533ddb9bdb34b7440a63e47f786a58ab, type: 2}
   AttackingState: {fileID: 0}
   DeadState: {fileID: 0}
+  AbilityRotation: {fileID: 0}
+  Personality: {fileID: 0}
+  BehaviorTree: {fileID: 0}
+  LodSettings: {fileID: 0}
+  BossScript: {fileID: 0}
+  AggressionDamageWeight: 1
+  AggressionHealingWeight: 0.6
+  AggressionHitBonus: 5
+  AggressionDecayRate: 3
+  AggressionStaleTimeout: 30
+  AggressionVarietyChance: 0.15
+  RepathInterval: 0.5
+  eyeTransform: {fileID: 0}
   LookTarget: {fileID: 0}
   RandomizeState: 0
   Waypoints: []
@@ -5060,23 +5100,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3d0ebacb7f3bee499ea9651cbb74449, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 4
-  _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: -4468559157413045786}
+  _componentIndexCache: 1
+  _addedNetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
+    type: 3}
+  _networkObjectCache: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
+    type: 3}
   CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,
     type: 2}
-  HealthResourceTemplate: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9,
-    type: 2}
-  HealthRegenerationTemplate: {fileID: 11400000, guid: 9e06a0ac8fc191f489439c81c899e385,
-    type: 2}
-  ManaResourceTemplate: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7,
-    type: 2}
-  ManaRegenerationTemplate: {fileID: 11400000, guid: c7cd9d02fb9bad644a058ea86d720c99,
-    type: 2}
-  StaminaResourceTemplate: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b,
-    type: 2}
-  StaminaRegenerationTemplate: {fileID: 11400000, guid: 5e8db3d7ab6f25e4c9297f410ea63268,
-    type: 2}
+  HealthResourceTemplateID: -2113468379
+  HealthRegenerationTemplateID: 1880892706
+  ManaResourceTemplateID: 1606168262
+  ManaRegenerationTemplateID: -2144672577
+  StaminaResourceTemplateID: 2142067754
+  StaminaRegenerationTemplateID: -251416119
+  regenTickRate: 5
 --- !u!114 &7824644601122125574
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5107,14 +5144,14 @@ MonoBehaviour:
   _componentIndexCache: 6
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
-  DamageAchievementTemplate: {fileID: 0}
-  DamagedAchievementTemplate: {fileID: 0}
-  KillAchievementTemplate: {fileID: 0}
-  KilledAchievementTemplate: {fileID: 0}
-  HealAchievementTemplate: {fileID: 0}
-  HealedAchievementTemplate: {fileID: 0}
-  ResurrectAchievementTemplate: {fileID: 0}
-  ResurrectedAchievementTemplate: {fileID: 0}
+  DamageAchievementTemplateID: 0
+  DamagedAchievementTemplateID: 0
+  KillAchievementTemplateID: 0
+  KilledAchievementTemplateID: 0
+  HealAchievementTemplateID: 0
+  HealedAchievementTemplateID: 0
+  ResurrectAchievementTemplateID: 0
+  ResurrectedAchievementTemplateID: 0
   immortal: 0
 --- !u!114 &7970910599131371131
 MonoBehaviour:
@@ -5132,7 +5169,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
   isAggressive: 0
-  raceTemplate: {fileID: 11400000, guid: 570b8e070c073834abac548a07706b47, type: 2}
+  raceTemplateID: 0
 --- !u!114 &965746080839380323
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5153,6 +5190,7 @@ MonoBehaviour:
   characterGuildLabel: {fileID: 182486481576893756}
   IsCharmable: 0
   AttributeBonuses: {fileID: 0}
+  Abilities: []
   PetAbilityTemplate: {fileID: 0}
 --- !u!195 &6630461006965550917
 NavMeshAgent:
@@ -5205,6 +5243,7 @@ MonoBehaviour:
   _sendToOwner: 1
   _interval: 1
   _synchronizePosition: 1
+  _positionSensitivity: 0.001
   _positionSnapping:
     X: 0
     Y: 0
@@ -5215,6 +5254,7 @@ MonoBehaviour:
     Y: 0
     Z: 0
   _synchronizeScale: 1
+  _scaleSensitivity: 0.001
   _scaleSnapping:
     X: 0
     Y: 0
@@ -5234,6 +5274,29 @@ MonoBehaviour:
   _overrideType: 1
   _updateHostVisibility: 1
   _observerConditions: []
+--- !u!114 &9168136948286660220
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb1b972667baff74aabba2d7602c53d0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Shared.AbilityController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: -4468559157413045786}
+  _networkObjectCache: {fileID: 0}
+  AbilitySpawner: {fileID: 0}
+  AttackSpeedReductionTemplate: {fileID: 0}
+  CastSpeedReductionTemplate: {fileID: 0}
+  CooldownReductionTemplate: {fileID: 0}
+  ObserverPredictionWindowTicks: 1
+  BloodResourceConversionTemplate: {fileID: 0}
+  ChargedTemplate: {fileID: 0}
+  ChanneledTemplate: {fileID: 0}
 --- !u!1 &9198423041106670181
 GameObject:
   m_ObjectHideFlags: 0

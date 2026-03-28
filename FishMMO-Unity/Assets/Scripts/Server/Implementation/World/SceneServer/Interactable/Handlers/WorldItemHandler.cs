@@ -68,10 +68,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					if (interactableSystem.SendNewItemBroadcast(character.Owner, character, inventoryController, newItem))
 					{
 						// Increment achievement
-						if (worldItem.AchievementTemplate != null &&
+						if (worldItem.AchievementTemplateID != 0 &&
 							character.TryGet(out IAchievementController achievementController))
 						{
-							achievementController.Increment(worldItem.AchievementTemplate, 1);
+							achievementController.Increment(worldItem.AchievementTemplateID, 1);
 						}
 
 						if (newItem.IsStackable &&

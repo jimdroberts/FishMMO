@@ -1,0 +1,105 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Client_Static_Permanent
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Client_Static_Permanent
+  m_GUID: 8057324dd1039b846be556683994bffd
+  m_SerializeEntries:
+  - m_GUID: 057385a6a43986c4395767410661fd2e
+    m_Address: LiberationSans SDF UIChat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 153116bad200a3444be96b22a65500ea
+    m_Address: Camera
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2de080fd835ec6747b1b1ff8ed6870f6
+    m_Address: Player Name Label
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 30339dbf6301676479d2c51120c3c56b
+    m_Address: Cached3DLabel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 422ac1a06602ba841bd45b8b1c616098
+    m_Address: Fire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6bed0c614c46964408373a65aba83a0e
+    m_Address: TestBuffFX
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d03b89b0b5eb734eb6e3aea188b17bf
+    m_Address: CharacterRenderTexture
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3763d5e92357f74c8c29b08f426493f
+    m_Address: TestBuffFX 3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b4012c6b79fc4f142860bb5fb688e83f
+    m_Address: Damage Material
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb25fb39d2ec2b646b6b18059ae87bce
+    m_Address: Explosion
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dc8cc64088072ae47872cf54e7cf6b6f
+    m_Address: Player Guild Label
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f70d8da8f64f2b84d9ada31241ac8a57
+    m_Address: UIColorPicker
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fc146935ca6612f4a816f8e9e2ad17c1
+    m_Address: TestBuffFX 2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: ba6f7c15cae0d5384b835d28a915e1a1, type: 2}

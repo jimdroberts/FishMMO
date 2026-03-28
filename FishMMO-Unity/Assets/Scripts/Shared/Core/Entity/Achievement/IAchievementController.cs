@@ -48,5 +48,12 @@ namespace FishMMO.Shared.Core
 		/// <param name="template">The achievement template to increment.</param>
 		/// <param name="amount">The amount to increment the achievement's value by.</param>
 		void Increment(AchievementTemplate template, uint amount);
+
+		/// <summary>
+		/// Increments the progress of an achievement by template ID, handling tier advancement and rewards.
+		/// </summary>
+		/// <param name="templateID">The template ID of the achievement.</param>
+		/// <param name="amount">The amount to increment the achievement's value by.</param>
+		void Increment(int templateID, uint amount);
 	}
 }

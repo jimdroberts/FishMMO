@@ -10,40 +10,54 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class WorldItem : Interactable, IWorldItem
 	{
-		// Change to a property with a private setter or public set
-		[SerializeField]
-		private BaseItemTemplate template;
+		[SerializeField, TemplateReference(typeof(BaseItemTemplate))]
+		private int templateID;
+
+		private BaseItemTemplate cachedTemplate;
 		public BaseItemTemplate Template
 		{
-			get => template;
-			set { template = value; OnTemplateChanged(); }
+			get
+			{
+				if (cachedTemplate == null && templateID != 0)
+				{
+					cachedTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
+				}
+				return cachedTemplate;
+			}
+			set
+			{
+				cachedTemplate = value;
+				templateID = value != null ? value.ID : 0;
+				OnTemplateChanged();
+			}
 		}
 
 		public uint Amount;
 
 		/// <summary>
-		/// Achievement to increment when a player picks up this world item.
+		/// Achievement template ID to increment when a player picks up this world item.
 		/// </summary>
-		public AchievementTemplate AchievementTemplate;
+		[TemplateReference(typeof(AchievementTemplate))]
+		public int AchievementTemplateID;
 
 		/// <inheritdoc />
 		uint IWorldItem.Amount { get => Amount; set => Amount = value; }
 
 		/// <inheritdoc />
-		AchievementTemplate IWorldItem.AchievementTemplate => AchievementTemplate;
+		int IWorldItem.AchievementTemplateID => AchievementTemplateID;
 
-		public override string Title => template != null ? template.Name : "";
+		public override string Title => Template != null ? Template.Name : "";
 
 		// This handles the visual swap when a template is injected
 		private void OnTemplateChanged()
 		{
 #if !UNITY_SERVER
-			if (template == null) return;
+			if (cachedTemplate == null) return;
 
 			MeshFilter mf = GetComponentInChildren<MeshFilter>();
-			if (mf != null && template.Mesh != null)
+			if (mf != null && cachedTemplate.Mesh != null)
 			{
-				mf.sharedMesh = template.Mesh;
+				mf.sharedMesh = cachedTemplate.Mesh;
 			}
 			// Add logic here for Materials or Icons if needed
 #endif
@@ -52,19 +66,19 @@ namespace FishMMO.Shared
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
 			// Write the Template ID so clients know which data to look up
-			writer.WriteInt32(template != null ? template.ID : -1);
+			writer.WriteInt32(templateID != 0 ? templateID : -1);
 			writer.WriteUInt32(Amount);
 		}
 
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			int templateId = reader.ReadInt32();
+			int readTemplateId = reader.ReadInt32();
 			Amount = reader.ReadUInt32();
 
 			// Use your existing Cache system to find the ScriptableObject by ID
-			if (templateId != -1)
+			if (readTemplateId != -1)
 			{
-				Template = BaseItemTemplate.Get<BaseItemTemplate>(templateId);
+				Template = BaseItemTemplate.Get<BaseItemTemplate>(readTemplateId);
 			}
 		}
 	}

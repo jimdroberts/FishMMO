@@ -83,14 +83,25 @@ namespace FishMMO.Shared
 		public Dictionary<int, Faction> Hostile { get { return hostile; } }
 
 		/// <summary>
-		/// The race template associated with this character, used for initial faction setup.
+		/// The race template ID associated with this character, used for initial faction setup.
 		/// </summary>
-		[SerializeField]
-		private RaceTemplate raceTemplate;
+		[SerializeField, TemplateReference(typeof(RaceTemplate))]
+		private int raceTemplateID;
+		private RaceTemplate cachedRaceTemplate;
 		/// <summary>
 		/// Gets the race template for this character.
 		/// </summary>
-		public RaceTemplate RaceTemplate { get { return this.raceTemplate; } }
+		public RaceTemplate RaceTemplate
+		{
+			get
+			{
+				if (cachedRaceTemplate == null && raceTemplateID != 0)
+				{
+					cachedRaceTemplate = RaceTemplate.Get<RaceTemplate>(raceTemplateID);
+				}
+				return cachedRaceTemplate;
+			}
+		}
 
 #if UNITY_SERVER
 		/// <summary>

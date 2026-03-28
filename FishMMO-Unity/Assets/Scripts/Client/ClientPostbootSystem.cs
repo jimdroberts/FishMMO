@@ -36,7 +36,11 @@ namespace FishMMO.Client
 			AddressableLoadProcessor.OnAddressableUnloaded += AddressableLoadProcessor_OnAddressableUnloaded;
 
 			// Load static permanent addressables (e.g., templates) before loading scenes to ensure they're available in the cache.
-			AddressableLoadProcessor.EnqueueLoad(new List<string>() { Constants.SharedStaticLabel, });
+			AddressableLoadProcessor.EnqueueLoad(new List<string>()
+			{
+				"Client_Static_Permanent",
+				Constants.SharedStaticLabel,
+			});
 		}
 
 		/// <summary>

@@ -195,6 +195,13 @@ namespace FishMMO.Shared
 				fixAllButton.clicked += FixAll;
 			}
 
+			// Smart Group button
+			var smartGroupButton = rootVisualElement.Q<ToolbarButton>("smart-group-button");
+			if (smartGroupButton != null)
+			{
+				smartGroupButton.clicked += SmartGroupAll;
+			}
+
 			// Add Group button
 			var addGroupButton = rootVisualElement.Q<ToolbarButton>("add-group-button");
 			if (addGroupButton != null)
@@ -931,6 +938,22 @@ namespace FishMMO.Shared
 			public const string SceneShared = "Scene_Shared";
 			public const string SceneClient = "Scene_Client";
 			public const string SceneServer = "Scene_Server";
+
+			/// <summary>
+			/// All smart group names. Used to strip stale labels from entries.
+			/// </summary>
+			public static readonly string[] All =
+			{
+				ClientStaticPermanent,
+				ServerStaticPermanent,
+				SharedStaticPermanent,
+				ClientDynamic,
+				ServerDynamic,
+				SharedDynamic,
+				SceneShared,
+				SceneClient,
+				SceneServer,
+			};
 		}
 
 		/// <summary>
@@ -964,6 +987,22 @@ namespace FishMMO.Shared
 					Reason = "Plugin asset — replace with production assets instead of making addressable",
 					IsPluginWarning = true,
 				};
+			}
+
+			// ── Prefabs: only Client, Server, Shared subdirectories are addressable ──
+			if (normalized.StartsWith("Assets/Prefabs/", StringComparison.OrdinalIgnoreCase))
+			{
+				bool isAllowed = normalized.StartsWith("Assets/Prefabs/Client/", StringComparison.OrdinalIgnoreCase) ||
+								 normalized.StartsWith("Assets/Prefabs/Server/", StringComparison.OrdinalIgnoreCase) ||
+								 normalized.StartsWith("Assets/Prefabs/Shared/", StringComparison.OrdinalIgnoreCase);
+				if (!isAllowed)
+				{
+					return new AssetCategory
+					{
+						GroupName = null,
+						Reason = "Editor-only prefab (outside Client/Server/Shared)",
+					};
+				}
 			}
 
 			// ── Templates: always shared + permanent ──
@@ -1020,12 +1059,11 @@ namespace FishMMO.Shared
 			{
 				bool isStatic = ContainsSegment(normalized, "UI") ||
 								ContainsSegment(normalized, "Input") ||
-								ContainsSegment(normalized, "Launcher") ||
-								ContainsSegment(normalized, "FX");
+								ContainsSegment(normalized, "Launcher");
 				return new AssetCategory
 				{
 					GroupName = isStatic ? SmartGroups.ClientStaticPermanent : SmartGroups.ClientDynamic,
-					Reason = isStatic ? "Client static asset (UI/Input/Launcher/FX)" : "Client dynamic asset",
+					Reason = isStatic ? "Client static asset (UI/Input/Launcher)" : "Client dynamic asset",
 				};
 			}
 
@@ -1039,6 +1077,16 @@ namespace FishMMO.Shared
 				{
 					GroupName = SmartGroups.ServerStaticPermanent,
 					Reason = "Server asset",
+				};
+			}
+
+			// ── Shared terrain: dynamic because terrain data is loaded per-scene ──
+			if (ContainsSegment(normalized, "Shared") && ContainsSegment(normalized, "Terrain"))
+			{
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.SharedDynamic,
+					Reason = "Shared terrain — loaded per-scene, not permanent",
 				};
 			}
 
@@ -1099,6 +1147,25 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Removes all smart-group labels from an entry, then sets only the correct one.
+		/// </summary>
+		private static void SetExclusiveSmartLabel(AddressableAssetSettings settings,
+			AddressableAssetEntry entry, string correctLabel)
+		{
+			for (int i = 0; i < SmartGroups.All.Length; i++)
+			{
+				string label = SmartGroups.All[i];
+				if (entry.labels.Contains(label) &&
+					!string.Equals(label, correctLabel, StringComparison.OrdinalIgnoreCase))
+				{
+					entry.SetLabel(label, false);
+				}
+			}
+			settings.AddLabel(correctLabel);
+			entry.SetLabel(correctLabel, true);
+		}
+
+		/// <summary>
 		/// Checks if a path contains a directory segment (between '/' separators).
 		/// </summary>
 		private static bool ContainsSegment(string path, string segment)
@@ -1120,6 +1187,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Finds an existing group by name or creates a new one with BundledAssetGroupSchema.
+		/// Newly created groups have their packing mode set based on the group name:
+		/// Scene and Dynamic groups use PackSeparately, Static_Permanent groups use PackTogether.
 		/// </summary>
 		private static AddressableAssetGroup GetOrCreateGroup(AddressableAssetSettings settings, string groupName,
 			Dictionary<string, AddressableAssetGroup> cache)
@@ -1141,9 +1210,35 @@ namespace FishMMO.Shared
 			var newGroup = settings.CreateGroup(groupName, false, false, true, null, typeof(BundledAssetGroupSchema));
 			if (newGroup != null)
 			{
+				ApplyGroupPackingMode(newGroup, groupName);
 				cache[groupName] = newGroup;
 			}
 			return newGroup;
+		}
+
+		/// <summary>
+		/// Sets the BundlePackingMode on a group based on its name convention.
+		/// Scene and Dynamic groups use PackSeparately for on-demand loading.
+		/// Static_Permanent groups use PackTogether for single-bundle bootstrap loading.
+		/// </summary>
+		/// <param name="group">The Addressable group.</param>
+		/// <param name="groupName">The group name used for convention matching.</param>
+		private static void ApplyGroupPackingMode(AddressableAssetGroup group, string groupName)
+		{
+			var schema = group.GetSchema<BundledAssetGroupSchema>();
+			if (schema == null) return;
+
+			string lower = groupName.ToLowerInvariant();
+			if (lower.Contains("scene") || lower.Contains("dynamic"))
+			{
+				schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
+			}
+			else
+			{
+				schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackTogether;
+			}
+
+			EditorUtility.SetDirty(group);
 		}
 
 		/// <summary>
@@ -1396,6 +1491,358 @@ namespace FishMMO.Shared
 			{
 				Debug.LogError($"[AddressablesDashboard] Fix All failed: {ex.Message}");
 				SetStatus($"Fix All failed: {ex.Message}");
+			}
+		}
+
+		// ──────────────────────────────────────────────
+		// Smart Grouping
+		// ──────────────────────────────────────────────
+
+		/// <summary>
+		/// Asset file extensions that should be made addressable during Smart Group.
+		/// </summary>
+		private static readonly HashSet<string> AddressableExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+		{
+			".prefab",
+			".asset",
+			".unity",
+			".mat",
+			".rendertexture",
+		};
+
+		/// <summary>
+		/// Directory segments that should be excluded from Smart Group scanning.
+		/// Assets under these directories are not made addressable.
+		/// </summary>
+		private static readonly string[] ExcludedDirectorySegments =
+		{
+			"Builds",
+			"Build Profiles",
+			"Build Settings",
+		};
+
+		/// <summary>
+		/// Root directories scanned by Smart Group.
+		/// </summary>
+		private static readonly string[] SmartGroupScanDirectories =
+		{
+			"Assets/Prefabs",
+			"Assets/Scenes",
+			"Assets/Templates",
+		};
+
+		/// <summary>
+		/// Directories that must always exist so new developers have a clear
+		/// project layout. Created automatically at the start of Smart Group.
+		/// </summary>
+		private static readonly string[] RequiredProjectDirectories =
+		{
+			// ── Client ──
+			"Assets/Prefabs/Client/Animations",
+			"Assets/Prefabs/Client/Animator",
+			"Assets/Prefabs/Client/Audio",
+			"Assets/Prefabs/Client/FX",
+			"Assets/Prefabs/Client/Icons",
+			"Assets/Prefabs/Client/Materials",
+			"Assets/Prefabs/Client/Models",
+			"Assets/Prefabs/Client/Music",
+			"Assets/Prefabs/Client/Sounds",
+			"Assets/Prefabs/Client/Textures",
+
+			// ── Shared ──
+			"Assets/Prefabs/Shared/Entity",
+			"Assets/Prefabs/Shared/Entity/Abilities",
+			"Assets/Prefabs/Shared/Entity/Interactables",
+			"Assets/Prefabs/Shared/Entity/NPCs",
+			"Assets/Prefabs/Shared/Entity/PlayableCharacters",
+			"Assets/Prefabs/Shared/Entity/Regions",
+			"Assets/Prefabs/Shared/Placeholders",
+			"Assets/Prefabs/Shared/Terrain",
+			"Assets/Prefabs/Shared/Conditions",
+		};
+
+		/// <summary>
+		/// Creates every directory listed in <see cref="RequiredProjectDirectories"/>
+		/// that does not already exist, walking the path from root to leaf so
+		/// intermediate folders are created as well.
+		/// </summary>
+		private static void EnsureProjectDirectories()
+		{
+			bool any = false;
+			for (int i = 0; i < RequiredProjectDirectories.Length; i++)
+			{
+				string fullPath = RequiredProjectDirectories[i];
+				if (AssetDatabase.IsValidFolder(fullPath))
+					continue;
+
+				// Walk segments and create each missing level.
+				string[] parts = fullPath.Split('/');
+				string current = parts[0]; // "Assets"
+				for (int p = 1; p < parts.Length; p++)
+				{
+					string next = current + "/" + parts[p];
+					if (!AssetDatabase.IsValidFolder(next))
+					{
+						AssetDatabase.CreateFolder(current, parts[p]);
+						any = true;
+					}
+					current = next;
+				}
+			}
+			if (any)
+			{
+				AssetDatabase.Refresh();
+			}
+		}
+
+		/// <summary>
+		/// Scans Assets/Prefabs, Assets/Scenes, and Assets/Templates, then categorizes
+		/// and assigns every discovered asset to the appropriate Addressable group with
+		/// correct packing mode and label. Existing entries in the wrong group are moved.
+		/// </summary>
+		private void SmartGroupAll()
+		{
+			var settings = AddressableAssetSettingsDefaultObject.Settings;
+			if (settings == null)
+			{
+				EditorUtility.DisplayDialog("Smart Group", "Addressable settings not found.", "OK");
+				return;
+			}
+
+			// Guarantee all required project directories exist before scanning.
+			EnsureProjectDirectories();
+
+			// Discover candidate assets
+			var candidates = new List<string>();
+			foreach (string dir in SmartGroupScanDirectories)
+			{
+				if (!AssetDatabase.IsValidFolder(dir)) continue;
+
+				string[] guids = AssetDatabase.FindAssets("", new[] { dir });
+				for (int i = 0; i < guids.Length; i++)
+				{
+					string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+					string ext = Path.GetExtension(path);
+					if (!AddressableExtensions.Contains(ext)) continue;
+
+					string normalized = path.Replace('\\', '/');
+
+					// Skip excluded directories
+					bool excluded = false;
+					for (int e = 0; e < ExcludedDirectorySegments.Length; e++)
+					{
+						if (ContainsSegment(normalized, ExcludedDirectorySegments[e]))
+						{
+							excluded = true;
+							break;
+						}
+					}
+					if (excluded) continue;
+
+					candidates.Add(path);
+				}
+			}
+
+			if (candidates.Count == 0)
+			{
+				EditorUtility.DisplayDialog("Smart Group",
+					"No addressable assets found in Assets/Prefabs, Assets/Scenes, or Assets/Templates.",
+					"OK");
+				return;
+			}
+
+			if (!EditorUtility.DisplayDialog("Smart Group",
+				$"Found {candidates.Count} asset(s) across Prefabs, Scenes, and Templates.\n\n" +
+				"This will:\n" +
+				"  • Create/move entries into categorized groups\n" +
+				"  • Assign labels matching the group name\n" +
+				"  • Set packing modes (PackTogether for static, PackSeparately for dynamic/scenes)\n\n" +
+				"Proceed?",
+				"Proceed", "Cancel"))
+			{
+				return;
+			}
+
+			try
+			{
+				var groupCache = new Dictionary<string, AddressableAssetGroup>(StringComparer.OrdinalIgnoreCase);
+				int created = 0;
+				int moved = 0;
+				int skipped = 0;
+				int labeled = 0;
+				var pluginWarnings = new List<string>();
+
+				for (int i = 0; i < candidates.Count; i++)
+				{
+					if (EditorUtility.DisplayCancelableProgressBar("Smart Group",
+						$"Processing {i + 1} / {candidates.Count}…", (float)i / candidates.Count))
+					{
+						break;
+					}
+
+					string assetPath = candidates[i];
+					string guid = AssetDatabase.AssetPathToGUID(assetPath);
+					if (string.IsNullOrEmpty(guid))
+					{
+						skipped++;
+						continue;
+					}
+
+					AssetCategory category = CategorizeAsset(assetPath, null);
+
+					if (category.IsPluginWarning)
+					{
+						pluginWarnings.Add(assetPath);
+						continue;
+					}
+					if (string.IsNullOrEmpty(category.GroupName))
+					{
+						skipped++;
+						continue;
+					}
+
+					AddressableAssetGroup targetGroup = GetOrCreateGroup(settings, category.GroupName, groupCache);
+					if (targetGroup == null)
+					{
+						skipped++;
+						continue;
+					}
+
+					AddressableAssetEntry existing = settings.FindAssetEntry(guid);
+					if (existing != null)
+					{
+						// Already addressable — check if in correct group
+						if (string.Equals(existing.parentGroup.Name, category.GroupName, StringComparison.OrdinalIgnoreCase))
+						{
+							// Already correct — clean stale labels and ensure the correct one
+							SetExclusiveSmartLabel(settings, existing, category.GroupName);
+							skipped++;
+							continue;
+						}
+
+						// Move to correct group
+						settings.CreateOrMoveEntry(guid, targetGroup, false, false);
+
+						// Clean stale labels and set the correct one after move
+						AddressableAssetEntry movedEntry = settings.FindAssetEntry(guid);
+						if (movedEntry != null)
+						{
+							SetExclusiveSmartLabel(settings, movedEntry, category.GroupName);
+						}
+						moved++;
+					}
+					else
+					{
+						// Create new entry
+						AddressableAssetEntry newEntry = settings.CreateOrMoveEntry(guid, targetGroup, false, false);
+						if (newEntry != null)
+						{
+							newEntry.SetAddress(Path.GetFileNameWithoutExtension(assetPath));
+							SetExclusiveSmartLabel(settings, newEntry, category.GroupName);
+							created++;
+						}
+						else
+						{
+							skipped++;
+						}
+					}
+				}
+
+				// Ensure packing modes are correct on all touched groups
+				foreach (var kvp in groupCache)
+				{
+					ApplyGroupPackingMode(kvp.Value, kvp.Key);
+				}
+
+				// ── Clean up empty groups ──
+				int removedGroups = 0;
+				var groupsToRemove = new List<AddressableAssetGroup>();
+				foreach (var group in settings.groups)
+				{
+					if (group == null) continue;
+					if (group == settings.DefaultGroup) continue;
+					if (group.entries.Count == 0)
+					{
+						groupsToRemove.Add(group);
+					}
+				}
+				for (int i = 0; i < groupsToRemove.Count; i++)
+				{
+					Debug.Log($"[AddressablesDashboard] Removing empty group: {groupsToRemove[i].Name}");
+					settings.RemoveGroup(groupsToRemove[i]);
+					removedGroups++;
+				}
+
+				// ── Clean up unused labels ──
+				int removedLabels = 0;
+				var usedLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				foreach (var group in settings.groups)
+				{
+					if (group == null) continue;
+					foreach (var entry in group.entries)
+					{
+						if (entry == null) continue;
+						foreach (string label in entry.labels)
+						{
+							usedLabels.Add(label);
+						}
+					}
+				}
+				var allLabels = settings.GetLabels();
+				if (allLabels != null)
+				{
+					for (int i = allLabels.Count - 1; i >= 0; i--)
+					{
+						if (!usedLabels.Contains(allLabels[i]))
+						{
+							Debug.Log($"[AddressablesDashboard] Removing unused label: {allLabels[i]}");
+							settings.RemoveLabel(allLabels[i]);
+							removedLabels++;
+						}
+					}
+				}
+
+				EditorUtility.SetDirty(settings);
+
+				var sb = new StringBuilder();
+				sb.Append($"Smart Group complete. Created {created}, moved {moved}");
+				if (labeled > 0) sb.Append($", labeled {labeled}");
+				if (removedGroups > 0) sb.Append($", removed {removedGroups} empty group(s)");
+				if (removedLabels > 0) sb.Append($", removed {removedLabels} unused label(s)");
+				if (skipped > 0) sb.Append($", skipped {skipped}");
+				sb.Append(".");
+
+				if (pluginWarnings.Count > 0)
+				{
+					sb.Append($"\n\n{pluginWarnings.Count} plugin asset(s) skipped (replace with production assets):");
+					int shown = 0;
+					for (int i = 0; i < pluginWarnings.Count; i++)
+					{
+						if (shown >= 15)
+						{
+							sb.Append($"\n  … and {pluginWarnings.Count - shown} more");
+							break;
+						}
+						sb.Append($"\n  • {pluginWarnings[i]}");
+						shown++;
+					}
+					Debug.LogWarning($"[AddressablesDashboard] Plugin assets skipped:\n{sb}");
+				}
+
+				string message = sb.ToString();
+				Debug.Log($"[AddressablesDashboard] {message}");
+				SetStatus(message.Split('\n')[0]);
+
+				RebuildTree();
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"[AddressablesDashboard] Smart Group failed: {ex.Message}");
+				SetStatus($"Smart Group failed: {ex.Message}");
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
 			}
 		}
 
@@ -2082,7 +2529,24 @@ namespace FishMMO.Shared
 				pathType = "Mixed";
 			}
 
-			return $"{entryInfo}  [{pathType}]";
+			string packMode;
+			switch (schema.BundleMode)
+			{
+				case BundledAssetGroupSchema.BundlePackingMode.PackTogether:
+					packMode = "Pack Together";
+					break;
+				case BundledAssetGroupSchema.BundlePackingMode.PackSeparately:
+					packMode = "Pack Separately";
+					break;
+				case BundledAssetGroupSchema.BundlePackingMode.PackTogetherByLabel:
+					packMode = "Pack By Label";
+					break;
+				default:
+					packMode = schema.BundleMode.ToString();
+					break;
+			}
+
+			return $"{entryInfo}  [{pathType}]  [{packMode}]";
 		}
 
 		/// <summary>

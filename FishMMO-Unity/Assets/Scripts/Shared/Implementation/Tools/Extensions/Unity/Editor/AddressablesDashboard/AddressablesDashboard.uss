@@ -24,6 +24,12 @@
     color: rgb(180, 230, 180);
 }
 
+.toolbar-button--smart {
+    background-color: rgb(60, 80, 120);
+    color: rgb(170, 200, 255);
+    width: 90px;
+}
+
 /* ── Statistics Panel ── */
 .stats-panel {
     flex-direction: row;

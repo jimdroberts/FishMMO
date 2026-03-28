@@ -424,18 +424,12 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 4964627840297570917}
   CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,
     type: 2}
-  HealthResourceTemplate: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9,
-    type: 2}
-  HealthRegenerationTemplate: {fileID: 11400000, guid: 9e06a0ac8fc191f489439c81c899e385,
-    type: 2}
-  ManaResourceTemplate: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7,
-    type: 2}
-  ManaRegenerationTemplate: {fileID: 11400000, guid: c7cd9d02fb9bad644a058ea86d720c99,
-    type: 2}
-  StaminaResourceTemplate: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b,
-    type: 2}
-  StaminaRegenerationTemplate: {fileID: 11400000, guid: 5e8db3d7ab6f25e4c9297f410ea63268,
-    type: 2}
+  HealthResourceTemplateID: -2113468379
+  HealthRegenerationTemplateID: 1880892706
+  ManaResourceTemplateID: 1606168262
+  ManaRegenerationTemplateID: -2144672577
+  StaminaResourceTemplateID: 2142067754
+  StaminaRegenerationTemplateID: -251416119
   regenTickRate: 5
 --- !u!114 &1643789448904715060
 MonoBehaviour:
@@ -616,20 +610,14 @@ MonoBehaviour:
   _componentIndexCache: 12
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  DamageAchievementTemplate: {fileID: 11400000, guid: 02a306f12237e8c4b90a2dbdccf178bb,
-    type: 2}
-  DamagedAchievementTemplate: {fileID: 11400000, guid: f23c3b7a7b856de45b336f9ba28c3059,
-    type: 2}
-  KillAchievementTemplate: {fileID: 11400000, guid: 1c632e8771fab6a408fecc11015cc6a5,
-    type: 2}
-  KilledAchievementTemplate: {fileID: 11400000, guid: 18e87e7a4d09c844fa3221b9ed8da77f,
-    type: 2}
-  HealAchievementTemplate: {fileID: 11400000, guid: 2a5692eafe24d1f48aa7f11be57a3892,
-    type: 2}
-  HealedAchievementTemplate: {fileID: 11400000, guid: 558258f511eba114fb9daedea1d4dcc9,
-    type: 2}
-  ResurrectAchievementTemplate: {fileID: 0}
-  ResurrectedAchievementTemplate: {fileID: 0}
+  DamageAchievementTemplateID: -1869629340
+  DamagedAchievementTemplateID: 904099543
+  KillAchievementTemplateID: -320818156
+  KilledAchievementTemplateID: 504720138
+  HealAchievementTemplateID: -484704940
+  HealedAchievementTemplateID: 381718814
+  ResurrectAchievementTemplateID: 0
+  ResurrectedAchievementTemplateID: 0
   immortal: 0
 --- !u!114 &6038023079570568745
 MonoBehaviour:
@@ -716,7 +704,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   isAggressive: 0
-  raceTemplate: {fileID: 11400000, guid: 570b8e070c073834abac548a07706b47, type: 2}
+  raceTemplateID: -2095018830
 --- !u!114 &7810264000710710752
 MonoBehaviour:
   m_ObjectHideFlags: 0

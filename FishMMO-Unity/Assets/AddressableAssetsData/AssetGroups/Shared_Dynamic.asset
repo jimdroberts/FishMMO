@@ -15,20 +15,48 @@ MonoBehaviour:
   m_GroupName: Shared_Dynamic
   m_GUID: c49c5cb7ebcee532e8ae3cf39921d60b
   m_SerializeEntries:
+  - m_GUID: 188cb4ddc03de3b40b08c95fc5afb56a
+    m_Address: GreaterFaydark
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Dynamic
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 41f73c28208285445b37a7980665ead3
     m_Address: GenericGameBackgroundDefaultLoadingScreen
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 46351237b3e72234a8bf86b294af5914
+    m_Address: Felwithe
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Dynamic
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5c2d23be0cbdd4048a53de5b3b050809
     m_Address: StartScene A Background
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a0f2e2dfb049684459f356b4502cc0d6
+    m_Address: TestDungeon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Dynamic
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: af9d2e8814f76f4498e2ed07cc8191ef
     m_Address: StartScene B Background
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd202fa0a3b7de04ab1143a8d66afd98
+    m_Address: Crushbone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Dynamic
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

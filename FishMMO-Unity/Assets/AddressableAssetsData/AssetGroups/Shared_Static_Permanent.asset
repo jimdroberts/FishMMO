@@ -15,13 +15,302 @@ MonoBehaviour:
   m_GroupName: Shared_Static_Permanent
   m_GUID: 23636b54ceb43a03f93abc3987c4632a
   m_SerializeEntries:
-  - m_GUID: 3a43eddc2e7096b9ba1e5d97c98932e0
-    m_Address: TeleporterCache
+  - m_GUID: 02a306f12237e8c4b90a2dbdccf178bb
+    m_Address: Damage Dealt
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0568e126266db254592d9ce8425e9830
+    m_Address: a lesser fire elemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 070a580671acc704ba34689f4865bcf4
+    m_Address: Summon Lesser Fire Elemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0892f64b2462ac94db21d06df7047e06
+    m_Address: Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0f2ff92179a6d1b4c9dde7ad6a4afdb0
+    m_Address: an orc warrior
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0fbfa8b68911e1c4fa66d6b57fcab6a2
+    m_Address: Minor Increase Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15a71776a1f5e4245841b3301c881f80
+    m_Address: Attack Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 16eb23baeafad21469a3509842b500e3
+    m_Address: NightSkybox
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 18e87e7a4d09c844fa3221b9ed8da77f
+    m_Address: Killed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1ab8069820abc0b45ad5dd91bc796d4c
+    m_Address: Highborn Nations
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1bd40dadbe68381429a0ce918130a642
+    m_Address: Test Helmet
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c5ebba9ff4ecbe4d8420fe4a3dc7db1
+    m_Address: EventRegionDisplayNameAction
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c632e8771fab6a408fecc11015cc6a5
+    m_Address: Kills
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1cc999ebd456f0943bbcfc4c09497b1b
+    m_Address: Test Tunic
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1f9df0e9a2fe1144c8f9f3714269c2ba
+    m_Address: SwordDatabase
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22297f79efd99de43a9e8079889ee4b4
+    m_Address: SceneRegionDisplayNameAction
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 227021df2b20bff40ab713a1a868b1d3
+    m_Address: Health Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23b76e39682ae764690280034e76f280
+    m_Address: Tier1 Sword Attack Power
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 27c4f240152242b4fb7dec2f5368445c
+    m_Address: Sprint Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a3df451e24ce964d940bc7b1ea071cc
+    m_Address: Earth Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a5692eafe24d1f48aa7f11be57a3892
+    m_Address: Healed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a666181fba14f54a8a1e2729e38e44e
+    m_Address: Test Sword
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2ce4d12b80ddd9f4ca8a389e6c91c7e3
+    m_Address: FemaleHumanAbilityCrafter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2e669850a4855b9438e174f70db28d9a
+    m_Address: Punch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 316068aec7de8294ba9429fc2bc910b9
+    m_Address: DaySkybox
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 31fd812565fea7940b6681ede8b3797f
+    m_Address: Physical Aerial Override
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3243c87cb242a03478e9ee038f7873ed
+    m_Address: Elf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 335c46c3e1940fa41a866740a873f64a
+    m_Address: GeneralGoods
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 34647e48cd749f04eb768bb8a41a47ad
+    m_Address: StartScene A Fog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a43eddc2e7096b9ba1e5d97c98932e0
+    m_Address: Assets/Prefabs/Shared/TeleporterCache.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b1405c322d7a2744a16faa08683d319
+    m_Address: Basic Patrol State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3d34315a07aca4243adfc96a4d3479c8
+    m_Address: Fast Fall Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3f3e421dc58c81d4e94dcea943cfcd35
+    m_Address: Assets/Prefabs/WorldSceneDetails.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44d3914835afcff478745749b153f953
+    m_Address: AreaOfInterestDisplayNameAction
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4a7063529ee215d4a915672973d299db
+    m_Address: Test Leggings
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4db22f87e1992de42b510d2318f467be
+    m_Address: Earth Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 519ad2c26141259488b7233901e4d46d
+    m_Address: FactionMatrix
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51f855b3de8e6644eb22eee716657935
+    m_Address: Basic Idle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 531ed21f335ef6e4cab9440971452675
+    m_Address: Sanctuary
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 533ddb9bdb34b7440a63e47f786a58ab
+    m_Address: Basic PetIdle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 549f4456666a19b428ae484dd2630ab1
+    m_Address: Lesser Fireball
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 558258f511eba114fb9daedea1d4dcc9
+    m_Address: Healing Received
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 561336c510b90b546b2650ffa83a09dc
+    m_Address: Move Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 570b8e070c073834abac548a07706b47
     m_Address: Human
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 58b39b31950b4104c808244e14478bdb
+    m_Address: Water Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b56c55d686ceac4cac2a744a5bf0951
+    m_Address: Basic Retreat State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d10e1ac3658ab248970a19c84e5eefb
+    m_Address: Wind Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5e8db3d7ab6f25e4c9297f410ea63268
+    m_Address: Stamina Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5f83904fcedd0864fbb6162f45fbeb9e
+    m_Address: Currency
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 67e5b419b5e646f4895935cf06fca178
+    m_Address: StartScene B Fog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -32,23 +321,430 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 71dd0b181f700604296224b69bb18e94
+    m_Address: Surnames
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - NameCache
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 77a3fb139fbe85a43a013e72d3b303a3
+    m_Address: Kingdom of Men
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 793ad9eb498a9224989b975a594d5a38
     m_Address: Human
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7b96a8c61db3a844ebc4c92b2487b0d1
     m_Address: Orc
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7c14874e3c902684a8d562913ed73c24
+    m_Address: Lesser Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7c33d6280baf6d94b8eee0548a749deb
+    m_Address: an orc
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
+    m_Address: Self Minor Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 81dd6c8841df66e44ad306e2ef34aaee
+    m_Address: Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82e54404fe2ccc448bd81cbe31657e29
+    m_Address: FemaleHumanGeneralMerchant
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
+    m_Address: Tier1 Sword Attack Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fe93c66f5bc53c45a7b0f8334be9016
+    m_Address: StandardAttributeDatabase
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a571cab03b3f684da8436e4391abdbb
+    m_Address: Lesser Fireball
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9aa49e0922d75f341a2be18b3000840a
+    m_Address: Water Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9e06a0ac8fc191f489439c81c899e385
+    m_Address: Health Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9ff935e98f3e2294ab9e0a838ad8ca5b
+    m_Address: Magic Aerial Override
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a0c807381df88cc4aaa63f497753d3f1
+    m_Address: Cast Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a188e3de8a5794043903352f3ce4a57d
+    m_Address: Basic Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1cb36c06a320c240878d104ba4f0abb
+    m_Address: MaleHumanGeneralMerchant
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
+    m_Address: an orc mage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: acce2c15167bca3468900e3963385b1e
+    m_Address: Basic GetBehind State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: afefadf23d30db24e98774bcd84d31c3
+    m_Address: Swim Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b1b0ada2796be4c4ca8c95734c884fc2
+    m_Address: Minor Increase Armor Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b235179bd2a63d1468dd430670338c55
     m_Address: Ethan
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b4bee0c12e3b92c48b285850bd5d47c1
+    m_Address: Basic Wander State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b506f64ee95dca8438ce9f8e87bb0525
+    m_Address: Water Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b646a6d9bc4f07d428f12e255af67366
+    m_Address: Basic ReturnHome State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ba6fc6ea5873d2f4dbf7c973fdafb667
+    m_Address: Lords of the Deep
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bfb81bf76967bb24098b2eb22e2a386e
+    m_Address: Basic Orbit State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c17ce5287a5cd454a8bbbc575618a1b9
+    m_Address: Wind Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c1ccb8d1da0194649ad403c25d5ac1dc
+    m_Address: Assets/Prefabs/Shared/FishMMO World Scene Details Reader.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c44327c9e1311ab4289d7debd893f0b6
+    m_Address: Test Shield
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4eb5f1a4b50f884c92f82a0e7ad26f3
+    m_Address: Physical Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c66ed2b42bcd6b14194a796e70a740e0
+    m_Address: Assets/Prefabs/LevelLoggingConfiguration.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c70f6d8041358ed41bfaf8483b590e34
+    m_Address: Disable Fog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c7cd9d02fb9bad644a058ea86d720c99
+    m_Address: Mana Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb16e96639b06ca4d9f2ed6c038bc1a9
+    m_Address: Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb59ad7dc19adac4286eff2a66fd3b7a
+    m_Address: Cooldown Reduction
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d00db1805f33b104b8b2198459b0a45d
+    m_Address: Ability On Hit Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d057742d4e36f464fb2f1dde1d2fe707
+    m_Address: Gravity
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d4194c9fc4a87c84cbdde10c40a67656
+    m_Address: Test Boots
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d6d32c919f2918f4f830933959878cae
+    m_Address: Earth Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d7d701201e0782a48b10f6acf2656544
+    m_Address: Fire Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d9b40c4bb7d3f5d4c965814c5433ce65
+    m_Address: SunAndMoon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e0d004d1b5e90374fa54e7f9aec2166a
+    m_Address: Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e32341894cca80f44988cbf96cd9a709
+    m_Address: Jump Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e34076ce9f0c6224986256c72f6258fb
+    m_Address: DungeonEntranceFog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e352d8d4481b57449bb4fea6f0b10695
+    m_Address: MaleNames
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - NameCache
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e37548aba1d69c14cb2bd288e7882f76
+    m_Address: DungeonFog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3e8b717b5d803248a6ff39ab30aa577
+    m_Address: Mana Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e48c22ecb1287cf4185c17311214bc8a
+    m_Address: Punch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e51ab0951a0991649933710345a96e34
+    m_Address: Wind Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e5859044195c03e44adebc73805dd570
+    m_Address: Orc Horde
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e5c10a046ee277f46a57ee2048ae5ec9
+    m_Address: Health
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e6d97319903785e4f8bbdbaa2ba21412
+    m_Address: Minor Movement Speed Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ecf1db3ea5ffe04438c0c425adb9bb32
+    m_Address: an orc warrior
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: efbdd45dd1adc6b4e828526c3e28fdf0
+    m_Address: Death Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f069d2a30c555ce42bb8079226fc8f14
+    m_Address: Test Gloves
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f1bedd6f4354a7e41be26aee87734d66
     m_Address: Orc
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f23c3b7a7b856de45b336f9ba28c3059
+    m_Address: Damage Received
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f382d90751b078548b47500f1817ff29
+    m_Address: Minor Increase Move Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f455d8a612b6da645b9a5f066502307b
+    m_Address: Self Minor Movement Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f48d7eb5d15b5104e943de8a94d65cc1
+    m_Address: Undead Legion
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f563991b5f3117546a87ff13e7fab199
+    m_Address: Death Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f627a40e6b3ef5349b3c735f0bfd60c7
+    m_Address: Mana
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f69ceb06ce90da94fbf1cbff95f3b7f0
+    m_Address: an orc
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6e937b757cf3074cb6781f142abab98
+    m_Address: Fire Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f7377f38d08b9c84ab957eb9d610e043
+    m_Address: FemaleHumanBanker
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f9116fa7190f01a4a93eb32cafac787b
+    m_Address: Stamina
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe3425a466033e34ead49fcfc3204895
+    m_Address: Small World Item
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: feab58756cafd3843bd5ab41652f2c56
+    m_Address: FemaleNames
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - NameCache
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ffa3526f3f634c34891d4419dab88371
+    m_Address: ItemAttributeDatabase
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

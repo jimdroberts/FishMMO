@@ -62,34 +62,34 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		[SerializeField] private WorldSceneDetailsCache worldSceneDetailsCache;
 		/// <summary>
-		/// List of ability templates to grant to new characters on creation.
+		/// List of ability template IDs to grant to new characters on creation.
 		/// </summary>
-		[SerializeField] private List<AbilityTemplate> startingAbilities = new List<AbilityTemplate>();
+		[SerializeField, TemplateReference(typeof(AbilityTemplate))] private List<int> startingAbilityIDs = new List<int>();
 		/// <summary>
-		/// List of item templates to add to new characters' inventory on creation.
+		/// List of item template IDs to add to new characters' inventory on creation.
 		/// </summary>
-		[SerializeField] private List<BaseItemTemplate> startingInventoryItems = new List<BaseItemTemplate>();
+		[SerializeField, TemplateReference(typeof(BaseItemTemplate))] private List<int> startingInventoryItemIDs = new List<int>();
 		/// <summary>
-		/// List of equipment templates to equip on new characters at creation.
+		/// List of equipment template IDs to equip on new characters at creation.
 		/// </summary>
-		[SerializeField] private List<EquippableItemTemplate> startingEquipment = new List<EquippableItemTemplate>();
+		[SerializeField, TemplateReference(typeof(EquippableItemTemplate))] private List<int> startingEquipmentIDs = new List<int>();
 
 		/// <summary>
 		/// Read-only access to the cached world scene details.
 		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache => worldSceneDetailsCache;
 		/// <summary>
-		/// Read-only view of the starting ability templates for new characters.
+		/// Read-only view of the starting ability template IDs for new characters.
 		/// </summary>
-		public IReadOnlyList<AbilityTemplate> StartingAbilities => startingAbilities;
+		public IReadOnlyList<int> StartingAbilityIDs => startingAbilityIDs;
 		/// <summary>
-		/// Read-only view of the starting inventory item templates for new characters.
+		/// Read-only view of the starting inventory item template IDs for new characters.
 		/// </summary>
-		public IReadOnlyList<BaseItemTemplate> StartingInventoryItems => startingInventoryItems;
+		public IReadOnlyList<int> StartingInventoryItemIDs => startingInventoryItemIDs;
 		/// <summary>
-		/// Read-only view of the starting equipment templates for new characters.
+		/// Read-only view of the starting equipment template IDs for new characters.
 		/// </summary>
-		public IReadOnlyList<EquippableItemTemplate> StartingEquipment => startingEquipment;
+		public IReadOnlyList<int> StartingEquipmentIDs => startingEquipmentIDs;
 
 		/// <summary>
 		/// Initializes the character creation system, registering broadcast handlers for character creation requests.
@@ -427,15 +427,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 				List<PreparedFactionEntry> preparedFactions = BuildStartingFactionEntries(raceTemplate);
 
 				List<PreparedAbilityEntry> preparedAbilities = new List<PreparedAbilityEntry>();
-				BuildStartingAbilityEntries(startingAbilities, preparedAbilities);
+				BuildStartingAbilityEntries(startingAbilityIDs, preparedAbilities);
 				BuildStartingAbilityEntries(raceTemplate.StartingAbilities, preparedAbilities);
 
 				List<PreparedInventoryEntry> preparedInventoryItems = new List<PreparedInventoryEntry>();
-				BuildStartingInventoryEntries(startingInventoryItems, preparedInventoryItems);
+				BuildStartingInventoryEntries(startingInventoryItemIDs, preparedInventoryItems);
 				BuildStartingInventoryEntries(raceTemplate.StartingInventoryItems, preparedInventoryItems);
 
 				List<PreparedEquipmentEntry> preparedEquipment = new List<PreparedEquipmentEntry>();
-				BuildStartingEquipmentEntries(startingEquipment, preparedEquipment);
+				BuildStartingEquipmentEntries(startingEquipmentIDs, preparedEquipment);
 				BuildStartingEquipmentEntries(raceTemplate.StartingEquipment, preparedEquipment);
 
 				// --- Begin Unit of Work for atomic character creation ---
@@ -707,6 +707,26 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
+		/// Builds CPU-only prepared ability entries from template IDs.
+		/// </summary>
+		private void BuildStartingAbilityEntries(List<int> templateIDs, List<PreparedAbilityEntry> abilities)
+		{
+			if (templateIDs == null)
+			{
+				return;
+			}
+
+			foreach (int id in templateIDs)
+			{
+				AbilityTemplate startingAbility = AbilityTemplate.Get<AbilityTemplate>(id);
+				if (startingAbility != null)
+				{
+					abilities.Add(new PreparedAbilityEntry(startingAbility.ID, startingAbility.GetAllAbilityEventIDs()));
+				}
+			}
+		}
+
+		/// <summary>
 		/// Builds CPU-only prepared inventory entries from immutable templates.
 		/// </summary>
 		private void BuildStartingInventoryEntries(List<BaseItemTemplate> startingItems, List<PreparedInventoryEntry> items)
@@ -721,6 +741,27 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				BaseItemTemplate itemTemplate = startingItems[i];
 				items.Add(new PreparedInventoryEntry(itemTemplate.ID, slotOffset + i));
+			}
+		}
+
+		/// <summary>
+		/// Builds CPU-only prepared inventory entries from template IDs.
+		/// </summary>
+		private void BuildStartingInventoryEntries(List<int> templateIDs, List<PreparedInventoryEntry> items)
+		{
+			if (templateIDs == null)
+			{
+				return;
+			}
+
+			int slotOffset = items.Count;
+			for (int i = 0; i < templateIDs.Count; ++i)
+			{
+				BaseItemTemplate itemTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateIDs[i]);
+				if (itemTemplate != null)
+				{
+					items.Add(new PreparedInventoryEntry(itemTemplate.ID, slotOffset + i));
+				}
 			}
 		}
 
@@ -743,6 +784,30 @@ namespace FishMMO.Server.Implementation.LoginServer
 				itemGenerator.Generate(1, itemTemplate);
 
 				equipment.Add(new PreparedEquipmentEntry(itemTemplate.ID, (int)itemTemplate.Slot, itemGenerator.Seed));
+			}
+		}
+
+		/// <summary>
+		/// Builds CPU-only prepared equipment entries from template IDs.
+		/// Item seed generation occurs before opening the DB transaction.
+		/// </summary>
+		private void BuildStartingEquipmentEntries(List<int> templateIDs, List<PreparedEquipmentEntry> equipment)
+		{
+			if (templateIDs == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < templateIDs.Count; ++i)
+			{
+				EquippableItemTemplate itemTemplate = EquippableItemTemplate.Get<EquippableItemTemplate>(templateIDs[i]);
+				if (itemTemplate != null)
+				{
+					ItemGenerator itemGenerator = new ItemGenerator();
+					itemGenerator.Generate(1, itemTemplate);
+
+					equipment.Add(new PreparedEquipmentEntry(itemTemplate.ID, (int)itemTemplate.Slot, itemGenerator.Seed));
+				}
 			}
 		}
 

@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Scene_Server
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Scene_Server
+  m_GUID: 28e7c6e4330f5d65b93b97c5c958435c
+  m_SerializeEntries:
+  - m_GUID: 4687cf31330e7c1499e44fba9490c8ac
+    m_Address: ServerLauncher
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Server
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7e1b8e5abbda71a4b9f84cee5252b68c
+    m_Address: SceneServer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Server
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c5c748f123bdc7e41bcb72c4f239ca6b
+    m_Address: WorldServer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Server
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e4f01a5d084fafb47a77f7552e2af05e
+    m_Address: LoginServer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Server
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 3d2aad0ffdefc82109a3d2f57b26bc7a, type: 2}

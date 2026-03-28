@@ -68,29 +68,35 @@ namespace FishMMO.Shared
 		public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
 		/// <summary>
-		/// Template for the health resource attribute (e.g., HP).
+		/// Template ID for the health resource attribute (e.g., HP).
 		/// </summary>
-		public CharacterAttributeTemplate HealthResourceTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int HealthResourceTemplateID;
 		/// <summary>
-		/// Template for the health regeneration attribute.
+		/// Template ID for the health regeneration attribute.
 		/// </summary>
-		public CharacterAttributeTemplate HealthRegenerationTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int HealthRegenerationTemplateID;
 		/// <summary>
-		/// Template for the mana resource attribute (e.g., MP).
+		/// Template ID for the mana resource attribute (e.g., MP).
 		/// </summary>
-		public CharacterAttributeTemplate ManaResourceTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int ManaResourceTemplateID;
 		/// <summary>
-		/// Template for the mana regeneration attribute.
+		/// Template ID for the mana regeneration attribute.
 		/// </summary>
-		public CharacterAttributeTemplate ManaRegenerationTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int ManaRegenerationTemplateID;
 		/// <summary>
-		/// Template for the stamina resource attribute.
+		/// Template ID for the stamina resource attribute.
 		/// </summary>
-		public CharacterAttributeTemplate StaminaResourceTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int StaminaResourceTemplateID;
 		/// <summary>
-		/// Template for the stamina regeneration attribute.
+		/// Template ID for the stamina regeneration attribute.
 		/// </summary>
-		public CharacterAttributeTemplate StaminaRegenerationTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int StaminaRegenerationTemplateID;
 
 		/// <summary>
 		/// Time in seconds between resource regeneration ticks.
@@ -414,7 +420,7 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetHealthAttribute(out CharacterResourceAttribute health)
 		{
-			return ResourceAttributes.TryGetValue(HealthResourceTemplate.ID, out health);
+			return ResourceAttributes.TryGetValue(HealthResourceTemplateID, out health);
 		}
 
 		/// <summary>
@@ -425,7 +431,7 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetManaAttribute(out CharacterResourceAttribute mana)
 		{
-			return ResourceAttributes.TryGetValue(ManaResourceTemplate.ID, out mana);
+			return ResourceAttributes.TryGetValue(ManaResourceTemplateID, out mana);
 		}
 
 		/// <summary>
@@ -436,7 +442,7 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetStaminaAttribute(out CharacterResourceAttribute stamina)
 		{
-			return ResourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out stamina);
+			return ResourceAttributes.TryGetValue(StaminaResourceTemplateID, out stamina);
 		}
 
 		/// <summary>
@@ -893,20 +899,32 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void CacheRegenReferences()
 		{
-			if (HealthResourceTemplate != null && HealthRegenerationTemplate != null &&
-				resourceAttributes.TryGetValue(HealthResourceTemplate.ID, out var health))
+			if (HealthResourceTemplateID != 0 && HealthRegenerationTemplateID != 0 &&
+				resourceAttributes.TryGetValue(HealthResourceTemplateID, out var health))
 			{
-				cachedHealthRegen = health.GetDependant(HealthRegenerationTemplate.Name);
+				CharacterAttributeTemplate healthRegenTemplate = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(HealthRegenerationTemplateID);
+				if (healthRegenTemplate != null)
+				{
+					cachedHealthRegen = health.GetDependant(healthRegenTemplate.Name);
+				}
 			}
-			if (ManaResourceTemplate != null && ManaRegenerationTemplate != null &&
-				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out var mana))
+			if (ManaResourceTemplateID != 0 && ManaRegenerationTemplateID != 0 &&
+				resourceAttributes.TryGetValue(ManaResourceTemplateID, out var mana))
 			{
-				cachedManaRegen = mana.GetDependant(ManaRegenerationTemplate.Name);
+				CharacterAttributeTemplate manaRegenTemplate = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(ManaRegenerationTemplateID);
+				if (manaRegenTemplate != null)
+				{
+					cachedManaRegen = mana.GetDependant(manaRegenTemplate.Name);
+				}
 			}
-			if (StaminaResourceTemplate != null && StaminaRegenerationTemplate != null &&
-				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out var stamina))
+			if (StaminaResourceTemplateID != 0 && StaminaRegenerationTemplateID != 0 &&
+				resourceAttributes.TryGetValue(StaminaResourceTemplateID, out var stamina))
 			{
-				cachedStaminaRegen = stamina.GetDependant(StaminaRegenerationTemplate.Name);
+				CharacterAttributeTemplate staminaRegenTemplate = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(StaminaRegenerationTemplateID);
+				if (staminaRegenTemplate != null)
+				{
+					cachedStaminaRegen = stamina.GetDependant(staminaRegenTemplate.Name);
+				}
 			}
 		}
 
@@ -924,23 +942,23 @@ namespace FishMMO.Shared
 			if (regenTickAccum >= regenTickInterval)
 			{
 				regenTickAccum = 0;
-				RegenerateResource(HealthResourceTemplate, cachedHealthRegen, 1);
-				RegenerateResource(ManaResourceTemplate, cachedManaRegen, 1);
-				RegenerateResource(StaminaResourceTemplate, cachedStaminaRegen, 1);
+				RegenerateResource(HealthResourceTemplateID, cachedHealthRegen, 1);
+				RegenerateResource(ManaResourceTemplateID, cachedManaRegen, 1);
+				RegenerateResource(StaminaResourceTemplateID, cachedStaminaRegen, 1);
 			}
 		}
 
 		/// <summary>
 		/// Regenerates a single resource attribute using the cached regen dependency reference.
 		/// </summary>
-		/// <param name="resourceTemplate">The template of the resource to regenerate.</param>
+		/// <param name="resourceTemplateID">The template ID of the resource to regenerate.</param>
 		/// <param name="cachedRegen">The cached regeneration dependency attribute (resolved at init).</param>
 		/// <param name="intervals">The number of regen-tick intervals to process.</param>
-		private void RegenerateResource(CharacterAttributeTemplate resourceTemplate, CharacterAttribute cachedRegen, int intervals)
+		private void RegenerateResource(int resourceTemplateID, CharacterAttribute cachedRegen, int intervals)
 		{
-			if (resourceTemplate != null &&
+			if (resourceTemplateID != 0 &&
 				cachedRegen != null &&
-				resourceAttributes.TryGetValue(resourceTemplate.ID, out CharacterResourceAttribute resource))
+				resourceAttributes.TryGetValue(resourceTemplateID, out CharacterResourceAttribute resource))
 			{
 				int totalRegenAmount = cachedRegen.FinalValue * intervals;
 				resource.Gain(totalRegenAmount);
@@ -954,14 +972,14 @@ namespace FishMMO.Shared
 		/// <param name="resourceState">The resource state snapshot to apply.</param>
 		public void ApplyResourceState(CharacterAttributeResourceState resourceState)
 		{
-			if (HealthResourceTemplate == null || ManaResourceTemplate == null || StaminaResourceTemplate == null)
+			if (HealthResourceTemplateID == 0 || ManaResourceTemplateID == 0 || StaminaResourceTemplateID == 0)
 			{
 				return;
 			}
 
-			if (resourceAttributes.TryGetValue(HealthResourceTemplate.ID, out CharacterResourceAttribute health) &&
-				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute mana) &&
-				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))
+			if (resourceAttributes.TryGetValue(HealthResourceTemplateID, out CharacterResourceAttribute health) &&
+				resourceAttributes.TryGetValue(ManaResourceTemplateID, out CharacterResourceAttribute mana) &&
+				resourceAttributes.TryGetValue(StaminaResourceTemplateID, out CharacterResourceAttribute stamina))
 			{
 				regenTickAccum = resourceState.RegenTickAccum;
 				float previousHealth = health.CurrentValue;
@@ -1029,14 +1047,14 @@ namespace FishMMO.Shared
 		/// <returns>A snapshot containing the current health, mana, stamina, and regeneration delta.</returns>
 		public CharacterAttributeResourceState GetResourceState()
 		{
-			if (HealthResourceTemplate == null || ManaResourceTemplate == null || StaminaResourceTemplate == null)
+			if (HealthResourceTemplateID == 0 || ManaResourceTemplateID == 0 || StaminaResourceTemplateID == 0)
 			{
 				return default;
 			}
 
-			if (resourceAttributes.TryGetValue(HealthResourceTemplate.ID, out CharacterResourceAttribute health) &&
-				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute mana) &&
-				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))
+			if (resourceAttributes.TryGetValue(HealthResourceTemplateID, out CharacterResourceAttribute health) &&
+				resourceAttributes.TryGetValue(ManaResourceTemplateID, out CharacterResourceAttribute mana) &&
+				resourceAttributes.TryGetValue(StaminaResourceTemplateID, out CharacterResourceAttribute stamina))
 			{
 				return new CharacterAttributeResourceState()
 				{

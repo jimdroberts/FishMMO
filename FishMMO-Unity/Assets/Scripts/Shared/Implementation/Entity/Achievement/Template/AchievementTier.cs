@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.AddressableAssets;
 using System;
 using System.Collections.Generic;
 
@@ -21,9 +22,10 @@ namespace FishMMO.Shared
 		public string TierCompleteMessage;
 
 		/// <summary>
-		/// The sound played when this tier is completed.
+		/// Addressable reference to the sound played when this tier is completed.
+		/// Loaded client-side only.
 		/// </summary>
-		public AudioClip CompleteSound;
+		public AssetReference CompleteSoundReference;
 
 		/// <summary>
 		/// List of ability templates rewarded for completing this tier.

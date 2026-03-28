@@ -19,9 +19,10 @@ namespace FishMMO.Client
 		/// </summary>
 		public Slider HealthSlider;
 		/// <summary>
-		/// The health attribute template used to identify health resources.
+		/// The health attribute template ID used to identify health resources.
 		/// </summary>
-		public CharacterAttributeTemplate HealthAttribute;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int HealthAttributeID;
 
 		/// <summary>
 		/// The parent RectTransform for displaying the target's buff and debuff icons.
@@ -127,7 +128,7 @@ namespace FishMMO.Client
 			}
 			if (characterAttributeController != null)
 			{
-				if (characterAttributeController.TryGetResourceAttribute(HealthAttribute, out CharacterResourceAttribute health))
+				if (characterAttributeController.TryGetResourceAttribute(HealthAttributeID, out CharacterResourceAttribute health))
 				{
 					HealthSlider.value = health.CurrentValue / health.FinalValue;
 

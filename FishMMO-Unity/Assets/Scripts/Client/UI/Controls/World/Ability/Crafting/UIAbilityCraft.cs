@@ -36,9 +36,10 @@ namespace FishMMO.Client
 		/// </summary>
 		public UITooltipButton AbilityEventPrefab;
 		/// <summary>
-		/// The template for the currency used to craft abilities.
+		/// The template ID for the currency used to craft abilities.
 		/// </summary>
-		public CharacterAttributeTemplate CurrencyTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int CurrencyTemplateID;
 
 		/// <summary>
 		/// The last interactable ID used for crafting.
@@ -338,13 +339,13 @@ namespace FishMMO.Client
 			}
 
 			// do we have enough currency to purchase this?
-			if (CurrencyTemplate == null)
+			if (CurrencyTemplateID == 0)
 			{
-				Log.Debug("UIAbilityCraft", "CurrencyTemplate is null.");
+				Log.Debug("UIAbilityCraft", "CurrencyTemplateID is not set.");
 				return;
 			}
 			if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+				!attributeController.TryGetAttribute(CurrencyTemplateID, out CharacterAttribute currency) ||
 				currency.FinalValue < price)
 			{
 				return;

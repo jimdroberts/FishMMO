@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Scene_Client
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Scene_Client
+  m_GUID: 13ac07a1ff385cd66bfb7562c456a184
+  m_SerializeEntries:
+  - m_GUID: 23b5cf170c94a974ba419bf15e943864
+    m_Address: ClientWorldGUI
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Client
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2f9b6832506387e4f914d2365d583a47
+    m_Address: ClientLauncher
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Client
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 40249726afffb674b809a9d0c1f41227
+    m_Address: ClientLoginGUI
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Client
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6645529da48a29b4fb1f95fe470c9520
+    m_Address: ClientPostboot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Client
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 99c9720ab356a0642a771bea13969a05
+    m_Address: ClientPreboot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Client
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 4e3a914d6c7ab9ce8946f327eb49bde2, type: 2}

@@ -22,9 +22,10 @@ namespace FishMMO.Client
 		public TMP_Text resourceValue;
 
 		/// <summary>
-		/// The attribute template used to identify which resource this bar represents (e.g., health, stamina).
+		/// The attribute template ID used to identify which resource this bar represents (e.g., health, stamina).
 		/// </summary>
-		public CharacterAttributeTemplate Template;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int TemplateID;
 
 		/// <summary>
 		/// How fast the slider interpolates toward the target value (units per second).
@@ -50,7 +51,7 @@ namespace FishMMO.Client
 		{
 			if (Character != null &&
 				Character.TryGet(out ICharacterAttributeController attributeController) &&
-				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
+				attributeController.TryGetResourceAttribute(TemplateID, out CharacterResourceAttribute attribute))
 			{
 				attribute.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
 
@@ -67,7 +68,7 @@ namespace FishMMO.Client
 
 			if (Character != null &&
 				Character.TryGet(out ICharacterAttributeController attributeController) &&
-				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
+				attributeController.TryGetResourceAttribute(TemplateID, out CharacterResourceAttribute attribute))
 			{
 				attribute.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
 
@@ -86,7 +87,7 @@ namespace FishMMO.Client
 		{
 			if (Character != null &&
 				Character.TryGet(out ICharacterAttributeController attributeController) &&
-				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
+				attributeController.TryGetResourceAttribute(TemplateID, out CharacterResourceAttribute resource))
 			{
 				targetValue = resource.FinalValueAsFloat > 0.0f
 					? resource.CurrentValue / resource.FinalValueAsFloat

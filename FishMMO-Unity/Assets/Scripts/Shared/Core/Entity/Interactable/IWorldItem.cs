@@ -12,9 +12,9 @@ namespace FishMMO.Shared.Core
 		BaseItemTemplate Template { get; }
 
 		/// <summary>
-		/// Achievement template to increment when a player picks up this world item.
+		/// Achievement template ID to increment when a player picks up this world item.
 		/// </summary>
-		AchievementTemplate AchievementTemplate { get; }
+		int AchievementTemplateID { get; }
 
 		/// <summary>
 		/// The number of items in this world item stack.
