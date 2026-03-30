@@ -59,9 +59,9 @@ namespace FishMMO.Shared
 			{
 				BuildTypeEnvironment newVal = (BuildTypeEnvironment)evt.newValue;
 				EditorPrefs.SetInt("FishMMOBuildType", (int)newVal);
-				SetStatus($"Build Type set to: {newVal}");
-				// Refresh the panel to show updated settings
-				ShowBuildInspector();
+				SetStatus($"Switching to: {newVal}...");
+				BuildEnvironmentOptions.SwitchToEnvironmentBuildTarget();
+				EditorApplication.delayCall += () => ShowBuildInspector();
 			});
 			buildTypeSection.Add(buildTypeField);
 			inspectorContent.Add(buildTypeSection);
@@ -75,8 +75,9 @@ namespace FishMMO.Shared
 			{
 				OSTargetEnvironment newVal = (OSTargetEnvironment)evt.newValue;
 				EditorPrefs.SetInt("FishMMOOSTarget", (int)newVal);
-				SetStatus($"OS Target set to: {GetOSTargetDisplayName(newVal)}");
-				ShowBuildInspector();
+				SetStatus($"Switching to: {GetOSTargetDisplayName(newVal)}...");
+				BuildEnvironmentOptions.SwitchToEnvironmentBuildTarget();
+				EditorApplication.delayCall += () => ShowBuildInspector();
 			});
 			osSection.Add(osField);
 			inspectorContent.Add(osSection);
