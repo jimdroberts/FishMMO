@@ -89,6 +89,12 @@
                         <ui:VisualElement name="dep-direct-list" class="dep-viewer-list" />
                     </ui:ScrollView>
                 </ui:VisualElement>
+                <ui:VisualElement class="dep-viewer-column dep-viewer-column--warn">
+                    <ui:Label text="Non-Addressable" class="dep-viewer-section-title dep-viewer-section-title--warn" />
+                    <ui:ScrollView name="dep-nonaddr-scroll" class="dep-viewer-scroll">
+                        <ui:VisualElement name="dep-nonaddr-list" class="dep-viewer-list" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
                 <ui:VisualElement class="dep-viewer-column dep-viewer-column--alert">
                     <ui:Label text="Implicit Duplicates" class="dep-viewer-section-title dep-viewer-section-title--alert" />
                     <ui:ScrollView name="dep-dupes-scroll" class="dep-viewer-scroll">

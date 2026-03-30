@@ -69,9 +69,22 @@ namespace FishMMO.Shared
 			// Normalize separators for reliable matching
 			string normalized = assetPath.Replace('\\', '/');
 
-			// ── Plugins: warn, do not fix ──
+			// ── Plugins ──
 			if (normalized.StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
 			{
+				// TextMesh Pro runtime assets (fonts, shaders, materials) are client-only
+				// because the server runs headless — no rendering.
+				if (normalized.StartsWith("Assets/Plugins/TextMesh Pro/", StringComparison.OrdinalIgnoreCase) &&
+					!IsEditorOnlyPath(normalized))
+				{
+					return new AssetCategory
+					{
+						GroupName = SmartGroups.ClientStaticPermanent,
+						Reason = "TextMesh Pro runtime asset — client-only (server is headless)",
+					};
+				}
+
+				// All other plugins: warn, do not fix
 				return new AssetCategory
 				{
 					GroupName = null,
@@ -104,6 +117,32 @@ namespace FishMMO.Shared
 					GroupName = SmartGroups.SharedStaticPermanent,
 					Reason = "Template — required at all times by client and server",
 				};
+			}
+
+			// ── Sprites: client-only (server is headless, no rendering) ──
+			if (normalized.StartsWith("Assets/Sprites/", StringComparison.OrdinalIgnoreCase))
+			{
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.ClientStaticPermanent,
+					Reason = "Sprite — client-only (server is headless)",
+				};
+			}
+
+			// ── Render assets: client-only (server is headless) ──
+			// Textures, fonts, materials, shaders, and render textures are never
+			// needed by the headless server.
+			if (IsRenderAsset(normalized))
+			{
+				// Still respect explicit Server paths — don't override those
+				if (!ContainsSegment(normalized, "Server"))
+				{
+					return new AssetCategory
+					{
+						GroupName = SmartGroups.ClientStaticPermanent,
+						Reason = "Render asset — client-only (server is headless)",
+					};
+				}
 			}
 
 			// ── Scenes ──
@@ -274,6 +313,54 @@ namespace FishMMO.Shared
 				idx = path.IndexOf(segment, end, StringComparison.OrdinalIgnoreCase);
 			}
 			return false;
+		}
+
+		/// <summary>
+		/// Returns true if the asset is a render-related type that only the client needs.
+		/// The server runs headless — textures, sprites, fonts, materials, shaders,
+		/// and render textures are never loaded server-side.
+		/// </summary>
+		private static bool IsRenderAsset(string normalizedPath)
+		{
+			string ext = System.IO.Path.GetExtension(normalizedPath).ToLowerInvariant();
+			switch (ext)
+			{
+				// Textures / sprites
+				case ".png":
+				case ".jpg":
+				case ".jpeg":
+				case ".tga":
+				case ".bmp":
+				case ".psd":
+				case ".gif":
+				case ".hdr":
+				case ".exr":
+				case ".tif":
+				case ".tiff":
+				// Fonts
+				case ".ttf":
+				case ".otf":
+				case ".fnt":
+				// TMP font assets
+				case ".fontsettings":
+				// Materials / shaders
+				case ".mat":
+				case ".shader":
+				case ".shadergraph":
+				case ".shadersubgraph":
+				case ".compute":
+				// Render textures
+				case ".rendertexture":
+				case ".cubemap":
+				// Models (meshes / animations are visual)
+				case ".fbx":
+				case ".obj":
+				case ".blend":
+				case ".dae":
+					return true;
+				default:
+					return false;
+			}
 		}
 
 		/// <summary>

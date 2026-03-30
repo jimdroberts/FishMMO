@@ -27,6 +27,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 16eb23baeafad21469a3509842b500e3
+    m_Address: NightSkybox
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1a3fc9516df07da4ebbb643fe79bc80b
+    m_Address: Ethan
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2de080fd835ec6747b1b1ff8ed6870f6
     m_Address: Player Name Label
     m_ReadOnly: 0
@@ -35,6 +47,36 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 30339dbf6301676479d2c51120c3c56b
     m_Address: Cached3DLabel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 316068aec7de8294ba9429fc2bc910b9
+    m_Address: DaySkybox
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 36866adaddfae0c4e975f65903f11405
+    m_Address: fm_teleporter_PLACEHOLDER
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 409d23918fda94d4daf83122bcb63ead
+    m_Address: EthanWhite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4529eea60fb8b9949b7878bf2099b1e4
+    m_Address: WaterMaterial_FromGraph
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
+    m_Address: MinimapRenderTexture
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -56,6 +98,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd89cf5b9246416f84610a006f916af7
+    m_Address: TMP_SDF Overlay
+    m_ReadOnly: 0
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f70d8da8f64f2b84d9ada31241ac8a57
     m_Address: UIColorPicker

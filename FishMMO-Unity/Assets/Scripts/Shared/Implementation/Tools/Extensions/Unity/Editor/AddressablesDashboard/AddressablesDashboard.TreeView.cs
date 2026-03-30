@@ -295,10 +295,12 @@ namespace FishMMO.Shared
 			element.RemoveFromClassList("group-header");
 			element.RemoveFromClassList("asset-entry");
 
-			// Clear previous path-type classes
+			// Clear previous path-type and violation classes
 			element.RemoveFromClassList("group-local");
 			element.RemoveFromClassList("group-remote");
 			element.RemoveFromClassList("group-mixed");
+			element.RemoveFromClassList("entry-violation");
+			element.RemoveFromClassList("group-violation");
 
 			if (idToGroup.TryGetValue(itemId, out AddressableAssetGroup group))
 			{
@@ -316,6 +318,12 @@ namespace FishMMO.Shared
 				if (labelsLabel != null) labelsLabel.text = "";
 				if (sizeLabel != null) sizeLabel.text = FormatGroupSize(group);
 
+				// Highlight groups that contain violated entries
+				if (violationGroupNames.Contains(group.Name))
+				{
+					element.AddToClassList("group-violation");
+				}
+
 				if (iconImage != null)
 				{
 					iconImage.image = EditorGUIUtility.IconContent("d_Folder Icon").image;
@@ -329,6 +337,12 @@ namespace FishMMO.Shared
 				if (pathLabel != null) pathLabel.text = $"[{entry.address}]  {entry.AssetPath}";
 				if (labelsLabel != null) labelsLabel.text = FormatLabels(entry);
 				if (sizeLabel != null) sizeLabel.text = FormatBytes(GetAssetFileSize(entry.AssetPath));
+
+				// Highlight entries with analysis violations
+				if (violationEntryPaths.Contains(entry.AssetPath))
+				{
+					element.AddToClassList("entry-violation");
+				}
 
 				if (iconImage != null)
 				{

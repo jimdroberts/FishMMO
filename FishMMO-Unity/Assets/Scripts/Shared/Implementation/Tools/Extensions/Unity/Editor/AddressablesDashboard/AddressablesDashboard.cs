@@ -57,6 +57,7 @@ namespace FishMMO.Shared
 		// Dependency Viewer
 		private Label depViewerAsset;
 		private VisualElement depDirectList;
+		private VisualElement depNonAddrList;
 		private VisualElement depDupesList;
 
 		/// <summary>
@@ -98,6 +99,18 @@ namespace FishMMO.Shared
 		/// Cached detailed analysis report text for the detail panel.
 		/// </summary>
 		private string cachedDetailReport = "";
+
+		/// <summary>
+		/// Asset paths of entries that have non-addressable references or cross-group duplicate deps.
+		/// Populated by RunAnalysis, consumed by BindTreeItem for red/pink highlighting.
+		/// </summary>
+		private readonly HashSet<string> violationEntryPaths = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Group names that contain at least one entry with violations.
+		/// Populated by RunAnalysis, consumed by BindTreeItem for group-level highlighting.
+		/// </summary>
+		private readonly HashSet<string> violationGroupNames = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Opens the Addressables Dashboard window from the menu.
@@ -153,6 +166,7 @@ namespace FishMMO.Shared
 			// Dependency Viewer
 			depViewerAsset = rootVisualElement.Q<Label>("dep-viewer-asset");
 			depDirectList = rootVisualElement.Q<VisualElement>("dep-direct-list");
+			depNonAddrList = rootVisualElement.Q<VisualElement>("dep-nonaddr-list");
 			depDupesList = rootVisualElement.Q<VisualElement>("dep-dupes-list");
 
 			if (treeView == null || searchField == null || statusBar == null)

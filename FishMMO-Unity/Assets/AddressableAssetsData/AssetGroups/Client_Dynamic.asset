@@ -15,38 +15,8 @@ MonoBehaviour:
   m_GroupName: Client_Dynamic
   m_GUID: e46cfb3a1a3f84c86ac0d2aeb16c01a7
   m_SerializeEntries:
-  - m_GUID: 1a3fc9516df07da4ebbb643fe79bc80b
-    m_Address: Ethan
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 36866adaddfae0c4e975f65903f11405
-    m_Address: fm_teleporter_PLACEHOLDER
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 409d23918fda94d4daf83122bcb63ead
-    m_Address: EthanWhite
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 422ac1a06602ba841bd45b8b1c616098
     m_Address: Fire
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4529eea60fb8b9949b7878bf2099b1e4
-    m_Address: WaterMaterial_FromGraph
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
-    m_Address: MinimapRenderTexture
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic

@@ -71,9 +71,10 @@ namespace FishMMO.Shared
 						string dep = deps[d];
 						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
 
-						// Skip scripts and packages — they are not bundled assets
+						// Skip scripts, packages, and editor-only assets — they are not bundled
 						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
+							IsEditorOnlyPath(dep))
 						{
 							continue;
 						}
@@ -99,10 +100,12 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// Separate plugin warnings from fixable assets
+			// Separate plugin warnings from fixable assets using the categorizer,
+			// which has exceptions for known runtime plugins (e.g. TextMesh Pro).
 			for (int i = assetsToFix.Count - 1; i >= 0; i--)
 			{
-				if (assetsToFix[i].Replace('\\', '/').StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
+				AssetCategory cat = CategorizeAsset(assetsToFix[i], null);
+				if (cat.IsPluginWarning)
 				{
 					pluginWarnings.Add(assetsToFix[i]);
 					assetsToFix.RemoveAt(i);
@@ -673,6 +676,90 @@ namespace FishMMO.Shared
 					ApplyGroupPackingMode(kvp.Value, kvp.Key);
 				}
 
+				// ── Resolve cross-group duplicate dependencies ──
+				// After smart-grouping the primary assets, scan all entries for
+				// non-addressable deps that are referenced by 2+ groups. Making
+				// these addressable ensures they are bundled once rather than
+				// duplicated in every referencing bundle.
+				int dupesFixed = 0;
+				int dupesPluginSkipped = 0;
+				{
+					var addressablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+					foreach (var group in settings.groups)
+					{
+						if (group == null) continue;
+						foreach (var entry in group.entries)
+						{
+							if (entry == null) continue;
+							addressablePaths.Add(entry.AssetPath);
+						}
+					}
+
+					var depToGroups = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+					foreach (var group in settings.groups)
+					{
+						if (group == null) continue;
+						foreach (var entry in group.entries)
+						{
+							if (entry == null) continue;
+							string[] deps = AssetDatabase.GetDependencies(entry.AssetPath, true);
+							for (int d = 0; d < deps.Length; d++)
+							{
+								string dep = deps[d];
+								if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
+								if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+									dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
+									IsEditorOnlyPath(dep))
+								{
+									continue;
+								}
+								if (addressablePaths.Contains(dep)) continue;
+
+								if (!depToGroups.TryGetValue(dep, out HashSet<string> dg))
+								{
+									dg = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+									depToGroups[dep] = dg;
+								}
+								dg.Add(group.Name);
+							}
+						}
+					}
+
+					foreach (var kvp in depToGroups)
+					{
+						if (kvp.Value.Count <= 1) continue; // only fix cross-group duplicates
+
+						string depPath = kvp.Key;
+						string guid = AssetDatabase.AssetPathToGUID(depPath);
+						if (string.IsNullOrEmpty(guid)) continue;
+						if (settings.FindAssetEntry(guid) != null) continue; // already addressable
+
+						AssetCategory cat = CategorizeAsset(depPath, kvp.Value);
+						if (cat.IsPluginWarning || string.IsNullOrEmpty(cat.GroupName))
+						{
+							if (cat.IsPluginWarning) dupesPluginSkipped++;
+							continue;
+						}
+
+						AddressableAssetGroup tg = GetOrCreateGroup(settings, cat.GroupName, groupCache);
+						if (tg == null) continue;
+
+						AddressableAssetEntry ne = settings.CreateOrMoveEntry(guid, tg, false, false);
+						if (ne != null)
+						{
+							ne.SetAddress(Path.GetFileNameWithoutExtension(depPath));
+							SetExclusiveSmartLabel(settings, ne, cat.GroupName);
+							dupesFixed++;
+						}
+					}
+
+					// Apply packing modes on any newly created groups
+					foreach (var kvp2 in groupCache)
+					{
+						ApplyGroupPackingMode(kvp2.Value, kvp2.Key);
+					}
+				}
+
 				// Resolve any address collisions introduced by filename-only addresses
 				int collisionsResolved = ResolveAddressCollisions(settings);
 
@@ -728,16 +815,18 @@ namespace FishMMO.Shared
 
 				var sb = new StringBuilder();
 				sb.Append($"Smart Group complete. Created {created}, moved {moved}");
-				if (collisionsResolved > 0) sb.Append($", resolved {collisionsResolved} collision(s)");
+				if (dupesFixed > 0) sb.Append($", resolved {dupesFixed} duplicate dep(s)");
+				if (collisionsResolved > 0) sb.Append($", resolved {collisionsResolved} address collision(s)");
 				if (labeled > 0) sb.Append($", labeled {labeled}");
 				if (removedGroups > 0) sb.Append($", removed {removedGroups} empty group(s)");
 				if (removedLabels > 0) sb.Append($", removed {removedLabels} unused label(s)");
 				if (skipped > 0) sb.Append($", skipped {skipped}");
 				sb.Append(".");
 
-				if (pluginWarnings.Count > 0)
+				if (pluginWarnings.Count > 0 || dupesPluginSkipped > 0)
 				{
-					sb.Append($"\n\n{pluginWarnings.Count} plugin asset(s) skipped (replace with production assets):");
+					int totalPluginWarn = pluginWarnings.Count + dupesPluginSkipped;
+					sb.Append($"\n\n{totalPluginWarn} plugin asset(s) skipped (replace with production assets):");
 					int shown = 0;
 					for (int i = 0; i < pluginWarnings.Count; i++)
 					{

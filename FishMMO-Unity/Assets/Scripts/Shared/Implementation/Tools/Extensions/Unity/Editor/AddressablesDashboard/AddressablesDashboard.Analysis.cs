@@ -209,19 +209,24 @@ namespace FishMMO.Shared
 						string dep = deps[d];
 						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
 
-						// Skip scripts and packages — they are not bundled assets
+						// Skip scripts, packages, and editor-only assets — they are not bundled
 						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase))
+							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
+							IsEditorOnlyPath(dep))
 						{
 							continue;
 						}
 
 						allUniqueDeps.Add(dep);
 
-						// Track plugin references — these are temporary and should be replaced
+						// Track plugin references that the categorizer considers unfixable
 						if (dep.Replace('\\', '/').StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
 						{
-							pluginRefs.Add(dep);
+							AssetCategory pluginCat = CategorizeAsset(dep, null);
+							if (pluginCat.IsPluginWarning)
+							{
+								pluginRefs.Add(dep);
+							}
 						}
 
 						// Track cross-group duplicate deps
@@ -247,13 +252,16 @@ namespace FishMMO.Shared
 					}
 				}
 
-				// Count dependencies referenced by more than one group
+				// Count non-addressable dependencies referenced by more than one group.
+				// Only non-addressable deps are actually duplicated in bundles —
+				// addressable deps are loaded by reference and bundled once.
 				int duplicateDepCount = 0;
 				var duplicateDepList = new List<KeyValuePair<string, HashSet<string>>>();
 				foreach (var kvp in depToGroups)
 				{
 					if (kvp.Value.Count > 1 &&
-						!kvp.Key.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+						!kvp.Key.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) &&
+						!addressablePaths.Contains(kvp.Key))
 					{
 						duplicateDepCount++;
 						duplicateDepList.Add(kvp);
@@ -293,6 +301,68 @@ namespace FishMMO.Shared
 					if (group != null && group.entries.Count == 0)
 					{
 						emptyGroups.Add(group.Name);
+					}
+				}
+
+				// Build per-entry and per-group violation sets for tree highlighting.
+				// An entry is violated if it has cross-group duplicate deps (non-addressable dep
+				// referenced by multiple groups → duplicated in each bundle), address collisions,
+				// or is a stale entry.
+				violationEntryPaths.Clear();
+				violationGroupNames.Clear();
+
+				// Mark stale entries as violations
+				for (int i = 0; i < staleEntries.Count; i++)
+				{
+					violationEntryPaths.Add(staleEntries[i].path);
+					violationGroupNames.Add(staleEntries[i].group);
+				}
+
+				// Mark entries involved in address collisions
+				for (int i = 0; i < addressCollisions.Count; i++)
+				{
+					var kvp = addressCollisions[i];
+					for (int j = 0; j < kvp.Value.Count; j++)
+					{
+						violationEntryPaths.Add(kvp.Value[j].path);
+						violationGroupNames.Add(kvp.Value[j].group);
+					}
+				}
+
+				// Mark entries with cross-group duplicate dependencies
+				for (int i = 0; i < total; i++)
+				{
+					var entry = allEntries[i];
+					if (violationEntryPaths.Contains(entry.AssetPath)) continue; // already flagged
+
+					string entGrpName = entry.parentGroup != null ? entry.parentGroup.Name : "Unknown";
+					bool hasViolation = false;
+
+					string[] entDeps = AssetDatabase.GetDependencies(entry.AssetPath, true);
+					for (int d = 0; d < entDeps.Length; d++)
+					{
+						string dep = entDeps[d];
+						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
+						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
+							IsEditorOnlyPath(dep))
+						{
+							continue;
+						}
+
+						// Cross-group duplicate: non-addressable dep used by entries in 2+ groups
+						if (!addressablePaths.Contains(dep) &&
+							depToGroups.TryGetValue(dep, out HashSet<string> dGroups) && dGroups.Count > 1)
+						{
+							hasViolation = true;
+							break;
+						}
+					}
+
+					if (hasViolation)
+					{
+						violationEntryPaths.Add(entry.AssetPath);
+						violationGroupNames.Add(entGrpName);
 					}
 				}
 
@@ -373,8 +443,8 @@ namespace FishMMO.Shared
 				if (pluginRefs.Count > 0)
 				{
 					report.AppendLine("═══ ⚠ PLUGIN ASSET REFERENCES ═══");
-					report.AppendLine("Assets under Assets/Plugins/ are temporary placeholders.");
-					report.AppendLine("Replace these with production assets. They will NOT be auto-fixed.\n");
+					report.AppendLine("These plugin assets have no categorization rule and cannot be auto-fixed.");
+					report.AppendLine("Replace with production assets or add a categorization rule.\n");
 
 					int shown = 0;
 					foreach (string path in pluginRefs)
@@ -419,7 +489,8 @@ namespace FishMMO.Shared
 				if (duplicateDepCount > 0)
 				{
 					report.AppendLine("═══ DUPLICATE DEPENDENCIES ═══");
-					report.AppendLine("These dependencies are shared across multiple groups and will be duplicated in bundles.\n");
+					report.AppendLine("These non-addressable dependencies are shared across multiple groups");
+					report.AppendLine("and WILL be duplicated into every bundle that references them.\n");
 
 					int shown = 0;
 					for (int i = 0; i < duplicateDepList.Count; i++)
@@ -478,6 +549,12 @@ namespace FishMMO.Shared
 					unusedLabels.Count > 0 || pluginRefs.Count > 0 || addressCollisionCount > 0 || staleEntries.Count > 0))
 				{
 					detailFoldout.value = true;
+				}
+
+				// Refresh tree rows so violation highlighting is applied
+				if (treeView != null)
+				{
+					treeView.RefreshItems();
 				}
 			}
 			finally
