@@ -14,18 +14,25 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Conditions: []
   Actions:
-  - {fileID: 11400000, guid: 816818339c158e94f881e5557e72c200, type: 2}
+  - rid: 4507019787936727129
   icon: {fileID: 0}
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
   Cooldown: 0
   Price: 0
-  Resources:
-    m_keys: []
-    m_values: 
-  RequiredAttributes:
-    m_keys: []
-    m_values: 
-  RequiredFaction: {fileID: 0}
-  RequiredArchetype: {fileID: 0}
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4507019787936727129
+      type: {class: AbilityApplyAreaAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        RadiusValue:
+          rid: -2
+        MaxHitsValue:
+          rid: -2
+        TargetLayerMask:
+          serializedVersion: 2
+          m_Bits: 4294967295

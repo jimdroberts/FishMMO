@@ -35,18 +35,41 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the total height required to render the property including all child fields.
+		/// Returns the total height required to render the property.
+		/// Includes the type dropdown line plus all visible child fields when expanded.
 		/// </summary>
 		/// <param name="property">The serialized property.</param>
 		/// <param name="label">The label for the property.</param>
-		/// <returns>The height of the property field including children.</returns>
+		/// <returns>The height of the property field including children when expanded.</returns>
 		public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
 		{
-			return EditorGUI.GetPropertyHeight(property, label, true);
+			float height = EditorGUIUtility.singleLineHeight;
+
+			if (property.isExpanded && property.hasVisibleChildren)
+			{
+				SerializedProperty iterator = property.Copy();
+				SerializedProperty endProperty = iterator.GetEndProperty();
+
+				if (iterator.NextVisible(true))
+				{
+					do
+					{
+						if (SerializedProperty.EqualContents(iterator, endProperty))
+						{
+							break;
+						}
+						height += EditorGUI.GetPropertyHeight(iterator, true) + EditorGUIUtility.standardVerticalSpacing;
+					}
+					while (iterator.NextVisible(false));
+				}
+			}
+
+			return height;
 		}
 
 		/// <summary>
-		/// Draws a type-selection dropdown followed by the selected type's serialized fields.
+		/// Draws a foldout with a type-selection dropdown, followed by the child fields of the selected type.
+		/// The foldout arrow controls expand/collapse while the dropdown selects the concrete type.
 		/// </summary>
 		/// <param name="position">Rectangle on the screen to use for the property GUI.</param>
 		/// <param name="property">The serialized property decorated with <see cref="SerializeReference"/>.</param>
@@ -81,9 +104,17 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// Draw the type dropdown.
-			Rect dropdownRect = new Rect(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
-			int newIndex = EditorGUI.Popup(dropdownRect, label.text, selectedIndex, typeNames);
+			// Draw foldout arrow in the label area.
+			Rect foldoutRect = new Rect(position.x, position.y, EditorGUIUtility.labelWidth, EditorGUIUtility.singleLineHeight);
+			property.isExpanded = EditorGUI.Foldout(foldoutRect, property.isExpanded, label, true);
+
+			// Draw type dropdown to the right of the label.
+			Rect popupRect = new Rect(
+				position.x + EditorGUIUtility.labelWidth + 2f,
+				position.y,
+				position.width - EditorGUIUtility.labelWidth - 2f,
+				EditorGUIUtility.singleLineHeight);
+			int newIndex = EditorGUI.Popup(popupRect, selectedIndex, typeNames);
 
 			// Handle type change.
 			if (newIndex != selectedIndex)
@@ -100,8 +131,34 @@ namespace FishMMO.Shared
 				property.serializedObject.ApplyModifiedProperties();
 			}
 
-			// Draw the child properties of the selected type.
-			EditorGUI.PropertyField(position, property, label, true);
+			// Draw child fields when expanded.
+			if (property.isExpanded && property.hasVisibleChildren)
+			{
+				EditorGUI.indentLevel++;
+
+				SerializedProperty iterator = property.Copy();
+				SerializedProperty endProperty = iterator.GetEndProperty();
+				float y = position.y + EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+
+				if (iterator.NextVisible(true))
+				{
+					do
+					{
+						if (SerializedProperty.EqualContents(iterator, endProperty))
+						{
+							break;
+						}
+
+						float h = EditorGUI.GetPropertyHeight(iterator, true);
+						Rect childRect = new Rect(position.x, y, position.width, h);
+						EditorGUI.PropertyField(childRect, iterator, true);
+						y += h + EditorGUIUtility.standardVerticalSpacing;
+					}
+					while (iterator.NextVisible(false));
+				}
+
+				EditorGUI.indentLevel--;
+			}
 
 			EditorGUI.EndProperty();
 		}

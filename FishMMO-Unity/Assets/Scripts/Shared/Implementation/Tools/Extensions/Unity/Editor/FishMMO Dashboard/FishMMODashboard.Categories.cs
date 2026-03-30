@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
@@ -50,6 +51,13 @@ namespace FishMMO.Shared
 		/// Lower values sort first. Defaults to 0 if null.
 		/// </summary>
 		public Func<UnityEngine.Object, int> GetSortOrder;
+
+		/// <summary>
+		/// Concrete ScriptableObject types that can be created for this category.
+		/// Used when AssetType is abstract and has multiple concrete subtypes.
+		/// Each entry is (displayName, concreteType).
+		/// </summary>
+		public List<(string Name, Type Type)> ConcreteTypes;
 	}
 
 	public partial class FishMMODashboard
@@ -91,9 +99,35 @@ namespace FishMMO.Shared
 			});
 
 			// ── Character Templates ──
-			AddCategory<AbilityTemplate>("Abilities", "Character",
-				"Assets/Templates/Entity/Abilities/Types",
-				"FishMMO/Character/Ability/Ability");
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Abilities",
+				Group = "Character",
+				AssetType = typeof(BaseAbilityTemplate),
+				DefaultAssetDirectory = "Assets/Templates/Entity/Abilities/Types",
+				ConcreteTypes = new List<(string, Type)>
+				{
+					("Ability", typeof(AbilityTemplate)),
+					("Pet Ability", typeof(PetAbilityTemplate)),
+					("Ability Type Override Event", typeof(AbilityTypeOverrideEventType)),
+				},
+			});
+
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Ability Events",
+				Group = "Character",
+				AssetType = typeof(AbilityEvent),
+				DefaultAssetDirectory = "Assets/Templates/Entity/Abilities/Events",
+				ConcreteTypes = new List<(string, Type)>
+				{
+					("On Destroy Event", typeof(AbilityOnDestroyEvent)),
+					("On Hit Event", typeof(AbilityOnHitEvent)),
+					("On Pre Spawn Event", typeof(AbilityOnPreSpawnEvent)),
+					("On Spawn Event", typeof(AbilityOnSpawnEvent)),
+					("On Tick Event", typeof(AbilityOnTickEvent)),
+				},
+			});
 
 			categories.Add(new TemplateCategory
 			{
@@ -118,9 +152,33 @@ namespace FishMMO.Shared
 				"Assets/Templates/Entity/Archetypes",
 				"FishMMO/Character/Archetype/Archetype");
 
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Buffs",
+				Group = "Character",
+				AssetType = typeof(BaseBuffTemplate),
+				DefaultAssetDirectory = "Assets/Templates/Entity/Buffs",
+				ConcreteTypes = new List<(string, Type)>
+				{
+					("Attribute Buff", typeof(AttributeBuffTemplate)),
+					("Attribute Tick Buff", typeof(AttributeTickBuffTemplate)),
+					("Composite Buff", typeof(CompositeBuffTemplate)),
+					("Resource Tick Buff", typeof(ResourceTickBuffTemplate)),
+					("State Buff", typeof(StateBuffTemplate)),
+				},
+			});
+
+			AddCategory<CharacterAttributeTemplate>("Character Attributes", "Character",
+				"Assets/Templates/Entity/CharacterAttributes",
+				"FishMMO/Character/Attribute/Character Attribute");
+
 			AddCategory<FactionTemplate>("Factions", "Character",
 				"Assets/Templates/Entity/Factions",
 				"FishMMO/Character/Faction/Faction");
+
+			AddCategory<FactionMatrixTemplate>("Faction Matrix", "Character",
+				"Assets/Templates/Entity/Factions",
+				"FishMMO/Character/Faction/Faction Matrix");
 
 			AddCategory<QuestTemplate>("Quests", "Character",
 				"Assets/Templates/Entity/Quests",
@@ -130,6 +188,10 @@ namespace FishMMO.Shared
 				"Assets/Templates/Entity/Races",
 				"FishMMO/Character/Race/Race");
 
+			AddCategory<NameCache>("Name Cache", "Character",
+				"Assets/Templates/Entity/Names",
+				"FishMMO/Character/Name Cache");
+
 			// ── Items ──
 			categories.Add(new TemplateCategory
 			{
@@ -137,6 +199,11 @@ namespace FishMMO.Shared
 				Group = "Items",
 				AssetType = typeof(BaseItemTemplate),
 				DefaultAssetDirectory = "Assets/Templates/Entity/Items",
+				ConcreteTypes = new List<(string, Type)>
+				{
+					("Weapon", typeof(WeaponTemplate)),
+					("Armor", typeof(ArmorTemplate)),
+				},
 				GetGroupLabel = asset =>
 				{
 					EquippableItemTemplate equip = asset as EquippableItemTemplate;
@@ -153,7 +220,35 @@ namespace FishMMO.Shared
 				},
 			});
 
+			AddCategory<ItemAttributeTemplate>("Item Attributes", "Items",
+				"Assets/Templates/Entity/Items",
+				"FishMMO/Item/Item Attribute/Attribute");
+
 			// ── NPCs ──
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "AI States",
+				Group = "NPCs",
+				AssetType = typeof(BaseAIState),
+				DefaultAssetDirectory = "Assets/Templates/Entity/NPCs",
+				ConcreteTypes = new List<(string, Type)>
+				{
+					("Idle State", typeof(IdleState)),
+					("Wander State", typeof(WanderState)),
+					("Patrol State", typeof(PatrolState)),
+					("Orbit State", typeof(OrbitState)),
+					("Get Behind State", typeof(GetBehindState)),
+					("Return Home State", typeof(ReturnHomeState)),
+					("Retreat State", typeof(RetreatState)),
+					("Pet Idle State", typeof(PetIdleState)),
+					("Attacking State", typeof(BaseAttackingState)),
+					("Melee Attacking State", typeof(MeleeAttackingState)),
+					("Ranged Attacking State", typeof(RangedAttackingState)),
+					("Caster Attacking State", typeof(CasterAttackingState)),
+					("Healer Attacking State", typeof(HealerAttackingState)),
+				},
+			});
+
 			AddCategory<NPCGuildTemplate>("NPC Guilds", "NPCs",
 				"Assets/Templates/Entity/NPCs",
 				"FishMMO/Character/NPC/NPC Guild");
@@ -186,6 +281,31 @@ namespace FishMMO.Shared
 			AddCategory<CapturePointTemplate>("Capture Points", "Interactables",
 				"Assets/Templates/Entity/Interactables/CapturePoints",
 				"FishMMO/Interactable/Capture Point");
+
+			// ── ECA ──
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Target Selectors",
+				Group = "ECA",
+				AssetType = typeof(TargetSelector),
+				DefaultAssetDirectory = "Assets/Templates/Entity/ECA",
+				ConcreteTypes = new List<(string, Type)>
+				{
+					("Area", typeof(AreaTargetSelector)),
+					("Chain", typeof(ChainTargetSelector)),
+					("Children", typeof(ChildrenTargetSelector)),
+					("Cone", typeof(ConeTargetSelector)),
+					("Furthest", typeof(FurthestTargetSelector)),
+					("Line", typeof(LineTargetSelector)),
+					("Nearest", typeof(NearestTargetSelector)),
+					("Random", typeof(RandomTargetSelector)),
+					("Self", typeof(SelfTargetSelector)),
+				},
+			});
+
+			AddCategory<Trigger>("Triggers", "ECA",
+				"Assets/Templates/Entity/ECA",
+				"FishMMO/ECA/Trigger");
 
 			// ── World ──
 			AddCategory<WorldSceneDetailsCache>("World Scene Details", "World",
@@ -592,6 +712,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Creates a new asset for the currently selected category.
+		/// If the category has multiple concrete types, shows a selection menu first.
 		/// </summary>
 		private void OnCreateAssetClicked()
 		{
@@ -599,6 +720,32 @@ namespace FishMMO.Shared
 
 			TemplateCategory cat = categories[selectedCategoryIndex];
 			if (cat.AssetType == null || cat.IsSpecial) return;
+
+			// If the category defines concrete subtypes, show a picker menu.
+			if (cat.ConcreteTypes != null && cat.ConcreteTypes.Count > 0)
+			{
+				GenericMenu menu = new GenericMenu();
+				for (int i = 0; i < cat.ConcreteTypes.Count; i++)
+				{
+					var entry = cat.ConcreteTypes[i];
+					menu.AddItem(new GUIContent(entry.Name), false, () =>
+					{
+						CreateAssetOfType(cat, entry.Type, entry.Name);
+					});
+				}
+				menu.ShowAsContext();
+				return;
+			}
+
+			// Single concrete type — create directly.
+			CreateAssetOfType(cat, cat.AssetType, cat.DisplayName);
+		}
+
+		/// <summary>
+		/// Creates a new ScriptableObject asset of the specified type in the category directory.
+		/// </summary>
+		private void CreateAssetOfType(TemplateCategory cat, Type assetType, string displayName)
+		{
 
 			// Ensure directory exists
 			string dir = cat.DefaultAssetDirectory;
@@ -608,8 +755,8 @@ namespace FishMMO.Shared
 			}
 
 			// Create instance
-			ScriptableObject instance = ScriptableObject.CreateInstance(cat.AssetType);
-			string assetName = $"New {cat.DisplayName}";
+			ScriptableObject instance = ScriptableObject.CreateInstance(assetType);
+			string assetName = $"New {displayName}";
 
 			// Ensure unique name
 			string assetPath = AssetDatabase.GenerateUniqueAssetPath($"{dir}/{assetName}.asset");

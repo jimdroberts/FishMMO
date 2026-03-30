@@ -12,20 +12,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
   m_Name: Minor Increase Armor Event
   m_EditorClassIdentifier: 
-  Conditions: []
+  Conditions:
+  - rid: 4507019787936727112
   Actions:
-  - {fileID: 11400000, guid: 330631dd81f582348b11bd40769c3ece, type: 2}
+  - rid: -2
   icon: {fileID: 0}
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
   Cooldown: 0
   Price: 0
-  Resources:
-    m_keys: []
-    m_values: 
-  RequiredAttributes:
-    m_keys: []
-    m_values: 
-  RequiredFaction: {fileID: 0}
-  RequiredArchetype: {fileID: 0}
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4507019787936727112
+      type: {class: HasQuestCondition, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        QuestTemplate: {fileID: 0}
+        Invert: 0
