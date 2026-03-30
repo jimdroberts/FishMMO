@@ -1,0 +1,356 @@
+/* FishMMO Dashboard Stylesheet */
+
+/* ── Root ── */
+.root {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+    flex-direction: row;
+    height: 28px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(30, 30, 30);
+    background-color: rgb(56, 56, 56);
+    align-items: center;
+}
+
+.toolbar-title {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(180, 210, 255);
+    margin-left: 8px;
+    margin-right: 12px;
+    white-space: nowrap;
+}
+
+.toolbar-search {
+    flex-grow: 1;
+    margin: 2px 4px;
+}
+
+.toolbar-button {
+    width: 64px;
+    margin: 2px 4px;
+}
+
+/* ── Main Content ── */
+.main-content {
+    flex-grow: 1;
+    flex-direction: row;
+}
+
+/* ── Panel Headers ── */
+.panel-header {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(200, 220, 240);
+    padding: 6px 8px 4px 8px;
+    background-color: rgb(50, 50, 50);
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(35, 35, 35);
+}
+
+/* ── Category Panel (Left) ── */
+.category-panel {
+    width: 200px;
+    min-width: 140px;
+    background-color: rgb(42, 42, 42);
+    border-right-width: 1px;
+    border-right-color: rgb(30, 30, 30);
+    flex-shrink: 0;
+}
+
+.category-scroll {
+    flex-grow: 1;
+}
+
+.category-list {
+    padding: 2px 0;
+}
+
+.category-item {
+    padding: 5px 10px;
+    margin: 1px 4px;
+    border-radius: 3px;
+    flex-direction: row;
+    align-items: center;
+    cursor: link;
+}
+
+.category-item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.category-item--selected {
+    background-color: rgba(50, 100, 180, 0.4);
+    border-left-width: 3px;
+    border-left-color: rgb(80, 140, 240);
+}
+
+.category-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.category-label {
+    font-size: 12px;
+    color: rgb(200, 200, 200);
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.category-count {
+    font-size: 10px;
+    color: rgb(130, 130, 130);
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.category-group-header {
+    padding: 8px 10px 3px 10px;
+    margin-top: 4px;
+}
+
+.category-group-label {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(120, 140, 170);
+    letter-spacing: 1px;
+    -unity-text-transform: uppercase;
+}
+
+/* ── Entity Panel (Middle) ── */
+.entity-panel {
+    width: 260px;
+    min-width: 180px;
+    background-color: rgb(46, 46, 46);
+    border-right-width: 1px;
+    border-right-color: rgb(30, 30, 30);
+    flex-shrink: 0;
+}
+
+.entity-header-row {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgb(50, 50, 50);
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(35, 35, 35);
+}
+
+.entity-header-row .panel-header {
+    flex-grow: 1;
+    border-bottom-width: 0;
+}
+
+.create-button {
+    width: 26px;
+    height: 20px;
+    margin: 2px 6px;
+    font-size: 14px;
+    -unity-font-style: bold;
+    background-color: rgb(50, 110, 60);
+    color: rgb(180, 240, 190);
+    border-radius: 3px;
+    border-width: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+
+.create-button:hover {
+    background-color: rgb(60, 130, 70);
+}
+
+.entity-search {
+    margin: 4px 6px 2px 6px;
+}
+
+.entity-scroll {
+    flex-grow: 1;
+}
+
+.entity-list {
+    padding: 2px 0;
+}
+
+.entity-item {
+    padding: 4px 10px;
+    margin: 1px 4px;
+    border-radius: 3px;
+    flex-direction: row;
+    align-items: center;
+    cursor: link;
+}
+
+.entity-item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.entity-item--selected {
+    background-color: rgba(50, 100, 180, 0.4);
+    border-left-width: 3px;
+    border-left-color: rgb(80, 140, 240);
+}
+
+.entity-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    background-color: rgb(60, 60, 60);
+}
+
+.entity-label {
+    font-size: 11px;
+    color: rgb(200, 200, 200);
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.entity-count-label {
+    font-size: 10px;
+    color: rgb(120, 120, 120);
+    padding: 3px 8px;
+    background-color: rgb(42, 42, 42);
+    border-top-width: 1px;
+    border-top-color: rgb(35, 35, 35);
+}
+
+/* ── Inspector Panel (Right) ── */
+.inspector-panel {
+    flex-grow: 1;
+    min-width: 300px;
+    background-color: rgb(50, 50, 50);
+}
+
+.inspector-scroll {
+    flex-grow: 1;
+}
+
+.inspector-content {
+    padding: 4px;
+}
+
+/* ── Resizer ── */
+.resizer {
+    width: 4px;
+    cursor: resize-horizontal;
+    background-color: rgb(35, 35, 35);
+}
+
+.resizer:hover {
+    background-color: rgb(80, 140, 240);
+}
+
+/* ── Status Bar ── */
+.status-bar {
+    height: 20px;
+    font-size: 10px;
+    color: rgb(140, 140, 140);
+    padding: 2px 8px;
+    background-color: rgb(40, 40, 40);
+    border-top-width: 1px;
+    border-top-color: rgb(30, 30, 30);
+    -unity-text-align: middle-left;
+}
+
+/* ── Constants Display ── */
+.constants-section {
+    margin: 4px 0;
+    padding: 6px;
+    background-color: rgb(55, 55, 55);
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(40, 40, 40);
+}
+
+.constants-section-header {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(180, 210, 240);
+    margin-bottom: 6px;
+    padding-bottom: 3px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(70, 70, 70);
+}
+
+.constants-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 2px 4px;
+    margin: 1px 0;
+}
+
+.constants-row:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.constants-key {
+    font-size: 11px;
+    color: rgb(160, 180, 210);
+    width: 200px;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.constants-value {
+    font-size: 11px;
+    color: rgb(200, 200, 200);
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Empty State ── */
+.empty-state {
+    flex-grow: 1;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.empty-state-label {
+    font-size: 12px;
+    color: rgb(120, 120, 120);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+/* ── Entity Group Sub-Headers ── */
+.entity-group-header {
+    padding: 6px 10px 2px 10px;
+    margin-top: 4px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(60, 60, 60);
+}
+
+.entity-group-label {
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(130, 160, 200);
+    letter-spacing: 1px;
+    -unity-text-transform: uppercase;
+}
+
+/* ── Entity Tag Labels ── */
+.entity-tag {
+    font-size: 9px;
+    color: rgb(100, 140, 180);
+    background-color: rgba(80, 120, 180, 0.15);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-left: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}

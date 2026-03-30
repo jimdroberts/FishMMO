@@ -15,11 +15,6 @@ MonoBehaviour:
   m_GroupName: Default Group
   m_GUID: 9f41fb9c2f019e548ad7e95d00d2093e
   m_SerializeEntries:
-  - m_GUID: 0b780052956643349b36dbed5d16fd35
-    m_Address: Cursor3.0
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0d9d26e2162aa4d11ab075b34c029673
     m_Address: HumanoidIdleJumpUp
     m_ReadOnly: 0

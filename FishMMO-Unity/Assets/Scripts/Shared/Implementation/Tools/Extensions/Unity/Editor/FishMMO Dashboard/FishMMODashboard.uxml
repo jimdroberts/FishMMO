@@ -1,0 +1,56 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <Style src="FishMMODashboard.uss" />
+    <ui:VisualElement name="root" class="root">
+
+        <!-- Toolbar -->
+        <uie:Toolbar name="toolbar" class="toolbar">
+            <ui:Label text="FishMMO Dashboard" class="toolbar-title" />
+            <uie:ToolbarSearchField name="search-field" class="toolbar-search" />
+            <uie:ToolbarButton name="refresh-button" text="Refresh" class="toolbar-button" />
+        </uie:Toolbar>
+
+        <!-- Main Content Area -->
+        <ui:VisualElement name="main-content" class="main-content">
+
+            <!-- Left Panel: Category List -->
+            <ui:VisualElement name="category-panel" class="category-panel">
+                <ui:Label text="Categories" class="panel-header" />
+                <ui:ScrollView name="category-scroll" class="category-scroll">
+                    <ui:VisualElement name="category-list" class="category-list" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <!-- Resizer -->
+            <ui:VisualElement name="left-resizer" class="resizer" />
+
+            <!-- Middle Panel: Entity List -->
+            <ui:VisualElement name="entity-panel" class="entity-panel">
+                <ui:VisualElement name="entity-header-row" class="entity-header-row">
+                    <ui:Label name="entity-panel-header" text="Select a Category" class="panel-header" />
+                    <ui:Button name="create-button" text="+" class="create-button" tooltip="Create new asset" />
+                </ui:VisualElement>
+                <uie:ToolbarSearchField name="entity-search-field" class="entity-search" />
+                <ui:ScrollView name="entity-scroll" class="entity-scroll">
+                    <ui:VisualElement name="entity-list" class="entity-list" />
+                </ui:ScrollView>
+                <ui:Label name="entity-count-label" text="" class="entity-count-label" />
+            </ui:VisualElement>
+
+            <!-- Resizer -->
+            <ui:VisualElement name="right-resizer" class="resizer" />
+
+            <!-- Right Panel: Inspector -->
+            <ui:VisualElement name="inspector-panel" class="inspector-panel">
+                <ui:Label name="inspector-header" text="Inspector" class="panel-header" />
+                <ui:ScrollView name="inspector-scroll" class="inspector-scroll">
+                    <ui:VisualElement name="inspector-content" class="inspector-content" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- Status Bar -->
+        <ui:Label name="status-bar" text="Ready" class="status-bar" />
+
+    </ui:VisualElement>
+</ui:UXML>

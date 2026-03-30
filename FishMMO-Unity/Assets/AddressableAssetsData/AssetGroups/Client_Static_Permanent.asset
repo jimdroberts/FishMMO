@@ -21,6 +21,11 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0b780052956643349b36dbed5d16fd35
+    m_Address: Cursor3.0
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 153116bad200a3444be96b22a65500ea
     m_Address: Camera
     m_ReadOnly: 0

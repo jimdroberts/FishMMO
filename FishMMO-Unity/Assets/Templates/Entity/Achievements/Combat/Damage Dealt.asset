@@ -12,7 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e50ec2665c219da4b99dc8b9b88aa0de, type: 3}
   m_Name: Damage Dealt
   m_EditorClassIdentifier: 
-  Icon: {fileID: 0}
+  IconReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   Category: 2
   Description: Total damage dealt.
   Tiers: []

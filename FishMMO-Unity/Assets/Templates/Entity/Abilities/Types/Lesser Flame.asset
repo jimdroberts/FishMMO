@@ -12,26 +12,32 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
   m_Name: Lesser Flame
   m_EditorClassIdentifier: 
-  icon: {fileID: 21300000, guid: b3905a73a6672d9449647aaf036e23fc, type: 3}
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   Description: Creates a flame in front of the caster for 5 seconds.
   ActivationTime: 0.5
   LifeTime: 5
-  Cooldown: 1
-  Range: 50
   Speed: 0
+  Cooldown: 1
   Price: 0
-  Resources:
-    m_keys:
-    - {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
-    m_values: 05000000
-  Requirements:
-    m_keys: []
-    m_values: 
+  ActivationConditions: []
   AbilityObjectPrefab: {fileID: 5773491593115871611, guid: 81dd6c8841df66e44ad306e2ef34aaee,
     type: 3}
   AbilitySpawnTarget: 6
   RequiresTarget: 0
-  EventSlots: 3
+  AdditionalEventSlots: 0
   HitCount: 1
   Type: 2
-  Events: []
+  TargetTrigger: {fileID: 0}
+  OnTickEvents: []
+  OnHitEvents: []
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds: []

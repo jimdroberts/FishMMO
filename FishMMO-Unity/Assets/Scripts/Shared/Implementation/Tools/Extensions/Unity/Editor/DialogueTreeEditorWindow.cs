@@ -101,11 +101,11 @@ namespace FishMMO.Shared
 
 			serializedTemplate.Update();
 
-			ProcessEvents(Event.current);
 			DrawGrid();
 			DrawConnections();
 			DrawNodes();
 			DrawConnectionPreview();
+			ProcessEvents(Event.current);
 
 			if (GUI.changed)
 			{

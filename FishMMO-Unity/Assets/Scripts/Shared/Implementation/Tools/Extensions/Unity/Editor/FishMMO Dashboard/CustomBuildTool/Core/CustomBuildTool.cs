@@ -113,7 +113,6 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 		}
 
-		[MenuItem("FishMMO/Update Linker")]
 		public static void UpdateLinker()
 		{
 			try
@@ -132,7 +131,6 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// <summary>
 		/// Builds the game executable using the current Build Environment Options (Build Type and OS Target).
 		/// </summary>
-		[MenuItem("FishMMO/Build/Build Game")]
 		public static void BuildGameWithEnvironmentOptions()
 		{
 			// Check if scripts are currently compiling
@@ -168,7 +166,6 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// <summary>
 		/// Builds addressables using the current Build Environment Options (Build Type and OS Target).
 		/// </summary>
-		[MenuItem("FishMMO/Build/Build Addressables")]
 		public static void BuildAddressablesWithEnvironmentOptions()
 		{
 			// Check if scripts are currently compiling

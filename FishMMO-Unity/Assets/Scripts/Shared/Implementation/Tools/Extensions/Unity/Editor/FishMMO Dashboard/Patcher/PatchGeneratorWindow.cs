@@ -109,7 +109,6 @@ namespace FishMMO.Shared.Patcher
 		/// <summary>
 		/// Adds the Patch Generator window to the Unity Editor menu.
 		/// </summary>
-		[MenuItem("FishMMO/Patch/Patch Generator")]
 		public static void ShowWindow()
 		{
 			GetWindow<PatchGeneratorWindow>("FishMMO Patch Generator");
@@ -496,6 +495,7 @@ namespace FishMMO.Shared.Patcher
 						try
 						{
 							CreatePatchInternal(patchGenerator,
+												latestClientDirectory,
 												latestVersionConfig.FullVersion,
 												oldDirectoryPath,
 												oldVersionConfig.FullVersion,
@@ -758,7 +758,7 @@ namespace FishMMO.Shared.Patcher
 		/// <param name="ignoredExtensions">Set of file extensions to ignore.</param>
 		/// <param name="ignoredDirectories">Set of directory names to ignore.</param>
 		/// <param name="progressCallback">Optional callback to report progress and status messages.</param>
-		public void CreatePatchInternal(PatchGenerator patchGenerator, string latestVersionString, string oldDirectory, string oldVersionString, string patchOutputDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories, ProgressCallback progressCallback = null)
+		public static void CreatePatchInternal(PatchGenerator patchGenerator, string latestClientDirectory, string latestVersionString, string oldDirectory, string oldVersionString, string patchOutputDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories, ProgressCallback progressCallback = null)
 		{
 			string oldDirName = Path.GetFileName(oldDirectory);
 
@@ -958,7 +958,7 @@ namespace FishMMO.Shared.Patcher
 		/// </summary>
 		/// <param name="dictionary">Dictionary to convert.</param>
 		/// <returns>HashSet of dictionary keys.</returns>
-		private static HashSet<string> DictionaryKeysToHashSet(Dictionary<string, (string relativePath, string hash)> dictionary)
+		internal static HashSet<string> DictionaryKeysToHashSet(Dictionary<string, (string relativePath, string hash)> dictionary)
 		{
 			return new HashSet<string>(dictionary.Keys);
 		}
@@ -1100,7 +1100,7 @@ namespace FishMMO.Shared.Patcher
 		/// </summary>
 		/// <param name="filePath">Path to the file.</param>
 		/// <returns>XxHash128 hash as a lowercase hexadecimal string (32 characters for 128-bit hash).</returns>
-		private static string ComputeFileHash(string filePath)
+		internal static string ComputeFileHash(string filePath)
 		{
 			using (var stream = File.OpenRead(filePath))
 			{
