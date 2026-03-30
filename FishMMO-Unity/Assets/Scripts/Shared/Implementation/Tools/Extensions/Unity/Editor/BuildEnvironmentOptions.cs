@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 		private const string PREF_BUILD_TYPE = "FishMMOBuildType";
 		private const string PREF_OS_TARGET = "FishMMOOSTarget";
 
-		#region Build Type Menu Items
+		/*#region Build Type Menu Items
 
 		/// <summary>
 		/// Sets the build type to Server and switches the Unity Editor to the appropriate build target.
@@ -139,7 +139,7 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		#endregion
+		#endregion*/
 
 		#region Public API
 

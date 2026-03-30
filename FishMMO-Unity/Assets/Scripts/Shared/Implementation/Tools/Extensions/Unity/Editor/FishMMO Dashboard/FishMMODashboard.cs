@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Opens the FishMMO Dashboard window from the menu.
 		/// </summary>
-		[MenuItem("FishMMO/Dashboard %#d")]
+		[MenuItem("FishMMO/FishMMO Dashboard %#d")]
 		public static void ShowWindow()
 		{
 			FishMMODashboard wnd = GetWindow<FishMMODashboard>();

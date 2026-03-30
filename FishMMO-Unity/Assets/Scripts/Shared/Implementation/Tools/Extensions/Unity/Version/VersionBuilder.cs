@@ -65,7 +65,7 @@ namespace FishMMO.Shared
 		/// Increments the major version, resets minor and patch, and clears pre-release.
 		/// Accessible via FishMMO/Version/Increment Major menu.
 		/// </summary>
-		[MenuItem("FishMMO/Version/Increment Major")]
+		//[MenuItem("FishMMO/Version/Increment Major")]
 		public static void IncrementMajor()
 		{
 			VersionConfig config = GetVersionConfig();
@@ -85,7 +85,7 @@ namespace FishMMO.Shared
 		/// Increments the minor version, resets patch, and clears pre-release.
 		/// Accessible via FishMMO/Version/Increment Minor menu.
 		/// </summary>
-		[MenuItem("FishMMO/Version/Increment Minor")]
+		//[MenuItem("FishMMO/Version/Increment Minor")]
 		public static void IncrementMinor()
 		{
 			VersionConfig config = GetVersionConfig();
@@ -104,7 +104,7 @@ namespace FishMMO.Shared
 		/// Increments the patch version. Does not clear pre-release or metadata.
 		/// Accessible via FishMMO/Version/Increment Patch menu.
 		/// </summary>
-		[MenuItem("FishMMO/Version/Increment Patch")]
+		//[MenuItem("FishMMO/Version/Increment Patch")]
 		public static void IncrementPatch()
 		{
 			VersionConfig config = GetVersionConfig();
@@ -121,7 +121,7 @@ namespace FishMMO.Shared
 		/// Resets the version to 0.0.0 and clears pre-release.
 		/// Accessible via FishMMO/Version/Reset menu.
 		/// </summary>
-		[MenuItem("FishMMO/Version/Reset")]
+		//[MenuItem("FishMMO/Version/Reset")]
 		public static void ResetVersion()
 		{
 			VersionConfig config = GetVersionConfig();

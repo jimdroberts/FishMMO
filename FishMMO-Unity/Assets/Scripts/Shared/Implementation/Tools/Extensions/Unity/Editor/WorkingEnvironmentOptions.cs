@@ -20,7 +20,7 @@ namespace FishMMO.Shared
 	[InitializeOnLoad]
 	public class WorkingEnvironmentOptions
 	{
-		/// <summary>
+		/*/// <summary>
 		/// Toggles the use of the local directory for assets and updates the menu checkmark.
 		/// </summary>
 		[MenuItem("FishMMO/Build/Environment/Enable Local Directory")]
@@ -72,7 +72,7 @@ namespace FishMMO.Shared
 					break;
 			}
 			return true;
-		}
+		}*/
 
 		/// <summary>
 		/// Gets the current working environment state (Development or Production).
