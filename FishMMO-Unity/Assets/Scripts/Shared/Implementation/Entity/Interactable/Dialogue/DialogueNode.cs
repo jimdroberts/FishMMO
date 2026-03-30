@@ -18,6 +18,11 @@ namespace FishMMO.Shared
 		public int NodeId;
 
 		/// <summary>
+		/// Editor-only display name for this node in the dialogue tree editor.
+		/// </summary>
+		public string NodeName;
+
+		/// <summary>
 		/// Optional speaker name override. If empty, the NPC's default name is used.
 		/// </summary>
 		public string SpeakerName;

@@ -57,12 +57,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 18b0bb9977dad97bbacbcec24dbc51dc
-    m_Address: New Line
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 18e87e7a4d09c844fa3221b9ed8da77f
     m_Address: Killed
     m_ReadOnly: 0
@@ -191,6 +185,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 34647e48cd749f04eb768bb8a41a47ad
     m_Address: StartScene A Fog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 354db05468059d74ca8700239d2e58fd
+    m_Address: Assassin
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -399,6 +399,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 822729ee7739ace4fa3c2f225832923a
+    m_Address: Eldritch Academy
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 82e54404fe2ccc448bd81cbe31657e29
     m_Address: FemaleHumanGeneralMerchant
     m_ReadOnly: 0
@@ -411,6 +417,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8794ea40ee18df847956a8d764f6e5ac
+    m_Address: Dark Conclave
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
     m_Address: Tier1 Sword Attack Speed
     m_ReadOnly: 0
@@ -419,6 +431,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8fe93c66f5bc53c45a7b0f8334be9016
     m_Address: StandardAttributeDatabase
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 94cd8f60f18580040ac0dc7a576dd80b
+    m_Address: Legion of Steel
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -473,12 +491,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
     m_Address: an orc mage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ac022a1d24a7d95b99f973f5a7ac2f97
-    m_Address: FemaleNames
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -634,6 +646,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d9b40c4bb7d3f5d4c965814c5433ce65
     m_Address: SunAndMoon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: de79a6c8358f516489da583195e9f7cb
+    m_Address: The Verdant Order
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

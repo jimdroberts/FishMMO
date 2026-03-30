@@ -46,6 +46,9 @@ namespace FishMMO.Shared
 		public abstract AINodeResult Evaluate(AIController controller);
 
 #if UNITY_EDITOR
+		[HideInInspector]
+		public Vector2 EditorPosition;
+
 		[TextArea(1, 3)]
 		[Tooltip("Designer note — has no runtime effect.")]
 		public string EditorComment;

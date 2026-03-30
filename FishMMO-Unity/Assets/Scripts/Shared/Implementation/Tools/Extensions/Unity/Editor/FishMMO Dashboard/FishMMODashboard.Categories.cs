@@ -253,6 +253,44 @@ namespace FishMMO.Shared
 				"Assets/Templates/Entity/NPCs",
 				"FishMMO/Character/NPC/NPC Guild");
 
+			AddCategory<NPCAttributeDatabase>("NPC Attribute Databases", "NPCs",
+				"Assets/Templates/Entity/NPCs/Attributes",
+				"FishMMO/Character/NPC/Attribute/Database");
+
+			AddCategory<BossScript>("Boss Scripts", "NPCs",
+				"Assets/Templates/Entity/NPCs/Boss",
+				"FishMMO/Character/NPC/AI/Boss Script");
+
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Behavior Trees",
+				Group = "NPCs",
+				AssetType = typeof(AIBehaviorTree),
+				DefaultAssetDirectory = "Assets/Templates/Entity/NPCs/AI/BehaviorTrees",
+				CreateAssetMenuName = "FishMMO/Character/NPC/AI/Behavior Tree/Behavior Tree",
+			});
+
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Behavior Nodes",
+				Group = "NPCs",
+				AssetType = typeof(AIBehaviorNode),
+				DefaultAssetDirectory = "Assets/Templates/Entity/NPCs/AI/BehaviorNodes",
+				ConcreteTypes = new List<(string, Type)>
+				{
+					("Selector", typeof(AISelector)),
+					("Sequence", typeof(AISequence)),
+					("Inverter", typeof(AIInverter)),
+					("Repeater", typeof(AIRepeater)),
+					("Condition", typeof(AIConditionNode)),
+					("State Transition", typeof(AIStateTransitionNode)),
+					("Has Target", typeof(AIHasTargetNode)),
+					("Is Dead", typeof(AIIsDeadNode)),
+					("Group In Combat", typeof(AIGroupInCombatNode)),
+					("Adopt Group Target", typeof(AIAdoptGroupTargetNode)),
+				},
+			});
+
 			// ── Interactables ──
 			AddCategory<DialogueTemplate>("Dialogues", "Interactables",
 				"Assets/Templates/Entity/Interactables/Dialogues",

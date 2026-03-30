@@ -13,7 +13,6 @@ namespace FishMMO.Shared
 	{
 		private DialogueTemplate template;
 		private SerializedObject serializedTemplate;
-		private Vector2 scrollPosition;
 		private Vector2 canvasOffset;
 		private Vector2 dragStartPos;
 		private bool isDraggingCanvas;
@@ -21,13 +20,17 @@ namespace FishMMO.Shared
 		private Vector2 nodeDragOffset;
 		private ConnectionState connectionState;
 		private int selectedNodeIndex = -1;
+		private int renamingNodeIndex = -1;
+		private string renameText = "";
+		private bool renameFocusRequested;
+		private readonly Dictionary<int, float> nodeHeightCache = new Dictionary<int, float>();
+		private readonly Dictionary<long, float> choiceDotY = new Dictionary<long, float>();
 
-		private const float NODE_WIDTH = 220f;
-		private const float NODE_MIN_HEIGHT = 80f;
+		private const float NODE_WIDTH = 380f;
+		private const float NODE_MIN_HEIGHT = 100f;
 		private const float NODE_HEADER_HEIGHT = 24f;
-		private const float CHOICE_HEIGHT = 20f;
 		private const float GRID_SIZE = 20f;
-		private const float CONNECTION_DOT_RADIUS = 6f;
+		private const float CONNECTION_DOT_SIZE = 12f;
 
 		private static readonly Color NODE_COLOR = new Color(0.22f, 0.22f, 0.22f, 1f);
 		private static readonly Color NODE_SELECTED_COLOR = new Color(0.15f, 0.35f, 0.55f, 1f);
@@ -36,6 +39,7 @@ namespace FishMMO.Shared
 		private static readonly Color CONNECTION_COLOR = new Color(0.8f, 0.8f, 0.2f, 0.8f);
 		private static readonly Color GRID_COLOR = new Color(0.2f, 0.2f, 0.2f, 0.3f);
 		private static readonly Color GRID_MAJOR_COLOR = new Color(0.2f, 0.2f, 0.2f, 0.5f);
+		private static readonly Color CHOICE_BOX_COLOR = new Color(0.18f, 0.18f, 0.18f, 1f);
 
 		private struct ConnectionState
 		{
@@ -85,6 +89,7 @@ namespace FishMMO.Shared
 			template = dialogueTemplate;
 			serializedTemplate = template != null ? new SerializedObject(template) : null;
 			selectedNodeIndex = -1;
+			renamingNodeIndex = -1;
 			connectionState = default;
 			Repaint();
 		}
@@ -100,12 +105,15 @@ namespace FishMMO.Shared
 			}
 
 			serializedTemplate.Update();
+			nodeHeightCache.Clear();
 
 			DrawGrid();
-			DrawConnections();
 			DrawNodes();
+			DrawConnections();
 			DrawConnectionPreview();
 			ProcessEvents(Event.current);
+
+			serializedTemplate.ApplyModifiedProperties();
 
 			if (GUI.changed)
 			{
@@ -234,10 +242,9 @@ namespace FishMMO.Shared
 
 		private void DrawNodes()
 		{
-			if (template.Nodes == null)
-			{
-				return;
-			}
+			if (template.Nodes == null) return;
+
+			choiceDotY.Clear();
 
 			for (int i = 0; i < template.Nodes.Count; i++)
 			{
@@ -248,31 +255,29 @@ namespace FishMMO.Shared
 		private void DrawNode(int index)
 		{
 			var node = template.Nodes[index];
-			if (node == null)
-			{
-				return;
-			}
+			if (node == null) return;
+
+			var nodesProp = serializedTemplate.FindProperty("Nodes");
+			var nodeProp = nodesProp.GetArrayElementAtIndex(index);
 
 			Rect nodeRect = GetNodeRect(index);
 			bool isSelected = index == selectedNodeIndex;
 			bool isStartNode = node.NodeId == template.StartNodeId;
 
-			// Node background
+			// Background
 			EditorGUI.DrawRect(nodeRect, isSelected ? NODE_SELECTED_COLOR : NODE_COLOR);
 
-			// Node header
+			// Header
 			Rect headerRect = new Rect(nodeRect.x, nodeRect.y, nodeRect.width, NODE_HEADER_HEIGHT);
 			EditorGUI.DrawRect(headerRect, isStartNode ? START_NODE_HEADER_COLOR : NODE_HEADER_COLOR);
 
-			// Node title
-			string title = isStartNode ? $"\u25B6 Node {node.NodeId}" : $"Node {node.NodeId}";
-			GUI.Label(headerRect, title, GetNodeTitleStyle());
+			DrawNodeTitle(index, node, headerRect, isStartNode);
 
-			// Start node button
+			// Set as start button
 			if (!isStartNode)
 			{
-				Rect startBtnRect = new Rect(nodeRect.xMax - 22, nodeRect.y + 3, 18, 18);
-				if (GUI.Button(startBtnRect, "\u25B6", EditorStyles.miniButton))
+				Rect startBtn = new Rect(nodeRect.xMax - 22, nodeRect.y + 3, 18, 18);
+				if (GUI.Button(startBtn, "\u25B6", EditorStyles.miniButton))
 				{
 					Undo.RecordObject(template, "Set Start Node");
 					template.StartNodeId = node.NodeId;
@@ -280,54 +285,78 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// Node text preview
-			float yOffset = nodeRect.y + NODE_HEADER_HEIGHT + 4;
-			Rect textRect = new Rect(nodeRect.x + 6, yOffset, nodeRect.width - 12, 36);
-			string preview = string.IsNullOrEmpty(node.Text) ? "(empty)" : node.Text;
-			if (preview.Length > 60)
-			{
-				preview = preview.Substring(0, 57) + "...";
-			}
-			GUI.Label(textRect, preview, GetNodeTextStyle());
+			// ── Inline content ──
+			float contentX = nodeRect.x + 6;
+			float contentW = nodeRect.width - 12;
+			float y = nodeRect.y + NODE_HEADER_HEIGHT + 4;
 
-			yOffset += 38;
+			// SpeakerName
+			var speakerProp = nodeProp.FindPropertyRelative("SpeakerName");
+			float h = EditorGUI.GetPropertyHeight(speakerProp);
+			EditorGUI.PropertyField(new Rect(contentX, y, contentW, h), speakerProp);
+			y += h + 2;
 
-			// ECA indicators
-			Rect ecaRect = new Rect(nodeRect.x + 6, yOffset, nodeRect.width - 12, 16);
-			int condCount = node.Conditions != null ? node.Conditions.Count : 0;
-			int enterCount = node.OnEnterActions != null ? node.OnEnterActions.Count : 0;
-			int exitCount = node.OnExitActions != null ? node.OnExitActions.Count : 0;
-			if (condCount > 0 || enterCount > 0 || exitCount > 0)
-			{
-				string ecaInfo = "";
-				if (condCount > 0) ecaInfo += $"C:{condCount} ";
-				if (enterCount > 0) ecaInfo += $"A\u2193:{enterCount} ";
-				if (exitCount > 0) ecaInfo += $"A\u2191:{exitCount}";
-				GUI.Label(ecaRect, ecaInfo.Trim(), GetECAInfoStyle());
-			}
-			yOffset += 18;
+			// Text
+			var textProp = nodeProp.FindPropertyRelative("Text");
+			h = EditorGUI.GetPropertyHeight(textProp);
+			EditorGUI.PropertyField(new Rect(contentX, y, contentW, h), textProp);
+			y += h + 4;
 
-			// Choices
-			if (node.Choices != null)
+			// Conditions
+			var condProp = nodeProp.FindPropertyRelative("Conditions");
+			h = EditorGUI.GetPropertyHeight(condProp, true);
+			EditorGUI.PropertyField(new Rect(contentX, y, contentW, h), condProp, true);
+			y += h + 2;
+
+			// OnEnterActions
+			var enterProp = nodeProp.FindPropertyRelative("OnEnterActions");
+			h = EditorGUI.GetPropertyHeight(enterProp, true);
+			EditorGUI.PropertyField(new Rect(contentX, y, contentW, h), enterProp, true);
+			y += h + 2;
+
+			// OnExitActions
+			var exitProp = nodeProp.FindPropertyRelative("OnExitActions");
+			h = EditorGUI.GetPropertyHeight(exitProp, true);
+			EditorGUI.PropertyField(new Rect(contentX, y, contentW, h), exitProp, true);
+			y += h + 6;
+
+			// ── Choices ──
+			GUI.Label(new Rect(contentX, y, contentW, 18), "Choices", EditorStyles.boldLabel);
+			y += 20;
+
+			var choicesProp = nodeProp.FindPropertyRelative("Choices");
+			int removeIndex = -1;
+
+			if (choicesProp != null)
 			{
-				for (int c = 0; c < node.Choices.Count; c++)
+				for (int c = 0; c < choicesProp.arraySize; c++)
 				{
+					var choiceProp = choicesProp.GetArrayElementAtIndex(c);
 					var choice = node.Choices[c];
-					if (choice == null) continue;
 
-					Rect choiceRect = new Rect(nodeRect.x + 6, yOffset, nodeRect.width - 32, CHOICE_HEIGHT);
-					string choiceText = string.IsNullOrEmpty(choice.Text) ? "(no text)" : choice.Text;
-					if (choiceText.Length > 25)
+					// Choice box background
+					float choiceH = CalculateChoiceHeight(choiceProp);
+					EditorGUI.DrawRect(new Rect(contentX, y, contentW, choiceH), CHOICE_BOX_COLOR);
+
+					// Choice header
+					string targetLabel = choice.NextNodeId >= 0 ? $"\u2192 Node {choice.NextNodeId}" : "\u2192 (end)";
+					GUI.Label(new Rect(contentX + 4, y + 2, contentW - 44, 18),
+						$"Choice {c} {targetLabel}", EditorStyles.miniBoldLabel);
+
+					// Delete button
+					if (GUI.Button(new Rect(contentX + contentW - 38, y + 1, 20, 18), "\u00D7", EditorStyles.miniButton))
 					{
-						choiceText = choiceText.Substring(0, 22) + "...";
+						removeIndex = c;
 					}
-					GUI.Label(choiceRect, $"  \u2192 {choiceText}", GetChoiceStyle());
 
 					// Connection dot
-					Rect dotRect = new Rect(nodeRect.xMax - 14, yOffset + 4, 12, 12);
-					Color dotColor = choice.NextNodeId >= 0 ? CONNECTION_COLOR : Color.gray;
-					EditorGUI.DrawRect(dotRect, dotColor);
+					Rect dotRect = new Rect(nodeRect.xMax - 16, y + 4, CONNECTION_DOT_SIZE, CONNECTION_DOT_SIZE);
+					EditorGUI.DrawRect(dotRect, choice.NextNodeId >= 0 ? CONNECTION_COLOR : Color.gray);
 
+					// Cache dot screen Y for connection drawing
+					choiceDotY[((long)index << 16) | (uint)c] = dotRect.y + CONNECTION_DOT_SIZE * 0.5f;
+
+					// Dot interaction
 					if (Event.current.type == EventType.MouseDown && dotRect.Contains(Event.current.mousePosition))
 					{
 						if (Event.current.button == 0)
@@ -342,7 +371,6 @@ namespace FishMMO.Shared
 						}
 						else if (Event.current.button == 1)
 						{
-							// Right-click to disconnect
 							Undo.RecordObject(template, "Disconnect Choice");
 							choice.NextNodeId = -1;
 							EditorUtility.SetDirty(template);
@@ -350,13 +378,39 @@ namespace FishMMO.Shared
 						}
 					}
 
-					yOffset += CHOICE_HEIGHT + 2;
+					y += 22;
+
+					// Choice Text
+					var choiceTextProp = choiceProp.FindPropertyRelative("Text");
+					h = EditorGUI.GetPropertyHeight(choiceTextProp);
+					EditorGUI.PropertyField(new Rect(contentX + 8, y, contentW - 16, h), choiceTextProp);
+					y += h + 2;
+
+					// Choice Conditions
+					var choiceCondProp = choiceProp.FindPropertyRelative("Conditions");
+					h = EditorGUI.GetPropertyHeight(choiceCondProp, true);
+					EditorGUI.PropertyField(new Rect(contentX + 8, y, contentW - 16, h), choiceCondProp, true);
+					y += h + 2;
+
+					// Choice OnSelectActions
+					var choiceActionsProp = choiceProp.FindPropertyRelative("OnSelectActions");
+					h = EditorGUI.GetPropertyHeight(choiceActionsProp, true);
+					EditorGUI.PropertyField(new Rect(contentX + 8, y, contentW - 16, h), choiceActionsProp, true);
+					y += h + 4;
 				}
 			}
 
+			// Deferred removal
+			if (removeIndex >= 0)
+			{
+				Undo.RecordObject(template, "Remove Dialogue Choice");
+				node.Choices.RemoveAt(removeIndex);
+				EditorUtility.SetDirty(template);
+				serializedTemplate.Update();
+			}
+
 			// Add choice button
-			Rect addChoiceRect = new Rect(nodeRect.x + 6, yOffset, nodeRect.width - 12, 18);
-			if (GUI.Button(addChoiceRect, "+ Add Choice", EditorStyles.miniButton))
+			if (GUI.Button(new Rect(contentX, y, contentW, 20), "+ Add Choice", EditorStyles.miniButton))
 			{
 				Undo.RecordObject(template, "Add Dialogue Choice");
 				if (node.Choices == null)
@@ -365,22 +419,79 @@ namespace FishMMO.Shared
 				}
 				node.Choices.Add(new DialogueChoice { Text = "New Choice", NextNodeId = -1 });
 				EditorUtility.SetDirty(template);
+				serializedTemplate.Update();
 			}
 
-			// Node border
+			// Border
 			Handles.BeginGUI();
-			Handles.color = isSelected ? new Color(0.4f, 0.7f, 1f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
 			Handles.DrawSolidRectangleWithOutline(nodeRect, Color.clear,
 				isSelected ? new Color(0.4f, 0.7f, 1f, 1f) : new Color(0.4f, 0.4f, 0.4f, 0.5f));
 			Handles.EndGUI();
 		}
 
+		private void DrawNodeTitle(int index, DialogueNode node, Rect headerRect, bool isStartNode)
+		{
+			if (renamingNodeIndex == index)
+			{
+				string controlName = "NodeRename";
+				bool apply = false;
+
+				// Check keys BEFORE the TextField consumes them.
+				Event evt = Event.current;
+				if (evt.type == EventType.KeyDown && GUI.GetNameOfFocusedControl() == controlName)
+				{
+					if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+					{
+						apply = true;
+						evt.Use();
+					}
+					else if (evt.keyCode == KeyCode.Escape)
+					{
+						renamingNodeIndex = -1;
+						evt.Use();
+						return;
+					}
+				}
+
+				GUI.SetNextControlName(controlName);
+				renameText = EditorGUI.TextField(
+					new Rect(headerRect.x + 6, headerRect.y + 2, headerRect.width - 34, 20),
+					renameText);
+
+				if (renameFocusRequested)
+				{
+					EditorGUI.FocusTextInControl(controlName);
+					renameFocusRequested = false;
+				}
+
+				// Apply on focus loss
+				string focused = GUI.GetNameOfFocusedControl();
+				if (!string.IsNullOrEmpty(focused) && focused != controlName)
+				{
+					apply = true;
+				}
+
+				if (apply)
+				{
+					Undo.RecordObject(template, "Rename Node");
+					node.NodeName = renameText;
+					EditorUtility.SetDirty(template);
+					renamingNodeIndex = -1;
+				}
+			}
+			else
+			{
+				string displayName = string.IsNullOrEmpty(node.NodeName)
+					? $"Node {node.NodeId}"
+					: $"Node {node.NodeId}: {node.NodeName}";
+				if (isStartNode) displayName = "\u25B6 " + displayName;
+				GUI.Label(headerRect, displayName, GetNodeTitleStyle());
+			}
+		}
+
 		private void DrawConnections()
 		{
-			if (template.Nodes == null)
-			{
-				return;
-			}
+			if (template.Nodes == null) return;
 
 			Handles.BeginGUI();
 
@@ -400,7 +511,13 @@ namespace FishMMO.Shared
 					Rect sourceRect = GetNodeRect(i);
 					Rect targetRect = GetNodeRect(targetIndex);
 
-					float sourceY = sourceRect.y + NODE_HEADER_HEIGHT + 60 + c * (CHOICE_HEIGHT + 2) + CHOICE_HEIGHT * 0.5f;
+					float sourceY;
+					long key = ((long)i << 16) | (uint)c;
+					if (!choiceDotY.TryGetValue(key, out sourceY))
+					{
+						sourceY = sourceRect.y + sourceRect.height * 0.5f;
+					}
+
 					Vector2 startPos = new Vector2(sourceRect.xMax - 8, sourceY);
 					Vector2 endPos = new Vector2(targetRect.x, targetRect.y + NODE_HEADER_HEIGHT * 0.5f);
 
@@ -424,14 +541,17 @@ namespace FishMMO.Shared
 
 		private void DrawConnectionPreview()
 		{
-			if (!connectionState.IsConnecting)
+			if (!connectionState.IsConnecting) return;
+
+			float sourceY;
+			long key = ((long)connectionState.FromNodeIndex << 16) | (uint)connectionState.FromChoiceIndex;
+			Rect sourceRect = GetNodeRect(connectionState.FromNodeIndex);
+
+			if (!choiceDotY.TryGetValue(key, out sourceY))
 			{
-				return;
+				sourceY = sourceRect.y + sourceRect.height * 0.5f;
 			}
 
-			Rect sourceRect = GetNodeRect(connectionState.FromNodeIndex);
-			float sourceY = sourceRect.y + NODE_HEADER_HEIGHT + 60 +
-				connectionState.FromChoiceIndex * (CHOICE_HEIGHT + 2) + CHOICE_HEIGHT * 0.5f;
 			Vector2 startPos = new Vector2(sourceRect.xMax - 8, sourceY);
 			Vector2 mousePos = Event.current.mousePosition;
 
@@ -458,8 +578,6 @@ namespace FishMMO.Shared
 				case EventType.MouseUp:
 					ProcessMouseUp(evt);
 					break;
-				case EventType.ScrollWheel:
-					break;
 				case EventType.ContextClick:
 					ProcessContextMenu(evt);
 					break;
@@ -470,7 +588,6 @@ namespace FishMMO.Shared
 		{
 			if (evt.button == 0)
 			{
-				// Check if clicking on a node
 				int clickedNode = GetNodeAtPosition(evt.mousePosition);
 				if (clickedNode >= 0)
 				{
@@ -479,6 +596,17 @@ namespace FishMMO.Shared
 
 					if (headerRect.Contains(evt.mousePosition))
 					{
+						if (evt.clickCount == 2)
+						{
+							// Double-click header: start rename
+							renamingNodeIndex = clickedNode;
+						renameText = template.Nodes[clickedNode].NodeName ?? "";
+							renameFocusRequested = true;
+							evt.Use();
+							return;
+						}
+
+						// Single click header: start drag
 						draggingNodeIndex = clickedNode;
 						nodeDragOffset = evt.mousePosition - new Vector2(
 							template.Nodes[clickedNode].EditorPosition.x + canvasOffset.x,
@@ -489,8 +617,8 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					// Start canvas drag
 					selectedNodeIndex = -1;
+					renamingNodeIndex = -1;
 					isDraggingCanvas = true;
 					dragStartPos = evt.mousePosition;
 					evt.Use();
@@ -560,11 +688,11 @@ namespace FishMMO.Shared
 					EditorUtility.SetDirty(template);
 				});
 
-				menu.AddItem(new GUIContent("Inspect in Inspector"), false, () =>
+				menu.AddItem(new GUIContent("Rename"), false, () =>
 				{
-					selectedNodeIndex = capturedIndex;
-					Selection.activeObject = template;
-					EditorGUIUtility.PingObject(template);
+					renamingNodeIndex = capturedIndex;
+					renameText = template.Nodes[capturedIndex].NodeName ?? "";
+					renameFocusRequested = true;
 				});
 
 				menu.AddSeparator("");
@@ -680,6 +808,15 @@ namespace FishMMO.Shared
 				selectedNodeIndex--;
 			}
 
+			if (renamingNodeIndex == index)
+			{
+				renamingNodeIndex = -1;
+			}
+			else if (renamingNodeIndex > index)
+			{
+				renamingNodeIndex--;
+			}
+
 			EditorUtility.SetDirty(template);
 			serializedTemplate.Update();
 		}
@@ -708,7 +845,7 @@ namespace FishMMO.Shared
 		private Rect GetNodeRect(int index)
 		{
 			var node = template.Nodes[index];
-			float height = CalculateNodeHeight(node);
+			float height = CalculateNodeHeight(index);
 			return new Rect(
 				node.EditorPosition.x + canvasOffset.x,
 				node.EditorPosition.y + canvasOffset.y + 20,
@@ -726,13 +863,49 @@ namespace FishMMO.Shared
 				NODE_HEADER_HEIGHT);
 		}
 
-		private float CalculateNodeHeight(DialogueNode node)
+		private float CalculateNodeHeight(int index)
 		{
-			float height = NODE_HEADER_HEIGHT + 4 + 38 + 18; // header + text preview + ECA info
-			int choiceCount = node.Choices != null ? node.Choices.Count : 0;
-			height += choiceCount * (CHOICE_HEIGHT + 2);
-			height += 24; // add choice button
-			return Mathf.Max(NODE_MIN_HEIGHT, height);
+			if (nodeHeightCache.TryGetValue(index, out float cached))
+			{
+				return cached;
+			}
+
+			var nodesProp = serializedTemplate.FindProperty("Nodes");
+			var nodeProp = nodesProp.GetArrayElementAtIndex(index);
+
+			float height = NODE_HEADER_HEIGHT + 4;
+
+			height += EditorGUI.GetPropertyHeight(nodeProp.FindPropertyRelative("SpeakerName")) + 2;
+			height += EditorGUI.GetPropertyHeight(nodeProp.FindPropertyRelative("Text")) + 4;
+			height += EditorGUI.GetPropertyHeight(nodeProp.FindPropertyRelative("Conditions"), true) + 2;
+			height += EditorGUI.GetPropertyHeight(nodeProp.FindPropertyRelative("OnEnterActions"), true) + 2;
+			height += EditorGUI.GetPropertyHeight(nodeProp.FindPropertyRelative("OnExitActions"), true) + 6;
+
+			height += 20; // Choices label
+
+			var choicesProp = nodeProp.FindPropertyRelative("Choices");
+			if (choicesProp != null)
+			{
+				for (int i = 0; i < choicesProp.arraySize; i++)
+				{
+					height += CalculateChoiceHeight(choicesProp.GetArrayElementAtIndex(i));
+				}
+			}
+
+			height += 24; // add choice button + padding
+
+			float result = Mathf.Max(NODE_MIN_HEIGHT, height);
+			nodeHeightCache[index] = result;
+			return result;
+		}
+
+		private float CalculateChoiceHeight(SerializedProperty choiceProp)
+		{
+			float h = 22; // choice header
+			h += EditorGUI.GetPropertyHeight(choiceProp.FindPropertyRelative("Text")) + 2;
+			h += EditorGUI.GetPropertyHeight(choiceProp.FindPropertyRelative("Conditions"), true) + 2;
+			h += EditorGUI.GetPropertyHeight(choiceProp.FindPropertyRelative("OnSelectActions"), true) + 4;
+			return h;
 		}
 
 		private int GetNodeAtPosition(Vector2 pos)
@@ -766,9 +939,6 @@ namespace FishMMO.Shared
 		// ───────── Styles ─────────
 
 		private GUIStyle nodeTitle;
-		private GUIStyle nodeText;
-		private GUIStyle choiceStyle;
-		private GUIStyle ecaInfo;
 
 		private GUIStyle GetNodeTitleStyle()
 		{
@@ -783,47 +953,6 @@ namespace FishMMO.Shared
 				};
 			}
 			return nodeTitle;
-		}
-
-		private GUIStyle GetNodeTextStyle()
-		{
-			if (nodeText == null)
-			{
-				nodeText = new GUIStyle(EditorStyles.wordWrappedMiniLabel)
-				{
-					normal = { textColor = new Color(0.8f, 0.8f, 0.8f, 1f) },
-					fontSize = 10,
-					wordWrap = true
-				};
-			}
-			return nodeText;
-		}
-
-		private GUIStyle GetChoiceStyle()
-		{
-			if (choiceStyle == null)
-			{
-				choiceStyle = new GUIStyle(EditorStyles.miniLabel)
-				{
-					normal = { textColor = new Color(0.9f, 0.9f, 0.6f, 1f) },
-					fontSize = 10
-				};
-			}
-			return choiceStyle;
-		}
-
-		private GUIStyle GetECAInfoStyle()
-		{
-			if (ecaInfo == null)
-			{
-				ecaInfo = new GUIStyle(EditorStyles.miniLabel)
-				{
-					normal = { textColor = new Color(0.5f, 0.8f, 1f, 0.8f) },
-					fontSize = 9,
-					fontStyle = FontStyle.Italic
-				};
-			}
-			return ecaInfo;
 		}
 	}
 
