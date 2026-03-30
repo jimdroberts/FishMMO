@@ -17,6 +17,19 @@ namespace FishMMO.Shared
 		private Sprite icon;
 
 		/// <summary>
+		/// Optional target selector for this event. When assigned, overrides the default target
+		/// (collision target or self) and uses <see cref="TargetSelector.SelectTargets"/> to
+		/// resolve one or more targets before executing this event's conditions and actions.
+		/// <para>
+		/// For self-target abilities (self-buffs, self-heals), assign a <see cref="SelfTargetSelector"/>.
+		/// For area effects (PBAoE, AoE), assign an <see cref="AreaTargetSelector"/>.
+		/// When <c>null</c>, the event uses the default target from the collision or self-target path.
+		/// </para>
+		/// </summary>
+		[Tooltip("Optional target selector. Overrides the default collision/self target. Use SelfTargetSelector for self-buffs, AreaTargetSelector for AoE, etc. When empty, defaults to the collision target or caster.")]
+		public TargetSelector TargetSelectorOverride;
+
+		/// <summary>
 		/// Time required to activate the event (in seconds). Aggregated into the runtime ability.
 		/// </summary>
 		public float ActivationTime;

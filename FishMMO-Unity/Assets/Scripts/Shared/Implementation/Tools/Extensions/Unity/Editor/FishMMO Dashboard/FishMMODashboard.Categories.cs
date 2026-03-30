@@ -810,9 +810,7 @@ namespace FishMMO.Shared
 			string path = AssetDatabase.GetAssetPath(asset);
 			string currentName = System.IO.Path.GetFileNameWithoutExtension(path);
 
-			// Use a simple input dialog
-			string newName = currentName;
-			RenameDialog.Show(currentName, result =>
+			EditorInputDialog.Show("Rename Asset", "New Name:", currentName, result =>
 			{
 				if (!string.IsNullOrWhiteSpace(result) && result != currentName)
 				{
@@ -892,49 +890,5 @@ namespace FishMMO.Shared
 		}
 	}
 
-	/// <summary>
-	/// Simple rename dialog for assets.
-	/// </summary>
-	public class RenameDialog : EditorWindow
-	{
-		private string newName = "";
-		private Action<string> callback;
-
-		/// <summary>
-		/// Shows the rename dialog.
-		/// </summary>
-		public static void Show(string currentName, Action<string> onComplete)
-		{
-			RenameDialog wnd = GetWindow<RenameDialog>(true, "Rename Asset", true);
-			wnd.newName = currentName;
-			wnd.callback = onComplete;
-			wnd.minSize = new Vector2(300, 80);
-			wnd.maxSize = new Vector2(400, 80);
-			wnd.ShowUtility();
-		}
-
-		private void OnGUI()
-		{
-			EditorGUILayout.Space(8);
-			newName = EditorGUILayout.TextField("New Name", newName);
-			EditorGUILayout.Space(4);
-
-			EditorGUILayout.BeginHorizontal();
-			GUILayout.FlexibleSpace();
-
-			if (GUILayout.Button("Rename", GUILayout.Width(80)))
-			{
-				callback?.Invoke(newName);
-				Close();
-			}
-
-			if (GUILayout.Button("Cancel", GUILayout.Width(80)))
-			{
-				Close();
-			}
-
-			EditorGUILayout.EndHorizontal();
-		}
-	}
 }
 #endif

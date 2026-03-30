@@ -206,7 +206,6 @@ The abstract base for all ability templates. Defines shared fields and ECA-based
 | `AdditionalEventSlots` | `byte`                        | Extra crafting slots for events             |
 | `HitCount`             | `int`                         | Max collision hits before destruction       |
 | `Type`                 | `AbilityType`                 | Physical/Magic/Grounded/Aerial type         |
-| `TargetTrigger`        | `AbilityEvent`                | Primary ECA trigger on activation or hit    |
 | `OnTickEvents`         | `List<AbilityOnTickEvent>`    | Tick-phase event list                       |
 | `OnHitEvents`          | `List<AbilityOnHitEvent>`     | Hit-phase event list                        |
 | `OnPreSpawnEvents`     | `List<AbilityOnPreSpawnEvent>`| Pre-spawn-phase event list                  |
@@ -226,13 +225,14 @@ Extends `AbilityTemplate` with pet-specific fields:
 
 All events extend `Trigger` (which is `CachedScriptableObject<Trigger>`) and implement `ITooltip`. Each event contributes additive stat modifiers to the runtime `Ability`.
 
-| Field            | Type    | Description                              |
-|------------------|---------|------------------------------------------|
-| `ActivationTime` | `float` | Additional activation time               |
-| `LifeTime`       | `float` | Additional lifetime                      |
-| `Speed`          | `float` | Additional speed                         |
-| `Cooldown`       | `float` | Additional cooldown                      |
-| `Price`          | `int`   | Crafting price to add this event         |
+| Field            | Type              | Description                              |
+|------------------|-------------------|------------------------------------------|
+| `TargetSelector` | `TargetSelector`  | Optional target selector for this event. Overrides default collision/self target. Use `SelfTargetSelector` for self-buffs, `AreaTargetSelector` for AoE. When null, defaults to collision target or caster. |
+| `ActivationTime` | `float`           | Additional activation time               |
+| `LifeTime`       | `float`           | Additional lifetime                      |
+| `Speed`          | `float`           | Additional speed                         |
+| `Cooldown`       | `float`           | Additional cooldown                      |
+| `Price`          | `int`             | Crafting price to add this event         |
 
 Concrete subclasses: `AbilityOnTickEvent`, `AbilityOnHitEvent`, `AbilityOnPreSpawnEvent`, `AbilityOnSpawnEvent`, `AbilityOnDestroyEvent`.
 

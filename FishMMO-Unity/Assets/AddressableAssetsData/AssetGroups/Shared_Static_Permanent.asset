@@ -57,6 +57,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 18b0bb9977dad97bbacbcec24dbc51dc
+    m_Address: New Line
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 18e87e7a4d09c844fa3221b9ed8da77f
     m_Address: Killed
     m_ReadOnly: 0
@@ -395,6 +401,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 82e54404fe2ccc448bd81cbe31657e29
     m_Address: FemaleHumanGeneralMerchant
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86d570f788618b579b164b93b46bb866
+    m_Address: New Self
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

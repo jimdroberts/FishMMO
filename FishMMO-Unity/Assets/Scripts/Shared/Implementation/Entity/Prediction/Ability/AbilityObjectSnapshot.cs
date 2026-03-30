@@ -51,11 +51,6 @@ namespace FishMMO.Shared
 		public readonly IReadOnlyDictionary<int, AbilityOnDestroyEvent> OnDestroyEvents;
 
 		/// <summary>
-		/// The TargetTrigger from the ability template for collision handling.
-		/// </summary>
-		public readonly AbilityEvent TargetTrigger;
-
-		/// <summary>
 		/// Creates a snapshot from a live <see cref="Ability"/> instance.
 		/// Each event dictionary structure is copied into a new <see cref="Dictionary{TKey,TValue}"/>
 		/// and assigned to an <see cref="IReadOnlyDictionary{TKey,TValue}"/> field. This isolates the
@@ -73,7 +68,6 @@ namespace FishMMO.Shared
 			OnTickEvents = CopyOrEmpty(ability.OnTickEvents, emptyOnTickEvents);
 			OnHitEvents = CopyOrEmpty(ability.OnHitEvents, emptyOnHitEvents);
 			OnDestroyEvents = CopyOrEmpty(ability.OnDestroyEvents, emptyOnDestroyEvents);
-			TargetTrigger = ability.Template?.TargetTrigger;
 		}
 
 		/// <summary>

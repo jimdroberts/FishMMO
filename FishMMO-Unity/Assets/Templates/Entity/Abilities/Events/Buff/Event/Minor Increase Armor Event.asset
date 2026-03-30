@@ -12,11 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
   m_Name: Minor Increase Armor Event
   m_EditorClassIdentifier: 
-  Conditions:
-  - rid: 4507019787936727112
+  Conditions: []
   Actions:
-  - rid: -2
+  - rid: 4507019787936727136
+  - rid: 4507019787936727138
   icon: {fileID: 0}
+  TargetSelector: {fileID: 0}
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
@@ -25,10 +26,18 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
-    - rid: 4507019787936727112
-      type: {class: HasQuestCondition, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 4507019787936727136
+      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
       data:
-        QuestTemplate: {fileID: 0}
-        Invert: 0
+        FXPrefab: {fileID: 7266499652759718708, guid: 6bed0c614c46964408373a65aba83a0e,
+          type: 3}
+    - rid: 4507019787936727138
+      type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        StacksValue:
+          rid: 4507019787936727139
+        BuffTemplate: {fileID: 11400000, guid: 0fbfa8b68911e1c4fa66d6b57fcab6a2, type: 2}
+    - rid: 4507019787936727139
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        Amount: 1

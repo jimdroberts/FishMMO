@@ -12,7 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8218f9b645c38b742a5d094500a7c0bc, type: 3}
   m_Name: GeneralGoods
   m_EditorClassIdentifier: 
-  icon: {fileID: 10901, guid: 0000000000000000f000000000000000, type: 0}
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   Description: General Goods
   Abilities:
   - {fileID: 11400000, guid: 7c14874e3c902684a8d562913ed73c24, type: 2}
@@ -21,15 +26,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: f455d8a612b6da645b9a5f066502307b, type: 2}
   - {fileID: 11400000, guid: 070a580671acc704ba34689f4865bcf4, type: 2}
   AbilityEvents:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 11400000, guid: d00db1805f33b104b8b2198459b0a45d, type: 2}
+  - {fileID: 11400000, guid: b1b0ada2796be4c4ca8c95734c884fc2, type: 2}
+  - {fileID: 11400000, guid: e6d97319903785e4f8bbdbaa2ba21412, type: 2}
   Items:
   - {fileID: 11400000, guid: 2a666181fba14f54a8a1e2729e38e44e, type: 2}

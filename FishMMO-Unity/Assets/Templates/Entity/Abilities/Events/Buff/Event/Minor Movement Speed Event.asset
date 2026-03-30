@@ -14,18 +14,30 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Conditions: []
   Actions:
-  - {fileID: 11400000, guid: b5ff41ab8f7082d4d89f6bdc98d1ec2c, type: 2}
+  - rid: 4507019787936727137
+  - rid: 4507019787936727140
   icon: {fileID: 0}
+  TargetSelector: {fileID: 0}
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
   Cooldown: 0
   Price: 0
-  Resources:
-    m_keys: []
-    m_values: 
-  RequiredAttributes:
-    m_keys: []
-    m_values: 
-  RequiredFaction: {fileID: 0}
-  RequiredArchetype: {fileID: 0}
+  references:
+    version: 2
+    RefIds:
+    - rid: 4507019787936727137
+      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        FXPrefab: {fileID: 7266499652759718708, guid: fc146935ca6612f4a816f8e9e2ad17c1,
+          type: 3}
+    - rid: 4507019787936727140
+      type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        StacksValue:
+          rid: 4507019787936727141
+        BuffTemplate: {fileID: 11400000, guid: f382d90751b078548b47500f1817ff29, type: 2}
+    - rid: 4507019787936727141
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        Amount: 1

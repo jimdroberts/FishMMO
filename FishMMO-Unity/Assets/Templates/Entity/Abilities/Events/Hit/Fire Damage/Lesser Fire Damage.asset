@@ -10,12 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
-  m_Name: Ability On Hit Event
+  m_Name: Lesser Fire Damage
   m_EditorClassIdentifier: 
   Conditions: []
   Actions:
-  - rid: 4507019787936727129
+  - rid: 4507019787936727142
   icon: {fileID: 0}
+  TargetSelector: {fileID: 0}
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
@@ -24,15 +25,14 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
-    - rid: 4507019787936727129
-      type: {class: AbilityApplyAreaAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 4507019787936727142
+      type: {class: ApplyDamageAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
       data:
-        RadiusValue:
-          rid: -2
-        MaxHitsValue:
-          rid: -2
-        TargetLayerMask:
-          serializedVersion: 2
-          m_Bits: 4294967295
+        DamageValue:
+          rid: 4507019787936727143
+        DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
+          type: 2}
+    - rid: 4507019787936727143
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: Assembly-CSharp}
+      data:
+        Amount: 3
