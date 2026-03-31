@@ -71,23 +71,6 @@ namespace FishMMO.Shared
 		public bool IsSpawned => true;
 
 		/// <inheritdoc/>
-		public List<Trigger> OnDamageTriggers => null;
-		/// <inheritdoc/>
-		public List<Trigger> OnDamagedTriggers => null;
-		/// <inheritdoc/>
-		public List<Trigger> OnHealTriggers => null;
-		/// <inheritdoc/>
-		public List<Trigger> OnHealedTriggers => null;
-		/// <inheritdoc/>
-		public List<Trigger> OnKillTriggers => null;
-		/// <inheritdoc/>
-		public List<Trigger> OnKilledTriggers => null;
-		/// <inheritdoc/>
-		public List<Trigger> OnResurrectTriggers => null;
-		/// <inheritdoc/>
-		public List<Trigger> OnResurrectedTriggers => null;
-
-		/// <inheritdoc/>
 		public int Flags { get; set; }
 
 		/// <inheritdoc/>

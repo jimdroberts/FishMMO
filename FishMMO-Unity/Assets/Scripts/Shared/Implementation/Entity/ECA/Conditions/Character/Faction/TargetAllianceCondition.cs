@@ -41,42 +41,40 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			if (eventData.TryGet(out CharacterHitEventData hitEventData))
+			ICharacter defender = ResolveTarget(initiator, eventData);
+
+			if (initiator == null)
 			{
-				ICharacter defender = hitEventData.Target;
-
-				if (initiator == null)
-				{
-					return false; // Initiator or their faction controller is missing
-				}
-
-				if (defender == null)
-				{
-					// If no defender, this condition typically wouldn't pass for character-specific effects
-					return false;
-				}
-
-				if (!initiator.TryGet(out IFactionController attackerFactionController))
-				{
-					return false; // Initiator must have a faction controller
-				}
-
-				// If targeting self, use the ApplyToSelf flag
-				if (defender.ID == initiator.ID)
-				{
-					return ApplyToSelf;
-				}
-				// Otherwise, check the alliance level between initiator and defender
-				else if (defender.TryGet(out IFactionController defenderFactionController))
-				{
-					FactionAllianceLevel allianceLevel = attackerFactionController.GetAllianceLevel(defenderFactionController);
-
-					return (allianceLevel == FactionAllianceLevel.Enemy && ApplyToEnemy) ||
-						   (allianceLevel == FactionAllianceLevel.Neutral && ApplyToNeutral) ||
-						   (allianceLevel == FactionAllianceLevel.Ally && ApplyToAllies);
-				}
+				return false; // Initiator or their faction controller is missing
 			}
-			// Not a CharacterHitEventData or other conditions not met
+
+			if (defender == null)
+			{
+				// If no defender, this condition typically wouldn't pass for character-specific effects
+				return false;
+			}
+
+			if (!initiator.TryGet(out IFactionController attackerFactionController))
+			{
+				return false; // Initiator must have a faction controller
+			}
+
+			// If targeting self, use the ApplyToSelf flag
+			if (defender.ID == initiator.ID)
+			{
+				return ApplyToSelf;
+			}
+			// Otherwise, check the alliance level between initiator and defender
+			else if (defender.TryGet(out IFactionController defenderFactionController))
+			{
+				FactionAllianceLevel allianceLevel = attackerFactionController.GetAllianceLevel(defenderFactionController);
+
+				return (allianceLevel == FactionAllianceLevel.Enemy && ApplyToEnemy) ||
+					   (allianceLevel == FactionAllianceLevel.Neutral && ApplyToNeutral) ||
+					   (allianceLevel == FactionAllianceLevel.Ally && ApplyToAllies);
+			}
+
+			// Not able to resolve target or other conditions not met
 			return false;
 		}
 

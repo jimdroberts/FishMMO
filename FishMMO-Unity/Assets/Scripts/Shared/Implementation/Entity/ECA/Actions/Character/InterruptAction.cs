@@ -1,5 +1,4 @@
 using System;
-using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -20,18 +19,15 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			// Try to get the event data for a character hit. If not present, log a warning and exit.
-			if (eventData.TryGet(out CharacterHitEventData targetEventData))
+			ICharacter target = ResolveTarget(initiator, eventData);
+			if (target == null)
 			{
-				// Try to get the ability controller from the target. If present, interrupt the current ability.
-				if (targetEventData.Target.TryGet(out IAbilityController abilityController))
-				{
-					abilityController.Interrupt(initiator);
-				}
+				return;
 			}
-			else
+
+			if (target.TryGet(out IAbilityController abilityController))
 			{
-				Log.Warning("InterruptAction", "Expected CharacterTargetEventData.");
+				abilityController.Interrupt(initiator);
 			}
 		}
 	}

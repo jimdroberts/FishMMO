@@ -188,57 +188,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual void OnAwake() { }
 
-		// ───── ECA Trigger Lists ─────────────────────────────────────────────
-
-		[Header("ECA - Damage")]
-		[Tooltip("Triggers invoked when this character deals damage to another.")]
-		[SerializeField]
-		private List<Trigger> onDamageTriggers = new List<Trigger>();
-		[Tooltip("Triggers invoked when this character receives damage from another.")]
-		[SerializeField]
-		private List<Trigger> onDamagedTriggers = new List<Trigger>();
-
-		[Header("ECA - Healing")]
-		[Tooltip("Triggers invoked when this character heals another.")]
-		[SerializeField]
-		private List<Trigger> onHealTriggers = new List<Trigger>();
-		[Tooltip("Triggers invoked when this character is healed by another.")]
-		[SerializeField]
-		private List<Trigger> onHealedTriggers = new List<Trigger>();
-
-		[Header("ECA - Kill")]
-		[Tooltip("Triggers invoked when this character kills another.")]
-		[SerializeField]
-		private List<Trigger> onKillTriggers = new List<Trigger>();
-		[Tooltip("Triggers invoked when this character is killed by another.")]
-		[SerializeField]
-		private List<Trigger> onKilledTriggers = new List<Trigger>();
-
-		[Header("ECA - Resurrect")]
-		[Tooltip("Triggers invoked when this character resurrects another.")]
-		[SerializeField]
-		private List<Trigger> onResurrectTriggers = new List<Trigger>();
-		[Tooltip("Triggers invoked when this character is resurrected by another.")]
-		[SerializeField]
-		private List<Trigger> onResurrectedTriggers = new List<Trigger>();
-
-		/// <inheritdoc />
-		public List<Trigger> OnDamageTriggers => onDamageTriggers;
-		/// <inheritdoc />
-		public List<Trigger> OnDamagedTriggers => onDamagedTriggers;
-		/// <inheritdoc />
-		public List<Trigger> OnHealTriggers => onHealTriggers;
-		/// <inheritdoc />
-		public List<Trigger> OnHealedTriggers => onHealedTriggers;
-		/// <inheritdoc />
-		public List<Trigger> OnKillTriggers => onKillTriggers;
-		/// <inheritdoc />
-		public List<Trigger> OnKilledTriggers => onKilledTriggers;
-		/// <inheritdoc />
-		public List<Trigger> OnResurrectTriggers => onResurrectTriggers;
-		/// <inheritdoc />
-		public List<Trigger> OnResurrectedTriggers => onResurrectedTriggers;
-
 		/// <inheritdoc />
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Invoke(List<Trigger> triggers, EventData eventData)

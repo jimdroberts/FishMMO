@@ -38,20 +38,16 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Try to get the event data for a character hit. If not present, log a warning and exit.
-			if (eventData.TryGet(out CharacterHitEventData targetEventData))
+			ICharacter target = ResolveTarget(initiator, eventData);
+			if (target == null)
 			{
-				// Try to get the damage controller from the target. If present, apply the damage.
-				if (targetEventData.Target.TryGet(out ICharacterDamageController defenderDamageController))
-				{
-					int amount = DamageValue.GetValue(initiator, eventData);
-					defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
-					Log.Debug("DamageAction", $"Initiator '{initiator.Name}' dealt {amount} damage to target '{targetEventData.Target.Name}'.");
-				}
+				return;
 			}
-			else
+
+			if (target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
-				Log.Warning("DamageAction", "Expected CharacterHitEventData.");
+				int amount = DamageValue.GetValue(initiator, eventData);
+				defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
 			}
 		}
 	}

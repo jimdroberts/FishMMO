@@ -36,20 +36,19 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (eventData.TryGet(out CharacterHitEventData targetEventData))
+			ICharacter target = ResolveTarget(initiator, eventData);
+			if (target == null)
 			{
-				if (targetEventData.Target.TryGet(out IBuffController buffController))
-				{
-					int stacks = StacksValue.GetValue(initiator, eventData);
-					for (int i = 0; i < stacks; ++i)
-					{
-						buffController.Apply(BuffTemplate);
-					}
-				}
+				return;
 			}
-			else
+
+			if (target.TryGet(out IBuffController buffController))
 			{
-				Log.Warning("ApplyBuffAction", "Expected CharacterHitEventData.");
+				int stacks = StacksValue.GetValue(initiator, eventData);
+				for (int i = 0; i < stacks; ++i)
+				{
+					buffController.Apply(BuffTemplate);
+				}
 			}
 		}
 	}

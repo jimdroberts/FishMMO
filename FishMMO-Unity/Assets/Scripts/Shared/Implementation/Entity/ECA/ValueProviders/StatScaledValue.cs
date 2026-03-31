@@ -16,7 +16,8 @@ namespace FishMMO.Shared
 		/// The character attribute to read the value from (e.g., Strength, Intelligence).
 		/// </summary>
 		[Tooltip("The character attribute to scale from (e.g., Strength, Intelligence).")]
-		public CharacterAttributeTemplate AttributeTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int AttributeTemplateID;
 
 		/// <summary>
 		/// The multiplier applied to the attribute's final value.
@@ -33,9 +34,9 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public int GetValue(ICharacter initiator, EventData eventData)
 		{
-			if (AttributeTemplate == null)
+			if (AttributeTemplateID == 0)
 			{
-				Log.Warning("StatScaledValue", "AttributeTemplate is null. Returning 0.");
+				Log.Warning("StatScaledValue", "AttributeTemplateID is not set. Returning 0.");
 				return 0;
 			}
 
@@ -61,12 +62,12 @@ namespace FishMMO.Shared
 				return 0;
 			}
 
-			if (attributeController.TryGetAttribute(AttributeTemplate, out CharacterAttribute attribute))
+			if (attributeController.TryGetAttribute(AttributeTemplateID, out CharacterAttribute attribute))
 			{
 				return (int)(attribute.FinalValue * ScaleFactor);
 			}
 
-			Log.Warning("StatScaledValue", $"Character '{source.Name}' does not have attribute '{AttributeTemplate.Name}'. Returning 0.");
+			Log.Warning("StatScaledValue", $"Character '{source.Name}' does not have attribute with ID '{AttributeTemplateID}'. Returning 0.");
 			return 0;
 		}
 	}

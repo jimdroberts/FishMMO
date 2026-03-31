@@ -31,20 +31,16 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Try to get the event data for a character hit. If not present, log a warning and exit.
-			if (eventData.TryGet(out CharacterHitEventData targetEventData))
+			ICharacter target = ResolveTarget(initiator, eventData);
+			if (target == null)
 			{
-				// Try to get the damage controller from the target. If present, apply the heal.
-				if (targetEventData.Target.TryGet(out ICharacterDamageController defenderDamageController))
-				{
-					int amount = HealValue.GetValue(initiator, eventData);
-					defenderDamageController.Heal(initiator, amount);
-					Log.Debug("HealAction", $"Initiator '{initiator.Name}' healed target '{targetEventData.Target.Name}' for {amount}.");
-				}
+				return;
 			}
-			else
+
+			if (target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
-				Log.Warning("HealAction", "Expected CharacterHitEventData.");
+				int amount = HealValue.GetValue(initiator, eventData);
+				defenderDamageController.Heal(initiator, amount);
 			}
 		}
 	}

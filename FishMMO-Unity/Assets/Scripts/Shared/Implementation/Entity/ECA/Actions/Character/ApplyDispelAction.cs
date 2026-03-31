@@ -41,20 +41,28 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (eventData.TryGet(out CharacterHitEventData targetEventData))
+			ICharacter target = ResolveTarget(initiator, eventData);
+			if (target == null)
 			{
-				if (targetEventData.Target.TryGet(out IBuffController defenderBuffController))
-				{
-					int amountToRemove = AmountToRemoveValue.GetValue(initiator, eventData);
-					for (int i = 0; i < amountToRemove && defenderBuffController.Buffs.Count > 0; ++i)
-					{
-						defenderBuffController.RemoveRandom(targetEventData.RNG, IncludeBuffs, IncludeDebuffs);
-					}
-				}
+				return;
 			}
-			else
+
+			if (target.TryGet(out IBuffController defenderBuffController))
 			{
-				Log.Warning("ApplyDispelAction", "Expected CharacterHitEventData.");
+				// Use deterministic RNG from CharacterHitEventData when available.
+				DeterministicRNG rng = DeterministicRNG.Shared;
+				if (eventData != null &&
+					eventData.TryGet(out CharacterHitEventData hitData) &&
+					hitData.RNG != null)
+				{
+					rng = hitData.RNG;
+				}
+
+				int amountToRemove = AmountToRemoveValue.GetValue(initiator, eventData);
+				for (int i = 0; i < amountToRemove && defenderBuffController.Buffs.Count > 0; ++i)
+				{
+					defenderBuffController.RemoveRandom(rng, IncludeBuffs, IncludeDebuffs);
+				}
 			}
 		}
 	}

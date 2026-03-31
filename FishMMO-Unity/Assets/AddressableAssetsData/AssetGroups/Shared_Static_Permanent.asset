@@ -57,6 +57,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1385f6e1d441547c2b899cd7bfe412ec
+    m_Address: New Triggers
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 15a71776a1f5e4245841b3301c881f80
     m_Address: Attack Speed
     m_ReadOnly: 0

@@ -16,7 +16,8 @@ namespace FishMMO.Shared
 		/// The character attribute template representing the resource to consume (e.g., Mana, Stamina).
 		/// </summary>
 		[Tooltip("The resource attribute to consume.")]
-		public CharacterAttributeTemplate ResourceTemplate;
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		public int ResourceTemplateID;
 
 		/// <summary>
 		/// The value provider that determines how much of the resource to consume.
@@ -32,9 +33,9 @@ namespace FishMMO.Shared
 		/// <param name="eventData">Event data for the action.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			if (ResourceTemplate == null)
+			if (ResourceTemplateID == 0)
 			{
-				Log.Warning("ConsumeResourceAction", "ResourceTemplate is null.");
+				Log.Warning("ConsumeResourceAction", "ResourceTemplateID is not set.");
 				return;
 			}
 
@@ -50,7 +51,7 @@ namespace FishMMO.Shared
 			if (!characterToConsume.TryGet(out ICharacterAttributeController attributeController)) return;
 
 			int amount = AmountValue.GetValue(initiator, eventData);
-			if (attributeController.TryGetResourceAttribute(ResourceTemplate.ID, out CharacterResourceAttribute resource) &&
+			if (attributeController.TryGetResourceAttribute(ResourceTemplateID, out CharacterResourceAttribute resource) &&
 				resource.CurrentValue >= amount)
 			{
 				resource.Consume(amount);

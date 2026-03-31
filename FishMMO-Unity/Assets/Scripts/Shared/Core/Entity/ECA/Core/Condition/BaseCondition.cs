@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace FishMMO.Shared.Core
 {
@@ -10,6 +11,14 @@ namespace FishMMO.Shared.Core
 	public abstract class BaseCondition : ICondition
 	{
 		/// <summary>
+		/// Optional provider that determines how this condition resolves its target character.
+		/// When null, falls back to event target if available, otherwise the initiator.
+		/// </summary>
+		[Tooltip("How this condition resolves its target character. When unset, uses event target or initiator.")]
+		[SerializeReference, SubclassSelector]
+		public ICharacterProvider TargetProvider;
+
+		/// <summary>
 		/// Evaluates the condition. Must be implemented by derived classes.
 		/// </summary>
 		/// <param name="initiator">The character initiating the check.</param>
@@ -18,14 +27,18 @@ namespace FishMMO.Shared.Core
 		public abstract bool Evaluate(ICharacter initiator, EventData eventData = null);
 
 		/// <summary>
-		/// Resolves the target character from event data, falling back to the initiator.
-		/// Checks <see cref="CharacterHitEventData"/> for a target override.
+		/// Resolves the target character using <see cref="TargetProvider"/> if set,
+		/// otherwise falls back to <see cref="CharacterHitEventData.Target"/> or the initiator.
 		/// </summary>
 		/// <param name="initiator">The initiating character (fallback).</param>
 		/// <param name="eventData">Optional event data containing a target override.</param>
 		/// <returns>The resolved character, or the initiator if no target override is found.</returns>
-		protected static ICharacter ResolveTarget(ICharacter initiator, EventData eventData)
+		protected ICharacter ResolveTarget(ICharacter initiator, EventData eventData)
 		{
+			if (TargetProvider != null)
+			{
+				return TargetProvider.GetCharacter(initiator, eventData);
+			}
 			if (eventData != null &&
 				eventData.TryGet(out CharacterHitEventData charTargetEventData) &&
 				charTargetEventData.Target != null)

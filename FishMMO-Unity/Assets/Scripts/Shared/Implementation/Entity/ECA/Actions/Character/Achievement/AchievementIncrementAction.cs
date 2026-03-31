@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -18,11 +19,11 @@ namespace FishMMO.Shared
 		public AchievementTemplate AchievementTemplate;
 
 		/// <summary>
-		/// The amount to increment by.
+		/// The value provider that determines the amount to increment by.
 		/// </summary>
-		[Tooltip("The amount to increment the achievement by.")]
-		[Min(1)]
-		public uint Amount = 1;
+		[Tooltip("The value provider that determines the amount to increment the achievement by.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider AmountValue;
 
 		/// <inheritdoc />
 		public override void Execute(ICharacter initiator, EventData eventData)
@@ -33,12 +34,23 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			if (AmountValue == null)
+			{
+				Log.Warning("AchievementIncrementAction", "AmountValue provider is null.");
+				return;
+			}
+
 			if (!initiator.TryGet(out IAchievementController achievementController))
 			{
 				return;
 			}
 
-			achievementController.Increment(AchievementTemplate, Amount);
+			int value = AmountValue.GetValue(initiator, eventData);
+			if (value < 1)
+			{
+				return;
+			}
+			achievementController.Increment(AchievementTemplate, (uint)value);
 #endif
 		}
 	}

@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -6,6 +7,57 @@ namespace FishMMO.Shared
 {
 	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController
 	{
+		// ───── ECA Trigger Lists ─────────────────────────────────────────────
+
+		[Header("ECA - Damage")]
+		[Tooltip("Triggers invoked when this character deals damage to another.")]
+		[SerializeField]
+		private List<Trigger> onDamageTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when this character receives damage from another.")]
+		[SerializeField]
+		private List<Trigger> onDamagedTriggers = new List<Trigger>();
+
+		[Header("ECA - Healing")]
+		[Tooltip("Triggers invoked when this character heals another.")]
+		[SerializeField]
+		private List<Trigger> onHealTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when this character is healed by another.")]
+		[SerializeField]
+		private List<Trigger> onHealedTriggers = new List<Trigger>();
+
+		[Header("ECA - Kill")]
+		[Tooltip("Triggers invoked when this character kills another.")]
+		[SerializeField]
+		private List<Trigger> onKillTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when this character is killed by another.")]
+		[SerializeField]
+		private List<Trigger> onKilledTriggers = new List<Trigger>();
+
+		[Header("ECA - Resurrect")]
+		[Tooltip("Triggers invoked when this character resurrects another.")]
+		[SerializeField]
+		private List<Trigger> onResurrectTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when this character is resurrected by another.")]
+		[SerializeField]
+		private List<Trigger> onResurrectedTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnDamageTriggers => onDamageTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnDamagedTriggers => onDamagedTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnHealTriggers => onHealTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnHealedTriggers => onHealedTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnKillTriggers => onKillTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnKilledTriggers => onKilledTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnResurrectTriggers => onResurrectTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnResurrectedTriggers => onResurrectedTriggers;
+
 		/// <summary>
 		/// If true, this character cannot be damaged or killed.
 		/// </summary>
@@ -115,13 +167,14 @@ namespace FishMMO.Shared
 			if (!ignoreAchievements)
 			{
 				// Invoke attacker's OnDamage triggers (e.g. achievements for dealing damage)
-				if (attacker != null)
+				if (attacker != null &&
+					attacker.TryGet(out ICharacterDamageController attackerDamage))
 				{
-					attacker.Invoke(attacker.OnDamageTriggers, new DamageEventData(attacker, Character, amount, damageAttribute));
+					attacker.Invoke(attackerDamage.OnDamageTriggers, new DamageEventData(attacker, Character, amount, damageAttribute));
 				}
 
 				// Invoke defender's OnDamaged triggers (e.g. achievements for receiving damage)
-				Character.Invoke(Character.OnDamagedTriggers, new DamageEventData(Character, attacker, amount, damageAttribute));
+				Character.Invoke(OnDamagedTriggers, new DamageEventData(Character, attacker, amount, damageAttribute));
 			}
 
 			// Check if we died after taking damage.
@@ -148,11 +201,14 @@ namespace FishMMO.Shared
 				}
 
 				// Invoke killer's OnKill triggers (e.g. achievements, quest objectives)
-				killer.Invoke(killer.OnKillTriggers, new EventData(killer, new CharacterHitEventData(killer, Character)));
+				if (killer.TryGet(out ICharacterDamageController killerDamage))
+				{
+					killer.Invoke(killerDamage.OnKillTriggers, new EventData(killer, new CharacterHitEventData(killer, Character)));
+				}
 			}
 
 			// Invoke victim's OnKilled triggers (e.g. death achievements)
-			Character.Invoke(Character.OnKilledTriggers, new EventData(Character, new CharacterHitEventData(Character, killer)));
+			Character.Invoke(OnKilledTriggers, new EventData(Character, new CharacterHitEventData(Character, killer)));
 
 			// Remove all buffs
 			if (Character.TryGet(out IBuffController buffController))
@@ -184,13 +240,14 @@ namespace FishMMO.Shared
 				if (!ignoreAchievements)
 				{
 					// Invoke healer's OnHeal triggers (e.g. achievements for healing)
-					if (healer != null)
+					if (healer != null &&
+						healer.TryGet(out ICharacterDamageController healerDamage))
 					{
-						healer.Invoke(healer.OnHealTriggers, new HealEventData(healer, Character, amount));
+						healer.Invoke(healerDamage.OnHealTriggers, new HealEventData(healer, Character, amount));
 					}
 
 					// Invoke healed character's OnHealed triggers (e.g. achievements for being healed)
-					Character.Invoke(Character.OnHealedTriggers, new HealEventData(Character, healer, amount));
+					Character.Invoke(OnHealedTriggers, new HealEventData(Character, healer, amount));
 				}
 			}
 		}

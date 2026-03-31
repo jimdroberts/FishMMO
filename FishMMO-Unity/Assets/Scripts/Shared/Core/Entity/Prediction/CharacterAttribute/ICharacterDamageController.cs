@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
 {
@@ -37,6 +38,25 @@ namespace FishMMO.Shared.Core
 		/// Gets the cached health resource attribute for this character.
 		/// </summary>
 		CharacterResourceAttribute ResourceInstance { get; }
+
+		// ───── ECA Trigger Lists ─────────────────────────────────────────────
+
+		/// <summary>Triggers invoked when this character deals damage to another. EventData: DamageEventData.</summary>
+		List<Trigger> OnDamageTriggers { get; }
+		/// <summary>Triggers invoked when this character receives damage from another. EventData: DamageEventData.</summary>
+		List<Trigger> OnDamagedTriggers { get; }
+		/// <summary>Triggers invoked when this character heals another. EventData: HealEventData.</summary>
+		List<Trigger> OnHealTriggers { get; }
+		/// <summary>Triggers invoked when this character is healed by another. EventData: HealEventData.</summary>
+		List<Trigger> OnHealedTriggers { get; }
+		/// <summary>Triggers invoked when this character kills another. EventData with CharacterHitEventData.</summary>
+		List<Trigger> OnKillTriggers { get; }
+		/// <summary>Triggers invoked when this character is killed by another. EventData with CharacterHitEventData.</summary>
+		List<Trigger> OnKilledTriggers { get; }
+		/// <summary>Triggers invoked when this character resurrects another. EventData with CharacterHitEventData.</summary>
+		List<Trigger> OnResurrectTriggers { get; }
+		/// <summary>Triggers invoked when this character is resurrected by another. EventData with CharacterHitEventData.</summary>
+		List<Trigger> OnResurrectedTriggers { get; }
 
 		/// <summary>
 		/// Kills the character, optionally specifying the killer.
