@@ -15,16 +15,16 @@ namespace FishMMO.Shared
 		/// If true, the condition passes if the character is NOT in a party.
 		/// </summary>
 		[Tooltip("If true, the condition passes if the character is NOT in a party.")]
-		public bool InvertResult = false;
+		public bool Invert = false;
 
 		/// <summary>
 		/// Evaluates whether the character (or event target) is in a party, or not in a party if <see cref="InvertResult"/> is true.
 		/// </summary>
 		/// <param name="initiator">The character to check, or the fallback if no event target is present.</param>
 		/// <param name="eventData">Optional event data that may provide a different character to check.</param>
-		/// <returns>True if the character is (or is not) in a party, depending on <see cref="InvertResult"/>; otherwise, false.</returns>
+		/// <returns>True if the character is (or is not) in a party, depending on <see cref="Invert"/>; otherwise, false.</returns>
 		/// <remarks>
-		/// This method checks for a party controller and evaluates the party membership. If <see cref="InvertResult"/> is true, the logic is inverted.
+		/// This method checks for a party controller and evaluates the party membership. If <see cref="Invert"/> is true, the logic is inverted.
 		/// </remarks>
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
@@ -38,11 +38,11 @@ namespace FishMMO.Shared
 			}
 			// A character is considered in a party if their party ID is not zero.
 			bool isInParty = partyController.ID != 0;
-			if (InvertResult)
+			if (Invert)
 			{
 				if (isInParty)
 				{
-					Log.Debug("HasPartyCondition", $"Character '{characterToCheck?.Name}' is in a party, but 'invertResult' is true. Condition failed.");
+					Log.Debug("HasPartyCondition", $"Character '{characterToCheck?.Name}' is in a party, but 'Invert' is true. Condition failed.");
 				}
 				return !isInParty;
 			}
@@ -55,6 +55,5 @@ namespace FishMMO.Shared
 				return isInParty;
 			}
 		}
-
 	}
 }

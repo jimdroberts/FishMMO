@@ -37,7 +37,7 @@ namespace FishMMO.Shared.Core
 		{
 			if (TargetProvider != null)
 			{
-				return TargetProvider.GetCharacter(initiator, eventData);
+				return TargetProvider.GetCharacter(initiator, eventData) ?? initiator;
 			}
 			if (eventData != null &&
 				eventData.TryGet(out CharacterHitEventData charTargetEventData) &&

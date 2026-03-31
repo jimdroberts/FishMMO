@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 		/// If true, the condition passes if the character is NOT alive (i.e., dead or health <= 0).
 		/// </summary>
 		[Tooltip("If true, the condition passes if the character is NOT alive (i.e., dead or health <= 0).")]
-		public bool InvertResult = false;
+		public bool Invert = false;
 
 		/// <summary>
 		/// Evaluates whether the character (or event target) is alive (health > 0), with optional inversion.
@@ -29,9 +29,9 @@ namespace FishMMO.Shared
 			ICharacter characterToCheck = ResolveTarget(initiator, eventData);
 
 			// Try to get the attribute controller from the character.
-			if (!characterToCheck.TryGet(out CharacterAttributeController attributeController))
+			if (!characterToCheck.TryGet(out ICharacterAttributeController attributeController))
 			{
-				Log.Warning("IsCharacterAliveCondition", $"Character '{characterToCheck?.Name}' does not have a CharacterAttributeController. Condition failed.");
+				Log.Warning("IsCharacterAliveCondition", $"Character '{characterToCheck?.Name}' does not have an ICharacterAttributeController. Condition failed.");
 				return false;
 			}
 
@@ -45,12 +45,12 @@ namespace FishMMO.Shared
 			// Check if the character is alive (health > 0).
 			bool isAlive = healthAttribute.CurrentValue > 0;
 			// Optionally invert the result.
-			bool finalResult = InvertResult ? !isAlive : isAlive;
+			bool finalResult = Invert ? !isAlive : isAlive;
 
 			if (!finalResult)
 			{
 				string status = isAlive ? "is alive" : "is dead (health <= 0)";
-				string invertedText = InvertResult ? " (inverted check)" : "";
+				string invertedText = Invert ? " (inverted check)" : "";
 				Log.Debug("IsCharacterAliveCondition", $"Character '{characterToCheck?.Name}' failed alive check. Status: {status}{invertedText}.");
 			}
 

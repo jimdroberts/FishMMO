@@ -60,9 +60,9 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			if (!characterToCheck.TryGet(out EquipmentController equipmentController))
+			if (!characterToCheck.TryGet(out IEquipmentController equipmentController))
 			{
-				Log.Warning("CanEquipItemCondition", "Character does not have an EquipmentController.");
+				Log.Warning("CanEquipItemCondition", "Character does not have an IEquipmentController.");
 				return false;
 			}
 

@@ -34,10 +34,10 @@ namespace FishMMO.Shared
 				Log.Warning("HasEquippedItemCondition", "Character is null.");
 				return false;
 			}
-			// Ensure the character has an EquipmentController.
-			if (!characterToCheck.TryGet(out EquipmentController equipmentController))
+			// Ensure the character has an IEquipmentController.
+			if (!characterToCheck.TryGet(out IEquipmentController equipmentController))
 			{
-				Log.Warning("HasEquippedItemCondition", "Character does not have an EquipmentController.");
+				Log.Warning("HasEquippedItemCondition", "Character does not have an IEquipmentController.");
 				return false;
 			}
 			// Ensure an item template is assigned.

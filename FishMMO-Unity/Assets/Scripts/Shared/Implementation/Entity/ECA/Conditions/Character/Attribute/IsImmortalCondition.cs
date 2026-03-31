@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 		/// If true, the condition passes if the target character is NOT immortal (inverts the result).
 		/// </summary>
 		[Tooltip("If true, the condition passes if the target character is NOT immortal.")]
-		public bool InvertResult = false;
+		public bool Invert = false;
 
 		/// <summary>
 		/// Evaluates whether the character (or event target) is immortal, with optional inversion.
@@ -39,12 +39,12 @@ namespace FishMMO.Shared
 			// Check if the character is immortal.
 			bool isImmortal = damageController.Immortal;
 			// Optionally invert the result.
-			bool finalResult = InvertResult ? !isImmortal : isImmortal;
+			bool finalResult = Invert ? !isImmortal : isImmortal;
 
 			if (!finalResult)
 			{
 				string status = isImmortal ? "is immortal" : "is mortal";
-				string invertedText = InvertResult ? " (inverted check)" : "";
+				string invertedText = Invert ? " (inverted check)" : "";
 				Log.Debug("IsImmortalCondition", $"(Character: '{characterToCheck?.Name}') failed immortality check. Status: {status}{invertedText}.");
 			}
 

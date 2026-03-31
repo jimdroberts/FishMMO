@@ -28,7 +28,7 @@ namespace FishMMO.Shared
 		/// If true, the condition passes if the character does NOT meet the stat requirement (inverts the result).
 		/// </summary>
 		[Tooltip("If true, the condition passes if the character does NOT meet the stat requirement.")]
-		public bool InvertResult = false;
+		public bool Invert = false;
 
 		/// <summary>
 		/// Evaluates whether the character (or event target) meets the required attribute value, with optional inversion.
@@ -65,7 +65,7 @@ namespace FishMMO.Shared
 			// Check if the attribute meets the required value.
 			bool meetsRequirement = characterAttribute.FinalValue >= RequiredValue;
 			// Optionally invert the result.
-			bool finalResult = InvertResult ? !meetsRequirement : meetsRequirement;
+			bool finalResult = Invert ? !meetsRequirement : meetsRequirement;
 
 			if (!finalResult)
 			{
@@ -73,7 +73,7 @@ namespace FishMMO.Shared
 					$"has {characterAttribute.FinalValue} (meets requirement)" :
 					$"has {characterAttribute.FinalValue} (does NOT meet requirement)";
 
-				Log.Debug("HasRequiredCharacterAttribute", $"Character '{characterToCheck?.Name}' failed stat check for '{Template.Name}'. Current: {characterAttribute.FinalValue}, Required: {RequiredValue}. Inverted: {InvertResult}.");
+				Log.Debug("HasRequiredCharacterAttribute", $"Character '{characterToCheck?.Name}' failed stat check for '{Template.Name}'. Current: {characterAttribute.FinalValue}, Required: {RequiredValue}. Inverted: {Invert}.");
 			}
 
 			return finalResult;

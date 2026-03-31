@@ -26,10 +26,11 @@ namespace FishMMO.Shared
 		public float ScaleFactor = 1.0f;
 
 		/// <summary>
-		/// If true, reads the attribute from the event target instead of the initiator.
+		/// Provider that determines which character's attribute to read. When unset, reads from the initiator.
 		/// </summary>
-		[Tooltip("If true, reads the attribute from the event target instead of the initiator.")]
-		public bool UseTarget;
+		[Tooltip("Provider that determines which character's attribute to read. When unset, reads from the initiator.")]
+		[SerializeReference, SubclassSelector]
+		public ICharacterProvider SourceProvider;
 
 		/// <inheritdoc/>
 		public float GetValue(ICharacter initiator, EventData eventData)
@@ -42,12 +43,9 @@ namespace FishMMO.Shared
 
 			// Determine which character to read the attribute from.
 			ICharacter source = initiator;
-			if (UseTarget &&
-				eventData != null &&
-				eventData.TryGet(out CharacterHitEventData hitData) &&
-				hitData.Target != null)
+			if (SourceProvider != null)
 			{
-				source = hitData.Target;
+				source = SourceProvider.GetCharacter(initiator, eventData) ?? initiator;
 			}
 
 			if (source == null)
