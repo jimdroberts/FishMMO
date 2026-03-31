@@ -52,6 +52,7 @@ namespace FishMMO.Shared
 				foreach (var entry in group.entries)
 				{
 					if (entry == null) continue;
+					if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
 					addressablePaths.Add(entry.AssetPath);
 				}
 			}
@@ -62,6 +63,7 @@ namespace FishMMO.Shared
 				foreach (var entry in group.entries)
 				{
 					if (entry == null) continue;
+					if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
 
 					string[] deps = AssetDatabase.GetDependencies(entry.AssetPath, true);
 					string groupName = group.Name;
@@ -74,7 +76,8 @@ namespace FishMMO.Shared
 						// Skip scripts, packages, and editor-only assets — they are not bundled
 						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
 							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-							IsEditorOnlyPath(dep))
+							IsEditorOnlyPath(dep) ||
+							ShouldSkipLocalAsset(dep))
 						{
 							continue;
 						}
@@ -691,6 +694,7 @@ namespace FishMMO.Shared
 						foreach (var entry in group.entries)
 						{
 							if (entry == null) continue;
+							if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
 							addressablePaths.Add(entry.AssetPath);
 						}
 					}
@@ -702,6 +706,7 @@ namespace FishMMO.Shared
 						foreach (var entry in group.entries)
 						{
 							if (entry == null) continue;
+							if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
 							string[] deps = AssetDatabase.GetDependencies(entry.AssetPath, true);
 							for (int d = 0; d < deps.Length; d++)
 							{
@@ -709,7 +714,8 @@ namespace FishMMO.Shared
 								if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
 								if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
 									dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-									IsEditorOnlyPath(dep))
+									IsEditorOnlyPath(dep) ||
+									ShouldSkipLocalAsset(dep))
 								{
 									continue;
 								}

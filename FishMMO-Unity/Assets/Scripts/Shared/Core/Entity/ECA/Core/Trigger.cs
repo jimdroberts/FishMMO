@@ -33,13 +33,13 @@ namespace FishMMO.Shared.Core
 		{
 			if (eventData.Initiator == null)
 			{
-				Log.Warning("Trigger", $"Trigger '{name}' attempted to execute without a valid Initiator.");
-				return;
+				Log.Warning("Trigger", $"Trigger '{name}' executed without a valid Initiator — world-level event.");
 			}
 
 			// Evaluate all conditions
-			foreach (var condition in Conditions)
+			for (int i = 0; i < Conditions.Count; ++i)
 			{
+				BaseCondition condition = Conditions[i];
 				if (condition != null)
 				{
 					// If any condition fails, abort execution
@@ -53,8 +53,9 @@ namespace FishMMO.Shared.Core
 
 			// If all conditions pass, execute all actions
 			Log.Debug("Trigger", $"Trigger '{name}' conditions met for {eventData.Initiator?.Name}. Executing actions for Event: {eventData.GetType().Name}...");
-			foreach (var action in Actions)
+			for (int i = 0; i < Actions.Count; ++i)
 			{
+				BaseAction action = Actions[i];
 				if (action != null)
 				{
 					action.Execute(eventData.Initiator, eventData);

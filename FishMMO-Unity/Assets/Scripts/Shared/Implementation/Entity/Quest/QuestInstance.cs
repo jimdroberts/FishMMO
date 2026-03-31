@@ -24,6 +24,11 @@ namespace FishMMO.Shared
 		public QuestStatus Status { get; private set; }
 
 		/// <summary>
+		/// Optimistic concurrency version for database persistence.
+		/// </summary>
+		public long Version { get; set; }
+
+		/// <summary>
 		/// Constructs a new quest instance from the given template, initializing all objective instances.
 		/// </summary>
 		/// <param name="template">The quest template.</param>

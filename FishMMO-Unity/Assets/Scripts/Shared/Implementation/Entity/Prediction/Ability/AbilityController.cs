@@ -326,6 +326,19 @@ namespace FishMMO.Shared
 			EnsureAbilitySeedGenerator();
 		}
 
+		[Header("ECA - Abilities")]
+		[Tooltip("Triggers invoked on the server when an ability activation begins.")]
+		[SerializeField]
+		private List<Trigger> onAbilityActivateTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked on the server when an ability activation completes.")]
+		[SerializeField]
+		private List<Trigger> onAbilityCompleteTriggers = new List<Trigger>();
+
+		/// <inheritdoc/>
+		public List<Trigger> OnAbilityActivateTriggers => onAbilityActivateTriggers;
+		/// <inheritdoc/>
+		public List<Trigger> OnAbilityCompleteTriggers => onAbilityCompleteTriggers;
+
 		/// <inheritdoc/>
 		public int Order => 100;
 

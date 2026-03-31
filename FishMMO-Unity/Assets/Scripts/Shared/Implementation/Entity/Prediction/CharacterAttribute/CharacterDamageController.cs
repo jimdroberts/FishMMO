@@ -7,47 +7,6 @@ namespace FishMMO.Shared
 	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController
 	{
 		/// <summary>
-		/// Achievement template ID for dealing damage to another character.
-		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
-		public int DamageAchievementTemplateID;
-		/// <summary>
-		/// Achievement template ID for receiving damage from another character.
-		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
-		public int DamagedAchievementTemplateID;
-		/// <summary>
-		/// Achievement template ID for killing another character.
-		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
-		public int KillAchievementTemplateID;
-		/// <summary>
-		/// Achievement template ID for being killed by another character.
-		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
-		public int KilledAchievementTemplateID;
-		/// <summary>
-		/// Achievement template ID for healing another character.
-		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
-		public int HealAchievementTemplateID;
-		/// <summary>
-		/// Achievement template ID for being healed by another character.
-		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
-		public int HealedAchievementTemplateID;
-		/// <summary>
-		/// Achievement template ID for resurrecting another character.
-		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
-		public int ResurrectAchievementTemplateID;
-		/// <summary>
-		/// Achievement template ID for being resurrected by another character.
-		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
-		public int ResurrectedAchievementTemplateID;
-
-		/// <summary>
 		/// If true, this character cannot be damaged or killed.
 		/// </summary>
 		[SerializeField]
@@ -153,19 +112,16 @@ namespace FishMMO.Shared
 
 			ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
 
-			uint fullAmount = (uint)amount;
-
 			if (!ignoreAchievements)
 			{
-				if (attacker.TryGet(out IAchievementController attackerAchievementController))
+				// Invoke attacker's OnDamage triggers (e.g. achievements for dealing damage)
+				if (attacker != null)
 				{
-					attackerAchievementController.Increment(DamageAchievementTemplateID, fullAmount);
+					attacker.Invoke(attacker.OnDamageTriggers, new DamageEventData(attacker, Character, amount, damageAttribute));
 				}
 
-				if (Character.TryGet(out IAchievementController defenderAchievementController))
-				{
-					defenderAchievementController.Increment(DamagedAchievementTemplateID, fullAmount);
-				}
+				// Invoke defender's OnDamaged triggers (e.g. achievements for receiving damage)
+				Character.Invoke(Character.OnDamagedTriggers, new DamageEventData(Character, attacker, amount, damageAttribute));
 			}
 
 			// Check if we died after taking damage.
@@ -191,18 +147,12 @@ namespace FishMMO.Shared
 					factionController.AdjustFaction(defenderFactionController, 0.01f, 0.01f);
 				}
 
-				// Reward the killer with kill achievements.
-				if (killer.TryGet(out IAchievementController killerAchievementController))
-				{
-					killerAchievementController.Increment(KillAchievementTemplateID, 1);
-				}
+				// Invoke killer's OnKill triggers (e.g. achievements, quest objectives)
+				killer.Invoke(killer.OnKillTriggers, new EventData(killer, new CharacterHitEventData(killer, Character)));
 			}
 
-			// Reward the defender with death achievements.
-			if (Character.TryGet(out IAchievementController defenderAchievementController))
-			{
-				defenderAchievementController.Increment(KilledAchievementTemplateID, 1);
-			}
+			// Invoke victim's OnKilled triggers (e.g. death achievements)
+			Character.Invoke(Character.OnKilledTriggers, new EventData(Character, new CharacterHitEventData(Character, killer)));
 
 			// Remove all buffs
 			if (Character.TryGet(out IBuffController buffController))
@@ -231,20 +181,16 @@ namespace FishMMO.Shared
 
 				ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
 
-				uint fullAmount = (uint)amount;
-
 				if (!ignoreAchievements)
 				{
-					if (healer != null &&
-					healer.TryGet(out IAchievementController healerAchievementController))
+					// Invoke healer's OnHeal triggers (e.g. achievements for healing)
+					if (healer != null)
 					{
-						healerAchievementController.Increment(HealAchievementTemplateID, fullAmount);
+						healer.Invoke(healer.OnHealTriggers, new HealEventData(healer, Character, amount));
 					}
-					if (Character != null &&
-						Character.TryGet(out IAchievementController healedAchievementController))
-					{
-						healedAchievementController.Increment(HealedAchievementTemplateID, fullAmount);
-					}
+
+					// Invoke healed character's OnHealed triggers (e.g. achievements for being healed)
+					Character.Invoke(Character.OnHealedTriggers, new HealEventData(Character, healer, amount));
 				}
 			}
 		}

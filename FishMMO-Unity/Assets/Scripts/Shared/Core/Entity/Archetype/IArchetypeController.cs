@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
 {
@@ -30,5 +31,10 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <param name="template">The archetype template to assign.</param>
 		void SetArchetype(ArchetypeTemplate template);
+
+		/// <summary>
+		/// Triggers invoked when the character's archetype changes.
+		/// </summary>
+		List<Trigger> OnArchetypeChangeTriggers { get; }
 	}
 }

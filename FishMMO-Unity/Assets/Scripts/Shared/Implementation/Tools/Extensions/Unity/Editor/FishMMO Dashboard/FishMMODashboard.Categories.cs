@@ -431,11 +431,25 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Counts assets of the given type in the project.
+		/// Excludes assets under Assets/LOCAL when Enable Local Directory is disabled.
 		/// </summary>
 		private int CountAssetsOfType(Type type)
 		{
 			string[] guids = AssetDatabase.FindAssets($"t:{type.Name}");
-			return guids.Length;
+
+			if (EditorPrefs.GetBool("FishMMOEnableLocalDirectory", false))
+				return guids.Length;
+
+			int count = 0;
+			for (int i = 0; i < guids.Length; i++)
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+				if (!path.Replace('\\', '/').StartsWith("Assets/LOCAL/", StringComparison.OrdinalIgnoreCase))
+				{
+					count++;
+				}
+			}
+			return count;
 		}
 
 		/// <summary>
@@ -513,10 +527,15 @@ namespace FishMMO.Shared
 			if (cat.AssetType == null) return;
 
 			string[] guids = AssetDatabase.FindAssets($"t:{cat.AssetType.Name}");
+			bool skipLocal = !EditorPrefs.GetBool("FishMMOEnableLocalDirectory", false);
 
 			for (int i = 0; i < guids.Length; i++)
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+				if (skipLocal && path.Replace('\\', '/').StartsWith("Assets/LOCAL/", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
 				UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath(path, cat.AssetType);
 				if (asset != null)
 				{

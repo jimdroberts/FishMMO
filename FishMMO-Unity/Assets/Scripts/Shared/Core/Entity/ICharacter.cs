@@ -120,5 +120,32 @@ namespace FishMMO.Shared.Core
 		/// <param name="control">The behaviour instance if found, otherwise null.</param>
 		/// <returns>True if the behaviour is found; otherwise, false.</returns>
 		bool TryGet<T>(out T control) where T : class, ICharacterBehaviour;
+
+		// ───── ECA Trigger Lists ─────────────────────────────────────────────
+
+		/// <summary>Triggers invoked when this character deals damage to another. EventData: DamageEventData.</summary>
+		List<Trigger> OnDamageTriggers { get; }
+		/// <summary>Triggers invoked when this character receives damage from another. EventData: DamageEventData.</summary>
+		List<Trigger> OnDamagedTriggers { get; }
+		/// <summary>Triggers invoked when this character heals another. EventData: HealEventData.</summary>
+		List<Trigger> OnHealTriggers { get; }
+		/// <summary>Triggers invoked when this character is healed by another. EventData: HealEventData.</summary>
+		List<Trigger> OnHealedTriggers { get; }
+		/// <summary>Triggers invoked when this character kills another. EventData with CharacterHitEventData.</summary>
+		List<Trigger> OnKillTriggers { get; }
+		/// <summary>Triggers invoked when this character is killed by another. EventData with CharacterHitEventData.</summary>
+		List<Trigger> OnKilledTriggers { get; }
+		/// <summary>Triggers invoked when this character resurrects another. EventData with CharacterHitEventData.</summary>
+		List<Trigger> OnResurrectTriggers { get; }
+		/// <summary>Triggers invoked when this character is resurrected by another. EventData with CharacterHitEventData.</summary>
+		List<Trigger> OnResurrectedTriggers { get; }
+
+		/// <summary>
+		/// Executes each trigger in the list with the supplied event data.
+		/// Null-safe: no-ops if <paramref name="triggers"/> or <paramref name="eventData"/> is null.
+		/// </summary>
+		/// <param name="triggers">The list of triggers to execute.</param>
+		/// <param name="eventData">The event data to pass to each trigger.</param>
+		void Invoke(List<Trigger> triggers, EventData eventData);
 	}
 }

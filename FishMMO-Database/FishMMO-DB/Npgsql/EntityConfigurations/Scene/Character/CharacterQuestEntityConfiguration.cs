@@ -22,23 +22,22 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.CharacterID)
 				.IsRequired();
 
-			builder.Property(e => e.Name)
-				.IsRequired()
-				.HasMaxLength(100);
+			builder.Property(e => e.TemplateID)
+				.IsRequired();
 
-			builder.Property(e => e.Progress)
+			builder.Property(e => e.Status)
 				.IsRequired()
-				.HasDefaultValue(0);
+				.HasDefaultValue((byte)0);
 
-			builder.Property(e => e.Completed)
-				.IsRequired()
-				.HasDefaultValue(false);
+			builder.Property(e => e.ObjectiveValues)
+				.IsRequired(false)
+				.HasMaxLength(500);
 
-			// Unique constraint: one quest per name per character
-			builder.HasIndex(e => new { e.CharacterID, e.Name })
+			// Unique constraint: one quest per template per character
+			builder.HasIndex(e => new { e.CharacterID, e.TemplateID })
 				.IsUnique();
 
-			// Performance index for character quest queries
+			// Performance index for character quest queries (hot path for character load)
 			builder.HasIndex(e => e.CharacterID);
 
 			// Foreign key relationship

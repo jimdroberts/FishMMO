@@ -133,7 +133,8 @@ namespace FishMMO.Shared
 					if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
 					if (!addressablePaths.Contains(dep) &&
 						!dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) &&
-						!dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+						!dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) &&
+						!ShouldSkipLocalAsset(dep))
 					{
 						nonAddrRefs.Add(dep);
 					}
@@ -511,6 +512,7 @@ namespace FishMMO.Shared
 				foreach (var entry in group.entries)
 				{
 					if (entry == null) continue;
+					if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
 					addressablePaths.Add(entry.AssetPath);
 				}
 			}
@@ -523,6 +525,7 @@ namespace FishMMO.Shared
 				foreach (var entry in group.entries)
 				{
 					if (entry == null) continue;
+					if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
 					string[] entryDeps = AssetDatabase.GetDependencies(entry.AssetPath, true);
 					for (int d = 0; d < entryDeps.Length; d++)
 					{
@@ -530,7 +533,8 @@ namespace FishMMO.Shared
 						if (string.Equals(dep, entry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
 						if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
 							dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-							IsEditorOnlyPath(dep))
+							IsEditorOnlyPath(dep) ||
+							ShouldSkipLocalAsset(dep))
 						{
 							continue;
 						}
@@ -553,7 +557,8 @@ namespace FishMMO.Shared
 				if (string.Equals(dep, selectedEntry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
 				if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
 					dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-					IsEditorOnlyPath(dep))
+					IsEditorOnlyPath(dep) ||
+					ShouldSkipLocalAsset(dep))
 				{
 					continue;
 				}
@@ -599,7 +604,8 @@ namespace FishMMO.Shared
 				if (string.Equals(dep, selectedEntry.AssetPath, StringComparison.OrdinalIgnoreCase)) continue;
 				if (dep.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
 					dep.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-					IsEditorOnlyPath(dep))
+					IsEditorOnlyPath(dep) ||
+					ShouldSkipLocalAsset(dep))
 				{
 					continue;
 				}
@@ -934,6 +940,20 @@ namespace FishMMO.Shared
 			string normalized = assetPath.Replace('\\', '/');
 			return normalized.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) >= 0 ||
 				   normalized.EndsWith("/Editor", StringComparison.OrdinalIgnoreCase);
+		}
+
+		/// <summary>
+		/// Returns true if the asset path is under Assets/LOCAL and the local directory
+		/// toggle is disabled in FishMMO Dashboard settings. LOCAL assets are development-only
+		/// and should be ignored unless explicitly enabled via FishMMO Dashboard → Build → Enable Local Directory.
+		/// </summary>
+		private static bool ShouldSkipLocalAsset(string assetPath)
+		{
+			if (EditorPrefs.GetBool("FishMMOEnableLocalDirectory", false))
+				return false;
+			string normalized = assetPath.Replace('\\', '/');
+			return normalized.StartsWith("Assets/LOCAL/", StringComparison.OrdinalIgnoreCase) ||
+				   normalized.Equals("Assets/LOCAL", StringComparison.OrdinalIgnoreCase);
 		}
 
 		/// <summary>

@@ -101,6 +101,12 @@ namespace FishMMO.Shared
 			localDirToggle.RegisterValueChangedCallback(evt =>
 			{
 				EditorPrefs.SetBool("FishMMOEnableLocalDirectory", evt.newValue);
+
+				if (!evt.newValue)
+				{
+					RemoveLocalAddressableEntries();
+				}
+
 				SetStatus($"Local Directory: {(evt.newValue ? "Enabled" : "Disabled")}");
 			});
 			envSection.Add(localDirToggle);
@@ -510,6 +516,48 @@ namespace FishMMO.Shared
 			EditorUtility.SetDirty(config);
 			AssetDatabase.SaveAssetIfDirty(config);
 			SetStatus($"Version: {config.FullVersion}");
+		}
+
+		/// <summary>
+		/// Removes all Addressable entries whose asset path is under Assets/LOCAL/.
+		/// Called when the Enable Local Directory toggle is turned off so that
+		/// LOCAL assets are no longer included in Addressable builds.
+		/// </summary>
+		private static void RemoveLocalAddressableEntries()
+		{
+			var settings = AddressableAssetSettingsDefaultObject.Settings;
+			if (settings == null) return;
+
+			int removed = 0;
+
+			foreach (var group in settings.groups)
+			{
+				if (group == null) continue;
+
+				// Collect entries to remove (cannot modify collection while iterating)
+				var toRemove = new System.Collections.Generic.List<AddressableAssetEntry>();
+				foreach (var entry in group.entries)
+				{
+					if (entry == null) continue;
+					string normalized = entry.AssetPath.Replace('\\', '/');
+					if (normalized.StartsWith("Assets/LOCAL/", System.StringComparison.OrdinalIgnoreCase))
+					{
+						toRemove.Add(entry);
+					}
+				}
+
+				for (int i = 0; i < toRemove.Count; i++)
+				{
+					group.RemoveAssetEntry(toRemove[i]);
+					removed++;
+				}
+			}
+
+			if (removed > 0)
+			{
+				EditorUtility.SetDirty(settings);
+				Debug.Log($"[FishMMO] Removed {removed} LOCAL addressable entry/entries.");
+			}
 		}
 	}
 }

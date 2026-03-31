@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Serializing;
@@ -27,6 +28,23 @@ namespace FishMMO.Shared
 		/// The squared interaction range, used for efficient distance checks.
 		/// </summary>
 		private float interactionRangeSqr;
+
+		[Header("ECA - Interaction")]
+		[Tooltip("Triggers invoked server-side when a player successfully interacts with this object.")]
+		[SerializeField]
+		private List<Trigger> onInteractTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnInteractTriggers => onInteractTriggers;
+
+		/// <inheritdoc />
+		public void ExecuteOnInteract(EventData eventData)
+		{
+			for (int i = 0; i < onInteractTriggers.Count; ++i)
+			{
+				onInteractTriggers[i].Execute(eventData);
+			}
+		}
 
 		/// <summary>
 		/// Event invoked when this object is despawned.

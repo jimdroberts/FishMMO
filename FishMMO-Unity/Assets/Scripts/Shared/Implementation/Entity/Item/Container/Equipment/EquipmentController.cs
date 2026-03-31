@@ -2,6 +2,7 @@
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -13,6 +14,18 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class EquipmentController : ItemContainer, IEquipmentController
 	{
+		[Header("ECA - Equipment")]
+		[Tooltip("Triggers invoked when this character equips an item.")]
+		[SerializeField]
+		private List<Trigger> onEquipTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when this character unequips an item.")]
+		[SerializeField]
+		private List<Trigger> onUnequipTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnEquipTriggers => onEquipTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnUnequipTriggers => onUnequipTriggers;
 		/// <summary>
 		/// Called when the equipment controller is initialized. Adds slots for each equipment type.
 		/// </summary>
@@ -293,6 +306,8 @@ namespace FishMMO.Shared
 			{
 				item.Equippable.Equip(Character);
 			}
+
+			Character.Invoke(onEquipTriggers, new EquipItemEventData(Character, item, toSlot));
 			return true;
 		}
 
@@ -330,6 +345,7 @@ namespace FishMMO.Shared
 			// Remove the equipped item.
 			SetItemSlot(null, slot);
 
+			Character.Invoke(onUnequipTriggers, new EquipItemEventData(Character, item, (ItemSlot)slot));
 			return true;
 		}
 	}

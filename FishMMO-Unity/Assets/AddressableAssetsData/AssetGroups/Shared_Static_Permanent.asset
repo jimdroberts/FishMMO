@@ -39,6 +39,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0ceafd4ad49cb8600aef7517479dea25
+    m_Address: New Quests
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0f2ff92179a6d1b4c9dde7ad6a4afdb0
     m_Address: an orc warrior
     m_ReadOnly: 0
@@ -117,12 +123,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 24f157651a42f78449cc320a96a44c6c
-    m_Address: Duelist
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 27c4f240152242b4fb7dec2f5368445c
     m_Address: Sprint Speed
     m_ReadOnly: 0
@@ -149,12 +149,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2ce4d12b80ddd9f4ca8a389e6c91c7e3
     m_Address: FemaleHumanAbilityCrafter
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2e2f5277117b70846a352104d0b2f4a6
-    m_Address: Brotherhood of Shadows
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -189,12 +183,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 354db05468059d74ca8700239d2e58fd
-    m_Address: Assassin
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a43eddc2e7096b9ba1e5d97c98932e0
     m_Address: Assets/Prefabs/Shared/TeleporterCache.asset
     m_ReadOnly: 0
@@ -215,12 +203,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3f3e421dc58c81d4e94dcea943cfcd35
     m_Address: Assets/Prefabs/WorldSceneDetails.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 443ce73235f1b01468c483a1615461a3
-    m_Address: Arcanist
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -297,12 +279,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5b0b39a8258fb9b44ad775191e1e360b
-    m_Address: Chromaturge
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b56c55d686ceac4cac2a744a5bf0951
     m_Address: Basic Retreat State
     m_ReadOnly: 0
@@ -329,12 +305,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 67e5b419b5e646f4895935cf06fca178
     m_Address: StartScene B Fog
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6a2605b4a1c1f8a498907c6839682a8d
-    m_Address: Chromatic Spire
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -399,12 +369,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 822729ee7739ace4fa3c2f225832923a
-    m_Address: Eldritch Academy
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 82e54404fe2ccc448bd81cbe31657e29
     m_Address: FemaleHumanGeneralMerchant
     m_ReadOnly: 0
@@ -417,12 +381,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8794ea40ee18df847956a8d764f6e5ac
-    m_Address: Dark Conclave
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
     m_Address: Tier1 Sword Attack Speed
     m_ReadOnly: 0
@@ -431,18 +389,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8fe93c66f5bc53c45a7b0f8334be9016
     m_Address: StandardAttributeDatabase
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 94cd8f60f18580040ac0dc7a576dd80b
-    m_Address: Legion of Steel
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 97769fb7154a22c4eb19a5f9ed732c60
-    m_Address: Beastmaster
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -536,12 +482,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b8c7915feee28984594865f67b7a15b5
-    m_Address: Sacred Shield
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ba6fc6ea5873d2f4dbf7c973fdafb667
     m_Address: Lords of the Deep
     m_ReadOnly: 0
@@ -574,12 +514,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c4eb5f1a4b50f884c92f82a0e7ad26f3
     m_Address: Physical Damage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c64f50b3230a1eb4891977cbe8060ba4
-    m_Address: Alchemist
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -646,12 +580,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d9b40c4bb7d3f5d4c965814c5433ce65
     m_Address: SunAndMoon
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: de79a6c8358f516489da583195e9f7cb
-    m_Address: The Verdant Order
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

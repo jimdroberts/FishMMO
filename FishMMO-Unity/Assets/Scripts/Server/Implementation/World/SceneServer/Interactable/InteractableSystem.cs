@@ -66,10 +66,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		[SerializeField] private WorldSceneDetailsCache worldSceneDetailsCache;
 		/// <summary>
-		/// Registers and clears interactable handlers for this system.
-		/// </summary>
-		[SerializeField] private InteractableHandlerInitializer interactableHandlerInitializer;
-		/// <summary>
 		/// Maximum number of crafted abilities a character may learn.
 		/// </summary>
 		[SerializeField] [Min(1)] private int maxAbilityCount = 25;
@@ -91,12 +87,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			if (interactableHandlerInitializer == null)
-			{
-				Log.Error("InteractableSystem", "InitializeOnce: InteractableHandlerInitializer is null");
-				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
-			}
-
 			if (Server.Database?.ServiceRegistry == null)
 			{
 				Log.Error("InteractableSystem", "InitializeOnce: Database ServiceRegistry is null");
@@ -109,14 +99,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
+			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out _))
 			{
 				Log.Error("InteractableSystem", "InitializeOnce: IInteractableSystemRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
-
-			// Interactable handlers
-			interactableHandlerInitializer.RegisterHandlers(Server, this);
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
@@ -128,9 +115,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<QuestAcceptBroadcast>(OnServerQuestAcceptBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<QuestTurnInBroadcast>(OnServerQuestTurnInBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<QuestAbandonBroadcast>(OnServerQuestAbandonBroadcastReceived, true);
 
 			IDialogueInteractable.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
 
@@ -156,11 +140,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Drain any remaining queued main-thread actions
 			DrainMainThreadQueue(drainAll: true);
 
-			// Interactable handlers
-			ClearAllHandlers();
 			if (Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.InteractableHandlers.Clear();
 				runtimeData.IngressGuard?.Clear();
 			}
 
@@ -174,9 +155,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<QuestAcceptBroadcast>(OnServerQuestAcceptBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<QuestTurnInBroadcast>(OnServerQuestTurnInBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<QuestAbandonBroadcast>(OnServerQuestAbandonBroadcastReceived);
 
 			IDialogueInteractable.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
 
@@ -228,123 +206,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				runtimeData.IngressGuard.End(guardKey);
 			}
-		}
-
-		/// <summary>
-		/// Registers an interactable handler for a specific interactable type (non-generic overload).
-		/// Used by reflection-based auto-discovery in InteractableHandlerInitializer.
-		/// </summary>
-		/// <param name="interactableType">The interactable type to register the handler for. Must implement IInteractable.</param>
-		/// <param name="handler">The handler instance for the specified interactable type.</param>
-		public void RegisterInteractableHandler(Type interactableType, IInteractableHandler handler)
-		{
-			if (interactableType == null || handler == null)
-			{
-				return;
-			}
-
-			if (!typeof(IInteractable).IsAssignableFrom(interactableType))
-			{
-				Log.Warning("InteractableSystem", $"Type {interactableType.Name} does not implement IInteractable. Skipping registration.");
-				return;
-			}
-
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
-			Dictionary<Type, IInteractableHandler> interactableHandlers = runtimeData.InteractableHandlers;
-			if (!interactableHandlers.ContainsKey(interactableType))
-			{
-				interactableHandlers.Add(interactableType, handler);
-				Log.Debug("InteractableSystem", $"Registered handler for {interactableType.Name}");
-			}
-			else
-			{
-				Log.Warning("InteractableSystem", $"Handler for type {interactableType.Name} is already registered. Overwriting existing handler.");
-				interactableHandlers[interactableType] = handler;
-			}
-		}
-
-		/// <summary>
-		/// Registers an interactable handler for a specific type. The type must implement IInteractable.
-		/// </summary>
-		/// <typeparam name="T">The type of interactable to register the handler for. Must implement IInteractable.</typeparam>
-		/// <param name="handler">The handler instance for the specified interactable type.</param>
-		public void RegisterInteractableHandler<T>(IInteractableHandler handler) where T : IInteractable
-		{
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
-			Dictionary<Type, IInteractableHandler> interactableHandlers = runtimeData.InteractableHandlers;
-			Type type = typeof(T);
-			if (!interactableHandlers.ContainsKey(type))
-			{
-				interactableHandlers.Add(type, handler);
-				Log.Debug("InteractableSystem", $"Registered handler for {type.Name}");
-			}
-			else
-			{
-				Log.Warning("InteractableSystem", $"Handler for type {type.Name} is already registered. Overwriting existing handler.");
-				interactableHandlers[type] = handler; // Overwrite in case you want to update handlers
-			}
-		}
-
-		/// <summary>
-		/// Unregisters the handler for a specific interactable type.
-		/// </summary>
-		/// <typeparam name="T">The type of interactable to unregister the handler for. Must implement IInteractable.</typeparam>
-		/// <returns>True if the handler was found and removed; otherwise, false.</returns>
-		public bool UnregisterInteractableHandler<T>() where T : IInteractable
-		{
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return false;
-			}
-
-			Dictionary<Type, IInteractableHandler> interactableHandlers = runtimeData.InteractableHandlers;
-			Type type = typeof(T);
-			if (interactableHandlers.Remove(type))
-			{
-				Log.Debug("InteractableSystem", $"Unregistered handler for {type.Name}");
-				return true;
-			}
-			else
-			{
-				Log.Warning("InteractableSystem", $"Attempted to unregister handler for type {type.Name}, but no handler was found.");
-				return false;
-			}
-		}
-
-		/// <summary>
-		/// Retrieves the interactable handler for a given type.
-		/// </summary>
-		public IInteractableHandler GetInteractableHandler<T>() where T : IInteractable
-		{
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return null;
-			}
-
-			Dictionary<Type, IInteractableHandler> interactableHandlers = runtimeData.InteractableHandlers;
-			Type type = typeof(T);
-			interactableHandlers.TryGetValue(type, out var handler);
-			return handler;
-		}
-
-		/// <summary>
-		/// Removes all registered interactable handlers.
-		/// </summary>
-		public void ClearAllHandlers()
-		{
-			if (Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				runtimeData.InteractableHandlers.Clear();
-			}
-			Log.Debug("InteractableSystem", "All interactable handlers cleared.");
 		}
 
 		/// <summary>
@@ -473,11 +334,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
-			{
-				return;
-			}
-
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
 				return;
@@ -504,16 +360,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (interactable != null &&
 					interactable.CanInteract(character))
 				{
-					Type interactableType = interactable.GetType();
-
-					if (runtimeData.InteractableHandlers.TryGetValue(interactableType, out IInteractableHandler handler))
-					{
-						handler.HandleInteraction(interactable, character, sceneObject, this);
-					}
-					else
-					{
-						Log.Warning("InteractableSystem", $"No interaction handler registered for type: {interactableType.Name}");
-					}
+					interactable.ExecuteOnInteract(new PlayerInteractionEventData(character, interactable,
+					(ch, inv, item) => SendNewItemBroadcast(ch.Owner, ch, inv, item)));
 				}
 			}
 			finally

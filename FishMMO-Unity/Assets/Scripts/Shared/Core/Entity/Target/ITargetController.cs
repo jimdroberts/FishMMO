@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared.Core
@@ -29,5 +30,14 @@ namespace FishMMO.Shared.Core
 		/// Updates the target based on the given origin, direction, and max distance.
 		/// </summary>
 		TargetInfo UpdateTarget(Vector3 origin, Vector3 direction, float maxDistance);
+
+		/// <summary>
+		/// Triggers invoked when the target changes to a new target.
+		/// </summary>
+		List<Trigger> OnTargetChangeTriggers { get; }
+		/// <summary>
+		/// Triggers invoked when the current target is cleared.
+		/// </summary>
+		List<Trigger> OnTargetClearTriggers { get; }
 	}
 }

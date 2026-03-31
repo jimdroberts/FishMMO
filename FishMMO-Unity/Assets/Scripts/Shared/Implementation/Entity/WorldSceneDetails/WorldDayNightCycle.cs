@@ -2,19 +2,17 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// MonoBehaviour for managing the day/night cycle in a scene. Handles skybox transitions, object rotations, object activations/deactivations, and material alpha fading based on the current game time of day.
+	/// MonoBehaviour for managing the day/night cycle in a scene. Handles skybox transitions,
+	/// object rotations, object activations/deactivations, and material alpha fading based on the
+	/// current game time of day. Supports ECA triggers for scene-load, day-start, and night-start events.
 	/// </summary>
 	public class WorldDayNightCycle : MonoBehaviour
 	{
-		/// <summary>
-		/// Delegate for triggering fog changes when the scene loads or transitions.
-		/// </summary>
-		public RegionChangeFogAction SceneFog;
-
 		/// <summary>
 		/// True if the day night cycle should run. False if not.
 		/// </summary>
@@ -58,7 +56,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		private float fadeTime;
 		/// <summary>
-		/// Duration in seconds for fading
+		/// Tracks the last applied rotation angle for objects affected by the day/night cycle.
+		/// </summary>
+		private float lastRotationAngle;
+		/// <summary>
+		/// Duration in seconds for fading.
 		/// </summary>
 		[Tooltip("The time in seconds that objects will take to fade in or out.")]
 		public float FadeThreshold = 1f;
@@ -74,25 +76,73 @@ namespace FishMMO.Shared
 		public List<GameObject> NightFadeObjects = new List<GameObject>();
 		/// <summary>
 		/// True if it's currently day time in the game world.
-		/// Used to determine which objects and effects should be active.
 		/// </summary>
 		[ShowReadonly]
 		[SerializeField]
 		private bool isDaytime = true;
 
+		// ───── ECA Trigger Lists ────────────────────────────────────────────
+
+		[Header("ECA - Day/Night Triggers")]
+		[Tooltip("Triggers executed once when this scene loads (e.g. apply default fog). EventData: DayNightEventData.")]
+		[SerializeField]
+		private List<Trigger> onSceneLoadTriggers = new List<Trigger>();
+
+		[Tooltip("Triggers executed when day begins. EventData: DayNightEventData (IsDaytime = true).")]
+		[SerializeField]
+		private List<Trigger> onDayStartTriggers = new List<Trigger>();
+
+		[Tooltip("Triggers executed when night begins. EventData: DayNightEventData (IsDaytime = false).")]
+		[SerializeField]
+		private List<Trigger> onNightStartTriggers = new List<Trigger>();
+
+		// Runtime blend material — we lerp this instance so we never mutate the shared material assets.
+		private Material blendSkyboxMaterial;
+
+		// Cached renderers for fade objects — avoids GetComponent<Renderer>() in Update.
+		private Renderer[] dayFadeRenderers;
+		private Renderer[] nightFadeRenderers;
+
+		private const float DynamicGIUpdateInterval = 1f;
+		private float dynamicGITimer;
+
 		/// <summary>
-		/// Unity Awake callback. Initializes the day/night cycle, sets the initial skybox, and triggers fog if needed.
+		/// Unity Awake callback. Initializes the day/night cycle, sets the initial skybox,
+		/// creates the blend material, and fires scene-load ECA triggers.
 		/// </summary>
 		private void Awake()
 		{
-			// Optionally trigger a fog change when the scene loads.
-			SceneFog?.Invoke(null, null, false);
+			DayCycleDuration = Mathf.Max(1, DayCycleDuration);
+			NightCycleDuration = Mathf.Max(1, NightCycleDuration);
 
-			// Set the initial skybox to the day material.
-			RenderSettings.skybox = DaySkyboxMaterial;
+#if !UNITY_SERVER
+			// Create a runtime copy of the day material for skybox blending.
+			// This prevents mutation of the shared DaySkyboxMaterial asset.
+			if (DaySkyboxMaterial != null)
+			{
+				blendSkyboxMaterial = new Material(DaySkyboxMaterial);
+				RenderSettings.skybox = blendSkyboxMaterial;
+			}
+
+			dayFadeRenderers = CacheRenderers(DayFadeObjects);
+			nightFadeRenderers = CacheRenderers(NightFadeObjects);
+#endif
+
+			// Fire scene-load triggers (e.g. apply default fog via ChangeFogAction).
+			InvokeTriggers(onSceneLoadTriggers);
 
 			// Initialize the day/night state based on the current time.
 			UpdateDayNightState(GetGameTimeOfDay(DateTime.UtcNow), true);
+		}
+
+		private void OnDestroy()
+		{
+#if !UNITY_SERVER
+			if (blendSkyboxMaterial != null)
+			{
+				Destroy(blendSkyboxMaterial);
+			}
+#endif
 		}
 
 		/// <summary>
@@ -103,11 +153,8 @@ namespace FishMMO.Shared
 			// Only update the cycle if enabled.
 			if (DayNightCycle)
 			{
-				DateTime now = DateTime.UtcNow;
+				float currentGameTimeOfDay = GetGameTimeOfDay(DateTime.UtcNow);
 
-				float currentGameTimeOfDay = GetGameTimeOfDay(now);
-
-				// Update day/night state, rotate objects, and handle fading transitions.
 				UpdateDayNightState(currentGameTimeOfDay);
 				UpdateDayNightRotation(currentGameTimeOfDay, RotateObjects);
 				UpdateDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
@@ -115,139 +162,126 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Gets the current game time of day in seconds.
+		/// Gets the current game time of day in seconds, wrapping after each full day/night cycle.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private float GetGameTimeOfDay(DateTime now)
 		{
 			float secondsPerGameDay = DayCycleDuration + NightCycleDuration;
-
-			// Calculate the total elapsed time since the start of the game day in seconds.
-			// This wraps around after each full day/night cycle.
 			return (float)(now.TimeOfDay.TotalSeconds % secondsPerGameDay);
 		}
 
 		/// <summary>
-		/// Updates the day night state.
+		/// Updates the day/night state and fires ECA triggers on transitions.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void UpdateDayNightState(float currentGameTimeOfDay, bool ignoreCurrentState = false)
 		{
-			// Determine if it's currently day or night and update state accordingly.
 			if (currentGameTimeOfDay <= DayCycleDuration)
 			{
-				// Switch to day if not already in day state or if forced to update.
 				if (!isDaytime || ignoreCurrentState)
 				{
 					isDaytime = true;
 
-					// Enable day objects, disable night objects.
-					UpdateDayNightActivations(isDaytime, DayObjects);
-					UpdateDayNightActivations(!isDaytime, NightObjects);
+					UpdateDayNightActivations(true, DayObjects);
+					UpdateDayNightActivations(false, NightObjects);
 
-					fadeTime = FadeThreshold; // Reset fade time for transitions.
+					fadeTime = FadeThreshold;
+
+					if (!ignoreCurrentState)
+					{
+						InvokeTriggers(onDayStartTriggers);
+					}
 				}
 			}
 			else
 			{
-				// Switch to night if not already in night state or if forced to update.
 				if (isDaytime || ignoreCurrentState)
 				{
 					isDaytime = false;
 
-					// Enable night objects, disable day objects.
-					UpdateDayNightActivations(isDaytime, DayObjects);
-					UpdateDayNightActivations(!isDaytime, NightObjects);
+					UpdateDayNightActivations(false, DayObjects);
+					UpdateDayNightActivations(true, NightObjects);
 
-					fadeTime = FadeThreshold; // Reset fade time for transitions.
+					fadeTime = FadeThreshold;
+
+					if (!ignoreCurrentState)
+					{
+						InvokeTriggers(onNightStartTriggers);
+					}
 				}
 			}
 		}
 
 		/// <summary>
-		/// Tracks the last applied rotation angle for objects affected by the day/night cycle.
-		/// Used to calculate incremental rotation each frame.
-		/// </summary>
-		private float lastRotationAngle = 0.0f;
-		/// <summary>
-		/// Rotate objects based on the current Game Time Of Day.
+		/// Rotates objects based on the current game time of day and lerps the skybox blend material.
 		/// </summary>
 		private void UpdateDayNightRotation(float currentGameTimeOfDay, List<GameObject> objects)
 		{
 			if (objects == null || objects.Count == 0)
 			{
-				return; // Early exit if there are no objects to rotate
+				return;
 			}
 
-			// The angle of rotation at the specific time.
 			float lerpTime;
 			float rotationAngle;
 
-			// Calculate rotation and skybox transition based on time of day.
 			if (currentGameTimeOfDay <= DayCycleDuration)
 			{
-				// Daytime: rotate from 0 to 180 degrees.
 				lerpTime = currentGameTimeOfDay / DayCycleDuration;
 				rotationAngle = Mathf.Lerp(0f, 180f, lerpTime);
 
 #if !UNITY_SERVER
-				// Lerp the skybox from day to night material as day progresses.
-				if (DaySkyboxMaterial != null &&
-					NightSkyBoxMaterial != null &&
-					RenderSettings.skybox != null)
+				if (blendSkyboxMaterial != null &&
+					DaySkyboxMaterial != null &&
+					NightSkyBoxMaterial != null)
 				{
-					// Only update the skybox if it has actually changed to prevent unnecessary lerp calls
-					if (RenderSettings.skybox != DaySkyboxMaterial)
-					{
-						RenderSettings.skybox.Lerp(DaySkyboxMaterial, NightSkyBoxMaterial, lerpTime);
-						DynamicGI.UpdateEnvironment(); // Update global illumination if required
-					}
+					blendSkyboxMaterial.Lerp(DaySkyboxMaterial, NightSkyBoxMaterial, lerpTime);
 				}
 #endif
 			}
 			else
 			{
-				// Nighttime: rotate from 180 to 360 degrees.
-				lerpTime = (currentGameTimeOfDay % DayCycleDuration) / NightCycleDuration;
+				lerpTime = (currentGameTimeOfDay - DayCycleDuration) / NightCycleDuration;
 				rotationAngle = Mathf.Lerp(180f, 360f, lerpTime);
 
 #if !UNITY_SERVER
-				// Lerp the skybox from night to day material as night progresses.
-				if (DaySkyboxMaterial != null &&
-					NightSkyBoxMaterial != null &&
-					RenderSettings.skybox != null)
+				if (blendSkyboxMaterial != null &&
+					DaySkyboxMaterial != null &&
+					NightSkyBoxMaterial != null)
 				{
-					// Only update the skybox if it has actually changed to prevent unnecessary lerp calls
-					if (RenderSettings.skybox != NightSkyBoxMaterial)
-					{
-						RenderSettings.skybox.Lerp(NightSkyBoxMaterial, DaySkyboxMaterial, lerpTime);
-						DynamicGI.UpdateEnvironment(); // Update global illumination if required
-					}
+					blendSkyboxMaterial.Lerp(NightSkyBoxMaterial, DaySkyboxMaterial, lerpTime);
 				}
 #endif
 			}
 
 			float rotationDiff = rotationAngle - lastRotationAngle;
 
-			// Apply calculated rotation difference to each object in the list.
-			foreach (GameObject obj in objects)
+			for (int i = 0; i < objects.Count; ++i)
 			{
+				GameObject obj = objects[i];
 				if (obj == null)
 				{
 					continue;
 				}
-				obj.transform.rotation = obj.transform.rotation * Quaternion.AngleAxis(rotationDiff, Vector3.right);
+				obj.transform.rotation *= Quaternion.AngleAxis(rotationDiff, Vector3.right);
 			}
 
 			lastRotationAngle = rotationAngle;
+
+#if !UNITY_SERVER
+			dynamicGITimer -= Time.deltaTime;
+			if (dynamicGITimer <= 0f)
+			{
+				dynamicGITimer = DynamicGIUpdateInterval;
+				DynamicGI.UpdateEnvironment();
+			}
+#endif
 		}
 
 		/// <summary>
-		/// Enables or disables all GameObjects in the provided list based on the 'enable' parameter.
-		/// Used to activate day or night objects as the cycle changes.
+		/// Enables or disables all GameObjects in the provided list.
 		/// </summary>
-		/// <param name="enable">True to enable objects, false to disable.</param>
-		/// <param name="objects">List of GameObjects to activate/deactivate.</param>
 		private void UpdateDayNightActivations(bool enable, List<GameObject> objects)
 		{
 			if (objects == null || objects.Count < 1)
@@ -255,71 +289,102 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Enable or disable each GameObject in the provided list.
-			foreach (GameObject gameObject in objects)
+			for (int i = 0; i < objects.Count; ++i)
 			{
-				if (gameObject == null)
+				GameObject obj = objects[i];
+				if (obj != null)
 				{
-					continue;
+					obj.SetActive(enable);
 				}
-
-				gameObject.SetActive(enable);
 			}
 		}
 
 		/// <summary>
-		/// Fade objects in or out based on day/night status.
+		/// Fades objects in or out based on day/night status.
 		/// </summary>
 		private void UpdateDayNightFading(float gameTimeOfDay, List<GameObject> dayFadeObjects, List<GameObject> nightFadeObjects)
 		{
 #if !UNITY_SERVER
 			float alpha = 0.0f;
 
-			// Handle fade transitions by decreasing fadeTime and calculating alpha.
 			if (fadeTime > 0)
 			{
 				fadeTime -= Time.deltaTime;
 				alpha = (fadeTime / FadeThreshold).Clamp(0.0f, 1.0f);
 			}
 
-			// Fade day objects out during the day, in at night.
-			if (dayFadeObjects != null && dayFadeObjects.Count > 0)
+			if (dayFadeRenderers != null && dayFadeRenderers.Length > 0)
 			{
-				SetAlpha(dayFadeObjects, isDaytime ? 1 - alpha : alpha);
+				SetAlpha(dayFadeRenderers, isDaytime ? 1 - alpha : alpha);
 			}
 
-			// Fade night objects in during the night, out during the day.
-			if (nightFadeObjects != null && nightFadeObjects.Count > 0)
+			if (nightFadeRenderers != null && nightFadeRenderers.Length > 0)
 			{
-				SetAlpha(nightFadeObjects, isDaytime ? alpha : 1 - alpha);
+				SetAlpha(nightFadeRenderers, isDaytime ? alpha : 1 - alpha);
 			}
 #endif
 		}
 
 		/// <summary>
-		/// Sets the alpha of the materials of objects in the list.
+		/// Caches renderers from the provided list of GameObjects.
 		/// </summary>
-		/// <param name="objects">List of GameObjects</param>
-		/// <param name="alpha">Target alpha value</param>
-		private void SetAlpha(List<GameObject> objects, float alpha)
+		private static Renderer[] CacheRenderers(List<GameObject> objects)
 		{
 			if (objects == null || objects.Count < 1)
 			{
+				return Array.Empty<Renderer>();
+			}
+
+			List<Renderer> renderers = new List<Renderer>(objects.Count);
+			for (int i = 0; i < objects.Count; ++i)
+			{
+				if (objects[i] != null)
+				{
+					Renderer r = objects[i].GetComponent<Renderer>();
+					if (r != null)
+					{
+						renderers.Add(r);
+					}
+				}
+			}
+			return renderers.ToArray();
+		}
+
+		/// <summary>
+		/// Sets the alpha of each cached renderer's material.
+		/// </summary>
+		private void SetAlpha(Renderer[] renderers, float alpha)
+		{
+#if !UNITY_SERVER
+			for (int i = 0; i < renderers.Length; ++i)
+			{
+				Renderer r = renderers[i];
+				if (r != null)
+				{
+					Color color = r.material.color;
+					color.a = alpha;
+					r.material.color = color;
+				}
+			}
+#endif
+		}
+
+		/// <summary>
+		/// Executes all triggers in the list using a world-level DayNightEventData (null initiator).
+		/// </summary>
+		private void InvokeTriggers(List<Trigger> triggers)
+		{
+			if (triggers == null || triggers.Count == 0)
+			{
 				return;
 			}
-			// Set the alpha value of each object's material to achieve fade effect.
-			foreach (GameObject obj in objects)
+
+			DayNightEventData eventData = new DayNightEventData(isDaytime);
+			for (int i = 0; i < triggers.Count; ++i)
 			{
-				if (obj == null)
+				if (triggers[i] != null)
 				{
-					continue;
-				}
-				Renderer renderer = obj.GetComponent<Renderer>();
-				if (renderer != null)
-				{
-					Color color = renderer.material.color;
-					color.a = alpha;
-					renderer.material.color = color;
+					triggers[i].Execute(eventData);
 				}
 			}
 		}

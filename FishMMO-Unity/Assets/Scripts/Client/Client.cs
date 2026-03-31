@@ -200,8 +200,8 @@ namespace FishMMO.Client
 			IAchievementController.OnCompleteAchievement += AchievementController_OnCompleteAchievement;
 
 			RegionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
-			RegionDisplayNameAction.OnDisplay2DLabel += RegionDisplayNameAction_OnDisplay2DLabel;
-			RegionChangeFogAction.OnChangeFog += RegionChangeFogAction_OnChangeFog;
+			DisplayRegionNameAction.OnDisplay2DLabel += RegionDisplayNameAction_OnDisplay2DLabel;
+			ChangeFogAction.OnChangeFog += RegionChangeFogAction_OnChangeFog;
 #endif
 		}
 
@@ -376,8 +376,8 @@ namespace FishMMO.Client
 				Destroy(RegionNameLabel.gameObject);
 				RegionNameLabel = null;
 			}
-			RegionDisplayNameAction.OnDisplay2DLabel -= RegionDisplayNameAction_OnDisplay2DLabel;
-			RegionChangeFogAction.OnChangeFog -= RegionChangeFogAction_OnChangeFog;
+			DisplayRegionNameAction.OnDisplay2DLabel -= RegionDisplayNameAction_OnDisplay2DLabel;
+			ChangeFogAction.OnChangeFog -= RegionChangeFogAction_OnChangeFog;
 #endif
 
 			AudioListener = null;

@@ -9,32 +9,38 @@ namespace FishMMO.Shared.Core
 	public interface IQuestController : ICharacterBehaviour
 	{
 		/// <summary>
-		/// Raised when a quest is accepted. Parameters: character, quest instance.
+		/// Raised when a quest is accepted. Parameters: character, quest template.
 		/// </summary>
-		static Action<ICharacter, QuestInstance> OnQuestAccepted;
+		static Action<ICharacter, QuestTemplate> OnQuestAccepted;
 
 		/// <summary>
-		/// Raised when an objective is updated. Parameters: character, quest instance, objective index.
+		/// Raised when an objective is updated. Parameters: character, quest name, objective index, amount.
 		/// </summary>
-		static Action<ICharacter, QuestInstance, int> OnObjectiveUpdated;
+		static Action<ICharacter, string, int, long> OnObjectiveUpdated;
 
 		/// <summary>
 		/// Raised when all objectives are met and the quest transitions to Complete.
-		/// Parameters: character, quest instance.
+		/// Parameters: character, quest name.
 		/// </summary>
-		static Action<ICharacter, QuestInstance> OnQuestComplete;
+		static Action<ICharacter, string> OnQuestComplete;
 
 		/// <summary>
 		/// Raised when a quest is turned in and rewards are granted.
-		/// Parameters: character, quest instance.
+		/// Parameters: character, quest name.
 		/// </summary>
-		static Action<ICharacter, QuestInstance> OnQuestTurnedIn;
+		static Action<ICharacter, string> OnQuestTurnedIn;
 
 		/// <summary>
 		/// Raised when a quest is failed (timer expired, etc.).
-		/// Parameters: character, quest instance.
+		/// Parameters: character, quest name.
 		/// </summary>
-		static Action<ICharacter, QuestInstance> OnQuestFailed;
+		static Action<ICharacter, string> OnQuestFailed;
+
+		/// <summary>
+		/// Raised when a quest is abandoned and removed from the quest log.
+		/// Parameters: character, quest name.
+		/// </summary>
+		static Action<ICharacter, string> OnQuestAbandoned;
 
 		/// <summary>
 		/// Read-only accessor for all active quests keyed by template name.

@@ -3,6 +3,8 @@ using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System;
+using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -20,6 +22,14 @@ namespace FishMMO.Shared
 		/// The old template may be null if no archetype was previously assigned.
 		/// </summary>
 		public event Action<ArchetypeTemplate, ArchetypeTemplate> OnArchetypeChanged;
+
+		[Header("ECA - Archetype")]
+		[Tooltip("Triggers invoked when the character's archetype changes.")]
+		[SerializeField]
+		private List<Trigger> onArchetypeChangeTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnArchetypeChangeTriggers => onArchetypeChangeTriggers;
 
 		/// <summary>
 		/// The archetype template currently assigned to this character.
@@ -109,6 +119,7 @@ namespace FishMMO.Shared
 #endif
 
 			OnArchetypeChanged?.Invoke(oldTemplate, Template);
+			Character.Invoke(onArchetypeChangeTriggers, new ArchetypeEventData(Character, Template, oldTemplate));
 		}
 
 #if UNITY_SERVER

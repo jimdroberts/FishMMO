@@ -1,4 +1,6 @@
 using FishNet.Transporting;
+using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -12,6 +14,19 @@ namespace FishMMO.Shared
 		/// The pet instance managed by this controller.
 		/// </summary>
 		public Pet Pet { get; set; }
+
+		[Header("ECA - Pet")]
+		[Tooltip("Triggers invoked when a pet is summoned.")]
+		[SerializeField]
+		private List<Trigger> onPetSummonTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when a pet is dismissed or destroyed.")]
+		[SerializeField]
+		private List<Trigger> onPetDismissTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnPetSummonTriggers => onPetSummonTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnPetDismissTriggers => onPetDismissTriggers;
 
 		/// <summary>
 		/// Resets the controller's state, clearing the pet reference.
@@ -64,6 +79,7 @@ namespace FishMMO.Shared
 				Pet = sceneObject.GameObject.GetComponent<Pet>();
 
 				IPetController.OnPetSummoned?.Invoke(Pet);
+				Character.Invoke(onPetSummonTriggers, new PetEventData(Character, Pet));
 			}
 		}
 
@@ -76,6 +92,7 @@ namespace FishMMO.Shared
 		{
 			Pet = null;
 			IPetController.OnPetDestroyed?.Invoke();
+			Character.Invoke(onPetDismissTriggers, new PetEventData(Character, null));
 		}
 #endif
 	}

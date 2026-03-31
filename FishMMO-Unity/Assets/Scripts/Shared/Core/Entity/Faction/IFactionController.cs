@@ -47,6 +47,11 @@ namespace FishMMO.Shared.Core
 		RaceTemplate RaceTemplate { get; }
 
 		/// <summary>
+		/// Triggers invoked when a faction standing changes for this character.
+		/// </summary>
+		List<Trigger> OnFactionChangeTriggers { get; }
+
+		/// <summary>
 		/// Copies all faction data from another faction controller.
 		/// </summary>
 		/// <param name="factionController">The source faction controller to copy from.</param>

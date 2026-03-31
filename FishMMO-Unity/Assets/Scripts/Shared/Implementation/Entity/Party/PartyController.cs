@@ -1,6 +1,7 @@
 ﻿using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -39,6 +40,19 @@ namespace FishMMO.Shared
 		/// Event triggered when the character leaves the party.
 		/// </summary>
 		public event Action OnLeaveParty;
+
+		[Header("ECA - Party")]
+		[Tooltip("Triggers invoked when the character joins or creates a party.")]
+		[SerializeField]
+		private List<Trigger> onPartyJoinTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when the character leaves a party.")]
+		[SerializeField]
+		private List<Trigger> onPartyLeaveTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnPartyJoinTriggers => onPartyJoinTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnPartyLeaveTriggers => onPartyLeaveTriggers;
 
 		/// <summary>
 		/// The unique ID of the party or party member.
@@ -102,6 +116,7 @@ namespace FishMMO.Shared
 			Rank = PartyRank.Leader;
 
 			OnPartyCreated?.Invoke(msg.Location);
+			Character.Invoke(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
 		}
 
 		/// <summary>
@@ -127,6 +142,7 @@ namespace FishMMO.Shared
 			{
 				ID = msg.PartyID;
 				Rank = msg.Rank;
+				Character.Invoke(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
 			}
 
 			OnAddPartyMember?.Invoke(msg.CharacterID, msg.Rank, msg.HealthPCT);
@@ -169,6 +185,7 @@ namespace FishMMO.Shared
 			ID = 0;
 			Rank = PartyRank.None;
 			OnLeaveParty?.Invoke();
+			Character.Invoke(onPartyLeaveTriggers, new PartyEventData(Character, 0, PartyRank.None));
 		}
 
 		/// <summary>

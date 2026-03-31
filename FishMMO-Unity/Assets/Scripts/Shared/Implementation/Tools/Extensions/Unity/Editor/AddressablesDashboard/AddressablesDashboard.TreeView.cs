@@ -104,6 +104,7 @@ namespace FishMMO.Shared
 				foreach (var entry in group.entries)
 				{
 					if (entry == null) continue;
+					if (ShouldSkipLocalAsset(entry.AssetPath)) continue;
 
 					int entryId = nextId++;
 					idToEntry[entryId] = entry;

@@ -157,6 +157,10 @@ namespace FishMMO.Shared
 				{
 					replicatedFlags.DisableBit(AbilityActivationFlags.IsHeld);
 				}
+				if (base.IsServerStarted)
+				{
+					Character.Invoke(onAbilityActivateTriggers, new AbilityEventData(Character, currentAbilityID));
+				}
 				return true;
 			}
 			return false;
@@ -344,6 +348,10 @@ namespace FishMMO.Shared
 				//Log.Debug($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
 				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
 				AddCooldown(validatedAbility, activationData.GetTick());
+				if (base.IsServerStarted)
+				{
+					Character.Invoke(onAbilityCompleteTriggers, new AbilityEventData(Character, validatedAbility.ID));
+				}
 			}
 
 			// Reset ability data

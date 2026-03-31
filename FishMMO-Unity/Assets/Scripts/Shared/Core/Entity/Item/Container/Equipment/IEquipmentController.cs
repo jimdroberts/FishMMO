@@ -9,6 +9,16 @@ namespace FishMMO.Shared.Core
 	public interface IEquipmentController : ICharacterBehaviour, IItemContainer
 	{
 		/// <summary>
+		/// Triggers invoked when this character equips an item. EventData: EquipItemEventData.
+		/// </summary>
+		List<Trigger> OnEquipTriggers { get; }
+
+		/// <summary>
+		/// Triggers invoked when this character unequips an item. EventData: EquipItemEventData.
+		/// </summary>
+		List<Trigger> OnUnequipTriggers { get; }
+
+		/// <summary>
 		/// Activates the item in the specified equipment slot, typically triggering its use effect.
 		/// </summary>
 		/// <param name="index">The equipment slot index to activate.</param>

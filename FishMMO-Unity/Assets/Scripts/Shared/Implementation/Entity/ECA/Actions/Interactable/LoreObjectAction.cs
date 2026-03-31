@@ -1,0 +1,114 @@
+using System;
+using System.Collections.Generic;
+using FishMMO.Shared.Core;
+
+namespace FishMMO.Shared
+{
+	/// <summary>
+	/// ECA action for lore object interactions. Sends a <see cref="LoreObjectBroadcast"/>
+	/// to display the UILore window, grants abilities and ability events inline (idempotent),
+	/// invokes <see cref="PlayerInteractionEventData.OnGrantItem"/> once per item grant so that
+	/// <c>InteractableSystem</c> can persist each item to the database, and increments
+	/// the achievement counter. Server-only.
+	/// </summary>
+	[Serializable]
+	public class LoreObjectAction : BaseAction
+	{
+		public override void Execute(ICharacter initiator, EventData eventData)
+		{
+#if UNITY_SERVER
+			if (!eventData.TryGet(out PlayerInteractionEventData data) || data.Interactable == null) return;
+
+			ILoreObject loreObject = data.Interactable as ILoreObject;
+			if (loreObject?.Template == null) return;
+
+			LoreObjectTemplate template = loreObject.Template;
+
+			// Show the lore window on the client
+			initiator.NetworkObject.Broadcast(new LoreObjectBroadcast()
+			{
+				InteractableID = data.Interactable.ID,
+				TemplateID = template.ID,
+			});
+
+			// Grant abilities (idempotent — already-known are skipped)
+			if (template.GrantAbilities != null && template.GrantAbilities.Count > 0)
+			{
+				if (initiator.TryGet(out IAbilityController abilityController))
+				{
+					List<BaseAbilityTemplate> toLearn = new List<BaseAbilityTemplate>();
+					for (int i = 0; i < template.GrantAbilities.Count; i++)
+					{
+						BaseAbilityTemplate ability = template.GrantAbilities[i];
+						if (ability != null && !abilityController.KnowsAbility(ability.ID))
+						{
+							toLearn.Add(ability);
+						}
+					}
+
+					if (toLearn.Count > 0)
+					{
+						abilityController.LearnBaseAbilities(toLearn);
+						for (int i = 0; i < toLearn.Count; i++)
+						{
+							initiator.NetworkObject.Broadcast(
+								new KnownAbilityAddBroadcast() { TemplateID = toLearn[i].ID });
+						}
+					}
+				}
+			}
+
+			// Grant ability events (idempotent — already-known are skipped)
+			if (template.GrantAbilityEvents != null && template.GrantAbilityEvents.Count > 0)
+			{
+				if (initiator.TryGet(out IAbilityController abilityController))
+				{
+					List<AbilityEvent> toLearn = new List<AbilityEvent>();
+					for (int i = 0; i < template.GrantAbilityEvents.Count; i++)
+					{
+						AbilityEvent abilityEvent = template.GrantAbilityEvents[i];
+						if (abilityEvent != null && !abilityController.KnowsAbilityEvent(abilityEvent.ID))
+						{
+							toLearn.Add(abilityEvent);
+						}
+					}
+
+					if (toLearn.Count > 0)
+					{
+						abilityController.LearnAbilityEvents(toLearn);
+						for (int i = 0; i < toLearn.Count; i++)
+						{
+							initiator.NetworkObject.Broadcast(
+								new KnownAbilityEventAddBroadcast() { TemplateID = toLearn[i].ID });
+						}
+					}
+				}
+			}
+
+			// Grant items — fire event per item so InteractableSystem can persist each one
+			if (template.GrantItems != null && template.GrantItems.Count > 0)
+			{
+				if (initiator.TryGet(out IInventoryController inventoryController))
+				{
+					for (int i = 0; i < template.GrantItems.Count; i++)
+					{
+						BaseItemTemplate itemTemplate = template.GrantItems[i];
+						if (itemTemplate != null)
+						{
+							Item newItem = new Item(itemTemplate, 1);
+							data.OnGrantItem?.Invoke(initiator, inventoryController, newItem);
+						}
+					}
+				}
+			}
+
+			// Achievement
+			if (loreObject.AchievementTemplate != null &&
+				initiator.TryGet(out IAchievementController achievementController))
+			{
+				achievementController.Increment(loreObject.AchievementTemplate, 1);
+			}
+#endif
+		}
+	}
+}

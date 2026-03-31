@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -5,30 +6,44 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Event data for player interactions, such as talking to NPCs or interacting with objects.
-	/// Contains information about the initiator, target, and type of interaction.
+	/// Carries the interactable that was triggered so ECA actions can cast it to the specific type.
 	/// </summary>
 	public class PlayerInteractionEventData : EventData
 	{
 		/// <summary>
-		/// The GameObject that was interacted with (e.g., the NPC or object).
+		/// The interactable object that was interacted with.
+		/// ECA actions cast this to the specific interactable interface they require
+		/// (e.g., <see cref="IBanker"/>, <see cref="IMerchant"/>).
 		/// </summary>
-		public GameObject Target { get; }
+		public IInteractable Interactable { get; }
 
 		/// <summary>
-		/// The type of interaction performed (e.g., "Talk", "Trade", "Attack").
+		/// Optional delegate that grants an item to the player's inventory and persists it to the database.
+		/// Set by the server (<c>InteractableSystem</c>) when creating this event data.
+		/// Returns <c>true</c> if the item was successfully added.
 		/// </summary>
-		public string InteractionType;
+		public Func<ICharacter, IInventoryController, Item, bool> OnGrantItem { get; }
 
 		/// <summary>
-		/// Constructs a new PlayerInteractionEventData with the initiator, target, and interaction type.
+		/// The GameObject of the interactable (convenience accessor).
+		/// </summary>
+		public GameObject Target => Interactable?.GameObject;
+
+		/// <summary>
+		/// The concrete type name of the interactable, used for logging.
+		/// </summary>
+		public string InteractionType => Interactable?.GetType().Name ?? "Unknown";
+
+		/// <summary>
+		/// Constructs a new PlayerInteractionEventData from the interacting player and the interactable.
 		/// </summary>
 		/// <param name="initiator">The player character who initiated the interaction.</param>
-		/// <param name="target">The GameObject that was interacted with.</param>
-		/// <param name="interactionType">The type of interaction performed.</param>
-		public PlayerInteractionEventData(IPlayerCharacter initiator, GameObject target, string interactionType) : base(initiator)
+		/// <param name="interactable">The interactable object that was interacted with.</param>
+		/// <param name="onGrantItem">Optional delegate for granting items with DB persistence.</param>
+		public PlayerInteractionEventData(IPlayerCharacter initiator, IInteractable interactable, Func<ICharacter, IInventoryController, Item, bool> onGrantItem = null) : base(initiator)
 		{
-			Target = target;
-			InteractionType = interactionType;
+			Interactable = interactable;
+			OnGrantItem = onGrantItem;
 		}
 
 		/// <summary>

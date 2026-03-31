@@ -46,5 +46,14 @@ namespace FishMMO.Shared.Core
 		/// The rank of the character in the guild.
 		/// </summary>
 		GuildRank Rank { get; set; }
+
+		/// <summary>
+		/// Triggers invoked when the character joins a guild.
+		/// </summary>
+		List<Trigger> OnGuildJoinTriggers { get; }
+		/// <summary>
+		/// Triggers invoked when the character leaves a guild.
+		/// </summary>
+		List<Trigger> OnGuildLeaveTriggers { get; }
 	}
 }

@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System;
+using System.Collections.Generic;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -49,6 +50,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		public event Action<Transform> OnClearTarget;
 
+		[Header("ECA - Target")]
+		[Tooltip("Triggers invoked when the character acquires a new target.")]
+		[SerializeField]
+		private List<Trigger> onTargetChangeTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when the character's target is cleared.")]
+		[SerializeField]
+		private List<Trigger> onTargetClearTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnTargetChangeTriggers => onTargetChangeTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnTargetClearTriggers => onTargetClearTriggers;
+
 #if !UNITY_SERVER
 		/// <summary>
 		/// Internal timer for controlling target update rate.
@@ -95,10 +109,12 @@ namespace FishMMO.Shared
 					if (Last.Target != null)
 					{
 						OnClearTarget?.Invoke(Last.Target);
+						Character.Invoke(onTargetClearTriggers, new TargetEventData(Character, Last.Target.gameObject));
 					}
 
 					// Invoke change target event.
 					OnChangeTarget?.Invoke(Current.Target);
+					Character.Invoke(onTargetChangeTriggers, new TargetEventData(Character, Current.Target?.gameObject));
 				}
 				else
 				{

@@ -152,6 +152,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterHotkeyData> hotkeyData = null;
 				IReadOnlyList<CharacterBuffData> buffData = null;
 				IReadOnlyList<CharacterFactionData> factionData = null;
+				IReadOnlyList<CharacterQuestData> questData = null;
 
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
 				if (!uowResult.IsSuccess)
@@ -273,6 +274,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						var result = await factionService.FetchAsync(characterID);
 						if (result.IsSuccess) factionData = result.Data;
 					}
+					if (serviceRegistry.TryGet<ICharacterQuestService>(out var questService))
+					{
+						var result = await questService.FetchAsync(characterID);
+						if (result.IsSuccess) questData = result.Data;
+					}
 
 					// Read-only: commit to cleanly close the transaction
 					await uow.CommitAsync();
@@ -285,7 +291,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					attributeData, abilityData, knownAbilityData,
 					achievementData, friendData,
 					guildData, partyData,
-					hotkeyData, buffData, factionData);
+					hotkeyData, buffData, factionData, questData);
 				TryEnqueueMainThread(() => InstantiateAndLoadCharacter(loadContext));
 			}
 			catch (Exception ex)
@@ -340,6 +346,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IReadOnlyList<CharacterHotkeyData> hotkeyData = ctx.HotkeyData;
 			IReadOnlyList<CharacterBuffData> buffData = ctx.BuffData;
 			IReadOnlyList<CharacterFactionData> factionData = ctx.FactionData;
+			IReadOnlyList<CharacterQuestData> questData = ctx.QuestData;
 
 			if (conn == null || !conn.IsActive)
 			{
@@ -615,6 +622,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
+			// Quests
+			if (questData != null && questData.Count > 0 &&
+				character.TryGet(out IQuestController questController))
+			{
+				foreach (CharacterQuestData quest in questData)
+				{
+					QuestTemplate questTemplate = QuestTemplate.Get<QuestTemplate>(quest.TemplateID);
+					if (questTemplate == null)
+					{
+						continue;
+					}
+
+					long[] objectiveValues = ParseObjectiveValues(quest.ObjectiveValues);
+					questController.SetQuest(questTemplate, (QuestStatus)quest.Status, objectiveValues);
+				}
+			}
+
 			string sceneName = character.SceneName;
 			int sceneHandle = character.SceneHandle;
 
@@ -851,6 +875,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Bundles all data needed to instantiate and load a character on the main thread.
 		/// Created on the async worker after the DB fetch, consumed by InstantiateAndLoadCharacter.
 		/// </summary>
+		/// <summary>
+		/// Parses a comma-separated objective values string into a long array.
+		/// </summary>
+		private static long[] ParseObjectiveValues(string objectiveValues)
+		{
+			if (string.IsNullOrEmpty(objectiveValues))
+			{
+				return Array.Empty<long>();
+			}
+
+			string[] parts = objectiveValues.Split(',');
+			long[] values = new long[parts.Length];
+			for (int i = 0; i < parts.Length; i++)
+			{
+				long.TryParse(parts[i], out values[i]);
+			}
+			return values;
+		}
+
 		private sealed class CharacterLoadContext
 		{
 			public readonly NetworkConnection Connection;
@@ -870,6 +913,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly IReadOnlyList<CharacterHotkeyData> HotkeyData;
 			public readonly IReadOnlyList<CharacterBuffData> BuffData;
 			public readonly IReadOnlyList<CharacterFactionData> FactionData;
+			public readonly IReadOnlyList<CharacterQuestData> QuestData;
 
 			public CharacterLoadContext(
 				NetworkConnection connection, CharacterData characterData,
@@ -886,7 +930,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				CharacterPartyData? partyData,
 				IReadOnlyList<CharacterHotkeyData> hotkeyData,
 				IReadOnlyList<CharacterBuffData> buffData,
-				IReadOnlyList<CharacterFactionData> factionData)
+				IReadOnlyList<CharacterFactionData> factionData,
+				IReadOnlyList<CharacterQuestData> questData)
 			{
 				Connection = connection;
 				CharacterData = characterData;
@@ -905,6 +950,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				HotkeyData = hotkeyData;
 				BuffData = buffData;
 				FactionData = factionData;
+				QuestData = questData;
 			}
 		}
 	}

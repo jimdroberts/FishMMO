@@ -57,6 +57,14 @@ namespace FishMMO.Shared
 		[SerializeField]
 		private bool isAggressive = false;
 
+		[Header("ECA - Faction")]
+		[Tooltip("Triggers invoked when a faction standing changes for this character.")]
+		[SerializeField]
+		private List<Trigger> onFactionChangeTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnFactionChangeTriggers => onFactionChangeTriggers;
+
 		/// <summary>
 		/// Gets or sets whether the character is aggressive (treats others as enemies).
 		/// </summary>
@@ -516,6 +524,7 @@ namespace FishMMO.Shared
 			if (!skipEvent)
 			{
 				IFactionController.OnUpdateFaction?.Invoke(Character, faction);
+				Character.Invoke(onFactionChangeTriggers, new FactionEventData(Character, FactionTemplate.Get<FactionTemplate>(templateID), value));
 			}
 		}
 
@@ -555,6 +564,7 @@ namespace FishMMO.Shared
 			//Log.Debug($"Update Faction: {template.ID}:{amount}");
 
 			IFactionController.OnUpdateFaction?.Invoke(Character, faction);
+			Character.Invoke(onFactionChangeTriggers, new FactionEventData(Character, template, faction.Value));
 		}
 
 		/// <summary>

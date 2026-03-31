@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
 {
@@ -21,5 +22,14 @@ namespace FishMMO.Shared.Core
 		/// The pet instance managed by this controller.
 		/// </summary>
 		Pet Pet { get; set; }
+
+		/// <summary>
+		/// Triggers invoked when a pet is summoned.
+		/// </summary>
+		List<Trigger> OnPetSummonTriggers { get; }
+		/// <summary>
+		/// Triggers invoked when a pet is dismissed or destroyed.
+		/// </summary>
+		List<Trigger> OnPetDismissTriggers { get; }
 	}
 }

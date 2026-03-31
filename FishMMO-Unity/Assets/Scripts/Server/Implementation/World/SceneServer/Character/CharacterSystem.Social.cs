@@ -220,6 +220,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			#endregion
 
+			#region Quests
+			if (character.TryGet(out IQuestController questController))
+			{
+				List<QuestUpdateBroadcast> questBroadcasts = new List<QuestUpdateBroadcast>();
+				foreach (QuestInstance quest in questController.Quests.Values)
+				{
+					if (quest.Template == null)
+					{
+						continue;
+					}
+
+					long[] objectiveValues = null;
+					if (quest.Objectives != null && quest.Objectives.Count > 0)
+					{
+						objectiveValues = new long[quest.Objectives.Count];
+						for (int i = 0; i < quest.Objectives.Count; i++)
+						{
+							objectiveValues[i] = quest.Objectives[i].CurrentValue;
+						}
+					}
+
+					questBroadcasts.Add(new QuestUpdateBroadcast()
+					{
+						TemplateID = quest.Template.ID,
+						Status = quest.Status,
+						ObjectiveValues = objectiveValues,
+					});
+				}
+				if (questBroadcasts.Count > 0)
+				{
+					Server.NetworkWrapper.Broadcast(character.Owner, new QuestUpdateMultipleBroadcast()
+					{
+						Quests = questBroadcasts,
+					}, true, Channel.Reliable);
+				}
+			}
+			#endregion
+
 			#region InventoryItems
 			if (character.TryGet(out IInventoryController inventoryController))
 			{

@@ -47,5 +47,14 @@ namespace FishMMO.Shared.Core
 		/// The rank of the character within the party (e.g., leader, member).
 		/// </summary>
 		PartyRank Rank { get; set; }
+
+		/// <summary>
+		/// Triggers invoked when the character joins or creates a party.
+		/// </summary>
+		List<Trigger> OnPartyJoinTriggers { get; }
+		/// <summary>
+		/// Triggers invoked when the character leaves a party.
+		/// </summary>
+		List<Trigger> OnPartyLeaveTriggers { get; }
 	}
 }

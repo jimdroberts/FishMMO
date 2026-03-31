@@ -42,19 +42,19 @@ namespace FishMMO.Shared
 		public Terrain Terrain;
 
 		/// <summary>
-		/// Actions to invoke when a player enters the region.
+		/// Triggers to invoke when a player enters the region.
 		/// </summary>
-		public List<RegionAction> OnRegionEnter = new List<RegionAction>();
+		public List<Trigger> OnRegionEnter = new List<Trigger>();
 
 		/// <summary>
-		/// Actions to invoke while a player stays in the region.
+		/// Triggers to invoke while a player stays in the region.
 		/// </summary>
-		public List<RegionAction> OnRegionStay = new List<RegionAction>();
+		public List<Trigger> OnRegionStay = new List<Trigger>();
 
 		/// <summary>
-		/// Actions to invoke when a player exits the region.
+		/// Triggers to invoke when a player exits the region.
 		/// </summary>
-		public List<RegionAction> OnRegionExit = new List<RegionAction>();
+		public List<Trigger> OnRegionExit = new List<Trigger>();
 
 		/// <summary>
 		/// The NetworkTrigger component used to detect player entry, stay, and exit events.
@@ -165,13 +165,14 @@ namespace FishMMO.Shared
 			{
 				Parent.NetworkCollider_OnExit(other);
 			}
-			// Invoke all region entry actions.
+			// Invoke all region entry triggers.
 			if (OnRegionEnter != null)
 			{
 				//Log.Debug($"OnEnter: {character.CharacterName} Entered {gameObject.name}");
-				foreach (RegionAction action in OnRegionEnter)
+				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
+				for (int i = 0; i < OnRegionEnter.Count; ++i)
 				{
-					action?.Invoke(character, this, base.PredictionManager.IsReconciling);
+					OnRegionEnter[i]?.Execute(eventData);
 				}
 			}
 		}
@@ -195,12 +196,13 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			// Invoke all region stay actions.
+			// Invoke all region stay triggers.
 			if (OnRegionStay != null)
 			{
-				foreach (RegionAction action in OnRegionStay)
+				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
+				for (int i = 0; i < OnRegionStay.Count; ++i)
 				{
-					action?.Invoke(character, this, base.PredictionManager.IsReconciling);
+					OnRegionStay[i]?.Execute(eventData);
 				}
 			}
 		}
@@ -224,13 +226,14 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			// Invoke all region exit actions.
+			// Invoke all region exit triggers.
 			if (OnRegionExit != null)
 			{
 				//Log.Debug($"OnExit: {character.CharacterName} Exited {gameObject.name}");
-				foreach (RegionAction action in OnRegionExit)
+				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
+				for (int i = 0; i < OnRegionExit.Count; ++i)
 				{
-					action?.Invoke(character, this, base.PredictionManager.IsReconciling);
+					OnRegionExit[i]?.Execute(eventData);
 				}
 			}
 			// Notify parent region of entry, if applicable.

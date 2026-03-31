@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -40,6 +41,19 @@ namespace FishMMO.Shared
 		/// Event triggered when a guild result is received. Parameter: result type.
 		/// </summary>
 		public event Action<GuildResultType> OnReceiveGuildResult;
+
+		[Header("ECA - Guild")]
+		[Tooltip("Triggers invoked when the character joins a guild.")]
+		[SerializeField]
+		private List<Trigger> onGuildJoinTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when the character leaves a guild.")]
+		[SerializeField]
+		private List<Trigger> onGuildLeaveTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnGuildJoinTriggers => onGuildJoinTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnGuildLeaveTriggers => onGuildLeaveTriggers;
 
 		/// <summary>
 		/// The unique guild ID for this character. Synchronized over the network.
@@ -160,6 +174,7 @@ namespace FishMMO.Shared
 				Rank = msg.Rank;
 
 				IGuildController.OnReadID?.Invoke(ID, PlayerCharacter);
+				Character.Invoke(onGuildJoinTriggers, new GuildEventData(Character, ID, Rank));
 			}
 
 			// update our Guild list with the new Guild member
@@ -197,6 +212,7 @@ namespace FishMMO.Shared
 			ID = 0;
 			Rank = GuildRank.None;
 			OnLeaveGuild?.Invoke();
+			Character.Invoke(onGuildLeaveTriggers, new GuildEventData(Character, 0, GuildRank.None));
 		}
 
 		/// <summary>

@@ -104,6 +104,41 @@ namespace FishMMO.Shared
 				quests.Remove(template.Name);
 			}
 		}
+
+		/// <summary>
+		/// Sends a quest accept request to the server for the given quest at the given interactable.
+		/// </summary>
+		public void RequestAcceptQuest(int templateID, long interactableID)
+		{
+			ClientManager.Broadcast(new QuestAcceptBroadcast()
+			{
+				InteractableID = interactableID,
+				TemplateID = templateID,
+			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Sends a quest turn-in request to the server for the given quest at the given interactable.
+		/// </summary>
+		public void RequestTurnInQuest(int templateID, long interactableID)
+		{
+			ClientManager.Broadcast(new QuestTurnInBroadcast()
+			{
+				InteractableID = interactableID,
+				TemplateID = templateID,
+			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Sends a quest abandon request to the server for the given quest.
+		/// </summary>
+		public void RequestAbandonQuest(int templateID)
+		{
+			ClientManager.Broadcast(new QuestAbandonBroadcast()
+			{
+				TemplateID = templateID,
+			}, Channel.Reliable);
+		}
 #endif
 
 		/// <inheritdoc />
@@ -120,16 +155,12 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			string questName = template.Name;
-			if (quests.ContainsKey(questName))
+			if (quests.ContainsKey(template.Name))
 			{
 				return;
 			}
 
-			QuestInstance instance = new QuestInstance(template);
-			quests.Add(questName, instance);
-
-			IQuestController.OnQuestAccepted?.Invoke(Character, instance);
+			IQuestController.OnQuestAccepted?.Invoke(Character, template);
 		}
 
 		/// <inheritdoc />
@@ -147,22 +178,12 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-
-			QuestObjectiveInstance objective = quest.Objectives[objectiveIndex];
-			if (objective.IsComplete)
+			if (quest.Objectives[objectiveIndex].IsComplete)
 			{
 				return;
 			}
 
-			objective.Increment(amount);
-
-			IQuestController.OnObjectiveUpdated?.Invoke(Character, quest, objectiveIndex);
-
-			if (quest.AreAllObjectivesComplete())
-			{
-				quest.TrySetStatus(QuestStatus.Complete);
-				IQuestController.OnQuestComplete?.Invoke(Character, quest);
-			}
+			IQuestController.OnObjectiveUpdated?.Invoke(Character, questName, objectiveIndex, amount);
 		}
 
 		/// <inheritdoc />
@@ -181,8 +202,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			quest.TrySetStatus(QuestStatus.Complete);
-			IQuestController.OnQuestComplete?.Invoke(Character, quest);
+			IQuestController.OnQuestComplete?.Invoke(Character, questName);
 			return true;
 		}
 
@@ -198,8 +218,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			quest.TrySetStatus(QuestStatus.TurnedIn);
-			IQuestController.OnQuestTurnedIn?.Invoke(Character, quest);
+			IQuestController.OnQuestTurnedIn?.Invoke(Character, questName);
 			return true;
 		}
 
@@ -215,15 +234,20 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			quest.TrySetStatus(QuestStatus.Failed);
-			IQuestController.OnQuestFailed?.Invoke(Character, quest);
+			IQuestController.OnQuestFailed?.Invoke(Character, questName);
 			return true;
 		}
 
 		/// <inheritdoc />
 		public bool AbandonQuest(string questName)
 		{
-			return quests.Remove(questName);
+			if (!quests.TryGetValue(questName, out QuestInstance quest))
+			{
+				return false;
+			}
+
+			IQuestController.OnQuestAbandoned?.Invoke(Character, questName);
+			return true;
 		}
 
 		/// <inheritdoc />
@@ -237,6 +261,7 @@ namespace FishMMO.Shared
 			string questName = template.Name;
 			if (quests.TryGetValue(questName, out QuestInstance existing))
 			{
+				existing.TrySetStatus(status);
 				for (int i = 0; i < existing.Objectives.Count; i++)
 				{
 					long value = (objectiveValues != null && i < objectiveValues.Length) ? objectiveValues[i] : 0;

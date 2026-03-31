@@ -1,4 +1,5 @@
-﻿using FishMMO.Shared.Core;
+﻿using System;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
@@ -6,6 +7,7 @@ namespace FishMMO.Shared
 	/// Represents a requirement for a quest based on a character attribute and minimum value.
 	/// Used to check if a character meets the attribute requirement for quest progression.
 	/// </summary>
+	[Serializable]
 	public class QuestAttributeRequirement
 	{
 		/// <summary>

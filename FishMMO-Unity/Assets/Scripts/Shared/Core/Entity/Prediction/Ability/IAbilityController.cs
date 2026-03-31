@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
 {
@@ -94,5 +95,14 @@ namespace FishMMO.Shared.Core
 		/// The remaining activation time for the current ability, or 0 if no ability is active.
 		/// </summary>
 		float RemainingActivationTime { get; }
+
+		/// <summary>
+		/// Triggers invoked on the server when an ability activation begins (non-replay).
+		/// </summary>
+		List<Trigger> OnAbilityActivateTriggers { get; }
+		/// <summary>
+		/// Triggers invoked on the server when an ability activation completes (non-replay).
+		/// </summary>
+		List<Trigger> OnAbilityCompleteTriggers { get; }
 	}
 }

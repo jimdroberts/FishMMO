@@ -69,6 +69,16 @@ namespace FishMMO.Shared
 			// Normalize separators for reliable matching
 			string normalized = assetPath.Replace('\\', '/');
 
+			// ── LOCAL ──
+			if (ShouldSkipLocalAsset(normalized))
+			{
+				return new AssetCategory
+				{
+					GroupName = null,
+					Reason = "LOCAL asset — Enable Local Directory is disabled",
+				};
+			}
+
 			// ── Plugins ──
 			if (normalized.StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
 			{

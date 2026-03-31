@@ -35,6 +35,16 @@ namespace FishMMO.Shared.Core
 		static Action<Buff> OnRemoveDebuff;
 
 		/// <summary>
+		/// Triggers invoked when a buff or debuff is applied to this character. EventData: BuffEventData.
+		/// </summary>
+		List<Trigger> OnBuffApplyTriggers { get; }
+
+		/// <summary>
+		/// Triggers invoked when a buff or debuff is removed from this character. EventData: BuffEventData.
+		/// </summary>
+		List<Trigger> OnBuffRemoveTriggers { get; }
+
+		/// <summary>
 		/// Dictionary of all active buffs for the character, indexed by template ID.
 		/// </summary>
 		SortedDictionary<int, Buff> Buffs { get; }

@@ -26,6 +26,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		public int Order => 80;
 
+		[Header("ECA - Buffs")]
+		[Tooltip("Triggers invoked when a buff or debuff is applied to this character.")]
+		[SerializeField]
+		private List<Trigger> onBuffApplyTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when a buff or debuff is removed from this character.")]
+		[SerializeField]
+		private List<Trigger> onBuffRemoveTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnBuffApplyTriggers => onBuffApplyTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnBuffRemoveTriggers => onBuffRemoveTriggers;
+
 		/// <summary>
 		/// Internal dictionary mapping buff template IDs to active buff instances.
 		/// </summary>
@@ -285,6 +298,7 @@ namespace FishMMO.Shared
 				{
 					IBuffController.OnAddBuff?.Invoke(buffInstance);
 				}
+				Character.Invoke(onBuffApplyTriggers, new BuffEventData(Character, buffInstance));
 			}
 
 			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
@@ -369,6 +383,7 @@ namespace FishMMO.Shared
 				{
 					IBuffController.OnRemoveBuff?.Invoke(buffInstance);
 				}
+				Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buffInstance));
 
 #if UNITY_SERVER
 				if (base.IsServerStarted)
