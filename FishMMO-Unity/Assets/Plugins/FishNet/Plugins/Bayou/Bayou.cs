@@ -43,6 +43,14 @@ namespace FishNet.Transporting.Bayou
 
         //Server.
         /// <summary>
+        /// When true, the server expects a PROXY protocol v1/v2 header from
+        /// the reverse proxy before the SSL/WebSocket handshake. Enable this
+        /// when NGINX (or similar) is configured with <c>proxy_protocol on;</c>.
+        /// </summary>
+        [Tooltip("When true, expects a PROXY protocol header from the reverse proxy before the WebSocket handshake.")]
+        [SerializeField]
+        private bool _useProxyProtocol = false;
+        /// <summary>
         /// Port to use.
         /// </summary>
         [Tooltip("Port to use.")]
@@ -381,7 +389,7 @@ namespace FishNet.Transporting.Bayou
 #else
             config = new SslConfiguration();
 #endif
-            _server.Initialize(this, _mtu, config);
+            _server.Initialize(this, _mtu, config, _useProxyProtocol);
             return _server.StartConnection(_port, _maximumClients);
         }
 

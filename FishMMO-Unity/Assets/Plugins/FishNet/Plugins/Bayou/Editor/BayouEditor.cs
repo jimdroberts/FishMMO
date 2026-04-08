@@ -13,6 +13,7 @@ namespace FishNet.Transporting.Bayou
         private SerializedProperty _useWss;
         private SerializedProperty _sslConfiguration;
         private SerializedProperty _mtu;
+        private SerializedProperty _useProxyProtocol;
         private SerializedProperty _port;
         private SerializedProperty _maximumClients;
         private SerializedProperty _clientAddress;
@@ -23,6 +24,7 @@ namespace FishNet.Transporting.Bayou
 
             _mtu = serializedObject.FindProperty(nameof(_mtu));
 
+            _useProxyProtocol = serializedObject.FindProperty(nameof(_useProxyProtocol));
             _port = serializedObject.FindProperty(nameof(_port));
             _maximumClients = serializedObject.FindProperty(nameof(_maximumClients));
 
@@ -57,6 +59,7 @@ namespace FishNet.Transporting.Bayou
 
             EditorGUILayout.LabelField("Server", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(_useProxyProtocol, new GUIContent("Use Proxy Protocol", "When true, expects a PROXY protocol header from the reverse proxy before the WebSocket handshake."));
             EditorGUILayout.PropertyField(_port);
             EditorGUILayout.PropertyField(_maximumClients);
             EditorGUI.indentLevel--;

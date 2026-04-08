@@ -360,6 +360,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxMainThreadActionsPerUpdate: 100
+  useConnectionIdForRateLimit: 0
   tokenExpirationMinutes: 10
 --- !u!114 &6776049994790379668
 MonoBehaviour:
@@ -413,6 +414,7 @@ MonoBehaviour:
     CertificatePassword: 
     SslProtocol: 0
   _mtu: 1023
+  _useProxyProtocol: 1
   _port: 7770
   _maximumClients: 2000
   _clientAddress: localhost

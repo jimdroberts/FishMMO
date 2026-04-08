@@ -141,6 +141,17 @@ namespace FishMMO.Server.Implementation
 
 		private const int MaxGlobalHandshakesPerSecond = 500;
 
+		/// <summary>
+		/// When true, uses the transport-level connection ID as the rate-limiting key
+		/// instead of the resolved IP address. Enable when the server is behind a reverse
+		/// proxy (e.g., NGINX) where <c>conn.GetAddress()</c> returns the proxy's loopback IP
+		/// for all clients, causing false-positive rate limiting.
+		/// </summary>
+		[Header("Proxy Compatibility")]
+		[Tooltip("Use connection ID instead of IP for rate limiting. Enable when behind a proxy/NAT/load balancer where all clients share one IP.")]
+		[SerializeField]
+		private bool useConnectionIdForRateLimit = false;
+
 		protected CancellationTokenSource workerCts;
 
 		/// <summary>
@@ -438,6 +449,27 @@ namespace FishMMO.Server.Implementation
 
 		#endregion
 
+		#region Rate Limit Key Resolution
+
+		/// <summary>
+		/// Resolves a rate-limit key for a connection. When <see cref="useConnectionIdForRateLimit"/>
+		/// is enabled (proxy/NAT deployment), returns the connection ID as a string to avoid
+		/// false-positive rate limiting when all clients share the proxy's transport-level IP.
+		/// Otherwise returns the normalized transport IP.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <returns>A string key suitable for per-identity rate limiting.</returns>
+		protected string ResolveRateLimitKey(NetworkConnection conn)
+		{
+			if (conn == null)
+				return string.Empty;
+			if (useConnectionIdForRateLimit)
+				return conn.ClientId.ToString();
+			return HandshakeService.NormalizeIp(conn.GetAddress());
+		}
+
+		#endregion
+
 		#region Handshake
 
 		/// <summary>
@@ -519,15 +551,18 @@ namespace FishMMO.Server.Implementation
 			// ── Per-IP rate limit ───────────────────────────────────────────
 			// Checked before the global cap so that per-IP debounce is always
 			// updated, even when the global cap would silently drop the request.
-			if (!string.IsNullOrEmpty(remoteIp))
+			// Uses ResolveRateLimitKey so that proxy deployments (where all clients
+			// share the proxy's IP) can fall back to connection-ID keying.
+			string rateLimitKey = ResolveRateLimitKey(conn);
+			if (!string.IsNullOrEmpty(rateLimitKey))
 			{
 				DateTime nowUtc = DateTime.UtcNow;
-				if (handshakeIpNextAllowedUtc.TryGetValue(remoteIp, out DateTime nextAllowed) && nowUtc < nextAllowed)
+				if (handshakeIpNextAllowedUtc.TryGetValue(rateLimitKey, out DateTime nextAllowed) && nowUtc < nextAllowed)
 				{
 					conn.Disconnect(true);
 					return;
 				}
-				handshakeIpNextAllowedUtc[remoteIp] = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
+				handshakeIpNextAllowedUtc[rateLimitKey] = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
 			}
 
 			// ── Global rate limit ───────────────────────────────────────────

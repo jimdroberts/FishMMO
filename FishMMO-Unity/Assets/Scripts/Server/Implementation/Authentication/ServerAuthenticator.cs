@@ -1708,10 +1708,13 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Resolves and caches a connection IP for auth rate limiting.
+		/// Resolves and caches a rate-limit key for a connection.
+		/// Delegates to <see cref="ResolveRateLimitKey"/> so that proxy deployments
+		/// (where every client shares the proxy's transport IP) can fall back to
+		/// connection-ID keying via the <c>useConnectionIdForRateLimit</c> toggle.
 		/// </summary>
 		/// <param name="conn">Connection to resolve.</param>
-		/// <returns>Canonical IP key or empty string when unavailable.</returns>
+		/// <returns>Rate-limit key or empty string when unavailable.</returns>
 		private string ResolveIpAddress(NetworkConnection conn)
 		{
 			if (conn == null)
@@ -1719,21 +1722,19 @@ namespace FishMMO.Server.Implementation
 				return string.Empty;
 			}
 
-			if (connectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string cachedIp) && !string.IsNullOrWhiteSpace(cachedIp))
+			if (connectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string cachedKey) && !string.IsNullOrWhiteSpace(cachedKey))
 			{
-				return cachedIp;
+				return cachedKey;
 			}
 
-			// Normalize to canonical form (collapses IPv4-mapped IPv6) to ensure
-			// consistent rate-limit and debounce identity with the base handshake layer.
-			string ip = HandshakeService.NormalizeIp(conn.GetAddress());
-			if (string.IsNullOrWhiteSpace(ip))
+			string key = ResolveRateLimitKey(conn);
+			if (string.IsNullOrWhiteSpace(key))
 			{
 				return string.Empty;
 			}
 
-			connectionIpCache.Upsert(conn.ClientId, ip, DateTime.UtcNow);
-			return ip;
+			connectionIpCache.Upsert(conn.ClientId, key, DateTime.UtcNow);
+			return key;
 		}
 
 		/// <summary>

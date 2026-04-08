@@ -61,6 +61,11 @@ namespace FishNet.Transporting.Bayou.Server
         /// SslConfiguration to use.
         /// </summary>
         private SslConfiguration _sslConfiguration;
+        /// <summary>
+        /// When true, expects a PROXY protocol v1/v2 header from the
+        /// reverse proxy before the SSL/WebSocket handshake.
+        /// </summary>
+        private bool _useProxyProtocol;
         #endregion
 
         ~ServerSocket()
@@ -72,9 +77,10 @@ namespace FishNet.Transporting.Bayou.Server
         /// Initializes this for use.
         /// </summary>
         /// <param name="t"></param>
-        internal void Initialize(Transport t, int unreliableMTU, SslConfiguration config)
+        internal void Initialize(Transport t, int unreliableMTU, SslConfiguration config, bool useProxyProtocol = false)
         {
             _sslConfiguration = config;
+            _useProxyProtocol = useProxyProtocol;
             base.Transport = t;
             _mtu = unreliableMTU;
         }
@@ -92,7 +98,7 @@ namespace FishNet.Transporting.Bayou.Server
             else
                 config = new SslConfig(_sslConfiguration.Enabled, _sslConfiguration.CertificatePath, _sslConfiguration.CertificatePassword,
                     _sslConfiguration.SslProtocol);
-            _server = new SimpleWebServer(5000, tcpConfig, _mtu, 5000, config);
+            _server = new SimpleWebServer(5000, tcpConfig, _mtu, 5000, config, _useProxyProtocol);
 
             _server.onConnect += _server_onConnect;
             _server.onDisconnect += _server_onDisconnect;

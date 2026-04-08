@@ -2,7 +2,6 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
-using System.Net;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
@@ -1047,7 +1046,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
-				return NormalizeIp(conn.GetAddress());
+				return HandshakeService.NormalizeIp(conn.GetAddress());
 			}
 
 			DateTime now = DateTime.UtcNow;
@@ -1057,25 +1056,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return cachedIp;
 			}
 
-			string ipAddress = NormalizeIp(conn.GetAddress());
+			string ipAddress = HandshakeService.NormalizeIp(conn.GetAddress());
 
 			runtimeData.ConnectionIpCache.Upsert(conn.ClientId, ipAddress, now);
 			return ipAddress;
-		}
-
-		/// <summary>
-		/// Collapses IPv4-mapped-IPv6 addresses to plain IPv4 so that both
-		/// representations share a single rate-limit identity.
-		/// </summary>
-		private static string NormalizeIp(string rawIp)
-		{
-			if (string.IsNullOrEmpty(rawIp))
-				return "unknown";
-			if (!IPAddress.TryParse(rawIp, out IPAddress parsed))
-				return "unknown";
-			if (parsed.IsIPv4MappedToIPv6)
-				parsed = parsed.MapToIPv4();
-			return parsed.ToString();
 		}
 
 		/// <summary>

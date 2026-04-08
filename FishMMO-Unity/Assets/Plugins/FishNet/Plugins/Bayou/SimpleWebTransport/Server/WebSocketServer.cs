@@ -3,6 +3,7 @@ using FishNet.Managing;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
@@ -15,6 +16,7 @@ namespace JamesFrowen.SimpleWeb
 
         readonly TcpConfig tcpConfig;
         readonly int maxMessageSize;
+        readonly bool useProxyProtocol;
 
         public TcpListener listener;
         Thread acceptThread;
@@ -52,13 +54,14 @@ namespace JamesFrowen.SimpleWeb
                 _idCache.Enqueue(i);
         }
 
-        public WebSocketServer(TcpConfig tcpConfig, int maxMessageSize, int handshakeMaxSize, SslConfig sslConfig, BufferPool bufferPool)
+        public WebSocketServer(TcpConfig tcpConfig, int maxMessageSize, int handshakeMaxSize, SslConfig sslConfig, BufferPool bufferPool, bool useProxyProtocol = false)
         {
             //Make a small queue to start.
             GrowIdCache(1000);
             
             this.tcpConfig = tcpConfig;
             this.maxMessageSize = maxMessageSize;
+            this.useProxyProtocol = useProxyProtocol;
             sslHelper = new ServerSslHelper(sslConfig);
             this.bufferPool = bufferPool;
             handShake = new ServerHandshake(this.bufferPool, handshakeMaxSize);
@@ -139,6 +142,24 @@ namespace JamesFrowen.SimpleWeb
         {
             try
             {
+                // ── PROXY protocol ──────────────────────────────────────
+                // Must be parsed BEFORE SSL/TLS because PROXY protocol is
+                // a transport-layer preamble sent in the clear by the proxy.
+                if (useProxyProtocol)
+                {
+                    Stream rawStream = conn.client.GetStream();
+                    if (ProxyProtocol.TryParse(rawStream, out string srcAddr))
+                    {
+                        conn.remoteAddress = srcAddr;
+                    }
+                    else
+                    {
+                        Log.Warn("Failed to parse PROXY protocol header, disconnecting client.");
+                        conn.Dispose();
+                        return;
+                    }
+                }
+
                 bool success = sslHelper.TryCreateStream(conn);
                 if (!success)
                 {
@@ -256,6 +277,10 @@ namespace JamesFrowen.SimpleWeb
         {
             if (connections.TryGetValue(id, out Connection conn))
             {
+                // Prefer the PROXY protocol resolved source IP when available.
+                if (!string.IsNullOrEmpty(conn.remoteAddress))
+                    return conn.remoteAddress;
+
                 return conn.client.Client.RemoteEndPoint.ToString();
             }
             else

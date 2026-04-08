@@ -19,6 +19,13 @@ namespace JamesFrowen.SimpleWeb
         public Thread receiveThread;
         public Thread sendThread;
 
+        /// <summary>
+        /// Source IP resolved from PROXY protocol header, if available.
+        /// When set, this takes precedence over <see cref="client"/>.RemoteEndPoint
+        /// because the transport-level endpoint will be the proxy's address.
+        /// </summary>
+        public string remoteAddress;
+
         public ManualResetEventSlim sendPending = new ManualResetEventSlim(false);
         public ConcurrentQueue<ArrayBuffer> sendQueue = new ConcurrentQueue<ArrayBuffer>();
 
