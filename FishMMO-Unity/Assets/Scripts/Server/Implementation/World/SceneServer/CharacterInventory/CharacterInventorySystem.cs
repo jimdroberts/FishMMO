@@ -5,6 +5,7 @@ using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
@@ -335,7 +336,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					int slot = msg.Slot;
 					item.Version++;
 					long version = item.Version;
-					TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, slot, version), characterID);
+					EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, slot, version), characterID);
 
 					Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 				}
@@ -392,7 +393,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						{
 							// fire-and-forget async persist for each affected inventory item
 							var invDtos = BuildInventoryItemDataList(characterID, invAffected);
-							TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
+							EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID);
 
 							// tell the client we succeeded
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -426,7 +427,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								if (fromItems != null && fromItems.Count > 0)
 								{
 									var bankDtos = BuildBankItemDataList(characterID, fromItems);
-									TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
+									EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID);
 								}
 								// Delete vacated bank slots
 								if (deletedSlots != null && deletedSlots.Count > 0)
@@ -435,14 +436,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									{
 										// Deleted slots no longer have an item reference;
 										// use long.MaxValue to ensure the delete succeeds.
-										TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue), characterID);
+										EnqueuePersistence(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue), characterID);
 									}
 								}
 								// Persist inventory items that moved to the destination (inventory) container
 								if (toItems != null && toItems.Count > 0)
 								{
 									var invDtos2 = BuildInventoryItemDataList(characterID, toItems);
-									TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos2), characterID);
+									EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos2), characterID);
 								}
 
 								// Tell the client
@@ -513,22 +514,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (inventoryController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 							{
 								var dto = BuildInventoryItemData(characterID, prevItem);
-								TryEnqueueAsyncWork(() => PersistInventoryItemAsync(dto), characterID);
+								EnqueuePersistence(() => PersistInventoryItemAsync(dto), characterID);
 							}
 							// remove the inventory item from the database
 							else
 							{
 								// Item moved out of inventory — use long.MaxValue to ensure delete succeeds
-								TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
+								EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
 							}
 
 							// set the equipment slot in the database
 							var equipDto = BuildEquipmentItemData(characterID, inventoryItem);
-							TryEnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto), characterID);
+							EnqueuePersistence(() => PersistEquipmentItemAsync(equipDto), characterID);
 
 							// save attributes
 							var attrDtos = BuildAttributeDataList(character);
-							TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
+							EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
 
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
@@ -565,22 +566,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								if (bankController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 								{
 									var dto = BuildBankItemData(characterID, prevItem);
-									TryEnqueueAsyncWork(() => PersistBankItemAsync(dto), characterID);
+									EnqueuePersistence(() => PersistBankItemAsync(dto), characterID);
 								}
 								// remove the bank item from the database
 								else
 								{
 									// Item moved out of bank — use long.MaxValue to ensure delete succeeds
-									TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
+									EnqueuePersistence(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
 								}
 
 								// set the equipment slot in the database
 								var equipDto = BuildEquipmentItemData(characterID, bankItem);
-								TryEnqueueAsyncWork(() => PersistEquipmentItemAsync(equipDto), characterID);
+								EnqueuePersistence(() => PersistEquipmentItemAsync(equipDto), characterID);
 
 								// save attributes
 								var attrDtos = BuildAttributeDataList(character);
-								TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
+								EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
 
 								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 							}
@@ -657,15 +658,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 							// persist all modified inventory slots
 							var invDtos = BuildInventoryItemDataList(characterID, modifiedItems);
-							TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
+							EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID);
 
 							// delete the item from the equipment table
 							// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
-							TryEnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
+							EnqueuePersistence(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
 
 							// save attributes
 							var attrDtos = BuildAttributeDataList(character);
-							TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
+							EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
 
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 						}
@@ -703,15 +704,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 								// persist all modified bank slots
 								var bankDtos = BuildBankItemDataList(characterID, modifiedItems);
-								TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
+								EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID);
 
 								// delete the item from the equipment table
 								// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
-								TryEnqueueAsyncWork(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
+								EnqueuePersistence(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
 
 								// save attributes
 								var attrDtos = BuildAttributeDataList(character);
-								TryEnqueueAsyncWork(() => PersistAttributesAsync(attrDtos), characterID);
+								EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
 
 								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 							}
@@ -776,7 +777,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					int slot = msg.Slot;
 					item.Version++;
 					long version = item.Version;
-					TryEnqueueAsyncWork(() => DeleteBankSlotAsync(characterID, slot, version), characterID);
+					EnqueuePersistence(() => DeleteBankSlotAsync(characterID, slot, version), characterID);
 
 					Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 				}
@@ -838,7 +839,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (fromItems != null && fromItems.Count > 0)
 							{
 								var invDtos = BuildInventoryItemDataList(characterID, fromItems);
-								TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(invDtos), characterID);
+								EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID);
 							}
 							// delete vacated inventory slots
 							if (deletedSlots != null && deletedSlots.Count > 0)
@@ -847,14 +848,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								{
 									// Deleted slots no longer have an item reference;
 									// use long.MaxValue to ensure the delete succeeds.
-									TryEnqueueAsyncWork(() => DeleteInventorySlotAsync(characterID, (int)slot, long.MaxValue), characterID);
+									EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, (int)slot, long.MaxValue), characterID);
 								}
 							}
 							// persist bank items that went into destination (bank) container
 							if (toItems != null && toItems.Count > 0)
 							{
 								var bankDtos = BuildBankItemDataList(characterID, toItems);
-								TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos), characterID);
+								EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID);
 							}
 
 							// tell the client
@@ -874,7 +875,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected))
 						{
 							var bankDtos2 = BuildBankItemDataList(characterID, bankAffected);
-							TryEnqueueAsyncWork(() => PersistBankItemsAsync(bankDtos2), characterID);
+							EnqueuePersistence(() => PersistBankItemsAsync(bankDtos2), characterID);
 
 							// tell the client we succeeded
 							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -1094,7 +1095,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "PersistInventoryItemAsync: Failed to resolve ICharacterInventoryService");
 					return;
 				}
-				await service.PersistAsync(dto);
+				DatabaseResult<long> result = await service.PersistAsync(dto);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"PersistInventoryItemAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1117,7 +1122,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "PersistInventoryItemsAsync: Failed to resolve ICharacterInventoryService");
 					return;
 				}
-				await service.PersistAsync(dtos);
+				DatabaseResult result = await service.PersistAsync(dtos);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"PersistInventoryItemsAsync DB error ({dtos.Count} items): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1142,7 +1151,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "DeleteInventorySlotAsync: Failed to resolve ICharacterInventoryService");
 					return;
 				}
-				await service.DeleteAsync(characterID, slot, version);
+				DatabaseResult result = await service.DeleteAsync(characterID, slot, version);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"DeleteInventorySlotAsync DB error (CharID={characterID}, Slot={slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1165,7 +1178,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "PersistBankItemAsync: Failed to resolve ICharacterBankService");
 					return;
 				}
-				await service.PersistAsync(dto);
+				DatabaseResult<long> result = await service.PersistAsync(dto);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"PersistBankItemAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1188,7 +1205,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "PersistBankItemsAsync: Failed to resolve ICharacterBankService");
 					return;
 				}
-				await service.PersistAsync(dtos);
+				DatabaseResult result = await service.PersistAsync(dtos);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"PersistBankItemsAsync DB error ({dtos.Count} items): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1213,7 +1234,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "DeleteBankSlotAsync: Failed to resolve ICharacterBankService");
 					return;
 				}
-				await service.DeleteAsync(characterID, slot, version);
+				DatabaseResult result = await service.DeleteAsync(characterID, slot, version);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"DeleteBankSlotAsync DB error (CharID={characterID}, Slot={slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1236,7 +1261,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "PersistEquipmentItemAsync: Failed to resolve ICharacterEquipmentService");
 					return;
 				}
-				await service.PersistAsync(dto);
+				DatabaseResult<long> result = await service.PersistAsync(dto);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"PersistEquipmentItemAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1261,7 +1290,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "DeleteEquipmentSlotAsync: Failed to resolve ICharacterEquipmentService");
 					return;
 				}
-				await service.DeleteAsync(characterID, slot, version);
+				DatabaseResult result = await service.DeleteAsync(characterID, slot, version);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"DeleteEquipmentSlotAsync DB error (CharID={characterID}, Slot={slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1286,7 +1319,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "PersistAttributesAsync: Failed to resolve ICharacterAttributeService");
 					return;
 				}
-				await service.PersistAsync(dtos);
+				DatabaseResult result = await service.PersistAsync(dtos);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterInventorySystem", $"PersistAttributesAsync DB error ({dtos.Count} attributes): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

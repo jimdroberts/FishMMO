@@ -376,7 +376,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 
 			// Async DB save with spawned=false, keyed by characterID to serialize with summon ops
-			TryEnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
+			EnqueuePersistence(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
 			}
 			finally
 			{
@@ -629,7 +629,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Async DB save, keyed by characterID to serialize with other pet ops for the same character
-			TryEnqueueAsyncWork(() => SavePetAsync(characterID, templateID, abilities, spawned), characterID);
+			EnqueuePersistence(() => SavePetAsync(characterID, templateID, abilities, spawned), characterID);
 		}
 
 		/// <summary>

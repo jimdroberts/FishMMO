@@ -702,7 +702,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 							// after maxFailedAttempts (default 5). The code is single-use and expires
 							// via DB-level TTL, so the effective attack window is narrow.
 							int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
-							await accountService.PersistVerifyCodeAsync(username, verifyCode);
+							DatabaseResult verifyResult = await accountService.PersistVerifyCodeAsync(username, verifyCode);
+							if (!verifyResult.IsSuccess)
+							{
+								await Log.Warning("AccountCreationSystem", $"PersistVerifyCodeAsync DB error for user '{username}': {verifyResult.ErrorCode} - {verifyResult.ErrorMessage}");
+							}
 
 							// Generate and store mandatory 2FA setup.
 							// Snapshot TotpMasterKey to prevent a TOCTOU race:
@@ -720,9 +724,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 									// Encrypt for DB at-rest storage.
 									string encryptedTotpSecret = CryptoHelper.TwoFactor.EncryptTotpSecret(totpMasterKeySnapshot, totpSecret);
-									await accountService.PersistTotpSecretAsync(username, encryptedTotpSecret);
-									await accountService.PersistTotpEnabledAsync(username, true);
-
+										DatabaseResult totpSecretResult = await accountService.PersistTotpSecretAsync(username, encryptedTotpSecret);
+										if (!totpSecretResult.IsSuccess)
+										{
+											await Log.Warning("AccountCreationSystem", $"PersistTotpSecretAsync DB error for user '{username}': {totpSecretResult.ErrorCode} - {totpSecretResult.ErrorMessage}");
+										}
+										DatabaseResult totpEnabledResult = await accountService.PersistTotpEnabledAsync(username, true);
+										if (!totpEnabledResult.IsSuccess)
+										{
+											await Log.Warning("AccountCreationSystem", $"PersistTotpEnabledAsync DB error for user '{username}': {totpEnabledResult.ErrorCode} - {totpEnabledResult.ErrorMessage}");
+										}
 									// Generate and hash recovery codes.
 									string[] recoveryCodes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
 									var codeHashes = new List<string>(recoveryCodes.Length);
@@ -732,51 +743,54 @@ namespace FishMMO.Server.Implementation.LoginServer
 									}
 									if (Server.Database.ServiceRegistry.TryGet<ITwoFactorRecoveryCodeService>(out var recoveryCodeService))
 									{
-										await recoveryCodeService.PersistManyAsync(username, codeHashes);
-									}
+											DatabaseResult recoveryResult = await recoveryCodeService.PersistManyAsync(username, codeHashes);
+											if (!recoveryResult.IsSuccess)
+											{
+												await Log.Warning("AccountCreationSystem", $"PersistManyAsync recovery codes DB error for user '{username}': {recoveryResult.ErrorCode} - {recoveryResult.ErrorMessage}");
+											}
+											// Build otpauth URI for the client's authenticator app.
+											string otpauthUri = CryptoHelper.TwoFactor.BuildOtpauthUri(totpSecret, username);
 
-									// Build otpauth URI for the client's authenticator app.
-									string otpauthUri = CryptoHelper.TwoFactor.BuildOtpauthUri(totpSecret, username);
+											// Encrypt setup data with the session key for secure transport to client.
+											byte[] otpauthUriBytes = Encoding.UTF8.GetBytes(otpauthUri);
+											byte[] recoveryCodesBytes = Encoding.UTF8.GetBytes(string.Join("\n", recoveryCodes));
 
-									// Encrypt setup data with the session key for secure transport to client.
-									byte[] otpauthUriBytes = Encoding.UTF8.GetBytes(otpauthUri);
-									byte[] recoveryCodesBytes = Encoding.UTF8.GetBytes(string.Join("\n", recoveryCodes));
+											uint seq1 = request.EncryptionData.NextSendSequence();
+											byte[] nonce1 = request.EncryptionData.BuildSendNonce(seq1);
+											byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq1);
+											byte[] encOtpauthUri = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce1, otpauthUriBytes, aad1);
 
-									uint seq1 = request.EncryptionData.NextSendSequence();
-									byte[] nonce1 = request.EncryptionData.BuildSendNonce(seq1);
-									byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq1);
-									byte[] encOtpauthUri = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce1, otpauthUriBytes, aad1);
+											uint seq2 = request.EncryptionData.NextSendSequence();
+											byte[] nonce2 = request.EncryptionData.BuildSendNonce(seq2);
+											byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq2);
+											byte[] encRecoveryCodes = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce2, recoveryCodesBytes, aad2);
 
-									uint seq2 = request.EncryptionData.NextSendSequence();
-									byte[] nonce2 = request.EncryptionData.BuildSendNonce(seq2);
-									byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq2);
-									byte[] encRecoveryCodes = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce2, recoveryCodesBytes, aad2);
+											// Zeroize plaintext secrets.
+											CryptographicOperations.ZeroMemory(totpSecret);
+											CryptographicOperations.ZeroMemory(otpauthUriBytes);
+											CryptographicOperations.ZeroMemory(recoveryCodesBytes);
 
-									// Zeroize plaintext secrets.
-									CryptographicOperations.ZeroMemory(totpSecret);
-									CryptographicOperations.ZeroMemory(otpauthUriBytes);
-									CryptographicOperations.ZeroMemory(recoveryCodesBytes);
+											// Capture for main-thread dispatch.
+											byte[] capturedEncUri = encOtpauthUri;
+											byte[] capturedEncCodes = encRecoveryCodes;
+											uint capturedSetupSeq = seq2;
+											string capturedUsername = username;
+											NetworkConnection setupConn = request.Connection;
 
-									// Capture for main-thread dispatch.
-									byte[] capturedEncUri = encOtpauthUri;
-									byte[] capturedEncCodes = encRecoveryCodes;
-									uint capturedSetupSeq = seq2;
-									string capturedUsername = username;
-									NetworkConnection setupConn = request.Connection;
-
-									TryEnqueueMainThread(() =>
-									{
-										if (setupConn != null && setupConn.IsActive)
-										{
-											Server.NetworkWrapper.Broadcast(setupConn,
-												new TwoFactorSetupBroadcast()
+											TryEnqueueMainThread(() =>
+											{
+												if (setupConn != null && setupConn.IsActive)
 												{
-													OtpauthUri = capturedEncUri,
-													RecoveryCodes = capturedEncCodes,
-													Seq = capturedSetupSeq,
-												}, false, Channel.Reliable);
-										}
-									});
+													Server.NetworkWrapper.Broadcast(setupConn,
+														new TwoFactorSetupBroadcast()
+														{
+															OtpauthUri = capturedEncUri,
+															RecoveryCodes = capturedEncCodes,
+															Seq = capturedSetupSeq,
+														}, false, Channel.Reliable);
+												}
+											});
+									}
 								}
 								catch (Exception tfaEx)
 								{

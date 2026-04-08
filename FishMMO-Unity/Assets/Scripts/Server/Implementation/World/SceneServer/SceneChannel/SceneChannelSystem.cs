@@ -410,6 +410,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guardKey, characterID))
 			{
 				EndIngressGuard(guardKey);
+				SendServerBusy(conn);
 			}
 		}
 
@@ -460,6 +461,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guardKey, characterID))
 			{
 				EndIngressGuard(guardKey);
+				SendServerBusy(conn);
 			}
 		}
 
@@ -641,6 +643,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guardKey, characterID))
 			{
 				EndIngressGuard(guardKey);
+				SendServerBusy(conn);
 			}
 		}
 

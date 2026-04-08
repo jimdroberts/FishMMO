@@ -3,6 +3,7 @@ using FishNet.Managing.Server;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
@@ -600,7 +601,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					// Fallback handles always differ from the character's saved handle
 					if (charData.SceneHandle != assignedHandle)
 					{
-						await charService.UpdateSceneAsync(charData.ID, sceneName, assignedHandle);
+						DatabaseResult updateResult = await charService.UpdateSceneAsync(charData.ID, sceneName, assignedHandle);
+						if (!updateResult.IsSuccess)
+						{
+							await Log.Warning("WorldSceneSystem", $"UpdateSceneAsync DB error (CharID={charData.ID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+						}
 					}
 
 					BroadcastSceneConnect(conn, server);
@@ -644,7 +649,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (needsNewScene)
 			{
-				await sceneService.EnqueueAsync(worldServerID, sceneName, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.OpenWorld);
+				DatabaseResult<long> enqueueResult = await sceneService.EnqueueAsync(worldServerID, sceneName, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.OpenWorld);
+				if (!enqueueResult.IsSuccess)
+				{
+					await Log.Warning("WorldSceneSystem", $"CleanupAndEnqueueNewSceneIfNeededAsync DB error (Scene={sceneName}): {enqueueResult.ErrorCode} - {enqueueResult.ErrorMessage}");
+				}
 			}
 		}
 
@@ -664,7 +673,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				charData.Version + 1,
 				DateTime.UtcNow
 			);
-			await charService.PersistAsync(updatedChar);
+			DatabaseResult persistResult = await charService.PersistAsync(updatedChar);
+			if (!persistResult.IsSuccess)
+			{
+				await Log.Warning("WorldSceneSystem", $"ClearInstanceFlagAndFallbackAsync DB error (CharID={charData.ID}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+			}
 			await FallbackToWorldSceneAsync(conn, accountName);
 		}
 
@@ -785,7 +798,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				else
 				{
 					// Scene server unreachable — delete stale scene entry and fall back
-					await sceneService.DeleteByHandleAsync(sceneData.SceneServerID, sceneData.SceneHandle);
+					DatabaseResult deleteResult = await sceneService.DeleteByHandleAsync(sceneData.SceneServerID, sceneData.SceneHandle);
+					if (!deleteResult.IsSuccess)
+					{
+						await Log.Warning("WorldSceneSystem", $"ProcessInstanceConnectionAsync scene delete failed (SceneServerID={sceneData.SceneServerID}, Handle={sceneData.SceneHandle}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+					}
 					await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
 				}
 			}

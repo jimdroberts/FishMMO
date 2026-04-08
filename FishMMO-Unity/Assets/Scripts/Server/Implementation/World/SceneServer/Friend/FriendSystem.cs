@@ -260,7 +260,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (!deferGuardRelease)
 				{
-					EndIngressGuard(guardKey);
+					EndIngressGuard(guardKey);					SendServerBusy(conn);					SendServerBusy(conn);
 				}
 			}
 		}

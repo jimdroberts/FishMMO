@@ -281,7 +281,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// Read-only: commit to cleanly close the transaction
-					await uow.CommitAsync();
+					DatabaseResult commitResult = await uow.CommitAsync();
+					if (!commitResult.IsSuccess)
+					{
+						await Log.Warning("CharacterSystem", $"LoadCharacterAsync: CommitAsync DB error for character {characterID}: {commitResult.ErrorCode} - {commitResult.ErrorMessage}");
+					}
 				}
 
 				// Marshal back to main thread for Unity object instantiation

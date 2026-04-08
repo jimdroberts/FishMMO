@@ -164,7 +164,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await characterService.PersistAsync(charData);
+				DatabaseResult result = await characterService.PersistAsync(charData);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterSystem", $"SaveCharacterAsync DB error for character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -207,7 +211,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					try
 					{
-						await characterService.PersistAsync(charData);
+						DatabaseResult result = await characterService.PersistAsync(charData);
+						if (!result.IsSuccess)
+						{
+							await Log.Warning("CharacterSystem", $"SaveAllCharactersAsync DB error for character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
+						}
 					}
 					catch (Exception ex)
 					{
@@ -221,7 +229,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						try
 						{
-							await characterService.RefreshSessionLeaseAsync(charData.ID, si.ServerID, si.Token);
+							DatabaseResult leaseResult = await characterService.RefreshSessionLeaseAsync(charData.ID, si.ServerID, si.Token);
+							if (!leaseResult.IsSuccess)
+							{
+								await Log.Warning("CharacterSystem", $"SaveAllCharactersAsync: RefreshSessionLeaseAsync DB error for character {charData.ID}: {leaseResult.ErrorCode} - {leaseResult.ErrorMessage}");
+							}
 						}
 						catch (Exception ex)
 						{

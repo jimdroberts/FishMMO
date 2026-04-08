@@ -3,6 +3,7 @@ using FishNet.Managing.Server;
 using FishNet.Transporting;
 using UnityEngine;
 using FishMMO.Server.Core;
+using FishMMO.Shared;
 using System;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
@@ -117,6 +118,19 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
+		/// Sends a <see cref="ServerBusyBroadcast"/> to the connection, informing the client
+		/// that the server cannot process the request right now.
+		/// Uses Unreliable channel to avoid amplifying server-side send-queue pressure.
+		/// </summary>
+		protected void SendServerBusy(NetworkConnection conn)
+		{
+			if (conn == null || !conn.IsActive)
+				return;
+
+			Server?.NetworkWrapper?.Broadcast(conn, new ServerBusyBroadcast(), true, Channel.Unreliable);
+		}
+
+		/// <summary>
 		/// Enqueue a unit of asynchronous work to the centralized AsyncWorker. Returns false when rejected.
 		/// Logs warnings using the concrete behaviour name for diagnostics.
 		/// </summary>
@@ -142,6 +156,38 @@ namespace FishMMO.Server.Implementation
 			}
 
 			Log.Warning(tag, $"{callerName}: IAsyncWorkerData unavailable; work was not enqueued.");
+			return false;
+		}
+
+		/// <summary>
+		/// Enqueues persistence work through the async worker. If the bounded channel is full,
+		/// runs the work directly on the thread pool as a fallback to prevent data loss.
+		/// <para>
+		/// Use this instead of <see cref="TryEnqueueAsyncWork"/> for post-processing persistence
+		/// where in-memory state has already been committed and the database write must not be silently dropped.
+		/// </para>
+		/// </summary>
+		/// <returns><c>true</c> if enqueued normally; <c>false</c> if the fallback path was used.</returns>
+		protected bool EnqueuePersistence(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (TryEnqueueAsyncWork(work, entityKey, callerName))
+				return true;
+
+			string tag = GetType().Name;
+			Log.Error(tag, $"{callerName}: Async worker full — persistence running via direct fallback (entityKey={entityKey}).");
+
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					await work();
+				}
+				catch (Exception ex)
+				{
+					await Log.Error(tag, $"{callerName}: Direct fallback persistence failed (entityKey={entityKey}): {ex}");
+				}
+			});
+
 			return false;
 		}
 

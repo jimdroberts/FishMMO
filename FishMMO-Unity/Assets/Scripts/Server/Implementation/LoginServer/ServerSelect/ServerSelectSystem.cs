@@ -131,7 +131,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (!TryEnqueueAsyncWork(() => ProcessServerListRequestAsync(conn)))
 			{
 				EndServerListRequest(conn);
-				Log.Warning("ServerSelectSystem", "Failed to enqueue server list request.");
+				SendServerBusy(conn);
 			}
 		}
 

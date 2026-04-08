@@ -171,12 +171,24 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.LoginSuccess:
 					OnLoginSuccess();
 					break;
-				case ClientAuthenticationResult.WorldLoginSuccess:
-					break;
 				case ClientAuthenticationResult.ServerFull:
 					OnLoginAuthenticationDialog("Server is currently full please wait a while and try again.");
 					break;
-				default:
+				case ClientAuthenticationResult.ServerBusy:
+					OnLoginAuthenticationDialog("Server is busy. Please try again.");
+					break;
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenRevoked:
+				case ClientAuthenticationResult.TokenDecryptFailed:
+					OnLoginAuthenticationDialog("Authentication failed. Please log in again.");
+					break;
+				// Not applicable during login flow.
+				case ClientAuthenticationResult.SrpVerify:
+				case ClientAuthenticationResult.SrpProof:
+				case ClientAuthenticationResult.WorldLoginSuccess:
+				case ClientAuthenticationResult.SceneLoginSuccess:
+				case ClientAuthenticationResult.NoCharacterSelected:
 					break;
 			}
 		}

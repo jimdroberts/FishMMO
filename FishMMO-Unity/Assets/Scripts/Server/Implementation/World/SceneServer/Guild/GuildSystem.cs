@@ -643,7 +643,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			byte rank = (byte)guildController.Rank;
 			string sceneName = character.SceneName;
 
-			TryEnqueueAsyncWork(() => PersistGuildMemberAsync(characterID, guildID, rank, sceneName), characterID);
+			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, rank, sceneName), characterID);
 		}
 
 		/// <summary>
@@ -682,7 +682,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long guildID = guildController.ID;
 			byte rank = (byte)guildController.Rank;
 
-			TryEnqueueAsyncWork(() => PersistGuildMemberAsync(characterID, guildID, rank, "Offline"), characterID);
+			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, rank, "Offline"), characterID);
 		}
 
 		/// <summary>
@@ -712,8 +712,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				CharacterGuildData guildData = new CharacterGuildData(0, version, characterID, guildID, rank, location);
-				await charGuildService.PersistAsync(guildData, maxGuildSize);
-				await guildUpdateService.PersistAsync(guildID);
+				DatabaseResult persistResult = await charGuildService.PersistAsync(guildData, maxGuildSize);
+				if (!persistResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"PersistGuildMemberAsync DB error (CharID={characterID}, GuildID={guildID}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+					return;
+				}
+				DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"PersistGuildMemberAsync guild update notification failed (GuildID={guildID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -778,6 +787,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				string sceneName = conn.FirstObject.gameObject.scene.name;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName), guardKey, characterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -837,7 +847,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Save the character as guild leader
 				CharacterGuildData memberData = new CharacterGuildData(0, 1, characterID, newGuildID, (byte)GuildRank.Leader, sceneName);
-				await charGuildService.PersistAsync(memberData, maxGuildSize);
+				DatabaseResult leaderResult = await charGuildService.PersistAsync(memberData, maxGuildSize);
+				if (!leaderResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"CreateGuildAsync leader membership persist failed (CharID={characterID}, GuildID={newGuildID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}");
+					return;
+				}
 
 				// Marshal in-memory state changes + Broadcast back to main thread
 				TryEnqueueMainThread(() =>
@@ -922,6 +937,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long targetCharacterID = msg.TargetCharacterID;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => InviteToGuildAsync(conn, inviterCharacterID, guildID, targetCharacterID), guardKey, inviterCharacterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -1049,6 +1065,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					string sceneName = conn.FirstObject.gameObject.scene.name;
 
 					deferGuardRelease = TryEnqueueIngressWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName), guardKey, characterID);
+					if (!deferGuardRelease) SendServerBusy(conn);
 				}
 			}
 			finally
@@ -1095,7 +1112,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Tell the other servers to update their guild lists
-				await guildUpdateService.PersistAsync(guildID);
+				DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"AcceptGuildInviteAsync guild update notification failed (GuildID={guildID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
 
 				// Marshal state changes + Broadcast back to main thread
 				TryEnqueueMainThread(() =>
@@ -1216,6 +1237,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				deferGuardRelease = TryEnqueueIngressWork(() => LeaveGuildAsync(conn, characterID, guildID, rank), guardKey, characterID);
 				if (!deferGuardRelease)
 				{
+					SendServerBusy(conn);
 					return;
 				}
 			}
@@ -1305,23 +1327,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// update the guild leader status in the database
 					if (newLeader.HasValue)
 					{
-						await charGuildService.UpdateRankAsync(newLeader.Value.CharacterID, newLeader.Value.GuildID, (byte)GuildRank.Leader, newLeader.Value.Version + 1);
+						DatabaseResult leaderResult = await charGuildService.UpdateRankAsync(newLeader.Value.CharacterID, newLeader.Value.GuildID, (byte)GuildRank.Leader, newLeader.Value.Version + 1);
+						if (!leaderResult.IsSuccess)
+						{
+							await Log.Warning("GuildSystem", $"LeaveGuildAsync leadership transfer failed (GuildID={guildID}, NewLeader={newLeader.Value.CharacterID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}");
+						}
 					}
 				}
 
 				// Remove the guild member
-				await charGuildService.DeleteAsync(characterID, leavingMemberVersion);
+				DatabaseResult deleteResult = await charGuildService.DeleteAsync(characterID, leavingMemberVersion);
+				if (!deleteResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"LeaveGuildAsync member delete failed (CharID={characterID}, GuildID={guildID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+				}
 
 				if (remainingCount < 1)
 				{
 					// Delete the guild entirely
-					await guildService.DeleteAsync(guildID);
-					await guildUpdateService.DeleteAsync(guildID);
+					DatabaseResult guildDeleteResult = await guildService.DeleteAsync(guildID);
+					if (!guildDeleteResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"LeaveGuildAsync guild delete failed (GuildID={guildID}): {guildDeleteResult.ErrorCode} - {guildDeleteResult.ErrorMessage}");
+					}
+					DatabaseResult<int> updateDeleteResult = await guildUpdateService.DeleteAsync(guildID);
+					if (!updateDeleteResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"LeaveGuildAsync guild update delete failed (GuildID={guildID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
+					}
 				}
 				else
 				{
 					// Tell the other servers to update their guild lists
-					await guildUpdateService.PersistAsync(guildID);
+					DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
+					if (!updateResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"LeaveGuildAsync guild update notification failed (GuildID={guildID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+					}
 				}
 
 				TryEnqueueMainThread(() =>
@@ -1404,6 +1446,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildRank requesterRank = guildController.Rank;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank), guardKey, characterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -1462,7 +1505,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Tell the other servers to update their guild lists
-				await guildUpdateService.PersistAsync(guildID);
+				DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"RemoveGuildMemberAsync guild update notification failed (GuildID={guildID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
 
 				// Marshal tracker cleanup to main thread
 				TryEnqueueMainThread(() =>
@@ -1537,6 +1584,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				deferGuardRelease = TryEnqueueIngressWork(() => ChangeGuildRankAsync(guildID, memberID, newRank), guardKey, guildID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -1575,7 +1623,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (rankResult.IsSuccess)
 				{
 					// Tell the other servers to update their guild lists
-					await guildUpdateService.PersistAsync(guildID);
+					DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
+					if (!updateResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"ChangeGuildRankAsync guild update notification failed (GuildID={guildID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+					}
+				}
+				else
+				{
+					await Log.Warning("GuildSystem", $"ChangeGuildRankAsync rank update failed (GuildID={guildID}, MemberID={memberID}): {rankResult.ErrorCode} - {rankResult.ErrorMessage}");
 				}
 			}
 			catch (Exception ex)

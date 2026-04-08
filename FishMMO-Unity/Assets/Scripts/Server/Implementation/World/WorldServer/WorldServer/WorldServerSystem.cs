@@ -186,7 +186,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					return;
 				}
-				await worldServerService.PulseAsync(serverId, characterCount);
+				DatabaseResult result = await worldServerService.PulseAsync(serverId, characterCount);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("WorldServerSystem", $"PulseAsync DB error (ServerID={serverId}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

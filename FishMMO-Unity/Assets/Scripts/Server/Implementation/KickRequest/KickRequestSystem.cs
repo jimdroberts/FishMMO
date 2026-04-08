@@ -159,7 +159,11 @@ namespace FishMMO.Server.Implementation
 					return;
 				}
 
-				await kickRequestService.DeleteAsync(accountName);
+				DatabaseResult<int> result = await kickRequestService.DeleteAsync(accountName);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("KickRequestSystem", $"DeleteKickRequestAsync DB error for {accountName}: {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

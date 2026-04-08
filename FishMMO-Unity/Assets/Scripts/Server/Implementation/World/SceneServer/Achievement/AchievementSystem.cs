@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishNet.Broadcast;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
@@ -164,10 +165,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (knownAbilityService != null)
 				{
 					long characterId = character.ID;
-					if (!TryEnqueueAsyncWork(() => PersistKnownAbilityAsync(knownAbilityService, characterId, id)))
-					{
-						Log.Warning("AchievementSystem", $"Failed to enqueue known-ability persistence (CharID={characterId}, TemplateID={id}).");
-					}
+					EnqueuePersistence(() => PersistKnownAbilityAsync(knownAbilityService, characterId, id));
 				}
 
 				broadcasts.Add(singleBroadcastFactory(reward));
@@ -189,7 +187,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				await service.PersistAsync(characterId, templateId, 1);
+				DatabaseResult result = await service.PersistAsync(characterId, templateId, 1);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("AchievementSystem", $"PersistKnownAbilityAsync DB error (CharID={characterId}, TemplateID={templateId}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -284,10 +286,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									seed: item.IsGenerated ? item.Generator.Seed : 0,
 									amount: item.IsStackable ? item.Stackable.Amount : 0
 								);
-								if (!TryEnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, dto)))
-								{
-									Log.Warning("AchievementSystem", $"Failed to enqueue inventory persistence (CharID={dto.CharacterID}, Slot={dto.Slot}).");
-								}
+								EnqueuePersistence(() => PersistInventorySlotAsync(inventoryService, dto));
 							}
 
 							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -340,10 +339,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									seed: item.IsGenerated ? item.Generator.Seed : 0,
 									amount: item.IsStackable ? item.Stackable.Amount : 0
 								);
-								if (!TryEnqueueAsyncWork(() => PersistBankSlotAsync(bankService, dto)))
-								{
-									Log.Warning("AchievementSystem", $"Failed to enqueue bank persistence (CharID={dto.CharacterID}, Slot={dto.Slot}).");
-								}
+								EnqueuePersistence(() => PersistBankSlotAsync(bankService, dto));
 							}
 
 							modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
@@ -386,7 +382,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				await service.PersistAsync(dto);
+				DatabaseResult<long> result = await service.PersistAsync(dto);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("AchievementSystem", $"PersistInventorySlotAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -403,7 +403,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				await service.PersistAsync(dto);
+				DatabaseResult<long> result = await service.PersistAsync(dto);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("AchievementSystem", $"PersistBankSlotAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

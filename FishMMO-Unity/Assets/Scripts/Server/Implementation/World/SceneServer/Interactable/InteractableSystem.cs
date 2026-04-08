@@ -5,6 +5,7 @@ using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System.Collections.Generic;
@@ -302,7 +303,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				await inventoryService.PersistAsync(items);
+				DatabaseResult result = await inventoryService.PersistAsync(items);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"PersistInventoryItemsAsync DB error ({items.Count} items): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

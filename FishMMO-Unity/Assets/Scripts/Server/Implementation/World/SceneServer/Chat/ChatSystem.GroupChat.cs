@@ -50,7 +50,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long receivedTicks = msg.ReceivedUtcTicks;
 
 			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
+			EnqueuePersistence(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 
@@ -157,7 +157,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long receivedTicks = msg.ReceivedUtcTicks;
 
 			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
+			EnqueuePersistence(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 

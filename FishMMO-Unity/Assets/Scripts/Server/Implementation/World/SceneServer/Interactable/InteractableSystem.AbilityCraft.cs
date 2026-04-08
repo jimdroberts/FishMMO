@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System.Collections.Generic;
@@ -216,7 +217,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				await abilityService.PersistAsync(abilityData);
+				DatabaseResult<long> result = await abilityService.PersistAsync(abilityData);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"PersistAbilityAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

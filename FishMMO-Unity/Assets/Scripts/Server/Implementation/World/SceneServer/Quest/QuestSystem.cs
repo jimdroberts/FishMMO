@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
@@ -769,10 +770,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				objectiveValues: SerializeObjectiveValues(objectiveValues)
 			);
 
-			if (!TryEnqueueAsyncWork(() => PersistQuestAsync(questService, dto), characterID))
-			{
-				Log.Warning("QuestSystem", $"Failed to enqueue quest persistence (CharID={characterID}, TemplateID={dto.TemplateID}).");
-			}
+			EnqueuePersistence(() => PersistQuestAsync(questService, dto), characterID);
 		}
 
 		/// <summary>
@@ -795,10 +793,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			int templateID = quest.Template.ID;
 			long version = quest.Version;
 
-			if (!TryEnqueueAsyncWork(() => DeleteQuestAsync(questService, characterID, templateID, version), characterID))
-			{
-				Log.Warning("QuestSystem", $"Failed to enqueue quest deletion (CharID={characterID}, TemplateID={templateID}).");
-			}
+			EnqueuePersistence(() => DeleteQuestAsync(questService, characterID, templateID, version), characterID);
 		}
 
 		/// <summary>
@@ -808,7 +803,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				await service.PersistAsync(new[] { dto });
+				DatabaseResult result = await service.PersistAsync(new[] { dto });
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("QuestSystem", $"PersistQuestAsync DB error (CharID={dto.CharacterID}, TemplateID={dto.TemplateID}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -823,7 +822,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				await service.DeleteQuestAsync(characterID, templateID, version);
+				DatabaseResult result = await service.DeleteQuestAsync(characterID, templateID, version);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("QuestSystem", $"DeleteQuestAsync DB error (CharID={characterID}, TemplateID={templateID}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -942,10 +945,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								seed: item.IsGenerated ? item.Generator.Seed : 0,
 								amount: item.IsStackable ? item.Stackable.Amount : 0
 							);
-							if (!TryEnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, dto), character.ID))
-							{
-								Log.Warning("QuestSystem", $"Failed to enqueue inventory persistence (CharID={dto.CharacterID}, Slot={dto.Slot}).");
-							}
+							EnqueuePersistence(() => PersistInventorySlotAsync(inventoryService, dto), character.ID);
 						}
 
 						modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -1003,10 +1003,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								seed: item.IsGenerated ? item.Generator.Seed : 0,
 								amount: item.IsStackable ? item.Stackable.Amount : 0
 							);
-							if (!TryEnqueueAsyncWork(() => PersistBankSlotAsync(bankService, dto), character.ID))
-							{
-								Log.Warning("QuestSystem", $"Failed to enqueue bank persistence (CharID={dto.CharacterID}, Slot={dto.Slot}).");
-							}
+							EnqueuePersistence(() => PersistBankSlotAsync(bankService, dto), character.ID);
 						}
 
 						modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
@@ -1073,7 +1070,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				await service.PersistAsync(dto);
+				DatabaseResult<long> result = await service.PersistAsync(dto);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("QuestSystem", $"PersistInventorySlotAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1088,7 +1089,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				await service.PersistAsync(dto);
+				DatabaseResult<long> result = await service.PersistAsync(dto);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("QuestSystem", $"PersistBankSlotAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

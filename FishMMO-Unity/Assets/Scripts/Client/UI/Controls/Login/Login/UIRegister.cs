@@ -153,7 +153,22 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.ServerBusy:
 					OnRegistrationDialog("Server is busy. Please try again later.");
 					break;
-				default:
+				// Not applicable during registration flow.
+				case ClientAuthenticationResult.SrpVerify:
+				case ClientAuthenticationResult.SrpProof:
+				case ClientAuthenticationResult.AlreadyOnline:
+				case ClientAuthenticationResult.LoginSuccess:
+				case ClientAuthenticationResult.WorldLoginSuccess:
+				case ClientAuthenticationResult.SceneLoginSuccess:
+				case ClientAuthenticationResult.ServerFull:
+				case ClientAuthenticationResult.NoCharacterSelected:
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenRevoked:
+				case ClientAuthenticationResult.AccountUnverified:
+				case ClientAuthenticationResult.TwoFactorRequired:
+				case ClientAuthenticationResult.TwoFactorInvalid:
+				case ClientAuthenticationResult.TokenDecryptFailed:
 					break;
 			}
 		}

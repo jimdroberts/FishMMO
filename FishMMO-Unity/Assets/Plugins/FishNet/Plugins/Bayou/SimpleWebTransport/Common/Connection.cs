@@ -37,8 +37,9 @@ namespace JamesFrowen.SimpleWeb
         {
             this.client = client ?? throw new ArgumentNullException(nameof(client));
             this.onDispose = onDispose;
-        }
 
+			remoteAddress = client.Client?.RemoteEndPoint?.ToString();
+        }
 
         /// <summary>
         /// disposes client and stops threads
@@ -90,8 +91,7 @@ namespace JamesFrowen.SimpleWeb
 
         public override string ToString()
         {
-            System.Net.EndPoint endpoint = client?.Client?.RemoteEndPoint;
-            return $"[Conn:{connId}, endPoint:{endpoint}]";
+            return $"[Conn:{connId}, endPoint:{remoteAddress}]";
         }
     }
 }

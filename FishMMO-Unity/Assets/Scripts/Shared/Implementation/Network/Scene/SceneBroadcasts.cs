@@ -89,4 +89,12 @@ namespace FishMMO.Shared
 	public struct RequestSceneChannelListBroadcast : IBroadcast
 	{
 	}
+
+	/// <summary>
+	/// Broadcast sent by the server when it cannot process a gameplay request because the
+	/// async work queue is full. The client should display a transient "Server Busy" notification.
+	/// </summary>
+	public struct ServerBusyBroadcast : IBroadcast
+	{
+	}
 }

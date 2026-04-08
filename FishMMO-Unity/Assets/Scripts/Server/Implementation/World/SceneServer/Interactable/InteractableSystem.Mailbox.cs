@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using FishMMO.Database;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -255,7 +256,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				// Resolve recipient by name — requires a character lookup service.
 				// For now, we pass 0 as recipientID; the service validates internally.
 				// A future enhancement can resolve the recipient name to ID here.
-				await mailService.SendAsync(
+				DatabaseResult result = await mailService.SendAsync(
 					senderID,
 					0, // recipientID — service should resolve by name or this needs a character lookup
 					subject,
@@ -265,6 +266,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					0, // itemAttachmentAmount
 					1  // version
 				);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"SendMailAsync DB error (SenderID={senderID}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -353,7 +358,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				await mailService.DeleteAsync(mailID, characterID, 1);
+				DatabaseResult result = await mailService.DeleteAsync(mailID, characterID, 2);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"DeleteMailAsync DB error (MailID={mailID}, CharID={characterID}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

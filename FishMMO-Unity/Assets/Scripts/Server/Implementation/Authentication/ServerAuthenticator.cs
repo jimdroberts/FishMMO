@@ -1096,7 +1096,11 @@ namespace FishMMO.Server.Implementation
 						Server.Database?.ServiceRegistry != null &&
 						Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var kickRequestService))
 					{
-						await kickRequestService.PersistAsync(username);
+						DatabaseResult kickResult = await kickRequestService.PersistAsync(username);
+						if (!kickResult.IsSuccess)
+						{
+							await Log.Warning(LogPrefix, $"PersistAsync kick request DB error for user '{username}': {kickResult.ErrorCode} - {kickResult.ErrorMessage}");
+						}
 					}
 				}
 
@@ -1537,7 +1541,11 @@ namespace FishMMO.Server.Implementation
 				}
 
 				// Consume the matched recovery code so it cannot be reused.
-				await recoveryCodeService.ConsumeCodeAsync(pendingState.Username, matchedHash);
+				DatabaseResult consumeResult = await recoveryCodeService.ConsumeCodeAsync(pendingState.Username, matchedHash);
+				if (!consumeResult.IsSuccess)
+				{
+					await Log.Warning(LogPrefix, $"ConsumeCodeAsync DB error for user '{pendingState.Username}': {consumeResult.ErrorCode} - {consumeResult.ErrorMessage}");
+				}
 			}
 			else
 			{
@@ -1580,11 +1588,19 @@ namespace FishMMO.Server.Implementation
 					if (accountResult.Data.TotpVerifiedAt == null)
 					{
 						// First TOTP verification ever — marks 2FA as fully activated.
-						await accountService.PersistTotpVerifiedAtAsync(pendingState.Username, windowUsed);
+						DatabaseResult verifiedResult = await accountService.PersistTotpVerifiedAtAsync(pendingState.Username, windowUsed);
+						if (!verifiedResult.IsSuccess)
+						{
+							await Log.Warning(LogPrefix, $"PersistTotpVerifiedAtAsync DB error for user '{pendingState.Username}': {verifiedResult.ErrorCode} - {verifiedResult.ErrorMessage}");
+						}
 					}
 					else
 					{
-						await accountService.PersistLastTotpWindowAsync(pendingState.Username, windowUsed);
+						DatabaseResult windowResult = await accountService.PersistLastTotpWindowAsync(pendingState.Username, windowUsed);
+						if (!windowResult.IsSuccess)
+						{
+							await Log.Warning(LogPrefix, $"PersistLastTotpWindowAsync DB error for user '{pendingState.Username}': {windowResult.ErrorCode} - {windowResult.ErrorMessage}");
+						}
 					}
 				}
 				finally
@@ -1842,7 +1858,18 @@ namespace FishMMO.Server.Implementation
 					if (Server.Database?.ServiceRegistry != null &&
 						Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var authTokenService))
 					{
-						await authTokenService.IssueAsync(tokenHash, username, LoginServerId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes));
+						DatabaseResult<AuthTokenData> tokenResult = await authTokenService.IssueAsync(tokenHash, username, LoginServerId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes));
+						if (!tokenResult.IsSuccess)
+						{
+							await Log.Warning(LogPrefix, $"IssueAsync auth token DB error for user '{username}': {tokenResult.ErrorCode} - {tokenResult.ErrorMessage}");
+							// Token not persisted — client would receive an unvalidatable token.
+							return null;
+						}
+					}
+					else
+					{
+						await Log.Warning(LogPrefix, $"IssueAsync: Database service unavailable for user '{username}', cannot persist auth token.");
+						return null;
 					}
 				}
 				finally

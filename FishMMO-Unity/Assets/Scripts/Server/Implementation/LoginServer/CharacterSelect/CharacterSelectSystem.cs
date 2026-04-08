@@ -132,7 +132,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!TryEnqueueAsyncWork(() => ProcessCharacterListRequestAsync(conn, accountName)))
 				{
 					EndInFlightRequest(conn);
-					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character list request for account '{accountName}'.");
+					SendServerBusy(conn);
 				}
 			}
 		}

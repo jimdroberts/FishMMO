@@ -530,12 +530,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Send server heartbeat pulse
-				await sceneServerService.PulseAsync(serverID, characterCount, isLocked);
+				DatabaseResult pulseResult = await sceneServerService.PulseAsync(serverID, characterCount, isLocked);
+				if (!pulseResult.IsSuccess)
+				{
+					await Log.Warning("SceneServerSystem", $"PulseAsync DB error (ServerID={serverID}): {pulseResult.ErrorCode} - {pulseResult.ErrorMessage}");
+				}
 
 				// Send scene heartbeat pulses (batched) — snapshot already in DB-ready format
 				if (pulseSnapshot.Count > 0)
 				{
-					await sceneService.PulseBatchAsync(pulseSnapshot);
+					DatabaseResult<int> batchResult = await sceneService.PulseBatchAsync(pulseSnapshot);
+					if (!batchResult.IsSuccess)
+					{
+						await Log.Warning("SceneServerSystem", $"PulseBatchAsync DB error ({pulseSnapshot.Count} scenes): {batchResult.ErrorCode} - {batchResult.ErrorMessage}");
+					}
 				}
 
 				// Process pending scenes — bounded to maxScenesPerPulse to prevent DB flood
@@ -747,7 +755,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 				// Cast from FishMMO.Shared.SceneStatus to FishMMO.Database.Data.Enums.SceneStatus (same int values)
-				await sceneService.UpdateStatusAsync(sceneId, (FishMMO.Database.Data.Enums.SceneStatus)(int)status);
+				DatabaseResult result = await sceneService.UpdateStatusAsync(sceneId, (FishMMO.Database.Data.Enums.SceneStatus)(int)status);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("SceneServerSystem", $"UpdateSceneStatusAsync DB error (SceneID={sceneId}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -775,7 +787,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return;
 				}
-				await sceneService.SetReadyAsync(sceneServerId, worldServerId, sceneName, sceneHandle);
+				DatabaseResult result = await sceneService.SetReadyAsync(sceneServerId, worldServerId, sceneName, sceneHandle);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("SceneServerSystem", $"SetSceneReadyAsync DB error (SceneServerID={sceneServerId}, Scene={sceneName}:{sceneHandle}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -1049,7 +1065,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return;
 				}
-				await sceneService.DeleteByHandleAsync(sceneServerId, sceneHandle);
+				DatabaseResult result = await sceneService.DeleteByHandleAsync(sceneServerId, sceneHandle);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("SceneServerSystem", $"DeleteSceneByHandleAsync DB error (ServerID={sceneServerId}, Handle={sceneHandle}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

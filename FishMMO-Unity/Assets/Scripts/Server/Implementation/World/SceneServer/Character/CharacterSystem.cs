@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Implementation.World.SceneServer.Character;
@@ -231,7 +232,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						{
 							try
 							{
-								await characterService.PersistAsync(charData);
+								DatabaseResult result = await characterService.PersistAsync(charData);
+								if (!result.IsSuccess)
+								{
+									await Log.Warning("CharacterSystem", $"OnDeinitialize: DB error saving character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
+								}
 							}
 							catch (Exception ex)
 							{

@@ -70,7 +70,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long receivedTicks = msg.ReceivedUtcTicks;
 
 			bool persist = sender != null;
-			TryEnqueueAsyncWork(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
+			EnqueuePersistence(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
 			return false; // suppress synchronous save — async path handles it
 		}
 

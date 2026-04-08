@@ -98,7 +98,7 @@ namespace FishNet.Transporting.Bayou.Server
             else
                 config = new SslConfig(_sslConfiguration.Enabled, _sslConfiguration.CertificatePath, _sslConfiguration.CertificatePassword,
                     _sslConfiguration.SslProtocol);
-            _server = new SimpleWebServer(5000, tcpConfig, _mtu, 5000, config, _useProxyProtocol);
+            _server = new SimpleWebServer(5000, tcpConfig, _maximumClients, _mtu, 5000, config, _useProxyProtocol);
 
             _server.onConnect += _server_onConnect;
             _server.onDisconnect += _server_onDisconnect;
@@ -150,12 +150,6 @@ namespace FishNet.Transporting.Bayou.Server
         {
             if (_server == null || !_server.Active)
                 return;
-
-            if (_clients.Count >= _maximumClients)
-            {
-                _server.KickClient(clientId);
-                return;
-            }
 
             _clients.Add(clientId);
             RemoteConnectionState state = RemoteConnectionState.Started;

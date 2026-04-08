@@ -117,13 +117,18 @@ namespace FishMMO.Client
 			switch (result)
 			{
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
-					break;
 				case ClientAuthenticationResult.AlreadyOnline:
-					break;
 				case ClientAuthenticationResult.Banned:
+				case ClientAuthenticationResult.ServerFull:
+				case ClientAuthenticationResult.ServerBusy:
+				case ClientAuthenticationResult.NoCharacterSelected:
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenRevoked:
+				case ClientAuthenticationResult.TokenDecryptFailed:
+					Client.QuitToLogin();
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
-					//Show(); // show the panel even if we don't get the character list.. this will let us return to login or quit
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
 					Hide();
@@ -131,9 +136,14 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.SceneLoginSuccess:
 					Hide();
 					break;
-				case ClientAuthenticationResult.ServerFull:
-					break;
-				default:
+				// Not applicable during character select flow.
+				case ClientAuthenticationResult.AccountCreated:
+				case ClientAuthenticationResult.SrpVerify:
+				case ClientAuthenticationResult.SrpProof:
+				case ClientAuthenticationResult.AccountUnverified:
+				case ClientAuthenticationResult.AccountVerified:
+				case ClientAuthenticationResult.TwoFactorRequired:
+				case ClientAuthenticationResult.TwoFactorInvalid:
 					break;
 			}
 			SetConnectButtonLocked(false);

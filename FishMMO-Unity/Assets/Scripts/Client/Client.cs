@@ -224,6 +224,7 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 			NetworkManager.ClientManager.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
+			NetworkManager.ClientManager.RegisterBroadcast<ServerBusyBroadcast>(OnServerBusyBroadcastReceived);
 
 			NetworkManager.SceneManager.OnLoadStart += SceneManager_OnLoadStart;
 			NetworkManager.SceneManager.OnLoadPercentChange += SceneManager_OnLoadPercentChange;
@@ -241,6 +242,7 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			NetworkManager.ClientManager.UnregisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 			NetworkManager.ClientManager.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
+			NetworkManager.ClientManager.UnregisterBroadcast<ServerBusyBroadcast>(OnServerBusyBroadcastReceived);
 
 			NetworkManager.SceneManager.OnLoadStart -= SceneManager_OnLoadStart;
 			NetworkManager.SceneManager.OnLoadPercentChange -= SceneManager_OnLoadPercentChange;
@@ -542,14 +544,6 @@ namespace FishMMO.Client
 		{
 			switch (result)
 			{
-				case ClientAuthenticationResult.AccountCreated:
-					break;
-				case ClientAuthenticationResult.InvalidUsernameOrPassword:
-					break;
-				case ClientAuthenticationResult.AlreadyOnline:
-					break;
-				case ClientAuthenticationResult.Banned:
-					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					currentConnectionType = ServerConnectionType.Login;
 					break;
@@ -558,12 +552,26 @@ namespace FishMMO.Client
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
 					currentConnectionType = ServerConnectionType.Scene;
-
 					OnEnterGameWorld?.Invoke();
 					break;
+				// Auth results handled by UI layers (UILogin, UIRegister, UICharacterSelect, UIServerSelect).
+				case ClientAuthenticationResult.AccountCreated:
+				case ClientAuthenticationResult.SrpVerify:
+				case ClientAuthenticationResult.SrpProof:
+				case ClientAuthenticationResult.InvalidUsernameOrPassword:
+				case ClientAuthenticationResult.AlreadyOnline:
+				case ClientAuthenticationResult.Banned:
 				case ClientAuthenticationResult.ServerFull:
-					break;
-				default:
+				case ClientAuthenticationResult.ServerBusy:
+				case ClientAuthenticationResult.NoCharacterSelected:
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenRevoked:
+				case ClientAuthenticationResult.AccountUnverified:
+				case ClientAuthenticationResult.AccountVerified:
+				case ClientAuthenticationResult.TwoFactorRequired:
+				case ClientAuthenticationResult.TwoFactorInvalid:
+				case ClientAuthenticationResult.TokenDecryptFailed:
 					break;
 			}
 		}
@@ -915,6 +923,17 @@ namespace FishMMO.Client
 			AddressableLoadProcessor.OnProgressUpdate -= OnClientValidatedSceneProgressUpdate;
 
 			Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Handler for server busy broadcast. Displays a dialog box notifying the player.
+		/// </summary>
+		private void OnServerBusyBroadcastReceived(ServerBusyBroadcast msg, Channel channel)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			{
+				uiDialogBox.Open("Server is busy. Please try again.");
+			}
 		}
 
 #if !UNITY_SERVER

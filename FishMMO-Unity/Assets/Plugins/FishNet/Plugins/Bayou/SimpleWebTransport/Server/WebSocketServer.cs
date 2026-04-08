@@ -10,284 +10,267 @@ using System.Threading;
 
 namespace JamesFrowen.SimpleWeb
 {
-    public class WebSocketServer
-    {
-        public readonly ConcurrentQueue<Message> receiveQueue = new ConcurrentQueue<Message>();
+	public class WebSocketServer
+	{
+		public readonly ConcurrentQueue<Message> receiveQueue = new ConcurrentQueue<Message>();
 
-        readonly TcpConfig tcpConfig;
-        readonly int maxMessageSize;
-        readonly bool useProxyProtocol;
+		readonly TcpConfig tcpConfig;
+		readonly int maximumClients;
+		readonly int maxMessageSize;
+		readonly bool useProxyProtocol;
 
-        public TcpListener listener;
-        Thread acceptThread;
-        bool serverStopped;
-        readonly ServerHandshake handShake;
-        readonly ServerSslHelper sslHelper;
-        readonly BufferPool bufferPool;
-        readonly ConcurrentDictionary<int, Connection> connections = new ConcurrentDictionary<int, Connection>();
-
-
-        private ConcurrentQueue<int> _idCache = new ConcurrentQueue<int>();
-        private int _nextId = 0;
-
-        private int GetNextId()
-        {
-            if (_idCache.Count == 0)
-                GrowIdCache(1000);
-
-            int result = NetworkConnection.UNSET_CLIENTID_VALUE;
-            _idCache.TryDequeue(out result);
-            return result;
-        }
-
-        /// <summary>
-        /// Grows IdCache by value.
-        /// </summary>
-        private void GrowIdCache(int value)
-        {
-            int over = (_nextId + value) - NetworkConnection.MAXIMUM_CLIENTID_VALUE;
-            //Prevent overflow.
-            if (over > 0)
-                value -= over;
-            
-            for (int i = _nextId; i < value; i++)
-                _idCache.Enqueue(i);
-        }
-
-        public WebSocketServer(TcpConfig tcpConfig, int maxMessageSize, int handshakeMaxSize, SslConfig sslConfig, BufferPool bufferPool, bool useProxyProtocol = false)
-        {
-            //Make a small queue to start.
-            GrowIdCache(1000);
-            
-            this.tcpConfig = tcpConfig;
-            this.maxMessageSize = maxMessageSize;
-            this.useProxyProtocol = useProxyProtocol;
-            sslHelper = new ServerSslHelper(sslConfig);
-            this.bufferPool = bufferPool;
-            handShake = new ServerHandshake(this.bufferPool, handshakeMaxSize);
-        }
-
-        public void Listen(int port)
-        {
-            listener = TcpListener.Create(port);
-            listener.Start();
-            Log.Info($"Server has started on port {port}");
-
-            acceptThread = new Thread(acceptLoop);
-            acceptThread.IsBackground = true;
-            acceptThread.Start();
-        }
-
-        public void Stop()
-        {
-            serverStopped = true;
-
-            // Interrupt then stop so that Exception is handled correctly
-            acceptThread?.Interrupt();
-            listener?.Stop();
-            acceptThread = null;
+		public TcpListener listener;
+		Thread acceptThread;
+		bool serverStopped;
+		readonly ServerHandshake handShake;
+		readonly ServerSslHelper sslHelper;
+		readonly BufferPool bufferPool;
+		readonly ConcurrentDictionary<int, Connection> connections = new ConcurrentDictionary<int, Connection>();
 
 
-            Log.Info("Server stoped, Closing all connections...");
-            // make copy so that foreach doesn't break if values are removed
-            Connection[] connectionsCopy = connections.Values.ToArray();
-            foreach (Connection conn in connectionsCopy)
-            {
-                conn.Dispose();
-            }
+		private ConcurrentQueue<int> _idCache = new ConcurrentQueue<int>();
 
-            connections.Clear();
-        }
+		public WebSocketServer(TcpConfig tcpConfig, int maximumClients, int maxMessageSize, int handshakeMaxSize, SslConfig sslConfig, BufferPool bufferPool, bool useProxyProtocol = false)
+		{
+			this.tcpConfig = tcpConfig;
+			this.maximumClients = maximumClients;
+			this.maxMessageSize = maxMessageSize;
+			this.useProxyProtocol = useProxyProtocol;
+			sslHelper = new ServerSslHelper(sslConfig);
+			this.bufferPool = bufferPool;
+			handShake = new ServerHandshake(this.bufferPool, handshakeMaxSize);
 
-        void acceptLoop()
-        {
-            try
-            {
-                try
-                {
-                    while (true)
-                    {
-                        TcpClient client = listener.AcceptTcpClient();
-                        tcpConfig.ApplyTo(client);
+			// Pre-fill exactly the IDs we'll ever need.
+			// Pool sized to maximumClients means exhaustion is impossible
+			// as long as IDs are returned on disconnect, which AfterConnectionDisposed does.
+			for (int i = 0; i < maximumClients; i++)
+				_idCache.Enqueue(i);
+		}
+
+		private int GetNextId()
+		{
+			// If the queue is empty we're genuinely at capacity — no growth needed.
+			if (_idCache.TryDequeue(out int id))
+				return id;
+
+			return NetworkConnection.UNSET_CLIENTID_VALUE;
+		}
+
+		public void Listen(int port)
+		{
+			listener = TcpListener.Create(port);
+			listener.Start();
+			Log.Info($"Server has started on port {port}");
+
+			acceptThread = new Thread(acceptLoop);
+			acceptThread.IsBackground = true;
+			acceptThread.Start();
+		}
+
+		public void Stop()
+		{
+			serverStopped = true;
+
+			// Interrupt then stop so that Exception is handled correctly
+			acceptThread?.Interrupt();
+			listener?.Stop();
+			acceptThread = null;
 
 
-                        // TODO keep track of connections before they are in connections dictionary
-                        //      this might not be a problem as HandshakeAndReceiveLoop checks for stop
-                        //      and returns/disposes before sending message to queue
-                        Connection conn = new Connection(client, AfterConnectionDisposed);
-                        //Log.Info($"A client connected {conn}");
+			Log.Info("Server stoped, Closing all connections...");
+			// make copy so that foreach doesn't break if values are removed
+			Connection[] connectionsCopy = connections.Values.ToArray();
+			foreach (Connection conn in connectionsCopy)
+			{
+				conn.Dispose();
+			}
 
-                        // handshake needs its own thread as it needs to wait for message from client
-                        Thread receiveThread = new Thread(() => HandshakeAndReceiveLoop(conn));
+			connections.Clear();
+		}
 
-                        conn.receiveThread = receiveThread;
+		void acceptLoop()
+		{
+			try
+			{
+				try
+				{
+					while (true)
+					{
+						TcpClient client = listener.AcceptTcpClient();
+						tcpConfig.ApplyTo(client);
 
-                        receiveThread.IsBackground = true;
-                        receiveThread.Start();
-                    }
-                }
-                catch (SocketException)
-                {
-                    // check for Interrupted/Abort
-                    Utils.CheckForInterupt();
-                    throw;
-                }
-            }
-            catch (ThreadInterruptedException e) { Log.InfoException(e); }
-            catch (ThreadAbortException e) { Log.InfoException(e); }
-            catch (Exception e) { Log.Exception(e); }
-        }
 
-        void HandshakeAndReceiveLoop(Connection conn)
-        {
-            try
-            {
-                // ── PROXY protocol ──────────────────────────────────────
-                // Must be parsed BEFORE SSL/TLS because PROXY protocol is
-                // a transport-layer preamble sent in the clear by the proxy.
-                if (useProxyProtocol)
-                {
-                    Stream rawStream = conn.client.GetStream();
-                    if (ProxyProtocol.TryParse(rawStream, out string srcAddr))
-                    {
-                        conn.remoteAddress = srcAddr;
-                    }
-                    else
-                    {
-                        Log.Warn("Failed to parse PROXY protocol header, disconnecting client.");
-                        conn.Dispose();
-                        return;
-                    }
-                }
+						// TODO keep track of connections before they are in connections dictionary
+						//      this might not be a problem as HandshakeAndReceiveLoop checks for stop
+						//      and returns/disposes before sending message to queue
+						Connection conn = new Connection(client, AfterConnectionDisposed);
+						//Log.Info($"A client connected {conn}");
 
-                bool success = sslHelper.TryCreateStream(conn);
-                if (!success)
-                {
-                    //Log.Error($"Failed to create SSL Stream {conn}");
-                    conn.Dispose();
-                    return;
-                }
+						// handshake needs its own thread as it needs to wait for message from client
+						Thread receiveThread = new Thread(() => HandshakeAndReceiveLoop(conn));
 
-                success = handShake.TryHandshake(conn);
+						conn.receiveThread = receiveThread;
 
-                if (success)
-                {
-                    //Log.Info($"Sent Handshake {conn}");
-                }
-                else
-                {
-                    //Log.Error($"Handshake Failed {conn}");
-                    conn.Dispose();
-                    return;
-                }
+						receiveThread.IsBackground = true;
+						receiveThread.Start();
+					}
+				}
+				catch (SocketException)
+				{
+					// check for Interrupted/Abort
+					Utils.CheckForInterupt();
+					throw;
+				}
+			}
+			catch (ThreadInterruptedException e) { Log.InfoException(e); }
+			catch (ThreadAbortException e) { Log.InfoException(e); }
+			catch (Exception e) { Log.Exception(e); }
+		}
 
-                // check if Stop has been called since accepting this client
-                if (serverStopped)
-                {
-                    Log.Info("Server stops after successful handshake");
-                    return;
-                }
+		void HandshakeAndReceiveLoop(Connection conn)
+		{
+			try
+			{
+				// ── PROXY protocol ──────────────────────────────────────
+				// Must be parsed BEFORE SSL/TLS because PROXY protocol is
+				// a transport-layer preamble sent in the clear by the proxy.
+				if (useProxyProtocol)
+				{
+					Stream rawStream = conn.client.GetStream();
+					if (ProxyProtocol.TryParse(rawStream, out string srcAddr))
+					{
+						// Overwrite the cached TCP endpoint with the real client IP.
+						if (!string.IsNullOrEmpty(srcAddr))
+							conn.remoteAddress = srcAddr;
+					}
+					else
+					{
+						Log.Warn("Failed to parse PROXY protocol header, disconnecting client.");
+						conn.Dispose();
+						return;
+					}
+				}
 
-                conn.connId = GetNextId();
-                if (conn.connId == NetworkConnection.UNSET_CLIENTID_VALUE)
-                {
-                    NetworkManagerExtensions.LogWarning($"At maximum connections. A client attempting to connect to be rejected.");
-                    conn.Dispose();
-                    return;
-                }
+				bool success = sslHelper.TryCreateStream(conn);
+				if (!success)
+				{
+					//Log.Error($"Failed to create SSL Stream {conn}");
+					conn.Dispose();
+					return;
+				}
 
-                connections.TryAdd(conn.connId, conn);
+				success = handShake.TryHandshake(conn);
 
-                receiveQueue.Enqueue(new Message(conn.connId, EventType.Connected));
+				if (success)
+				{
+					//Log.Info($"Sent Handshake {conn}");
+				}
+				else
+				{
+					//Log.Error($"Handshake Failed {conn}");
+					conn.Dispose();
+					return;
+				}
 
-                Thread sendThread = new Thread(() =>
-                {
-                    SendLoop.Config sendConfig = new SendLoop.Config(
-                        conn,
-                        bufferSize: Constants.HeaderSize + maxMessageSize,
-                        setMask: false);
+				// check if Stop has been called since accepting this client
+				if (serverStopped)
+				{
+					Log.Info("Server stops after successful handshake");
+					return;
+				}
 
-                    SendLoop.Loop(sendConfig);
-                });
+				conn.connId = GetNextId();
+				if (conn.connId == NetworkConnection.UNSET_CLIENTID_VALUE)
+				{
+					NetworkManagerExtensions.LogWarning($"At maximum connections. A client attempting to connect to be rejected.");
+					conn.Dispose();
+					return;
+				}
 
-                conn.sendThread = sendThread;
-                sendThread.IsBackground = true;
-                sendThread.Name = $"SendLoop {conn.connId}";
-                sendThread.Start();
+				connections.TryAdd(conn.connId, conn);
 
-                ReceiveLoop.Config receiveConfig = new ReceiveLoop.Config(
-                    conn,
-                    maxMessageSize,
-                    expectMask: true,
-                    receiveQueue,
-                    bufferPool);
+				receiveQueue.Enqueue(new Message(conn.connId, EventType.Connected));
 
-                ReceiveLoop.Loop(receiveConfig);
-            }
-            catch (ThreadInterruptedException e) { Log.InfoException(e); }
-            catch (ThreadAbortException e) { Log.InfoException(e); }
-            catch (Exception e) { Log.Exception(e); }
-            finally
-            {
-                // close here incase connect fails
-                conn.Dispose();
-            }
-        }
+				Thread sendThread = new Thread(() =>
+				{
+					SendLoop.Config sendConfig = new SendLoop.Config(
+						conn,
+						bufferSize: Constants.HeaderSize + maxMessageSize,
+						setMask: false);
 
-        void AfterConnectionDisposed(Connection conn)
-        {
-            if (conn.connId != Connection.IdNotSet)
-            {
-                receiveQueue.Enqueue(new Message(conn.connId, EventType.Disconnected));
-                connections.TryRemove(conn.connId, out Connection _);
-                _idCache.Enqueue(conn.connId);
-            }
-        }
+					SendLoop.Loop(sendConfig);
+				});
 
-        public void Send(int id, ArrayBuffer buffer)
-        {
-            if (connections.TryGetValue(id, out Connection conn))
-            {
-                conn.sendQueue.Enqueue(buffer);
-                conn.sendPending.Set();
-            }
-            else
-            {
-                Log.Warn($"Cant send message to {id} because connection was not found in dictionary. Maybe it disconnected.");
-            }
-        }
+				conn.sendThread = sendThread;
+				sendThread.IsBackground = true;
+				sendThread.Name = $"SendLoop {conn.connId}";
+				sendThread.Start();
 
-        public bool CloseConnection(int id)
-        {
-            if (connections.TryGetValue(id, out Connection conn))
-            {
-                Log.Info($"Kicking connection {id}");
-                conn.Dispose();
-                return true;
-            }
-            else
-            {
-                Log.Warn($"Failed to kick {id} because id not found");
+				ReceiveLoop.Config receiveConfig = new ReceiveLoop.Config(
+					conn,
+					maxMessageSize,
+					expectMask: true,
+					receiveQueue,
+					bufferPool);
 
-                return false;
-            }
-        }
+				ReceiveLoop.Loop(receiveConfig);
+			}
+			catch (ThreadInterruptedException e) { Log.InfoException(e); }
+			catch (ThreadAbortException e) { Log.InfoException(e); }
+			catch (Exception e) { Log.Exception(e); }
+			finally
+			{
+				// close here incase connect fails
+				conn.Dispose();
+			}
+		}
 
-        public string GetClientAddress(int id)
-        {
-            if (connections.TryGetValue(id, out Connection conn))
-            {
-                // Prefer the PROXY protocol resolved source IP when available.
-                if (!string.IsNullOrEmpty(conn.remoteAddress))
-                    return conn.remoteAddress;
+		void AfterConnectionDisposed(Connection conn)
+		{
+			if (conn.connId != Connection.IdNotSet)
+			{
+				receiveQueue.Enqueue(new Message(conn.connId, EventType.Disconnected));
+				connections.TryRemove(conn.connId, out Connection _);
+				_idCache.Enqueue(conn.connId);
+			}
+		}
 
-                return conn.client.Client.RemoteEndPoint.ToString();
-            }
-            else
-            {
-                Log.Error($"Cant close connection to {id} because connection was not found in dictionary");
-                return null;
-            }
-        }
-    }
+		public void Send(int id, ArrayBuffer buffer)
+		{
+			if (connections.TryGetValue(id, out Connection conn))
+			{
+				conn.sendQueue.Enqueue(buffer);
+				conn.sendPending.Set();
+			}
+			else
+			{
+				Log.Warn($"Cant send message to {id} because connection was not found in dictionary. Maybe it disconnected.");
+			}
+		}
+
+		public bool CloseConnection(int id)
+		{
+			if (connections.TryGetValue(id, out Connection conn))
+			{
+				Log.Info($"Kicking connection {id}");
+				conn.Dispose();
+				return true;
+			}
+			else
+			{
+				Log.Warn($"Failed to kick {id} because id not found");
+
+				return false;
+			}
+		}
+
+		public string GetClientAddress(int id)
+		{
+			if (connections.TryGetValue(id, out Connection conn))
+				return conn.remoteAddress;
+
+			Log.Error($"Cannot get address for {id}, connection not found.");
+			return null;
+		}
+	}
 }

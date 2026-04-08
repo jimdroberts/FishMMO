@@ -631,7 +631,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				? attrController.GetHealthResourceAttributeCurrentPercentage()
 				: 0.0f;
 
-			TryEnqueueAsyncWork(() => PersistPartyMemberAndNotifyAsync(characterID, partyID, rank, healthPCT), characterID);
+			EnqueuePersistence(() => PersistPartyMemberAndNotifyAsync(characterID, partyID, rank, healthPCT), characterID);
 		}
 
 		/// <summary>
@@ -665,7 +665,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Fire-and-forget async DB persist
 			long partyID = partyController.ID;
-			TryEnqueueAsyncWork(() => PersistPartyUpdateAsync(partyID), character.ID);
+			EnqueuePersistence(() => PersistPartyUpdateAsync(partyID), character.ID);
 		}
 
 		/// <summary>
@@ -702,8 +702,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				CharacterPartyData partyData = new CharacterPartyData(0, version, characterID, partyID, rank, healthPCT);
-				await charPartyService.PersistAsync(partyData, MaxPartySize);
-				await partyUpdateService.PersistAsync(partyID);
+				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
+				if (!persistResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"PersistPartyMemberAndNotifyAsync DB error (CharID={characterID}, PartyID={partyID}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+					return;
+				}
+				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"PersistPartyMemberAndNotifyAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -729,7 +738,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await partyUpdateService.PersistAsync(partyID);
+				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"PersistPartyUpdateAsync DB error (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -775,6 +788,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					: 0.0f;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT), guardKey, characterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -907,6 +921,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long targetCharacterID = msg.TargetCharacterID;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => ValidateAndSendPartyInviteAsync(conn, inviterPartyID, inviterCharacterID, targetCharacterID), guardKey, inviterCharacterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -1037,6 +1052,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					float healthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f;
 
 					deferGuardRelease = TryEnqueueIngressWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT), guardKey, characterID);
+					if (!deferGuardRelease) SendServerBusy(conn);
 				}
 			}
 			finally
@@ -1085,7 +1101,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Tell the other servers to update their party lists
-				await partyUpdateService.PersistAsync(partyID);
+				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"AcceptPartyInviteAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
 
 				// Marshal state changes + broadcast to main thread
 				TryEnqueueMainThread(() =>
@@ -1211,6 +1231,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				deferGuardRelease = TryEnqueueIngressWork(() => LeavePartyAsync(conn, characterID, partyID, rank), guardKey, characterID);
 				if (!deferGuardRelease)
 				{
+					SendServerBusy(conn);
 					return;
 				}
 			}
@@ -1288,22 +1309,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					DeterministicRNG rng = new DeterministicRNG();
 					CharacterPartyData newLeader = remainingMembers[rng.Next(0, remainingMembers.Count)];
-					await charPartyService.UpdateRankAsync(newLeader.CharacterID, partyID, (byte)PartyRank.Leader, newLeader.Version + 1);
+					DatabaseResult leaderResult = await charPartyService.UpdateRankAsync(newLeader.CharacterID, partyID, (byte)PartyRank.Leader, newLeader.Version + 1);
+					if (!leaderResult.IsSuccess)
+					{
+						await Log.Warning("PartySystem", $"LeavePartyAsync leadership transfer failed (PartyID={partyID}, NewLeader={newLeader.CharacterID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}");
+					}
 				}
 
 				// Delete the leaving member
-				await charPartyService.DeleteAsync(characterID, leavingMember.Version + 1);
+				DatabaseResult deleteResult = await charPartyService.DeleteAsync(characterID, leavingMember.Version + 1);
+				if (!deleteResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"LeavePartyAsync member delete failed (CharID={characterID}, PartyID={partyID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+				}
 
 				if (remainingCount < 1)
 				{
 					// Delete the party
-					await partyService.DeleteAsync(partyID);
-					await partyUpdateService.DeleteAsync(partyID);
+					DatabaseResult partyDeleteResult = await partyService.DeleteAsync(partyID);
+					if (!partyDeleteResult.IsSuccess)
+					{
+						await Log.Warning("PartySystem", $"LeavePartyAsync party delete failed (PartyID={partyID}): {partyDeleteResult.ErrorCode} - {partyDeleteResult.ErrorMessage}");
+					}
+					DatabaseResult<int> updateDeleteResult = await partyUpdateService.DeleteAsync(partyID);
+					if (!updateDeleteResult.IsSuccess)
+					{
+						await Log.Warning("PartySystem", $"LeavePartyAsync party update delete failed (PartyID={partyID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
+					}
 				}
 				else
 				{
 					// Tell the other servers to update their party lists
-					await partyUpdateService.PersistAsync(partyID);
+					DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+					if (!updateResult.IsSuccess)
+					{
+						await Log.Warning("PartySystem", $"LeavePartyAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+					}
 				}
 
 				TryEnqueueMainThread(() =>
@@ -1385,6 +1426,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long characterID = partyController.Character.ID;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => RemovePartyMemberAsync(partyID, memberID, characterID), guardKey, characterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -1441,7 +1483,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					});
 
 					// Tell the other servers to update their party lists.
-					await partyUpdateService.PersistAsync(partyID);
+					DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+					if (!updateResult.IsSuccess)
+					{
+						await Log.Warning("PartySystem", $"RemovePartyMemberAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+					}
+				}
+				else
+				{
+					await Log.Warning("PartySystem", $"RemovePartyMemberAsync member delete failed (PartyID={partyID}, MemberID={memberID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
 				}
 			}
 			catch (Exception ex)
@@ -1503,6 +1553,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long targetMemberID = msg.MemberID;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID), guardKey, leaderCharacterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -1583,7 +1634,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// Tell the other servers to update their party lists
-				await partyUpdateService.PersistAsync(partyID);
+				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"ChangePartyRankAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{

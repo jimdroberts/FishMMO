@@ -720,7 +720,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			TryEnqueueAsyncWork(() => FlushPersistQueueAsync());
+			if (!TryEnqueueAsyncWork(() => FlushPersistQueueAsync()))
+			{
+				Log.Error("ChatSystem", "Failed to enqueue chat persist flush. Messages remain queued for next cycle.");
+			}
 		}
 
 		/// <summary>
@@ -779,7 +782,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await chatService.PersistBatchAsync(batch);
+				DatabaseResult result = await chatService.PersistBatchAsync(batch);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("ChatSystem", $"FlushPersistQueueAsync DB error ({batch.Count} messages): {result.ErrorCode} - {result.ErrorMessage}");
+				}
 			}
 			catch (Exception ex)
 			{
@@ -830,7 +837,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (batch.Count > 0)
 				{
-					chatService.PersistBatchAsync(batch).GetAwaiter().GetResult();
+					DatabaseResult result = chatService.PersistBatchAsync(batch).GetAwaiter().GetResult();
+					if (!result.IsSuccess)
+					{
+						Log.Warning("ChatSystem", $"FlushPersistQueueSync DB error ({batch.Count} messages): {result.ErrorCode} - {result.ErrorMessage}");
+					}
 				}
 			}
 			catch (Exception ex)
