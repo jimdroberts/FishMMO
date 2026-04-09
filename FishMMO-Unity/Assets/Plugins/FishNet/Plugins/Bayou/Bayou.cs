@@ -8,29 +8,25 @@ using UnityEngine;
 
 namespace FishNet.Transporting.Bayou
 {
+    /// <remarks>
+    /// Architecture: Bayou is designed to sit behind an NGINX reverse proxy.
+    /// SSL/TLS is terminated at the NGINX layer; the server always runs plain WebSocket (WS).
+    /// Clients connect to NGINX via WSS, which forwards traffic to this transport over WS.
+    /// The server binds to loopback only — external access is routed through NGINX.
+    /// </remarks>
     [DisallowMultipleComponent]
     public class Bayou : Transport
     {
 
         #region Serialized.
-        //Security.
+        //Client Security.
         /// <summary>
-        /// True to connect using WSS.
+        /// True to connect using WSS (client-side only).
+        /// The server always runs plain WS behind NGINX where SSL is terminated.
         /// </summary>
-        [Tooltip("True to connect using WSS.")]
+        [Tooltip("True to connect using WSS (client-side). Server always runs plain WS behind NGINX.")]
         [SerializeField]
         private bool _useWss = false;
-
-        //[SerializeField]
-       // private bool _configureFor
-#if UNITY_SERVER || UNITY_EDITOR
-        /// <summary>
-        /// Configuration to use for SSL.
-        /// </summary>
-        [Tooltip("Configuration to use for SSL.")]
-        [SerializeField]
-        private SslConfiguration _sslConfiguration;
-#endif
 
         //Channels.
         /// <summary>
@@ -44,12 +40,20 @@ namespace FishNet.Transporting.Bayou
         //Server.
         /// <summary>
         /// When true, the server expects a PROXY protocol v1/v2 header from
-        /// the reverse proxy before the SSL/WebSocket handshake. Enable this
+        /// the reverse proxy before the WebSocket handshake. Enable this
         /// when NGINX (or similar) is configured with <c>proxy_protocol on;</c>.
         /// </summary>
         [Tooltip("When true, expects a PROXY protocol header from the reverse proxy before the WebSocket handshake.")]
         [SerializeField]
         private bool _useProxyProtocol = false;
+        /// <summary>
+        /// Address the server will bind to. Defaults to localhost (loopback) for
+        /// co-located NGINX deployments. Set to a specific IP or 0.0.0.0 when
+        /// NGINX is on a separate machine.
+        /// </summary>
+        [Tooltip("Server bind address. Use 'localhost' for co-located NGINX, or '0.0.0.0' / a specific IP when NGINX is on a separate machine.")]
+        [SerializeField]
+        private string _serverBindAddress = "localhost";
         /// <summary>
         /// Port to use.
         /// </summary>
@@ -86,11 +90,11 @@ namespace FishNet.Transporting.Bayou
 
         #region Const.
         /// <summary>
-        /// Minimum UDP packet size allowed.
+        /// Minimum WebSocket MTU allowed.
         /// </summary>
         private const int MINIMUM_MTU = 576;
         /// <summary>
-        /// Maximum UDP packet size allowed.
+        /// Maximum WebSocket MTU allowed.
         /// </summary>
         private const int MAXIMUM_MTU = ushort.MaxValue;
         #endregion
@@ -250,7 +254,7 @@ namespace FishNet.Transporting.Bayou
 
         #region Configuration.
         /// <summary>
-        /// Sets UseWSS value.
+        /// Sets UseWSS value (client-side only).
         /// </summary>
         /// <param name="useWss"></param>
         public void SetUseWSS(bool useWss)
@@ -261,10 +265,10 @@ namespace FishNet.Transporting.Bayou
         /// How long in seconds until either the server or client socket must go without data before being timed out.
         /// </summary>
         /// <param name="asServer">True to get the timeout for the server socket, false for the client socket.</param>
-        /// <returns></returns>
+        /// <returns>Timeout in seconds. Server: 120s receive timeout. Client: 20s receive timeout.</returns>
         public override float GetTimeout(bool asServer)
         {
-            return -1f;
+            return asServer ? 120f : 20f;
         }
         /// <summary>
         /// Returns the maximum number of clients allowed to connect to the server. If the transport does not support this method the value -1 is returned.
@@ -303,16 +307,20 @@ namespace FishNet.Transporting.Bayou
 
         /// <summary>
         /// Sets which address the server will bind to.
+        /// Defaults to localhost (loopback) for co-located NGINX deployments.
+        /// Set to 0.0.0.0 or a specific IP when NGINX is on a separate machine.
         /// </summary>
         /// <param name="address"></param>
-        public override void SetServerBindAddress(string address, IPAddressType addressType) { }
+        public override void SetServerBindAddress(string address, IPAddressType addressType)
+        {
+            _serverBindAddress = address;
+        }
         /// <summary>
         /// Gets which address the server will bind to.
         /// </summary>
-        /// <param name="address"></param>
         public override string GetServerBindAddress(IPAddressType addressType)
         {
-            return "localhost";
+            return _serverBindAddress;
         }
         /// <summary>
         /// Sets which port to use.
@@ -383,14 +391,8 @@ namespace FishNet.Transporting.Bayou
         /// </summary>
         private bool StartServer()
         {
-            SslConfiguration config;
-#if UNITY_SERVER
-            config = _sslConfiguration;
-#else
-            config = new SslConfiguration();
-#endif
-            _server.Initialize(this, _mtu, config, _useProxyProtocol);
-            return _server.StartConnection(_port, _maximumClients);
+            _server.Initialize(this, _mtu, _useProxyProtocol);
+            return _server.StartConnection(_serverBindAddress, _port, _maximumClients);
         }
 
         /// <summary>
@@ -438,7 +440,7 @@ namespace FishNet.Transporting.Bayou
         /// <param name="channelId"></param>
         private void SanitizeChannel(ref byte channelId)
         {
-            if (channelId < 0 || channelId >= TransportManager.CHANNEL_COUNT)
+            if (channelId >= TransportManager.CHANNEL_COUNT)
             {
                 base.NetworkManager.LogWarning($"Channel of {channelId} is out of range of supported channels. Channel will be defaulted to reliable.");
                 channelId = 0;

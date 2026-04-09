@@ -28,9 +28,9 @@ namespace JamesFrowen.SimpleWeb
 		public event Action<int, ArraySegment<byte>> onData;
 		public event Action<int, Exception> onError;
 
-		public void Start(ushort port)
+		public void Start(string bindAddress, ushort port)
 		{
-			server.Listen(port);
+			server.Listen(bindAddress, port);
 			Active = true;
 		}
 
@@ -39,19 +39,6 @@ namespace JamesFrowen.SimpleWeb
 			server.Stop();
 			Active = false;
 		}
-		public void SendAll(Dictionary<int, short> connections, ArraySegment<byte> source)
-		{
-			ArrayBuffer buffer = bufferPool.Take(source.Count);
-			buffer.CopyFrom(source);
-			buffer.SetReleasesRequired(connections.Count);
-
-			// make copy of array before for each, data sent to each client is the same
-			foreach (short id in connections.Values)
-			{
-				server.Send(id, buffer);
-			}
-		}
-
 		public void SendAll(HashSet<int> connectionIds, ArraySegment<byte> source)
 		{
 			if (connectionIds.Count == 0)

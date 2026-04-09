@@ -63,7 +63,7 @@ namespace JamesFrowen.SimpleWeb
 
         public void CopyTo(byte[] target, int offset)
         {
-            if (count > (target.Length + offset)) throw new ArgumentException($"{nameof(count)} was greater than {nameof(target)}.length", nameof(target));
+            if (count > (target.Length - offset)) throw new ArgumentException($"{nameof(count)} was greater than {nameof(target)}.length - {nameof(offset)}", nameof(target));
 
             Buffer.BlockCopy(array, 0, target, offset, count);
         }

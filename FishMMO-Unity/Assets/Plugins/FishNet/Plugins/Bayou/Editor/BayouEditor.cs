@@ -11,20 +11,20 @@ namespace FishNet.Transporting.Bayou
     public class BayouEditor : Editor
     {
         private SerializedProperty _useWss;
-        private SerializedProperty _sslConfiguration;
         private SerializedProperty _mtu;
         private SerializedProperty _useProxyProtocol;
+        private SerializedProperty _serverBindAddress;
         private SerializedProperty _port;
         private SerializedProperty _maximumClients;
         private SerializedProperty _clientAddress;
         protected virtual void OnEnable()
         {
             _useWss = serializedObject.FindProperty(nameof(_useWss));
-            _sslConfiguration = serializedObject.FindProperty(nameof(_sslConfiguration));
 
             _mtu = serializedObject.FindProperty(nameof(_mtu));
 
             _useProxyProtocol = serializedObject.FindProperty(nameof(_useProxyProtocol));
+            _serverBindAddress = serializedObject.FindProperty(nameof(_serverBindAddress));
             _port = serializedObject.FindProperty(nameof(_port));
             _maximumClients = serializedObject.FindProperty(nameof(_maximumClients));
 
@@ -39,15 +39,9 @@ namespace FishNet.Transporting.Bayou
             EditorGUILayout.ObjectField("Script:", MonoScript.FromMonoBehaviour((Bayou)target), typeof(Bayou), false);
             GUI.enabled = true;
             
-            EditorGUILayout.LabelField("Security", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Client Security", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
-            EditorGUILayout.PropertyField(_useWss);
-            if (_useWss.boolValue == true)
-            {
-                EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(_sslConfiguration, new GUIContent("SSL Configuration"));
-                EditorGUI.indentLevel--;
-            }
+            EditorGUILayout.PropertyField(_useWss, new GUIContent("Use WSS", "Client connects via WSS. Server always runs plain WS (SSL terminated at NGINX)."));
             EditorGUI.indentLevel--;
             EditorGUILayout.Space();
 
@@ -60,6 +54,7 @@ namespace FishNet.Transporting.Bayou
             EditorGUILayout.LabelField("Server", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
             EditorGUILayout.PropertyField(_useProxyProtocol, new GUIContent("Use Proxy Protocol", "When true, expects a PROXY protocol header from the reverse proxy before the WebSocket handshake."));
+            EditorGUILayout.PropertyField(_serverBindAddress, new GUIContent("Bind Address", "Server bind address. Use 'localhost' for co-located NGINX, or '0.0.0.0' / a specific IP when NGINX is on a separate machine."));
             EditorGUILayout.PropertyField(_port);
             EditorGUILayout.PropertyField(_maximumClients);
             EditorGUI.indentLevel--;

@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 
@@ -26,6 +27,12 @@ namespace JamesFrowen.SimpleWeb
 		readonly ServerSslHelper sslHelper;
 		readonly BufferPool bufferPool;
 		readonly ConcurrentDictionary<int, Connection> connections = new ConcurrentDictionary<int, Connection>();
+
+		/// <summary>
+		/// Connections that have been accepted but have not yet completed the handshake.
+		/// Tracked so that Stop() can clean them up (prevents slowloris-style DoS).
+		/// </summary>
+		readonly ConcurrentDictionary<Connection, byte> pendingConnections = new ConcurrentDictionary<Connection, byte>();
 
 
 		private ConcurrentQueue<int> _idCache = new ConcurrentQueue<int>();
@@ -56,11 +63,19 @@ namespace JamesFrowen.SimpleWeb
 			return NetworkConnection.UNSET_CLIENTID_VALUE;
 		}
 
-		public void Listen(int port)
+		public void Listen(string bindAddress, int port)
 		{
-			listener = TcpListener.Create(port);
+			// Parse the bind address. Defaults to loopback for co-located NGINX.
+			// Use "0.0.0.0" or a specific IP when NGINX is on a separate machine.
+			IPAddress address;
+			if (string.IsNullOrEmpty(bindAddress) || bindAddress == "localhost")
+				address = IPAddress.Loopback;
+			else if (!IPAddress.TryParse(bindAddress, out address))
+				address = IPAddress.Loopback;
+
+			listener = new TcpListener(address, port);
 			listener.Start();
-			Log.Info($"Server has started on port {port}");
+			Log.Info($"Server has started on {address}:{port}");
 
 			acceptThread = new Thread(acceptLoop);
 			acceptThread.IsBackground = true;
@@ -85,7 +100,17 @@ namespace JamesFrowen.SimpleWeb
 				conn.Dispose();
 			}
 
+			// Also dispose any connections still in the handshake phase.
+			Connection[] pendingCopy = pendingConnections.Keys.ToArray();
+			foreach (Connection conn in pendingCopy)
+			{
+				conn.Dispose();
+			}
+
 			connections.Clear();
+			pendingConnections.Clear();
+
+			sslHelper.Dispose();
 		}
 
 		void acceptLoop()
@@ -100,10 +125,8 @@ namespace JamesFrowen.SimpleWeb
 						tcpConfig.ApplyTo(client);
 
 
-						// TODO keep track of connections before they are in connections dictionary
-						//      this might not be a problem as HandshakeAndReceiveLoop checks for stop
-						//      and returns/disposes before sending message to queue
 						Connection conn = new Connection(client, AfterConnectionDisposed);
+						pendingConnections.TryAdd(conn, 0);
 						//Log.Info($"A client connected {conn}");
 
 						// handshake needs its own thread as it needs to wait for message from client
@@ -188,6 +211,7 @@ namespace JamesFrowen.SimpleWeb
 				}
 
 				connections.TryAdd(conn.connId, conn);
+				pendingConnections.TryRemove(conn, out _);
 
 				receiveQueue.Enqueue(new Message(conn.connId, EventType.Connected));
 
@@ -227,6 +251,7 @@ namespace JamesFrowen.SimpleWeb
 
 		void AfterConnectionDisposed(Connection conn)
 		{
+			pendingConnections.TryRemove(conn, out _);
 			if (conn.connId != Connection.IdNotSet)
 			{
 				receiveQueue.Enqueue(new Message(conn.connId, EventType.Disconnected));

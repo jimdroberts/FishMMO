@@ -58,28 +58,18 @@ namespace FishNet.Transporting.Bayou.Server
         /// </summary>
         private SimpleWebServer _server;
         /// <summary>
-        /// SslConfiguration to use.
-        /// </summary>
-        private SslConfiguration _sslConfiguration;
-        /// <summary>
         /// When true, expects a PROXY protocol v1/v2 header from the
         /// reverse proxy before the SSL/WebSocket handshake.
         /// </summary>
         private bool _useProxyProtocol;
         #endregion
 
-        ~ServerSocket()
-        {
-            StopConnection();
-        }
-
         /// <summary>
         /// Initializes this for use.
         /// </summary>
         /// <param name="t"></param>
-        internal void Initialize(Transport t, int unreliableMTU, SslConfiguration config, bool useProxyProtocol = false)
+        internal void Initialize(Transport t, int unreliableMTU, bool useProxyProtocol = false)
         {
-            _sslConfiguration = config;
             _useProxyProtocol = useProxyProtocol;
             base.Transport = t;
             _mtu = unreliableMTU;
@@ -89,16 +79,11 @@ namespace FishNet.Transporting.Bayou.Server
         /// Threaded operation to process server actions.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Socket()
+        private void Socket(string bindAddress)
         {
-            TcpConfig tcpConfig = new TcpConfig(false, 5000, 120000);
-            SslConfig config;
-            if (!_sslConfiguration.Enabled)
-                config = new SslConfig();
-            else
-                config = new SslConfig(_sslConfiguration.Enabled, _sslConfiguration.CertificatePath, _sslConfiguration.CertificatePassword,
-                    _sslConfiguration.SslProtocol);
-            _server = new SimpleWebServer(5000, tcpConfig, _maximumClients, _mtu, 5000, config, _useProxyProtocol);
+            // SSL is terminated at the NGINX reverse proxy; the server always runs plain WS.
+            TcpConfig tcpConfig = new TcpConfig(true, 5000, 120000);
+            _server = new SimpleWebServer(5000, tcpConfig, _maximumClients, _mtu, 5000, new SslConfig(), _useProxyProtocol);
 
             _server.onConnect += _server_onConnect;
             _server.onDisconnect += _server_onDisconnect;
@@ -106,7 +91,7 @@ namespace FishNet.Transporting.Bayou.Server
             _server.onError += _server_onError;
 
             base.SetConnectionState(LocalConnectionState.Starting, true);
-            _server.Start(_port);
+            _server.Start(bindAddress, _port);
             base.SetConnectionState(LocalConnectionState.Started, true);
         }
 
@@ -180,7 +165,7 @@ namespace FishNet.Transporting.Bayou.Server
         /// <summary>
         /// Starts the server.
         /// </summary>
-        internal bool StartConnection(ushort port, int maximumClients)
+        internal bool StartConnection(string bindAddress, ushort port, int maximumClients)
         {
             if (base.GetConnectionState() != LocalConnectionState.Stopped)
                 return false;
@@ -191,7 +176,7 @@ namespace FishNet.Transporting.Bayou.Server
             _port = port;
             _maximumClients = maximumClients;
             ResetQueues();
-            Socket();
+            Socket(bindAddress);
             return true;
         }
 

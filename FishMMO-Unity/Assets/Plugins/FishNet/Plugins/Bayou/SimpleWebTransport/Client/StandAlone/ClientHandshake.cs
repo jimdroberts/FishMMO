@@ -28,7 +28,11 @@ namespace JamesFrowen.SimpleWeb
                 byte[] keySumBytes = Encoding.ASCII.GetBytes(keySum);
                 Log.Verbose($"Handshake Hashing {Encoding.ASCII.GetString(keySumBytes)}");
 
-                byte[] keySumHash = SHA1.Create().ComputeHash(keySumBytes);
+                byte[] keySumHash;
+                using (SHA1 sha1 = SHA1.Create())
+                {
+                    keySumHash = sha1.ComputeHash(keySumBytes);
+                }
 
                 string expectedResponse = Convert.ToBase64String(keySumHash);
                 string handshake =

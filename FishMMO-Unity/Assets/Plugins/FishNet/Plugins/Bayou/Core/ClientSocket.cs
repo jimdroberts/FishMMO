@@ -7,10 +7,6 @@ namespace FishNet.Transporting.Bayou.Client
 {
     public class ClientSocket : CommonSocket
     {
-        ~ClientSocket()
-        {
-            StopConnection();
-        }
 
         #region Private.
         #region Configuration.
@@ -55,7 +51,7 @@ namespace FishNet.Transporting.Bayou.Client
         private void Socket(bool useWss)
         {
 
-            TcpConfig tcpConfig = new TcpConfig(false, 5000, 20000);
+            TcpConfig tcpConfig = new TcpConfig(true, 5000, 20000);
             _client = SimpleWebClient.Create(ushort.MaxValue, 5000, tcpConfig);
 
             _client.onConnect += _client_onConnect;

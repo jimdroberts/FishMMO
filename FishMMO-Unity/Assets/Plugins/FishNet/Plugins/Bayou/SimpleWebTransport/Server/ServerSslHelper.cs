@@ -22,7 +22,7 @@ namespace JamesFrowen.SimpleWeb
             this.sslProtocols = sslProtocols;
         }
     }
-    internal class ServerSslHelper
+    internal class ServerSslHelper : IDisposable
     {
         readonly SslConfig config;
         readonly X509Certificate2 certificate;
@@ -32,6 +32,11 @@ namespace JamesFrowen.SimpleWeb
             config = sslConfig;
             if (config.enabled)
                 certificate = new X509Certificate2(config.certPath, config.certPassword);
+        }
+
+        public void Dispose()
+        {
+            certificate?.Dispose();
         }
 
         internal bool TryCreateStream(Connection conn)
