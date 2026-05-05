@@ -42,7 +42,8 @@ RenderSettings:
 --- !u!157 &3
 LightmapSettings:
   m_ObjectHideFlags: 0
-  serializedVersion: 12
+  serializedVersion: 13
+  m_BakeOnSceneLoad: 0
   m_GISettings:
     serializedVersion: 2
     m_BounceScale: 1
@@ -157,7 +158,6 @@ MonoBehaviour:
   MaxReconnectAttempts: 10
   ReconnectAttemptWaitTime: 5
   ClientPostbootSystem: {fileID: 1045518714}
-  NetworkManager: {fileID: 567623046510845244}
   LoginAuthenticator: {fileID: 2516426190219138202}
   AudioListener: {fileID: 0}
 --- !u!4 &1045518713
@@ -250,8 +250,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 48a412bb5145d6a4489eb171727d5d59, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  LabelPrefab3D: {fileID: 1101973805684055076, guid: 30339dbf6301676479d2c51120c3c56b,
-    type: 3}
+  labelPrefab: {fileID: 0}
+  preWarmCount: 0
+  maxPoolSize: 0
 --- !u!4 &1509889812
 Transform:
   m_ObjectHideFlags: 0
@@ -317,13 +318,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
+  _spawnablePrefabs: {fileID: 11400000, guid: 7d40862968a2aed4f859067648b24444, type: 2}
   _refreshDefaultPrefabs: 1
   _runInBackground: 1
   _dontDestroyOnLoad: 1
   _objectPool: {fileID: 0}
   _persistence: 0
-  _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
-  _spawnablePrefabs: {fileID: 11400000, guid: 7d40862968a2aed4f859067648b24444, type: 2}
 --- !u!114 &984075724780075366
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -490,12 +491,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _useWss: 1
-  _sslConfiguration:
-    Enabled: 0
-    CertificatePath: 
-    CertificatePassword: 
-    SslProtocol: 0
   _mtu: 1023
+  _useProxyProtocol: 0
+  _serverBindAddress: localhost
   _port: 7770
   _maximumClients: 2000
   _clientAddress: localhost
@@ -523,7 +521,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 15895a51081447d46bda466e7e830c08, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _sceneProcessor: {fileID: 6776049995475983712}
+  _sceneProcessor: {fileID: 0}
   _lightProbeUpdating: 0
   _moveClientObjects: 1
   _setActiveScene: 1

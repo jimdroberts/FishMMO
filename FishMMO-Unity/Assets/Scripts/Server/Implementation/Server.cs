@@ -198,17 +198,21 @@ namespace FishMMO.Server.Implementation
 				CoreServer.Address,
 				CoreServer.RemoteAddress);
 
-			NetworkWrapper.ApplyTransportConfiguration();
-			NetworkWrapper.AttachLoginAuthenticator(this);
-			NetworkWrapper.RegisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
-
 			// Create the appropriate AccountManager subtype based on the authenticator.
+			// This must happen before AttachLoginAuthenticator because AttachLoginAuthenticator
+			// synchronously calls InitializeWorkers() → InitializeWorkersCore(), which validates
+			// Server.AccountManager. If AccountManager is null at that point, an
+			// InvalidOperationException is thrown before workers can start.
 			// LoginServer uses SRP authentication → SrpAccountManager.
 			// World/Scene servers use token authentication → TokenAccountManager.
 			var authenticator = NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator();
 			AccountManager = authenticator is ServerAuthenticator
 				? (IAccountManager<NetworkConnection>)new SrpAccountManager()
 				: new TokenAccountManager();
+
+			NetworkWrapper.ApplyTransportConfiguration();
+			NetworkWrapper.AttachLoginAuthenticator(this);
+			NetworkWrapper.RegisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 
 			// Initialize all registered runtime data containers
 			DataContainerRegistry = new RuntimeDataContainerRegistry();

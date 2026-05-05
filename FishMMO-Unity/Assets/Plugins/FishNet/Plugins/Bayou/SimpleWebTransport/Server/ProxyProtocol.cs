@@ -24,7 +24,10 @@ namespace JamesFrowen.SimpleWeb
             0x55, 0x49, 0x54, 0x0A
         };
         const int V2HeaderLength = 16; // 12-byte sig + ver/cmd + fam + 2-byte len
-        const int V2MaxAddressLength = 216; // max TLV block per spec
+        // The v2 'len' field includes address data AND TLV extensions.
+        // Spec: entire header fits in one MSS (536 bytes) → max len = 536 − 16 = 520.
+        // NGINX v2 may include TLVs (PP2_TYPE_AUTHORITY, PP2_TYPE_SSL, etc.).
+        const int V2MaxPayloadLength = 520;
 
         // ── v1 constants ────────────────────────────────────────────────
         static readonly byte[] V1Prefix = Encoding.ASCII.GetBytes("PROXY ");
@@ -117,7 +120,7 @@ namespace JamesFrowen.SimpleWeb
 
             // Split: ["PROXY", "TCP4"/"TCP6", srcIP, dstIP, srcPort, dstPort]
             string[] parts = line.Split(' ');
-            if (parts.Length < 6)
+            if (parts.Length != 6)
                 return false;
 
             string family = parts[1];
@@ -125,9 +128,16 @@ namespace JamesFrowen.SimpleWeb
                 return false;
 
             string srcIp = parts[2];
+            string dstIp = parts[3];
 
-            // Validate the IP to prevent spoofing of garbage data.
+            // Validate both IPs to reject malformed/spoofed headers.
             if (!IPAddress.TryParse(srcIp, out _))
+                return false;
+            if (!IPAddress.TryParse(dstIp, out _))
+                return false;
+
+            // Validate ports: must be numeric integers in [0..65535].
+            if (!TryParsePort(parts[4]) || !TryParsePort(parts[5]))
                 return false;
 
             sourceAddress = srcIp;
@@ -167,8 +177,8 @@ namespace JamesFrowen.SimpleWeb
 
             int addrLen = (header[14] << 8) | header[15];
 
-            // Sanity-check the address block length.
-            if (addrLen < 0 || addrLen > V2MaxAddressLength)
+            // Sanity-check the payload length (addresses + optional TLV data).
+            if (addrLen < 0 || addrLen > V2MaxPayloadLength)
                 return false;
 
             // Read the address block (may be 0 for LOCAL command).
@@ -209,6 +219,24 @@ namespace JamesFrowen.SimpleWeb
         }
 
         // ── helpers ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Validates a port string per the spec: decimal integer [0..65535], no leading zeroes.
+        /// </summary>
+        static bool TryParsePort(string s)
+        {
+            if (string.IsNullOrEmpty(s) || s.Length > 5)
+                return false;
+
+            // Leading zeroes are forbidden per spec (avoid octal confusion).
+            if (s.Length > 1 && s[0] == '0')
+                return false;
+
+            if (!int.TryParse(s, out int port))
+                return false;
+
+            return port >= 0 && port <= 65535;
+        }
 
         static bool TryReadExact(Stream stream, byte[] buffer, int offset, int count)
         {
