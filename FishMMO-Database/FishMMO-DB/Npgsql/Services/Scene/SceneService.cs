@@ -133,10 +133,24 @@ namespace FishMMO.Database.Npgsql.Services
 				var pendingStatus = (int)SceneStatus.Pending;
 				var loadingStatus = (int)SceneStatus.Loading;
 
-				var entity = await dbContext.Scenes
-						.FromSqlRaw(sql, pendingStatus, loadingStatus)
-						.AsNoTracking()
-						.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+				var entity = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sql,
+					new object[] { pendingStatus, loadingStatus },
+					reader => new SceneEntity
+					{
+						ID = reader.GetInt64(0),
+						WorldServerID = reader.GetInt64(1),
+						SceneServerID = reader.GetInt64(2),
+						SceneName = reader.GetString(3),
+						SceneHandle = reader.GetInt32(4),
+						SceneStatus = reader.GetInt32(5),
+						SceneType = reader.GetInt32(6),
+						CharacterID = reader.GetInt64(7),
+						CharacterCount = reader.GetInt32(8),
+						TimeCreated = reader.GetDateTime(9),
+					},
+					cancellationToken).ConfigureAwait(false);
 
 				return entity != null ? (SceneData?)MapEntityToDto(entity) : null;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -200,37 +214,33 @@ namespace FishMMO.Database.Npgsql.Services
 			// Still performs a best-effort "already ready" check to be robust to in-call retries.
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var claimedScenes = await dbContext.Scenes
-					.FromSqlRaw($@"
-							WITH claimable_scene AS (
-								SELECT id FROM {TableName}
-								WHERE world_server_id = {{0}}
-									AND scene_name = {{1}}
-									AND scene_status = {{2}}
-								ORDER BY time_created, id
-								FOR UPDATE SKIP LOCKED
-								LIMIT 1
-							)
-							UPDATE {TableName}
-							SET scene_status = {{3}},
-								scene_server_id = {{4}},
-								scene_handle = {{5}}
-							FROM claimable_scene
-							WHERE {TableName}.id = claimable_scene.id
-							RETURNING {TableName}.id",
-						worldServerId,
-						sceneName,
-						(int)SceneStatus.Loading,
-						(int)SceneStatus.Ready,
-						sceneServerId,
-						sceneHandle)
-					.AsNoTracking()
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
+var claimSql = $@"WITH claimable_scene AS (
+						SELECT id FROM {TableName}
+						WHERE world_server_id = {{0}}
+							AND scene_name = {{1}}
+							AND scene_status = {{2}}
+						ORDER BY time_created, id
+						FOR UPDATE SKIP LOCKED
+						LIMIT 1
+					)
+					UPDATE {TableName}
+					SET scene_status = {{3}},
+						scene_server_id = {{4}},
+						scene_handle = {{5}}
+					FROM claimable_scene
+					WHERE {TableName}.id = claimable_scene.id
+					RETURNING {TableName}.id";
 
-				if (claimedScenes.Count > 0)
+				var claimedId = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					claimSql,
+					new object[] { worldServerId, sceneName, (int)SceneStatus.Loading, (int)SceneStatus.Ready, sceneServerId, sceneHandle },
+					reader => reader.GetInt64(0),
+					cancellationToken).ConfigureAwait(false);
+
+				if (claimedId > 0)
 				{
-					return (long?)claimedScenes[0].ID;
+					return (long?)claimedId;
 				}
 
 				// Fallback: check if already ready (idempotency on retry)

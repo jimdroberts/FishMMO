@@ -74,7 +74,7 @@ namespace FishMMO.DiscordBot.Modules
 						.WithColor(account.AccessLevel == 0 ? Color.DarkRed : Color.Blue)
 						.AddField("Access Level", accessLevel, true)
 						.AddField("Email", account.Email ?? "—", true)
-						.AddField("2FA Enabled", account.TwoFactorEnabled ? "Yes" : "No", true)
+						.AddField("2FA Enabled", account.TotpEnabled ? "Yes" : "No", true)
 						.AddField("Discord Link", string.IsNullOrEmpty(account.DiscordLinkCode) ? "—" : "Pending", true)
 						.AddField("Created", account.TimeCreated.ToString("yyyy-MM-dd HH:mm"), true)
 						.AddField("Last Login", account.LastLogin.ToString("yyyy-MM-dd HH:mm"), true)

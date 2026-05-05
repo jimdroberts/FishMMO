@@ -104,26 +104,21 @@ namespace FishMMO.Database.Npgsql.Services
 						EXCLUDED.version > {TableName}.version
 					RETURNING id, version, character_id, template_id, slot, seed, amount, time_created, deleted, time_deleted";
 
-				var upserted = await dbContext.CharacterInventoryItems
-					.FromSqlRaw(
+				long upsertedId;
+				try
+				{
+					upsertedId = await ExecuteReturningAsync(
+						dbContext,
 						sql,
-						item.CharacterID,
-						item.Slot,
-						item.Version,
-						item.TemplateID,
-						item.Seed,
-						item.Amount,
-						now)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				if (upserted == null)
+						new object[] { item.CharacterID, item.Slot, item.Version, item.TemplateID, item.Seed, item.Amount, now },
+						reader => reader.GetInt64(0),
+						cancellationToken).ConfigureAwait(false);
+				}
+				catch (DatabaseException ex) when (ex.ErrorCode == DatabaseErrorCodes.DatabaseError)
 				{
 					throw new StaleStateException("Inventory item was rejected due to a stale Version.");
 				}
-
-				return upserted.ID;
+				return upsertedId;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}

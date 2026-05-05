@@ -62,11 +62,20 @@ namespace FishMMO.Database.Npgsql.Services
 						last_pulse = CURRENT_TIMESTAMP
 					RETURNING id, name, time_created, last_pulse, address, port";
 
-				return await dbContext.LoginServers
-					.FromSqlRaw(sql, name, address, port)
-					.AsNoTracking()
-					.FirstAsync(cancellationToken)
-					.ConfigureAwait(false);
+				return await ExecuteReturningAsync(
+					dbContext,
+					sql,
+					new object[] { name, address, (int)port },
+					reader => new LoginServerEntity
+					{
+						ID = reader.GetInt64(0),
+						Name = reader.GetString(1),
+						TimeCreated = reader.GetDateTime(2),
+						LastPulse = reader.GetDateTime(3),
+						Address = reader.GetString(4),
+						Port = (ushort)reader.GetInt32(5),
+					},
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess

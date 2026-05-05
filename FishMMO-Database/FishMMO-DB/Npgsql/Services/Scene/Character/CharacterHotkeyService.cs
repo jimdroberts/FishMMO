@@ -113,25 +113,21 @@ namespace FishMMO.Database.Npgsql.Services
 						EXCLUDED.version > {TableName}.version
 					RETURNING id, version, character_id, type, slot, reference_id, time_created, deleted, time_deleted";
 
-				var upserted = await dbContext.CharacterHotkeys
-					.FromSqlRaw(
+				long upsertedId;
+				try
+				{
+					upsertedId = await ExecuteReturningAsync(
+						dbContext,
 						sql,
-						hotkey.CharacterID,
-						hotkey.Slot,
-						hotkey.Version,
-						(short)hotkey.Type,
-						hotkey.ReferenceID,
-						now)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				if (upserted == null)
+						new object[] { hotkey.CharacterID, hotkey.Slot, hotkey.Version, (int)hotkey.Type, hotkey.ReferenceID, now },
+						reader => reader.GetInt64(0),
+						cancellationToken).ConfigureAwait(false);
+				}
+				catch (DatabaseException ex) when (ex.ErrorCode == DatabaseErrorCodes.DatabaseError)
 				{
 					throw new StaleStateException("Hotkey was rejected due to a stale Version.");
 				}
-
-				return upserted.ID;
+				return upsertedId;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}

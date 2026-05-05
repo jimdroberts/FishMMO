@@ -293,8 +293,17 @@ namespace FishMMO.DiscordBot.Modules
 						var sb = new StringBuilder();
 						foreach (var quest in activeQuests)
 						{
-							string status = quest.Completed ? "Completed" : $"Progress: {quest.Progress}";
-							sb.AppendLine($"• {quest.Name} — {status}");
+							string status = quest.Status switch
+							{
+								0 => "Inactive",
+								1 => "Active",
+								2 => "Complete",
+								3 => "TurnedIn",
+								4 => "Failed",
+								_ => $"Unknown ({quest.Status})"
+							};
+							string objectives = string.IsNullOrWhiteSpace(quest.ObjectiveValues) ? "—" : quest.ObjectiveValues;
+							sb.AppendLine($"• Quest #{quest.TemplateID} — {status}; Objectives: {objectives}");
 						}
 						questsEmbed.WithDescription(Truncate(sb.ToString(), 4096));
 					}

@@ -71,11 +71,21 @@ namespace FishMMO.Database.Npgsql.Services
 					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
 					RETURNING id, token_hash, account_name, login_server_id, time_created, expires_utc, revoked";
 
-				return await dbContext.AuthTokens
-					.FromSqlRaw(sql, tokenHash, accountName, loginServerId, expiresUtc, false)
-					.AsNoTracking()
-					.FirstAsync(cancellationToken)
-					.ConfigureAwait(false);
+				return await ExecuteReturningAsync(
+					dbContext,
+					sql,
+					new object[] { tokenHash, accountName, loginServerId, expiresUtc, false },
+					reader => new AuthTokenEntity
+					{
+						ID = reader.GetInt64(0),
+						TokenHash = reader.GetString(1),
+						AccountName = reader.GetString(2),
+						LoginServerId = reader.GetInt64(3),
+						TimeCreated = reader.GetDateTime(4),
+						ExpiresUtc = reader.GetDateTime(5),
+						Revoked = reader.GetBoolean(6),
+					},
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess

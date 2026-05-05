@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System;
 using System.Data;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -934,6 +935,104 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		private static bool IsPgBouncerConfigurationSqlState(string? sqlState) =>
 			SqlStateHelper.IsPgBouncerConfigurationSqlState(sqlState);
+
+		/// <summary>
+		/// Executes a raw SQL statement that produces a result set and maps the first returned row.
+		/// Use this for non-composable DML statements with RETURNING (INSERT/UPDATE … RETURNING)
+		/// where exactly one row is expected.
+		/// <para>Reuses the ambient EF Core connection and transaction so the call is atomic when invoked
+		/// inside <see cref="ExecuteWriteAsync{TResult}"/> or <see cref="ExecuteTransactionAsync{TResult}"/>.</para>
+		/// </summary>
+		/// <typeparam name="TResult">The type produced by the <paramref name="map"/> delegate.</typeparam>
+		/// <param name="dbContext">The active DbContext providing the connection and ambient transaction.</param>
+		/// <param name="sql">
+		/// Parameterized SQL using <c>{0}</c>, <c>{1}</c>, … placeholders (same syntax as
+		/// <see cref="Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync"/>).
+		/// Must never embed user-controlled identifiers.
+		/// </param>
+		/// <param name="parameters">Positional parameter values corresponding to the SQL placeholders.</param>
+		/// <param name="map">A delegate that reads one row from the <see cref="DbDataReader"/> and returns <typeparamref name="TResult"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The mapped result of the first row.</returns>
+		/// <exception cref="DatabaseException">Thrown when no row is returned.</exception>
+		protected static async Task<TResult> ExecuteReturningAsync<TResult>(
+			NpgsqlDbContext dbContext,
+			string sql,
+			object[] parameters,
+			Func<DbDataReader, TResult> map,
+			CancellationToken cancellationToken)
+		{
+			var connection = dbContext.Database.GetDbConnection();
+			if (connection.State != ConnectionState.Open)
+			{
+				await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+			}
+			using var command = connection.CreateCommand();
+			command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
+			command.CommandText = ParameterPlaceholderRegex.Replace(sql, "@p$1");
+			for (int i = 0; i < parameters.Length; i++)
+			{
+				var param = command.CreateParameter();
+				param.ParameterName = "@p" + i;
+				param.Value = parameters[i] ?? DBNull.Value;
+				command.Parameters.Add(param);
+			}
+			using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+			if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+			{
+				throw new DatabaseException("The database command did not return a row.", errorCode: DatabaseErrorCodes.DatabaseError);
+			}
+			return map(reader);
+		}
+
+		/// <summary>
+		/// Executes a raw SQL statement that produces a result set and maps the first returned row,
+		/// or returns <c>default</c> when no row is returned.
+		/// Use this for non-composable DML statements with RETURNING (INSERT/UPDATE … RETURNING)
+		/// where zero or one rows are expected.
+		/// <para>Reuses the ambient EF Core connection and transaction so the call is atomic when invoked
+		/// inside <see cref="ExecuteWriteAsync{TResult}"/> or <see cref="ExecuteTransactionAsync{TResult}"/>.</para>
+		/// </summary>
+		/// <typeparam name="TResult">The type produced by the <paramref name="map"/> delegate.</typeparam>
+		/// <param name="dbContext">The active DbContext providing the connection and ambient transaction.</param>
+		/// <param name="sql">
+		/// Parameterized SQL using <c>{0}</c>, <c>{1}</c>, … placeholders (same syntax as
+		/// <see cref="Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync"/>).
+		/// Must never embed user-controlled identifiers.
+		/// </param>
+		/// <param name="parameters">Positional parameter values corresponding to the SQL placeholders.</param>
+		/// <param name="map">A delegate that reads one row from the <see cref="DbDataReader"/> and returns <typeparamref name="TResult"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The mapped result of the first row, or <c>default</c> when no row is returned.</returns>
+		protected static async Task<TResult?> ExecuteReturningOrDefaultAsync<TResult>(
+			NpgsqlDbContext dbContext,
+			string sql,
+			object[] parameters,
+			Func<DbDataReader, TResult> map,
+			CancellationToken cancellationToken)
+		{
+			var connection = dbContext.Database.GetDbConnection();
+			if (connection.State != ConnectionState.Open)
+			{
+				await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+			}
+			using var command = connection.CreateCommand();
+			command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
+			command.CommandText = ParameterPlaceholderRegex.Replace(sql, "@p$1");
+			for (int i = 0; i < parameters.Length; i++)
+			{
+				var param = command.CreateParameter();
+				param.ParameterName = "@p" + i;
+				param.Value = parameters[i] ?? DBNull.Value;
+				command.Parameters.Add(param);
+			}
+			using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+			if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+			{
+				return default;
+			}
+			return map(reader);
+		}
 
 		/// <summary>
 		/// Executes a bulk UPSERT statement and enforces version/authority semantics by validating the affected row count.

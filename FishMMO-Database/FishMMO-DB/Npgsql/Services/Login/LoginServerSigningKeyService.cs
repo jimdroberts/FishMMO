@@ -58,11 +58,18 @@ namespace FishMMO.Database.Npgsql.Services
 						time_created = CURRENT_TIMESTAMP
 					RETURNING id, login_server_id, hmac_key, time_created";
 
-				return await dbContext.LoginServerSigningKeys
-					.FromSqlRaw(sql, loginServerId, hmacKey)
-					.AsNoTracking()
-					.FirstAsync(cancellationToken)
-					.ConfigureAwait(false);
+				return await ExecuteReturningAsync(
+					dbContext,
+					sql,
+					new object[] { loginServerId, hmacKey },
+					reader => new LoginServerSigningKeyEntity
+					{
+						ID = reader.GetInt64(0),
+						LoginServerId = reader.GetInt64(1),
+						HmacKey = (byte[])reader.GetValue(2),
+						TimeCreated = reader.GetDateTime(3),
+					},
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
