@@ -254,5 +254,206 @@ namespace FishMMO.Installer
 			return await RunDotNetCommandAsync(
 				$"ef database update -p \"{InstallationConstants.ProjectPath}\" -s \"{InstallationConstants.StartupProject}\"");
 		}
+
+		/// <summary>
+		/// Installs the ASP.NET Core runtime for the current platform.
+		/// On Windows, downloads and runs the official Hosting Bundle EXE.
+		/// On Linux (Arch/CachyOS, Debian/Ubuntu, RHEL/Fedora), uses the system package manager
+		/// or falls back to dotnet-install.sh --runtime aspnetcore.
+		/// </summary>
+		/// <returns>True if installation succeeded or runtime was already present.</returns>
+		public static async Task<bool> InstallAspNetRuntime()
+		{
+			if (await IsAspNetRuntimeInstalledAsync())
+			{
+				await Log.Info("FishMMOInstaller", $"ASP.NET Core {InstallationConstants.AspNetRuntimeMajorVersion} runtime is already installed.");
+				return true;
+			}
+
+			if (!InstallerProcessHelper.PromptForYesNo($"ASP.NET Core {InstallationConstants.AspNetRuntimeMajorVersion} runtime is not installed. Install it now?"))
+			{
+				return false;
+			}
+
+			await Log.Info("FishMMOInstaller", "Installing ASP.NET Core runtime...");
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				return await InstallAspNetRuntimeWindows();
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				return await InstallAspNetRuntimeLinux();
+			}
+			else
+			{
+				await Log.Warning("FishMMOInstaller", "Unsupported operating system for ASP.NET Core runtime installation.");
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Returns true if a compatible ASP.NET Core runtime is present.
+		/// </summary>
+		public static async Task<bool> IsAspNetRuntimeInstalledAsync()
+		{
+			return await InstallerProcessHelper.RunDotNetProcessAsync("--list-runtimes", (e, o, err) =>
+			{
+				if (e != 0) return false;
+
+				if (!int.TryParse(InstallationConstants.AspNetRuntimeMajorVersion.Split('.')[0], out int requiredMajor))
+					return false;
+
+				using var reader = new StringReader(o);
+				string? line;
+				while ((line = reader.ReadLine()) != null)
+				{
+					// Line format: "Microsoft.AspNetCore.App 8.0.16 [/usr/share/dotnet/shared/...]"
+					if (!line.StartsWith("Microsoft.AspNetCore.App", StringComparison.OrdinalIgnoreCase))
+						continue;
+
+					string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+					if (parts.Length < 2) continue;
+
+					if (int.TryParse(parts[1].Split('.')[0], out int installedMajor) && installedMajor >= requiredMajor)
+						return true;
+				}
+				return false;
+			});
+		}
+
+		/// <summary>
+		/// Downloads and runs the ASP.NET Core Windows Hosting Bundle installer silently.
+		/// </summary>
+		private static async Task<bool> InstallAspNetRuntimeWindows()
+		{
+			string installerPath;
+			try
+			{
+				installerPath = await InstallerProcessHelper.DownloadFileAsync(
+					InstallationConstants.AspNetRuntimeWindowsUrl,
+					InstallationConstants.AspNetRuntimeWindowsFileName);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("FishMMOInstaller", "Failed to download ASP.NET Core Hosting Bundle", ex);
+				return false;
+			}
+
+			try
+			{
+				InstallerProcessHelper.LogElevatedProcessEnvironmentWarning("ASP.NET Core Hosting Bundle installer");
+
+				ProcessStartInfo startInfo = new ProcessStartInfo
+				{
+					FileName = installerPath,
+					Arguments = "/install /quiet /norestart",
+					WorkingDirectory = Path.GetDirectoryName(installerPath) ?? InstallerProcessHelper.GetWorkingDirectory(),
+					UseShellExecute = true,
+					Verb = "runas"
+				};
+
+				Process? process = Process.Start(startInfo);
+				if (process == null)
+				{
+					await Log.Error("FishMMOInstaller", "Failed to start ASP.NET Core Hosting Bundle installer process.");
+					return false;
+				}
+				await process.WaitForExitAsync();
+
+				if (process.ExitCode == 0)
+				{
+					await Log.Info("FishMMOInstaller", "ASP.NET Core Hosting Bundle installation successful.");
+					return true;
+				}
+				else
+				{
+					await Log.Error("FishMMOInstaller", $"ASP.NET Core Hosting Bundle installer exited with code {process.ExitCode}.");
+					return false;
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("FishMMOInstaller", "Error installing ASP.NET Core Hosting Bundle", ex);
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Installs the ASP.NET Core runtime on Linux.
+		/// Tries the system package manager first; falls back to dotnet-install.sh
+		/// with --runtime aspnetcore when no supported package manager is found.
+		/// </summary>
+		private static async Task<bool> InstallAspNetRuntimeLinux()
+		{
+			var packages = new Dictionary<string, string>
+			{
+				["pacman"] = $"aspnet-runtime-{InstallationConstants.AspNetRuntimeMajorVersion}",
+				["apt-get"] = $"aspnetcore-runtime-{InstallationConstants.AspNetRuntimeMajorVersion}",
+				["dnf"] = $"aspnetcore-runtime-{InstallationConstants.AspNetRuntimeMajorVersion}",
+				["yum"] = $"aspnetcore-runtime-{InstallationConstants.AspNetRuntimeMajorVersion}",
+			};
+
+			var pm = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packages);
+			if (pm.HasValue)
+			{
+				(string updateCmd, string installCmd, string managerName) = pm.Value;
+				await Log.Info("FishMMOInstaller", $"Using package manager: {managerName}");
+
+				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+
+				bool updated = await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCmd,
+					$"Package database update failed ({managerName}).");
+				if (!updated)
+				{
+					await Log.Warning("FishMMOInstaller", "Package database update failed; attempting install anyway.");
+				}
+
+				bool installed = await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, installCmd,
+					$"ASP.NET Core runtime installation failed via {managerName}.");
+				if (installed)
+				{
+					await Log.Info("FishMMOInstaller", "ASP.NET Core runtime installed successfully.");
+					return true;
+				}
+				await Log.Warning("FishMMOInstaller", "Package manager install failed. Falling back to dotnet-install.sh.");
+			}
+			else
+			{
+				await Log.Warning("FishMMOInstaller", "No supported package manager found. Falling back to dotnet-install.sh.");
+			}
+
+			// Fallback: dotnet-install.sh --runtime aspnetcore
+			string shScriptFile = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), InstallationConstants.DotNetInstallScriptFileName);
+
+			if (!File.Exists(shScriptFile))
+			{
+				string scriptContent = await InstallerProcessHelper.SharedHttpClient.GetStringAsync(InstallationConstants.DotNetInstallScriptUrl);
+				await File.WriteAllTextAsync(shScriptFile, scriptContent);
+				await InstallerProcessHelper.RunProcessAsync("chmod", $"+x \"{shScriptFile}\"");
+			}
+
+			bool fallbackResult = await InstallerProcessHelper.RunProcessAsync("/bin/bash",
+				$"\"{shScriptFile}\" --runtime aspnetcore --version {InstallationConstants.AspNetRuntimeLinuxVersion}",
+				(e, o, err) =>
+				{
+					if (e != 0)
+					{
+						_ = Log.Warning("FishMMOInstaller", $"dotnet-install.sh fallback failed: {err}");
+						return false;
+					}
+					return true;
+				});
+
+			if (fallbackResult)
+			{
+				await Log.Info("FishMMOInstaller", "ASP.NET Core runtime installed via dotnet-install.sh.");
+			}
+			else
+			{
+				await Log.Error("FishMMOInstaller", "ASP.NET Core runtime installation failed.");
+			}
+			return fallbackResult;
+		}
 	}
 }

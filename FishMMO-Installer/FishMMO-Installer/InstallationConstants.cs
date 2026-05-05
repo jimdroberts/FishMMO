@@ -42,6 +42,28 @@ namespace FishMMO.Installer
 		public const string DotNetEFVersion = "5.0.17";
 
 		/// <summary>
+		/// ASP.NET Core runtime major version to install (e.g. "8.0").
+		/// </summary>
+		public const string AspNetRuntimeMajorVersion = "8.0";
+
+		/// <summary>
+		/// Download URL for the ASP.NET Core 8 Runtime Windows installer (x64 Hosting Bundle).
+		/// Includes Kestrel runtime, IIS module, and the ASP.NET Core shared framework.
+		/// </summary>
+		public const string AspNetRuntimeWindowsUrl = "https://download.visualstudio.microsoft.com/download/pr/751d3fe9-0a4e-4cb7-aa28-b4d3b55f2df2/2de0e4eea90cc10c26df6b0bec0748fa/dotnet-hosting-8.0.16-win.exe";
+
+		/// <summary>
+		/// Filename for the downloaded ASP.NET Core Windows Hosting Bundle installer.
+		/// </summary>
+		public const string AspNetRuntimeWindowsFileName = "dotnet-hosting-8.0.16-win.exe";
+
+		/// <summary>
+		/// Download URL for the DotNet install shell script, also used to install the
+		/// ASP.NET Core runtime on Linux via the --runtime aspnetcore flag.
+		/// </summary>
+		public const string AspNetRuntimeLinuxVersion = "8.0.16";
+
+		/// <summary>
 		/// Download URL for the PostgreSQL Windows installer.
 		/// </summary>
 		public const string PostgreSQLWindowsInstallerUrl = @"https://sbp.enterprisedb.com/getfile.jsp?fileid=1259105";
