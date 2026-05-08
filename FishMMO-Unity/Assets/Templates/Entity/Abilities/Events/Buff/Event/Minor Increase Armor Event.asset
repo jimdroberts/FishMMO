@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Conditions: []
   Actions:
-  - rid: 4507019787936727136
-  - rid: 4507019787936727138
+  - rid: 8938684490743545932
+  - rid: 8938684490743545937
   icon: {fileID: 0}
   TargetSelectorOverride: {fileID: 0}
   ActivationTime: 0
@@ -26,24 +26,30 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
-    - rid: 4507019787936727136
-      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 8938684490743545932
+      type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetProvider:
-          rid: -2
+          rid: 8938684490743545933
+        StacksValue:
+          rid: 8938684490743545934
+        BuffTemplate: {fileID: 11400000, guid: 0fbfa8b68911e1c4fa66d6b57fcab6a2, type: 2}
+    - rid: 8938684490743545933
+      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        FallbackToInitiator: 0
+    - rid: 8938684490743545934
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Amount: 3
+    - rid: 8938684490743545937
+      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetProvider:
+          rid: 8938684490743545938
         FXPrefab: {fileID: 7266499652759718708, guid: 6bed0c614c46964408373a65aba83a0e,
           type: 3}
-    - rid: 4507019787936727138
-      type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 8938684490743545938
+      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetProvider:
-          rid: -2
-        StacksValue:
-          rid: 4507019787936727139
-        BuffTemplate: {fileID: 11400000, guid: 0fbfa8b68911e1c4fa66d6b57fcab6a2, type: 2}
-    - rid: 4507019787936727139
-      type: {class: ConstantValue, ns: FishMMO.Shared, asm: Assembly-CSharp}
-      data:
-        Amount: 1
+        FallbackToInitiator: 0

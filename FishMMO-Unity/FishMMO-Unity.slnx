@@ -1,14 +1,22 @@
 ﻿<Solution>
-  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="FishMMO.Shared.csproj" />
+  <Project Path="FishMMO.Server.csproj" />
+  <Project Path="FishMMO.Client.csproj" />
   <Project Path="FishNet.Runtime.csproj" />
-  <Project Path="Assembly-CSharp-firstpass.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="KinematicCharacterController.csproj" />
+  <Project Path="FishMMO.Shared.WorldSceneDetails.Editor.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="FishNet.Codegen.Cecil.csproj" />
+  <Project Path="FishMMO.Shared.Tools.Editor.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="SimpleWebTransport.csproj" />
   <Project Path="Bayou.csproj" />
   <Project Path="SimpleWebRTC.csproj" />
+  <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="FishNet.Demos.csproj" />
+  <Project Path="FishMMO.Client.Input.Generated.csproj" />
+  <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />
 </Solution>

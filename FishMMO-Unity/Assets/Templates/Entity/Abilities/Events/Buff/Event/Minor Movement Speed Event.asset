@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Conditions: []
   Actions:
-  - rid: 4507019787936727137
-  - rid: 4507019787936727140
+  - rid: 8938684490743545939
+  - rid: 8938684490743545940
   icon: {fileID: 0}
   TargetSelectorOverride: {fileID: 0}
   ActivationTime: 0
@@ -26,24 +26,30 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
-    - rid: 4507019787936727137
-      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 8938684490743545939
+      type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetProvider:
-          rid: -2
+          rid: 8938684490743545942
+        StacksValue:
+          rid: 8938684490743545943
+        BuffTemplate: {fileID: 11400000, guid: f382d90751b078548b47500f1817ff29, type: 2}
+    - rid: 8938684490743545940
+      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetProvider:
+          rid: 8938684490743545941
         FXPrefab: {fileID: 7266499652759718708, guid: fc146935ca6612f4a816f8e9e2ad17c1,
           type: 3}
-    - rid: 4507019787936727140
-      type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 8938684490743545941
+      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetProvider:
-          rid: -2
-        StacksValue:
-          rid: 4507019787936727141
-        BuffTemplate: {fileID: 11400000, guid: f382d90751b078548b47500f1817ff29, type: 2}
-    - rid: 4507019787936727141
-      type: {class: ConstantValue, ns: FishMMO.Shared, asm: Assembly-CSharp}
+        FallbackToInitiator: 0
+    - rid: 8938684490743545942
+      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        Amount: 1
+        FallbackToInitiator: 0
+    - rid: 8938684490743545943
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Amount: 15

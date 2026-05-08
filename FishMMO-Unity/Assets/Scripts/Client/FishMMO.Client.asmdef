@@ -1,0 +1,28 @@
+{
+    "name": "FishMMO.Client",
+    "rootNamespace": "FishMMO.Client",
+    "references": [
+        "FishMMO.Shared",
+        "FishMMO.Client.Input.Generated",
+        "FishNet.Runtime",
+        "GameKit.Dependencies",
+        "Bayou",
+        "SimpleWebTransport",
+        "KinematicCharacterController",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem",
+        "Unity.Splines",
+        "Unity.Mathematics",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -14,7 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Conditions: []
   Actions:
-  - rid: 4507019787936727142
+  - rid: 8938684490743545926
+  - rid: 8938684490743545935
   icon: {fileID: 0}
   TargetSelectorOverride: {fileID: 0}
   ActivationTime: 0
@@ -25,18 +26,31 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
-    - rid: 4507019787936727142
-      type: {class: ApplyDamageAction, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 8938684490743545926
+      type: {class: ApplyDamageAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetProvider:
-          rid: -2
+          rid: 8938684490743545930
         DamageValue:
-          rid: 4507019787936727143
+          rid: 8938684490743545927
         DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
           type: 2}
-    - rid: 4507019787936727143
-      type: {class: ConstantValue, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 8938684490743545927
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 3
+    - rid: 8938684490743545930
+      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        FallbackToInitiator: 0
+    - rid: 8938684490743545935
+      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetProvider:
+          rid: 8938684490743545936
+        FXPrefab: {fileID: 5773491593115871611, guid: 549f4456666a19b428ae484dd2630ab1,
+          type: 3}
+    - rid: 8938684490743545936
+      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        FallbackToInitiator: 0
