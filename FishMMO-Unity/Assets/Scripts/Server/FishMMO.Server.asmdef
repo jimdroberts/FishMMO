@@ -9,7 +9,12 @@
         "Unity.Addressables",
         "Unity.ResourceManager"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
