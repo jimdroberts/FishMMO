@@ -23,15 +23,16 @@ This module contains transport-agnostic collection primitives designed for high-
 
 All tracker classes live in the `FishMMO.Server.Core.Collections` namespace and can be used from both the Core and Implementation server layers.
 
-The five collections are:
+The four collections are:
 
 | Class | Purpose |
 |---|---|
 | `ExpiringKeyTracker<TKey>` | Debounce / rate-limit windows keyed by `TKey` with bounded expiry sweeps |
 | `LastSeenCacheTracker<TKey, TValue>` | Key-value cache where entries expire by inactivity (last-seen); reads extend lifetime |
 | `TimedCache<TKey, TValue>` | Write-through TTL cache where entries expire after a fixed duration from storage; reads do **not** extend lifetime |
-| `ArrivalOrderTracker<TKey>` | Oldest-first stale-entry processing with O(1) `TrackIfMissing` / `Remove` |
 | `InstanceCapacityHeap` | Max-heap of scene-instance handles ordered by remaining capacity for O(log N) routing |
+
+> **Note:** `ArrivalOrderTracker<TKey>` (oldest-first stale-entry processing for unauthenticated SRP/encryption sweeps) used to live here but has been moved to the engine-independent `FishMMO-Auth.dll` shared library under `FishMMO.Auth.Core.Collections`. Server systems that need it should reference it from there.
 
 ## Supported Platforms
 
@@ -48,12 +49,11 @@ The five collections are:
 
 - **Bounded sweep cleanup** — all TTL trackers (`ExpiringKeyTracker`, `LastSeenCacheTracker`, `TimedCache`) accept `maxScan` and `maxRemove` parameters to cap per-frame work.
 - **Head-first linked-list traversal** — expired entries are processed from the oldest end of a `LinkedList`, avoiding full dictionary scans.
-- **Thread-safe by default** — `ExpiringKeyTracker`, `LastSeenCacheTracker`, `TimedCache`, and `ArrivalOrderTracker` use `lock`-based synchronization around all public methods.
+- **Thread-safe by default** — `ExpiringKeyTracker`, `LastSeenCacheTracker`, and `TimedCache` use `lock`-based synchronization around all public methods.
 - **Stale-node detection** — when a key is refreshed (touched / re-set), the old queue node is detected as stale during the next sweep and skipped without incorrect removal.
-- **O(1) add/remove by key** — `ArrivalOrderTracker` combines a `LinkedList` with a `Dictionary<TKey, LinkedListNode>` for constant-time insertion and removal while preserving first-seen order.
 - **O(log N) capacity routing** — `InstanceCapacityHeap` uses an array-backed binary max-heap so the instance with the most remaining capacity is always at the root.
 - **Custom equality comparers** — all generic trackers accept an optional `IEqualityComparer<TKey>` at construction.
-- **Zero-allocation inner types** — nested helper types (`ArrivalEntry`, `ExpiryQueueNode`, `QueueNode`, `CacheEntry`, `CacheValue`) are `readonly struct` to avoid heap pressure.
+- **Zero-allocation inner types** — nested helper types (`ExpiryQueueNode`, `QueueNode`, `CacheEntry`, `CacheValue`) are `readonly struct` to avoid heap pressure.
 - **Transport-agnostic** — no dependency on FishNet, networking, or Unity APIs; pure C# collections.
 
 ## Prerequisites
@@ -128,6 +128,8 @@ int removed = cache.SweepExpired(DateTime.UtcNow, TimeSpan.FromSeconds(30), maxS
 
 ### Oldest-First Tracking with ArrivalOrderTracker
 
+> Moved to `FishMMO-Auth.dll` under `FishMMO.Auth.Core.Collections`. The API is identical; only the namespace has changed. Add `using FishMMO.Auth.Core.Collections;` and reference `FishMMO-Auth.dll` from your assembly.
+
 ```csharp
 var tracker = new ArrivalOrderTracker<NetworkConnection>();
 
@@ -199,7 +201,7 @@ These collections are configured at construction time or per-call through method
 
 ### AccountManager
 
-- `ArrivalOrderTracker<NetworkConnection>` — tracks unauthenticated SRP/encryption handshake connections for oldest-first stale-state sweeps.
+- `ArrivalOrderTracker<NetworkConnection>` *(now in `FishMMO-Auth.dll` — `FishMMO.Auth.Core.Collections`)* — tracks unauthenticated SRP/encryption handshake connections for oldest-first stale-state sweeps. The `AccountManager<TConnection>` base class in FishMMO-Auth owns the tracker; FishMMO-Unity does not need to reference it directly.
 
 ## Operational Checks
 
@@ -212,8 +214,6 @@ These collections are configured at construction time or per-call through method
 | Stale queue nodes are skipped | Touch/re-set a key then sweep | Old queue node discarded; entry survives until its refreshed TTL expires |
 | `TimedCache` reads do not extend lifetime | `TryGet()` after `Set()` | Entry still expires relative to `Set()` time, not `TryGet()` time |
 | `LastSeenCacheTracker` reads extend lifetime | `TryGetAndTouch()` refreshes last-seen | Entry survives longer after being touched |
-| `ArrivalOrderTracker` preserves insertion order | `TrackIfMissing()` several keys, then `PopOldest()` | Keys returned in first-seen order |
-| `ArrivalOrderTracker` ignores duplicate adds | `TrackIfMissing()` same key twice | `Count` remains 1 |
 | `InstanceCapacityHeap` assigns highest capacity first | `Push()` multiple handles, `TryAssignFromTop()` | Returns handle with greatest remaining capacity |
 | `InstanceCapacityHeap` auto-removes zero-capacity | Assign until capacity reaches 0 | Entry removed; next `TryAssignFromTop()` returns next largest |
 
@@ -246,7 +246,8 @@ These collections are configured at construction time or per-call through method
 │  │  Stale-     │◄────────────┐                                   │
 │  │  Connection │   ┌─────────┴───────────────────────────────┐  │
 │  │  Sweep      │   │  ArrivalOrderTracker<TKey>              │  │
-│  └────────────┘   │  (oldest-first processing, O(1) ops)     │  │
+│  └────────────┘   │  (in FishMMO-Auth.dll —                  │  │
+│                    │   FishMMO.Auth.Core.Collections)         │  │
 │                    └─────────────────────────────────────────┘  │
 │                                                                  │
 │  ┌────────────┐  TryAssignFromTop()                              │
@@ -266,13 +267,14 @@ These collections are configured at construction time or per-call through method
 
 ```
 Assets/Scripts/Server/Core/Collections/
-├── ArrivalOrderTracker.cs        # Oldest-first queue/index tracker (O(1) add/remove)
 ├── ExpiringKeyTracker.cs         # Debounce / rate-limit expiry tracker
 ├── InstanceCapacityHeap.cs       # Max-heap for capacity-based instance routing
 ├── LastSeenCacheTracker.cs       # Last-seen TTL cache (reads extend lifetime)
 ├── TimedCache.cs                 # Fixed-TTL write-through cache (reads do not extend)
 └── README.md                     # This file
 ```
+
+> `ArrivalOrderTracker.cs` was previously in this folder but has been moved to `FishMMO-Auth.dll` (`FishMMO.Auth.Core.Collections`) so it can be shared with the engine-independent authentication core. No replacement file lives here.
 
 ### Class Relationships
 
@@ -295,20 +297,17 @@ Assets/Scripts/Server/Core/Collections/
 │                  │ │Clear()               │ │SweepExpired()        │
 └──────────────────┘ └──────────────────────┘ └──────────────────────┘
 
-┌──────────────────────┐  ┌──────────────────────┐
-│ArrivalOrderTracker   │  │InstanceCapacityHeap  │
-│<TKey>         sealed │  │              struct   │
-├──────────────────────┤  ├──────────────────────┤
-│TrackIfMissing()      │  │Push()                │
-│Remove()              │  │TryAssignFromTop()    │
-│TryPeekOldest()       │  │Count                 │
-│PopOldest()           │  │                      │
-│Clear()               │  │                      │
-│Count                 │  │                      │
-└──────────────────────┘  └──────────────────────┘
+┌──────────────────────┐
+│InstanceCapacityHeap  │
+│              struct  │
+├──────────────────────┤
+│Push()                │
+│TryAssignFromTop()    │
+│Count                 │
+└──────────────────────┘
 ```
 
-All tracker classes (except `InstanceCapacityHeap`) share the same internal pattern: a `Dictionary` for O(1) key lookup paired with a `LinkedList` for ordered expiry traversal, protected by a `lock` gate. `InstanceCapacityHeap` is a value-type (`struct`) using an array-backed binary max-heap without locking.
+All tracker classes share the same internal pattern: a `Dictionary` for O(1) key lookup paired with a `LinkedList` for ordered expiry traversal, protected by a `lock` gate. `InstanceCapacityHeap` is a value-type (`struct`) using an array-backed binary max-heap without locking. `ArrivalOrderTracker<TKey>` follows the same dictionary + linked-list pattern but now lives in `FishMMO-Auth.dll` (`FishMMO.Auth.Core.Collections`).
 
 ## License
 

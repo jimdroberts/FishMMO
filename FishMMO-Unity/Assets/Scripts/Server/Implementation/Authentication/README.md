@@ -484,11 +484,17 @@ Server/
 ├── Core/Authentication/
 │   └── IAuthenticatorQueueData.cs             # Legacy interface for bounded channels + CTS runtime data
 │
-└── Implementation/Authentication/             # FishNet-typed composition wrappers (this directory)
-    ├── IServerAuthenticator.cs                # Interface: Server ref + worker lifecycle
-    ├── BaseServerAuthenticator.cs             # Composition host: owns Core, routes FishNet events to core
-    ├── ServerAuthenticator.cs                 # SRP wrapper: inner ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
-    └── TokenServerAuthenticator.cs            # Token wrapper: inner TokenCore : TokenAuthenticatorCore<NetworkConnection>
+├── Implementation/Authentication/             # FishNet-typed composition wrappers (this directory)
+│   ├── IServerAuthenticator.cs                # Interface: Server ref + worker lifecycle
+│   ├── BaseServerAuthenticator.cs             # Composition host: owns Core, routes FishNet events to core
+│   ├── ServerAuthenticator.cs                 # SRP wrapper: inner ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
+│   └── TokenServerAuthenticator.cs            # Token wrapper: inner TokenCore : TokenAuthenticatorCore<NetworkConnection>
+│
+└── Implementation/World/
+    ├── WorldServer/Authentication/
+    │   └── WorldServerAuthenticator.cs        # Subclass of TokenServerAuthenticator: world admission (player cap, character check)
+    └── SceneServer/Authentication/
+        └── SceneServerAuthenticator.cs        # Subclass of TokenServerAuthenticator: scene-transfer pass-through
 ```
 
 ### Related Modules
@@ -507,10 +513,12 @@ C# single-inheritance prevents a MonoBehaviour from also extending `BaseAuthenti
 # Class hierarchy
 Authenticator (FishNet MonoBehaviour)
 └── BaseServerAuthenticator              # owns Core; routes FishNet lifecycle to it
-    ├── ServerAuthenticator              # inner: ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
-    └── TokenServerAuthenticator         # inner: TokenCore : TokenAuthenticatorCore<NetworkConnection>
-        ├── WorldServerAuthenticator     # overrides TryLoginAsync + OnAuthSweep (player cap, character check)
-        └── SceneServerAuthenticator     # overrides TryLoginAsync (scene pass-through)
+    ├── ServerAuthenticator              # this directory — inner: ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
+    └── TokenServerAuthenticator         # this directory — inner: TokenCore : TokenAuthenticatorCore<NetworkConnection>
+        ├── WorldServerAuthenticator     # in Server/Implementation/World/WorldServer/Authentication/
+        │                                # — overrides TryLoginAsync + OnAuthSweep (player cap, character check)
+        └── SceneServerAuthenticator     # in Server/Implementation/World/SceneServer/Authentication/
+                                         # — overrides TryLoginAsync (scene pass-through)
 
 # FishMMO-Auth core abstract hierarchy
 BaseAuthenticatorCore<TConnection>
@@ -527,9 +535,9 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 ### Key Interfaces and Classes
 
 - **`IServerAuthenticator`** — Unity interface exposing `Server` property, `InitializeWorkers()`, and `ShutdownWorkers()`. Consumed by `FishNetNetworkWrapper.AttachLoginAuthenticator`.
-- **`BaseServerAuthenticator`** — Abstract Unity composition host. Holds `protected abstract BaseAuthenticatorCore<NetworkConnection> Core`. Owns the `ConcurrentQueue<Action>` drained by `Update()`, handles `InitializeOnce`, `OnRemoteConnectionState`, `ClientHandshake` broadcast routing, and the `OnAuthSweep()` / `TryLoginAsync()` virtual hooks.
-- **`ServerAuthenticator`** — SRP wrapper. Inspector fields: `tokenExpirationMinutes`. Contains inner `ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>` which implements all abstract callbacks by routing to `_outer`. The outer class provides DB method implementations (`FetchAccountForLoginCoreAsync`, `CheckIsOnlineCoreAsync`, `PersistTokenHashCoreAsync`, `VerifyTotpCodeCoreAsync`, etc.).
-- **`TokenServerAuthenticator`** — Token wrapper. Contains inner `TokenCore : TokenAuthenticatorCore<NetworkConnection>`. Provides `FetchSigningKeyCoreAsync` and `CheckTokenRevocationCoreAsync`.
+- **`BaseServerAuthenticator`** — Abstract Unity composition host. Holds `protected abstract BaseAuthenticatorCore<NetworkConnection> Core`. Owns the `ConcurrentQueue<Action>` drained by `Update()`, handles `InitializeOnce`, `OnRemoteConnectionState`, `ClientHandshake` broadcast routing, and the `OnAuthSweep()` / `TryLoginAsync()` virtual hooks. Includes an `OnDestroy()` failsafe that calls `ShutdownWorkers()`.
+- **`ServerAuthenticator`** — SRP wrapper (LoginServer). Inspector fields: `tokenExpirationMinutes`. Contains inner `ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>` which implements all abstract callbacks by routing to `_outer`. The outer class provides DB method implementations (`FetchAccountForLoginCoreAsync`, `CheckIsOnlineCoreAsync`, `PersistTokenHashCoreAsync`, `VerifyTotpCodeCoreAsync`, etc.).
+- **`TokenServerAuthenticator`** — Token wrapper (base for World/Scene servers). Contains inner `TokenCore : TokenAuthenticatorCore<NetworkConnection>`. Provides `FetchSigningKeyCoreAsync` and `CheckTokenRevocationCoreAsync`. Subclassed by `WorldServerAuthenticator` and `SceneServerAuthenticator` (both located outside this directory under `Server/Implementation/World/...`).
 - **`BaseAuthenticatorCore<TConnection>`** (FishMMO-Auth) — Engine-independent base: cookie challenge, X25519 handshake, stale-auth TTL sweep, pending-auth cap, global/per-IP handshake rate limits, worker lifecycle (`InitializeWorkers`, `ShutdownWorkers`, `Tick`), and `HandleConnectionStopped`.
 - **`SrpAuthenticatorCore<TConnection>`** (FishMMO-Auth) — All SRP-6a logic: bounded verify/proof channels, workers, fake SRP verifier, TOTP, per-IP/account debounce, IP cache, kick-request debounce, token generation. `TickRateLimits()` must be called each frame from the Unity wrapper's `OnUpdate()`.
 - **`TokenAuthenticatorCore<TConnection>`** (FishMMO-Auth) — All token-auth logic: bounded token channel, worker, HMAC verification with timing equalization, expiration and revocation checks.
@@ -605,8 +613,8 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 `TryLoginAsync` is `internal virtual` on `BaseServerAuthenticator`, returning `Task<ClientAuthenticationResult>`. Subclasses override for server-type-specific admission logic:
 
 - **LoginServer** (`ServerAuthenticator`) — Default: returns `LoginSuccess`.
-- **WorldServer** (`WorldServerAuthenticator`) — Checks world lock, player cap, selected character via `ExpiringKeyTracker`-rate-limited DB query.
-- **SceneServer** (`SceneServerAuthenticator`) — Scene-transfer pass-through.
+- **WorldServer** (`WorldServerAuthenticator` — located under `Server/Implementation/World/WorldServer/Authentication/`) — Checks world lock, player cap, selected character via `ExpiringKeyTracker`-rate-limited DB query.
+- **SceneServer** (`SceneServerAuthenticator` — located under `Server/Implementation/World/SceneServer/Authentication/`) — Scene-transfer pass-through.
 
 ### External Dependencies
 
@@ -626,7 +634,7 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 | `ITwoFactorRecoveryCodeService` | Database: fetch unused recovery code hashes, consume used codes |
 | `ExpiringKeyTracker<T>` | Head-first expiry queue for bounded rate limiting |
 | `LastSeenCacheTracker<K, V>` | TTL cache with bounded sweep for IP/encryption caches |
-| `ArrivalOrderTracker<T>` | Oldest-first tracking for stale-connection sweeps |
+| `ArrivalOrderTracker<T>` *(in `FishMMO-Auth.dll` — `FishMMO.Auth.Core.Collections`)* | Oldest-first tracking for stale-connection sweeps |
 | `FishMMO.Logging.Log` | Structured async logging |
 
 ## License

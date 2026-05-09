@@ -19,27 +19,36 @@
 
 ## Overview
 
-The client authentication module handles the entire client-side lifecycle of authenticating with FishMMO servers. On connection start, `ClientLoginAuthenticator` generates an ephemeral X25519 keypair and initiates a handshake with the server. The server may respond with a stateless cookie challenge (proof-of-reachability) which the client echoes back, or a full handshake containing the server's X25519 public key and a negotiated protocol version. Once the handshake completes, both sides derive directional AES-256 session keys via HKDF-SHA256 over a transcript-bound shared secret, establishing an encrypted channel.
+The client authentication module handles the entire client-side lifecycle of authenticating with FishMMO servers. The Unity-facing class `ClientLoginAuthenticator` is a **thin FishNet adapter** that owns an inner sealed `LoginAuthenticatorCore : ClientAuthenticatorCore` (from `FishMMO-Auth.dll`). The engine-independent `ClientAuthenticatorCore` runs the entire client-side state machine — ephemeral X25519 keypair generation, handshake, cookie echoing, ECDH + transcript-bound HKDF key derivation, AES-256-GCM encrypt/decrypt with counter-based nonces, SRP verify/proof, account creation, token reconnection, two-factor verification, duplicate-message guards, and key-material zeroing.
 
-With the encrypted channel in place, the authenticator supports three flows:
+The Unity wrapper's job is purely routing:
 
-1. **Login (SRP verify/proof)** — The client sends its encrypted username and SRP ephemeral to the server, receives an encrypted salt and server ephemeral, computes the SRP client proof via `ClientSrpData`, sends the encrypted proof, and verifies the server's proof from the `SrpSuccessBroadcast`. Credentials are nulled immediately after proof generation.
+- Implements the abstract `Send*` callbacks on `ClientAuthenticatorCore` by emitting FishNet broadcasts via `Client.Broadcast(...)`.
+- Implements `Disconnect()` by calling `Client.ForceDisconnect()`.
+- Forwards FishNet `OnClientConnectionState` (`Started` / `Stopping` / `Stopped`) into `core.OnConnected()` / `core.OnDisconnected()`.
+- Forwards incoming `ServerHandshake`, `SrpVerifyBroadcast`, `SrpSuccessBroadcast`, `ClientAuthResultBroadcast`, and `TwoFactorSetupBroadcast` broadcasts into the matching core handlers.
+- Surfaces `OnClientAuthenticationResult` and `OnTwoFactorSetupReceived` as Unity-facing events.
+- Disposes the core in `OnDestroy()`.
 
-2. **Account creation** — The client generates an SRP salt and verifier from the username and password via `ClientSrpData.GetSaltAndVerifier()`, encrypts all three fields, and sends a `CreateAccountBroadcast`. The server's `AccountCreationSystem` pipeline processes the request.
+With the encrypted channel established by the core, the authenticator supports four flows:
 
-3. **Token-based reconnection** — After a successful SRP login with the LoginServer, the client stores an encrypted auth token. On subsequent connections to World/Scene servers, the stored token is encrypted and sent via `TokenAuthBroadcast`, bypassing the full SRP flow.
+1. **Login (SRP verify/proof)** — Encrypted username and SRP ephemeral are sent, the encrypted salt and server ephemeral come back, and the core computes the client proof via `ClientSrpData`, sends the encrypted proof, and verifies the server's proof from `SrpSuccessBroadcast`. Credentials are nulled inside the core immediately after proof generation.
 
-4. **Two-factor authentication** — If the server indicates `TwoFactorRequired` after SRP proof, the client prompts the user for a TOTP code (6-digit) or recovery code (XXXXX-XXXXX). The code is encrypted and sent via `TwoFactorVerifyBroadcast`. On success, the server completes login as normal. During account creation, the server sends a `TwoFactorSetupBroadcast` containing the encrypted otpauth URI and recovery codes, received via `OnTwoFactorSetupReceived`.
+2. **Account creation** — The core generates an SRP salt and verifier from the username and password via `ClientSrpData.GetSaltAndVerifier()`, encrypts all three fields, and sends `CreateAccountBroadcast`. The server's `AccountCreationSystem` pipeline processes the request.
+
+3. **Token-based reconnection** — After a successful SRP login with the LoginServer, the core stores an encrypted auth token. On subsequent connections to World/Scene servers, the stored token is encrypted and sent via `TokenAuthBroadcast`, bypassing the full SRP flow.
+
+4. **Two-factor authentication** — If the server returns `TwoFactorRequired` after SRP proof, the public `SendTotpCode(string)` API encrypts and sends a TOTP code (6-digit) or recovery code (XXXXX-XXXXX) via `TwoFactorVerifyBroadcast`. During account creation, the server may send `TwoFactorSetupBroadcast` containing the encrypted otpauth URI and recovery codes; the core surfaces this via `OnTwoFactorSetupReceived`.
 
 `ClientSrpData` (from `FishMMO.Auth.Core`) wraps the `SrpClient` library (2048-bit group, SHA-512) to generate ephemeral values, compute client proofs, generate salt/verifier pairs for registration, and verify server proofs. All SRP references are explicitly nulled on cleanup to allow GC collection of sensitive string data.
 
-All cryptographic operations are delegated to three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped via the `FishMMO-Auth.dll` shared library):
+All cryptographic operations are performed by the core through three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped via `FishMMO-Auth.dll`):
 
 - **`HandshakeService`** — X25519 ECDH key agreement and transcript-hash computation.
 - **`SrpService`** — Client-side SRP field encryption/decryption (username, ephemeral, proof, salt, registration fields, TOTP, 2FA setup, account verify, auth token).
 - **`TokenService`** — Client-side token encryption for World/Scene server authentication.
 
-The authenticator itself is a thin wrapper: it orchestrates the FishNet broadcast flow, manages connection state and guards, and delegates all crypto to the services above. Every AES-GCM encrypt/decrypt call is wrapped in `try/catch (CryptographicException)` with immediate `ForceDisconnect()` and buffer zeroing on failure. Duplicate-message guards (`srpVerifyProcessed`, `srpSuccessProcessed`, `cookieEchoed`) prevent replay of critical protocol messages within a session.
+Every AES-GCM encrypt/decrypt call inside the core is wrapped in `try/catch (CryptographicException)` with immediate disconnect (via the wrapper's `Disconnect()` callback) and buffer zeroing on failure. Duplicate-message guards (`srpVerifyProcessed`, `srpSuccessProcessed`, `cookieEchoed`) inside the core prevent replay of critical protocol messages within a session.
 
 ## Supported Platforms
 
@@ -399,7 +408,7 @@ LocalConnectionState.Stopping / Stopped
 
 ```
 Client/Authentication/
-├── ClientLoginAuthenticator.cs   # Client-side auth orchestrator (thin wrapper around FishMMO-Auth services)
+├── ClientLoginAuthenticator.cs   # Thin FishNet adapter — owns inner LoginAuthenticatorCore (ClientAuthenticatorCore subclass)
 └── README.md                     # This file
 ```
 
@@ -414,6 +423,9 @@ FishMMO-Auth/
 │   ├── ClientSrpData.cs               # Client SRP state (ephemeral, proof, session verify, salt/verifier generation)
 │   ├── ClientAuthenticationResult.cs  # Enum: auth result codes (LoginSuccess, TokenDecryptFailed, etc.)
 │   └── AccessLevel.cs                 # Enum: Player, Moderator, Admin, etc.
+│
+├── Implementation/Auth/
+│   └── ClientAuthenticatorCore.cs     # Engine-independent client-side state machine (abstract base for LoginAuthenticatorCore)
 │
 └── Implementation/Services/
     ├── HandshakeService.cs            # X25519 ECDH key agreement (client + server sides)
@@ -440,15 +452,36 @@ FishMMO-SharedUtility/
 
 ### Inheritance Hierarchy
 
+Because `Authenticator` (FishNet) is a MonoBehaviour and C# single-inheritance prevents the Unity class from also extending `ClientAuthenticatorCore`, the wrapper uses **composition with an inner sealed core class**:
+
 ```
-FishNet.Authenticating.Authenticator (abstract)
-└── ClientLoginAuthenticator
-        ├── Manages: ClientSrpData (composition, from FishMMO-Auth)
-        ├── Manages: CryptoHelper.X25519EphemeralKeyPair (composition, from FishMMO-Auth)
-        ├── Manages: CryptoHelper.GcmNonceContext × 2 (send + receive, from FishMMO-Auth)
-        ├── Delegates to: HandshakeService, SrpService, TokenService (from FishMMO-Auth)
-        └── Events: OnClientAuthenticationResult, OnTwoFactorSetupReceived
+FishNet.Authenticating.Authenticator (abstract MonoBehaviour)
+└── ClientLoginAuthenticator                       # Unity adapter (this assembly)
+        ├── owns: LoginAuthenticatorCore           # private sealed inner class
+        │         └── : ClientAuthenticatorCore  # FishMMO-Auth abstract base
+        │             └── owns:
+        │                 ├── ClientSrpData              (SRP state)
+        │                 ├── X25519EphemeralKeyPair     (ECDH key pair)
+        │                 ├── GcmNonceContext × 2        (send + receive)
+        │                 └── directional AES-256 keys, stored token, guards
+        └── events: OnClientAuthenticationResult, OnTwoFactorSetupReceived
 ```
+
+The inner `LoginAuthenticatorCore` implements all 11 abstract callbacks of `ClientAuthenticatorCore`:
+
+| Abstract callback | Implementation |
+|---|---|
+| `SendClientHandshake` | `Client.Broadcast(new ClientHandshake { ... }, Channel.Reliable)` |
+| `SendTokenAuth` | `Client.Broadcast(new TokenAuthBroadcast { ... }, Channel.Reliable)` |
+| `SendSrpVerify` | `Client.Broadcast(new SrpVerifyBroadcast { ... }, Channel.Reliable)` |
+| `SendSrpProof` | `Client.Broadcast(new SrpProofBroadcast { ... }, Channel.Reliable)` |
+| `SendCreateAccount` | `Client.Broadcast(new CreateAccountBroadcast { ... }, Channel.Reliable)` |
+| `SendAccountVerify` | `Client.Broadcast(new AccountVerifyBroadcast { ... }, Channel.Reliable)` |
+| `SendTwoFactorVerify` | `Client.Broadcast(new TwoFactorVerifyBroadcast { ... }, Channel.Reliable)` |
+| `Disconnect` | `_outer.Client.ForceDisconnect()` |
+| `OnAuthResultCallback` | Invokes `_outer.OnClientAuthenticationResult` event |
+| `OnTwoFactorSetupCallback` | Invokes `_outer.OnTwoFactorSetupReceived` event |
+| `IsAllowedUsername` / `IsAllowedPassword` / `IsAllowedEmailUsername` | Delegate to `FishMMO.Shared.Authentication` |
 
 ```
 System.Object (from FishMMO-Auth)
@@ -462,7 +495,9 @@ System.Object (from FishMMO-Auth)
 
 | Type | Purpose |
 |------|---------|
-| `ClientLoginAuthenticator` | Thin wrapper orchestrating client-side auth flow via FishMMO-Auth services: handshake, SRP verify/proof, account creation, token auth, key material lifecycle, nonce contexts, credential clearing |
+| `ClientLoginAuthenticator` | Thin FishNet MonoBehaviour adapter. Owns the inner `LoginAuthenticatorCore`, registers and routes broadcasts, surfaces public events, and disposes the core on `OnDestroy()`. Holds no auth state of its own. |
+| `LoginAuthenticatorCore` *(private sealed inner class)* | `ClientAuthenticatorCore` subclass. Bridges all engine-independent send/disconnect/result callbacks to FishNet broadcasts via `Client.Broadcast(...)` and to `Client.ForceDisconnect()`. |
+| `ClientAuthenticatorCore` *(FishMMO-Auth)* | Engine-independent base class — owns the X25519 keypair, AES keys, nonce contexts, `ClientSrpData`, stored auth token, duplicate-message guards, and the entire client-side handshake/SRP/token/2FA state machine. |
 | `ClientSrpData` *(FishMMO-Auth)* | Wraps `SrpClient` — generates ephemeral values, computes client proof, generates salt/verifier for registration, verifies server proof |
 | `HandshakeService` *(FishMMO-Auth)* | X25519 ECDH key agreement and transcript-hash computation |
 | `SrpService` *(FishMMO-Auth)* | Client-side SRP encrypt/decrypt operations for all auth fields |

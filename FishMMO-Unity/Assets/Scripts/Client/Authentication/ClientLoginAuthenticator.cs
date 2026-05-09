@@ -10,18 +10,44 @@ using FishMMO.Auth.Implementation;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// FishNet client-side authenticator MonoBehaviour for the FishMMO login flow.
+	/// Thin adapter over the engine-independent <see cref="ClientAuthenticatorCore"/> state machine:
+	/// translates abstract send/disconnect/result callbacks into FishNet broadcasts and connection control,
+	/// and routes incoming FishNet broadcasts back into the core.
+	/// </summary>
 	public class ClientLoginAuthenticator : Authenticator
 	{
 		#region Inner Core
 
+		/// <summary>
+		/// Concrete <see cref="ClientAuthenticatorCore"/> implementation that bridges the engine-independent
+		/// authentication state machine to FishNet broadcasts and the FishMMO <see cref="FishMMO.Client.Client"/>.
+		/// All abstract send hooks marshal payloads into the matching broadcast types.
+		/// </summary>
 		private sealed class LoginAuthenticatorCore : ClientAuthenticatorCore
 		{
+			/// <summary>
+			/// Owning <see cref="ClientLoginAuthenticator"/>, used to access the FishNet client and to raise
+			/// outer events (auth result, two-factor setup) from core callbacks.
+			/// </summary>
 			private readonly ClientLoginAuthenticator _outer;
 
+			/// <summary>
+			/// Creates a new core bound to the given outer authenticator.
+			/// </summary>
+			/// <param name="outer">The owning <see cref="ClientLoginAuthenticator"/> MonoBehaviour.</param>
 			public LoginAuthenticatorCore(ClientLoginAuthenticator outer) => _outer = outer;
 
+			/// <summary>
+			/// Log prefix used by base-class diagnostics.
+			/// </summary>
 			protected override string LogPrefix => "ClientLoginAuthenticator";
 
+			/// <summary>
+			/// Sends the initial client handshake (ephemeral public key, cookie, supported protocol version range)
+			/// to the server as a <see cref="ClientHandshake"/> broadcast.
+			/// </summary>
 			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, ushort minVersion, ushort maxVersion)
 			{
 				Client.Broadcast(new ClientHandshake()
@@ -33,6 +59,10 @@ namespace FishMMO.Client
 				}, Channel.Reliable);
 			}
 
+			/// <summary>
+			/// Sends an encrypted authentication token (for World/Scene server reconnects) to the server
+			/// as a <see cref="TokenAuthBroadcast"/>.
+			/// </summary>
 			protected override void SendTokenAuth(byte[] encryptedToken, uint seq)
 			{
 				Client.Broadcast(new TokenAuthBroadcast()
@@ -42,6 +72,10 @@ namespace FishMMO.Client
 				}, Channel.Reliable);
 			}
 
+			/// <summary>
+			/// Sends the SRP-6a identification step (encrypted username + client ephemeral A) as a
+			/// <see cref="SrpVerifyBroadcast"/>.
+			/// </summary>
 			protected override void SendSrpVerify(byte[] encryptedUsername, byte[] encryptedClientEphemeral, uint seq)
 			{
 				Client.Broadcast(new SrpVerifyBroadcast()
@@ -52,6 +86,9 @@ namespace FishMMO.Client
 				}, Channel.Reliable);
 			}
 
+			/// <summary>
+			/// Sends the SRP-6a client proof M1 (encrypted) as a <see cref="SrpProofBroadcast"/>.
+			/// </summary>
 			protected override void SendSrpProof(byte[] encryptedProof, uint seq)
 			{
 				Client.Broadcast(new SrpProofBroadcast()
@@ -61,6 +98,10 @@ namespace FishMMO.Client
 				}, Channel.Reliable);
 			}
 
+			/// <summary>
+			/// Sends a new-account registration request (all fields encrypted under the handshake key)
+			/// as a <see cref="CreateAccountBroadcast"/>.
+			/// </summary>
 			protected override void SendCreateAccount(
 				byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
 				byte[] encryptedSalt, byte[] encryptedVerifier, uint seq)
@@ -76,6 +117,9 @@ namespace FishMMO.Client
 				}, Channel.Reliable);
 			}
 
+			/// <summary>
+			/// Sends an account email-verification code (encrypted) as an <see cref="AccountVerifyBroadcast"/>.
+			/// </summary>
 			protected override void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq)
 			{
 				Client.Broadcast(new AccountVerifyBroadcast()
@@ -86,6 +130,10 @@ namespace FishMMO.Client
 				}, Channel.Reliable);
 			}
 
+			/// <summary>
+			/// Sends a TOTP/2FA code (encrypted) for the in-progress login as a
+			/// <see cref="TwoFactorVerifyBroadcast"/>.
+			/// </summary>
 			protected override void SendTwoFactorVerify(byte[] encryptedCode, uint seq)
 			{
 				Client.Broadcast(new TwoFactorVerifyBroadcast()
@@ -95,26 +143,49 @@ namespace FishMMO.Client
 				}, Channel.Reliable);
 			}
 
+			/// <summary>
+			/// Forces the underlying FishNet client connection to disconnect (used on fatal auth errors).
+			/// </summary>
 			protected override void Disconnect() => _outer.Client.ForceDisconnect();
 
+			/// <summary>
+			/// Raises the outer <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event.
+			/// </summary>
 			protected override void OnAuthResultCallback(ClientAuthenticationResult result) =>
 				_outer.OnClientAuthenticationResult?.Invoke(result);
 
+			/// <summary>
+			/// Raises the outer <see cref="ClientLoginAuthenticator.OnTwoFactorSetupReceived"/> event with
+			/// the otpauth URI and recovery codes returned by the server after registration.
+			/// </summary>
 			protected override void OnTwoFactorSetupCallback(string otpauthUri, string[] recoveryCodes) =>
 				_outer.OnTwoFactorSetupReceived?.Invoke(otpauthUri, recoveryCodes);
 
+			/// <summary>
+			/// Validates a username against FishMMO's shared character/format rules.
+			/// </summary>
 			protected override bool IsAllowedUsername(string username) =>
 				Authentication.IsAllowedUsername(username);
 
+			/// <summary>
+			/// Validates a password against FishMMO's shared length/character rules.
+			/// </summary>
 			protected override bool IsAllowedPassword(string password) =>
 				Authentication.IsAllowedPassword(password);
 
+			/// <summary>
+			/// Validates an email address against FishMMO's shared format rules.
+			/// </summary>
 			protected override bool IsAllowedEmailUsername(string email) =>
 				Authentication.IsAllowedEmailUsername(email);
 		}
 
 		#endregion
 
+		/// <summary>
+		/// Engine-independent authentication state machine instance. Created in <see cref="InitializeOnce"/>
+		/// and disposed in <see cref="OnDestroy"/>; null before initialization and after teardown.
+		/// </summary>
 		private LoginAuthenticatorCore _core;
 
 		/// <summary>
@@ -237,6 +308,11 @@ namespace FishMMO.Client
 
 		// ── Connection lifecycle ──────────────────────────────────────────────
 
+		/// <summary>
+		/// FishNet callback invoked when the local client connection state changes.
+		/// Forwards <c>Started</c> to <see cref="ClientAuthenticatorCore.OnConnected"/> and
+		/// <c>Stopping</c>/<c>Stopped</c> to <see cref="ClientAuthenticatorCore.OnDisconnected"/>.
+		/// </summary>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
 			if (args.ConnectionState == LocalConnectionState.Stopping ||
@@ -252,26 +328,46 @@ namespace FishMMO.Client
 
 		// ── Incoming broadcast routers ────────────────────────────────────────
 
+		/// <summary>
+		/// Handles the server's handshake response (server public key, cookie echo, negotiated protocol
+		/// version) and forwards it to the core to derive the shared encryption key.
+		/// </summary>
 		private void OnClientServerHandshakeBroadcastReceived(ServerHandshake msg, Channel channel)
 		{
 			_core.OnServerHandshakeReceived(msg.PublicKey, msg.Cookie, msg.AgreedVersion);
 		}
 
+		/// <summary>
+		/// Handles the server's SRP-6a identification response (salt s and server ephemeral B) and
+		/// forwards it to the core, which computes M1 and triggers <see cref="LoginAuthenticatorCore.SendSrpProof"/>.
+		/// </summary>
 		private void OnClientSrpVerifyBroadcastReceived(SrpVerifyBroadcast msg, Channel channel)
 		{
 			_core.OnSrpVerifyResponseReceived(msg.S, msg.PublicEphemeral);
 		}
 
+		/// <summary>
+		/// Handles the server's SRP success message (server proof M2, auth result, optional reconnect token)
+		/// and forwards it to the core for verification and token storage.
+		/// </summary>
 		private void OnClientSrpSuccessBroadcastReceived(SrpSuccessBroadcast msg, Channel channel)
 		{
 			_core.OnSrpSuccessReceived(msg.Proof, msg.Result, msg.Token);
 		}
 
+		/// <summary>
+		/// Handles a generic authentication result broadcast (e.g., banned, version mismatch, server full)
+		/// and forwards it to the core.
+		/// </summary>
 		private void OnClientAuthResultBroadcastReceived(ClientAuthResultBroadcast msg, Channel channel)
 		{
 			_core.OnAuthResultReceived(msg.Result);
 		}
 
+		/// <summary>
+		/// Handles the post-registration 2FA setup broadcast (otpauth URI and recovery codes) and forwards
+		/// it to the core, which raises <see cref="OnTwoFactorSetupReceived"/>.
+		/// </summary>
 		private void OnClientTwoFactorSetupBroadcastReceived(TwoFactorSetupBroadcast msg, Channel channel)
 		{
 			_core.OnTwoFactorSetupReceived(msg.OtpauthUri, msg.RecoveryCodes);

@@ -59,6 +59,7 @@ All public methods acquire `lock(syncRoot)` before accessing any internal state.
 - Unity 6.3 LTS (IL2CPP scripting backend)
 - FishNet networking framework (`FishNet.Connection.NetworkConnection`)
 - FishMMO server core assemblies (`FishMMO.Server.Core.Account`, `FishMMO.Server.Core.Collections`)
+- `FishMMO-Auth.dll` shared library — provides the generic `AccountManager<T>` / `SrpAccountManager<T>` / `TokenAccountManager<T>` base classes, `AccountData`, `ConnectionEncryptionData`, `ServerSrpData`, the `AuthState` enum, and the `ArrivalOrderTracker<T>` collection (in `FishMMO.Auth.Core.Collections`).
 - `SecureRemotePassword` third-party library (2048-bit parameters, SHA-512)
 - `System.Security.Cryptography` for SHA-512 and `CryptographicOperations.ZeroMemory`
 - `CryptoHelper` (FishMMO shared) for X25519 ECDH + HKDF-SHA256 key derivation, AES-GCM, nonce construction
@@ -422,7 +423,7 @@ All public methods acquire `lock(syncRoot)`. The `TryAdvanceAuthState` callback 
 | `System.Security.Cryptography` | SHA-512 hash algorithm for SRP; `CryptographicOperations.ZeroMemory` for key cleanup |
 | `CryptoHelper` | X25519 ECDH + HKDF-SHA256 key derivation, AES-GCM, nonce construction, protocol versioning |
 | `AccessLevel` | Enum defining account permission tiers (Player, GameMaster, Admin, etc.) |
-| `ArrivalOrderTracker<T>` | O(1) track/untrack with oldest-first iteration for TTL sweeps |
+| `ArrivalOrderTracker<T>` *(now in `FishMMO-Auth.dll` — `FishMMO.Auth.Core.Collections`)* | O(1) track/untrack with oldest-first iteration for TTL sweeps |
 
 ### Integration Points
 
