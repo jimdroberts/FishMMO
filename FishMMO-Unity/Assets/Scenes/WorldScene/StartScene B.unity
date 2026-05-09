@@ -1399,6 +1399,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 520637846}
   _networkObjectCache: {fileID: 520637846}
   InteractionRange: 3.5
+  onInteractTriggers: []
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 1770604219}
   DestinationID: 
@@ -2529,23 +2530,54 @@ MonoBehaviour:
   BoundingBoxSize: {x: 10.47, y: 15.56, z: 25.5}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - rid: 4754568208579821638
+  - rid: 8938684497020846080
+  - rid: 8938684497020846081
+  - rid: 8938684497020846082
+  - rid: 8938684497020846083
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: 4754568208579821638
-      type: {class: ItemSpawnableSettings, ns: FishMMO.Shared, asm: Assembly-CSharp}
+    - rid: 8938684497020846080
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: fe3425a466033e34ead49fcfc3204895,
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
           type: 3}
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
         SpawnChance: 0.5
         YOffset: 0
-        ItemTemplate: {fileID: 11400000, guid: f069d2a30c555ce42bb8079226fc8f14, type: 2}
-        MinimumAmount: 1
-        MaximumAmount: 1
+        AttributeBonusOverride: {fileID: 0}
+    - rid: 8938684497020846081
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 689555114688187283, guid: a1cb36c06a320c240878d104ba4f0abb,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+    - rid: 8938684497020846082
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+    - rid: 8938684497020846083
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
 --- !u!114 &849065437
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3910,7 +3942,9 @@ MonoBehaviour:
   MaxClients: 100
   SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
     type: 3}
-  DefaultSceneFog: {fileID: 11400000, guid: 67e5b419b5e646f4895935cf06fca178, type: 2}
+  onSceneLoadTriggers: []
+  onDayStartTriggers: []
+  onNightStartTriggers: []
   DayNightCycle: 1
   DayCycleDuration: 10800
   NightCycleDuration: 10800
@@ -5828,6 +5862,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 2026365189}
   _networkObjectCache: {fileID: 2026365189}
   InteractionRange: 3.5
+  onInteractTriggers: []
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 0}
   DestinationID: 233ec218-7363-4d27-9e29-7645a4151c1c

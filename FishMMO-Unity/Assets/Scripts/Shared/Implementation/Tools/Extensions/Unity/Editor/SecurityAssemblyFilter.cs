@@ -90,15 +90,24 @@ namespace FishMMO.Shared
 			// Redis
 			"StackExchange.Redis",
 			"Pipelines.Sockets.Unofficial",
-			"System.IO.Pipelines",
+			// NOTE: System.IO.Pipelines is intentionally NOT stripped. While StackExchange.Redis
+			// uses it, System.Text.Json (a client-side BCL polyfill shipped via the Dependencies
+			// folder) also references types from System.IO.Pipelines. Stripping it breaks IL2CPP
+			// managed-stripping with IL1005 / unresolved assembly errors on the client.
 
 			// Server-side dependency injection / configuration / logging plumbing
 			// (FishMMO clients use FishMMO-Logger and Unity's own infrastructure instead).
-			"Microsoft.Extensions.",
-			"Microsoft.Bcl.AsyncInterfaces",
-
-			// Server-side TOTP verification (clients never validate TOTP codes).
-			"Otp.NET",
+			//
+			// NOTE: Microsoft.Extensions.* and Microsoft.Bcl.AsyncInterfaces are intentionally
+			// NOT stripped — although the FishMMO client never uses Microsoft.Extensions DI/
+			// configuration/logging APIs at runtime, the netstandard 2.1 BCL polyfill
+			// System.Text.Json.dll (shipped under Assets/Dependencies/) IL-references types
+			// in Microsoft.Bcl.AsyncInterfaces, and several Microsoft.Extensions.* assemblies
+			// have similar inter-dependencies. Stripping any of them breaks IL2CPP managed-
+			// stripping with IL1005 / unresolved assembly errors on the client. If a
+			// genuinely server-only Microsoft.Extensions.* sub-package is identified later,
+			// add a more specific prefix (e.g. "Microsoft.Extensions.Configuration.Json")
+			// rather than the family root.
 
 			// AI integrations are server-side only.
 			"OpenAI_API",
