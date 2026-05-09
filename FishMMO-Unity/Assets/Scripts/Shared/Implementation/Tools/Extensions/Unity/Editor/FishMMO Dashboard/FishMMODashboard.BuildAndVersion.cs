@@ -112,6 +112,27 @@ namespace FishMMO.Shared
 			envSection.Add(localDirToggle);
 			inspectorContent.Add(envSection);
 
+			// ── Server Build Options ──
+			VisualElement serverSection = CreateConstantsSection("Server Build Options");
+
+			Toggle serverIl2cppToggle = new Toggle("Dedicated Server: Use IL2CPP");
+			serverIl2cppToggle.tooltip =
+				"When enabled, the dedicated-server build uses the IL2CPP scripting backend " +
+				"(matches the client; produces il2cpp_data/ folders, larger but harder to decompile). " +
+				"When disabled, the server build uses the Mono2x backend (faster build, smaller output, " +
+				"managed assemblies are present and decompilable).";
+			bool serverUsesIl2Cpp = EditorPrefs.GetBool(BuildEnvironmentOptions.PREF_SERVER_USE_IL2CPP, false);
+			serverIl2cppToggle.value = serverUsesIl2Cpp;
+			BuildEnvironmentOptions.ApplyServerScriptingBackend(serverUsesIl2Cpp);
+			serverIl2cppToggle.RegisterValueChangedCallback(evt =>
+			{
+				EditorPrefs.SetBool(BuildEnvironmentOptions.PREF_SERVER_USE_IL2CPP, evt.newValue);
+				BuildEnvironmentOptions.ApplyServerScriptingBackend(evt.newValue);
+				SetStatus($"Server scripting backend: {(evt.newValue ? "IL2CPP" : "Mono2x")}");
+			});
+			serverSection.Add(serverIl2cppToggle);
+			inspectorContent.Add(serverSection);
+
 			// ── Apply Platform Button ──
 			Button applyPlatformButton = new Button(() =>
 			{

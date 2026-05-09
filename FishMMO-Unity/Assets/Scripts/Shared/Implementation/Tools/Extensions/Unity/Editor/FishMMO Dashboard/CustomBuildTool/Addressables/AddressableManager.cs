@@ -138,8 +138,7 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 				Log.Error("Addressables", $"Error during Addressables build: {ex.Message}");
 			}
 
-			// Refresh the AssetDatabase after the build
-			AssetDatabase.Refresh();
+			AssetDatabase.SaveAssets();
 		}
 
 		/// <summary>

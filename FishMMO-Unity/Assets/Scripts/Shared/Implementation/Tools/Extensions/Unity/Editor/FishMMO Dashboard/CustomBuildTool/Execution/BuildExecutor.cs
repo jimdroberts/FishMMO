@@ -37,8 +37,6 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 				return;
 			}
 
-			AssetDatabase.Refresh();
-
 			BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
 
 			// Append world scene paths to bootstrap scene array

@@ -1,7 +1,6 @@
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.Build;
-using System.IO;
 using FishMMO.Logging;
 using FishMMO.Shared.CustomBuildTool.Core;
 
@@ -106,6 +105,7 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			if (EditorUserBuildSettings.activeBuildTarget == buildTarget && EditorUserBuildSettings.standaloneBuildSubtarget == buildSubtarget)
 			{
 				Log.Debug("BuildConfigurator", $"Already at build target {buildTarget} with subtarget {buildSubtarget}, no switch needed.");
+				ApplyBuildTargetSettings(buildSubtarget, buildTarget, targetGroup);
 			}
 			else
 			{
@@ -152,26 +152,20 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 				PlayerSettings.WebGL.dataCaching = true;
 			}
 
-			// Force IL2CPP for the dedicated-server subtarget on Standalone targets so the
-			// server build pipeline matches the client (ahead-of-time compiled native code,
-			// no managed assemblies to decompile, identical runtime characteristics).
+			// Apply the dedicated-server scripting backend selected in the FishMMO Dashboard
+			// ("Dedicated Server: Use IL2CPP", persisted as the EditorPref
+			// BuildEnvironmentOptions.PREF_SERVER_USE_IL2CPP). The Server subtarget has its
+			// own NamedBuildTarget distinct from the Standalone Player one, so the backend
+			// must be configured explicitly for both enabled and disabled states.
 			//
-			// The Server subtarget has its own NamedBuildTarget (NamedBuildTarget.Server)
-			// distinct from the Standalone Player one, so its scripting backend / IL2CPP
-			// settings must be configured separately.
 			if (buildTarget != BuildTarget.WebGL && buildSubtarget == StandaloneBuildSubtarget.Server)
 			{
-				PlayerSettings.SetScriptingBackend(NamedBuildTarget.Server, ScriptingImplementation.IL2CPP);
-				PlayerSettings.SetIl2CppCompilerConfiguration(NamedBuildTarget.Server, Il2CppCompilerConfiguration.Release);
-				PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.Server, Il2CppCodeGeneration.OptimizeSize);
+				bool useIl2Cpp = EditorPrefs.GetBool(BuildEnvironmentOptions.PREF_SERVER_USE_IL2CPP, false);
+				BuildEnvironmentOptions.ApplyServerScriptingBackend(useIl2Cpp);
 			}
 
-			// Force asset database refresh and reimport
+			// Save PlayerSettings changes without forcing a reimport loop during builds.
 			AssetDatabase.SaveAssets();
-			AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
-
-			// Force script recompilation after platform switch
-			ForceEditorScriptRecompile();
 
 			Log.Debug("BuildConfigurator", $"Build target configuration applied successfully for {buildTarget}:{buildSubtarget}.");
 		}
@@ -191,67 +185,7 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			PlayerSettings.WebGL.decompressionFallback = originalDecompressionFallback;
 			PlayerSettings.WebGL.dataCaching = originalDataCaching;
 
-			// Switch back to original build target
-			/*Log.Debug("BuildConfigurator", $"Restoring build target to {originalBuildTarget}...");
-
-			// If already at original target, no need to switch
-			if (EditorUserBuildSettings.activeBuildTarget == originalBuildTarget && EditorUserBuildSettings.standaloneBuildSubtarget == originalBuildSubtarget)
-			{
-				Log.Debug("BuildConfigurator", $"Already at original build target {originalBuildTarget}:{originalBuildSubtarget}, no switch needed.");
-			}
-			else
-			{
-				bool switchResult = EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
-
-				if (!switchResult)
-				{
-					Log.Warning("BuildConfigurator", "SwitchActiveBuildTarget (restore) returned false. Target may already be active.");
-				}
-				else
-				{
-					EditorUserBuildSettings.standaloneBuildSubtarget = originalBuildSubtarget;
-
-					Log.Debug("BuildConfigurator", $"Build target restored to {originalBuildTarget}:{originalBuildSubtarget} successfully.");
-
-					// Force asset database refresh and reimport
-					AssetDatabase.SaveAssets();
-					AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
-
-					// Force script recompilation after platform switch
-					ForceEditorScriptRecompile();
-				}
-			}
-
-			// Save restored settings
-			AssetDatabase.SaveAssets();
-			AssetDatabase.Refresh();*/
-
 			Log.Debug("BuildConfigurator", "Build target restored successfully.");
-		}
-
-		/// <summary>
-		/// Forces the Unity Editor to recompile scripts by reimporting a script asset.
-		/// </summary>
-		private void ForceEditorScriptRecompile()
-		{
-			string[] allScriptGuids = AssetDatabase.FindAssets("t:Script");
-			if (allScriptGuids.Length > 0)
-			{
-				string scriptPath = AssetDatabase.GUIDToAssetPath(allScriptGuids[0]);
-				if (File.Exists(scriptPath))
-				{
-					Log.Debug("BuildConfigurator", $"Forcing editor script recompile.");
-					AssetDatabase.ImportAsset(scriptPath, ImportAssetOptions.ForceUpdate);
-				}
-				else
-				{
-					Log.Warning("BuildConfigurator", "Found script GUID but file does not exist to reimport. Define symbols might not update as expected.");
-				}
-			}
-			else
-			{
-				Log.Warning("BuildConfigurator", "No script files found to force editor recompile. Define symbols might not update.");
-			}
 		}
 	}
 }

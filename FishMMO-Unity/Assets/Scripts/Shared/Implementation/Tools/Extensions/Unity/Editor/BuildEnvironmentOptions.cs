@@ -1,4 +1,5 @@
 using UnityEditor;
+using UnityEditor.Build;
 
 namespace FishMMO.Shared
 {
@@ -34,6 +35,7 @@ namespace FishMMO.Shared
 	{
 		private const string PREF_BUILD_TYPE = "FishMMOBuildType";
 		private const string PREF_OS_TARGET = "FishMMOOSTarget";
+		internal const string PREF_SERVER_USE_IL2CPP = "FishMMOServerUseIL2CPP";
 
 		/*#region Build Type Menu Items
 
@@ -272,6 +274,47 @@ namespace FishMMO.Shared
 			}
 
 			return result;
+		}
+
+		/// <summary>
+		/// Applies the dedicated-server scripting backend selected in the FishMMO Dashboard.
+		/// </summary>
+		/// <param name="useIl2Cpp">Whether the dedicated server should use IL2CPP; false uses Mono2x.</param>
+		/// <returns>True if any PlayerSettings value was changed.</returns>
+		internal static bool ApplyServerScriptingBackend(bool useIl2Cpp)
+		{
+			bool changed = false;
+			ScriptingImplementation backend = useIl2Cpp
+				? ScriptingImplementation.IL2CPP
+				: ScriptingImplementation.Mono2x;
+
+			if (PlayerSettings.GetScriptingBackend(NamedBuildTarget.Server) != backend)
+			{
+				PlayerSettings.SetScriptingBackend(NamedBuildTarget.Server, backend);
+				changed = true;
+			}
+
+			if (useIl2Cpp)
+			{
+				if (PlayerSettings.GetIl2CppCompilerConfiguration(NamedBuildTarget.Server) != Il2CppCompilerConfiguration.Release)
+				{
+					PlayerSettings.SetIl2CppCompilerConfiguration(NamedBuildTarget.Server, Il2CppCompilerConfiguration.Release);
+					changed = true;
+				}
+
+				if (PlayerSettings.GetIl2CppCodeGeneration(NamedBuildTarget.Server) != Il2CppCodeGeneration.OptimizeSize)
+				{
+					PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.Server, Il2CppCodeGeneration.OptimizeSize);
+					changed = true;
+				}
+			}
+
+			if (changed)
+			{
+				AssetDatabase.SaveAssets();
+			}
+
+			return changed;
 		}
 
 		/// <summary>
