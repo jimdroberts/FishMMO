@@ -3931,7 +3931,14 @@ MonoBehaviour:
   MaxClients: 100
   SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
     type: 3}
-  onSceneLoadTriggers: []
+  onSceneLoadTriggers:
+  - Name: 
+    TargetSelector:
+      rid: -2
+    Conditions:
+    - rid: 8938684509875339273
+    OnConditionsMetActions: []
+    OnConditionsNotMetActions: []
   onDayStartTriggers: []
   onNightStartTriggers: []
   DayNightCycle: 1
@@ -3961,7 +3968,16 @@ MonoBehaviour:
   isDaytime: 1
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 8938684509875339273
+      type: {class: HasEquippedItemCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        ItemTemplate: {fileID: 0}
 --- !u!4 &1334146826
 Transform:
   m_ObjectHideFlags: 0

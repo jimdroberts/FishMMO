@@ -469,7 +469,7 @@ namespace FishMMO.Shared
 			{
 				if (triggers[i] != null)
 				{
-					triggers[i].Execute(eventData, gameObject);
+					triggers[i].Execute(eventData);
 				}
 			}
 		}

@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
   m_Name: Lesser Fire Damage
   m_EditorClassIdentifier: 
+  TargetSelector:
+    rid: -2
   Conditions:
   - rid: 8938684509875339264
   OnConditionsMetActions:
@@ -19,8 +21,6 @@ MonoBehaviour:
   - rid: 8938684490743545935
   OnConditionsNotMetActions: []
   icon: {fileID: 0}
-  TargetSelectorOverride:
-    rid: -2
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
@@ -34,8 +34,8 @@ MonoBehaviour:
     - rid: 8938684490743545926
       type: {class: ApplyDamageAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetProvider:
-          rid: 8938684490743545930
+        TargetSelector:
+          rid: -2
         DamageValue:
           rid: 8938684490743545927
         DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
@@ -44,29 +44,18 @@ MonoBehaviour:
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 3
-    - rid: 8938684490743545930
-      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        FallbackToInitiator: 0
     - rid: 8938684490743545935
       type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetProvider:
-          rid: 8938684490743545936
+        TargetSelector:
+          rid: -2
         FXPrefab: {fileID: 5773491593115871611, guid: 549f4456666a19b428ae484dd2630ab1,
           type: 3}
-    - rid: 8938684490743545936
-      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        FallbackToInitiator: 0
     - rid: 8938684509875339264
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetProvider:
-          rid: 8938684509875339266
+        TargetSelector:
+          rid: -2
+        Combine: 0
         Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
         RequiredAmount: 5
-    - rid: 8938684509875339266
-      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        FallbackToInitiator: 0
