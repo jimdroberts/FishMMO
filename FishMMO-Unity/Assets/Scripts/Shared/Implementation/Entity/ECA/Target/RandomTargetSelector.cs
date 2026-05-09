@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -8,7 +9,7 @@ namespace FishMMO.Shared
 	/// Selects a random <see cref="GameObject"/> from all within a given radius and layer mask.
 	/// Useful for random targeting effects or abilities.
 	/// </summary>
-	[CreateAssetMenu(fileName = "RandomTargetSelector", menuName = "FishMMO/ECA/TargetSelectors/Random", order = 15)]
+	[Serializable]
 	public class RandomTargetSelector : TargetSelector
 	{
 		/// <summary>
@@ -35,27 +36,32 @@ namespace FishMMO.Shared
 		private Collider[] hits;
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="RandomTargetSelector"/> class.
-		/// </summary>
-		void Awake() { hits = new Collider[MaxHits]; }
-
-		/// <summary>
 		/// Returns a random <see cref="GameObject"/> from all within <see cref="Radius"/> of the context.
 		/// </summary>
 		/// <param name="context">The <see cref="GameObject"/> to search from.</param>
 		/// <returns>An enumerable containing one random <see cref="GameObject"/>, or empty if none found.</returns>
 		public override IEnumerable<GameObject> SelectTargets(GameObject context)
 		{
+			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			{
+				if (overrideTarget != null)
+				{
+					yield return overrideTarget;
+				}
+				yield break;
+			}
+
 			if (context == null) yield break;
+			EnsureHitBuffer();
 			var scene = context.scene;
 			PhysicsScene physicsScene = scene.GetPhysicsScene();
 			Vector3 origin = context.transform.position;
 			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
-			var initiator = context != null ? context.GetComponent<ICharacter>() : null;
+			ICharacter initiator = ResolveInitiator(context);
 			List<GameObject> candidates = new List<GameObject>();
 			for (int i = 0; i < hitCount; i++)
 			{
-				var hit = hits[i];
+				Collider hit = hits[i];
 				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, initiator))
 					candidates.Add(hit.gameObject);
 			}
@@ -63,6 +69,18 @@ namespace FishMMO.Shared
 			{
 				int idx = DeterministicRNG.Shared.Range(0, candidates.Count);
 				yield return candidates[idx];
+			}
+		}
+
+		/// <summary>
+		/// Ensures the reusable collider buffer matches <see cref="MaxHits"/>.
+		/// </summary>
+		private void EnsureHitBuffer()
+		{
+			int maxHits = Mathf.Max(1, MaxHits);
+			if (hits == null || hits.Length != maxHits)
+			{
+				hits = new Collider[maxHits];
 			}
 		}
 	}

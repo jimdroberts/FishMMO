@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -8,7 +9,7 @@ namespace FishMMO.Shared
 	/// Selects all <see cref="GameObject"/>s within a cone in front of the context object.
 	/// Useful for cone-shaped area-of-effect abilities.
 	/// </summary>
-	[CreateAssetMenu(fileName = "ConeTargetSelector", menuName = "FishMMO/ECA/TargetSelectors/Cone", order = 10)]
+	[Serializable]
 	public class ConeTargetSelector : TargetSelector
 	{
 		/// <summary>
@@ -41,27 +42,32 @@ namespace FishMMO.Shared
 		private Collider[] hits;
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="ConeTargetSelector"/> class.
-		/// </summary>
-		void Awake() { hits = new Collider[MaxHits]; }
-
-		/// <summary>
 		/// Returns all <see cref="GameObject"/>s within a cone in front of the context object.
 		/// </summary>
 		/// <param name="context">The center <see cref="GameObject"/> for the cone search.</param>
 		/// <returns>An enumerable of <see cref="GameObject"/>s within the cone, or empty if context is null.</returns>
 		public override IEnumerable<GameObject> SelectTargets(GameObject context)
 		{
+			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			{
+				if (overrideTarget != null)
+				{
+					yield return overrideTarget;
+				}
+				yield break;
+			}
+
 			if (context == null) yield break;
+			EnsureHitBuffer();
 			var scene = context.scene;
 			PhysicsScene physicsScene = scene.GetPhysicsScene();
 			Vector3 origin = context.transform.position;
 			Vector3 forward = context.transform.forward;
 			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
-			var initiator = context != null ? context.GetComponent<ICharacter>() : null;
+			ICharacter initiator = ResolveInitiator(context);
 			for (int i = 0; i < hitCount; i++)
 			{
-				var hit = hits[i];
+				Collider hit = hits[i];
 				if (hit != null)
 				{
 					Vector3 toTarget = (hit.transform.position - origin).normalized;
@@ -70,6 +76,18 @@ namespace FishMMO.Shared
 					if (angleToTarget <= Angle * 0.5f && AreConditionsMet(hit.gameObject, initiator))
 						yield return hit.gameObject;
 				}
+			}
+		}
+
+		/// <summary>
+		/// Ensures the reusable collider buffer matches <see cref="MaxHits"/>.
+		/// </summary>
+		private void EnsureHitBuffer()
+		{
+			int maxHits = Mathf.Max(1, MaxHits);
+			if (hits == null || hits.Length != maxHits)
+			{
+				hits = new Collider[maxHits];
 			}
 		}
 	}

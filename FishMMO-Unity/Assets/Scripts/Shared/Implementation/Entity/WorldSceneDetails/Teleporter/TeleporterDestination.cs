@@ -61,6 +61,7 @@ namespace FishMMO.Shared
 				// If no collider is present, draw a default wire cube to indicate the position.
 				Gizmos.color = GizmoColor;
 				Gizmos.DrawWireCube(transform.position, Vector3.one);
+				ColliderExtensions.DrawCenterMarker(transform.position, GizmoColor);
 			}
 		}
 #endif

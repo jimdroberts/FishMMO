@@ -21,6 +21,7 @@ namespace FishMMO.Shared
 		{
 			Gizmos.color = Color.grey;
 			Gizmos.DrawWireCube(transform.position, BoundarySize);
+			ColliderExtensions.DrawCenterMarker(transform.position, Color.grey);
 		}
 
 		/// <summary>
@@ -30,6 +31,7 @@ namespace FishMMO.Shared
 		{
 			Gizmos.color = Color.green;
 			Gizmos.DrawCube(transform.position, BoundarySize);
+			ColliderExtensions.DrawCenterMarker(transform.position, Color.green);
 		}
 
 		/// <summary>

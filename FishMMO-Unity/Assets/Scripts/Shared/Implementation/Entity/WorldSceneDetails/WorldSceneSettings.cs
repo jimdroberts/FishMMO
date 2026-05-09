@@ -1,11 +1,168 @@
 using UnityEngine;
+using FishNet.Managing;
+using FishNet.Managing.Timing;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishMMO.Shared.Core;
+using UnityEngine.Serialization;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Inline ECA trigger data for world scene events.
+	/// </summary>
+	[Serializable]
+	public class WorldSceneTrigger
+	{
+		/// <summary>
+		/// Display name for this trigger entry.
+		/// </summary>
+		public string Name = "New Trigger";
+
+		/// <summary>
+		/// Optional selector used to choose scene targets for this trigger entry.
+		/// </summary>
+		[Tooltip("Optional selector used to choose scene targets for this trigger entry. When empty, the trigger executes once as a world event.")]
+		[SerializeReference, SubclassSelector]
+		public TargetSelector TargetSelector;
+
+		/// <summary>
+		/// Conditions that must pass before actions execute.
+		/// </summary>
+		[Tooltip("Conditions that must pass before actions execute.")]
+		[SerializeReference, SubclassSelector]
+		public List<BaseCondition> Conditions = new List<BaseCondition>();
+
+		/// <summary>
+		/// Actions to execute when all conditions pass.
+		/// </summary>
+		[Tooltip("Actions to execute when all conditions pass.")]
+		[FormerlySerializedAs("Actions")]
+		[SerializeReference, SubclassSelector]
+		public List<BaseAction> OnConditionsMetActions = new List<BaseAction>();
+
+		/// <summary>
+		/// Actions to execute when one or more conditions fail.
+		/// </summary>
+		[Tooltip("Actions to execute when one or more conditions fail.")]
+		[SerializeReference, SubclassSelector]
+		public List<BaseAction> OnConditionsNotMetActions = new List<BaseAction>();
+
+		/// <summary>
+		/// Executes this trigger against the supplied event data.
+		/// </summary>
+		/// <param name="eventData">The event data used by conditions and actions.</param>
+		public void Execute(EventData eventData)
+		{
+			Execute(eventData, null);
+		}
+
+		/// <summary>
+		/// Executes this trigger against the supplied event data and optional target selector context.
+		/// </summary>
+		/// <param name="eventData">The event data used by conditions and actions.</param>
+		/// <param name="context">The context GameObject passed to <see cref="TargetSelector"/>.</param>
+		public void Execute(EventData eventData, GameObject context)
+		{
+			if (eventData == null)
+			{
+				return;
+			}
+
+			if (TargetSelector != null && context != null)
+			{
+				ExecuteForSelectedTargets(eventData, context);
+				return;
+			}
+
+			ExecuteActionsIfConditionsPass(eventData);
+		}
+
+		/// <summary>
+		/// Executes this trigger once per target selected from the supplied context.
+		/// </summary>
+		/// <param name="eventData">The original event data.</param>
+		/// <param name="context">The context GameObject used by the target selector.</param>
+		private void ExecuteForSelectedTargets(EventData eventData, GameObject context)
+		{
+			ICharacter initiator = TargetSelector.ResolveInitiator(context, eventData.Initiator);
+			foreach (GameObject target in TargetSelector.SelectTargets(context))
+			{
+				if (target == null)
+				{
+					continue;
+				}
+
+				EventData targetEventData = CreateTargetEventData(eventData, target, initiator);
+				ExecuteActionsIfConditionsPass(targetEventData);
+			}
+		}
+
+		/// <summary>
+		/// Executes this trigger once if all trigger conditions pass.
+		/// </summary>
+		/// <param name="eventData">The event data used by conditions and actions.</param>
+		private void ExecuteActionsIfConditionsPass(EventData eventData)
+		{
+			if (Conditions != null)
+			{
+				for (int i = 0; i < Conditions.Count; i++)
+				{
+					BaseCondition condition = Conditions[i];
+					if (condition != null && !condition.Evaluate(eventData.Initiator, eventData))
+					{
+						ExecuteActions(OnConditionsNotMetActions, eventData);
+						return;
+					}
+				}
+			}
+
+			ExecuteActions(OnConditionsMetActions, eventData);
+		}
+
+		/// <summary>
+		/// Executes the supplied actions against the supplied event data.
+		/// </summary>
+		/// <param name="actions">The actions to execute.</param>
+		/// <param name="eventData">The event data passed to each action.</param>
+		private void ExecuteActions(List<BaseAction> actions, EventData eventData)
+		{
+			if (actions == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < actions.Count; i++)
+			{
+				BaseAction action = actions[i];
+				if (action != null)
+				{
+					action.Execute(eventData.Initiator, eventData);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Creates target-specific event data while preserving the original event data object.
+		/// </summary>
+		/// <param name="eventData">The original event data.</param>
+		/// <param name="target">The selected target GameObject.</param>
+		/// <param name="initiator">The effective initiator for the selected target.</param>
+		/// <returns>Event data containing the selected target.</returns>
+		private static EventData CreateTargetEventData(EventData eventData, GameObject target, ICharacter initiator)
+		{
+			ICharacter targetCharacter = target.GetComponent<ICharacter>();
+			TargetEventData targetEventData = new TargetEventData(initiator, target);
+			if (targetCharacter == null)
+			{
+				return new EventData(initiator, eventData, targetEventData);
+			}
+
+			return new EventData(initiator, eventData, targetEventData, new CharacterHitEventData(initiator, targetCharacter));
+		}
+	}
+
 	/// <summary>
 	/// MonoBehaviour for configuring world scene settings, including client limits, transition visuals, day/night cycle, and object activations.
 	/// </summary>
@@ -27,15 +184,15 @@ namespace FishMMO.Shared
 		[Header("ECA - Day/Night Triggers")]
 		[Tooltip("Triggers executed once when this scene loads (e.g. apply default fog). EventData: DayNightEventData.")]
 		[SerializeField]
-		private List<Trigger> onSceneLoadTriggers = new List<Trigger>();
+		private List<WorldSceneTrigger> onSceneLoadTriggers = new List<WorldSceneTrigger>();
 
 		[Tooltip("Triggers executed when day begins. EventData: DayNightEventData (IsDaytime = true).")]
 		[SerializeField]
-		private List<Trigger> onDayStartTriggers = new List<Trigger>();
+		private List<WorldSceneTrigger> onDayStartTriggers = new List<WorldSceneTrigger>();
 
 		[Tooltip("Triggers executed when night begins. EventData: DayNightEventData (IsDaytime = false).")]
 		[SerializeField]
-		private List<Trigger> onNightStartTriggers = new List<Trigger>();
+		private List<WorldSceneTrigger> onNightStartTriggers = new List<WorldSceneTrigger>();
 
 		/// <summary>
 		/// True if the day night cycle should run. False if not.
@@ -103,6 +260,10 @@ namespace FishMMO.Shared
 
 		// Runtime blend material — we lerp this instance so we never mutate the shared material assets.
 		private Material blendSkyboxMaterial;
+		private NetworkManager networkManager;
+		private TimeManager timeManager;
+		private float offlineElapsedSeconds;
+		private bool sceneLoadTriggersPending = true;
 
 		/// <summary>
 		/// Unity Awake callback. Initializes the day/night cycle, sets the initial skybox,
@@ -110,6 +271,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void Awake()
 		{
+			DayCycleDuration = Mathf.Max(1, DayCycleDuration);
+			NightCycleDuration = Mathf.Max(1, NightCycleDuration);
+			networkManager = FindSceneNetworkManager();
+			timeManager = networkManager == null ? null : networkManager.TimeManager;
+			if (timeManager != null)
+			{
+				timeManager.OnTick += TimeManager_OnTick;
+			}
+
 #if !UNITY_SERVER
 			// Create a runtime copy of the day material for skybox blending.
 			if (DaySkyboxMaterial != null)
@@ -119,11 +289,26 @@ namespace FishMMO.Shared
 			}
 #endif
 
-			// Fire scene-load triggers (e.g. apply default fog via ChangeFogAction).
-			InvokeTriggers(onSceneLoadTriggers);
+			// Initialize the day/night state based on synchronized network time when available.
+			UpdateDayNightState(GetGameTimeOfDay(), true);
+			TryInvokeSceneLoadTriggers();
+		}
 
-			// Initialize the day/night state based on the current time.
-			UpdateDayNightState(GetGameTimeOfDay(DateTime.UtcNow), true);
+		private void OnDestroy()
+		{
+			if (timeManager != null)
+			{
+				timeManager.OnTick -= TimeManager_OnTick;
+				timeManager = null;
+			}
+			networkManager = null;
+
+#if !UNITY_SERVER
+			if (blendSkyboxMaterial != null)
+			{
+				Destroy(blendSkyboxMaterial);
+			}
+#endif
 		}
 
 		/// <summary>
@@ -131,24 +316,92 @@ namespace FishMMO.Shared
 		/// </summary>
 		void Update()
 		{
+			TryInvokeSceneLoadTriggers();
+
 			if (DayNightCycle)
 			{
-				float currentGameTimeOfDay = GetGameTimeOfDay(DateTime.UtcNow);
+				float currentGameTimeOfDay = GetGameTimeOfDay();
 
-				UpdateDayNightState(currentGameTimeOfDay);
+				if (!CanExecuteWorldTriggers())
+				{
+					UpdateDayNightState(currentGameTimeOfDay);
+				}
+
 				UpdateDayNightRotation(currentGameTimeOfDay, RotateObjects);
 				UpdateDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
 			}
 		}
 
 		/// <summary>
+		/// FishNet tick callback used for authoritative day/night state transitions.
+		/// </summary>
+		private void TimeManager_OnTick()
+		{
+			TryInvokeSceneLoadTriggers();
+
+			if (!DayNightCycle || !CanExecuteWorldTriggers())
+			{
+				return;
+			}
+
+			UpdateDayNightState(GetGameTimeOfDay());
+		}
+
+		/// <summary>
 		/// Gets the current game time of day in seconds.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private float GetGameTimeOfDay(DateTime now)
+		private float GetGameTimeOfDay()
 		{
 			float secondsPerGameDay = DayCycleDuration + NightCycleDuration;
-			return (float)(now.TimeOfDay.TotalSeconds % secondsPerGameDay);
+			if (timeManager != null && timeManager.TickDelta > 0.0d)
+			{
+				return (float)(timeManager.TicksToTime(TickType.Tick) % secondsPerGameDay);
+			}
+
+			offlineElapsedSeconds += Time.deltaTime;
+			return offlineElapsedSeconds % secondsPerGameDay;
+		}
+
+		/// <summary>
+		/// Executes pending scene-load triggers once the server is authoritative for this scene.
+		/// </summary>
+		private void TryInvokeSceneLoadTriggers()
+		{
+			if (!sceneLoadTriggersPending || !CanExecuteWorldTriggers())
+			{
+				return;
+			}
+
+			sceneLoadTriggersPending = false;
+			InvokeTriggers(onSceneLoadTriggers);
+		}
+
+		/// <summary>
+		/// Returns true when world-scene ECA triggers may execute authoritatively.
+		/// </summary>
+		private bool CanExecuteWorldTriggers()
+		{
+			return networkManager != null && networkManager.IsServerStarted;
+		}
+
+		/// <summary>
+		/// Finds the NetworkManager loaded in this component's scene.
+		/// </summary>
+		/// <returns>The scene-local NetworkManager, or null if none exists.</returns>
+		private NetworkManager FindSceneNetworkManager()
+		{
+			NetworkManager[] networkManagers = FindObjectsByType<NetworkManager>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+			for (int i = 0; i < networkManagers.Length; i++)
+			{
+				NetworkManager candidate = networkManagers[i];
+				if (candidate != null && candidate.gameObject.scene == gameObject.scene)
+				{
+					return candidate;
+				}
+			}
+
+			return null;
 		}
 
 		/// <summary>
@@ -335,9 +588,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Executes all triggers in the list using a world-level DayNightEventData (null initiator).
 		/// </summary>
-		private void InvokeTriggers(List<Trigger> triggers)
+		private void InvokeTriggers(List<WorldSceneTrigger> triggers)
 		{
-			if (triggers == null || triggers.Count == 0)
+			if (!CanExecuteWorldTriggers() || triggers == null || triggers.Count == 0)
 			{
 				return;
 			}
@@ -347,7 +600,7 @@ namespace FishMMO.Shared
 			{
 				if (triggers[i] != null)
 				{
-					triggers[i].Execute(eventData);
+					triggers[i].Execute(eventData, gameObject);
 				}
 			}
 		}

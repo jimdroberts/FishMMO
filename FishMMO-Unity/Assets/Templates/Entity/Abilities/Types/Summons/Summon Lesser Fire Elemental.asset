@@ -24,14 +24,14 @@ MonoBehaviour:
   Speed: 0
   Cooldown: 60
   Price: 0
-  ActivationConditions: []
+  ActivationConditions:
+  - rid: 8938684499217875193
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 0
   AdditionalEventSlots: 0
   HitCount: 0
   Type: 4
-  TargetTrigger: {fileID: 0}
   OnTickEvents: []
   OnHitEvents: []
   OnPreSpawnEvents: []
@@ -43,4 +43,14 @@ MonoBehaviour:
   SpawnDistance: 5
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 8938684499217875193
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetProvider:
+          rid: 8938684499217875194
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 15
+    - rid: 8938684499217875194
+      type: {class: InitiatorCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data: 

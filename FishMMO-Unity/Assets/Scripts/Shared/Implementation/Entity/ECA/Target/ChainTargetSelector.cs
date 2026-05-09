@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -8,7 +9,7 @@ namespace FishMMO.Shared
 	/// Selects a chain of <see cref="GameObject"/>s starting from the context object, such as for chain lightning or similar effects.
 	/// Each link in the chain is the closest unselected <see cref="GameObject"/> within <see cref="ChainRadius"/> of the previous target.
 	/// </summary>
-	[CreateAssetMenu(fileName = "ChainTargetSelector", menuName = "FishMMO/ECA/TargetSelectors/Chain", order = 2)]
+	[Serializable]
 	public class ChainTargetSelector : TargetSelector
 	{
 		/// <summary>
@@ -41,14 +42,6 @@ namespace FishMMO.Shared
 		private Collider[] hits;
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="ChainTargetSelector"/> class.
-		/// </summary>
-		void Awake()
-		{
-			hits = new Collider[MaxHits];
-		}
-
-		/// <summary>
 		/// Selects a chain of <see cref="GameObject"/>s starting from the given context object.
 		/// Each subsequent target is the closest unselected <see cref="GameObject"/> within <see cref="ChainRadius"/> of the previous one.
 		/// The chain will contain at most <see cref="ChainLength"/> targets.
@@ -57,12 +50,22 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of <see cref="GameObject"/>s representing the chain of selected targets, starting with <paramref name="context"/>.</returns>
 		public override IEnumerable<GameObject> SelectTargets(GameObject context)
 		{
+			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			{
+				if (overrideTarget != null)
+				{
+					yield return overrideTarget;
+				}
+				yield break;
+			}
+
 			if (context == null) yield break;
+			EnsureHitBuffer();
 			var scene = context.scene;
 			PhysicsScene physicsScene = scene.GetPhysicsScene();
-			var selected = new HashSet<GameObject>();
-			var current = context;
-			var initiator = context != null ? context.GetComponent<ICharacter>() : null;
+			HashSet<GameObject> selected = new HashSet<GameObject>();
+			GameObject current = context;
+			ICharacter initiator = ResolveInitiator(context);
 			for (int i = 0; i < ChainLength && current != null; i++)
 			{
 				if (!AreConditionsMet(current, initiator))
@@ -78,7 +81,7 @@ namespace FishMMO.Shared
 				float minDist = float.MaxValue;
 				for (int j = 0; j < hitCount; j++)
 				{
-					var hit = hits[j];
+					Collider hit = hits[j];
 					if (hit != null && !selected.Contains(hit.gameObject) && AreConditionsMet(hit.gameObject, initiator))
 					{
 						float dist = Vector3.Distance(center, hit.transform.position);
@@ -90,6 +93,18 @@ namespace FishMMO.Shared
 					}
 				}
 				current = next;
+			}
+		}
+
+		/// <summary>
+		/// Ensures the reusable collider buffer matches <see cref="MaxHits"/>.
+		/// </summary>
+		private void EnsureHitBuffer()
+		{
+			int maxHits = Mathf.Max(1, MaxHits);
+			if (hits == null || hits.Length != maxHits)
+			{
+				hits = new Collider[maxHits];
 			}
 		}
 	}

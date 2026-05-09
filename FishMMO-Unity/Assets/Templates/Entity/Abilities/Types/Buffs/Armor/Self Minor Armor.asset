@@ -12,31 +12,31 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
   m_Name: Self Minor Armor
   m_EditorClassIdentifier: 
-  icon: {fileID: 21300000, guid: 5a97d5afa6254804f81b7ba956296996, type: 3}
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   Description: 
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
   Cooldown: 0
   Price: 0
-  Resources:
-    m_keys: []
-    m_values: 
-  RequiredAttributes:
-    m_keys: []
-    m_values: 
-  RequiredFaction: {fileID: 0}
-  RequiredArchetype: {fileID: 0}
+  ActivationConditions: []
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 0
   AdditionalEventSlots: 0
   HitCount: 0
   Type: 4
-  TargetTrigger: {fileID: 11400000, guid: d00db1805f33b104b8b2198459b0a45d, type: 2}
   OnTickEvents: []
   OnHitEvents:
   - {fileID: 11400000, guid: b1b0ada2796be4c4ca8c95734c884fc2, type: 2}
   OnPreSpawnEvents: []
   OnSpawnEvents: []
   OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds: []

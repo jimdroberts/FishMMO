@@ -2533,7 +2533,6 @@ MonoBehaviour:
   - rid: 8938684497020846080
   - rid: 8938684497020846081
   - rid: 8938684497020846082
-  - rid: 8938684497020846083
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
@@ -2551,7 +2550,7 @@ MonoBehaviour:
     - rid: 8938684497020846081
       type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        NetworkObject: {fileID: 689555114688187283, guid: a1cb36c06a320c240878d104ba4f0abb,
+        NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
           type: 3}
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
@@ -2562,16 +2561,6 @@ MonoBehaviour:
       type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
-          type: 3}
-        MinimumRespawnTime: 0
-        MaximumRespawnTime: 0
-        SpawnChance: 0.5
-        YOffset: 0
-        AttributeBonusOverride: {fileID: 0}
-    - rid: 8938684497020846083
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
           type: 3}
         MinimumRespawnTime: 0
         MaximumRespawnTime: 0
@@ -3700,8 +3689,8 @@ MonoBehaviour:
   Collider: {fileID: 0}
   Terrain: {fileID: 0}
   OnRegionEnter:
-  - {fileID: 11400000, guid: 44d3914835afcff478745749b153f953, type: 2}
-  - {fileID: 11400000, guid: e34076ce9f0c6224986256c72f6258fb, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
@@ -3970,6 +3959,9 @@ MonoBehaviour:
   DayFadeObjects: []
   NightFadeObjects: []
   isDaytime: 1
+  references:
+    version: 2
+    RefIds: []
 --- !u!4 &1334146826
 Transform:
   m_ObjectHideFlags: 0
@@ -4953,7 +4945,7 @@ MonoBehaviour:
   Collider: {fileID: 0}
   Terrain: {fileID: 347432128}
   OnRegionEnter:
-  - {fileID: 11400000, guid: 22297f79efd99de43a9e8079889ee4b4, type: 2}
+  - {fileID: 0}
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}

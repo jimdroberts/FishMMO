@@ -27,6 +27,7 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </summary>
 		[Tooltip("Optional target selector. Overrides the default collision/self target. Use SelfTargetSelector for self-buffs, AreaTargetSelector for AoE, etc. When empty, defaults to the collision target or caster.")]
+		[SerializeReference, SubclassSelector]
 		public TargetSelector TargetSelectorOverride;
 
 		/// <summary>
@@ -84,6 +85,19 @@ namespace FishMMO.Shared
 		public virtual void BuildTooltip(TooltipBuilder builder)
 		{
 			builder.AddLine("Ability Event: " + Name, 0, TooltipColors.Title);
+		}
+
+		/// <summary>
+		/// Determines whether a condition should be evaluated when this ability event executes.
+		/// Resource cost conditions are aggregated and processed by the owning ability during activation,
+		/// so event execution skips them to avoid checking already-consumed resources again.
+		/// </summary>
+		/// <param name="condition">The condition being considered.</param>
+		/// <param name="eventData">The event data used for execution.</param>
+		/// <returns>True when the condition should be evaluated during event execution; otherwise, false.</returns>
+		protected override bool ShouldEvaluateCondition(BaseCondition condition, EventData eventData)
+		{
+			return !(condition is IResourceCost);
 		}
 	}
 }

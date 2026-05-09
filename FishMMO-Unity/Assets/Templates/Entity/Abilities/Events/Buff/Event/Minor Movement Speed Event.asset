@@ -17,7 +17,8 @@ MonoBehaviour:
   - rid: 8938684490743545939
   - rid: 8938684490743545940
   icon: {fileID: 0}
-  TargetSelectorOverride: {fileID: 0}
+  TargetSelectorOverride:
+    rid: -2
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
@@ -26,6 +27,8 @@ MonoBehaviour:
   references:
     version: 2
     RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
     - rid: 8938684490743545939
       type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
@@ -52,4 +55,4 @@ MonoBehaviour:
     - rid: 8938684490743545943
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        Amount: 15
+        Amount: 1

@@ -593,6 +593,7 @@ namespace FishMMO.Shared
 			Color previousColor = Handles.color;
 			Handles.color = new Color(1.0f, 0.35f, 0.1f, 0.8f);
 			Handles.DrawWireCube(spawner.transform.position, spawner.BoundingBoxSize);
+			Handles.CubeHandleCap(0, spawner.transform.position, Quaternion.identity, 0.2f, EventType.Repaint);
 			Handles.DrawWireDisc(spawner.transform.position, Vector3.up, spawner.SphereRadius);
 			Handles.color = previousColor;
 		}

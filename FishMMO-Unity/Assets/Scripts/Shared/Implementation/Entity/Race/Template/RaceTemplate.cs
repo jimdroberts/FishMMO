@@ -89,7 +89,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Gets the model reference for the given gender and index, or the placeholder if out of range or models are missing.
+		/// Gets the model reference for the given gender and index, or the placeholder if selection fails.
 		/// </summary>
 		/// <param name="gender">The selected character gender.</param>
 		/// <param name="index">The model index.</param>
@@ -112,13 +112,13 @@ namespace FishMMO.Shared
 				return PlaceholderModel;
 			}
 
-			// If index is out of range, return the first model as a fallback.
 			if (index >= modelSet.ModelReferences.Count || index < 0)
 			{
-				return modelSet.ModelReferences[0];
+				return PlaceholderModel;
 			}
 
-			return modelSet.ModelReferences[index];
+			AssetReference modelReference = modelSet.ModelReferences[index];
+			return modelReference == null ? PlaceholderModel : modelReference;
 		}
 
 		/// <summary>
@@ -198,12 +198,11 @@ namespace FishMMO.Shared
 		/// <returns>The matching model reference, or the placeholder when unavailable.</returns>
 		private AssetReference GetModelReferenceFromAllSets(int index)
 		{
-			if (GenderedModels == null || GenderedModels.Count == 0)
+			if (GenderedModels == null || GenderedModels.Count == 0 || index < 0)
 			{
 				return PlaceholderModel;
 			}
 
-			AssetReference firstModel = null;
 			int currentIndex = 0;
 			for (int i = 0; i < GenderedModels.Count; i++)
 			{
@@ -213,22 +212,18 @@ namespace FishMMO.Shared
 					continue;
 				}
 
-				if (firstModel == null)
-				{
-					firstModel = modelSet.ModelReferences[0];
-				}
-
 				for (int modelIndex = 0; modelIndex < modelSet.ModelReferences.Count; modelIndex++)
 				{
 					if (currentIndex == index)
 					{
-						return modelSet.ModelReferences[modelIndex];
+						AssetReference modelReference = modelSet.ModelReferences[modelIndex];
+						return modelReference == null ? PlaceholderModel : modelReference;
 					}
 					currentIndex++;
 				}
 			}
 
-			return firstModel == null ? PlaceholderModel : firstModel;
+			return PlaceholderModel;
 		}
 
 		/// <summary>

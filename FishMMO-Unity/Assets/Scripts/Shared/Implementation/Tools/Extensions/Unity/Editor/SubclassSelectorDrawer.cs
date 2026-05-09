@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FishNet.Object;
 using UnityEditor;
 using UnityEngine;
 
@@ -151,7 +152,7 @@ namespace FishMMO.Shared
 
 						float h = EditorGUI.GetPropertyHeight(iterator, true);
 						Rect childRect = new Rect(position.x, y, position.width, h);
-						EditorGUI.PropertyField(childRect, iterator, true);
+						DrawChildProperty(childRect, iterator);
 						y += h + EditorGUIUtility.standardVerticalSpacing;
 					}
 					while (iterator.NextVisible(false));
@@ -161,6 +162,52 @@ namespace FishMMO.Shared
 			}
 
 			EditorGUI.EndProperty();
+		}
+
+		/// <summary>
+		/// Draws a child property, with prefab GameObject selection support for NetworkObject fields.
+		/// </summary>
+		/// <param name="position">Rectangle on the screen to use for the property GUI.</param>
+		/// <param name="property">The child serialized property to draw.</param>
+		private static void DrawChildProperty(Rect position, SerializedProperty property)
+		{
+			if (IsNetworkObjectReferenceProperty(property))
+			{
+				DrawNetworkObjectPrefabField(position, property);
+				return;
+			}
+
+			EditorGUI.PropertyField(position, property, true);
+		}
+
+		/// <summary>
+		/// Draws a NetworkObject reference as a prefab GameObject picker and stores the selected NetworkObject component.
+		/// </summary>
+		/// <param name="position">Rectangle on the screen to use for the property GUI.</param>
+		/// <param name="property">The NetworkObject reference property.</param>
+		private static void DrawNetworkObjectPrefabField(Rect position, SerializedProperty property)
+		{
+			NetworkObject currentNetworkObject = property.objectReferenceValue as NetworkObject;
+			GameObject currentGameObject = currentNetworkObject == null ? null : currentNetworkObject.gameObject;
+			EditorGUI.BeginChangeCheck();
+			GameObject selectedGameObject = EditorGUI.ObjectField(position, property.displayName, currentGameObject, typeof(GameObject), false) as GameObject;
+			if (!EditorGUI.EndChangeCheck())
+			{
+				return;
+			}
+
+			property.objectReferenceValue = selectedGameObject == null ? null : selectedGameObject.GetComponent<NetworkObject>();
+		}
+
+		/// <summary>
+		/// Returns whether the property is a FishNet NetworkObject reference.
+		/// </summary>
+		/// <param name="property">The serialized property to inspect.</param>
+		/// <returns>True if the property stores a NetworkObject reference.</returns>
+		private static bool IsNetworkObjectReferenceProperty(SerializedProperty property)
+		{
+			return property.propertyType == SerializedPropertyType.ObjectReference &&
+				(property.type.Contains("NetworkObject") || property.objectReferenceValue is NetworkObject);
 		}
 
 		/// <summary>

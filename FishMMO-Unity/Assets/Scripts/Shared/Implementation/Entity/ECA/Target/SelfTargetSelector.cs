@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -8,7 +9,7 @@ namespace FishMMO.Shared
 	/// Selects the context <see cref="GameObject"/> itself as the only target.
 	/// Useful for self-targeted abilities or effects.
 	/// </summary>
-	[CreateAssetMenu(fileName = "SelfTargetSelector", menuName = "FishMMO/ECA/TargetSelectors/Self", order = 0)]
+	[Serializable]
 	public class SelfTargetSelector : TargetSelector
 	{
 		/// <summary>
@@ -18,9 +19,18 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable containing only the context object, or empty if null.</returns>
 		public override IEnumerable<GameObject> SelectTargets(GameObject context)
 		{
+			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			{
+				if (overrideTarget != null)
+				{
+					yield return overrideTarget;
+				}
+				yield break;
+			}
+
 			if (context != null)
 			{
-				var initiator = context.GetComponent<ICharacter>();
+				ICharacter initiator = ResolveInitiator(context);
 				if (AreConditionsMet(context, initiator))
 					yield return context;
 			}

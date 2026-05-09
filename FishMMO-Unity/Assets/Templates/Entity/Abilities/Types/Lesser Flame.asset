@@ -32,7 +32,6 @@ MonoBehaviour:
   AdditionalEventSlots: 0
   HitCount: 1
   Type: 2
-  TargetTrigger: {fileID: 0}
   OnTickEvents: []
   OnHitEvents: []
   OnPreSpawnEvents: []

@@ -321,26 +321,6 @@ namespace FishMMO.Shared
 				"FishMMO/Interactable/Capture Point");
 
 			// ── ECA ──
-			categories.Add(new TemplateCategory
-			{
-				DisplayName = "Target Selectors",
-				Group = "ECA",
-				AssetType = typeof(TargetSelector),
-				DefaultAssetDirectory = "Assets/Templates/Entity/ECA",
-				ConcreteTypes = new List<(string, Type)>
-				{
-					("Area", typeof(AreaTargetSelector)),
-					("Chain", typeof(ChainTargetSelector)),
-					("Children", typeof(ChildrenTargetSelector)),
-					("Cone", typeof(ConeTargetSelector)),
-					("Furthest", typeof(FurthestTargetSelector)),
-					("Line", typeof(LineTargetSelector)),
-					("Nearest", typeof(NearestTargetSelector)),
-					("Random", typeof(RandomTargetSelector)),
-					("Self", typeof(SelfTargetSelector)),
-				},
-			});
-
 			AddCategory<Trigger>("Triggers", "ECA",
 				"Assets/Templates/Entity/ECA",
 				"FishMMO/ECA/Trigger");

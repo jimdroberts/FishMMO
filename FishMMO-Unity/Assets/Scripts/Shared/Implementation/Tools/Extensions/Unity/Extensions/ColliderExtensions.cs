@@ -8,6 +8,9 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class ColliderExtensions
 	{
+		private const float CenterMarkerSize = 0.2f;
+		private const float CenterMarkerBrightnessMultiplier = 1.35f;
+
 		/// <summary>
 		/// Draws a gizmo for the collider in the editor using the specified color.
 		/// Supports BoxCollider, SphereCollider, and CapsuleCollider.
@@ -16,6 +19,8 @@ namespace FishMMO.Shared
 		/// <param name="color">The color to use for the gizmo.</param>
 		public static void DrawGizmo(this Collider collider, Color color)
 		{
+			Color previousColor = Gizmos.color;
+			Matrix4x4 previousMatrix = Gizmos.matrix;
 			Gizmos.color = color;
 
 			Transform transform = collider.transform;
@@ -46,6 +51,41 @@ namespace FishMMO.Shared
 					}
 				}
 			}
+
+			Gizmos.matrix = previousMatrix;
+			DrawCenterMarker(transform.position, color);
+			Gizmos.color = previousColor;
+		}
+
+		/// <summary>
+		/// Draws a small solid cube at an object's transform center.
+		/// </summary>
+		/// <param name="position">The center position to mark.</param>
+		/// <param name="color">The base gizmo color.</param>
+		public static void DrawCenterMarker(Vector3 position, Color color)
+		{
+			Color previousColor = Gizmos.color;
+			Matrix4x4 previousMatrix = Gizmos.matrix;
+			Gizmos.matrix = Matrix4x4.identity;
+			Gizmos.color = GetCenterMarkerColor(color);
+			Gizmos.DrawCube(position, Vector3.one * CenterMarkerSize);
+			Gizmos.DrawWireSphere(position, CenterMarkerSize);
+			Gizmos.matrix = previousMatrix;
+			Gizmos.color = previousColor;
+		}
+
+		/// <summary>
+		/// Gets a brighter marker color while preserving alpha.
+		/// </summary>
+		/// <param name="color">The base gizmo color.</param>
+		/// <returns>The center marker color.</returns>
+		private static Color GetCenterMarkerColor(Color color)
+		{
+			return new Color(
+				Mathf.Min(color.r * CenterMarkerBrightnessMultiplier, 1.0f),
+				Mathf.Min(color.g * CenterMarkerBrightnessMultiplier, 1.0f),
+				Mathf.Min(color.b * CenterMarkerBrightnessMultiplier, 1.0f),
+				1.0f);
 		}
 
 		/// <summary>

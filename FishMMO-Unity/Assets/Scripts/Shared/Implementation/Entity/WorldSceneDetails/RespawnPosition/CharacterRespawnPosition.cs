@@ -27,6 +27,7 @@ namespace FishMMO.Shared
 			{
 				Gizmos.color = GizmoColor;
 				Gizmos.DrawWireCube(transform.position, Vector3.one);
+				ColliderExtensions.DrawCenterMarker(transform.position, GizmoColor);
 			}
 		}
 #endif

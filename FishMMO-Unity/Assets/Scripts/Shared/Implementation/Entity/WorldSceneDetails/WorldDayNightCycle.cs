@@ -1,4 +1,6 @@
 using UnityEngine;
+using FishNet.Managing;
+using FishNet.Managing.Timing;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -86,18 +88,22 @@ namespace FishMMO.Shared
 		[Header("ECA - Day/Night Triggers")]
 		[Tooltip("Triggers executed once when this scene loads (e.g. apply default fog). EventData: DayNightEventData.")]
 		[SerializeField]
-		private List<Trigger> onSceneLoadTriggers = new List<Trigger>();
+		private List<WorldSceneTrigger> onSceneLoadTriggers = new List<WorldSceneTrigger>();
 
 		[Tooltip("Triggers executed when day begins. EventData: DayNightEventData (IsDaytime = true).")]
 		[SerializeField]
-		private List<Trigger> onDayStartTriggers = new List<Trigger>();
+		private List<WorldSceneTrigger> onDayStartTriggers = new List<WorldSceneTrigger>();
 
 		[Tooltip("Triggers executed when night begins. EventData: DayNightEventData (IsDaytime = false).")]
 		[SerializeField]
-		private List<Trigger> onNightStartTriggers = new List<Trigger>();
+		private List<WorldSceneTrigger> onNightStartTriggers = new List<WorldSceneTrigger>();
 
 		// Runtime blend material — we lerp this instance so we never mutate the shared material assets.
 		private Material blendSkyboxMaterial;
+		private NetworkManager networkManager;
+		private TimeManager timeManager;
+		private float offlineElapsedSeconds;
+		private bool sceneLoadTriggersPending = true;
 
 		// Cached renderers for fade objects — avoids GetComponent<Renderer>() in Update.
 		private Renderer[] dayFadeRenderers;
@@ -114,6 +120,12 @@ namespace FishMMO.Shared
 		{
 			DayCycleDuration = Mathf.Max(1, DayCycleDuration);
 			NightCycleDuration = Mathf.Max(1, NightCycleDuration);
+			networkManager = FindSceneNetworkManager();
+			timeManager = networkManager == null ? null : networkManager.TimeManager;
+			if (timeManager != null)
+			{
+				timeManager.OnTick += TimeManager_OnTick;
+			}
 
 #if !UNITY_SERVER
 			// Create a runtime copy of the day material for skybox blending.
@@ -128,15 +140,20 @@ namespace FishMMO.Shared
 			nightFadeRenderers = CacheRenderers(NightFadeObjects);
 #endif
 
-			// Fire scene-load triggers (e.g. apply default fog via ChangeFogAction).
-			InvokeTriggers(onSceneLoadTriggers);
-
-			// Initialize the day/night state based on the current time.
-			UpdateDayNightState(GetGameTimeOfDay(DateTime.UtcNow), true);
+			// Initialize the day/night state based on synchronized network time when available.
+			UpdateDayNightState(GetGameTimeOfDay(), true);
+			TryInvokeSceneLoadTriggers();
 		}
 
 		private void OnDestroy()
 		{
+			if (timeManager != null)
+			{
+				timeManager.OnTick -= TimeManager_OnTick;
+				timeManager = null;
+			}
+			networkManager = null;
+
 #if !UNITY_SERVER
 			if (blendSkyboxMaterial != null)
 			{
@@ -150,25 +167,93 @@ namespace FishMMO.Shared
 		/// </summary>
 		void Update()
 		{
+			TryInvokeSceneLoadTriggers();
+
 			// Only update the cycle if enabled.
 			if (DayNightCycle)
 			{
-				float currentGameTimeOfDay = GetGameTimeOfDay(DateTime.UtcNow);
+				float currentGameTimeOfDay = GetGameTimeOfDay();
 
-				UpdateDayNightState(currentGameTimeOfDay);
+				if (!CanExecuteWorldTriggers())
+				{
+					UpdateDayNightState(currentGameTimeOfDay);
+				}
+
 				UpdateDayNightRotation(currentGameTimeOfDay, RotateObjects);
 				UpdateDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
 			}
 		}
 
 		/// <summary>
+		/// FishNet tick callback used for authoritative day/night state transitions.
+		/// </summary>
+		private void TimeManager_OnTick()
+		{
+			TryInvokeSceneLoadTriggers();
+
+			if (!DayNightCycle || !CanExecuteWorldTriggers())
+			{
+				return;
+			}
+
+			UpdateDayNightState(GetGameTimeOfDay());
+		}
+
+		/// <summary>
 		/// Gets the current game time of day in seconds, wrapping after each full day/night cycle.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private float GetGameTimeOfDay(DateTime now)
+		private float GetGameTimeOfDay()
 		{
 			float secondsPerGameDay = DayCycleDuration + NightCycleDuration;
-			return (float)(now.TimeOfDay.TotalSeconds % secondsPerGameDay);
+			if (timeManager != null && timeManager.TickDelta > 0.0d)
+			{
+				return (float)(timeManager.TicksToTime(TickType.Tick) % secondsPerGameDay);
+			}
+
+			offlineElapsedSeconds += Time.deltaTime;
+			return offlineElapsedSeconds % secondsPerGameDay;
+		}
+
+		/// <summary>
+		/// Executes pending scene-load triggers once the server is authoritative for this scene.
+		/// </summary>
+		private void TryInvokeSceneLoadTriggers()
+		{
+			if (!sceneLoadTriggersPending || !CanExecuteWorldTriggers())
+			{
+				return;
+			}
+
+			sceneLoadTriggersPending = false;
+			InvokeTriggers(onSceneLoadTriggers);
+		}
+
+		/// <summary>
+		/// Returns true when world-scene ECA triggers may execute authoritatively.
+		/// </summary>
+		private bool CanExecuteWorldTriggers()
+		{
+			return networkManager != null && networkManager.IsServerStarted;
+		}
+
+		/// <summary>
+		/// Finds the NetworkManager loaded in this component's scene.
+		/// </summary>
+		/// <returns>The scene-local NetworkManager, or null if none exists.</returns>
+		private NetworkManager FindSceneNetworkManager()
+		{
+			NetworkManager[] networkManagers = FindObjectsByType<NetworkManager>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+			for (int i = 0; i < networkManagers.Length; i++)
+			{
+				NetworkManager candidate = networkManagers[i];
+				if (candidate != null && candidate.gameObject.scene == gameObject.scene)
+				{
+					return candidate;
+				}
+			}
+
+			return null;
 		}
 
 		/// <summary>
@@ -372,9 +457,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Executes all triggers in the list using a world-level DayNightEventData (null initiator).
 		/// </summary>
-		private void InvokeTriggers(List<Trigger> triggers)
+		private void InvokeTriggers(List<WorldSceneTrigger> triggers)
 		{
-			if (triggers == null || triggers.Count == 0)
+			if (!CanExecuteWorldTriggers() || triggers == null || triggers.Count == 0)
 			{
 				return;
 			}
@@ -384,7 +469,7 @@ namespace FishMMO.Shared
 			{
 				if (triggers[i] != null)
 				{
-					triggers[i].Execute(eventData);
+					triggers[i].Execute(eventData, gameObject);
 				}
 			}
 		}

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -8,7 +9,7 @@ namespace FishMMO.Shared
 	/// Selects the furthest <see cref="GameObject"/> from the context within a given radius and layer mask.
 	/// Useful for targeting the most distant enemy, ally, or object.
 	/// </summary>
-	[CreateAssetMenu(fileName = "FurthestTargetSelector", menuName = "FishMMO/ECA/TargetSelectors/Furthest", order = 12)]
+	[Serializable]
 	public class FurthestTargetSelector : TargetSelector
 	{
 		/// <summary>
@@ -35,28 +36,33 @@ namespace FishMMO.Shared
 		private Collider[] hits;
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="FurthestTargetSelector"/> class.
-		/// </summary>
-		void Awake() { hits = new Collider[MaxHits]; }
-
-		/// <summary>
 		/// Returns the furthest <see cref="GameObject"/> from the context within <see cref="Radius"/>.
 		/// </summary>
 		/// <param name="context">The <see cref="GameObject"/> to search from.</param>
 		/// <returns>An enumerable containing the furthest <see cref="GameObject"/>, or empty if none found.</returns>
 		public override IEnumerable<GameObject> SelectTargets(GameObject context)
 		{
+			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			{
+				if (overrideTarget != null)
+				{
+					yield return overrideTarget;
+				}
+				yield break;
+			}
+
 			if (context == null) yield break;
+			EnsureHitBuffer();
 			var scene = context.scene;
 			PhysicsScene physicsScene = scene.GetPhysicsScene();
 			Vector3 origin = context.transform.position;
 			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
 			GameObject furthest = null;
 			float maxDist = float.MinValue;
-			var initiator = context != null ? context.GetComponent<ICharacter>() : null;
+			ICharacter initiator = ResolveInitiator(context);
 			for (int i = 0; i < hitCount; i++)
 			{
-				var hit = hits[i];
+				Collider hit = hits[i];
 				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, initiator))
 				{
 					float dist = Vector3.Distance(origin, hit.transform.position);
@@ -69,6 +75,18 @@ namespace FishMMO.Shared
 			}
 			if (furthest != null)
 				yield return furthest;
+		}
+
+		/// <summary>
+		/// Ensures the reusable collider buffer matches <see cref="MaxHits"/>.
+		/// </summary>
+		private void EnsureHitBuffer()
+		{
+			int maxHits = Mathf.Max(1, MaxHits);
+			if (hits == null || hits.Length != maxHits)
+			{
+				hits = new Collider[maxHits];
+			}
 		}
 	}
 }
