@@ -1,7 +1,7 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using FishMMO.Logging;
 using UnityEditor;
 using UnityEditor.Build;
@@ -14,18 +14,34 @@ namespace FishMMO.Shared
 	///
 	/// <para>
 	/// Unity invokes <see cref="IFilterBuildAssemblies"/> implementations during player build
-	/// to allow the project to remove managed assemblies from the final binary. Removing
+	/// to allow the project to remove managed assemblies (both compiled <c>asmdef</c> output
+	/// and precompiled DLLs under <c>Assets/Dependencies/</c>) from the final binary. Removing
 	/// assemblies that contain code, data, or secrets that should never ship to the other
 	/// side of the trust boundary reduces the attack surface and prevents accidental leakage
 	/// of server logic to clients (and vice versa).
 	/// </para>
 	///
 	/// <para>
+	/// Two complementary mechanisms are applied:
+	/// </para>
+	/// <list type="number">
+	///   <item>
+	///     <description>A curated list of third-party dependency name prefixes that are
+	///     known to be exclusively server-side (EF Core, Npgsql, StackExchange.Redis,
+	///     OTP/2FA, OpenAI, etc.). These are stripped from client builds only.</description>
+	///   </item>
+	///   <item>
+	///     <description>A case-insensitive substring fallback that strips assembly names
+	///     containing <c>"Server"</c> from client builds and <c>"Client"</c> from server
+	///     builds. This covers FishMMO-internal assemblies whose role is encoded in the
+	///     name (e.g. <c>FishMMO.Server</c>, <c>FishMMO-ClientAuth</c>).</description>
+	///   </item>
+	/// </list>
+	///
+	/// <para>
 	/// Matching is performed against the assembly file name only (no directory components,
-	/// no extension) using a case-insensitive substring check, so an assembly path such as
-	/// <c>Library/ScriptAssemblies/FishMMO.Server.dll</c> is matched as
-	/// <c>FishMMO.Server</c> and a client-side build directory like <c>ClientBuilds/</c>
-	/// in the path will not produce false positives.
+	/// no extension), so a build path containing the words <c>"Client"</c> or <c>"Server"</c>
+	/// (e.g. <c>ClientBuilds/</c>) cannot produce false positives.
 	/// </para>
 	/// </summary>
 	public sealed class SecurityAssemblyFilter : IFilterBuildAssemblies
@@ -43,6 +59,54 @@ namespace FishMMO.Shared
 		/// server-only assemblies that must not ship in a client build.
 		/// </summary>
 		private const string ServerToken = "Server";
+
+		/// <summary>
+		/// Curated list of assembly file name prefixes (case-insensitive) for third-party
+		/// dependencies that are exclusively used by server-side code paths in this project
+		/// (database, Redis, EF Core tooling, server TOTP, AI integrations, etc.). Stripped
+		/// from client builds.
+		///
+		/// <para>
+		/// Verified via grep against <c>Assets/Scripts/{Client,Shared}/**/*.cs</c>: none of
+		/// these prefixes are referenced from client or shared code in this project. If a
+		/// future client feature legitimately needs one of these libraries, remove the
+		/// matching entry from this list.
+		/// </para>
+		///
+		/// <para>
+		/// Prefix matching is intentional so that family packages
+		/// (e.g. <c>Microsoft.EntityFrameworkCore.Abstractions</c>,
+		/// <c>Microsoft.EntityFrameworkCore.Relational</c>) all match a single entry.
+		/// </para>
+		/// </summary>
+		private static readonly string[] ServerOnlyAssemblyPrefixes = new[]
+		{
+			// Database
+			"Microsoft.EntityFrameworkCore",
+			"EFCore.NamingConventions",
+			"Npgsql",
+			"Humanizer", // EF Core design-time dependency
+
+			// Redis
+			"StackExchange.Redis",
+			"Pipelines.Sockets.Unofficial",
+			"System.IO.Pipelines",
+
+			// Server-side dependency injection / configuration / logging plumbing
+			// (FishMMO clients use FishMMO-Logger and Unity's own infrastructure instead).
+			"Microsoft.Extensions.",
+			"Microsoft.Bcl.AsyncInterfaces",
+
+			// Server-side TOTP verification (clients never validate TOTP codes).
+			"Otp.NET",
+
+			// AI integrations are server-side only.
+			"OpenAI_API",
+
+			// FishMMO server-only modules.
+			"FishMMO-DB",
+			"FishMMO-ServerAuth",
+		};
 
 		/// <summary>
 		/// Callback order. Lower runs earlier; <c>0</c> is fine since this filter does not
@@ -73,7 +137,8 @@ namespace FishMMO.Shared
 			string strippedToken = isServerBuild ? ClientToken : ServerToken;
 
 			List<string> filtered = new List<string>(assemblies.Length);
-			List<string> removed = new List<string>();
+			List<string> removedByToken = new List<string>();
+			List<string> removedByCuratedList = new List<string>();
 
 			foreach (string assemblyPath in assemblies)
 			{
@@ -83,26 +148,75 @@ namespace FishMMO.Shared
 				}
 
 				string fileName = Path.GetFileNameWithoutExtension(assemblyPath);
-				if (fileName.IndexOf(strippedToken, System.StringComparison.OrdinalIgnoreCase) >= 0)
+
+				// Curated server-only dependency list — applies only to client builds.
+				if (!isServerBuild && IsServerOnlyDependency(fileName))
 				{
-					removed.Add(fileName);
+					removedByCuratedList.Add(fileName);
+					continue;
+				}
+
+				// Token-based fallback (Client/Server) for FishMMO-named assemblies.
+				if (fileName.IndexOf(strippedToken, StringComparison.OrdinalIgnoreCase) >= 0)
+				{
+					removedByToken.Add(fileName);
 					continue;
 				}
 
 				filtered.Add(assemblyPath);
 			}
 
-			if (removed.Count > 0)
+			LogRemovals(isServerBuild, removedByToken, removedByCuratedList);
+
+			return filtered.ToArray();
+		}
+
+		/// <summary>
+		/// Returns <c>true</c> if <paramref name="fileName"/> begins (case-insensitively)
+		/// with any entry in <see cref="ServerOnlyAssemblyPrefixes"/>.
+		/// </summary>
+		/// <param name="fileName">The assembly file name without directory or extension.</param>
+		private static bool IsServerOnlyDependency(string fileName)
+		{
+			for (int i = 0; i < ServerOnlyAssemblyPrefixes.Length; i++)
 			{
-				string buildKind = isServerBuild ? "Server" : "Client";
+				if (fileName.StartsWith(ServerOnlyAssemblyPrefixes[i], StringComparison.OrdinalIgnoreCase))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Emits a single <see cref="Log.Info"/> entry summarizing all assemblies stripped
+		/// during the current build, grouped by removal reason.
+		/// </summary>
+		private static void LogRemovals(bool isServerBuild, List<string> removedByToken, List<string> removedByCuratedList)
+		{
+			if (removedByToken.Count == 0 && removedByCuratedList.Count == 0)
+			{
+				return;
+			}
+
+			string buildKind = isServerBuild ? "Server" : "Client";
+
+			if (removedByCuratedList.Count > 0)
+			{
+				Log.Info(
+					LogContext,
+					$"Stripped {removedByCuratedList.Count} server-only dependency assemblies from {buildKind} build (curated list): " +
+					string.Join(", ", removedByCuratedList));
+			}
+
+			if (removedByToken.Count > 0)
+			{
 				string strippedKind = isServerBuild ? "Client" : "Server";
 				Log.Info(
 					LogContext,
-					$"Stripped {removed.Count} {strippedKind}-only assemblies from {buildKind} build: " +
-					string.Join(", ", removed));
+					$"Stripped {removedByToken.Count} {strippedKind}-named assemblies from {buildKind} build (name token): " +
+					string.Join(", ", removedByToken));
 			}
-
-			return filtered.ToArray();
 		}
 	}
 }
