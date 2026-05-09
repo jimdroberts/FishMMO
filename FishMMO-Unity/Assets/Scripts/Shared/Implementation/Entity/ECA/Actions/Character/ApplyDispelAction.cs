@@ -41,7 +41,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ICharacter target = ResolveTarget(initiator, eventData);
+			ICharacter target = (eventData?.TargetCharacter ?? initiator);
 			if (target == null)
 			{
 				return;
@@ -49,14 +49,10 @@ namespace FishMMO.Shared
 
 			if (target.TryGet(out IBuffController defenderBuffController))
 			{
-				// Use deterministic RNG from CharacterHitEventData when available.
-				DeterministicRNG rng = DeterministicRNG.Shared;
-				if (eventData != null &&
-					eventData.TryGet(out CharacterHitEventData hitData) &&
-					hitData.RNG != null)
-				{
-					rng = hitData.RNG;
-				}
+				// Use deterministic RNG from EventData when available.
+				DeterministicRNG rng = eventData != null && eventData.RNG != null
+					? eventData.RNG
+					: DeterministicRNG.Shared;
 
 				int amountToRemove = AmountToRemoveValue.GetValue(initiator, eventData);
 				for (int i = 0; i < amountToRemove && defenderBuffController.Buffs.Count > 0; ++i)

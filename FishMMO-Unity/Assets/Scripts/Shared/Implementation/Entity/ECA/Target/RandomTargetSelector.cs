@@ -40,9 +40,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="context">The <see cref="GameObject"/> to search from.</param>
 		/// <returns>An enumerable containing one random <see cref="GameObject"/>, or empty if none found.</returns>
-		public override IEnumerable<GameObject> SelectTargets(GameObject context)
+		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
 			{
 				if (overrideTarget != null)
 				{
@@ -51,23 +51,24 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
 			var scene = context.scene;
 			PhysicsScene physicsScene = scene.GetPhysicsScene();
 			Vector3 origin = context.transform.position;
 			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
-			ICharacter initiator = ResolveInitiator(context);
 			List<GameObject> candidates = new List<GameObject>();
 			for (int i = 0; i < hitCount; i++)
 			{
 				Collider hit = hits[i];
-				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, initiator))
+				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, eventData))
 					candidates.Add(hit.gameObject);
 			}
 			if (candidates.Count > 0)
 			{
-				int idx = DeterministicRNG.Shared.Range(0, candidates.Count);
+				DeterministicRNG rng = eventData?.RNG ?? DeterministicRNG.Shared;
+				int idx = rng.Range(0, candidates.Count);
 				yield return candidates[idx];
 			}
 		}

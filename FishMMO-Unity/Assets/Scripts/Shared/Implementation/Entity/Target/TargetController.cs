@@ -109,12 +109,12 @@ namespace FishMMO.Shared
 					if (Last.Target != null)
 					{
 						OnClearTarget?.Invoke(Last.Target);
-						Character.Invoke(onTargetClearTriggers, new TargetEventData(Character, Last.Target.gameObject));
+						Character.Invoke(onTargetClearTriggers, new EventData(Character, Last.Target.gameObject));
 					}
 
 					// Invoke change target event.
 					OnChangeTarget?.Invoke(Current.Target);
-					Character.Invoke(onTargetChangeTriggers, new TargetEventData(Character, Current.Target?.gameObject));
+					Character.Invoke(onTargetChangeTriggers, new EventData(Character, Current.Target?.gameObject));
 				}
 				else
 				{

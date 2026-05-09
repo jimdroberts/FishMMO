@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// ECA event data for heal-related triggers. Carries the heal amount.
-	/// Automatically includes a CharacterHitEventData with the target.
+	/// The healed character is exposed on <see cref="EventData.TargetCharacter"/>.
 	/// </summary>
 	public class HealEventData : EventData
 	{
@@ -20,7 +20,7 @@ namespace FishMMO.Shared
 		/// <param name="target">The other character involved in the heal interaction.</param>
 		/// <param name="amount">The heal amount.</param>
 		public HealEventData(ICharacter initiator, ICharacter target, int amount)
-			: base(initiator, new CharacterHitEventData(initiator, target))
+			: base(initiator, target)
 		{
 			Amount = amount;
 		}

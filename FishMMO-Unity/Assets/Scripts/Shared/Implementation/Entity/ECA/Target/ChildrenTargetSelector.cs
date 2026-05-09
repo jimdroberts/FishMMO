@@ -17,9 +17,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="context">The parent <see cref="GameObject"/> whose children to select.</param>
 		/// <returns>An enumerable of all direct child <see cref="GameObject"/>s, or empty if context is null.</returns>
-		public override IEnumerable<GameObject> SelectTargets(GameObject context)
+		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
 			{
 				if (overrideTarget != null)
 				{
@@ -28,13 +28,13 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
-			ICharacter initiator = ResolveInitiator(context);
 			Transform contextTransform = context.transform;
 			for (int i = 0; i < contextTransform.childCount; i++)
 			{
 				Transform child = contextTransform.GetChild(i);
-				if (AreConditionsMet(child.gameObject, initiator))
+				if (AreConditionsMet(child.gameObject, eventData))
 					yield return child.gameObject;
 			}
 		}

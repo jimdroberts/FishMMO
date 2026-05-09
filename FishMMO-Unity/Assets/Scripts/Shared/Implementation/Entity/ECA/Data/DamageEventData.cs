@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// ECA event data for damage-related triggers. Carries the damage amount and
-	/// damage attribute type. Automatically includes a CharacterHitEventData with the target.
+	/// damage attribute type. The damaged character is exposed on <see cref="EventData.TargetCharacter"/>.
 	/// </summary>
 	public class DamageEventData : EventData
 	{
@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 		/// <param name="amount">The damage amount after modifiers.</param>
 		/// <param name="damageAttribute">The damage attribute type.</param>
 		public DamageEventData(ICharacter initiator, ICharacter target, int amount, DamageAttributeTemplate damageAttribute)
-			: base(initiator, new CharacterHitEventData(initiator, target))
+			: base(initiator, target)
 		{
 			Amount = amount;
 			DamageAttribute = damageAttribute;

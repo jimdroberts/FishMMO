@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using FishMMO.Shared;
 
 namespace FishMMO.Shared.Core
 {
@@ -11,12 +12,14 @@ namespace FishMMO.Shared.Core
 	public abstract class BaseAction : IAction
 	{
 		/// <summary>
-		/// Optional provider that determines how this action resolves its target character.
-		/// When null, falls back to event target if available, otherwise the initiator.
+		/// Optional selector that picks one or more targets for this action. When set, the
+		/// action runs once per selected target. When unset, the action runs once against the
+		/// current event data (reading <see cref="EventData.TargetCharacter"/> or falling back
+		/// to the initiator).
 		/// </summary>
-		[Tooltip("How this action resolves its target character. When unset, uses event target or initiator.")]
+		[Tooltip("Optional selector for this action. When unset the action runs once against the current event target.")]
 		[SerializeReference, SubclassSelector]
-		public ICharacterProvider TargetProvider;
+		public TargetSelector TargetSelector;
 
 		/// <summary>
 		/// Executes the action. Must be implemented by derived classes.
@@ -24,27 +27,5 @@ namespace FishMMO.Shared.Core
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">Event data for the action.</param>
 		public abstract void Execute(ICharacter initiator, EventData eventData);
-
-		/// <summary>
-		/// Resolves the target character using <see cref="TargetProvider"/> if set,
-		/// otherwise falls back to <see cref="CharacterHitEventData.Target"/> or the initiator.
-		/// </summary>
-		/// <param name="initiator">The initiating character (fallback).</param>
-		/// <param name="eventData">Optional event data containing a target override.</param>
-		/// <returns>The resolved character, or the initiator if no target override is found.</returns>
-		protected ICharacter ResolveTarget(ICharacter initiator, EventData eventData)
-		{
-			if (TargetProvider != null)
-			{
-				return TargetProvider.GetCharacter(initiator, eventData) ?? initiator;
-			}
-			if (eventData != null &&
-				eventData.TryGet(out CharacterHitEventData charTargetEventData) &&
-				charTargetEventData.Target != null)
-			{
-				return charTargetEventData.Target;
-			}
-			return initiator;
-		}
 	}
 }

@@ -49,13 +49,13 @@ namespace FishMMO.Shared.Core
 		List<Trigger> OnHealTriggers { get; }
 		/// <summary>Triggers invoked when this character is healed by another. EventData: HealEventData.</summary>
 		List<Trigger> OnHealedTriggers { get; }
-		/// <summary>Triggers invoked when this character kills another. EventData with CharacterHitEventData.</summary>
+		/// <summary>Triggers invoked when this character kills another. EventData with TargetCharacter set.</summary>
 		List<Trigger> OnKillTriggers { get; }
-		/// <summary>Triggers invoked when this character is killed by another. EventData with CharacterHitEventData.</summary>
+		/// <summary>Triggers invoked when this character is killed by another. EventData with TargetCharacter set.</summary>
 		List<Trigger> OnKilledTriggers { get; }
-		/// <summary>Triggers invoked when this character resurrects another. EventData with CharacterHitEventData.</summary>
+		/// <summary>Triggers invoked when this character resurrects another. EventData with TargetCharacter set.</summary>
 		List<Trigger> OnResurrectTriggers { get; }
-		/// <summary>Triggers invoked when this character is resurrected by another. EventData with CharacterHitEventData.</summary>
+		/// <summary>Triggers invoked when this character is resurrected by another. EventData with TargetCharacter set.</summary>
 		List<Trigger> OnResurrectedTriggers { get; }
 
 		/// <summary>

@@ -7,7 +7,9 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Abstract base class for selecting targets in an ability or event context.
-	/// Implementations define how to select one or more <see cref="GameObject"/>s based on a given context object.
+	/// Implementations consume the current <see cref="EventData"/> (its <see cref="EventData.Target"/>
+	/// or <see cref="EventData.Initiator"/> serve as the spatial / contextual reference)
+	/// and yield one or more <see cref="GameObject"/>s for triggers, conditions or actions to operate on.
 	/// </summary>
 	[Serializable]
 	public abstract class TargetSelector : IConditionalTargetSelector
@@ -33,49 +35,47 @@ namespace FishMMO.Shared
 		[SerializeField]
 		private GameObject initiatorOverride;
 
-		/// <summary>
-		/// Gets or sets the list of conditions that must be met for a target to be valid.
-		/// </summary>
+		/// <inheritdoc/>
 		public List<BaseCondition> Conditions { get { return conditions; } set { conditions = value; } }
 
 		/// <summary>
-		/// Gets or sets the optional scene object selected directly by this selector.
+		/// Optional scene object selected directly by this selector.
 		/// </summary>
 		public GameObject TargetOverride { get { return targetOverride; } set { targetOverride = value; } }
 
 		/// <summary>
-		/// Gets or sets the optional scene object used as this selector's initiator.
+		/// Optional scene object used as this selector's initiator.
 		/// </summary>
 		public GameObject InitiatorOverride { get { return initiatorOverride; } set { initiatorOverride = value; } }
 
 		/// <summary>
-		/// Resolves this selector's effective initiator.
+		/// Selects targets based on the supplied event context.
 		/// </summary>
-		/// <param name="context">The selection context GameObject.</param>
-		/// <param name="fallback">Fallback initiator when no override is assigned.</param>
-		/// <returns>The resolved initiator, or null if none exists.</returns>
-		public ICharacter ResolveInitiator(GameObject context, ICharacter fallback = null)
+		/// <param name="eventData">The event data driving the selection. <see cref="EventData.Target"/>
+		/// (when set) or <see cref="EventData.Initiator"/> typically serves as the spatial origin.</param>
+		/// <returns>The selected GameObjects.</returns>
+		public abstract IEnumerable<GameObject> SelectTargets(EventData eventData);
+
+		/// <summary>
+		/// Returns the spatial origin for this selector — preferring <see cref="EventData.Target"/>,
+		/// falling back to <see cref="EventData.Initiator"/>'s GameObject.
+		/// </summary>
+		/// <param name="eventData">The current event data.</param>
+		/// <returns>A GameObject to use as a spatial reference, or null.</returns>
+		protected static GameObject GetContext(EventData eventData)
 		{
-			if (initiatorOverride != null && initiatorOverride.TryGetComponent(out ICharacter overrideInitiator))
-			{
-				return overrideInitiator;
-			}
-
-			if (fallback != null)
-			{
-				return fallback;
-			}
-
-			return context != null && context.TryGetComponent(out ICharacter contextInitiator) ? contextInitiator : null;
+			if (eventData == null) return null;
+			if (eventData.Target != null) return eventData.Target;
+			return eventData.Initiator?.GameObject;
 		}
 
 		/// <summary>
-		/// Tries to select the explicit target override.
+		/// Tries to yield this selector's explicit <see cref="TargetOverride"/> if assigned.
 		/// </summary>
-		/// <param name="context">The selection context GameObject.</param>
-		/// <param name="target">The selected override target.</param>
-		/// <returns>True when an override target exists and passes selector conditions.</returns>
-		protected bool TrySelectTargetOverride(GameObject context, out GameObject target)
+		/// <param name="eventData">The current event data.</param>
+		/// <param name="target">The override target when present and conditions pass.</param>
+		/// <returns>True when an override was configured (regardless of whether conditions passed).</returns>
+		protected bool TrySelectTargetOverride(EventData eventData, out GameObject target)
 		{
 			if (targetOverride == null)
 			{
@@ -83,22 +83,21 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			target = AreConditionsMet(targetOverride, ResolveInitiator(context)) ? targetOverride : null;
+			target = AreConditionsMet(targetOverride, eventData) ? targetOverride : null;
 			return true;
 		}
 
 		/// <summary>
-		/// Checks if all conditions are met for a given target.
-		/// If no initiator is provided, attempts to extract <see cref="ICharacter"/> from the target <see cref="GameObject"/>.
-		/// If no event data is provided, creates a <see cref="TargetEventData"/> wrapping the target.
+		/// Evaluates this selector's per-target <see cref="Conditions"/> against the candidate target.
+		/// Builds a forked <see cref="EventData"/> scoped to the candidate so conditions see the right
+		/// <see cref="EventData.Target"/> / <see cref="EventData.TargetCharacter"/>.
 		/// </summary>
-		/// <param name="target">The target <see cref="GameObject"/> being evaluated.</param>
-		/// <param name="initiator">The character initiating the selection, or null to extract from target.</param>
-		/// <param name="eventData">Optional event data for condition evaluation.</param>
-		/// <returns>True if all conditions pass; otherwise, false.</returns>
-		protected bool AreConditionsMet(GameObject target, ICharacter initiator = null, EventData eventData = null)
+		/// <param name="target">The candidate target GameObject.</param>
+		/// <param name="eventData">The parent event data, or null.</param>
+		/// <returns>True when no conditions exist, or all conditions pass.</returns>
+		protected bool AreConditionsMet(GameObject target, EventData eventData)
 		{
-			if (Conditions == null || Conditions.Count == 0)
+			if (conditions == null || conditions.Count == 0)
 			{
 				return true;
 			}
@@ -108,15 +107,12 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			ICharacter targetCharacter = target.GetComponent<ICharacter>();
-			ICharacter effectiveInitiator = ResolveInitiator(target, initiator ?? targetCharacter);
+			EventData scoped = ForkForCandidate(target, eventData);
 
-			EventData effectiveEventData = CreateTargetEventData(eventData, effectiveInitiator, target, targetCharacter);
-
-			for (int i = 0; i < Conditions.Count; i++)
+			for (int i = 0; i < conditions.Count; ++i)
 			{
-				BaseCondition condition = Conditions[i];
-				if (condition != null && !condition.Evaluate(effectiveInitiator, effectiveEventData))
+				BaseCondition condition = conditions[i];
+				if (condition != null && !condition.Evaluate(scoped.Initiator, scoped))
 				{
 					return false;
 				}
@@ -125,32 +121,40 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Creates event data for evaluating a candidate target against selector conditions.
+		/// Builds a per-candidate event data clone, honoring <see cref="InitiatorOverride"/> when assigned.
 		/// </summary>
-		/// <param name="eventData">Optional source event data.</param>
-		/// <param name="initiator">The effective initiator.</param>
-		/// <param name="target">The target GameObject being evaluated.</param>
-		/// <param name="targetCharacter">The target character, when the target implements <see cref="ICharacter"/>.</param>
-		/// <returns>Event data containing the selected target context.</returns>
-		private static EventData CreateTargetEventData(EventData eventData, ICharacter initiator, GameObject target, ICharacter targetCharacter)
+		/// <param name="target">The candidate target GameObject.</param>
+		/// <param name="eventData">The parent event data.</param>
+		/// <returns>A new event data scoped to the candidate.</returns>
+		private EventData ForkForCandidate(GameObject target, EventData eventData)
 		{
-			TargetEventData targetEventData = new TargetEventData(initiator, target);
-			if (targetCharacter == null)
+			ICharacter overrideInitiator = null;
+			if (initiatorOverride != null)
 			{
-				return eventData == null ? new EventData(initiator, targetEventData) : new EventData(initiator, eventData, targetEventData);
+				initiatorOverride.TryGetComponent(out overrideInitiator);
 			}
 
-			CharacterHitEventData characterHitEventData = new CharacterHitEventData(initiator, targetCharacter);
-			return eventData == null ?
-				new EventData(initiator, targetEventData, characterHitEventData) :
-				new EventData(initiator, eventData, targetEventData, characterHitEventData);
-		}
+			if (overrideInitiator != null)
+			{
+				EventData scoped = new EventData(overrideInitiator);
+				scoped.SetTarget(target);
+				if (eventData != null)
+				{
+					scoped.RNG = eventData.RNG;
+					scoped.Merge(eventData);
+				}
+				return scoped;
+			}
 
-		/// <summary>
-		/// Selects targets based on the provided context <see cref="GameObject"/>.
-		/// </summary>
-		/// <param name="context">The <see cref="GameObject"/> in which to select targets (e.g., self, area center, parent, etc.).</param>
-		/// <returns>An enumerable collection of selected <see cref="GameObject"/>s.</returns>
-		public abstract IEnumerable<GameObject> SelectTargets(GameObject context);
+			if (eventData != null)
+			{
+				return eventData.Fork(target);
+			}
+
+			// No parent event data and no override — synthesize a minimal scope.
+			EventData fallback = new EventData(null);
+			fallback.SetTarget(target);
+			return fallback;
+		}
 	}
 }

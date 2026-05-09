@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the item can be equipped; otherwise, false.</returns>
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			ICharacter characterToCheck = ResolveTarget(initiator, eventData);
+			ICharacter characterToCheck = (eventData?.TargetCharacter ?? initiator);
 
 			if (characterToCheck == null || eventData == null)
 			{

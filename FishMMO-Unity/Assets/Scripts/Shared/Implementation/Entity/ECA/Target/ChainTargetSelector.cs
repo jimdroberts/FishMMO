@@ -48,9 +48,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="context">The starting <see cref="GameObject"/> for the chain selection. Must not be null.</param>
 		/// <returns>An enumerable of <see cref="GameObject"/>s representing the chain of selected targets, starting with <paramref name="context"/>.</returns>
-		public override IEnumerable<GameObject> SelectTargets(GameObject context)
+		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
 			{
 				if (overrideTarget != null)
 				{
@@ -59,16 +59,16 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
 			var scene = context.scene;
 			PhysicsScene physicsScene = scene.GetPhysicsScene();
 			HashSet<GameObject> selected = new HashSet<GameObject>();
 			GameObject current = context;
-			ICharacter initiator = ResolveInitiator(context);
 			for (int i = 0; i < ChainLength && current != null; i++)
 			{
-				if (!AreConditionsMet(current, initiator))
+				if (!AreConditionsMet(current, eventData))
 				{
 					current = null;
 					break;
@@ -82,7 +82,7 @@ namespace FishMMO.Shared
 				for (int j = 0; j < hitCount; j++)
 				{
 					Collider hit = hits[j];
-					if (hit != null && !selected.Contains(hit.gameObject) && AreConditionsMet(hit.gameObject, initiator))
+					if (hit != null && !selected.Contains(hit.gameObject) && AreConditionsMet(hit.gameObject, eventData))
 					{
 						float dist = Vector3.Distance(center, hit.transform.position);
 						if (dist < minDist)

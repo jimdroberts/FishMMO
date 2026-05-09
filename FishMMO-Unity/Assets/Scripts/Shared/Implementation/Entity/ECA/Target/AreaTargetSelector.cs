@@ -37,9 +37,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="context">The center <see cref="GameObject"/> for the area search.</param>
 		/// <returns>An enumerable of <see cref="GameObject"/>s within the area, or empty if context is null.</returns>
-		public override IEnumerable<GameObject> SelectTargets(GameObject context)
+		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
 			{
 				if (overrideTarget != null)
 				{
@@ -48,17 +48,17 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
 			var scene = context.scene;
 			PhysicsScene physicsScene = scene.GetPhysicsScene();
 			Vector3 center = context.transform.position;
 			int hitCount = physicsScene.OverlapSphere(center, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
-			ICharacter initiator = ResolveInitiator(context);
 			for (int i = 0; i < hitCount; i++)
 			{
 				Collider hit = hits[i];
-				if (hit != null && AreConditionsMet(hit.gameObject, initiator))
+				if (hit != null && AreConditionsMet(hit.gameObject, eventData))
 					yield return hit.gameObject;
 			}
 		}

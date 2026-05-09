@@ -46,9 +46,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="context">The center <see cref="GameObject"/> for the cone search.</param>
 		/// <returns>An enumerable of <see cref="GameObject"/>s within the cone, or empty if context is null.</returns>
-		public override IEnumerable<GameObject> SelectTargets(GameObject context)
+		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
 			{
 				if (overrideTarget != null)
 				{
@@ -57,6 +57,7 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
 			var scene = context.scene;
@@ -64,7 +65,6 @@ namespace FishMMO.Shared
 			Vector3 origin = context.transform.position;
 			Vector3 forward = context.transform.forward;
 			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
-			ICharacter initiator = ResolveInitiator(context);
 			for (int i = 0; i < hitCount; i++)
 			{
 				Collider hit = hits[i];
@@ -73,7 +73,7 @@ namespace FishMMO.Shared
 					Vector3 toTarget = (hit.transform.position - origin).normalized;
 					float dot = Vector3.Dot(forward, toTarget);
 					float angleToTarget = Mathf.Acos(dot) * Mathf.Rad2Deg;
-					if (angleToTarget <= Angle * 0.5f && AreConditionsMet(hit.gameObject, initiator))
+					if (angleToTarget <= Angle * 0.5f && AreConditionsMet(hit.gameObject, eventData))
 						yield return hit.gameObject;
 				}
 			}

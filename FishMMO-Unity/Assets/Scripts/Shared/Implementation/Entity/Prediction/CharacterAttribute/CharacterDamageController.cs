@@ -203,12 +203,12 @@ namespace FishMMO.Shared
 				// Invoke killer's OnKill triggers (e.g. achievements, quest objectives)
 				if (killer.TryGet(out ICharacterDamageController killerDamage))
 				{
-					killer.Invoke(killerDamage.OnKillTriggers, new EventData(killer, new CharacterHitEventData(killer, Character)));
+					killer.Invoke(killerDamage.OnKillTriggers, new EventData(killer, Character));
 				}
 			}
 
 			// Invoke victim's OnKilled triggers (e.g. death achievements)
-			Character.Invoke(OnKilledTriggers, new EventData(Character, new CharacterHitEventData(Character, killer)));
+			Character.Invoke(OnKilledTriggers, new EventData(Character, killer));
 
 			// Remove all buffs
 			if (Character.TryGet(out IBuffController buffController))

@@ -41,7 +41,7 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			ICharacter defender = ResolveTarget(initiator, eventData);
+			ICharacter defender = (eventData?.TargetCharacter ?? initiator);
 
 			if (initiator == null)
 			{

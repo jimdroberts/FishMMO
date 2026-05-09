@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
 			// Determine which character to check: use the event target if available, otherwise use the initiator.
-			ICharacter characterToCheck = ResolveTarget(initiator, eventData);
+			ICharacter characterToCheck = (eventData?.TargetCharacter ?? initiator);
 
 			// Try to get the attribute controller from the character.
 			if (!characterToCheck.TryGet(out ICharacterAttributeController attributeController))

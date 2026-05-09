@@ -28,7 +28,7 @@ namespace FishMMO.Shared
 		public override bool Evaluate(ICharacter initiator, EventData eventData = null)
 		{
 			// Determine which character to check: use the event target if available, otherwise use the initiator.
-			ICharacter characterToCheck = ResolveTarget(initiator, eventData);
+			ICharacter characterToCheck = (eventData?.TargetCharacter ?? initiator);
 			if (characterToCheck == null)
 			{
 				Log.Warning("HasEquippedItemCondition", "Character is null.");

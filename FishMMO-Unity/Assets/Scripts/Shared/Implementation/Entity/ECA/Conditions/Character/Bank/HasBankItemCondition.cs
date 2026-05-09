@@ -22,7 +22,7 @@ namespace FishMMO.Shared
         public override bool Evaluate(ICharacter initiator, EventData eventData)
         {
             // Determine which character to check: use the event target if available, otherwise use the initiator.
-            ICharacter characterToCheck = ResolveTarget(initiator, eventData);
+            ICharacter characterToCheck = (eventData?.TargetCharacter ?? initiator);
             // Check if the character and bank controller exist.
             if (characterToCheck == null || !characterToCheck.TryGet(out IBankController bankController))
                 return false;

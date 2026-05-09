@@ -45,7 +45,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ICharacter characterToConsume = ResolveTarget(initiator, eventData);
+			ICharacter characterToConsume = (eventData?.TargetCharacter ?? initiator);
 
 			if (characterToConsume == null) return;
 			if (!characterToConsume.TryGet(out ICharacterAttributeController attributeController)) return;

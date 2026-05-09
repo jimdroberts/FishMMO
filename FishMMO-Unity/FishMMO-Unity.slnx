@@ -17,6 +17,7 @@
   <Project Path="FishMMO.Client.Input.Generated.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
+  <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />
 </Solution>

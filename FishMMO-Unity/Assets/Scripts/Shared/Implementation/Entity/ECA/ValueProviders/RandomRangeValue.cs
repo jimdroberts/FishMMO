@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Value provider that returns a random integer between <see cref="Min"/> and <see cref="Max"/> (inclusive).
-	/// Uses the deterministic <see cref="DeterministicRNG"/> from <see cref="CharacterHitEventData.RNG"/> when available,
+	/// Uses the deterministic <see cref="DeterministicRNG"/> from <see cref="EventData.RNG"/> when available,
 	/// otherwise falls back to <see cref="DeterministicRNG.Shared"/>.
 	/// </summary>
 	[Serializable]
@@ -38,12 +38,10 @@ namespace FishMMO.Shared
 				max = temp;
 			}
 
-			// Use deterministic RNG from CharacterHitEventData when available (server-authoritative).
-			if (eventData != null &&
-				eventData.TryGet(out CharacterHitEventData hitData) &&
-				hitData.RNG != null)
+			// Use deterministic RNG from EventData when available (server-authoritative).
+			if (eventData != null && eventData.RNG != null)
 			{
-				return hitData.RNG.Next(min, max + 1);
+				return eventData.RNG.Next(min, max + 1);
 			}
 
 			// Fallback to shared RNG.

@@ -30,7 +30,7 @@ namespace FishMMO.Shared
 			}
 
 			// Determine which character to check: use the event target if available, otherwise use the initiator.
-			ICharacter characterToCheck = ResolveTarget(initiator, eventData);
+			ICharacter characterToCheck = (eventData?.TargetCharacter ?? initiator);
 			if (characterToCheck == null)
 			{
 				Log.Warning("IsArchetypeCondition", "Character does not exist.");

@@ -24,9 +24,10 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing tick and target information.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			if (eventData.TryGet(out AbilityTickEventData tickData) && tickData.Target != null)
+			if (eventData.TryGet(out AbilityTickEventData tickData) && tickData.AbilityObject != null)
 			{
-				tickData.Target.position += tickData.Target.rotation * MoveDirection * tickData.AbilityObject.Speed * tickData.DeltaTime;
+				Transform abilityTransform = tickData.AbilityObject.Transform;
+				abilityTransform.position += abilityTransform.rotation * MoveDirection * tickData.AbilityObject.Speed * tickData.DeltaTime;
 			}
 			else
 			{

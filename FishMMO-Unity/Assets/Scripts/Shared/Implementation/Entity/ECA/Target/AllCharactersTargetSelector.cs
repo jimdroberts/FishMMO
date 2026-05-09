@@ -26,11 +26,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns all GameObjects in the active scene that have a component implementing <see cref="ICharacter"/>.
 		/// </summary>
-		/// <param name="context">The context GameObject used to identify the scene.</param>
+		/// <param name="eventData">The event data driving the selection.</param>
 		/// <returns>An enumerable of character GameObjects.</returns>
-		public override IEnumerable<GameObject> SelectTargets(GameObject context)
+		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
 			{
 				if (overrideTarget != null)
 				{
@@ -39,12 +39,11 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			GameObject context = GetContext(eventData);
 			if (context == null)
 			{
 				yield break;
 			}
-
-			ICharacter initiator = ResolveInitiator(context);
 
 			MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(
 				IncludeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude,
@@ -60,7 +59,7 @@ namespace FishMMO.Shared
 
 				if (behaviour is ICharacter character &&
 					(IncludeUnspawned || character.IsSpawned) &&
-					AreConditionsMet(character.GameObject, initiator))
+					AreConditionsMet(character.GameObject, eventData))
 				{
 					yield return character.GameObject;
 				}

@@ -289,7 +289,7 @@ namespace FishMMO.Shared
 				// readonly, so a new instance is required when the caster changes.
 				if (cachedTickEventData == null || cachedTickEventData.Initiator != Caster)
 				{
-					cachedTickEventData = new AbilityTickEventData(Caster, Transform, tickDelta, this);
+					cachedTickEventData = new AbilityTickEventData(Caster, tickDelta, this);
 				}
 				else
 				{
@@ -338,9 +338,9 @@ namespace FishMMO.Shared
 		/// Gameplay-affecting effects (damage, healing, buffs) are only dispatched on the server.
 		/// Clients still see the collision (VFX, projectile destruction, hit-count drain) but
 		/// do not apply state changes to other characters — those arrive via server broadcasts.
-		/// Each <see cref="AbilityOnHitEvent"/> is executed independently, using its own
-		/// <see cref="AbilityEvent.TargetSelectorOverride"/> to resolve targets when set, or defaulting
-		/// to the direct collision target when no selector is assigned.
+		/// Each <see cref="AbilityOnHitEvent"/> is executed independently; its inherited
+		/// <see cref="Trigger.TargetSelector"/> selects the final targets (defaulting to the direct
+		/// collision target when an InitiatorTargetSelector or null is configured).
 		/// </summary>
 		/// <param name="collision">The collision data from Unity.</param>
 		void OnCollisionEnter(Collision collision)
@@ -366,27 +366,9 @@ namespace FishMMO.Shared
 
 					foreach (var hitEvent in hitEvents.Values)
 					{
-						if (hitEvent.TargetSelectorOverride != null)
-						{
-							// Use the event's TargetSelectorOverride to resolve targets from the collision context.
-							foreach (GameObject targetObj in hitEvent.TargetSelectorOverride.SelectTargets(collision.gameObject))
-							{
-								if (targetObj == null) continue;
-								targetObj.TryGetComponent(out ICharacter targetCharacter);
-								if (targetCharacter == null) continue;
-
-								AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, targetCharacter, this, collision);
-								collisionEvent.Add(new CharacterHitEventData(Caster, targetCharacter, RNG));
-								hitEvent.Execute(collisionEvent);
-							}
-						}
-						else
-						{
-							// No TargetSelector: default to the direct collision target.
-							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision);
-							collisionEvent.Add(new CharacterHitEventData(Caster, hitCharacter, RNG));
-							hitEvent.Execute(collisionEvent);
-						}
+						// The trigger's own TargetSelector handles fan-out.
+						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision, RNG);
+						hitEvent.Execute(collisionEvent);
 					}
 				}
 			}
@@ -730,10 +712,9 @@ namespace FishMMO.Shared
 			// Effects are server-authoritative, same as projectile hits — the result reaches
 			// the client via reconcile (resources/buffs) or broadcast. During client-side
 			// prediction this path is skipped to avoid double-application.
-			// Each OnHitEvent's TargetSelector determines the final targets:
-			//   - SelfTargetSelector for self-buffs/self-heals
+			// Each OnHitEvent's inherited Trigger.TargetSelector determines the final targets:
+			//   - InitiatorTargetSelector for self-buffs/self-heals
 			//   - AreaTargetSelector for PBAoE centered on the caster
-			//   - null selector defaults to the caster as both initiator and target
 			// NOTE: The caller (ResolveTargetAndSpawn) is responsible for advancing the
 			// deterministic seed after this method returns, keeping client/server RNG in sync.
 			if (template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
@@ -744,27 +725,9 @@ namespace FishMMO.Shared
 					DeterministicRNG rng = new DeterministicRNG(seed);
 					foreach (var hitEvent in ability.OnHitEvents.Values)
 					{
-						if (hitEvent.TargetSelectorOverride != null)
-						{
-							// Use the event's TargetSelectorOverride to resolve targets from the caster's position.
-							foreach (GameObject targetObj in hitEvent.TargetSelectorOverride.SelectTargets(caster.GameObject))
-							{
-								if (targetObj == null) continue;
-								targetObj.TryGetComponent(out ICharacter targetCharacter);
-								if (targetCharacter == null) continue;
-
-								AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, targetCharacter);
-								collisionEvent.Add(new CharacterHitEventData(caster, targetCharacter, rng));
-								hitEvent.Execute(collisionEvent);
-							}
-						}
-						else
-						{
-							// No TargetSelector: default to caster as both initiator and target (self-cast).
-							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster);
-							collisionEvent.Add(new CharacterHitEventData(caster, caster, rng));
-							hitEvent.Execute(collisionEvent);
-						}
+						// The trigger's own TargetSelector handles fan-out (self / area / etc.).
+						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster, null, null, rng);
+						hitEvent.Execute(collisionEvent);
 					}
 				}
 				return;

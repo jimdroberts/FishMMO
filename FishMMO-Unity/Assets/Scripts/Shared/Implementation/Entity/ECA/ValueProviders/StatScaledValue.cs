@@ -26,11 +26,13 @@ namespace FishMMO.Shared
 		public float ScaleFactor = 1.0f;
 
 		/// <summary>
-		/// Provider that determines which character's attribute to read. When unset, reads from the initiator.
+		/// Selector that determines which character's attribute to read. When unset, reads from the
+		/// current event target (or initiator if no target). Uses the first selected target that has
+		/// an <see cref="ICharacter"/> component.
 		/// </summary>
-		[Tooltip("Provider that determines which character's attribute to read. When unset, reads from the initiator.")]
+		[Tooltip("Selector that picks the source character whose attribute is read. When unset, uses the current event target or initiator.")]
 		[SerializeReference, SubclassSelector]
-		public ICharacterProvider SourceProvider;
+		public TargetSelector SourceSelector;
 
 		/// <inheritdoc/>
 		public int GetValue(ICharacter initiator, EventData eventData)
@@ -42,10 +44,18 @@ namespace FishMMO.Shared
 			}
 
 			// Determine which character to read the attribute from.
-			ICharacter source = initiator;
-			if (SourceProvider != null)
+			ICharacter source = eventData?.TargetCharacter ?? initiator;
+			if (SourceSelector != null && eventData != null)
 			{
-				source = SourceProvider.GetCharacter(initiator, eventData) ?? initiator;
+				foreach (GameObject go in SourceSelector.SelectTargets(eventData))
+				{
+					if (go == null) continue;
+					if (go.TryGetComponent(out ICharacter c) && c != null)
+					{
+						source = c;
+						break;
+					}
+				}
 			}
 
 			if (source == null)

@@ -80,8 +80,7 @@ namespace FishMMO.Shared
 						var targetCharacter = hit.GetComponent<ICharacter>();
 						if (targetCharacter != null)
 						{
-							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(initiator, targetCharacter, abilityObject);
-							collisionEvent.Add(new CharacterHitEventData(initiator, targetCharacter, abilityObject.RNG));
+							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(initiator, targetCharacter, abilityObject, null, abilityObject.RNG);
 
 							foreach (var trigger in onHitEvents.Values)
 							{

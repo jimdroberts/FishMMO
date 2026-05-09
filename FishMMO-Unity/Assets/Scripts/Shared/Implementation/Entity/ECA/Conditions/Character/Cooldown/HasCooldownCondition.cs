@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			ICharacter characterToCheck = ResolveTarget(initiator, eventData);
+			ICharacter characterToCheck = (eventData?.TargetCharacter ?? initiator);
 			if (characterToCheck == null)
 			{
 				return false;

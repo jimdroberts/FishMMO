@@ -1,8 +1,21 @@
 using System;
 using UnityEngine;
+using FishMMO.Shared;
 
 namespace FishMMO.Shared.Core
 {
+	/// <summary>
+	/// How a <see cref="BaseCondition"/> with a <see cref="BaseCondition.TargetSelector"/> combines
+	/// per-target evaluation results.
+	/// </summary>
+	public enum ConditionTargetCombine
+	{
+		/// <summary>All selected targets must satisfy the condition (logical AND).</summary>
+		All = 0,
+		/// <summary>At least one selected target must satisfy the condition (logical OR).</summary>
+		Any = 1,
+	}
+
 	/// <summary>
 	/// Abstract base class for all ECA conditions. Serialized inline via [SerializeReference] on Trigger assets.
 	/// Derive from this class and add [Serializable] to create concrete conditions.
@@ -11,12 +24,20 @@ namespace FishMMO.Shared.Core
 	public abstract class BaseCondition : ICondition
 	{
 		/// <summary>
-		/// Optional provider that determines how this condition resolves its target character.
-		/// When null, falls back to event target if available, otherwise the initiator.
+		/// Optional selector that picks one or more targets for this condition. When set, the
+		/// condition is evaluated once per selected target and the results combined per
+		/// <see cref="Combine"/>. When unset, the condition runs against the current event
+		/// data (reading <see cref="EventData.TargetCharacter"/> or falling back to the initiator).
 		/// </summary>
-		[Tooltip("How this condition resolves its target character. When unset, uses event target or initiator.")]
+		[Tooltip("Optional selector for this condition. When unset the condition runs against the current event target.")]
 		[SerializeReference, SubclassSelector]
-		public ICharacterProvider TargetProvider;
+		public TargetSelector TargetSelector;
+
+		/// <summary>
+		/// How per-target results are combined when <see cref="TargetSelector"/> yields multiple targets.
+		/// </summary>
+		[Tooltip("Combine mode for multi-target evaluation when TargetSelector is set.")]
+		public ConditionTargetCombine Combine = ConditionTargetCombine.All;
 
 		/// <summary>
 		/// Evaluates the condition. Must be implemented by derived classes.
@@ -25,27 +46,5 @@ namespace FishMMO.Shared.Core
 		/// <param name="eventData">Optional event data for the condition.</param>
 		/// <returns>True if the condition is met; otherwise, false.</returns>
 		public abstract bool Evaluate(ICharacter initiator, EventData eventData = null);
-
-		/// <summary>
-		/// Resolves the target character using <see cref="TargetProvider"/> if set,
-		/// otherwise falls back to <see cref="CharacterHitEventData.Target"/> or the initiator.
-		/// </summary>
-		/// <param name="initiator">The initiating character (fallback).</param>
-		/// <param name="eventData">Optional event data containing a target override.</param>
-		/// <returns>The resolved character, or the initiator if no target override is found.</returns>
-		protected ICharacter ResolveTarget(ICharacter initiator, EventData eventData)
-		{
-			if (TargetProvider != null)
-			{
-				return TargetProvider.GetCharacter(initiator, eventData) ?? initiator;
-			}
-			if (eventData != null &&
-				eventData.TryGet(out CharacterHitEventData charTargetEventData) &&
-				charTargetEventData.Target != null)
-			{
-				return charTargetEventData.Target;
-			}
-			return initiator;
-		}
 	}
 }

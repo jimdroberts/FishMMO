@@ -40,9 +40,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="context">The <see cref="GameObject"/> to cast the ray from.</param>
 		/// <returns>An enumerable of <see cref="GameObject"/>s hit by the ray, or empty if none found.</returns>
-		public override IEnumerable<GameObject> SelectTargets(GameObject context)
+		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
 			{
 				if (overrideTarget != null)
 				{
@@ -51,6 +51,7 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
 			var scene = context.scene;
@@ -58,11 +59,10 @@ namespace FishMMO.Shared
 			Vector3 origin = context.transform.position;
 			Vector3 direction = context.transform.forward;
 			int hitCount = physicsScene.Raycast(origin, direction, hits, Length, TargetLayer, QueryTriggerInteraction.UseGlobal);
-			ICharacter initiator = ResolveInitiator(context);
 			for (int i = 0; i < hitCount; i++)
 			{
 				RaycastHit hit = hits[i];
-				if (hit.collider != null && AreConditionsMet(hit.collider.gameObject, initiator))
+				if (hit.collider != null && AreConditionsMet(hit.collider.gameObject, eventData))
 					yield return hit.collider.gameObject;
 			}
 		}

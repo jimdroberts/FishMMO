@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -16,23 +17,19 @@ namespace FishMMO.Shared
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target object.</param>
 		/// <remarks>
-		/// This method attempts to retrieve <see cref="TargetEventData"/> from the event data. If successful, it destroys the target game object and deactivates it.
+		/// Reads <see cref="EventData.Target"/>; logs a warning when no target is present.
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			// Try to get the event data for a target object. If not present, log a warning and exit.
-			if (eventData.TryGet(out TargetEventData targetEventData))
+			if (eventData != null && eventData.Target != null)
 			{
-				// If the target exists, destroy and deactivate it.
-				if (targetEventData.Target != null)
-				{
-					targetEventData.Target.SetActive(false);
-					UnityEngine.Object.Destroy(targetEventData.Target);
-				}
+				GameObject target = eventData.Target;
+				target.SetActive(false);
+				UnityEngine.Object.Destroy(target);
 			}
 			else
 			{
-				Log.Warning("DestroyObjectAction", "Expected TargetEventData.");
+				Log.Warning("DestroyObjectAction", "Expected an EventData with a non-null Target.");
 			}
 		}
 	}

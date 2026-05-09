@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ICharacter target = ResolveTarget(initiator, eventData);
+			ICharacter target = (eventData?.TargetCharacter ?? initiator);
 			if (target is BaseCharacter character &&
 				character.TryGet(out ICharacterDamageController defenderDamageController) &&
 				!defenderDamageController.Immortal)

@@ -40,9 +40,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="context">The <see cref="GameObject"/> to search from.</param>
 		/// <returns>An enumerable containing the furthest <see cref="GameObject"/>, or empty if none found.</returns>
-		public override IEnumerable<GameObject> SelectTargets(GameObject context)
+		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(context, out GameObject overrideTarget))
+			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
 			{
 				if (overrideTarget != null)
 				{
@@ -51,6 +51,7 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
 			var scene = context.scene;
@@ -59,11 +60,10 @@ namespace FishMMO.Shared
 			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
 			GameObject furthest = null;
 			float maxDist = float.MinValue;
-			ICharacter initiator = ResolveInitiator(context);
 			for (int i = 0; i < hitCount; i++)
 			{
 				Collider hit = hits[i];
-				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, initiator))
+				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, eventData))
 				{
 					float dist = Vector3.Distance(origin, hit.transform.position);
 					if (dist > maxDist)

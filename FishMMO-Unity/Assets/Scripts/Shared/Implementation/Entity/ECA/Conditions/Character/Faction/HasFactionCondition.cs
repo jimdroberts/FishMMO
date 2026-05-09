@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 		{
 			if (FactionTemplate == null) return false;
 
-			ICharacter characterToCheck = ResolveTarget(initiator, eventData);
+			ICharacter characterToCheck = (eventData?.TargetCharacter ?? initiator);
 
 			if (characterToCheck == null) return false;
 			if (!characterToCheck.TryGet(out IFactionController factionController)) return false;
