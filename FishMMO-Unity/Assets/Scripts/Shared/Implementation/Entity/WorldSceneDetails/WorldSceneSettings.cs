@@ -76,7 +76,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ExecuteActionsIfConditionsPass(eventData);
+			ExecuteMatchingActions(eventData);
 		}
 
 		/// <summary>
@@ -95,52 +95,23 @@ namespace FishMMO.Shared
 				}
 
 				EventData targetEventData = CreateTargetEventData(eventData, target, initiator);
-				ExecuteActionsIfConditionsPass(targetEventData);
+				ExecuteMatchingActions(targetEventData);
 			}
 		}
 
 		/// <summary>
-		/// Executes this trigger once if all trigger conditions pass.
+		/// Executes the action branch matching this trigger's condition result.
 		/// </summary>
 		/// <param name="eventData">The event data used by conditions and actions.</param>
-		private void ExecuteActionsIfConditionsPass(EventData eventData)
+		private void ExecuteMatchingActions(EventData eventData)
 		{
-			if (Conditions != null)
+			if (!TriggerExecution.AreConditionsMet(Conditions, eventData))
 			{
-				for (int i = 0; i < Conditions.Count; i++)
-				{
-					BaseCondition condition = Conditions[i];
-					if (condition != null && !condition.Evaluate(eventData.Initiator, eventData))
-					{
-						ExecuteActions(OnConditionsNotMetActions, eventData);
-						return;
-					}
-				}
-			}
-
-			ExecuteActions(OnConditionsMetActions, eventData);
-		}
-
-		/// <summary>
-		/// Executes the supplied actions against the supplied event data.
-		/// </summary>
-		/// <param name="actions">The actions to execute.</param>
-		/// <param name="eventData">The event data passed to each action.</param>
-		private void ExecuteActions(List<BaseAction> actions, EventData eventData)
-		{
-			if (actions == null)
-			{
+				TriggerExecution.ExecuteActions(OnConditionsNotMetActions, eventData);
 				return;
 			}
 
-			for (int i = 0; i < actions.Count; i++)
-			{
-				BaseAction action = actions[i];
-				if (action != null)
-				{
-					action.Execute(eventData.Initiator, eventData);
-				}
-			}
+			TriggerExecution.ExecuteActions(OnConditionsMetActions, eventData);
 		}
 
 		/// <summary>

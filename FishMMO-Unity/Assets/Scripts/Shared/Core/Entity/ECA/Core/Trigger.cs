@@ -6,6 +6,64 @@ using UnityEngine.Serialization;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
+	/// Shared helpers for evaluating trigger conditions and executing trigger action lists.
+	/// </summary>
+	public static class TriggerExecution
+	{
+		/// <summary>
+		/// Determines whether all supplied conditions pass for the supplied event data.
+		/// </summary>
+		/// <param name="conditions">The conditions to evaluate.</param>
+		/// <param name="eventData">The event data used for evaluation.</param>
+		/// <returns>True when all conditions pass; otherwise, false.</returns>
+		public static bool AreConditionsMet(List<BaseCondition> conditions, EventData eventData)
+		{
+			if (eventData == null)
+			{
+				return false;
+			}
+
+			if (conditions == null)
+			{
+				return true;
+			}
+
+			for (int i = 0; i < conditions.Count; ++i)
+			{
+				BaseCondition condition = conditions[i];
+				if (condition != null && !condition.Evaluate(eventData.Initiator, eventData))
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Executes the supplied actions against the supplied event data.
+		/// </summary>
+		/// <param name="actions">The actions to execute.</param>
+		/// <param name="eventData">The event data passed to each action.</param>
+		public static void ExecuteActions(List<BaseAction> actions, EventData eventData)
+		{
+			if (actions == null || eventData == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < actions.Count; ++i)
+			{
+				BaseAction action = actions[i];
+				if (action != null)
+				{
+					action.Execute(eventData.Initiator, eventData);
+				}
+			}
+		}
+	}
+
+	/// <summary>
 	/// Represents a trigger that executes actions when all conditions are met for a given event.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Trigger", menuName = "FishMMO/ECA/Trigger", order = 0)]
@@ -104,19 +162,7 @@ namespace FishMMO.Shared.Core
 		/// <param name="eventData">The event data passed to each action.</param>
 		protected void ExecuteActions(List<BaseAction> actions, EventData eventData)
 		{
-			if (actions == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < actions.Count; ++i)
-			{
-				BaseAction action = actions[i];
-				if (action != null)
-				{
-					action.Execute(eventData.Initiator, eventData);
-				}
-			}
+			TriggerExecution.ExecuteActions(actions, eventData);
 		}
 	}
 }
