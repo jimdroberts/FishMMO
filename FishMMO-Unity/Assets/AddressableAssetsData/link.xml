@@ -4,84 +4,35 @@
   </assembly>
   <assembly fullname="FishMMO.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Client.Billboard" preserve="all" />
-    <type fullname="FishMMO.Client.BrightnessSettingOption" preserve="all" />
-    <type fullname="FishMMO.Client.Cached3DLabel" preserve="all" />
-    <type fullname="FishMMO.Client.CanvasCrawler" preserve="all" />
-    <type fullname="FishMMO.Client.CharacterDetailsButton" preserve="all" />
-    <type fullname="FishMMO.Client.ChatTab" preserve="all" />
-    <type fullname="FishMMO.Client.CinematicCamera" preserve="all" />
-    <type fullname="FishMMO.Client.Client" preserve="all" />
-    <type fullname="FishMMO.Client.ClientLauncher" preserve="all" />
-    <type fullname="FishMMO.Client.ClientLoginAuthenticator" preserve="all" />
-    <type fullname="FishMMO.Client.ClientPostbootSystem" preserve="all" />
-    <type fullname="FishMMO.Client.FullscreenSettingOption" preserve="all" />
-    <type fullname="FishMMO.Client.HttpPatchServerService" preserve="all" />
-    <type fullname="FishMMO.Client.LabelMaker" preserve="all" />
-    <type fullname="FishMMO.Client.RefreshRateSettingOption" preserve="all" />
-    <type fullname="FishMMO.Client.ResolutionSettingOption" preserve="all" />
-    <type fullname="FishMMO.Client.ServerDetailsButton" preserve="all" />
-    <type fullname="FishMMO.Client.ToggleSettingOption" preserve="all" />
-    <type fullname="FishMMO.Client.UIAbilities" preserve="all" />
-    <type fullname="FishMMO.Client.UIAbilityButton" preserve="all" />
-    <type fullname="FishMMO.Client.UIAbilityCraft" preserve="all" />
-    <type fullname="FishMMO.Client.UIAchievementCategory" preserve="all" />
-    <type fullname="FishMMO.Client.UIAchievementDescription" preserve="all" />
-    <type fullname="FishMMO.Client.UIAchievements" preserve="all" />
-    <type fullname="FishMMO.Client.UIAttribute" preserve="all" />
-    <type fullname="FishMMO.Client.UIBank" preserve="all" />
-    <type fullname="FishMMO.Client.UIBankButton" preserve="all" />
-    <type fullname="FishMMO.Client.UIBuff" preserve="all" />
-    <type fullname="FishMMO.Client.UIBuffGroup" preserve="all" />
-    <type fullname="FishMMO.Client.UICastBar" preserve="all" />
-    <type fullname="FishMMO.Client.UICharacterCreate" preserve="all" />
-    <type fullname="FishMMO.Client.UICharacterSelect" preserve="all" />
-    <type fullname="FishMMO.Client.UIChat" preserve="all" />
-    <type fullname="FishMMO.Client.UIChatChannelPicker" preserve="all" />
-    <type fullname="FishMMO.Client.UIChatMessage" preserve="all" />
-    <type fullname="FishMMO.Client.UIColorPicker" preserve="all" />
-    <type fullname="FishMMO.Client.UICrosshair" preserve="all" />
-    <type fullname="FishMMO.Client.UIDebuff" preserve="all" />
-    <type fullname="FishMMO.Client.UIDialogBox" preserve="all" />
-    <type fullname="FishMMO.Client.UIDialogInputBox" preserve="all" />
-    <type fullname="FishMMO.Client.UIDragObject" preserve="all" />
-    <type fullname="FishMMO.Client.UIDropdown" preserve="all" />
-    <type fullname="FishMMO.Client.UIDungeonFinder" preserve="all" />
-    <type fullname="FishMMO.Client.UIEquipment" preserve="all" />
-    <type fullname="FishMMO.Client.UIEquipmentButton" preserve="all" />
-    <type fullname="FishMMO.Client.UIFactionDescription" preserve="all" />
-    <type fullname="FishMMO.Client.UIFactions" preserve="all" />
-    <type fullname="FishMMO.Client.UIFriend" preserve="all" />
-    <type fullname="FishMMO.Client.UIFriendList" preserve="all" />
-    <type fullname="FishMMO.Client.UIGuild" preserve="all" />
-    <type fullname="FishMMO.Client.UIGuildMember" preserve="all" />
-    <type fullname="FishMMO.Client.UIHealthBar" preserve="all" />
-    <type fullname="FishMMO.Client.UIHotkeyBar" preserve="all" />
-    <type fullname="FishMMO.Client.UIHotkeyButton" preserve="all" />
-    <type fullname="FishMMO.Client.UIHotkeyGroup" preserve="all" />
-    <type fullname="FishMMO.Client.UIInventory" preserve="all" />
-    <type fullname="FishMMO.Client.UIInventoryButton" preserve="all" />
-    <type fullname="FishMMO.Client.UILoadingScreen" preserve="all" />
-    <type fullname="FishMMO.Client.UILogin" preserve="all" />
-    <type fullname="FishMMO.Client.UIManaBar" preserve="all" />
-    <type fullname="FishMMO.Client.UIMenu" preserve="all" />
-    <type fullname="FishMMO.Client.UIMerchant" preserve="all" />
-    <type fullname="FishMMO.Client.UIMinimap" preserve="all" />
-    <type fullname="FishMMO.Client.UIOptions" preserve="all" />
-    <type fullname="FishMMO.Client.UIParty" preserve="all" />
-    <type fullname="FishMMO.Client.UIPartyMember" preserve="all" />
-    <type fullname="FishMMO.Client.UIPetControl" preserve="all" />
-    <type fullname="FishMMO.Client.UIReconnectDisplay" preserve="all" />
-    <type fullname="FishMMO.Client.UISelector" preserve="all" />
-    <type fullname="FishMMO.Client.UIServerSelect" preserve="all" />
-    <type fullname="FishMMO.Client.UIStaminaBar" preserve="all" />
-    <type fullname="FishMMO.Client.UITarget" preserve="all" />
-    <type fullname="FishMMO.Client.UITooltip" preserve="all" />
-    <type fullname="FishMMO.Client.UITooltipButton" preserve="all" />
-    <type fullname="FishMMO.Client.UnityHtmlContentFetcher" preserve="all" />
-    <type fullname="FishMMO.Client.UnityWebRequestService" preserve="all" />
-    <type fullname="FishMMO.Client.VSyncSettingOption" preserve="all" />
-    <type fullname="FishMMO.Client.WebGLKeyHijack" preserve="all" />
-    <type fullname="FishMMO.Shared.UIChatChannelColorDictionary" preserve="nothing" serialized="true" />
+  </assembly>
+  <assembly fullname="FishMMO.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.KickRequestSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.AccountCreationSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.CharacterCreateSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.CharacterSelectSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.LoginServerSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.ServerSelectSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.Server" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.ServerAuthenticator" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.ServerLauncher" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.ServerWindowTitleUpdater" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AchievementSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.CharacterInventorySystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.CharacterSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.ChatSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.FriendSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.GuildSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.HotkeySystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Interactable.InteractableSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.NamingSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.PartySystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.PetSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.SceneChannelSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.SceneServerAuthenticator" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.SceneServerSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.WorldServer.WorldSceneSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.WorldServer.WorldServerAuthenticator" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.WorldServer.WorldServerSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Shared, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.AbilityController" preserve="all" />
@@ -100,7 +51,6 @@
     <type fullname="FishMMO.Shared.Banker" preserve="all" />
     <type fullname="FishMMO.Shared.BaseAttackingState" preserve="all" />
     <type fullname="FishMMO.Shared.Bindstone" preserve="all" />
-    <type fullname="FishMMO.Shared.BootstrapSystem" preserve="all" />
     <type fullname="FishMMO.Shared.BuffController" preserve="all" />
     <type fullname="FishMMO.Shared.CharacterAttributeController" preserve="all" />
     <type fullname="FishMMO.Shared.CharacterAttributeTemplate" preserve="all" />
@@ -125,7 +75,6 @@
     <type fullname="FishMMO.Shared.ItemAttributeTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.ItemAttributeTemplateDatabase" preserve="all" />
     <type fullname="FishMMO.Shared.ItemTemplateDatabase" preserve="all" />
-    <type fullname="FishMMO.Shared.KCCCamera" preserve="all" />
     <type fullname="FishMMO.Shared.KCCController" preserve="all" />
     <type fullname="FishMMO.Shared.KCCPlatform" preserve="all" />
     <type fullname="FishMMO.Shared.KCCPlayer" preserve="all" />
@@ -161,7 +110,6 @@
     <type fullname="FishMMO.Shared.TeleporterCache" preserve="all" />
     <type fullname="FishMMO.Shared.TeleporterDestination" preserve="all" />
     <type fullname="FishMMO.Shared.TerrainBoundary" preserve="all" />
-    <type fullname="FishMMO.Shared.TMPro_TextLinkHandler" preserve="all" />
     <type fullname="FishMMO.Shared.VersionConfig" preserve="all" />
     <type fullname="FishMMO.Shared.WanderState" preserve="all" />
     <type fullname="FishMMO.Shared.WeaponTemplate" preserve="all" />
@@ -169,11 +117,6 @@
     <type fullname="FishMMO.Shared.WorldSceneDetailsCache" preserve="all" />
     <type fullname="FishMMO.Shared.WorldSceneDetailsCacheReader" preserve="all" />
     <type fullname="FishMMO.Shared.WorldSceneSettings" preserve="all" />
-    <type fullname="RageInputField" preserve="all" />
-    <type fullname="RageSlider" preserve="all" />
-    <type fullname="FishMMO.Shared.CharacterDetails" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.WorldServerDetails" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.AddressableSceneLoadData" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.AchievementTier" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ApplyBuffAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ApplyDamageAction" preserve="nothing" serialized="true" />
@@ -205,15 +148,18 @@
     <type fullname="FishMMO.Shared.NPCSpawnableSettings" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="FishNet.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishNet.Component.Observing.OwnerOnlyCondition" preserve="all" />
+    <type fullname="FishNet.Component.Observing.SceneCondition" preserve="all" />
     <type fullname="FishNet.Component.Prediction.NetworkCollision" preserve="all" />
     <type fullname="FishNet.Component.Prediction.NetworkTrigger" preserve="all" />
     <type fullname="FishNet.Component.Transforming.Beta.NetworkTickSmoother" preserve="all" />
     <type fullname="FishNet.Component.Transforming.NetworkTransform" preserve="all" />
-    <type fullname="FishNet.Component.Utility.BandwidthDisplay" preserve="all" />
+    <type fullname="FishNet.Component.Utility.PingDisplay" preserve="all" />
     <type fullname="FishNet.Managing.Client.ClientManager" preserve="all" />
     <type fullname="FishNet.Managing.Logging.LevelLoggingConfiguration" preserve="all" />
     <type fullname="FishNet.Managing.NetworkManager" preserve="all" />
     <type fullname="FishNet.Managing.Object.DefaultPrefabObjects" preserve="all" />
+    <type fullname="FishNet.Managing.Observing.ObserverManager" preserve="all" />
     <type fullname="FishNet.Managing.Predicting.PredictionManager" preserve="all" />
     <type fullname="FishNet.Managing.Scened.SceneManager" preserve="all" />
     <type fullname="FishNet.Managing.Server.ServerManager" preserve="all" />
@@ -223,12 +169,12 @@
     <type fullname="FishNet.Observing.NetworkObserver" preserve="all" />
     <type fullname="FishNet.Transporting.Multipass.Multipass" preserve="all" />
     <type fullname="FishNet.Transporting.Tugboat.Tugboat" preserve="all" />
-    <type fullname="FishNet.Managing.Transporting.LatencySimulator" preserve="nothing" serialized="true" />
-    <type fullname="FishNet.Serializing.TransformPackingData" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Component.Transforming.NetworkTransform/ComponentConfigurationType" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Component.Transforming.NetworkTransform/SnappedAxes" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Object.NetworkObject/PredictionType" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Object.TransformProperties" preserve="nothing" serialized="true" />
+    <type fullname="FishNet.Serializing.TransformPackingData" preserve="nothing" serialized="true" />
+    <type fullname="FishNet.Managing.Transporting.LatencySimulator" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Component.Transforming.Beta.InitializationSettings" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Component.Transforming.Beta.MovementSettings" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Utility.Template.TickNetworkBehaviour/TickCallback" preserve="nothing" serialized="true" />
@@ -246,16 +192,6 @@
   <assembly fullname="Unity.AI.Navigation, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="Unity.AI.Navigation.NavMeshSurface" preserve="all" />
   </assembly>
-  <assembly fullname="Unity.InputSystem, Version=1.16.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.InputSystem.InputActionAsset" preserve="all" />
-    <type fullname="UnityEngine.InputSystem.InputActionReference" preserve="all" />
-    <type fullname="UnityEngine.InputSystem.UI.InputSystemUIInputModule" preserve="all" />
-    <type fullname="UnityEngine.InputSystem.InputAction" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.InputSystem.InputActionMap" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.InputSystem.InputBinding" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.InputSystem.InputControlScheme" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.InputSystem.InputControlScheme/DeviceRequirement" preserve="nothing" serialized="true" />
-  </assembly>
   <assembly fullname="Unity.RenderPipelines.Universal.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="UnityEngine.Rendering.Universal.UniversalAdditionalCameraData" preserve="all" />
     <type fullname="UnityEngine.Rendering.Universal.UniversalAdditionalLightData" preserve="all" />
@@ -267,29 +203,10 @@
     <type fullname="UnityEngine.ResourceManagement.ResourceProviders.InstanceProvider" preserve="all" />
     <type fullname="UnityEngine.ResourceManagement.ResourceProviders.SceneProvider" preserve="all" />
   </assembly>
-  <assembly fullname="Unity.Splines, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.Splines.SplineContainer" preserve="all" />
-    <type fullname="UnityEngine.Splines.BezierKnot" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Splines.KnotLinkCollection" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Splines.Spline" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Splines.Spline/MetaData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Splines.SplineDataDictionary`1" preserve="nothing" serialized="true" />
-  </assembly>
   <assembly fullname="Unity.TextMeshPro, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="TMPro.TextMeshPro" preserve="all" />
-    <type fullname="TMPro.TextMeshProUGUI" preserve="all" />
-    <type fullname="TMPro.TMP_Dropdown" preserve="all" />
     <type fullname="TMPro.TMP_FontAsset" preserve="all" />
-    <type fullname="TMPro.TMP_InputField" preserve="all" />
-    <type fullname="TMPro.TMP_InputField/OnChangeEvent" preserve="nothing" serialized="true" />
-    <type fullname="TMPro.TMP_InputField/SelectionEvent" preserve="nothing" serialized="true" />
-    <type fullname="TMPro.TMP_InputField/SubmitEvent" preserve="nothing" serialized="true" />
-    <type fullname="TMPro.TMP_InputField/TextSelectionEvent" preserve="nothing" serialized="true" />
-    <type fullname="TMPro.TMP_InputField/TouchScreenKeyboardEvent" preserve="nothing" serialized="true" />
     <type fullname="TMPro.VertexGradient" preserve="nothing" serialized="true" />
-    <type fullname="TMPro.TMP_Dropdown/DropdownEvent" preserve="nothing" serialized="true" />
-    <type fullname="TMPro.TMP_Dropdown/OptionData" preserve="nothing" serialized="true" />
-    <type fullname="TMPro.TMP_Dropdown/OptionDataList" preserve="nothing" serialized="true" />
     <type fullname="TMPro.FaceInfo_Legacy" preserve="nothing" serialized="true" />
     <type fullname="TMPro.FontAssetCreationSettings" preserve="nothing" serialized="true" />
     <type fullname="TMPro.KerningTable" preserve="nothing" serialized="true" />
@@ -306,9 +223,6 @@
     <type fullname="UnityEngine.Animator" preserve="all" />
     <type fullname="UnityEngine.Avatar" preserve="all" />
     <type fullname="UnityEngine.RuntimeAnimatorController" preserve="all" />
-  </assembly>
-  <assembly fullname="UnityEngine.AudioModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.AudioListener" preserve="all" />
   </assembly>
   <assembly fullname="UnityEngine.CoreModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="UnityEngine.Camera" preserve="all" />
@@ -329,10 +243,7 @@
     <type fullname="UnityEngine.Sprite" preserve="all" />
     <type fullname="UnityEngine.Texture2D" preserve="all" />
     <type fullname="UnityEngine.Transform" preserve="all" />
-    <type fullname="UnityEngine.Events.ArgumentCache" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.Events.PersistentCallGroup" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Events.PersistentListenerMode" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.RectOffset" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.RenderingLayerMask" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="UnityEngine.ParticleSystemModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
@@ -356,54 +267,6 @@
   <assembly fullname="UnityEngine.TextRenderingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="UnityEngine.Font" preserve="all" />
   </assembly>
-  <assembly fullname="UnityEngine.UI, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.EventSystems.BaseInput" preserve="all" />
-    <type fullname="UnityEngine.EventSystems.EventSystem" preserve="all" />
-    <type fullname="UnityEngine.EventSystems.EventTrigger" preserve="all" />
-    <type fullname="UnityEngine.UI.Button" preserve="all" />
-    <type fullname="UnityEngine.UI.CanvasScaler" preserve="all" />
-    <type fullname="UnityEngine.UI.ContentSizeFitter" preserve="all" />
-    <type fullname="UnityEngine.UI.GraphicRaycaster" preserve="all" />
-    <type fullname="UnityEngine.UI.GridLayoutGroup" preserve="all" />
-    <type fullname="UnityEngine.UI.HorizontalLayoutGroup" preserve="all" />
-    <type fullname="UnityEngine.UI.Image" preserve="all" />
-    <type fullname="UnityEngine.UI.LayoutElement" preserve="all" />
-    <type fullname="UnityEngine.UI.Mask" preserve="all" />
-    <type fullname="UnityEngine.UI.RawImage" preserve="all" />
-    <type fullname="UnityEngine.UI.RectMask2D" preserve="all" />
-    <type fullname="UnityEngine.UI.Scrollbar" preserve="all" />
-    <type fullname="UnityEngine.UI.ScrollRect" preserve="all" />
-    <type fullname="UnityEngine.UI.Slider" preserve="all" />
-    <type fullname="UnityEngine.UI.Text" preserve="all" />
-    <type fullname="UnityEngine.UI.Toggle" preserve="all" />
-    <type fullname="UnityEngine.UI.VerticalLayoutGroup" preserve="all" />
-    <type fullname="UnityEngine.EventSystems.EventTrigger/Entry" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.EventSystems.EventTrigger/TriggerEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.AnimationTriggers" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.Button/ButtonClickedEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.ColorBlock" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.FontData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.MaskableGraphic/CullStateChangedEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.Navigation" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.ScrollRect/ScrollRectEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.Scrollbar/ScrollEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.Slider/SliderEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.SpriteState" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.Toggle/ToggleEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.InputField/EndEditEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.InputField/OnChangeEvent" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UI.InputField/SubmitEvent" preserve="nothing" serialized="true" />
-  </assembly>
-  <assembly fullname="UnityEngine.UIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.Canvas" preserve="all" />
-    <type fullname="UnityEngine.CanvasGroup" preserve="all" />
-    <type fullname="UnityEngine.CanvasRenderer" preserve="all" />
-  </assembly>
-  <assembly fullname="Unity.Mathematics">
-    <type fullname="Unity.Mathematics.float3" preserve="nothing" serialized="true" />
-    <type fullname="Unity.Mathematics.float4" preserve="nothing" serialized="true" />
-    <type fullname="Unity.Mathematics.quaternion" preserve="nothing" serialized="true" />
-  </assembly>
   <assembly fullname="UnityEngine.TextCoreFontEngineModule">
     <type fullname="UnityEngine.TextCore.FaceInfo" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.TextCore.Glyph" preserve="nothing" serialized="true" />
@@ -412,5 +275,8 @@
     <type fullname="UnityEngine.TextCore.LowLevel.GlyphAdjustmentRecord" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.TextCore.LowLevel.GlyphPairAdjustmentRecord" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.TextCore.LowLevel.GlyphValueRecord" preserve="nothing" serialized="true" />
+  </assembly>
+  <assembly fullname="UnityEngine.UI">
+    <type fullname="UnityEngine.UI.MaskableGraphic/CullStateChangedEvent" preserve="nothing" serialized="true" />
   </assembly>
 </linker>

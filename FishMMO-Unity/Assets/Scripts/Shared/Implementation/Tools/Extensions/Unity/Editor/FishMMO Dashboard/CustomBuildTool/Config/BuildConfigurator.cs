@@ -152,6 +152,20 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 				PlayerSettings.WebGL.dataCaching = true;
 			}
 
+			// Force IL2CPP for the dedicated-server subtarget on Standalone targets so the
+			// server build pipeline matches the client (ahead-of-time compiled native code,
+			// no managed assemblies to decompile, identical runtime characteristics).
+			//
+			// The Server subtarget has its own NamedBuildTarget (NamedBuildTarget.Server)
+			// distinct from the Standalone Player one, so its scripting backend / IL2CPP
+			// settings must be configured separately.
+			if (buildTarget != BuildTarget.WebGL && buildSubtarget == StandaloneBuildSubtarget.Server)
+			{
+				PlayerSettings.SetScriptingBackend(NamedBuildTarget.Server, ScriptingImplementation.IL2CPP);
+				PlayerSettings.SetIl2CppCompilerConfiguration(NamedBuildTarget.Server, Il2CppCompilerConfiguration.Release);
+				PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.Server, Il2CppCodeGeneration.OptimizeSize);
+			}
+
 			// Force asset database refresh and reimport
 			AssetDatabase.SaveAssets();
 			AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
