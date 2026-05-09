@@ -41,7 +41,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The seed used for RNG, synchronized over the network.
 		/// </summary>
+		[SerializeField, ShowReadonly]
 		private int npcSeed = 0;
+
+		/// <summary>
+		/// Gender selected for this NPC's generated name and model set.
+		/// </summary>
+		[SerializeField, ShowReadonly]
+		private CharacterGender npcGender = CharacterGender.Unspecified;
 
 		/// <summary>
 		/// If true, this NPC can be charmed by players.
@@ -65,14 +72,32 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Reference to the spawner that created this NPC.
 		/// </summary>
-		[ShowReadonly]
-		public ObjectSpawner ObjectSpawner { get; set; }
+		[SerializeField, ShowReadonly]
+		private ObjectSpawner objectSpawner;
+
+		/// <summary>
+		/// Reference to the spawner that created this NPC.
+		/// </summary>
+		public ObjectSpawner ObjectSpawner
+		{
+			get { return objectSpawner; }
+			set { objectSpawner = value; }
+		}
 
 		/// <summary>
 		/// Settings used when spawning this NPC.
 		/// </summary>
-		[ShowReadonly]
-		public SpawnableSettings SpawnableSettings { get; set; }
+		[SerializeReference, ShowReadonly]
+		private SpawnableSettings spawnableSettings;
+
+		/// <summary>
+		/// Settings used when spawning this NPC.
+		/// </summary>
+		public SpawnableSettings SpawnableSettings
+		{
+			get { return spawnableSettings; }
+			set { spawnableSettings = value; }
+		}
 
 		/// <summary>
 		/// Called when the NPC is awakened. Handles name cleanup and registration.
@@ -141,6 +166,7 @@ namespace FishMMO.Shared
 
 			npcRNG = null;
 			npcSeed = 0;
+			npcGender = CharacterGender.Unspecified;
 			ObjectSpawner = null;
 			SpawnableSettings = null;
 		}
@@ -157,6 +183,7 @@ namespace FishMMO.Shared
 
 			// Read the attribute seed for deterministic attribute generation.
 			npcSeed = reader.ReadInt32();
+			npcGender = (CharacterGender)reader.ReadUInt8Unpacked();
 
 			// Instantiate the client side NPC RNG with the received seed.
 			npcRNG = new DeterministicRNG(npcSeed);
@@ -174,12 +201,13 @@ namespace FishMMO.Shared
 			{
 				RaceTemplate raceTemplate = factionController.RaceTemplate;
 				int modelIndex = -1;
-				if (raceTemplate.Models != null && raceTemplate.Models.Count > 0)
+				int modelCount = raceTemplate == null ? 0 : raceTemplate.GetModelCount(npcGender);
+				if (modelCount > 0)
 				{
 					// Pick a random model for this NPC using the RNG.
-					modelIndex = npcRNG.Next(0, raceTemplate.Models.Count);
+					modelIndex = npcRNG.Next(0, modelCount);
 
-					InstantiateRaceModelFromIndex(raceTemplate, modelIndex);
+					InstantiateRaceModelFromIndex(raceTemplate, modelIndex, npcGender);
 				}
 			}
 #endif
@@ -196,6 +224,9 @@ namespace FishMMO.Shared
 
 			// Write the seed for clients to use for determinism.
 			writer.WriteInt32(npcSeed);
+			SceneObjectNamer sceneObjectNamer = GetComponent<SceneObjectNamer>();
+			npcGender = sceneObjectNamer == null ? CharacterGender.Unspecified : sceneObjectNamer.EnsureGeneratedGender();
+			writer.WriteUInt8Unpacked((byte)npcGender);
 
 			//Log.Debug($"Writing NPC RNG Seed {npcSeed}");
 		}

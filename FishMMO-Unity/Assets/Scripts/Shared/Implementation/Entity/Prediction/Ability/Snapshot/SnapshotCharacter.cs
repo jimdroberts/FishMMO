@@ -107,6 +107,9 @@ namespace FishMMO.Shared
 
 		/// <inheritdoc/>
 		public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
+
+		/// <inheritdoc/>
+		public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender) { }
 #endif
 
 		/// <summary>

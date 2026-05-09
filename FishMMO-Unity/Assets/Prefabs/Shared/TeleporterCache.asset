@@ -16,10 +16,10 @@ MonoBehaviour:
     m_keys:
     - 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
     - 8cc50df6-4bab-4505-84dc-28d5cf672c96
-    - e97dae04-89b3-47a3-9d9c-56d8f2f05b55
-    - 6459955d-9b23-40b1-8863-37e5616b1800
     - 233ec218-7363-4d27-9e29-7645a4151c1c
     - f5af695c-c112-48c1-b738-41522ab8b500
+    - 6459955d-9b23-40b1-8863-37e5616b1800
+    - e97dae04-89b3-47a3-9d9c-56d8f2f05b55
     - 26b009fe-1369-4c28-baf0-8085c8b66300
     - 72dbbbc0-3b12-4768-8206-16bac1b58f4f
     - 798eff71-f469-46cb-9312-cc2cdf3c07ed
@@ -36,16 +36,6 @@ MonoBehaviour:
       DisplayName: FromTutorial SpawnPoints Entrance
       Position: {x: 15.661569, y: 30.904213, z: -41.275322}
       Rotation: {x: -0, y: 1, z: -0, w: 0}
-    - DestinationID: e97dae04-89b3-47a3-9d9c-56d8f2f05b55
-      SceneName: StartScene A
-      DisplayName: FromTutorial Spawners Entrance
-      Position: {x: 29.111568, y: 30.904213, z: -41.27882}
-      Rotation: {x: -0, y: 1, z: -0, w: 0}
-    - DestinationID: 6459955d-9b23-40b1-8863-37e5616b1800
-      SceneName: StartScene A
-      DisplayName: FromTutorial Regions Entrance
-      Position: {x: 22.411568, y: 30.904213, z: -40.85532}
-      Rotation: {x: -0, y: 1, z: -0, w: 0}
     - DestinationID: 233ec218-7363-4d27-9e29-7645a4151c1c
       SceneName: StartScene A
       DisplayName: FromStart Scene A 1 Teleporter
@@ -56,6 +46,16 @@ MonoBehaviour:
       DisplayName: FromStart Scene A 1
       Position: {x: 10.631569, y: 30.904213, z: -75.19532}
       Rotation: {x: -0, y: -0, z: -0, w: 1}
+    - DestinationID: 6459955d-9b23-40b1-8863-37e5616b1800
+      SceneName: StartScene A
+      DisplayName: FromTutorial Regions Entrance
+      Position: {x: 22.411568, y: 30.904213, z: -40.85532}
+      Rotation: {x: -0, y: 1, z: -0, w: 0}
+    - DestinationID: e97dae04-89b3-47a3-9d9c-56d8f2f05b55
+      SceneName: StartScene A
+      DisplayName: FromTutorial Spawners Entrance
+      Position: {x: 29.111568, y: 30.904213, z: -41.27882}
+      Rotation: {x: -0, y: 1, z: -0, w: 0}
     - DestinationID: 26b009fe-1369-4c28-baf0-8085c8b66300
       SceneName: StartScene B
       DisplayName: FromDungeon A 1 Entrance
@@ -84,12 +84,12 @@ MonoBehaviour:
   Teleporters:
     m_keys:
     - Dungeon/Dungeon A 1 Entrance
-    - StartScene A/Start Scene B 1
     - StartScene A/Tutorial Spawners
-    - StartScene A/Tutorial SpawnPoints
+    - StartScene A/Start Scene B 1
     - StartScene A/Tutorial Regions
-    - StartScene B/Start Scene A 1
+    - StartScene A/Tutorial SpawnPoints
     - StartScene B/Dungeon A 1
+    - StartScene B/Start Scene A 1
     - Tutorial Regions/Tutorial Regions Entrance
     - Tutorial SpawnPoints/Tutorial SpawnPoints Entrance
     - Tutorial Spawners/Tutorial Spawners Entrance
@@ -100,42 +100,42 @@ MonoBehaviour:
       DestinationID: 26b009fe-1369-4c28-baf0-8085c8b66300
       TeleporterGlobalObjectId: GlobalObjectId_V1-2-4421ff33e86120247a8ae615ef06f2c7-598504140-0
       Position: {x: -133.71, y: 19.5, z: 22.919998}
-    - TeleporterName: Start Scene B 1
-      SceneName: StartScene A
-      ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
-      DestinationID: 72dbbbc0-3b12-4768-8206-16bac1b58f4f
-      TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-2076367145-0
-      Position: {x: 9.568108, y: 32.120003, z: -78.00528}
     - TeleporterName: Tutorial Spawners
       SceneName: StartScene A
       ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
       DestinationID: 79f661e5-9832-4446-8801-42b88b6d02b9
       TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-1907630164-0
       Position: {x: 29.091568, y: 32.650005, z: -36.84532}
-    - TeleporterName: Tutorial SpawnPoints
+    - TeleporterName: Start Scene B 1
       SceneName: StartScene A
       ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
-      DestinationID: 9c7e8c79-fd27-4e35-92bd-aec16302146e
-      TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-1602961390-0
-      Position: {x: 15.361568, y: 32.710003, z: -36.841824}
+      DestinationID: 72dbbbc0-3b12-4768-8206-16bac1b58f4f
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-2076367145-0
+      Position: {x: 9.568108, y: 32.120003, z: -78.00528}
     - TeleporterName: Tutorial Regions
       SceneName: StartScene A
       ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
       DestinationID: 798eff71-f469-46cb-9312-cc2cdf3c07ed
       TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-2124318345-0
       Position: {x: 22.171568, y: 32.610004, z: -36.84532}
-    - TeleporterName: Start Scene A 1
-      SceneName: StartScene B
-      ScenePath: Assets/Scenes/WorldScene/StartScene B.unity
-      DestinationID: f5af695c-c112-48c1-b738-41522ab8b500
-      TeleporterGlobalObjectId: GlobalObjectId_V1-2-3a3ad1e67809ba94c984635c5d313682-598504140-0
-      Position: {x: -152.6, y: 11.45, z: 44.51}
+    - TeleporterName: Tutorial SpawnPoints
+      SceneName: StartScene A
+      ScenePath: Assets/Scenes/WorldScene/StartScene A.unity
+      DestinationID: 9c7e8c79-fd27-4e35-92bd-aec16302146e
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-e8a5917e2e784024a83eee958f6f9689-1602961390-0
+      Position: {x: 15.361568, y: 32.710003, z: -36.841824}
     - TeleporterName: Dungeon A 1
       SceneName: StartScene B
       ScenePath: Assets/Scenes/WorldScene/StartScene B.unity
       DestinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
       TeleporterGlobalObjectId: GlobalObjectId_V1-2-3a3ad1e67809ba94c984635c5d313682-701074605-0
       Position: {x: -2.52, y: 5.8199997, z: 30.28}
+    - TeleporterName: Start Scene A 1
+      SceneName: StartScene B
+      ScenePath: Assets/Scenes/WorldScene/StartScene B.unity
+      DestinationID: f5af695c-c112-48c1-b738-41522ab8b500
+      TeleporterGlobalObjectId: GlobalObjectId_V1-2-3a3ad1e67809ba94c984635c5d313682-598504140-0
+      Position: {x: -152.6, y: 11.45, z: 44.51}
     - TeleporterName: Tutorial Regions Entrance
       SceneName: Tutorial Regions
       ScenePath: Assets/Scenes/WorldScene/Tutorial Regions.unity

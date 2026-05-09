@@ -122,12 +122,24 @@ namespace FishMMO.Shared
 		/// <param name="modelIndex">The index of the model to instantiate.</param>
 		public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex)
 		{
+			InstantiateRaceModelFromIndex(raceTemplate, modelIndex, CharacterGender.Unspecified);
+		}
+
+		/// <summary>
+		/// Instantiates the character's race model prefab at the specified gender and index and attaches it to the mesh root.
+		/// Removes any previous child models except for labels and special points.
+		/// </summary>
+		/// <param name="raceTemplate">The race template containing model references.</param>
+		/// <param name="modelIndex">The index of the model to instantiate.</param>
+		/// <param name="gender">The model gender to request.</param>
+		public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender)
+		{
 			if (raceTemplate == null || MeshRoot == null)
 			{
 				return;
 			}
 
-			AddressableLoadProcessor.LoadPrefabAsync(raceTemplate.GetModelReference(modelIndex), (go) =>
+			AddressableLoadProcessor.LoadPrefabAsync(raceTemplate.GetModelReference(gender, modelIndex), (go) =>
 			{
 				// Remove previous child models except for labels and special points.
 				if (MeshRoot.childCount > 0)

@@ -154,7 +154,7 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2ce4d12b80ddd9f4ca8a389e6c91c7e3
-    m_Address: FemaleHumanAbilityCrafter
+    m_Address: HumanAbilityCrafter
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -376,7 +376,7 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 82e54404fe2ccc448bd81cbe31657e29
-    m_Address: FemaleHumanGeneralMerchant
+    m_Address: HumanGeneralMerchant
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -431,12 +431,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a188e3de8a5794043903352f3ce4a57d
     m_Address: Basic Attack State
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a1cb36c06a320c240878d104ba4f0abb
-    m_Address: MaleHumanGeneralMerchant
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -730,7 +724,7 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f7377f38d08b9c84ab957eb9d610e043
-    m_Address: FemaleHumanBanker
+    m_Address: HumanBanker
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

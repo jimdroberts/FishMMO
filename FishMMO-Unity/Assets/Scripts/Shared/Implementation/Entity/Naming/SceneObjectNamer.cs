@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using FishNet.Object;
 using FishNet.Connection;
 using FishNet.Serializing;
@@ -7,72 +8,159 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Assigns a generated name to a scene object using prefix and suffix name caches.
+	/// Name caches for a specific generated character gender.
+	/// </summary>
+	[System.Serializable]
+	public class GenderedNameCacheSet
+	{
+		/// <summary>
+		/// Gender this name set applies to.
+		/// </summary>
+		public CharacterGender Gender = CharacterGender.Unspecified;
+
+		/// <summary>
+		/// Cache of possible first names.
+		/// </summary>
+		public NameCache FirstNames;
+
+		/// <summary>
+		/// Cache of possible last names.
+		/// </summary>
+		public NameCache LastNames;
+	}
+
+	/// <summary>
+	/// Assigns a generated name to a scene object using gender-specific name caches.
 	/// Handles network payloads for name synchronization.
 	/// </summary>
 	public class SceneObjectNamer : NetworkBehaviour
 	{
 		/// <summary>
-		/// Cache of possible name prefixes.
+		/// Gender-specific name cache sets.
 		/// </summary>
-		public NameCache Prefix;
-		/// <summary>
-		/// Cache of possible name suffixes.
-		/// </summary>
-		public NameCache Suffix;
+		public List<GenderedNameCacheSet> GenderedNames = new List<GenderedNameCacheSet>();
 
 		/// <summary>
-		/// The selected prefix index for this object's name.
+		/// The selected first name index for this object's name.
 		/// </summary>
-		private int prefixID;
+		private int firstNameID = -1;
 		/// <summary>
-		/// The selected suffix index for this object's name.
+		/// The selected last name index for this object's name.
 		/// </summary>
-		private int suffixID;
+		private int lastNameID = -1;
 
 		/// <summary>
-		/// Called when the server starts. Randomizes prefix and suffix IDs for the object name.
+		/// The selected gender for this object's generated name.
+		/// </summary>
+		private CharacterGender selectedGender = CharacterGender.Unspecified;
+
+		/// <summary>
+		/// True once this object has selected name payload values.
+		/// </summary>
+		private bool nameGenerated;
+
+		/// <summary>
+		/// The selected gender for this object's generated name.
+		/// </summary>
+		public CharacterGender SelectedGender => selectedGender;
+
+		/// <summary>
+		/// Called when the server starts. Randomizes name IDs for the object name.
 		/// </summary>
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
 
-			// Randomly select prefix and suffix IDs from available caches.
-			prefixID = Prefix == null || Prefix.Names == null ? -1 : DeterministicRNG.Shared.Range(0, Prefix.Names.Count);
-			suffixID = Suffix == null || Suffix.Names == null ? -1 : DeterministicRNG.Shared.Range(0, Suffix.Names.Count);
+			GenerateNameIfNeeded();
 		}
 
 		/// <summary>
-		/// Reads the prefix and suffix IDs from the network and sets the object name accordingly.
+		/// Ensures name payload values have been generated and returns the selected gender.
+		/// </summary>
+		/// <returns>The selected generated name gender.</returns>
+		public CharacterGender EnsureGeneratedGender()
+		{
+			GenerateNameIfNeeded();
+			return selectedGender;
+		}
+
+		/// <summary>
+		/// Reads the name IDs from the network and sets the object name accordingly.
 		/// </summary>
 		/// <param name="connection">Network connection.</param>
 		/// <param name="reader">Network reader for payload.</param>
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			prefixID = reader.ReadInt32();
-			suffixID = reader.ReadInt32();
+			firstNameID = reader.ReadInt32();
+			lastNameID = reader.ReadInt32();
+			selectedGender = (CharacterGender)reader.ReadUInt8Unpacked();
+			nameGenerated = true;
 
-			// Validate prefix
-			if (prefixID < 0 ||
-				Prefix == null ||
-				Prefix.Names == null ||
-				Prefix.Names.Count < 1 ||
-				prefixID >= Prefix.Names.Count)
+			ApplyGeneratedName();
+		}
+
+		/// <summary>
+		/// Writes the name IDs to the network for synchronization.
+		/// </summary>
+		/// <param name="connection">Network connection.</param>
+		/// <param name="writer">Network writer for payload.</param>
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			GenerateNameIfNeeded();
+
+			writer.WriteInt32(firstNameID);
+			writer.WriteInt32(lastNameID);
+			writer.WriteUInt8Unpacked((byte)selectedGender);
+		}
+
+		/// <summary>
+		/// Generates name payload values once on the server.
+		/// </summary>
+		private void GenerateNameIfNeeded()
+		{
+			if (nameGenerated)
 			{
 				return;
 			}
-			string characterName = Prefix.Names[prefixID];
 
-			// Validate suffix
-			if (suffixID < 0 ||
-				Suffix == null ||
-				Suffix.Names == null ||
-				Suffix.Names.Count < 1 ||
-				suffixID >= Suffix.Names.Count)
+			GenderedNameCacheSet nameSet = SelectRandomGenderedNameSet();
+			NameCache firstNames = nameSet == null ? null : nameSet.FirstNames;
+			NameCache lastNames = nameSet == null ? null : nameSet.LastNames;
+
+			selectedGender = nameSet == null ? CharacterGender.Unspecified : nameSet.Gender;
+			firstNameID = GetRandomNameIndex(firstNames);
+			lastNameID = GetRandomNameIndex(lastNames);
+			nameGenerated = true;
+		}
+
+		/// <summary>
+		/// Applies the generated name to the object and client label.
+		/// </summary>
+		private void ApplyGeneratedName()
+		{
+			GenderedNameCacheSet nameSet = GetNameSet(selectedGender);
+			NameCache firstNames = nameSet == null ? null : nameSet.FirstNames;
+			NameCache lastNames = nameSet == null ? null : nameSet.LastNames;
+
+			if (firstNameID < 0 ||
+				firstNames == null ||
+				firstNames.Names == null ||
+				firstNames.Names.Count < 1 ||
+				firstNameID >= firstNames.Names.Count)
 			{
 				return;
 			}
-			characterName += $" {Suffix.Names[suffixID]}";
+			string characterName = firstNames.Names[firstNameID];
+
+			if (lastNameID < 0 ||
+				lastNames == null ||
+				lastNames.Names == null ||
+				lastNames.Names.Count < 1 ||
+				lastNameID >= lastNames.Names.Count)
+			{
+				return;
+			}
+			characterName += $" {lastNames.Names[lastNameID]}";
 
 			// Assign the generated name to the GameObject
 			this.gameObject.name = characterName.Trim();
@@ -88,14 +176,104 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Writes the prefix and suffix IDs to the network for synchronization.
+		/// Selects a random valid gendered name set.
 		/// </summary>
-		/// <param name="connection">Network connection.</param>
-		/// <param name="writer">Network writer for payload.</param>
-		public override void WritePayload(NetworkConnection connection, Writer writer)
+		/// <returns>A random valid gendered name set, or null when none are configured.</returns>
+		private GenderedNameCacheSet SelectRandomGenderedNameSet()
 		{
-			writer.WriteInt32(prefixID);
-			writer.WriteInt32(suffixID);
+			if (GenderedNames == null || GenderedNames.Count < 1)
+			{
+				return null;
+			}
+
+			int validCount = 0;
+			for (int i = 0; i < GenderedNames.Count; i++)
+			{
+				if (IsValidNameSet(GenderedNames[i]))
+				{
+					validCount++;
+				}
+			}
+
+			if (validCount < 1)
+			{
+				return null;
+			}
+
+			int selectedIndex = DeterministicRNG.Shared.Range(0, validCount);
+			int currentIndex = 0;
+			for (int i = 0; i < GenderedNames.Count; i++)
+			{
+				GenderedNameCacheSet nameSet = GenderedNames[i];
+				if (!IsValidNameSet(nameSet))
+				{
+					continue;
+				}
+
+				if (currentIndex == selectedIndex)
+				{
+					return nameSet;
+				}
+				currentIndex++;
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Gets the name set for the selected gender.
+		/// </summary>
+		/// <param name="gender">The selected gender.</param>
+		/// <returns>The matching valid name set, or null when none exists.</returns>
+		private GenderedNameCacheSet GetNameSet(CharacterGender gender)
+		{
+			if (gender == CharacterGender.Unspecified || GenderedNames == null)
+			{
+				return null;
+			}
+
+			for (int i = 0; i < GenderedNames.Count; i++)
+			{
+				GenderedNameCacheSet nameSet = GenderedNames[i];
+				if (nameSet != null && nameSet.Gender == gender && IsValidNameSet(nameSet))
+				{
+					return nameSet;
+				}
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Returns true if a gendered name set has usable name caches.
+		/// </summary>
+		/// <param name="nameSet">The name set to validate.</param>
+		/// <returns>True if the name set can generate a complete name.</returns>
+		private bool IsValidNameSet(GenderedNameCacheSet nameSet)
+		{
+			return nameSet != null &&
+				HasNames(nameSet.FirstNames) &&
+				HasNames(nameSet.LastNames);
+		}
+
+		/// <summary>
+		/// Gets a random name index from a cache.
+		/// </summary>
+		/// <param name="nameCache">The name cache.</param>
+		/// <returns>A valid random index, or -1 when no names exist.</returns>
+		private int GetRandomNameIndex(NameCache nameCache)
+		{
+			return HasNames(nameCache) ? DeterministicRNG.Shared.Range(0, nameCache.Names.Count) : -1;
+		}
+
+		/// <summary>
+		/// Returns true if a name cache has at least one name.
+		/// </summary>
+		/// <param name="nameCache">The name cache.</param>
+		/// <returns>True if the cache has names.</returns>
+		private bool HasNames(NameCache nameCache)
+		{
+			return nameCache != null && nameCache.Names != null && nameCache.Names.Count > 0;
 		}
 	}
 }

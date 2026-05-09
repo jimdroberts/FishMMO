@@ -1,6 +1,5 @@
 using FishNet.Transporting;
 using System.Collections.Generic;
-using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -112,9 +111,17 @@ namespace FishMMO.Client
 					}
 					raceNameMap.Add(pair.Value.Name, pair.Key);
 					InitialRaceNames.Add(pair.Value.Name);
-					if (pair.Value != null && pair.Value.Models != null)
+					int modelCount = pair.Value.GetModelCount(CharacterGender.Unspecified);
+					if (modelCount > 0)
 					{
-						InitialModelNames.AddRange(pair.Value.Models.Select(m => m.Asset.name));
+						for (int modelIndex = 0; modelIndex < modelCount; modelIndex++)
+						{
+							string modelName = pair.Value.GetModelName(modelIndex);
+							if (!string.IsNullOrWhiteSpace(modelName))
+							{
+								InitialModelNames.Add(modelName);
+							}
+						}
 					}
 					else if (pair.Value.PlaceholderModel != null)
 					{

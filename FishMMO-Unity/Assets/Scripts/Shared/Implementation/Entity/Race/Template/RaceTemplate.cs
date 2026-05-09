@@ -6,6 +6,23 @@ using FishMMO.Logging;
 namespace FishMMO.Shared
 {
 	/// <summary>
+	/// Race model references available for a specific generated character gender.
+	/// </summary>
+	[System.Serializable]
+	public class GenderedRaceModelSet
+	{
+		/// <summary>
+		/// Gender this model set applies to.
+		/// </summary>
+		public CharacterGender Gender = CharacterGender.Unspecified;
+
+		/// <summary>
+		/// Model references available for this gender.
+		/// </summary>
+		public List<AssetReference> ModelReferences = new List<AssetReference>();
+	}
+
+	/// <summary>
 	/// ScriptableObject template for defining a playable race, including models, attributes, starting abilities, inventory, and equipment.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Race", menuName = "FishMMO/Character/Race/Race", order = 1)]
@@ -22,9 +39,9 @@ namespace FishMMO.Shared
 		public AssetReference PlaceholderModel;
 
 		/// <summary>
-		/// The real character model references for this race.
+		/// Gender-specific model references for this race. Use <see cref="CharacterGender.Unspecified"/> for generic/default models.
 		/// </summary>
-		public List<AssetReference> Models;
+		public List<GenderedRaceModelSet> GenderedModels = new List<GenderedRaceModelSet>();
 
 		/// <summary>
 		/// Description of the race.
@@ -68,17 +85,174 @@ namespace FishMMO.Shared
 		/// <returns>The asset reference for the model.</returns>
 		public AssetReference GetModelReference(int index)
 		{
-			if (Models == null || Models.Count == 0)
+			return GetModelReference(CharacterGender.Unspecified, index);
+		}
+
+		/// <summary>
+		/// Gets the model reference for the given gender and index, or the placeholder if out of range or models are missing.
+		/// </summary>
+		/// <param name="gender">The selected character gender.</param>
+		/// <param name="index">The model index.</param>
+		/// <returns>The asset reference for the model.</returns>
+		public AssetReference GetModelReference(CharacterGender gender, int index)
+		{
+			if (gender == CharacterGender.Unspecified)
+			{
+				return GetModelReferenceFromAllSets(index);
+			}
+
+			GenderedRaceModelSet modelSet = GetModelSet(gender);
+			if (modelSet == null)
+			{
+				modelSet = GetModelSet(CharacterGender.Unspecified);
+			}
+
+			if (modelSet == null || modelSet.ModelReferences == null || modelSet.ModelReferences.Count == 0)
 			{
 				return PlaceholderModel;
 			}
 
 			// If index is out of range, return the first model as a fallback.
-			if (index >= Models.Count || index < 0)
+			if (index >= modelSet.ModelReferences.Count || index < 0)
 			{
-				return Models[0];
+				return modelSet.ModelReferences[0];
 			}
-			return Models[index];
+
+			return modelSet.ModelReferences[index];
+		}
+
+		/// <summary>
+		/// Gets the number of model references available for a gender, including fallback models.
+		/// </summary>
+		/// <param name="gender">The selected character gender.</param>
+		/// <returns>The number of available model references.</returns>
+		public int GetModelCount(CharacterGender gender)
+		{
+			if (gender == CharacterGender.Unspecified)
+			{
+				return GetAllModelCount();
+			}
+
+			GenderedRaceModelSet modelSet = GetModelSet(gender);
+			if (modelSet == null)
+			{
+				modelSet = GetModelSet(CharacterGender.Unspecified);
+			}
+
+			return modelSet == null || modelSet.ModelReferences == null ? 0 : modelSet.ModelReferences.Count;
+		}
+
+		/// <summary>
+		/// Gets model references for a specific gender.
+		/// </summary>
+		/// <param name="gender">The selected character gender.</param>
+		/// <returns>The matching model list, or null when no matching gender list exists.</returns>
+		public List<AssetReference> GetModels(CharacterGender gender)
+		{
+			GenderedRaceModelSet modelSet = GetModelSet(gender);
+			return modelSet == null ? null : modelSet.ModelReferences;
+		}
+
+		/// <summary>
+		/// Gets the display name for a model in the flattened gendered model list.
+		/// </summary>
+		/// <param name="index">The flattened model index.</param>
+		/// <returns>The model asset name, or an empty string when unavailable.</returns>
+		public string GetModelName(int index)
+		{
+			AssetReference modelReference = GetModelReference(index);
+			return modelReference == null || modelReference.Asset == null ? string.Empty : modelReference.Asset.name;
+		}
+
+		/// <summary>
+		/// Gets the model set matching a gender.
+		/// </summary>
+		/// <param name="gender">The selected character gender.</param>
+		/// <returns>The matching model set, or null when unavailable.</returns>
+		private GenderedRaceModelSet GetModelSet(CharacterGender gender)
+		{
+			if (GenderedModels == null)
+			{
+				return null;
+			}
+
+			for (int i = 0; i < GenderedModels.Count; i++)
+			{
+				GenderedRaceModelSet modelSet = GenderedModels[i];
+				if (modelSet != null &&
+					modelSet.Gender == gender &&
+					modelSet.ModelReferences != null &&
+					modelSet.ModelReferences.Count > 0)
+				{
+					return modelSet;
+				}
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Gets a model reference from all configured gendered model sets using a flattened index.
+		/// </summary>
+		/// <param name="index">The flattened model index.</param>
+		/// <returns>The matching model reference, or the placeholder when unavailable.</returns>
+		private AssetReference GetModelReferenceFromAllSets(int index)
+		{
+			if (GenderedModels == null || GenderedModels.Count == 0)
+			{
+				return PlaceholderModel;
+			}
+
+			AssetReference firstModel = null;
+			int currentIndex = 0;
+			for (int i = 0; i < GenderedModels.Count; i++)
+			{
+				GenderedRaceModelSet modelSet = GenderedModels[i];
+				if (modelSet == null || modelSet.ModelReferences == null || modelSet.ModelReferences.Count == 0)
+				{
+					continue;
+				}
+
+				if (firstModel == null)
+				{
+					firstModel = modelSet.ModelReferences[0];
+				}
+
+				for (int modelIndex = 0; modelIndex < modelSet.ModelReferences.Count; modelIndex++)
+				{
+					if (currentIndex == index)
+					{
+						return modelSet.ModelReferences[modelIndex];
+					}
+					currentIndex++;
+				}
+			}
+
+			return firstModel == null ? PlaceholderModel : firstModel;
+		}
+
+		/// <summary>
+		/// Gets the total number of models across all configured gendered model sets.
+		/// </summary>
+		/// <returns>The flattened model count.</returns>
+		private int GetAllModelCount()
+		{
+			if (GenderedModels == null)
+			{
+				return 0;
+			}
+
+			int count = 0;
+			for (int i = 0; i < GenderedModels.Count; i++)
+			{
+				GenderedRaceModelSet modelSet = GenderedModels[i];
+				if (modelSet != null && modelSet.ModelReferences != null)
+				{
+					count += modelSet.ModelReferences.Count;
+				}
+			}
+
+			return count;
 		}
 
 		/// <summary>

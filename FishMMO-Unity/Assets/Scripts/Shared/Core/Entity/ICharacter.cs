@@ -99,6 +99,13 @@ namespace FishMMO.Shared.Core
 		/// <param name="raceTemplate">The race template containing model references.</param>
 		/// <param name="modelIndex">The index of the model to instantiate.</param>
 		void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex);
+		/// <summary>
+		/// Instantiates the character's race model prefab at the specified gender and index and attaches it to the mesh root.
+		/// </summary>
+		/// <param name="raceTemplate">The race template containing model references.</param>
+		/// <param name="modelIndex">The index of the model to instantiate.</param>
+		/// <param name="gender">The model gender to request.</param>
+		void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender);
 #endif
 
 		/// <summary>
