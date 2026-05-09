@@ -1,5 +1,6 @@
 ﻿<Solution>
   <Project Path="FishMMO.Shared.csproj" />
+  <Project Path="FishMMO.Server.csproj" />
   <Project Path="FishMMO.Client.csproj" />
   <Project Path="FishNet.Runtime.csproj" />
   <Project Path="KinematicCharacterController.csproj" />

@@ -25,7 +25,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="signingKey">HMAC-SHA256 signing key. Must be at least <see cref="CryptoHelper.HmacKeyLength"/> bytes.</param>
 		/// <param name="accessLevel">Account access level to embed.</param>
 		/// <returns>Raw signed token bytes, or <c>null</c> if the signing key is invalid.</returns>
-		public static byte[] BuildToken(
+		public static byte[]? BuildToken(
 			string username,
 			long loginServerId,
 			DateTime expiresUtc,
@@ -64,18 +64,18 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="accessLevel">Account access level to embed.</param>
 		/// <param name="rawTokenForHashing">Raw token bytes (caller must hash for DB storage, then zero).</param>
 		/// <returns>Encrypted token bytes for transmission, or <c>null</c> if generation failed.</returns>
-		public static byte[] GenerateAndEncryptToken(
+		public static byte[]? GenerateAndEncryptToken(
 			ConnectionEncryptionData encryptionData,
 			string username,
 			long loginServerId,
 			int tokenExpirationMinutes,
 			byte[] signingKey,
 			AccessLevel accessLevel,
-			out byte[] rawTokenForHashing)
+			out byte[]? rawTokenForHashing)
 		{
 			rawTokenForHashing = null;
 
-			byte[] rawToken = BuildToken(username, loginServerId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes), signingKey, accessLevel);
+			byte[]? rawToken = BuildToken(username, loginServerId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes), signingKey, accessLevel);
 			if (rawToken == null)
 				return null;
 
@@ -104,7 +104,7 @@ namespace FishMMO.Auth.Implementation
 			byte[] tokenNonce = encryptionData.BuildSendNonce(tokenSeq);
 			byte[] tokenAad = new byte[CryptoHelper.AadLength];
 			CryptoHelper.WriteAad(tokenAad, (byte)CryptoHelper.AuthMessageType.SrpSuccess, encryptionData.AgreedVersion, tokenSeq);
-			return CryptoHelper.EncryptAES(encryptionData.ServerToClientKey, tokenNonce, rawToken, tokenAad);
+			return CryptoHelper.EncryptAES(encryptionData.ServerToClientKey!, tokenNonce, rawToken, tokenAad);
 		}
 
 		#endregion
@@ -120,7 +120,7 @@ namespace FishMMO.Auth.Implementation
 			public bool IsValid;
 
 			/// <summary>Account name extracted from the verified token.</summary>
-			public string AccountName;
+			public string? AccountName;
 
 			/// <summary>Login server ID extracted from the verified token.</summary>
 			public long LoginServerId;
@@ -132,7 +132,7 @@ namespace FishMMO.Auth.Implementation
 			public DateTime ExpiresUtc;
 
 			/// <summary>SHA-256 hex hash of the raw token for revocation lookups.</summary>
-			public string TokenHash;
+			public string? TokenHash;
 
 			/// <summary>
 			/// If <c>false</c>, the signing key was not found but the HMAC verification
@@ -164,7 +164,7 @@ namespace FishMMO.Auth.Implementation
 			byte[] encryptedToken,
 			ConnectionEncryptionData encryptionData,
 			uint seq,
-			out byte[] rawToken,
+			out byte[]? rawToken,
 			out long loginServerId)
 		{
 			rawToken = null;
@@ -178,7 +178,7 @@ namespace FishMMO.Auth.Implementation
 				byte[] nonce = encryptionData.BuildReceiveNonce(seq);
 				byte[] aad = new byte[CryptoHelper.AadLength];
 				CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.TokenAuth, encryptionData.AgreedVersion, seq);
-				rawToken = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonce, encryptedToken, aad);
+				rawToken = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey!, nonce, encryptedToken, aad);
 			}
 			catch (CryptographicException)
 			{

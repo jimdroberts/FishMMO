@@ -13,31 +13,31 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// The client's X25519 public key received during the handshake.
 		/// </summary>
-		public byte[] PublicKey;
+		public byte[]? PublicKey;
 
 		/// <summary>
 		/// Master secret derived via X25519 ECDH + HKDF. Null after promotion to directional keys.
 		/// </summary>
-		public byte[] MasterSecret;
+		public byte[]? MasterSecret;
 
 		/// <summary>
 		/// Directional AES keys derived via HKDF-SHA256. <c>ClientToServerKey</c> is used to decrypt client→server messages.
 		/// <c>ServerToClientKey</c> is used to encrypt server→client messages.
 		/// </summary>
-		public byte[] ClientToServerKey;
-		public byte[] ServerToClientKey;
+		public byte[]? ClientToServerKey;
+		public byte[]? ServerToClientKey;
 
 		/// <summary>
 		/// Nonce context for server→client (send/encrypt) direction.
 		/// Owns the server prefix and send counter. Null until <see cref="PromoteToDirectional"/> is called.
 		/// </summary>
-		public CryptoHelper.GcmNonceContext SendNonceCtx;
+		public CryptoHelper.GcmNonceContext? SendNonceCtx;
 
 		/// <summary>
 		/// Nonce context for client→server (receive/decrypt) direction.
 		/// Owns the client prefix and receive counter. Null until <see cref="PromoteToDirectional"/> is called.
 		/// </summary>
-		public CryptoHelper.GcmNonceContext ReceiveNonceCtx;
+		public CryptoHelper.GcmNonceContext? ReceiveNonceCtx;
 
 		/// <summary>
 		/// Negotiated protocol version for this connection.
@@ -69,7 +69,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>Tuple of (12-byte nonce, sequence number).</returns>
 		public (byte[] Nonce, uint Sequence) NextSendNonce()
 		{
-			return SendNonceCtx.NextNonce();
+			return SendNonceCtx!.NextNonce();
 		}
 
 		/// <summary>
@@ -80,7 +80,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>The next send sequence number.</returns>
 		public uint NextSendSequence()
 		{
-			return SendNonceCtx.NextSequenceOnly();
+			return SendNonceCtx!.NextSequenceOnly();
 		}
 
 		/// <summary>
@@ -89,7 +89,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>Tuple of (12-byte nonce, sequence number).</returns>
 		public (byte[] Nonce, uint Sequence) NextReceiveNonce()
 		{
-			return ReceiveNonceCtx.NextNonce();
+			return ReceiveNonceCtx!.NextNonce();
 		}
 
 		/// <summary>
@@ -101,7 +101,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if consumed; <c>false</c> otherwise.</returns>
 		public bool TryConsumeReceiveSequence(uint seq)
 		{
-			return ReceiveNonceCtx.TryConsumeSequence(seq);
+			return ReceiveNonceCtx!.TryConsumeSequence(seq);
 		}
 
 		/// <summary>
@@ -110,7 +110,7 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		public byte[] BuildReceiveNonce(uint seq)
 		{
-			return ReceiveNonceCtx.BuildNonceForSequence(seq);
+			return ReceiveNonceCtx!.BuildNonceForSequence(seq);
 		}
 
 		/// <summary>
@@ -119,7 +119,7 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		public byte[] BuildSendNonce(uint seq)
 		{
-			return SendNonceCtx.BuildNonceForSequence(seq);
+			return SendNonceCtx!.BuildNonceForSequence(seq);
 		}
 
 		/// <summary>

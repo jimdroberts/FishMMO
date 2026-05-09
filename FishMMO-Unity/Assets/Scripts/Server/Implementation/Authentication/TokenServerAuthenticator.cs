@@ -16,79 +16,30 @@ using FishMMO.Logging;
 namespace FishMMO.Server.Implementation
 {
 	/// <summary>
-	/// Token-based authenticator for World and Scene servers.
-	/// Extends <see cref="BaseServerAuthenticator"/> for shared X25519 ECDH handshake, main-thread
-	/// marshalling, and stale-auth TTL sweeps.
-	/// <para>
-	/// Flow: ClientHandshake → ServerHandshake → TokenAuthBroadcast → ClientAuthResultBroadcast.
-	/// </para>
+	/// Token-based server authenticator for World and Scene servers.
+	/// Delegates all handshake, channel, worker, and protocol logic to
+	/// <see cref="TokenAuthenticatorCore{TConnection}"/> in FishMMO-Auth.
+	/// This class bridges FishNet broadcast events to the core and provides Unity/DB callbacks.
 	/// </summary>
 	public class TokenServerAuthenticator : BaseServerAuthenticator
 	{
-		#region Constants
+		/// <summary>The token-specific core instance. Null until <see cref="InitializeCoreInstance"/> is called.</summary>
+		private TokenCore _core;
 
-		/// <summary>
-		/// Number of concurrent workers processing token auth requests.
-		/// </summary>
-		private const int TokenWorkerCount = 2;
+		/// <inheritdoc/>
+		protected override BaseAuthenticatorCore<NetworkConnection> Core => _core;
 
-		/// <summary>
-		/// Bounded channel capacity for token auth requests.
-		/// </summary>
-		private const int TokenChannelCapacity = 500;
+		#region Lifecycle
 
-		/// <summary>
-		/// Maximum allowed size in bytes for an encrypted token payload.
-		/// Tighter than <see cref="CryptoHelper.MaxAesCiphertextSize"/> (64 KB) because
-		/// the token format is: HMAC (64B) + loginServerId (8B) + expiry (8B) +
-		/// accountName (≤64B UTF-8) + accessLevel (4B) + AES-GCM overhead (28B),
-		/// totalling ~176 bytes at maximum. 2048 bytes is ~12× that — an intentionally
-		/// generous ceiling, not a tight bound. Do not raise without re-evaluating the
-		/// token format.
-		/// </summary>
-		private const int MaxTokenPayloadBytes = 2048;
-
-		#endregion
-
-		#region Nested Types
-
-		/// <summary>
-		/// Token authentication request for async worker processing.
-		/// </summary>
-		private readonly struct TokenAuthRequest
+		/// <inheritdoc/>
+		protected override void InitializeCoreInstance()
 		{
-			public readonly NetworkConnection Connection;
-			public readonly byte[] EncryptedToken;
-			public readonly ConnectionEncryptionData EncryptionData;
-			public readonly uint Seq;
-
-			public TokenAuthRequest(NetworkConnection connection, byte[] encryptedToken, ConnectionEncryptionData encryptionData, uint seq)
-			{
-				Connection = connection;
-				EncryptedToken = encryptedToken;
-				EncryptionData = encryptionData;
-				Seq = seq;
-			}
+			var tam = Server.AccountManager as ITokenAccountManager<NetworkConnection>
+				?? throw new InvalidOperationException(
+					$"{LogPrefix}: Server.AccountManager must implement ITokenAccountManager<NetworkConnection>. " +
+					$"Actual type: {Server.AccountManager?.GetType().FullName ?? "null"}.");
+			_core = new TokenCore(this, tam);
 		}
-
-		#endregion
-
-		#region Fields
-
-		/// <summary>
-		/// Bounded channel for queuing token auth requests for async worker processing.
-		/// </summary>
-		private System.Threading.Channels.Channel<TokenAuthRequest> tokenChannel;
-
-		/// <summary>
-		/// Typed reference to the token account manager. Cached on worker initialization
-		/// to avoid repeated casts from <see cref="IAccountManager{TConnection}"/>.
-		/// </summary>
-		private ITokenAccountManager<NetworkConnection> tokenAccountManager;
-
-		#endregion
-
-		#region Lifecycle Overrides
 
 		/// <inheritdoc/>
 		protected override void RegisterProtocolHandlers(NetworkManager networkManager)
@@ -96,294 +47,143 @@ namespace FishMMO.Server.Implementation
 			networkManager.ServerManager.RegisterBroadcast<TokenAuthBroadcast>(OnServerTokenAuthBroadcastReceived, false);
 		}
 
-		/// <inheritdoc/>
-		protected override void InitializeWorkersCore(CancellationToken cancellationToken)
-		{
-			if (!(Server.AccountManager is ITokenAccountManager<NetworkConnection> tam))
-				throw new InvalidOperationException($"{LogPrefix}: Server.AccountManager must implement ITokenAccountManager<NetworkConnection>. Actual type: {Server.AccountManager?.GetType().FullName ?? "null"}.");
-			tokenAccountManager = tam;
-
-			tokenChannel = System.Threading.Channels.Channel.CreateBounded<TokenAuthRequest>(
-				new System.Threading.Channels.BoundedChannelOptions(TokenChannelCapacity)
-				{
-					FullMode = System.Threading.Channels.BoundedChannelFullMode.DropWrite,
-					SingleReader = false,
-					SingleWriter = false
-				});
-
-			for (int i = 0; i < TokenWorkerCount; i++)
-			{
-				int workerId = i + 1;
-				_ = ProcessTokenAuthRequestsAsync(cancellationToken, workerId);
-			}
-
-			Log.Debug(LogPrefix, $"Workers initialized (Token={TokenWorkerCount})");
-		}
-
-		/// <inheritdoc/>
-		/// <remarks>
-		/// Ordering: TryComplete signals the channel's Reader to stop, then the field is
-		/// nulled. Workers capture a local reference at startup (<c>var channel = tokenChannel</c>),
-		/// so the null assignment cannot race with an in-progress ReadAllAsync enumeration.
-		/// </remarks>
-		protected override void ShutdownWorkersCore()
-		{
-			tokenChannel?.Writer.TryComplete();
-			tokenChannel = null;
-		}
-
 		#endregion
 
-		#region UDP Receiver Gates
+		#region UDP Receiver Gate (routes to core)
 
-		/// <summary>
-		/// UDP gate: Receives token auth broadcast, validates connection state, and enqueues
-		/// encrypted data for async processing. Zero blocking — no decryption or database work.
-		/// </summary>
+		/// <summary>Routes an incoming <see cref="TokenAuthBroadcast"/> to the core token authentication channel.</summary>
 		internal void OnServerTokenAuthBroadcastReceived(NetworkConnection conn, TokenAuthBroadcast msg, Channel channel)
+			=> _core?.OnTokenAuthReceived(conn, msg.Token, msg.Seq);
+
+		#endregion
+
+		#region DB Implementations (called by TokenCore)
+
+		/// <summary>
+		/// Fetches the HMAC signing key for the specified LoginServer from the database.
+		/// Returns <c>null</c> if the service is unavailable, the key is not found, or the key is too short.
+		/// </summary>
+		private async Task<byte[]> FetchSigningKeyCoreAsync(long loginServerId)
 		{
-			if (conn.IsAuthenticated)
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var svc))
 			{
-				conn.Disconnect(true);
-				return;
+				await Log.Warning(LogPrefix, $"Signing key service unavailable for LoginServer {loginServerId}.");
+				return null;
 			}
 
-			// Atomically advance Handshake → TokenPending to prevent duplicate token processing.
-			if (!Server.AccountManager.TryAdvanceAuthState(conn, AuthState.Handshake, AuthState.TokenPending))
-				return;
+			var result = await svc.FetchByLoginServerIdAsync(loginServerId);
 
-			if (!Server.AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
+			if (!result.IsSuccess || result.Data.HmacKey == null)
 			{
-				PurgeConnectionAuthState(conn, disconnect: false);
-				conn.Disconnect(true);
-				return;
+				await Log.Warning(LogPrefix, $"Signing key not found for LoginServer {loginServerId}.");
+				return null;
 			}
 
-			if (msg.Token == null || msg.Token.Length == 0 || msg.Token.Length > MaxTokenPayloadBytes)
+			if (result.Data.HmacKey.Length < CryptoHelper.HmacKeyLength)
 			{
-				PurgeConnectionAuthState(conn, disconnect: true);
-				return;
+				await Log.Warning(LogPrefix, $"Signing key too short for LoginServer {loginServerId}.");
+				return null;
 			}
 
-			var request = new TokenAuthRequest(conn, msg.Token, encryptionData, msg.Seq);
+			var key = new byte[result.Data.HmacKey.Length];
+			Buffer.BlockCopy(result.Data.HmacKey, 0, key, 0, key.Length);
+			return key;
+		}
 
-			if (tokenChannel == null || !tokenChannel.Writer.TryWrite(request))
-			{
-				// TOKEN NO-RETRY: Unlike the SRP path (which rolls back state to allow
-				// retry), token auth is one-shot by design. RejectAndPurge disconnects
-				// the client and removes all connection state. The client must reconnect
-				// and present the token again on a fresh connection. This is intentional
-				// because token auth has no intermediate state worth preserving.
-				RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
-			}
+		/// <summary>
+		/// Checks whether the token hash has been revoked in the database.
+		/// Fails closed: returns <c>true</c> (revoked) if the service is unavailable or the DB query fails.
+		/// </summary>
+		private async Task<bool> CheckTokenRevocationCoreAsync(string tokenHash)
+		{
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
+				return true; // Treat service-unavailable as revoked (fail-closed).
+
+			var result = await svc.FetchByHashAsync(tokenHash);
+			if (!result.IsSuccess) return true; // DB error → fail-closed.
+			return result.Data.Revoked;
 		}
 
 		#endregion
 
-		#region Async Workers
+		#region Inner Core (bridges FishNet callbacks to TokenAuthenticatorCore)
 
 		/// <summary>
-		/// Async worker that processes token auth requests from the bounded channel.
-		/// <para><b>Rate limiting:</b> Per-connection token-attempt rate limiting is enforced
-		/// by the TryAdvanceAuthState gate (Handshake → TokenPending) in the UDP receiver.
-		/// A connection can only submit one token attempt; further attempts fail the state advance.</para>
-		/// <para><b>Token reuse:</b> The same token may be presented to multiple World/Scene servers
-		/// within its validity window (e.g., during server transfers). Single-use enforcement is
-		/// intentionally not applied. Replay is bounded by the expiration window and can be
-		/// explicitly terminated via token revocation in the database.</para>
-		/// <para><b>Logging:</b> Warning-level logs for invalid tokens are bounded by the
-		/// TryAdvanceAuthState gate (one attempt per connection). Under a connection flood,
-		/// consider reducing log level or adding log-rate sampling.</para>
+		/// Inner sealed implementation of <see cref="TokenAuthenticatorCore{TConnection}"/> bound to
+		/// <see cref="NetworkConnection"/>. All abstract callbacks route to <see cref="_outer"/>
+		/// (the enclosing <see cref="TokenServerAuthenticator"/>), which provides FishNet broadcasts,
+		/// DB access, and event invocation.
 		/// </summary>
-		private async Task ProcessTokenAuthRequestsAsync(CancellationToken cancellationToken, int workerId)
+		private sealed class TokenCore : TokenAuthenticatorCore<NetworkConnection>
 		{
-			await Log.Debug(LogPrefix, $"Token worker {workerId} started");
-			try
+			/// <summary>The enclosing <see cref="TokenServerAuthenticator"/> instance that hosts this core.</summary>
+			private readonly TokenServerAuthenticator _outer;
+
+			/// <summary>
+			/// Initializes the core with the enclosing authenticator and the token account manager.
+			/// </summary>
+			public TokenCore(TokenServerAuthenticator outer, ITokenAccountManager<NetworkConnection> accountManager)
+				: base(accountManager) => _outer = outer;
+
+			// ── BaseAuthenticatorCore abstracts ──────────────────────────────
+			/// <inheritdoc/>
+			protected override bool IsConnectionAuthenticated(NetworkConnection conn) => conn.IsAuthenticated;
+			/// <inheritdoc/>
+			protected override string GetConnectionAddress(NetworkConnection conn) => conn.GetAddress();
+			/// <inheritdoc/>
+			protected override int GetConnectionClientId(NetworkConnection conn) => conn.ClientId;
+			/// <inheritdoc/>
+			protected override string ResolveRateLimitKey(NetworkConnection conn) => _outer.ResolveRateLimitKey(conn);
+
+			/// <inheritdoc/>
+			protected override void BroadcastCookieChallenge(NetworkConnection conn, byte[] cookie) =>
+				_outer.NetworkManager.ServerManager.Broadcast(conn,
+					new ServerHandshake { Cookie = cookie }, false, Channel.Reliable);
+
+			/// <inheritdoc/>
+			protected override void BroadcastServerHandshake(NetworkConnection conn, byte[] key, ushort version) =>
+				_outer.NetworkManager.ServerManager.Broadcast(conn,
+					new ServerHandshake { PublicKey = key, AgreedVersion = version }, false, Channel.Reliable);
+
+			/// <inheritdoc/>
+			protected override void DisconnectConnection(NetworkConnection conn, bool graceful) =>
+				conn.Disconnect(graceful);
+
+			// ── TokenAuthenticatorCore abstracts ─────────────────────────────
+			/// <inheritdoc/>
+			protected override bool IsConnectionActive(NetworkConnection conn) => conn.IsActive;
+
+			/// <inheritdoc/>
+			protected override void OnAuthenticationResult(NetworkConnection conn, bool authenticated)
 			{
-				// Defensive backstop: capture a local reference to prevent a NullReferenceException
-				// if ShutdownWorkersCore nulls the field between TryComplete and worker exit.
-				var channel = tokenChannel;
-				if (channel == null)
-				{
-					await Log.Warning(LogPrefix, $"Token worker {workerId}: channel is null at start.");
-					return;
-				}
-
-				// Rely on channel completion (TryComplete in ShutdownWorkers) for graceful exit.
-				// CancellationToken.None avoids a redundant cancellation race with completion.
-				await foreach (var request in channel.Reader.ReadAllAsync(CancellationToken.None))
-				{
-					if (cancellationToken.IsCancellationRequested)
-						break;
-
-					try
-					{
-						await ProcessTokenAuthAsync(request);
-					}
-					catch (Exception ex)
-					{
-						await Log.Error(LogPrefix, $"Token worker {workerId} error: {ex}");
-					}
-				}
-			}
-			catch (Exception ex) when (!(ex is OperationCanceledException))
-			{
-				await Log.Error(LogPrefix, $"Token worker {workerId} unexpected error: {ex}");
+				_outer.OnAuthentication(conn, authenticated);
+				_outer.InvokeClientAuthenticationResult(conn, authenticated);
 			}
 
-			await Log.Debug(LogPrefix, $"Token worker {workerId} stopped");
-		}
+			/// <inheritdoc/>
+			protected override void BroadcastAuthResult(NetworkConnection conn, ClientAuthenticationResult result, bool reliable) =>
+				_outer.NetworkManager.ServerManager.Broadcast(conn,
+					new ClientAuthResultBroadcast { Result = result }, false,
+					reliable ? Channel.Reliable : Channel.Unreliable);
 
-		/// <summary>
-		/// Processes a single token auth request asynchronously.
-		/// Delegates crypto to <see cref="TokenService"/>, handles DB lookups, revocation, and finalization.
-		/// </summary>
-		private async Task ProcessTokenAuthAsync(TokenAuthRequest request)
-		{
-			NetworkConnection conn = request.Connection;
-			byte[] rawToken = null;
-			byte[] hmacKey = null;
+			/// <inheritdoc/>
+			protected override void EnqueueMainThread(NetworkConnection conn, Action action) =>
+				_outer.EnqueueMainThreadAction(action);
 
-			try
-			{
-				// Decrypt and partially parse token to extract loginServerId for signing key lookup.
-				if (!TokenService.TryDecryptAndPartialParse(request.EncryptedToken, request.EncryptionData, request.Seq, out rawToken, out long loginServerId))
-				{
-					await Log.Warning(LogPrefix, "Token decryption or parse failed.");
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
+			/// <inheritdoc/>
+			protected override Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult defaultResult, string username) =>
+				_outer.TryLoginAsync(defaultResult, username);
 
-				// Fetch DB services
-				if (Server.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var signingKeyService) ||
-					!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var authTokenService))
-				{
-					CryptographicOperations.ZeroMemory(rawToken);
-					RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
-					return;
-				}
+			// ── DB callbacks ─────────────────────────────────────────────────
+			/// <inheritdoc/>
+			protected override Task<byte[]> FetchSigningKeyAsync(long loginServerId) =>
+				_outer.FetchSigningKeyCoreAsync(loginServerId);
 
-				// Fetch the HMAC signing key for the issuing LoginServer
-				DatabaseResult<LoginServerSigningKeyData> keyResult = await signingKeyService.FetchByLoginServerIdAsync(loginServerId);
-				RefreshAuthTtl(conn);
-
-				// Equalize timing: use a random dummy key if signing key not found
-				// to prevent loginServerId enumeration via response-time oracle.
-				bool keyFound;
-				if (!keyResult.IsSuccess || keyResult.Data.HmacKey == null || keyResult.Data.HmacKey.Length < CryptoHelper.HmacKeyLength)
-				{
-					hmacKey = new byte[CryptoHelper.HmacKeyLength];
-					using (var rng = RandomNumberGenerator.Create())
-						rng.GetBytes(hmacKey);
-					keyFound = false;
-
-					if (!keyResult.IsSuccess || keyResult.Data.HmacKey == null)
-						await Log.Warning(LogPrefix, $"Signing key not found for LoginServer {loginServerId}.");
-					else
-						await Log.Warning(LogPrefix, $"Signing key too short for LoginServer {loginServerId}.");
-				}
-				else
-				{
-					hmacKey = new byte[keyResult.Data.HmacKey.Length];
-					Buffer.BlockCopy(keyResult.Data.HmacKey, 0, hmacKey, 0, keyResult.Data.HmacKey.Length);
-					keyFound = true;
-				}
-
-				// Verify HMAC, cross-check loginServerId, and check expiration via TokenService.
-				// hmacKey is zeroed in a finally block so it is cleared even if VerifyToken
-				// or any subsequent call throws an unexpected exception.
-				TokenService.TokenVerifyResult verifyResult;
-				try
-				{
-					verifyResult = TokenService.VerifyToken(rawToken, hmacKey, keyFound, loginServerId);
-				}
-				finally
-				{
-					CryptographicOperations.ZeroMemory(hmacKey);
-					hmacKey = null;
-				}
-				CryptographicOperations.ZeroMemory(rawToken);
-				rawToken = null;
-
-				if (!verifyResult.IsValid)
-				{
-					if (verifyResult.SigningKeyFound && verifyResult.ExpiresUtc != default && DateTime.UtcNow >= verifyResult.ExpiresUtc)
-						RejectAndPurge(conn, ClientAuthenticationResult.TokenExpired);
-					else
-						RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-
-				// Check revocation via token hash (computed by VerifyToken on success).
-				DatabaseResult<AuthTokenData> tokenResult = await authTokenService.FetchByHashAsync(verifyResult.TokenHash);
-				RefreshAuthTtl(conn);
-
-				if (!tokenResult.IsSuccess)
-				{
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-
-				if (tokenResult.Data.Revoked)
-				{
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenRevoked);
-					return;
-				}
-
-				// Register account from HMAC-verified token payload.
-				try
-				{
-					tokenAccountManager.AddConnectionAccount(conn, verifyResult.AccountName, verifyResult.AccessLevel);
-				}
-				catch (InvalidOperationException addEx)
-				{
-					await Log.Error(LogPrefix, $"AddConnectionAccount failed: {addEx.Message}");
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-
-				// Attempt login (virtual — overridden by WorldServer/SceneServer)
-				ClientAuthenticationResult result = await TryLoginAsync(ClientAuthenticationResult.LoginSuccess, verifyResult.AccountName);
-
-				bool authenticated = result == ClientAuthenticationResult.LoginSuccess ||
-									 result == ClientAuthenticationResult.WorldLoginSuccess ||
-									 result == ClientAuthenticationResult.SceneLoginSuccess;
-
-				EnqueueMainThread(() =>
-				{
-					if (conn.IsActive)
-					{
-						NetworkManager.ServerManager.Broadcast(conn, new ClientAuthResultBroadcast()
-						{
-							Result = result,
-						}, false, Channel.Reliable);
-					}
-
-					OnAuthentication(conn, authenticated);
-					InvokeClientAuthenticationResult(conn, authenticated);
-
-					if (authenticated)
-					{
-						Server.AccountManager.TryAdvanceAuthState(conn, AuthState.TokenPending, AuthState.Authenticated);
-					}
-					else
-					{
-						Server.AccountManager.RemoveConnectionAccount(conn);
-					}
-				});
-			}
-			catch (Exception ex)
-			{
-				if (rawToken != null) CryptographicOperations.ZeroMemory(rawToken);
-				if (hmacKey != null) CryptographicOperations.ZeroMemory(hmacKey);
-				await Log.Error(LogPrefix, $"Error during token auth: {ex}");
-				EnqueueMainThread(() =>
-				{
-					if (conn.IsActive) conn.Disconnect(false);
-				});
-				PurgeConnectionAuthState(conn, disconnect: false);
-			}
+			/// <inheritdoc/>
+			protected override Task<bool> CheckTokenRevocationAsync(string tokenHash) =>
+				_outer.CheckTokenRevocationCoreAsync(tokenHash);
 		}
 
 		#endregion

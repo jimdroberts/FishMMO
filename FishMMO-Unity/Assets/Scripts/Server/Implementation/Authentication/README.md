@@ -19,17 +19,38 @@
 
 ## Overview
 
-Server-side authentication with a bounded-channel architecture for high-throughput, non-blocking operation. Two authentication modes — **SRP-6a** (LoginServer) and **HMAC-signed token verification** (World/Scene servers) — share a common abstract base class (`BaseServerAuthenticator`) that provides X25519 ECDH key exchange, main-thread marshalling, stale-auth TTL sweeps, and connection lifecycle management. Broadcast handlers act as ultra-fast UDP receiver gates with zero blocking; all heavy crypto, database, and SRP/token work is offloaded to async workers via `System.Threading.Channels`.
+Server-side authentication with a bounded-channel architecture for high-throughput, non-blocking operation. Two authentication modes — **SRP-6a** (LoginServer) and **HMAC-signed token verification** (World/Scene servers) — share a common abstract base class (`BaseServerAuthenticator`) that routes FishNet lifecycle events to an engine-independent `BaseAuthenticatorCore<NetworkConnection>` in the `FishMMO-Auth.dll` shared library.
 
-All cryptographic operations are delegated to three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped via the `FishMMO-Auth.dll` shared library):
+### Composition Architecture
+
+Because `Authenticator` (FishNet) is a MonoBehaviour, and C# single-inheritance prevents a Unity class from also extending `BaseAuthenticatorCore<TConnection>`, the Unity authenticator classes use **composition with inner sealed classes**:
+
+```
+BaseServerAuthenticator : Authenticator      ← Unity MonoBehaviour
+  └─ protected abstract Core                  ← holds FishMMO-Auth core instance
+
+ServerAuthenticator : BaseServerAuthenticator
+  └─ ServerAuthenticatorCore                  ← inner sealed class
+      : SrpAuthenticatorCore<NetworkConnection> (FishMMO-Auth)
+
+TokenServerAuthenticator : BaseServerAuthenticator
+  └─ TokenCore                                ← inner sealed class
+      : TokenAuthenticatorCore<NetworkConnection> (FishMMO-Auth)
+```
+
+The Unity classes are **thin routing shells**: they register FishNet broadcast handlers, forward received messages to the core, supply DB callbacks via abstract method implementations, and marshal core-initiated broadcasts back to the FishNet main thread. All handshake, TTL sweep, channel, worker, rate-limit, and crypto orchestration logic lives in FishMMO-Auth.
+
+All cryptographic operations are delegated to three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped via `FishMMO-Auth.dll`):
 
 - **`HandshakeService`** — X25519 ECDH key agreement, transcript-hash computation, and cookie HMAC generation/verification.
 - **`SrpService`** — Server-side SRP field encryption/decryption, fake SRP verifier generation, and all AES-GCM encrypt/decrypt for SRP broadcasts.
 - **`TokenService`** — Server-side token generation, HMAC signing, structure verification, and token encrypt/decrypt.
 
-The authenticator classes are thin wrappers: they orchestrate the FishNet broadcast flow, manage connection state and rate limiting, and delegate all crypto to the services above. Core types (`CryptoHelper`, `ConnectionEncryptionData`, `ServerSrpData`, `SrpVerifyRequest`, `SrpProofRequest`, `AuthState`, `IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`, `AccessLevel`, `ClientAuthenticationResult`) are provided by the `FishMMO.Auth.Core` namespace.
+Core types (`CryptoHelper`, `ConnectionEncryptionData`, `ServerSrpData`, `SrpVerifyRequest`, `SrpProofRequest`, `AuthState`, `IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`, `AccessLevel`, `ClientAuthenticationResult`) are in the `FishMMO.Auth.Core` namespace.
 
 ### Bounded-Channel Pipeline
+
+The pipeline below is owned by the FishMMO-Auth core classes. The Unity wrapper classes route incoming broadcast messages into the core; the core internally manages the channels, workers, and main-thread enqueue callbacks.
 
 ```
 Network Thread (UDP Gates)              Worker Threads (Async)              Main Thread
@@ -56,7 +77,7 @@ Network Thread (UDP Gates)              Worker Threads (Async)              Main
 | **Worker Threads** | AES decryption, StrictUtf8 decode, database I/O, SRP math, ZeroMemory | **Yes** (async/await) |
 | **Main Thread** | `Broadcast()`, `Disconnect()`, `OnAuthenticationResult` | N/A (Unity main loop) |
 
-Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>`, drained each frame by `Update()` → `DrainMainThreadQueue()`. A per-frame cap (`MaxMainThreadActionsPerUpdate = 100`) time-slices draining to avoid frame spikes, with back-pressure logging when the queue is not fully drained.
+Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `BaseServerAuthenticator`, drained each frame by `Update()` → `DrainMainThreadQueue()`. A per-frame cap (`maxMainThreadActionsPerUpdate = 100`, Inspector-configurable) time-slices draining to avoid frame spikes, with back-pressure logging when the queue is not fully drained.
 
 ## Supported Platforms
 
@@ -107,9 +128,9 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>`, drained eac
 
 - **FishNet** — Networking framework providing `Authenticator` base class, `NetworkConnection`, `NetworkManager`, and broadcast infrastructure.
 - **SecureRemotePassword** — SRP-6a library (2048-bit group, SHA-512 parameters).
-- **FishMMO-Auth.dll** — Shared authentication library providing:
-  - `FishMMO.Auth.Core`: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, `StrictUtf8`, constant-time compare, nonce builder, protocol version constants), `ConnectionEncryptionData`, `ServerSrpData`, `SrpVerifyRequest`, `SrpProofRequest`, `AuthState`, `IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`, `AccessLevel`, `ClientAuthenticationResult`.
-  - `FishMMO.Auth.Implementation`: `HandshakeService`, `SrpService`, `TokenService` — static service classes that encapsulate all server-side crypto operations.
+- **FishMMO-Auth.dll** — netstandard2.1 shared authentication library (auto-copied to `Assets/Dependencies/`). Provides:
+  - `FishMMO.Auth.Core`: enums (`AuthState`, `AccessLevel`, `ClientAuthenticationResult`), interfaces (`IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`), DTOs, and the `ArrivalOrderTracker` / `ExpiringKeyTracker` / `LastSeenCacheTracker` collections.
+  - `FishMMO.Auth.Implementation`: abstract auth core classes (`BaseAuthenticatorCore<TConnection>`, `SrpAuthenticatorCore<TConnection>`, `TokenAuthenticatorCore<TConnection>`), generic account managers (`AccountManager<T>`, `SrpAccountManager<T>`, `TokenAccountManager<T>`), connection data types (`ConnectionEncryptionData`, `AccountData`, `ServerSrpData`), static crypto service classes (`HandshakeService`, `SrpService`, `TokenService`), `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, `StrictUtf8`, constant-time compare), and request structs (`SrpVerifyRequest`, `SrpProofRequest`).
 - **Database services** — `IAccountService` (fetch salt/verifier), `ICharacterService` (online check), `IKickRequestService` (kick persistence), `IAuthTokenService` (token hash CRUD), `ILoginServerSigningKeyService` (HMAC key fetch).
 - **FishMMO.Shared.Authentication** — Centralized validation rules (`IsAllowedUsername`, `IsAllowedPassword`).
 - **FishMMO.Logging.Log** — Structured async logging.
@@ -143,11 +164,22 @@ This module is an integrated part of the FishMMO Unity project. The server authe
 
 ## Configuration
 
-### BaseServerAuthenticator Constants
+### BaseServerAuthenticator Inspector Fields (FishMMO-Unity)
+
+These are the only configurable values that live in the Unity wrapper classes:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `maxMainThreadActionsPerUpdate` | 100 | Max queued main-thread actions drained per Update frame |
+| `useConnectionIdForRateLimit` | false | Use connection ID instead of remote IP for rate limiting. Enable when behind a NAT/proxy/load balancer |
+| `tokenExpirationMinutes` | 10 min | Auth token expiration (`ServerAuthenticator` only; Inspector-configurable) |
+
+### BaseAuthenticatorCore Constants (FishMMO-Auth)
+
+The following constants are defined in `BaseAuthenticatorCore<TConnection>` and its subclasses in the `FishMMO-Auth` shared library.
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `MaxMainThreadActionsPerUpdate` | 100 | Max queued main-thread actions drained per frame |
 | `AuthStaleTtlSeconds` | 15 s | TTL for stale-auth sweep |
 | `AuthHardDeadlineSeconds` | 60 s | Absolute auth deadline (cannot be extended) |
 | `AuthSweepIntervalSeconds` | 1 s | Sweep interval for stale auth cleanup |
@@ -158,7 +190,7 @@ This module is an integrated part of the FishMMO Unity project. The server authe
 | `MaxGlobalHandshakesPerSecond` | 500 | Global X25519 handshake rate cap |
 | `CookieTimeBucketSeconds` | 30 s | Handshake cookie validity window (max 2×) |
 
-### ServerAuthenticator Constants (SRP-6a)
+### SrpAuthenticatorCore Constants (FishMMO-Auth)
 
 | Constant | Value | Description |
 |----------|-------|-------------|
@@ -170,12 +202,6 @@ This module is an integrated part of the FishMMO Unity project. The server authe
 | `IpAuthAttemptDebounceSeconds` | 1 s | Per-IP SRP verify debounce |
 | `AccountVerifyDebounceSeconds` | 2 s | Per-account SRP verify debounce |
 | `ConnectionIpCacheTtlSeconds` | 120 s | IP cache entry TTL |
-| `tokenExpirationMinutes` | 10 min | Auth token expiration (Inspector-configurable) |
-
-### ServerAuthenticator TOTP Constants
-
-| Constant | Value | Description |
-|----------|-------|-------------|
 | `MaxConcurrentTotpVerifications` | 4 | Semaphore limit for parallel TOTP/recovery verifications |
 | `MaxTotpAttempts` | 5 | Per-connection TOTP attempt cap (exceeding disconnects) |
 | `MaxTotpFailuresPerUsername` | 15 | Per-username failure threshold before lockout |
@@ -183,7 +209,7 @@ This module is an integrated part of the FishMMO Unity project. The server authe
 | `MaxTotpUsernameFailureEntries` | 10,000 | Hard cap on tracked username entries |
 | `TotpUsernameFailureSweepMaxScan` | 64 | Max entries scanned per sweep iteration |
 
-### TokenServerAuthenticator Constants
+### TokenAuthenticatorCore Constants (FishMMO-Auth)
 
 | Constant | Value | Description |
 |----------|-------|-------------|
@@ -413,45 +439,56 @@ On failure at any step, workers call `RejectAndPurge(conn, result)` which atomic
 ### Directory Tree
 
 ```
-Server/
-├── Core/Authentication/
-│   └── IAuthenticatorQueueData.cs             # Interface for bounded channels + CTS runtime data
-│
-├── Core/Collections/                          # Reusable bounded-sweep trackers
-│   ├── ExpiringKeyTracker.cs                  # Keyed debounce/rate-limit (head-first expiry queue)
-│   ├── LastSeenCacheTracker.cs                # Key/value cache with TTL by last-seen timestamp
-│   └── ArrivalOrderTracker.cs                 # Oldest-first tracker for stale-connection sweeps
-│
-└── Implementation/Authentication/             # FishNet-specific authenticators (this directory)
-    ├── IServerAuthenticator.cs                # Interface: Server ref + worker lifecycle
-    ├── BaseServerAuthenticator.cs             # Abstract base: X25519 handshake, main-thread queue, TTL sweeps, RejectAndPurge
-    ├── ServerAuthenticator.cs                 # SRP-6a authenticator (LoginServer) — thin wrapper around FishMMO-Auth services
-    └── TokenServerAuthenticator.cs            # Token-based authenticator (World/Scene servers) — thin wrapper around FishMMO-Auth services
-```
-
-### FishMMO-Auth DLL (shared library)
-
-Core types and crypto services consumed by the authenticators. Built from the `FishMMO-Auth` project and auto-copied to `Assets/Dependencies/FishMMO-Auth.dll`.
-
-```
+# FishMMO-Auth (netstandard2.1 shared library — Assets/Dependencies/FishMMO-Auth.dll)
 FishMMO-Auth/
 ├── Core/
-│   ├── CryptoHelper.cs                        # AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, GcmNonceContext, nonce builder
-│   ├── ConnectionEncryptionData.cs            # Per-connection AES keys, nonce counters, sequence tracking
-│   ├── ServerSrpData.cs                       # Server SRP state (verifier, ephemeral, session)
-│   ├── SrpVerifyRequest.cs                    # Immutable request struct (encrypted credentials)
-│   ├── SrpProofRequest.cs                     # Immutable request struct (encrypted proof)
-│   ├── AuthState.cs                           # Enum: Handshake → VerifyPending → WaitingForProof → ProofPending → SrpSuccess → Authenticated
-│   ├── AccessLevel.cs                         # Enum: Player, Moderator, Admin, etc.
-│   ├── ClientAuthenticationResult.cs          # Enum: auth result codes (LoginSuccess, TokenDecryptFailed, etc.)
-│   ├── IAccountManager.cs                     # Thread-safe account/connection state management interface
-│   ├── ISrpAccountManager.cs                  # SRP-specific account manager (LoginServer)
-│   └── ITokenAccountManager.cs                # Token-specific account manager (World/Scene servers)
+│   ├── Enums/
+│   │   ├── AuthState.cs                       # Enum: Handshake → VerifyPending → … → Authenticated
+│   │   ├── AccessLevel.cs                     # Enum: Player, Moderator, Admin, etc.
+│   │   └── ClientAuthenticationResult.cs      # Enum: auth result codes
+│   ├── Interfaces/
+│   │   ├── IAccountManager.cs                 # Thread-safe account/connection state management
+│   │   ├── ISrpAccountManager.cs              # SRP-specific account manager (LoginServer)
+│   │   └── ITokenAccountManager.cs            # Token-specific account manager (World/Scene)
+│   └── Collections/
+│       ├── ExpiringKeyTracker.cs              # Keyed debounce/rate-limit (head-first expiry queue)
+│       ├── LastSeenCacheTracker.cs            # Key/value cache with TTL by last-seen timestamp
+│       └── ArrivalOrderTracker.cs             # Oldest-first tracker for stale-connection sweeps
 │
-└── Implementation/Services/
-    ├── HandshakeService.cs                    # X25519 ECDH key agreement, cookie HMAC (client + server sides)
-    ├── SrpService.cs                          # Server-side SRP encrypt/decrypt, fake SRP verifier generation
-    └── TokenService.cs                        # Token generation, HMAC signing, structure verification
+└── Implementation/
+    ├── Auth/
+    │   ├── BaseAuthenticatorCore.cs           # Abstract base: handshake, TTL sweeps, workers, rate limits, cookie, nonce
+    │   ├── SrpAuthenticatorCore.cs            # Abstract SRP-6a pipeline: bounded channels, verify/proof workers, TOTP
+    │   ├── TokenAuthenticatorCore.cs          # Abstract token pipeline: bounded channel, token worker, revocation
+    │   └── ClientAuthenticatorCore.cs         # Abstract client-side auth flow
+    ├── Account/
+    │   ├── AccountManager.cs                  # Thread-safe base: all dictionaries, CAS machine, sweep tracking
+    │   ├── SrpAccountManager.cs               # SRP extension: AddConnectionAccount, SweepUnauthenticated
+    │   └── TokenAccountManager.cs             # Token extension: AddConnectionAccount (name + ACL)
+    ├── Connection/
+    │   ├── AccountData.cs                     # Access level + auth state + SRP data container
+    │   └── ConnectionEncryptionData.cs        # Per-connection AES-256 keys, nonce contexts, sequence tracking
+    ├── SRP/
+    │   ├── ServerSrpData.cs                   # Server SRP session state (ephemeral, proof, verifier)
+    │   └── ClientSrpData.cs                   # Client SRP session state
+    ├── Requests/
+    │   ├── SrpVerifyRequest.cs                # Immutable request struct (encrypted credentials)
+    │   └── SrpProofRequest.cs                 # Immutable request struct (encrypted proof)
+    └── Services/
+        ├── HandshakeService.cs                # X25519 ECDH key agreement, cookie HMAC (client + server sides)
+        ├── SrpService.cs                      # Server-side SRP encrypt/decrypt, fake SRP verifier generation
+        └── TokenService.cs                    # Token generation, HMAC signing, structure verification
+
+# FishMMO-Unity (this assembly)
+Server/
+├── Core/Authentication/
+│   └── IAuthenticatorQueueData.cs             # Legacy interface for bounded channels + CTS runtime data
+│
+└── Implementation/Authentication/             # FishNet-typed composition wrappers (this directory)
+    ├── IServerAuthenticator.cs                # Interface: Server ref + worker lifecycle
+    ├── BaseServerAuthenticator.cs             # Composition host: owns Core, routes FishNet events to core
+    ├── ServerAuthenticator.cs                 # SRP wrapper: inner ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
+    └── TokenServerAuthenticator.cs            # Token wrapper: inner TokenCore : TokenAuthenticatorCore<NetworkConnection>
 ```
 
 ### Related Modules
@@ -462,23 +499,40 @@ Shared/
     └── AuthenticationBroadcasts.cs            # ClientHandshake, ServerHandshake, SrpVerify/Proof/Success, AuthResult
 ```
 
-### Inheritance Hierarchy
+### Composition and Inheritance
+
+C# single-inheritance prevents a MonoBehaviour from also extending `BaseAuthenticatorCore<TConnection>`. The pattern is composition via inner sealed classes:
 
 ```
-Authenticator (FishNet)
-└── BaseServerAuthenticator              # X25519 handshake, main-thread queue, stale-auth sweeps, RejectAndPurge
-    ├── ServerAuthenticator              # SRP-6a pipeline (LoginServer)
-    └── TokenServerAuthenticator         # HMAC-signed token pipeline (World/Scene servers)
-        ├── WorldServerAuthenticator     # World-entry gate (player limit, selected character, ExpiringKeyTracker)
-        └── SceneServerAuthenticator     # Scene-entry pass-through
+# Class hierarchy
+Authenticator (FishNet MonoBehaviour)
+└── BaseServerAuthenticator              # owns Core; routes FishNet lifecycle to it
+    ├── ServerAuthenticator              # inner: ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
+    └── TokenServerAuthenticator         # inner: TokenCore : TokenAuthenticatorCore<NetworkConnection>
+        ├── WorldServerAuthenticator     # overrides TryLoginAsync + OnAuthSweep (player cap, character check)
+        └── SceneServerAuthenticator     # overrides TryLoginAsync (scene pass-through)
+
+# FishMMO-Auth core abstract hierarchy
+BaseAuthenticatorCore<TConnection>
+├── SrpAuthenticatorCore<TConnection>    # used as base for ServerAuthenticatorCore (inner class)
+└── TokenAuthenticatorCore<TConnection>  # used as base for TokenCore (inner class)
+
+# Inner sealed class example (ServerAuthenticator.cs)
+private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
+{
+    // implements all abstract callbacks by routing to _outer (the ServerAuthenticator instance)
+}
 ```
 
-### Key Interfaces
+### Key Interfaces and Classes
 
-- **`IServerAuthenticator`** — Common interface exposing `Server` property, `InitializeWorkers()`, and `ShutdownWorkers()`.
-- **`BaseServerAuthenticator`** — Abstract base providing handshake (via `HandshakeService`), TTL tracking, main-thread queue, sweep infrastructure, `RejectAndPurge`, `RefreshAuthTtl`, `TryLoginAsync` (virtual).
-- **`ServerAuthenticator`** — SRP-6a implementation: bounded verify/proof channels, fake SRP verifier (via `SrpService`), per-IP/account debounce, IP cache, kick-request debounce, token generation (via `TokenService`).
-- **`TokenServerAuthenticator`** — Token-based implementation: bounded token channel, HMAC verification with timing equalization (via `TokenService`), expiration/revocation checks.
+- **`IServerAuthenticator`** — Unity interface exposing `Server` property, `InitializeWorkers()`, and `ShutdownWorkers()`. Consumed by `FishNetNetworkWrapper.AttachLoginAuthenticator`.
+- **`BaseServerAuthenticator`** — Abstract Unity composition host. Holds `protected abstract BaseAuthenticatorCore<NetworkConnection> Core`. Owns the `ConcurrentQueue<Action>` drained by `Update()`, handles `InitializeOnce`, `OnRemoteConnectionState`, `ClientHandshake` broadcast routing, and the `OnAuthSweep()` / `TryLoginAsync()` virtual hooks.
+- **`ServerAuthenticator`** — SRP wrapper. Inspector fields: `tokenExpirationMinutes`. Contains inner `ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>` which implements all abstract callbacks by routing to `_outer`. The outer class provides DB method implementations (`FetchAccountForLoginCoreAsync`, `CheckIsOnlineCoreAsync`, `PersistTokenHashCoreAsync`, `VerifyTotpCodeCoreAsync`, etc.).
+- **`TokenServerAuthenticator`** — Token wrapper. Contains inner `TokenCore : TokenAuthenticatorCore<NetworkConnection>`. Provides `FetchSigningKeyCoreAsync` and `CheckTokenRevocationCoreAsync`.
+- **`BaseAuthenticatorCore<TConnection>`** (FishMMO-Auth) — Engine-independent base: cookie challenge, X25519 handshake, stale-auth TTL sweep, pending-auth cap, global/per-IP handshake rate limits, worker lifecycle (`InitializeWorkers`, `ShutdownWorkers`, `Tick`), and `HandleConnectionStopped`.
+- **`SrpAuthenticatorCore<TConnection>`** (FishMMO-Auth) — All SRP-6a logic: bounded verify/proof channels, workers, fake SRP verifier, TOTP, per-IP/account debounce, IP cache, kick-request debounce, token generation. `TickRateLimits()` must be called each frame from the Unity wrapper's `OnUpdate()`.
+- **`TokenAuthenticatorCore<TConnection>`** (FishMMO-Auth) — All token-auth logic: bounded token channel, worker, HMAC verification with timing equalization, expiration and revocation checks.
 
 ### Broadcast Types
 

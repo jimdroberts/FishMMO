@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>FishMMO.Auth</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
+    <PackageReference Include="srp" Version="1.0.7" />
+    <PackageReference Include="Otp.NET" Version="1.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FishMMO-SharedUtility\FishMMO-SharedUtility\FishMMO-SharedUtility.csproj" />
+    <ProjectReference Include="..\..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
+  </ItemGroup>
+
+  <!-- Copy the built DLL to the Unity project Dependencies folder. -->
+  <Target Name="CopyToUnityDependencies" AfterTargets="Build">
+    <PropertyGroup>
+      <UnityDepsDir>..\..\FishMMO-Unity\Assets\Dependencies</UnityDepsDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <AuthDll Include="bin\$(Configuration)\**\FishMMO-AuthShared.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AuthDll)" DestinationFolder="$(UnityDepsDir)" />
+  </Target>
+
+</Project>

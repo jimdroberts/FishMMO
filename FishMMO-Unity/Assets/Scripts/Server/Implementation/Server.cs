@@ -375,7 +375,7 @@ namespace FishMMO.Server.Implementation
 			UnregisterAllDataContainers();
 
 			// Shutdown authenticator workers before stopping the server.
-			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is ServerAuthenticator authenticator)
+			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator authenticator)
 			{
 				authenticator.ShutdownWorkers();
 			}

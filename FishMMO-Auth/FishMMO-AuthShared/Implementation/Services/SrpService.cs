@@ -102,8 +102,8 @@ namespace FishMMO.Auth.Implementation
 			byte[] encryptedPublicEphemeral,
 			ConnectionEncryptionData encryptionData,
 			uint seq,
-			out string username,
-			out string publicEphemeral)
+			out string? username,
+			out string? publicEphemeral)
 		{
 			username = null;
 			publicEphemeral = null;
@@ -116,14 +116,14 @@ namespace FishMMO.Auth.Implementation
 			if (!encryptionData.TryConsumeReceiveSequence(seqUsername))
 				return false;
 
-			byte[] decryptedRawUsername = null;
-			byte[] decryptedRawPublicEphemeral = null;
+			byte[]? decryptedRawUsername = null;
+			byte[]? decryptedRawPublicEphemeral = null;
 			try
 			{
 				byte[] nonce1 = encryptionData.BuildReceiveNonce(seqUsername);
 				byte[] aad1 = new byte[CryptoHelper.AadLength];
 				CryptoHelper.WriteAad(aad1, (byte)CryptoHelper.AuthMessageType.SrpVerify, encryptionData.AgreedVersion, seqUsername);
-				decryptedRawUsername = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonce1, encryptedUsername, aad1);
+				decryptedRawUsername = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey!, nonce1, encryptedUsername, aad1);
 
 				try
 				{
@@ -141,7 +141,7 @@ namespace FishMMO.Auth.Implementation
 				byte[] nonce2 = encryptionData.BuildReceiveNonce(seq);
 				byte[] aad2 = new byte[CryptoHelper.AadLength];
 				CryptoHelper.WriteAad(aad2, (byte)CryptoHelper.AuthMessageType.SrpVerify, encryptionData.AgreedVersion, seq);
-				decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonce2, encryptedPublicEphemeral, aad2);
+				decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey!, nonce2, encryptedPublicEphemeral, aad2);
 
 				try
 				{
@@ -182,7 +182,7 @@ namespace FishMMO.Auth.Implementation
 			byte[] aadSend1 = new byte[CryptoHelper.AadLength];
 			CryptoHelper.WriteAad(aadSend1, (byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, encryptionData.AgreedVersion, sendSeq1);
 			byte[] srpSaltBytes = Encoding.UTF8.GetBytes(srpSalt);
-			encryptedSalt = CryptoHelper.EncryptAES(encryptionData.ServerToClientKey, sendNonce1, srpSaltBytes, aadSend1);
+			encryptedSalt = CryptoHelper.EncryptAES(encryptionData.ServerToClientKey!, sendNonce1, srpSaltBytes, aadSend1);
 			CryptographicOperations.ZeroMemory(srpSaltBytes);
 
 			uint sendSeq2 = encryptionData.NextSendSequence();
@@ -190,7 +190,7 @@ namespace FishMMO.Auth.Implementation
 			byte[] aadSend2 = new byte[CryptoHelper.AadLength];
 			CryptoHelper.WriteAad(aadSend2, (byte)CryptoHelper.AuthMessageType.SrpVerifyResponse, encryptionData.AgreedVersion, sendSeq2);
 			byte[] srpEphemeralBytes = Encoding.UTF8.GetBytes(srpPublicServerEphemeral);
-			encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(encryptionData.ServerToClientKey, sendNonce2, srpEphemeralBytes, aadSend2);
+			encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(encryptionData.ServerToClientKey!, sendNonce2, srpEphemeralBytes, aadSend2);
 			CryptographicOperations.ZeroMemory(srpEphemeralBytes);
 		}
 
@@ -215,7 +215,7 @@ namespace FishMMO.Auth.Implementation
 			byte[] nonce = encryptionData.BuildReceiveNonce(seq);
 			byte[] aad = new byte[CryptoHelper.AadLength];
 			CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.SrpProof, encryptionData.AgreedVersion, seq);
-			byte[] decryptedClientProof = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonce, encryptedProof, aad);
+			byte[] decryptedClientProof = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey!, nonce, encryptedProof, aad);
 			string clientProof;
 			try
 			{
@@ -244,7 +244,7 @@ namespace FishMMO.Auth.Implementation
 			byte[] sendNonce = encryptionData.BuildSendNonce(sendSeq);
 			byte[] aadSend = new byte[CryptoHelper.AadLength];
 			CryptoHelper.WriteAad(aadSend, (byte)CryptoHelper.AuthMessageType.SrpSuccess, encryptionData.AgreedVersion, sendSeq);
-			return CryptoHelper.EncryptAES(encryptionData.ServerToClientKey, sendNonce, Encoding.UTF8.GetBytes(serverProof), aadSend);
+			return CryptoHelper.EncryptAES(encryptionData.ServerToClientKey!, sendNonce, Encoding.UTF8.GetBytes(serverProof), aadSend);
 		}
 
 		#endregion
@@ -340,8 +340,8 @@ namespace FishMMO.Auth.Implementation
 			out string salt,
 			out string publicServerEphemeral)
 		{
-			byte[] decryptedSalt = null;
-			byte[] decryptedRawPublicEphemeral = null;
+			byte[]? decryptedSalt = null;
+			byte[]? decryptedRawPublicEphemeral = null;
 			try
 			{
 				var (nonce1, rseq1) = receiveNonceCtx.NextNonce();
@@ -414,7 +414,7 @@ namespace FishMMO.Auth.Implementation
 			CryptoHelper.GcmNonceContext receiveNonceCtx,
 			ushort agreedVersion)
 		{
-			byte[] decryptedProof = null;
+			byte[]? decryptedProof = null;
 			try
 			{
 				var (nonce, rseq) = receiveNonceCtx.NextNonce();
@@ -572,7 +572,7 @@ namespace FishMMO.Auth.Implementation
 			byte[] nonce = encryptionData.BuildReceiveNonce(seq);
 			byte[] aad = new byte[CryptoHelper.AadLength];
 			CryptoHelper.WriteAad(aad, (byte)CryptoHelper.AuthMessageType.TwoFactorVerify, encryptionData.AgreedVersion, seq);
-			byte[] decryptedCode = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonce, encryptedCode, aad);
+			byte[] decryptedCode = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey!, nonce, encryptedCode, aad);
 			string totpCode;
 			try
 			{
@@ -606,8 +606,8 @@ namespace FishMMO.Auth.Implementation
 			out string otpauthUri,
 			out string[] recoveryCodes)
 		{
-			byte[] decryptedUri = null;
-			byte[] decryptedCodes = null;
+			byte[]? decryptedUri = null;
+			byte[]? decryptedCodes = null;
 			try
 			{
 				var (nonce1, rseq1) = receiveNonceCtx.NextNonce();

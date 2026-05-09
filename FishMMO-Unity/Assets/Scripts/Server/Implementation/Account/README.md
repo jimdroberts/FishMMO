@@ -21,11 +21,11 @@
 
 The Account system manages the server-side lifecycle of player connections, including encryption key exchange, authentication state, account-to-connection mappings, and access level tracking. It is split into a Core interface layer (transport-agnostic) and an Implementation layer that binds to FishNet's `NetworkConnection`.
 
-The Core layer defines `IAccountManager<TConnection>`, `ISrpAccountManager<TConnection>`, and `ITokenAccountManager<TConnection>` — generic interfaces for encryption management, auth-state transitions, and account lookup. The Implementation layer provides three concrete classes:
+The Core layer defines `IAccountManager<TConnection>`, `ISrpAccountManager<TConnection>`, and `ITokenAccountManager<TConnection>` — generic interfaces for encryption management, auth-state transitions, and account lookup. The Implementation layer provides three thin Unity wrappers — concrete FishNet-typed classes that bind `TConnection = NetworkConnection` and carry no logic of their own. All implementation lives in the FishMMO-Auth generic base classes (`FishMMO.Auth.Implementation` namespace):
 
-- **`AccountManager`** — Thread-safe base class implementing `IAccountManager<NetworkConnection>`. Owns all internal dictionaries, the unified `AuthState` compare-and-swap machine, and the `ArrivalOrderTracker`-backed unauthenticated connection tracker.
-- **`SrpAccountManager`** — Extends `AccountManager` with SRP-specific connection account creation (`AddConnectionAccount` with SRP parameters), periodic stale-connection sweeps (`SweepUnauthenticatedConnections`), and post-success SRP material cleanup (`ClearSrpState`). Used by `LoginServer`.
-- **`TokenAccountManager`** — Extends `AccountManager` with a simplified `AddConnectionAccount` (name + access level only, no SRP state). Used by World and Scene servers.
+- **`AccountManager`** — Inherits `AccountManager<NetworkConnection>` from FishMMO-Auth verbatim. No additional members. Thread-safe base implementing `IAccountManager<NetworkConnection>`: owns all internal dictionaries, the unified `AuthState` CAS machine, and the `ArrivalOrderTracker`-backed unauthenticated connection tracker.
+- **`SrpAccountManager`** — Inherits `SrpAccountManager<NetworkConnection>` from FishMMO-Auth verbatim. No additional members. Extends `AccountManager<TConnection>` with SRP-specific `AddConnectionAccount`, periodic `SweepUnauthenticatedConnections`, and `ClearSrpState`. Used by `LoginServer`.
+- **`TokenAccountManager`** — Inherits `TokenAccountManager<NetworkConnection>` from FishMMO-Auth, providing a constructor that passes `conn => conn.ClientId.ToString()` as the connection-ID resolver. Extends `AccountManager<TConnection>` with a simplified `AddConnectionAccount` (name + access level only). Used by World and Scene servers.
 
 All public methods acquire `lock(syncRoot)` before accessing any internal state. `AccountData.AuthState` is the **single source of truth** for where a connection sits in the authentication lifecycle. All transitions are performed atomically via `TryAdvanceAuthState` (compare-and-swap under lock).
 
@@ -314,24 +314,38 @@ Values are explicitly numbered and must not be renumbered — sweep logic and gu
 ### Directory Tree
 
 ```
+# FishMMO-Auth (netstandard2.1 shared library — Assets/Dependencies/FishMMO-Auth.dll)
+FishMMO-Auth/
+├── Core/
+│   ├── Interfaces/
+│   │   ├── IAccountManager.cs                 # Generic interface: encryption, auth-state, account-connection maps
+│   │   ├── ISrpAccountManager.cs              # SRP-specific interface: AddConnectionAccount with SRP params
+│   │   └── ITokenAccountManager.cs            # Token-specific interface: AddConnectionAccount (name + ACL)
+│   ├── Enums/
+│   │   ├── AuthState.cs                       # Unified auth state enum (None → Handshake → … → Authenticated)
+│   │   └── AccessLevel.cs                     # Account permission tiers
+│   └── Collections/
+│       ├── ArrivalOrderTracker.cs             # Oldest-first tracking utility for TTL sweeps
+│       ├── ExpiringKeyTracker.cs              # Keyed debounce / rate-limit with head-first expiry
+│       └── LastSeenCacheTracker.cs            # TTL cache by last-seen timestamp
+│
+└── Implementation/
+    ├── Connection/
+    │   ├── AccountData.cs                     # Access level + auth state + SRP data container
+    │   └── ConnectionEncryptionData.cs        # X25519 public key, directional AES-256 keys, nonce contexts
+    ├── SRP/
+    │   └── ServerSrpData.cs                   # Server-side SRP session (ephemeral, proof, session)
+    └── Account/
+        ├── AccountManager.cs                  # Thread-safe base: all dictionaries, CAS machine, sweep tracking
+        ├── SrpAccountManager.cs               # SRP extension: AddConnectionAccount, SweepUnauthenticated, ClearSrpState
+        └── TokenAccountManager.cs             # Token extension: simplified AddConnectionAccount (name + ACL)
+
+# FishMMO-Unity (this assembly)
 Server/
-├── Core/Account/                              # Transport-agnostic interfaces and data types
-│   ├── IAccountManager.cs                     # Generic interface for account/connection management
-│   ├── ISrpAccountManager.cs                  # SRP-specific account management interface
-│   ├── ITokenAccountManager.cs                # Token-specific account management interface
-│   ├── AccountData.cs                         # Access level + auth state + SRP data container
-│   ├── ConnectionEncryptionData.cs            # X25519 public key, directional AES keys, nonce contexts
-│   └── SRP/
-│       ├── ServerSrpData.cs                   # Server-side SRP session (ephemeral, proof, session)
-│       └── AuthState.cs                       # Unified authentication state enum (all server types)
-│
-├── Core/Collections/
-│   └── ArrivalOrderTracker.cs                 # Shared oldest-first tracking utility for TTL sweeps
-│
-└── Implementation/Account/                    # FishNet-specific implementation (this directory)
-    ├── AccountManager.cs                      # Thread-safe IAccountManager<NetworkConnection>
-    ├── SrpAccountManager.cs                   # SRP-specific account management (LoginServer)
-    ├── TokenAccountManager.cs                 # Token-specific account management (World/Scene)
+└── Implementation/Account/                    # FishNet-typed thin wrappers (this directory)
+    ├── AccountManager.cs                      # Inherits AccountManager<NetworkConnection>; no members
+    ├── SrpAccountManager.cs                   # Inherits SrpAccountManager<NetworkConnection>; no members
+    ├── TokenAccountManager.cs                 # Inherits TokenAccountManager<NetworkConnection>; adds ClientId resolver ctor
     └── README.md                              # This file
 ```
 
@@ -345,12 +359,20 @@ IAccountManager<TConnection>
 └── ITokenAccountManager<TConnection>
 ```
 
-**Implementation Classes**
+**Generic Implementation Classes (FishMMO-Auth)**
 
 ```
-AccountManager : IAccountManager<NetworkConnection>
-├── SrpAccountManager : AccountManager, ISrpAccountManager<NetworkConnection>
-└── TokenAccountManager : AccountManager, ITokenAccountManager<NetworkConnection>
+AccountManager<TConnection> : IAccountManager<TConnection>
+├── SrpAccountManager<TConnection> : AccountManager<TConnection>, ISrpAccountManager<TConnection>
+└── TokenAccountManager<TConnection> : AccountManager<TConnection>, ITokenAccountManager<TConnection>
+```
+
+**FishNet-Typed Wrappers (FishMMO-Unity)**
+
+```
+AccountManager : AccountManager<NetworkConnection>             // no additional members
+SrpAccountManager : SrpAccountManager<NetworkConnection>      // no additional members
+TokenAccountManager : TokenAccountManager<NetworkConnection>   // adds ClientId resolver constructor
 ```
 
 **Data Types**
@@ -406,9 +428,9 @@ All public methods acquire `lock(syncRoot)`. The `TryAdvanceAuthState` callback 
 
 | Consumer | Interface Used | Role |
 |----------|---------------|------|
-| Login ServerBehaviour | `SrpAccountManager` | Creates manager; calls `AddConnectionEncryptionData`, drives SRP flow |
-| ServerAuthenticator (SRP) | `SrpAccountManager` | Advances through SRP auth states via `TryAdvanceAuthState`; calls `SweepUnauthenticatedConnections` periodically |
-| TokenServerAuthenticator | `TokenAccountManager` | Advances through `Handshake → TokenPending → Authenticated` |
+| Login ServerBehaviour | `SrpAccountManager` | Creates manager; passes to `SrpAuthenticatorCore` via `InitializeCoreInstance` |
+| `SrpAuthenticatorCore` (FishMMO-Auth) | `ISrpAccountManager<NetworkConnection>` | Calls `AddConnectionEncryptionData`, drives all SRP state transitions, runs `SweepUnauthenticatedConnections` |
+| `TokenAuthenticatorCore` (FishMMO-Auth) | `ITokenAccountManager<NetworkConnection>` | Drives `Handshake → TokenPending → Authenticated` transitions |
 | World/Scene Servers | `AccountManager` (base) | Query `GetAccountNameByConnection` and `GetConnectionAccountData` for permission checks |
 | Disconnect Handling | `AccountManager` (base) | Calls `RemoveConnectionAccount` to clean up all mappings |
 | Server Shutdown | `AccountManager` (base) | Calls `Clear()` to release all tracked connections and data |

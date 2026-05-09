@@ -1,3 +1,5 @@
 <Solution>
-  <Project Path="FishMMO-Auth/FishMMO-Auth.csproj" />
+  <Project Path="FishMMO-AuthShared/FishMMO-AuthShared.csproj" />
+  <Project Path="FishMMO-ClientAuth/FishMMO-ClientAuth.csproj" />
+  <Project Path="FishMMO-ServerAuth/FishMMO-ServerAuth.csproj" />
 </Solution>

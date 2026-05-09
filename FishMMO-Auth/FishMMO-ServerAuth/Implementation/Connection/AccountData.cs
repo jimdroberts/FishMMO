@@ -28,7 +28,7 @@ namespace FishMMO.Auth.Implementation
 		/// Gets the SRP authentication data for the account.
 		/// Null for token-authenticated connections and after SRP material is cleared.
 		/// </summary>
-		public ServerSrpData SrpData { get; private set; }
+		public ServerSrpData? SrpData { get; private set; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AccountData"/> class at Handshake state.

@@ -10,6 +10,7 @@
         "Unity.ResourceManager"
     ],
     "includePlatforms": [
+        "Editor",
         "LinuxStandalone64Server",
         "CloudRendering",
         "WindowsStandalone32Server",

@@ -22,37 +22,37 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// Gets the username associated with the SRP session.
 		/// </summary>
-		public string UserName { get; private set; }
+		public string? UserName { get; private set; }
 
 		/// <summary>
 		/// Gets the public ephemeral value sent by the client.
 		/// </summary>
-		public string PublicClientEphemeral { get; private set; }
+		public string? PublicClientEphemeral { get; private set; }
 
 		/// <summary>
 		/// Gets the SRP server instance handling the protocol.
 		/// </summary>
-		public SrpServer SrpServer { get; private set; }
+		public SrpServer? SrpServer { get; private set; }
 
 		/// <summary>
 		/// Gets the salt used for the SRP session.
 		/// </summary>
-		public string Salt { get; private set; }
+		public string? Salt { get; private set; }
 
 		/// <summary>
 		/// Gets the verifier used for the SRP session.
 		/// </summary>
-		public string Verifier { get; private set; }
+		public string? Verifier { get; private set; }
 
 		/// <summary>
 		/// Gets the server's ephemeral values for the SRP session.
 		/// </summary>
-		public SrpEphemeral ServerEphemeral { get; private set; }
+		public SrpEphemeral? ServerEphemeral { get; private set; }
 
 		/// <summary>
 		/// Gets the SRP session object after proof verification.
 		/// </summary>
-		public SrpSession Session { get; private set; }
+		public SrpSession? Session { get; private set; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ServerSrpData"/> class.
@@ -82,7 +82,7 @@ namespace FishMMO.Auth.Implementation
 		{
 			try
 			{
-				Session = SrpServer.DeriveSession(ServerEphemeral.Secret,
+				Session = SrpServer!.DeriveSession(ServerEphemeral!.Secret,
 												  PublicClientEphemeral,
 												  Salt,
 												  UserName,

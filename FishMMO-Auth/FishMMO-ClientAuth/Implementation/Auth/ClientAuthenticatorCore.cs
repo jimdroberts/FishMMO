@@ -1,0 +1,757 @@
+using System.Security.Cryptography;
+using SecureRemotePassword;
+using FishMMO.Auth.Core;
+using FishMMO.Logging;
+
+namespace FishMMO.Auth.Implementation
+{
+	/// <summary>
+	/// Engine-independent client-side authenticator state machine.
+	/// Implements the full SRP-6a + X25519 ECDH client auth flow, including
+	/// cookie challenge echo, key agreement, token auth (World/Scene), SRP verify/proof,
+	/// TOTP, and key material cleanup.
+	/// <para>
+	/// Concrete implementations (e.g., FishNet <c>ClientLoginAuthenticator</c>) implement
+	/// abstract callbacks for broadcasting messages and notifying the application layer.
+	/// </para>
+	/// </summary>
+	public abstract class ClientAuthenticatorCore
+	{
+		#region Fields
+
+		/// <summary>Ephemeral X25519 keypair for ECDH key agreement. Zeroed after use or on cleanup.</summary>
+		private CryptoHelper.X25519EphemeralKeyPair? ephemeralKeyPair;
+
+		/// <summary>Client→server AES-256 key derived via HKDF.</summary>
+		private byte[]? clientToServerKey;
+
+		/// <summary>Server→client AES-256 key derived via HKDF.</summary>
+		private byte[]? serverToClientKey;
+
+		/// <summary>Nonce context for the client→server (send/encrypt) direction.</summary>
+		private CryptoHelper.GcmNonceContext? sendNonceCtx;
+
+		/// <summary>Nonce context for the server→client (receive/decrypt) direction.</summary>
+		private CryptoHelper.GcmNonceContext? receiveNonceCtx;
+
+		/// <summary>Negotiated protocol version.</summary>
+		private ushort agreedVersion;
+
+		/// <summary>SRP client state.</summary>
+		private ClientSrpData? srpData;
+
+		/// <summary>Guard to ignore duplicate SRP verify messages. Main-thread only.</summary>
+		private bool srpVerifyProcessed;
+
+		/// <summary>Guard to ignore duplicate SRP success messages. Main-thread only.</summary>
+		private bool srpSuccessProcessed;
+
+		/// <summary>Guard to prevent echoing the cookie challenge more than once per connection.</summary>
+		private bool cookieEchoed;
+
+		/// <summary>Signed auth token from the LoginServer. Persists across connections; used for World/Scene auth.</summary>
+		private byte[]? storedAuthToken;
+
+		// ── Credential fields ──────────────────────────────────────────────────────────────────────
+		/// <summary>Username or email address supplied via <see cref="SetLoginCredentials"/>. Cleared after SRP proof is sent.</summary>
+		private string? username = "";
+		/// <summary>Password supplied via <see cref="SetLoginCredentials"/>. Cleared after SRP proof is sent.</summary>
+		private string? password = "";
+		/// <summary>Email address supplied for registration. Cleared after the create-account broadcast is sent.</summary>
+		private string? email = "";
+		/// <summary>User age supplied for registration.</summary>
+		private int age;
+		/// <summary>True when the current flow is account registration rather than login.</summary>
+		private bool register;
+
+		#endregion
+
+		#region Properties
+
+		/// <summary>
+		/// Returns the pending login identifier (username or email) if still set.
+		/// Returns null after credentials are cleared (post-SRP proof or disconnect).
+		/// </summary>
+		public string? PendingLoginIdentifier => username;
+
+		/// <summary>
+		/// Returns whether a stored auth token exists for World/Scene server authentication.
+		/// </summary>
+		public bool HasAuthToken => storedAuthToken != null;
+
+		/// <summary>Log source tag for all log messages.</summary>
+		protected virtual string LogPrefix => GetType().Name;
+
+		#endregion
+
+		#region Credential Setup
+
+		/// <summary>
+		/// Sets login credentials. Returns false if the format is invalid.
+		/// </summary>
+		/// <param name="username">Username or email used as login identifier.</param>
+		/// <param name="password">Account password.</param>
+		/// <param name="register">True to register a new account; false to login.</param>
+		/// <param name="email">Email address (required for registration).</param>
+		/// <param name="age">User age (required for registration).</param>
+		/// <returns>True if credentials were accepted; false if rejected by validation rules.</returns>
+		public bool SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0)
+		{
+			if (!IsAllowedUsername(username) || !IsAllowedPassword(password))
+				return false;
+
+			if (register && (string.IsNullOrWhiteSpace(email) || !IsAllowedEmailUsername(email)))
+				return false;
+
+			this.username = username;
+			this.password = password;
+			this.register = register;
+			this.email = email;
+			this.age = age;
+			return true;
+		}
+
+		#endregion
+
+		#region Connection Lifecycle
+
+		/// <summary>
+		/// Call when a new transport connection is established.
+		/// Generates the X25519 keypair and sends the initial <c>ClientHandshake</c>.
+		/// </summary>
+		public void OnConnected()
+		{
+			ephemeralKeyPair = new CryptoHelper.X25519EphemeralKeyPair();
+			srpVerifyProcessed = false;
+			srpSuccessProcessed = false;
+			cookieEchoed = false;
+
+			SendClientHandshake(
+				ephemeralKeyPair.PublicKey,
+				cookie: null,
+				CryptoHelper.MinSupportedProtocolVersion,
+				CryptoHelper.MaxSupportedProtocolVersion);
+		}
+
+		/// <summary>
+		/// Call when the transport connection stops or is stopped.
+		/// Clears all per-connection key material (not the stored auth token).
+		/// </summary>
+		public void OnDisconnected()
+		{
+			ClearKeyMaterial();
+		}
+
+		/// <summary>
+		/// Disposes the ephemeral keypair. Call from the host object's destroy/dispose method.
+		/// </summary>
+		public void Dispose()
+		{
+			ephemeralKeyPair?.Dispose();
+			ephemeralKeyPair = null;
+			ClearKeyMaterial();
+			ClearAuthToken();
+		}
+
+		#endregion
+
+		#region Incoming Message Handlers
+
+		/// <summary>
+		/// Handles a server handshake response.
+		/// Phase 1 (cookie challenge): echoes the cookie with the public key.
+		/// Phase 2 (ECDH complete): derives session keys, then initiates SRP or token auth.
+		/// </summary>
+		/// <param name="serverPublicKey">Server's X25519 public key, or null for a cookie challenge.</param>
+		/// <param name="cookie">Cookie from a phase-1 challenge.</param>
+		/// <param name="agreedVersion">Negotiated protocol version (only meaningful on phase 2).</param>
+		public void OnServerHandshakeReceived(byte[] serverPublicKey, byte[] cookie, ushort agreedVersion)
+		{
+			// ── Phase 1: Cookie challenge ──────────────────────────────────
+			if (serverPublicKey == null)
+			{
+				if (cookie == null || cookie.Length == 0 || ephemeralKeyPair == null)
+				{
+					Disconnect();
+					return;
+				}
+				if (cookieEchoed) return;
+				cookieEchoed = true;
+				SendClientHandshake(
+					ephemeralKeyPair.PublicKey,
+					cookie,
+					CryptoHelper.MinSupportedProtocolVersion,
+					CryptoHelper.MaxSupportedProtocolVersion);
+				return;
+			}
+
+			// ── Phase 2: ECDH key agreement ────────────────────────────────
+			if (serverPublicKey.Length != CryptoHelper.X25519PublicKeyLength)
+			{
+				Disconnect();
+				return;
+			}
+
+			if (ephemeralKeyPair == null)
+			{
+				_ = Log.Warning(LogPrefix, "Received server handshake but no client keypair exists.");
+				Disconnect();
+				return;
+			}
+
+			if (agreedVersion < CryptoHelper.MinSupportedProtocolVersion || agreedVersion > CryptoHelper.MaxSupportedProtocolVersion)
+			{
+				_ = Log.Warning(LogPrefix, $"Server agreed version {agreedVersion} is outside range [{CryptoHelper.MinSupportedProtocolVersion}..{CryptoHelper.MaxSupportedProtocolVersion}].");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			this.agreedVersion = agreedVersion;
+
+			try
+			{
+				var kaResult = HandshakeService.ClientPerformKeyAgreement(
+					serverPublicKey, ephemeralKeyPair,
+					CryptoHelper.MinSupportedProtocolVersion, CryptoHelper.MaxSupportedProtocolVersion,
+					this.agreedVersion);
+
+				ephemeralKeyPair.Dispose();
+				ephemeralKeyPair = null;
+
+				if (!kaResult.Success)
+				{
+					_ = Log.Warning(LogPrefix, "X25519 key agreement failed.");
+					ClearKeyMaterial();
+					Disconnect();
+					return;
+				}
+
+				clientToServerKey = kaResult.SessionKeys.ClientToServerKey;
+				serverToClientKey = kaResult.SessionKeys.ServerToClientKey;
+				sendNonceCtx = new CryptoHelper.GcmNonceContext(kaResult.SessionKeys.ClientPrefix, CryptoHelper.NonceSide.ClientToServer);
+				receiveNonceCtx = new CryptoHelper.GcmNonceContext(kaResult.SessionKeys.ServerPrefix, CryptoHelper.NonceSide.ServerToClient);
+			}
+			catch (CryptographicException ex)
+			{
+				_ = Log.Warning(LogPrefix, $"X25519 handshake failed: {ex.Message}");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			srpData = new ClientSrpData(SrpParameters.Create2048<SHA512>());
+
+			// Token auth path (World/Scene server)
+			if (storedAuthToken != null)
+			{
+				try
+				{
+					TokenService.ClientEncryptToken(storedAuthToken, clientToServerKey, sendNonceCtx, this.agreedVersion, out byte[] encryptedToken, out uint seq);
+					SendTokenAuth(encryptedToken, seq);
+				}
+				catch (CryptographicException ex)
+				{
+					_ = Log.Error(LogPrefix, $"AES encryption failed for token auth: {ex.Message}");
+					ClearKeyMaterial();
+					Disconnect();
+				}
+				return;
+			}
+
+			// Credential pre-validation
+			if (string.IsNullOrEmpty(this.username) || this.username.Length < 3 || this.username.Length > 32)
+			{
+				_ = Log.Warning(LogPrefix, "Username is empty or outside allowed length (3-32 characters).");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			if (string.IsNullOrEmpty(this.password) || this.password.Length < 1)
+			{
+				_ = Log.Warning(LogPrefix, "Password is empty.");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			if (register && string.IsNullOrEmpty(this.email))
+			{
+				_ = Log.Warning(LogPrefix, "Email is required for registration.");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			byte[] encryptedUsername;
+			uint usernameSeq;
+			try
+			{
+				SrpService.ClientEncryptUsername(this.username, clientToServerKey, sendNonceCtx, this.agreedVersion, register, out encryptedUsername, out usernameSeq);
+			}
+			catch (CryptographicException ex)
+			{
+				_ = Log.Error(LogPrefix, $"AES encryption failed for username: {ex.Message}");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			if (register)
+			{
+				srpData.GetSaltAndVerifier(username, password, out string salt, out string verifier);
+
+				byte[] encryptedEmail;
+				byte[] encryptedAge;
+				byte[] encryptedSalt;
+				byte[] encryptedVerifier;
+				uint createAccountSeq;
+				try
+				{
+					SrpService.ClientEncryptRegistrationFields(
+						this.email!, this.age, salt, verifier,
+						clientToServerKey, sendNonceCtx, this.agreedVersion,
+						out encryptedEmail, out encryptedAge, out encryptedSalt, out encryptedVerifier, out createAccountSeq);
+				}
+				catch (CryptographicException ex)
+				{
+					_ = Log.Error(LogPrefix, $"AES encryption failed for registration fields: {ex.Message}");
+					ClearKeyMaterial();
+					Disconnect();
+					return;
+				}
+
+				SendCreateAccount(encryptedUsername, encryptedEmail, encryptedAge, encryptedSalt, encryptedVerifier, createAccountSeq);
+			}
+			else
+			{
+				byte[] encryptedClientEphemeral;
+				uint seqClientEphemeral;
+				try
+				{
+					SrpService.ClientEncryptEphemeral(srpData.ClientEphemeral!.Public, clientToServerKey, sendNonceCtx, this.agreedVersion, out encryptedClientEphemeral, out seqClientEphemeral);
+				}
+				catch (CryptographicException ex)
+				{
+					_ = Log.Error(LogPrefix, $"AES encryption failed for client ephemeral: {ex.Message}");
+					ClearKeyMaterial();
+					Disconnect();
+					return;
+				}
+
+				SendSrpVerify(encryptedUsername, encryptedClientEphemeral, seqClientEphemeral);
+			}
+		}
+
+		/// <summary>
+		/// Handles the SRP verify response from the server.
+		/// Decrypts salt + server ephemeral, computes and sends the SRP proof.
+		/// </summary>
+		/// <param name="encryptedSalt">Encrypted SRP salt from server.</param>
+		/// <param name="encryptedServerEphemeral">Encrypted server public ephemeral from server.</param>
+		public void OnSrpVerifyResponseReceived(byte[] encryptedSalt, byte[] encryptedServerEphemeral)
+		{
+			if (srpData == null || srpVerifyProcessed) return;
+
+			if (receiveNonceCtx == null || serverToClientKey == null ||
+				sendNonceCtx == null || clientToServerKey == null)
+			{
+				Disconnect();
+				return;
+			}
+
+			string salt;
+			string publicServerEphemeral;
+			try
+			{
+				if (encryptedSalt == null || encryptedSalt.Length > CryptoHelper.MaxSrpPayloadBytes ||
+					encryptedServerEphemeral == null || encryptedServerEphemeral.Length > CryptoHelper.MaxSrpPayloadBytes)
+				{
+					ClearKeyMaterial();
+					Disconnect();
+					return;
+				}
+				SrpService.ClientDecryptVerifyResponse(encryptedSalt, encryptedServerEphemeral, serverToClientKey, receiveNonceCtx, agreedVersion, out salt, out publicServerEphemeral);
+			}
+			catch (CryptographicException)
+			{
+				_ = Log.Warning(LogPrefix, "AES decryption failed for SRP verify response.");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			if (srpData.GetProof(this.username!, this.password!, salt, publicServerEphemeral, out string proof))
+			{
+				username = null;
+				password = null;
+				email = null;
+				age = 0;
+
+				byte[] encryptedProof;
+				uint seqProof;
+				try
+				{
+					SrpService.ClientEncryptProof(proof, clientToServerKey, sendNonceCtx, agreedVersion, out encryptedProof, out seqProof);
+				}
+				catch (CryptographicException ex)
+				{
+					_ = Log.Error(LogPrefix, $"AES encryption failed for client proof: {ex.Message}");
+					Disconnect();
+					return;
+				}
+
+				SendSrpProof(encryptedProof, seqProof);
+				srpVerifyProcessed = true;
+			}
+			else
+			{
+				username = null;
+				password = null;
+				email = null;
+				age = 0;
+				Disconnect();
+			}
+		}
+
+		/// <summary>
+		/// Handles the SRP success response from the server.
+		/// Verifies the server proof, extracts and stores the auth token on success.
+		/// </summary>
+		/// <param name="encryptedServerProof">Encrypted server proof.</param>
+		/// <param name="result">Auth result code sent alongside the proof.</param>
+		/// <param name="encryptedToken">Encrypted auth token (null if not a LoginSuccess).</param>
+		public void OnSrpSuccessReceived(byte[] encryptedServerProof, ClientAuthenticationResult result, byte[] encryptedToken)
+		{
+			if (srpData == null || srpSuccessProcessed) return;
+
+			if (receiveNonceCtx == null || serverToClientKey == null)
+			{
+				Disconnect();
+				return;
+			}
+
+			string proof;
+			try
+			{
+				if (encryptedServerProof == null || encryptedServerProof.Length > CryptoHelper.MaxSrpPayloadBytes)
+				{
+					ClearKeyMaterial();
+					Disconnect();
+					return;
+				}
+				proof = SrpService.ClientDecryptServerProof(encryptedServerProof, serverToClientKey, receiveNonceCtx, agreedVersion);
+			}
+			catch (CryptographicException)
+			{
+				_ = Log.Warning(LogPrefix, "AES decryption failed for SRP success proof.");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			if (srpData.Verify(proof, out string _))
+			{
+				srpSuccessProcessed = true;
+
+				if (result == ClientAuthenticationResult.LoginSuccess &&
+					encryptedToken != null && encryptedToken.Length > 0)
+				{
+					try
+					{
+						storedAuthToken = SrpService.ClientDecryptAuthToken(encryptedToken, serverToClientKey, receiveNonceCtx, agreedVersion);
+					}
+					catch (CryptographicException tokenEx)
+					{
+						_ = Log.Warning(LogPrefix, $"Failed to decrypt auth token (non-fatal): {tokenEx.Message}");
+						storedAuthToken = null;
+					}
+				}
+
+				OnAuthResultCallback(result);
+
+				if (result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null)
+				{
+					OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
+				}
+
+				_ = Log.Debug(LogPrefix, result.ToString());
+
+				srpData.Clear();
+				srpData = null;
+			}
+			else
+			{
+				Disconnect();
+			}
+		}
+
+		/// <summary>
+		/// Handles a generic auth result broadcast from the server.
+		/// Clears the stored token on terminal token failures.
+		/// </summary>
+		/// <param name="result">The auth result code.</param>
+		public void OnAuthResultReceived(ClientAuthenticationResult result)
+		{
+			if (result == ClientAuthenticationResult.TokenInvalid ||
+				result == ClientAuthenticationResult.TokenExpired ||
+				result == ClientAuthenticationResult.TokenRevoked)
+			{
+				ClearAuthToken();
+			}
+
+			OnAuthResultCallback(result);
+			_ = Log.Debug(LogPrefix, result.ToString());
+		}
+
+		/// <summary>
+		/// Handles a 2FA setup broadcast (received after successful account registration).
+		/// Decrypts the otpauth URI and recovery codes then fires <see cref="OnTwoFactorSetupCallback"/>.
+		/// </summary>
+		/// <param name="encryptedOtpauthUri">Encrypted otpauth URI bytes.</param>
+		/// <param name="encryptedRecoveryCodes">Encrypted recovery codes array.</param>
+		public void OnTwoFactorSetupReceived(byte[] encryptedOtpauthUri, byte[] encryptedRecoveryCodes)
+		{
+			if (receiveNonceCtx == null || serverToClientKey == null) return;
+			if (encryptedOtpauthUri == null || encryptedOtpauthUri.Length == 0 ||
+				encryptedRecoveryCodes == null || encryptedRecoveryCodes.Length == 0) return;
+
+			string otpauthUri;
+			string[] recoveryCodes;
+			try
+			{
+				SrpService.ClientDecryptTwoFactorSetup(encryptedOtpauthUri, encryptedRecoveryCodes, serverToClientKey, receiveNonceCtx, agreedVersion, out otpauthUri, out recoveryCodes);
+			}
+			catch (CryptographicException)
+			{
+				_ = Log.Warning(LogPrefix, "AES decryption failed for 2FA setup data.");
+				return;
+			}
+
+			OnTwoFactorSetupCallback(otpauthUri, recoveryCodes);
+		}
+
+		#endregion
+
+		#region Send Helpers
+
+		/// <summary>
+		/// Encrypts and sends an account verification code.
+		/// </summary>
+		/// <param name="username">Account username to verify.</param>
+		/// <param name="verifyCode">The verification code received by the user.</param>
+		public void SendVerifyCode(string username, string verifyCode)
+		{
+			if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(verifyCode)) return;
+			if (sendNonceCtx == null || clientToServerKey == null)
+			{
+				Disconnect();
+				return;
+			}
+
+			byte[] encryptedUsername;
+			byte[] encryptedCode;
+			uint accountVerifySeq;
+			try
+			{
+				SrpService.ClientEncryptAccountVerify(username, verifyCode, clientToServerKey, sendNonceCtx, agreedVersion, out encryptedUsername, out encryptedCode, out accountVerifySeq);
+			}
+			catch (CryptographicException ex)
+			{
+				_ = Log.Error(LogPrefix, $"AES encryption failed for verify code: {ex.Message}");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			SendAccountVerify(encryptedUsername, encryptedCode, accountVerifySeq);
+		}
+
+		/// <summary>
+		/// Encrypts and sends a TOTP code for two-factor verification.
+		/// </summary>
+		/// <param name="code">The 6-digit TOTP code from the authenticator app.</param>
+		public void SendTotpCode(string code)
+		{
+			if (string.IsNullOrEmpty(code)) return;
+			if (sendNonceCtx == null || clientToServerKey == null)
+			{
+				Disconnect();
+				return;
+			}
+
+			byte[] encryptedCode;
+			uint totpSeq;
+			try
+			{
+				SrpService.ClientEncryptTotpCode(code, clientToServerKey, sendNonceCtx, agreedVersion, out encryptedCode, out totpSeq);
+			}
+			catch (CryptographicException ex)
+			{
+				_ = Log.Error(LogPrefix, $"AES encryption failed for TOTP code: {ex.Message}");
+				ClearKeyMaterial();
+				Disconnect();
+				return;
+			}
+
+			SendTwoFactorVerify(encryptedCode, totpSeq);
+		}
+
+		#endregion
+
+		#region Key Material Cleanup
+
+		/// <summary>
+		/// Zeroes all per-connection key material and resets state.
+		/// Does NOT clear <see cref="storedAuthToken"/>.
+		/// </summary>
+		public void ClearKeyMaterial()
+		{
+			ephemeralKeyPair?.Dispose();
+			ephemeralKeyPair = null;
+			srpData?.Clear();
+			srpData = null;
+			if (clientToServerKey != null)
+			{
+				CryptographicOperations.ZeroMemory(clientToServerKey);
+				clientToServerKey = null;
+			}
+			if (serverToClientKey != null)
+			{
+				CryptographicOperations.ZeroMemory(serverToClientKey);
+				serverToClientKey = null;
+			}
+			sendNonceCtx?.Dispose();
+			sendNonceCtx = null;
+			receiveNonceCtx?.Dispose();
+			receiveNonceCtx = null;
+			agreedVersion = 0;
+			username = null;
+			password = null;
+			email = null;
+			register = false;
+			age = 0;
+		}
+
+		/// <summary>
+		/// Zeroes and clears the stored auth token.
+		/// Call on explicit logout or when the token is no longer needed.
+		/// </summary>
+		public void ClearAuthToken()
+		{
+			if (storedAuthToken != null)
+			{
+				CryptographicOperations.ZeroMemory(storedAuthToken);
+				storedAuthToken = null;
+			}
+		}
+
+		#endregion
+
+		#region Abstract Transport Callbacks
+
+		/// <summary>
+		/// Sends the initial or cookie-echo client handshake broadcast.
+		/// </summary>
+		/// <param name="publicKey">Client's ephemeral X25519 public key (32 bytes).</param>
+		/// <param name="cookie">Cookie echoed from a prior challenge, or null on the initial handshake.</param>
+		/// <param name="minVersion">Minimum protocol version supported by this client.</param>
+		/// <param name="maxVersion">Maximum protocol version supported by this client.</param>
+		protected abstract void SendClientHandshake(byte[] publicKey, byte[]? cookie, ushort minVersion, ushort maxVersion);
+
+		/// <summary>
+		/// Sends a token auth broadcast (World/Scene server path).
+		/// </summary>
+		/// <param name="encryptedToken">AES-GCM encrypted auth token.</param>
+		/// <param name="seq">Message sequence number.</param>
+		protected abstract void SendTokenAuth(byte[] encryptedToken, uint seq);
+
+		/// <summary>
+		/// Sends the SRP verify broadcast (login path, phase 1).
+		/// </summary>
+		/// <param name="encryptedUsername">AES-GCM encrypted username bytes.</param>
+		/// <param name="encryptedClientEphemeral">AES-GCM encrypted SRP client public ephemeral.</param>
+		/// <param name="seq">Message sequence number.</param>
+		protected abstract void SendSrpVerify(byte[] encryptedUsername, byte[] encryptedClientEphemeral, uint seq);
+
+		/// <summary>
+		/// Sends the SRP proof broadcast (login path, phase 2).
+		/// </summary>
+		/// <param name="encryptedProof">AES-GCM encrypted SRP client proof.</param>
+		/// <param name="seq">Message sequence number.</param>
+		protected abstract void SendSrpProof(byte[] encryptedProof, uint seq);
+
+		/// <summary>
+		/// Sends the account creation broadcast (registration path).
+		/// </summary>
+		/// <param name="encryptedUsername">AES-GCM encrypted username.</param>
+		/// <param name="encryptedEmail">AES-GCM encrypted email address.</param>
+		/// <param name="encryptedAge">AES-GCM encrypted age value.</param>
+		/// <param name="encryptedSalt">AES-GCM encrypted SRP salt.</param>
+		/// <param name="encryptedVerifier">AES-GCM encrypted SRP verifier.</param>
+		/// <param name="seq">Message sequence number.</param>
+		protected abstract void SendCreateAccount(
+			byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
+			byte[] encryptedSalt, byte[] encryptedVerifier, uint seq);
+
+		/// <summary>
+		/// Sends an account verification code broadcast.
+		/// </summary>
+		/// <param name="encryptedUsername">AES-GCM encrypted username.</param>
+		/// <param name="encryptedCode">AES-GCM encrypted verification code.</param>
+		/// <param name="seq">Message sequence number.</param>
+		protected abstract void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq);
+
+		/// <summary>
+		/// Sends a TOTP verify broadcast.
+		/// </summary>
+		/// <param name="encryptedCode">AES-GCM encrypted TOTP code.</param>
+		/// <param name="seq">Message sequence number.</param>
+		protected abstract void SendTwoFactorVerify(byte[] encryptedCode, uint seq);
+
+		/// <summary>
+		/// Disconnects the client. Called on fatal protocol errors.
+		/// </summary>
+		protected abstract void Disconnect();
+
+		/// <summary>
+		/// Invoked when an auth result is received from the server.
+		/// Implementations should fire a UI event or property change.
+		/// </summary>
+		protected abstract void OnAuthResultCallback(ClientAuthenticationResult result);
+
+		/// <summary>
+		/// Invoked when the server sends 2FA setup data after account creation.
+		/// </summary>
+		/// <param name="otpauthUri">otpauth URI for authenticator app QR code.</param>
+		/// <param name="recoveryCodes">Recovery codes array.</param>
+		protected abstract void OnTwoFactorSetupCallback(string otpauthUri, string[] recoveryCodes);
+
+		/// <summary>
+		/// Validates a username according to project rules.
+		/// Delegates to <c>Authentication.IsAllowedUsername</c>.
+		/// </summary>
+		/// <param name="username">The username string to validate.</param>
+		/// <returns><c>true</c> if the username is allowed; otherwise, <c>false</c>.</returns>
+		protected abstract bool IsAllowedUsername(string username);
+
+		/// <summary>
+		/// Validates a password according to project rules.
+		/// Delegates to <c>Authentication.IsAllowedPassword</c>.
+		/// </summary>
+		/// <param name="password">The password string to validate.</param>
+		/// <returns><c>true</c> if the password is allowed; otherwise, <c>false</c>.</returns>
+		protected abstract bool IsAllowedPassword(string password);
+
+		/// <summary>
+		/// Validates an email-format username.
+		/// Delegates to <c>Authentication.IsAllowedEmailUsername</c>.
+		/// </summary>
+		/// <param name="email">The email address to validate.</param>
+		/// <returns><c>true</c> if the email is a valid login identifier; otherwise, <c>false</c>.</returns>
+		protected abstract bool IsAllowedEmailUsername(string email);
+
+		#endregion
+	}
+}

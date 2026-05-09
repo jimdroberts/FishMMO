@@ -8,26 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
-    <PackageReference Include="srp" Version="1.0.7" />
-    <PackageReference Include="Otp.NET" Version="1.4.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\FishMMO-SharedUtility\FishMMO-SharedUtility\FishMMO-SharedUtility.csproj" />
+    <ProjectReference Include="..\FishMMO-AuthShared\FishMMO-AuthShared.csproj" />
   </ItemGroup>
 
   <!-- Copy the built DLL to the Unity project Dependencies folder. -->
   <Target Name="CopyToUnityDependencies" AfterTargets="Build">
     <PropertyGroup>
       <UnityDepsDir>..\..\FishMMO-Unity\Assets\Dependencies</UnityDepsDir>
-      <BuildConfiguration>Debug</BuildConfiguration>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-      <BuildConfiguration>Release</BuildConfiguration>
     </PropertyGroup>
     <ItemGroup>
-      <AuthDll Include="bin\$(BuildConfiguration)\**\FishMMO-Auth.dll" />
+      <AuthDll Include="bin\$(Configuration)\**\FishMMO-ClientAuth.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(AuthDll)" DestinationFolder="$(UnityDepsDir)" />
   </Target>

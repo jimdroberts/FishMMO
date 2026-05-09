@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace FishMMO.Server.Core.Collections
+namespace FishMMO.Auth.Core.Collections
 {
 	/// <summary>
 	/// Queue/index tracker that preserves first-seen ordering with O(1) add/remove by key.
@@ -17,7 +17,7 @@ namespace FishMMO.Server.Core.Collections
 		/// <summary>
 		/// Initializes a new tracker with an optional key comparer.
 		/// </summary>
-		public ArrivalOrderTracker(IEqualityComparer<TKey> comparer = null)
+		public ArrivalOrderTracker(IEqualityComparer<TKey>? comparer = null)
 		{
 			nodes = comparer == null
 				? new Dictionary<TKey, LinkedListNode<ArrivalEntry<TKey>>>()
@@ -53,6 +53,8 @@ namespace FishMMO.Server.Core.Collections
 		/// <summary>
 		/// Adds a key only if it is not already tracked.
 		/// </summary>
+		/// <param name="key">The key to track.</param>
+		/// <param name="firstSeenUtc">The UTC timestamp to record as first-seen.</param>
 		public void TrackIfMissing(TKey key, DateTime firstSeenUtc)
 		{
 			lock (gate)
@@ -67,9 +69,10 @@ namespace FishMMO.Server.Core.Collections
 		}
 
 		/// <summary>
-		/// Removes a tracked key if present. O(1) via Dictionary→LinkedListNode lookup;
-		/// <see cref="LinkedList{T}.Remove(LinkedListNode{T})"/> is itself O(1).
+		/// Removes a tracked key if present. O(1) via Dictionary→LinkedListNode lookup.
 		/// </summary>
+		/// <param name="key">The key to remove.</param>
+		/// <returns><c>true</c> if the key was found and removed; otherwise, <c>false</c>.</returns>
 		public bool Remove(TKey key)
 		{
 			lock (gate)
@@ -91,6 +94,9 @@ namespace FishMMO.Server.Core.Collections
 		/// <summary>
 		/// Gets the oldest tracked key without removing it.
 		/// </summary>
+		/// <param name="key">The oldest key, if one exists.</param>
+		/// <param name="firstSeenUtc">The first-seen UTC timestamp of the oldest key.</param>
+		/// <returns><c>true</c> if a key was found; otherwise, <c>false</c>.</returns>
 		public bool TryPeekOldest(out TKey key, out DateTime firstSeenUtc)
 		{
 			lock (gate)
@@ -98,7 +104,7 @@ namespace FishMMO.Server.Core.Collections
 				LinkedListNode<ArrivalEntry<TKey>> head = queue.First;
 				if (head == null)
 				{
-					key = default;
+					key = default!;
 					firstSeenUtc = default;
 					return false;
 				}
@@ -112,6 +118,9 @@ namespace FishMMO.Server.Core.Collections
 		/// <summary>
 		/// Removes and returns the oldest tracked key.
 		/// </summary>
+		/// <param name="key">The removed key, if one existed.</param>
+		/// <param name="firstSeenUtc">The first-seen UTC timestamp of the removed key.</param>
+		/// <returns><c>true</c> if a key was removed; otherwise, <c>false</c>.</returns>
 		public bool PopOldest(out TKey key, out DateTime firstSeenUtc)
 		{
 			lock (gate)
@@ -119,7 +128,7 @@ namespace FishMMO.Server.Core.Collections
 				LinkedListNode<ArrivalEntry<TKey>> head = queue.First;
 				if (head == null)
 				{
-					key = default;
+					key = default!;
 					firstSeenUtc = default;
 					return false;
 				}

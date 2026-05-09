@@ -234,7 +234,7 @@ namespace FishMMO.Auth.Implementation
 		/// </remarks>
 		public sealed class X25519EphemeralKeyPair : IDisposable
 		{
-			private byte[] privateKey;
+			private byte[]? privateKey;
 			private bool consumed;
 			private bool disposed;
 
@@ -270,7 +270,7 @@ namespace FishMMO.Auth.Implementation
 
 				try
 				{
-					return DeriveX25519SharedSecret(privateKey, peerPublicKey, handshakeTranscriptHash);
+					return DeriveX25519SharedSecret(privateKey!, peerPublicKey, handshakeTranscriptHash);
 				}
 				finally
 				{
@@ -538,7 +538,7 @@ namespace FishMMO.Auth.Implementation
 
 		public sealed class GcmNonceContext : IDisposable
 		{
-			private byte[] prefix;
+			private byte[]? prefix;
 			private readonly bool serverToClient;
 			private long counter;
 			private bool disposed;
@@ -580,7 +580,7 @@ namespace FishMMO.Auth.Implementation
 				long seq = Interlocked.Increment(ref counter);
 				if (seq > uint.MaxValue)
 					throw new CryptographicException("GCM nonce counter exhausted; session must be rekeyed.");
-				return (BuildGcmNonce(prefix, (ulong)seq, serverToClient), (uint)seq);
+				return (BuildGcmNonce(prefix!, (ulong)seq, serverToClient), (uint)seq);
 			}
 
 			/// <summary>
@@ -592,7 +592,7 @@ namespace FishMMO.Auth.Implementation
 			public byte[] BuildNonceForSequence(uint sequence)
 			{
 				if (disposed) throw new ObjectDisposedException(nameof(GcmNonceContext));
-				return BuildGcmNonce(prefix, sequence, serverToClient);
+				return BuildGcmNonce(prefix!, sequence, serverToClient);
 			}
 
 			/// <summary>
@@ -1040,7 +1040,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="accessLevel">Parsed access level (AccessLevel.Player on failure).</param>
 		/// <param name="expiresUtc">Parsed UTC expiration (DateTime.MinValue on failure).</param>
 		/// <returns><c>true</c> if the HMAC is valid and the token is well-formed; otherwise <c>false</c>.</returns>
-		public static bool TryParseAndVerifyAuthToken(byte[] signedToken, byte[] hmacKey, out string accountName, out long loginServerId, out AccessLevel accessLevel, out DateTime expiresUtc)
+		public static bool TryParseAndVerifyAuthToken(byte[] signedToken, byte[] hmacKey, out string? accountName, out long loginServerId, out AccessLevel accessLevel, out DateTime expiresUtc)
 		{
 			accountName = null;
 			loginServerId = 0;
