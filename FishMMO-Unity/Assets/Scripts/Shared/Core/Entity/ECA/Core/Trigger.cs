@@ -43,7 +43,17 @@ namespace FishMMO.Shared.Core
 				{
 					continue;
 				}
-				if (!EvaluateCondition(condition, eventData))
+				bool passed;
+				try
+				{
+					passed = EvaluateCondition(condition, eventData);
+				}
+				catch (System.Exception ex)
+				{
+					Log.Error("Trigger", $"Condition '{condition.GetType().Name}' threw: {ex}");
+					passed = false;
+				}
+				if (!passed)
 				{
 					return false;
 				}
@@ -62,7 +72,7 @@ namespace FishMMO.Shared.Core
 		{
 			if (condition.TargetSelector == null)
 			{
-				return condition.Evaluate(eventData.Initiator, eventData);
+				return condition.Check(eventData.Initiator, eventData);
 			}
 
 			foreach (GameObject target in condition.TargetSelector.SelectTargets(eventData))
@@ -72,7 +82,7 @@ namespace FishMMO.Shared.Core
 					continue;
 				}
 				EventData scoped = eventData.Fork(target);
-				bool passed = condition.Evaluate(scoped.Initiator, scoped);
+				bool passed = condition.Check(scoped.Initiator, scoped);
 				if (passed && condition.Combine == ConditionTargetCombine.Any)
 				{
 					return true;
@@ -91,7 +101,10 @@ namespace FishMMO.Shared.Core
 
 		/// <summary>
 		/// Executes an action list against the supplied event data, fanning out across
-		/// per-action <see cref="BaseAction.TargetSelector"/> when set.
+		/// per-action <see cref="BaseAction.TargetSelector"/> when set. Actions implementing
+		/// <see cref="IAbortableAction"/> with <see cref="BaseAction.StopChainOnFailure"/> set
+		/// will abort the rest of the chain when their <see cref="IAbortableAction.TryExecute"/>
+		/// returns false (e.g. a resource cost that couldn't be paid).
 		/// </summary>
 		/// <param name="actions">The actions to execute.</param>
 		/// <param name="eventData">The event data passed to each action.</param>
@@ -112,7 +125,10 @@ namespace FishMMO.Shared.Core
 
 				if (action.TargetSelector == null)
 				{
-					action.Execute(eventData.Initiator, eventData);
+					if (!RunOne(action, eventData.Initiator, eventData))
+					{
+						return;
+					}
 					continue;
 				}
 
@@ -123,8 +139,39 @@ namespace FishMMO.Shared.Core
 						continue;
 					}
 					EventData scoped = eventData.Fork(target);
-					action.Execute(scoped.Initiator, scoped);
+					if (!RunOne(action, scoped.Initiator, scoped))
+					{
+						return;
+					}
 				}
+			}
+		}
+
+		/// <summary>
+		/// Invokes a single action instance, routing through <see cref="IAbortableAction"/> when
+		/// the action opts in. Exceptions thrown by an action are caught and logged so a single
+		/// malformed designer-authored action cannot poison the rest of the action chain or
+		/// sibling targets in a fan-out. Returns false only when an abortable action signals
+		/// failure AND has <see cref="BaseAction.StopChainOnFailure"/> set — in which case the
+		/// caller should stop processing further actions/targets in the current list.
+		/// </summary>
+		private static bool RunOne(BaseAction action, ICharacter initiator, EventData eventData)
+		{
+			try
+			{
+				if (action is IAbortableAction abortable)
+				{
+					bool ok = abortable.TryExecute(initiator, eventData);
+					return ok || !action.StopChainOnFailure;
+				}
+				action.Execute(initiator, eventData);
+				return true;
+			}
+			catch (System.Exception ex)
+			{
+				Log.Error("Trigger", $"Action '{action.GetType().Name}' threw: {ex}");
+				// Fault isolation: a throwing action does not abort sibling actions.
+				return true;
 			}
 		}
 	}
@@ -146,11 +193,13 @@ namespace FishMMO.Shared.Core
 	public class Trigger : CachedScriptableObject<Trigger>, ICachedObject
 	{
 		/// <summary>
-		/// Selector that produces the targets this trigger fires for. Required at runtime —
-		/// when null, the trigger logs a warning and treats the trigger as firing once with
-		/// no target (initiator-only).
+		/// Selector that produces the targets this trigger fires for. When null, the trigger
+		/// fires once against the event data as-is (i.e. against whatever <see cref="EventData.Target"/>
+		/// the caller already set) — equivalent to using <see cref="EventTargetSelector"/> but
+		/// without per-target conditions or override slots. Set a concrete selector for
+		/// spatial fan-out (Area, Cone, Chain, …) or for explicit per-target conditions.
 		/// </summary>
-		[Tooltip("Selector that produces the targets this trigger fires for. Use InitiatorTargetSelector for self-only effects.")]
+		[Tooltip("Selector that produces the targets this trigger fires for. Leave null to act on the event's existing Target. Use InitiatorTargetSelector for self-only, EventTargetSelector for explicit hit-target semantics.")]
 		[SerializeReference, SubclassSelector]
 		public TargetSelector TargetSelector;
 
@@ -194,7 +243,9 @@ namespace FishMMO.Shared.Core
 
 			if (TargetSelector == null)
 			{
-				Log.Warning("Trigger", $"Trigger '{name}' has no TargetSelector — executing once against the initiator.");
+				// Intentional fallback: act on the event's existing Target (or initiator
+				// for events with no target). This is the common path for OnHit / region /
+				// dialogue triggers whose caller already resolved the target.
 				ExecuteForTarget(eventData);
 				return;
 			}

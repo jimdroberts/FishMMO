@@ -19,15 +19,6 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of all direct child <see cref="GameObject"/>s, or empty if context is null.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
-			{
-				if (overrideTarget != null)
-				{
-					yield return overrideTarget;
-				}
-				yield break;
-			}
-
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			Transform contextTransform = context.transform;

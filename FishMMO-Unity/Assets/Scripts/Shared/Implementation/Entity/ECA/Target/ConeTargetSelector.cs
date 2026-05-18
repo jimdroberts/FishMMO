@@ -16,12 +16,14 @@ namespace FishMMO.Shared
 		/// Radius of the cone.
 		/// </summary>
 		[Tooltip("Radius of the cone.")]
+		[Min(0f)]
 		public float Radius = 5f;
 
 		/// <summary>
 		/// Angle of the cone in degrees.
 		/// </summary>
 		[Tooltip("Angle of the cone in degrees.")]
+		[Range(0f, 360f)]
 		public float Angle = 45f;
 
 		/// <summary>
@@ -34,6 +36,7 @@ namespace FishMMO.Shared
 		/// Maximum number of hits to process.
 		/// </summary>
 		[Tooltip("Maximum number of hits to process.")]
+		[Min(1)]
 		public int MaxHits = 16;
 
 		/// <summary>
@@ -48,15 +51,6 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of <see cref="GameObject"/>s within the cone, or empty if context is null.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
-			{
-				if (overrideTarget != null)
-				{
-					yield return overrideTarget;
-				}
-				yield break;
-			}
-
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();

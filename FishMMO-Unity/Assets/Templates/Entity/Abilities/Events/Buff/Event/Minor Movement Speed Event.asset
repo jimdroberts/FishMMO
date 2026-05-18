@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
   m_Name: Minor Movement Speed Event
   m_EditorClassIdentifier: 
+  TargetSelector:
+    rid: -2
   Conditions:
   - rid: 8938684509875339269
   OnConditionsMetActions:
@@ -32,12 +34,16 @@ MonoBehaviour:
     - rid: 8938684490743545939
       type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
+        TargetSelector:
+          rid: -2
         StacksValue:
           rid: 8938684490743545943
         BuffTemplate: {fileID: 11400000, guid: f382d90751b078548b47500f1817ff29, type: 2}
     - rid: 8938684490743545940
       type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
+        TargetSelector:
+          rid: -2
         FXPrefab: {fileID: 7266499652759718708, guid: fc146935ca6612f4a816f8e9e2ad17c1,
           type: 3}
     - rid: 8938684490743545943
@@ -47,5 +53,14 @@ MonoBehaviour:
     - rid: 8938684509875339269
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
+        TargetSelector:
+          rid: 8938684714611114055
+        Combine: 0
         Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
         RequiredAmount: 3
+    - rid: 8938684714611114055
+      type: {class: InitiatorTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        conditions: []
+        targetOverride: {fileID: 0}
+        initiatorOverride: {fileID: 0}

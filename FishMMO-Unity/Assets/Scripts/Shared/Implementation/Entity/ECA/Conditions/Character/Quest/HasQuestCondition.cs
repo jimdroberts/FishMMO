@@ -16,12 +16,6 @@ namespace FishMMO.Shared
 		[Tooltip("The quest template to check for in the character's quest log.")]
 		public QuestTemplate QuestTemplate;
 
-		/// <summary>
-		/// When true, requires the quest to NOT be present (inverse check).
-		/// </summary>
-		[Tooltip("When true, the condition passes if the character does NOT have this quest.")]
-		public bool Invert;
-
 		/// <inheritdoc />
 		public override bool Evaluate(ICharacter initiator, EventData eventData = null)
 		{
@@ -32,11 +26,10 @@ namespace FishMMO.Shared
 			}
 			if (!target.TryGet(out IQuestController questController))
 			{
-				return Invert;
+				return false;
 			}
 
-			bool hasQuest = questController.TryGetQuest(QuestTemplate.Name, out _);
-			return Invert ? !hasQuest : hasQuest;
+			return questController.TryGetQuest(QuestTemplate.Name, out _);
 		}
 	}
 }

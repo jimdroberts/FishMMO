@@ -45,7 +45,7 @@ namespace FishMMO.Shared.Core
 			{
 				foreach (var condition in Conditions)
 				{
-					if (condition == null || !condition.Evaluate(initiator, eventData))
+					if (condition == null || !condition.Check(initiator, eventData))
 					{
 						return false;
 					}
@@ -56,7 +56,7 @@ namespace FishMMO.Shared.Core
 			{
 				foreach (var condition in Conditions)
 				{
-					if (condition != null && condition.Evaluate(initiator, eventData))
+					if (condition != null && condition.Check(initiator, eventData))
 					{
 						return true;
 					}

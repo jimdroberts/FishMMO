@@ -10,6 +10,16 @@ namespace FishMMO.Shared
 	/// Implementations consume the current <see cref="EventData"/> (its <see cref="EventData.Target"/>
 	/// or <see cref="EventData.Initiator"/> serve as the spatial / contextual reference)
 	/// and yield one or more <see cref="GameObject"/>s for triggers, conditions or actions to operate on.
+	/// <para>
+	/// <b>Asset safety:</b> selectors are serialized inline on Trigger ScriptableObjects via
+	/// <c>[SerializeReference]</c>. Unity cannot serialize references to scene GameObjects from
+	/// asset files, so selectors intentionally hold no direct scene references. To "pick a
+	/// specific scene object" from an asset-based Trigger, use
+	/// <see cref="NamedSceneObjectTargetSelector"/> or <see cref="TaggedSceneObjectTargetSelector"/>
+	/// — they resolve scene objects at runtime by name or tag. For inline (MonoBehaviour-hosted)
+	/// triggers in a scene, prefer setting <see cref="EventData.Target"/> at the invocation
+	/// site so the trigger receives the picked GameObject through standard event flow.
+	/// </para>
 	/// </summary>
 	[Serializable]
 	public abstract class TargetSelector : IConditionalTargetSelector
@@ -21,32 +31,8 @@ namespace FishMMO.Shared
 		[SerializeReference, SubclassSelector]
 		private List<BaseCondition> conditions = new List<BaseCondition>();
 
-		/// <summary>
-		/// Optional scene object selected directly instead of running this selector's normal target query.
-		/// </summary>
-		[Tooltip("Optional scene object selected directly instead of running this selector's normal target query.")]
-		[SerializeField]
-		private GameObject targetOverride;
-
-		/// <summary>
-		/// Optional scene object used as the initiator when it implements ICharacter.
-		/// </summary>
-		[Tooltip("Optional scene object used as the initiator when it implements ICharacter.")]
-		[SerializeField]
-		private GameObject initiatorOverride;
-
 		/// <inheritdoc/>
 		public List<BaseCondition> Conditions { get { return conditions; } set { conditions = value; } }
-
-		/// <summary>
-		/// Optional scene object selected directly by this selector.
-		/// </summary>
-		public GameObject TargetOverride { get { return targetOverride; } set { targetOverride = value; } }
-
-		/// <summary>
-		/// Optional scene object used as this selector's initiator.
-		/// </summary>
-		public GameObject InitiatorOverride { get { return initiatorOverride; } set { initiatorOverride = value; } }
 
 		/// <summary>
 		/// Selects targets based on the supplied event context.
@@ -70,27 +56,12 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Tries to yield this selector's explicit <see cref="TargetOverride"/> if assigned.
-		/// </summary>
-		/// <param name="eventData">The current event data.</param>
-		/// <param name="target">The override target when present and conditions pass.</param>
-		/// <returns>True when an override was configured (regardless of whether conditions passed).</returns>
-		protected bool TrySelectTargetOverride(EventData eventData, out GameObject target)
-		{
-			if (targetOverride == null)
-			{
-				target = null;
-				return false;
-			}
-
-			target = AreConditionsMet(targetOverride, eventData) ? targetOverride : null;
-			return true;
-		}
-
-		/// <summary>
 		/// Evaluates this selector's per-target <see cref="Conditions"/> against the candidate target.
 		/// Builds a forked <see cref="EventData"/> scoped to the candidate so conditions see the right
-		/// <see cref="EventData.Target"/> / <see cref="EventData.TargetCharacter"/>.
+		/// <see cref="EventData.Target"/> / <see cref="EventData.TargetCharacter"/>, then delegates to
+		/// <see cref="TriggerExecution.AreConditionsMet"/> so nested conditions' own
+		/// <see cref="BaseCondition.TargetSelector"/> and <see cref="BaseCondition.Combine"/> settings
+		/// are honored uniformly with top-level Trigger conditions.
 		/// </summary>
 		/// <param name="target">The candidate target GameObject.</param>
 		/// <param name="eventData">The parent event data, or null.</param>
@@ -108,50 +79,23 @@ namespace FishMMO.Shared
 			}
 
 			EventData scoped = ForkForCandidate(target, eventData);
-
-			for (int i = 0; i < conditions.Count; ++i)
-			{
-				BaseCondition condition = conditions[i];
-				if (condition != null && !condition.Evaluate(scoped.Initiator, scoped))
-				{
-					return false;
-				}
-			}
-			return true;
+			return TriggerExecution.AreConditionsMet(conditions, scoped);
 		}
 
 		/// <summary>
-		/// Builds a per-candidate event data clone, honoring <see cref="InitiatorOverride"/> when assigned.
+		/// Builds a per-candidate event data clone scoped to <paramref name="target"/>.
 		/// </summary>
 		/// <param name="target">The candidate target GameObject.</param>
 		/// <param name="eventData">The parent event data.</param>
 		/// <returns>A new event data scoped to the candidate.</returns>
 		private EventData ForkForCandidate(GameObject target, EventData eventData)
 		{
-			ICharacter overrideInitiator = null;
-			if (initiatorOverride != null)
-			{
-				initiatorOverride.TryGetComponent(out overrideInitiator);
-			}
-
-			if (overrideInitiator != null)
-			{
-				EventData scoped = new EventData(overrideInitiator);
-				scoped.SetTarget(target);
-				if (eventData != null)
-				{
-					scoped.RNG = eventData.RNG;
-					scoped.Merge(eventData);
-				}
-				return scoped;
-			}
-
 			if (eventData != null)
 			{
 				return eventData.Fork(target);
 			}
 
-			// No parent event data and no override — synthesize a minimal scope.
+			// No parent event data — synthesize a minimal scope.
 			EventData fallback = new EventData(null);
 			fallback.SetTarget(target);
 			return fallback;

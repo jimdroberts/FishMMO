@@ -9,11 +9,6 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class HasPetCondition : BaseCondition
 	{
-		/// <summary>
-		/// If true, inverts the result (returns true when no pet).
-		/// </summary>
-		public bool Invert;
-
 		/// <inheritdoc />
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
@@ -28,8 +23,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			bool hasPet = petController.Pet != null;
-			return Invert ? !hasPet : hasPet;
+			return petController.Pet != null;
 		}
 	}
 }

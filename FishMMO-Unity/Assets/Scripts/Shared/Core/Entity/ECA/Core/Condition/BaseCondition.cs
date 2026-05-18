@@ -19,6 +19,11 @@ namespace FishMMO.Shared.Core
 	/// <summary>
 	/// Abstract base class for all ECA conditions. Serialized inline via [SerializeReference] on Trigger assets.
 	/// Derive from this class and add [Serializable] to create concrete conditions.
+	/// <para>
+	/// Concrete classes implement <see cref="Evaluate"/> with their plain pass/fail logic.
+	/// Framework code (TriggerExecution, TargetSelector, CompositeCondition) should call <see cref="Check"/>
+	/// instead — it wraps <see cref="Evaluate"/> and applies the universal <see cref="Invert"/> flag.
+	/// </para>
 	/// </summary>
 	[Serializable]
 	public abstract class BaseCondition : ICondition
@@ -40,11 +45,37 @@ namespace FishMMO.Shared.Core
 		public ConditionTargetCombine Combine = ConditionTargetCombine.All;
 
 		/// <summary>
-		/// Evaluates the condition. Must be implemented by derived classes.
+		/// When true, the final result of <see cref="Check"/> is logically negated. Apply this at
+		/// the condition's boundary rather than open-coding inversion inside each derived class —
+		/// every condition type gets the flag uniformly, and per-target <see cref="Combine"/>
+		/// semantics still hold (Invert flips the aggregate, not each per-target evaluation).
+		/// </summary>
+		[Tooltip("If true, negate this condition's final result (after multi-target Combine).")]
+		public bool Invert;
+
+		/// <summary>
+		/// Evaluates the condition's raw pass/fail logic. Must be implemented by derived classes.
+		/// Derived classes should NOT apply <see cref="Invert"/> themselves — the framework calls
+		/// <see cref="Check"/>, which wraps this method and applies <see cref="Invert"/> uniformly.
 		/// </summary>
 		/// <param name="initiator">The character initiating the check.</param>
 		/// <param name="eventData">Optional event data for the condition.</param>
-		/// <returns>True if the condition is met; otherwise, false.</returns>
+		/// <returns>True if the underlying check passes; otherwise, false.</returns>
 		public abstract bool Evaluate(ICharacter initiator, EventData eventData = null);
+
+		/// <summary>
+		/// Evaluates the condition and applies <see cref="Invert"/> to the result. Framework
+		/// code (TriggerExecution, TargetSelector, CompositeCondition, Ability activation
+		/// checks) should call this method rather than <see cref="Evaluate"/> directly so the
+		/// inversion semantics stay consistent everywhere.
+		/// </summary>
+		/// <param name="initiator">The character initiating the check.</param>
+		/// <param name="eventData">Optional event data for the condition.</param>
+		/// <returns>True when the condition (after optional inversion) is satisfied.</returns>
+		public bool Check(ICharacter initiator, EventData eventData = null)
+		{
+			bool raw = Evaluate(initiator, eventData);
+			return Invert ? !raw : raw;
+		}
 	}
 }

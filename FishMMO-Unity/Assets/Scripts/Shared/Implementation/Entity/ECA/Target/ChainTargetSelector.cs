@@ -16,12 +16,14 @@ namespace FishMMO.Shared
 		/// The maximum number of targets to select in the chain (including the initial context).
 		/// </summary>
 		[Tooltip("The maximum number of targets to select in the chain (including the initial context).")]
+		[Min(1)]
 		public int ChainLength = 3;
 
 		/// <summary>
 		/// The radius to search for the next target in the chain, in Unity units.
 		/// </summary>
 		[Tooltip("The radius to search for the next target in the chain, in Unity units.")]
+		[Min(0f)]
 		public float ChainRadius = 5f;
 
 		/// <summary>
@@ -34,6 +36,7 @@ namespace FishMMO.Shared
 		/// The maximum number of colliders to consider per OverlapSphere query.
 		/// </summary>
 		[Tooltip("The maximum number of colliders to consider per OverlapSphere query.")]
+		[Min(1)]
 		public int MaxHits = 16;
 
 		/// <summary>
@@ -50,15 +53,6 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of <see cref="GameObject"/>s representing the chain of selected targets, starting with <paramref name="context"/>.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
-			{
-				if (overrideTarget != null)
-				{
-					yield return overrideTarget;
-				}
-				yield break;
-			}
-
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();

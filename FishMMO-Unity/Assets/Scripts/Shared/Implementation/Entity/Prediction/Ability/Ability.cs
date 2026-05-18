@@ -424,7 +424,7 @@ namespace FishMMO.Shared
 				// Skip resource cost conditions; those are handled by HasResource via aggregation.
 				if (condition is IResourceCost) continue;
 
-				if (!condition.Evaluate(character, checkData))
+				if (!condition.Check(character, checkData))
 				{
 					return false;
 				}

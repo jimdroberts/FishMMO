@@ -19,8 +19,7 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			ICharacter target = (eventData?.TargetCharacter ?? initiator);
-			if (target == null)
+			if (!TryResolveTarget(eventData, out ICharacter target))
 			{
 				return;
 			}

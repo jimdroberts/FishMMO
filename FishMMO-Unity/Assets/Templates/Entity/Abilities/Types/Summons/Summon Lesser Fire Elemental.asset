@@ -47,5 +47,14 @@ MonoBehaviour:
     - rid: 8938684499217875193
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
+        TargetSelector:
+          rid: 8938684714611114056
+        Combine: 0
         Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
         RequiredAmount: 15
+    - rid: 8938684714611114056
+      type: {class: InitiatorTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        conditions: []
+        targetOverride: {fileID: 0}
+        initiatorOverride: {fileID: 0}

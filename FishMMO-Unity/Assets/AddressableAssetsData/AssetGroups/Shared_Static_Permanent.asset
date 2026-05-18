@@ -39,12 +39,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 0ceafd4ad49cb8600aef7517479dea25
-    m_Address: New Quests
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0f2ff92179a6d1b4c9dde7ad6a4afdb0
     m_Address: an orc warrior
     m_ReadOnly: 0
@@ -53,12 +47,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0fbfa8b68911e1c4fa66d6b57fcab6a2
     m_Address: Minor Increase Armor
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1385f6e1d441547c2b899cd7bfe412ec
-    m_Address: New Triggers
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

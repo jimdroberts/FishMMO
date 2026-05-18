@@ -16,12 +16,14 @@ namespace FishMMO.Shared
 		/// Radius of the area effect.
 		/// </summary>
 		[Tooltip("Radius of the area effect.")]
+		[Min(0f)]
 		public float Radius = 5f;
 
 		/// <summary>
 		/// Maximum number of hits to process in the area.
 		/// </summary>
 		[Tooltip("Maximum number of hits to process in the area.")]
+		[Min(1)]
 		public int MaxHits = 5;
 
 		/// <summary>
@@ -39,15 +41,6 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of <see cref="GameObject"/>s within the area, or empty if context is null.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
-			{
-				if (overrideTarget != null)
-				{
-					yield return overrideTarget;
-				}
-				yield break;
-			}
-
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();

@@ -9,11 +9,6 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class HasTargetCondition : BaseCondition
 	{
-		/// <summary>
-		/// If true, inverts the result (returns true when no target).
-		/// </summary>
-		public bool Invert;
-
 		/// <inheritdoc />
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
@@ -28,8 +23,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			bool hasTarget = targetController.Current.Target != null;
-			return Invert ? !hasTarget : hasTarget;
+			return targetController.Current.Target != null;
 		}
 	}
 }

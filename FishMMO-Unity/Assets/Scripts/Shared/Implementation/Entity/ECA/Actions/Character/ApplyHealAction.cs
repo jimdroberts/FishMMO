@@ -31,8 +31,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ICharacter target = (eventData?.TargetCharacter ?? initiator);
-			if (target == null)
+			if (!TryResolveTargetOrInitiator(initiator, eventData, out ICharacter target))
 			{
 				return;
 			}

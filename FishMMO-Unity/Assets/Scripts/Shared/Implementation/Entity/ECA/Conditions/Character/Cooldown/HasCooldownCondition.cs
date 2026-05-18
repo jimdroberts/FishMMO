@@ -15,11 +15,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public long AbilityID;
 
-		/// <summary>
-		/// If true, inverts the result (returns true when NOT on cooldown).
-		/// </summary>
-		public bool Invert;
-
 		/// <inheritdoc />
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
@@ -41,8 +36,7 @@ namespace FishMMO.Shared
 				currentTick = characterToCheck.NetworkObject.TimeManager.LocalTick;
 			}
 
-			bool isOnCooldown = cooldownController.IsOnCooldown(AbilityID, currentTick);
-			return Invert ? !isOnCooldown : isOnCooldown;
+			return cooldownController.IsOnCooldown(AbilityID, currentTick);
 		}
 	}
 }

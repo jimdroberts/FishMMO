@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
   m_Name: Minor Increase Armor Event
   m_EditorClassIdentifier: 
+  TargetSelector:
+    rid: -2
   Conditions:
   - rid: 8938684509875339267
   OnConditionsMetActions:
@@ -32,6 +34,8 @@ MonoBehaviour:
     - rid: 8938684490743545932
       type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
+        TargetSelector:
+          rid: -2
         StacksValue:
           rid: 8938684490743545934
         BuffTemplate: {fileID: 11400000, guid: 0fbfa8b68911e1c4fa66d6b57fcab6a2, type: 2}
@@ -42,10 +46,21 @@ MonoBehaviour:
     - rid: 8938684490743545937
       type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
+        TargetSelector:
+          rid: -2
         FXPrefab: {fileID: 7266499652759718708, guid: 6bed0c614c46964408373a65aba83a0e,
           type: 3}
     - rid: 8938684509875339267
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
+        TargetSelector:
+          rid: 8938684714611114054
+        Combine: 0
         Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
         RequiredAmount: 3
+    - rid: 8938684714611114054
+      type: {class: InitiatorTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        conditions: []
+        targetOverride: {fileID: 0}
+        initiatorOverride: {fileID: 0}

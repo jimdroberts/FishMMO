@@ -19,15 +19,6 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable containing only the initiator's GameObject, or empty when none.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
-			{
-				if (overrideTarget != null)
-				{
-					yield return overrideTarget;
-				}
-				yield break;
-			}
-
 			GameObject initiatorGameObject = eventData?.Initiator?.GameObject;
 			if (initiatorGameObject != null && AreConditionsMet(initiatorGameObject, eventData))
 			{

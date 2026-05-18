@@ -16,6 +16,7 @@ namespace FishMMO.Shared
 		/// Radius to search for targets.
 		/// </summary>
 		[Tooltip("Radius to search for targets.")]
+		[Min(0f)]
 		public float Radius = 10f;
 
 		/// <summary>
@@ -28,6 +29,7 @@ namespace FishMMO.Shared
 		/// Maximum number of hits to process.
 		/// </summary>
 		[Tooltip("Maximum number of hits to process.")]
+		[Min(1)]
 		public int MaxHits = 16;
 
 		/// <summary>
@@ -42,15 +44,6 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable containing one random <see cref="GameObject"/>, or empty if none found.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (TrySelectTargetOverride(eventData, out GameObject overrideTarget))
-			{
-				if (overrideTarget != null)
-				{
-					yield return overrideTarget;
-				}
-				yield break;
-			}
-
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
