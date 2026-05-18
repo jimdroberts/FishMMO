@@ -381,12 +381,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 86d570f788618b579b164b93b46bb866
-    m_Address: New Self
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
     m_Address: Tier1 Sword Attack Speed
     m_ReadOnly: 0

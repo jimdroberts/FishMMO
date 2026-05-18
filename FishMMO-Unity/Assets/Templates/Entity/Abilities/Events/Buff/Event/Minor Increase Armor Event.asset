@@ -19,8 +19,6 @@ MonoBehaviour:
   - rid: 8938684490743545937
   OnConditionsNotMetActions: []
   icon: {fileID: 0}
-  TargetSelectorOverride:
-    rid: -2
   ActivationTime: 0
   LifeTime: 0
   Speed: 0
@@ -34,15 +32,9 @@ MonoBehaviour:
     - rid: 8938684490743545932
       type: {class: ApplyBuffAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetProvider:
-          rid: 8938684490743545933
         StacksValue:
           rid: 8938684490743545934
         BuffTemplate: {fileID: 11400000, guid: 0fbfa8b68911e1c4fa66d6b57fcab6a2, type: 2}
-    - rid: 8938684490743545933
-      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        FallbackToInitiator: 0
     - rid: 8938684490743545934
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
@@ -50,22 +42,10 @@ MonoBehaviour:
     - rid: 8938684490743545937
       type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetProvider:
-          rid: 8938684490743545938
         FXPrefab: {fileID: 7266499652759718708, guid: 6bed0c614c46964408373a65aba83a0e,
           type: 3}
-    - rid: 8938684490743545938
-      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        FallbackToInitiator: 0
     - rid: 8938684509875339267
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetProvider:
-          rid: 8938684509875339268
         Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
         RequiredAmount: 3
-    - rid: 8938684509875339268
-      type: {class: EventTargetCharacterProvider, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        FallbackToInitiator: 0

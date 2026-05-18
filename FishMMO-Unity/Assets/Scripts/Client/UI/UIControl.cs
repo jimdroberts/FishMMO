@@ -2,6 +2,7 @@ using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -291,7 +292,8 @@ namespace FishMMO.Client
 		{
 			if (inputFields != null && inputFields.Length > 0)
 			{
-				if (Input.GetKeyDown(KeyCode.Tab))
+				Keyboard keyboard = Keyboard.current;
+				if (keyboard != null && keyboard.tabKey.wasPressedThisFrame)
 				{
 					CycleInputFields();
 				}

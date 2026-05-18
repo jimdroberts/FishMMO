@@ -1,5 +1,6 @@
 ﻿using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace FishMMO.Client
 {
@@ -50,7 +51,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private void UpdatePosition()
 		{
-			Vector3 mousePosition = Input.mousePosition;
+			Mouse mouse = Mouse.current;
+			if (mouse == null)
+			{
+				return;
+			}
+			Vector3 mousePosition = mouse.position.ReadValue();
 			float yOffset = (mousePosition.y > Screen.height * 0.5f) ? -Background.rect.height : 0f;
 			transform.position = mousePosition + new Vector3(0f, yOffset, 0f);
 		}

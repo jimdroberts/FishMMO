@@ -227,7 +227,7 @@ All events extend `Trigger` (which is `CachedScriptableObject<Trigger>`) and imp
 
 | Field            | Type              | Description                              |
 |------------------|-------------------|------------------------------------------|
-| `TargetSelector` | `TargetSelector`  | Optional target selector for this event. Overrides default collision/self target. Use `SelfTargetSelector` for self-buffs, `AreaTargetSelector` for AoE. When null, defaults to collision target or caster. |
+| `TargetSelector` | `TargetSelector`  | Optional target selector for this event. Overrides default collision/self target. Use `InitiatorTargetSelector` for self-buffs, `AreaTargetSelector` for AoE. When null, defaults to collision target or caster. |
 | `ActivationTime` | `float`           | Additional activation time               |
 | `LifeTime`       | `float`           | Additional lifetime                      |
 | `Speed`          | `float`           | Additional speed                         |

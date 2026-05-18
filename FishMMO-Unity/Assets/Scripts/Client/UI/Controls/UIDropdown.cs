@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine.Events;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine;
 using TMPro;
@@ -51,7 +52,11 @@ namespace FishMMO.Client
 		{
 			base.Show();
 
-			transform.position = Input.mousePosition;
+			Mouse mouse = Mouse.current;
+			if (mouse != null)
+			{
+				transform.position = (Vector3)mouse.position.ReadValue();
+			}
 		}
 
 		/// <summary>

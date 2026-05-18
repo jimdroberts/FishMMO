@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.InputSystem;
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
@@ -96,7 +97,9 @@ namespace FishMMO.Shared
 			{
 				nextTick = TARGET_UPDATE_RATE;
 
-				Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+				Mouse mouse = Mouse.current;
+				Vector2 mousePosition = mouse != null ? mouse.position.ReadValue() : new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+				Ray ray = Camera.main.ScreenPointToRay(mousePosition);
 				// Optionally, use screen center for targeting:
 				// Ray ray = Camera.main.ScreenPointToRay(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0));
 

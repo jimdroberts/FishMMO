@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace FishMMO.Client
@@ -86,7 +87,7 @@ namespace FishMMO.Client
 			// Position at mouse
 			if (MainPanel != null)
 			{
-				Vector2 mousePos = Input.mousePosition;
+				Vector2 mousePos = Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
 
 				RectTransformUtility.ScreenPointToLocalPointInRectangle(
 					MainCanvas.transform as RectTransform,
@@ -154,7 +155,8 @@ namespace FishMMO.Client
 			}
 
 			// Close on left click outside the menu
-			if (Input.GetMouseButtonDown(0) && !HasFocus)
+			Mouse mouse = Mouse.current;
+			if (mouse != null && mouse.leftButton.wasPressedThisFrame && !HasFocus)
 			{
 				Hide();
 			}

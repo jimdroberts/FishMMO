@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using FishMMO.Logging;
 
@@ -52,14 +53,17 @@ namespace FishMMO.Client
 					return;
 				}
 
+				Mouse mouse = Mouse.current;
+				Vector2 mousePosition = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
+
 				// Clear the hotkey if clicking anywhere that isn't the UI
 				// Also handles dropping items to the ground from inventory
-				if (Input.GetMouseButtonDown(0) && !UIManager.ControlHasFocus())
+				if (mouse != null && mouse.leftButton.wasPressedThisFrame && !UIManager.ControlHasFocus())
 				{
 					// Only drop items if dragging from inventory
 					if (Type == ReferenceButtonType.Inventory)
 					{
-						Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+						Ray ray = Camera.main.ScreenPointToRay(mousePosition);
 						RaycastHit hit;
 						if (Physics.Raycast(ray, out hit, DropDistance, LayerMask))
 						{
@@ -73,7 +77,7 @@ namespace FishMMO.Client
 
 				// UIDragObject always follows the mouse cursor
 				Vector3 offset = new Vector3(Icon.sprite.bounds.size.x * 0.5f + 1.0f, Icon.sprite.bounds.size.y * -0.5f - 1.0f, 0.0f);
-				transform.position = Input.mousePosition + offset;
+				transform.position = (Vector3)mousePosition + offset;
 			}
 		}
 
@@ -95,7 +99,9 @@ namespace FishMMO.Client
 			{
 				offset = new Vector3(Icon.sprite.bounds.size.x * 0.5f + 1.0f, Icon.sprite.bounds.size.y * -0.5f - 1.0f, 0.0f);
 			}
-			transform.position = Input.mousePosition + offset;
+			Mouse setMouse = Mouse.current;
+			Vector3 setMousePos = setMouse != null ? (Vector3)setMouse.position.ReadValue() : Vector3.zero;
+			transform.position = setMousePos + offset;
 
 			Show();
 		}

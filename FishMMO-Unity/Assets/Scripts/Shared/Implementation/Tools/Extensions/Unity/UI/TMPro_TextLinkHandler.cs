@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using TMPro;
 using System;
 
@@ -40,7 +41,13 @@ namespace FishMMO.Shared
 				return;
 			}
 			// Get mouse position and check for intersecting TMP link
-			Vector3 mousePos = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0.0f);
+			Mouse mouse = Mouse.current;
+			if (mouse == null)
+			{
+				return;
+			}
+			Vector2 readMousePos = mouse.position.ReadValue();
+			Vector3 mousePos = new Vector3(readMousePos.x, readMousePos.y, 0.0f);
 			var linkTagText = TMP_TextUtilities.FindIntersectingLink(htmlText, mousePos, null);
 			if (linkTagText < 0)
 			{

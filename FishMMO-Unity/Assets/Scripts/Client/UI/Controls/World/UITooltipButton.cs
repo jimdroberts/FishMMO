@@ -1,6 +1,7 @@
 ﻿using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TMPro;
 using FishMMO.Shared;
@@ -197,9 +198,12 @@ namespace FishMMO.Client
 		{
 			base.OnPointerClick(eventData);
 
+			Keyboard keyboard = Keyboard.current;
+			bool ctrlHeld = keyboard != null && keyboard.leftCtrlKey.isPressed;
+
 			if (eventData.button == PointerEventData.InputButton.Left)
 			{
-				if (Input.GetKey(KeyCode.LeftControl))
+				if (ctrlHeld)
 				{
 					OnCtrlClick?.Invoke(Index, OptionalParams);
 				}
@@ -210,7 +214,7 @@ namespace FishMMO.Client
 			}
 			else if (eventData.button == PointerEventData.InputButton.Right)
 			{
-				if (Input.GetKey(KeyCode.LeftControl))
+				if (ctrlHeld)
 				{
 					OnCtrlClick?.Invoke(Index, OptionalParams);
 				}

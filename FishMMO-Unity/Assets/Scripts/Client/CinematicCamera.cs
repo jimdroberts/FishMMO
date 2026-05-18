@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Splines;
 using System;
 using System.Collections;
@@ -51,6 +52,25 @@ namespace FishMMO.Client
 		private float splineLength = 0.0f;
 
 		/// <summary>
+		/// Returns true when any keyboard key or primary mouse button was pressed this frame.
+		/// Used to skip the cinematic via the new Input System.
+		/// </summary>
+		private static bool AnyInputPressedThisFrame()
+		{
+			Keyboard keyboard = Keyboard.current;
+			if (keyboard != null && keyboard.anyKey.wasPressedThisFrame)
+			{
+				return true;
+			}
+			Mouse mouse = Mouse.current;
+			if (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame))
+			{
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Coroutine to move the camera along the spline to the next waypoint.
 		/// </summary>
 		/// <param name="onComplete">Callback invoked when movement is finished.</param>
@@ -72,8 +92,8 @@ namespace FishMMO.Client
 			// Loop through the spline movement from t = 0 to t = 1 (start to finish)
 			while (t < 1f)
 			{
-				// Handle input skip: if allowed and any key is pressed, jump to end
-				if (allowInputSkip && Input.anyKeyDown)
+				// Handle input skip: if allowed and any key/mouse button is pressed, jump to end
+				if (allowInputSkip && AnyInputPressedThisFrame())
 				{
 					t = 1f;  // Skip to the end of the spline
 				}
