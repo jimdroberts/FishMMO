@@ -25,22 +25,20 @@ namespace FishMMO.Shared
 		public Func<ICharacter, IInventoryController, Item, bool> OnGrantItem { get; }
 
 		/// <summary>
-		/// The GameObject of the interactable (convenience accessor).
-		/// </summary>
-		public GameObject Target => Interactable?.GameObject;
-
-		/// <summary>
 		/// The concrete type name of the interactable, used for logging.
 		/// </summary>
 		public string InteractionType => Interactable?.GetType().Name ?? "Unknown";
 
 		/// <summary>
 		/// Constructs a new PlayerInteractionEventData from the interacting player and the interactable.
+		/// The base <see cref="EventData.Target"/> is populated with the interactable's GameObject
+		/// so target selectors and conditions see it through the standard event flow.
 		/// </summary>
 		/// <param name="initiator">The player character who initiated the interaction.</param>
 		/// <param name="interactable">The interactable object that was interacted with.</param>
 		/// <param name="onGrantItem">Optional delegate for granting items with DB persistence.</param>
-		public PlayerInteractionEventData(IPlayerCharacter initiator, IInteractable interactable, Func<ICharacter, IInventoryController, Item, bool> onGrantItem = null) : base(initiator)
+		public PlayerInteractionEventData(IPlayerCharacter initiator, IInteractable interactable, Func<ICharacter, IInventoryController, Item, bool> onGrantItem = null)
+			: base(initiator, interactable?.GameObject)
 		{
 			Interactable = interactable;
 			OnGrantItem = onGrantItem;
