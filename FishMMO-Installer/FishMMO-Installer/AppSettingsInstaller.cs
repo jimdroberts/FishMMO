@@ -14,6 +14,16 @@ namespace FishMMO.Installer
 	/// Also generates environment-variable export files so passwords never need
 	/// to live in plain-text JSON at rest.
 	///
+	/// Supported components:
+	/// <list type="bullet">
+	///   <item>Database — FishMMO-DB (Npgsql + Redis)</item>
+	///   <item>IPFetch Web Server — WebServer.HttpPort + ConnectionStrings.NpgsqlConnection</item>
+	///   <item>Patcher Web Server — WebServer.HttpPort + Patches.DirectoryName</item>
+	///   <item>WebGL Web Server — WebServer.HttpPort</item>
+	///   <item>Discord Bot — Discord.Token + Discord.DefaultGuildId + ConnectionStrings.Npgsql + rate-limiting</item>
+	///   <item>CMS Server — ConnectionStrings.DefaultConnection</item>
+	/// </list>
+	///
 	/// Supported outputs:
 	/// <list type="bullet">
 	///   <item>appsettings.json — base configuration, chmod 600</item>
@@ -32,6 +42,15 @@ namespace FishMMO.Installer
 			WriteIndented = true,
 		};
 
+		/// <summary>Conventional FishMMO dev workspace root: ~/Dev/FishMMO Dev/</summary>
+		private static string FishMMODevRoot => Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+			"Dev", "FishMMO Dev");
+
+		// ──────────────────────────────────────────────────────────────────────────
+		//  Entry point — component selection
+		// ──────────────────────────────────────────────────────────────────────────
+
 		/// <summary>
 		/// Entry point for the AppSettings secure setup wizard.
 		/// </summary>
@@ -39,44 +58,68 @@ namespace FishMMO.Installer
 		{
 			await Log.Info("FishMMOInstaller", "=== AppSettings Secure Configuration ===");
 
-			string exeDir = InstallerProcessHelper.GetWorkingDirectory();
-			string dbSubDir = Path.Combine(exeDir, "FishMMO-Database", "FishMMO-DB");
-
-			string? targetDir = PromptTargetDirectory(exeDir, dbSubDir);
-			if (targetDir == null) return;
-
-			Console.WriteLine();
-			Console.WriteLine("Select action:");
-			Console.WriteLine("1 : Write / update appsettings.json");
-			Console.WriteLine("2 : Write / update environment override (appsettings.<env>.json)");
-			Console.WriteLine("3 : Generate secrets environment-variable file");
+			Console.WriteLine("Select component to configure:");
+			Console.WriteLine("1 : Database                  (FishMMO-DB / FishMMO-Setup)");
+			Console.WriteLine("2 : IPFetch Web Server         (Login gate + IP fetch)");
+			Console.WriteLine("3 : Patcher Web Server         (Patch distribution)");
+			Console.WriteLine("4 : WebGL Web Server           (WebGL client host)");
+			Console.WriteLine("5 : Discord Bot                (Chat bridge)");
+			Console.WriteLine("6 : CMS Server                 (Content management)");
 			Console.WriteLine("0 : Back");
 
-			ConsoleKeyInfo key = Console.ReadKey(true);
+			ConsoleKeyInfo ckey = Console.ReadKey(true);
 			Console.WriteLine();
 
-			switch (key.Key)
+			switch (ckey.Key)
 			{
 				case ConsoleKey.D1:
-					await WriteBaseAppSettings(targetDir);
+					await ConfigureDatabaseComponent();
 					break;
 				case ConsoleKey.D2:
-					await WriteEnvironmentOverride(targetDir);
+					await ConfigureWebServerComponent("IPFetch", "IPFetchASP.NET", "IpFetchServer",
+						defaultPort: 8080, hasNpgsqlDsn: true, hasPatches: false);
 					break;
 				case ConsoleKey.D3:
-					await GenerateSecretsFile(targetDir);
+					await ConfigureWebServerComponent("Patcher", "PatcherASP.NET", "Patcher",
+						defaultPort: 8090, hasNpgsqlDsn: false, hasPatches: true);
+					break;
+				case ConsoleKey.D4:
+					await ConfigureWebServerComponent("WebGL", "WebGLServerASP.NET", "WebGLServer",
+						defaultPort: 8000, hasNpgsqlDsn: false, hasPatches: false);
+					break;
+				case ConsoleKey.D5:
+					await ConfigureDiscordBotComponent();
+					break;
+				case ConsoleKey.D6:
+					await ConfigureCmsComponent();
 					break;
 				case ConsoleKey.D0:
 				case ConsoleKey.NumPad0:
 					return;
 				default:
-					if (key.KeyChar == '0') return;
+					if (ckey.KeyChar == '0') return;
 					break;
 			}
 		}
 
 		// ──────────────────────────────────────────────────────────────────────────
-		//  Action: write appsettings.json
+		//  Component: Database (FishMMO-DB + FishMMO-Setup)
+		// ──────────────────────────────────────────────────────────────────────────
+
+		private static async Task ConfigureDatabaseComponent()
+		{
+			string defaultDir = Path.Combine(FishMMODevRoot, "FishMMO-Database", "FishMMO-DB");
+			string? targetDir = PromptComponentDirectory(defaultDir);
+			if (targetDir == null) return;
+
+			await RunActionMenu("Database", targetDir,
+				writeBase: WriteBaseAppSettings,
+				writeEnvOverride: WriteEnvironmentOverride,
+				generateSecrets: GenerateDatabaseSecretsFile);
+		}
+
+		// ──────────────────────────────────────────────────────────────────────────
+		//  Action: write appsettings.json (Database)
 		// ──────────────────────────────────────────────────────────────────────────
 
 		private static async Task WriteBaseAppSettings(string targetDir)
@@ -95,26 +138,12 @@ namespace FishMMO.Installer
 		}
 
 		// ──────────────────────────────────────────────────────────────────────────
-		//  Action: write appsettings.<env>.json
+		//  Action: write appsettings.<env>.json (Database)
 		// ──────────────────────────────────────────────────────────────────────────
 
 		private static async Task WriteEnvironmentOverride(string targetDir)
 		{
-			Console.WriteLine("Select environment:");
-			Console.WriteLine("1 : Development");
-			Console.WriteLine("2 : Production");
-			Console.WriteLine("0 : Back");
-
-			ConsoleKeyInfo key = Console.ReadKey(true);
-			Console.WriteLine();
-
-			string? envName = key.Key switch
-			{
-				ConsoleKey.D1 => "Development",
-				ConsoleKey.D2 => "Production",
-				_ => null,
-			};
-
+			string? envName = PromptEnvironmentName();
 			if (envName == null) return;
 
 			string filePath = Path.Combine(targetDir, $"appsettings.{envName}.json");
@@ -133,10 +162,10 @@ namespace FishMMO.Installer
 		}
 
 		// ──────────────────────────────────────────────────────────────────────────
-		//  Action: generate secrets env-var file
+		//  Action: generate secrets env-var file (Database)
 		// ──────────────────────────────────────────────────────────────────────────
 
-		private static async Task GenerateSecretsFile(string targetDir)
+		private static async Task GenerateDatabaseSecretsFile(string targetDir)
 		{
 			Console.WriteLine("Select output format:");
 			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
@@ -166,18 +195,411 @@ namespace FishMMO.Installer
 			if (string.IsNullOrEmpty(redisPassword))
 				redisPassword = defaults.Redis?.Password ?? string.Empty;
 
+			var secrets = new Dictionary<string, string>
+			{
+				["Npgsql__Password"] = npgsqlPassword,
+			};
+			if (!string.IsNullOrWhiteSpace(redisPassword))
+				secrets["Redis__Password"] = redisPassword;
+
 			switch (key.Key)
 			{
 				case ConsoleKey.D1:
-					await WriteFishSecretsSnippet(npgsqlPassword, redisPassword);
+					await WriteFishSecretsSnippet(secrets);
 					break;
 				case ConsoleKey.D2:
-					await WriteSystemdEnvFile(targetDir, npgsqlPassword, redisPassword);
+					await WriteSystemdEnvFile(targetDir, secrets);
 					break;
 			}
 		}
 
-		private static async Task WriteFishSecretsSnippet(string npgsqlPassword, string redisPassword)
+		// ──────────────────────────────────────────────────────────────────────────
+		//  Component: Web Servers (IPFetch, Patcher, WebGL)
+		// ──────────────────────────────────────────────────────────────────────────
+
+		private static async Task ConfigureWebServerComponent(
+			string displayName, string folderGroup, string folderName,
+			int defaultPort, bool hasNpgsqlDsn, bool hasPatches)
+		{
+			string defaultDir = Path.Combine(FishMMODevRoot, "FishMMO-WebServers", folderGroup, folderName);
+			string? targetDir = PromptComponentDirectory(defaultDir);
+			if (targetDir == null) return;
+
+			await RunActionMenu($"{displayName} Web Server", targetDir,
+				writeBase: async dir =>
+					await WriteWebServerSettings(dir, "appsettings.json", defaultPort, hasNpgsqlDsn, hasPatches),
+				writeEnvOverride: async dir =>
+				{
+					string? envName = PromptEnvironmentName();
+					if (envName == null) return;
+					await WriteWebServerSettings(dir, $"appsettings.{envName}.json", defaultPort, hasNpgsqlDsn, hasPatches);
+				},
+				generateSecrets: async dir =>
+					await GenerateWebServerSecretsFile(dir, hasNpgsqlDsn));
+		}
+
+		private static async Task WriteWebServerSettings(
+			string targetDir, string fileName, int defaultPort, bool hasNpgsqlDsn, bool hasPatches)
+		{
+			string filePath = Path.Combine(targetDir, fileName);
+
+			// Load existing values as defaults.
+			int existingPort = defaultPort;
+			string? existingDsn = null;
+			string? existingPatchesDir = null;
+
+			if (File.Exists(filePath))
+			{
+				try
+				{
+					string text = await File.ReadAllTextAsync(filePath, Encoding.UTF8);
+					JsonObject? existing = JsonNode.Parse(text)?.AsObject();
+					if (existing != null)
+					{
+						if (existing["WebServer"]?["HttpPort"] is JsonNode portNode
+							&& int.TryParse(portNode.ToString(), out int p))
+							existingPort = p;
+						existingDsn = existing["ConnectionStrings"]?["NpgsqlConnection"]?.GetValue<string>();
+						existingPatchesDir = existing["Patches"]?["DirectoryName"]?.GetValue<string>();
+					}
+				}
+				catch { /* use defaults */ }
+			}
+
+			await Log.Info("FishMMOInstaller", $"Configuring: {filePath}");
+			Console.WriteLine("Press Enter to keep the current value shown in brackets.");
+			Console.WriteLine();
+
+			Console.WriteLine("--- Web Server ---");
+			int httpPort = PromptInt("  HttpPort", existingPort);
+
+			string? npgsqlDsn = null;
+			if (hasNpgsqlDsn)
+				npgsqlDsn = PromptNpgsqlDsn(existingDsn);
+
+			string? patchesDir = null;
+			if (hasPatches)
+			{
+				Console.WriteLine();
+				Console.WriteLine("--- Patches ---");
+				patchesDir = PromptString("  Patches directory (relative or absolute)",
+					existingPatchesDir ?? "Patches");
+			}
+
+			// Merge into existing JSON, preserving unmanaged keys.
+			JsonObject root = await LoadOrCreateJsonObject(filePath);
+
+			JsonObject webServer = EnsureObject(root, "WebServer");
+			webServer["HttpPort"] = JsonValue.Create(httpPort);
+
+			if (npgsqlDsn != null)
+			{
+				JsonObject connStrings = EnsureObject(root, "ConnectionStrings");
+				connStrings["NpgsqlConnection"] = JsonValue.Create(npgsqlDsn);
+			}
+
+			if (patchesDir != null)
+			{
+				JsonObject patches = EnsureObject(root, "Patches");
+				patches["DirectoryName"] = JsonValue.Create(patchesDir);
+			}
+
+			await WriteJsonObjectSecure(filePath, root);
+			await Log.Info("FishMMOInstaller", $"{fileName} written and secured at: {filePath}");
+		}
+
+		private static async Task GenerateWebServerSecretsFile(string targetDir, bool hasNpgsqlDsn)
+		{
+			if (!hasNpgsqlDsn)
+			{
+				Console.WriteLine("This web server component has no secrets to export.");
+				return;
+			}
+
+			Console.WriteLine("Select output format:");
+			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
+			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
+			Console.WriteLine("0 : Back");
+
+			ConsoleKeyInfo key = Console.ReadKey(true);
+			Console.WriteLine();
+			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
+			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2) return;
+
+			Console.WriteLine("Enter the PostgreSQL connection string secret for this web server.");
+			string dsn = PromptNpgsqlDsn(existingDsn: null);
+
+			var secrets = new Dictionary<string, string>
+			{
+				["ConnectionStrings__NpgsqlConnection"] = dsn,
+			};
+
+			switch (key.Key)
+			{
+				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
+				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
+			}
+		}
+
+		// ──────────────────────────────────────────────────────────────────────────
+		//  Component: Discord Bot
+		// ──────────────────────────────────────────────────────────────────────────
+
+		private static async Task ConfigureDiscordBotComponent()
+		{
+			string defaultDir = Path.Combine(FishMMODevRoot, "FishMMO-DiscordBot", "FishMMO-DiscordBot");
+			string? targetDir = PromptComponentDirectory(defaultDir);
+			if (targetDir == null) return;
+
+			await RunActionMenu("Discord Bot", targetDir,
+				writeBase: async dir => await WriteDiscordBotSettings(dir, "appsettings.json"),
+				writeEnvOverride: async dir =>
+				{
+					string? envName = PromptEnvironmentName();
+					if (envName == null) return;
+					await WriteDiscordBotSettings(dir, $"appsettings.{envName}.json");
+				},
+				generateSecrets: GenerateDiscordBotSecretsFile);
+		}
+
+		private static async Task WriteDiscordBotSettings(string targetDir, string fileName)
+		{
+			string filePath = Path.Combine(targetDir, fileName);
+
+			// Load existing values as defaults.
+			string? existingToken = null;
+			ulong existingGuildId = 0;
+			string? existingDsn = null;
+			int existingPollInterval = 5;
+			int existingMaxMsgLen = 2000;
+			int existingMaxPerWindow = 10;
+			int existingWindowSec = 60;
+
+			if (File.Exists(filePath))
+			{
+				try
+				{
+					string text = await File.ReadAllTextAsync(filePath, Encoding.UTF8);
+					JsonObject? existing = JsonNode.Parse(text)?.AsObject();
+					if (existing != null)
+					{
+						existingToken = existing["Discord"]?["Token"]?.GetValue<string>();
+						if (existing["Discord"]?["DefaultGuildId"] is JsonNode gidNode
+							&& ulong.TryParse(gidNode.ToString(), out ulong gid))
+							existingGuildId = gid;
+						existingDsn = existing["ConnectionStrings"]?["Npgsql"]?.GetValue<string>();
+						if (existing["ChatPollingIntervalSeconds"] is JsonNode ciNode
+							&& int.TryParse(ciNode.ToString(), out int ci))
+							existingPollInterval = ci;
+						if (existing["BridgeMessageMaxLength"] is JsonNode mlNode
+							&& int.TryParse(mlNode.ToString(), out int ml))
+							existingMaxMsgLen = ml;
+						if (existing["RateLimiting"]?["MaxMessagesPerWindow"] is JsonNode mpwNode
+							&& int.TryParse(mpwNode.ToString(), out int mpw))
+							existingMaxPerWindow = mpw;
+						if (existing["RateLimiting"]?["WindowSeconds"] is JsonNode wsNode
+							&& int.TryParse(wsNode.ToString(), out int ws))
+							existingWindowSec = ws;
+					}
+				}
+				catch { /* use defaults */ }
+			}
+
+			await Log.Info("FishMMOInstaller", $"Configuring: {filePath}");
+			Console.WriteLine("Press Enter to keep the current value shown in brackets.");
+			Console.WriteLine();
+
+			Console.WriteLine("--- Discord ---");
+			string token = InstallerProcessHelper.PromptForPassword(
+				$"  Bot Token [{MaskSecret(existingToken)}]: ");
+			if (string.IsNullOrEmpty(token)) token = existingToken ?? string.Empty;
+			ulong guildId = PromptUlong("  Default Guild ID", existingGuildId);
+
+			string npgsqlDsn = PromptNpgsqlDsn(existingDsn);
+
+			Console.WriteLine();
+			Console.WriteLine("--- Chat Bridge ---");
+			int pollInterval = PromptInt("  ChatPollingIntervalSeconds", existingPollInterval);
+			int maxMsgLen = PromptInt("  BridgeMessageMaxLength", existingMaxMsgLen);
+
+			Console.WriteLine();
+			Console.WriteLine("--- Rate Limiting ---");
+			int maxPerWindow = PromptInt("  MaxMessagesPerWindow", existingMaxPerWindow);
+			int windowSec = PromptInt("  WindowSeconds", existingWindowSec);
+
+			// Merge into existing JSON, preserving unmanaged keys.
+			JsonObject root = await LoadOrCreateJsonObject(filePath);
+
+			JsonObject discord = EnsureObject(root, "Discord");
+			discord["Token"] = JsonValue.Create(token);
+			discord["DefaultGuildId"] = JsonValue.Create(guildId);
+
+			JsonObject connStrings = EnsureObject(root, "ConnectionStrings");
+			connStrings["Npgsql"] = JsonValue.Create(npgsqlDsn);
+
+			root["ChatPollingIntervalSeconds"] = JsonValue.Create(pollInterval);
+			root["BridgeMessageMaxLength"] = JsonValue.Create(maxMsgLen);
+
+			JsonObject rateLimiting = EnsureObject(root, "RateLimiting");
+			rateLimiting["MaxMessagesPerWindow"] = JsonValue.Create(maxPerWindow);
+			rateLimiting["WindowSeconds"] = JsonValue.Create(windowSec);
+
+			await WriteJsonObjectSecure(filePath, root);
+			await Log.Info("FishMMOInstaller", $"{fileName} written and secured at: {filePath}");
+		}
+
+		private static async Task GenerateDiscordBotSecretsFile(string targetDir)
+		{
+			Console.WriteLine("Select output format:");
+			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
+			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
+			Console.WriteLine("0 : Back");
+
+			ConsoleKeyInfo key = Console.ReadKey(true);
+			Console.WriteLine();
+			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
+			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2) return;
+
+			Console.WriteLine("Enter Discord Bot secret values to export as environment variables.");
+			Console.WriteLine();
+
+			string token = InstallerProcessHelper.PromptForPassword("  Discord Bot Token: ");
+			string dsn = PromptNpgsqlDsn(existingDsn: null);
+
+			var secrets = new Dictionary<string, string>
+			{
+				["Discord__Token"] = token,
+				["ConnectionStrings__Npgsql"] = dsn,
+			};
+
+			switch (key.Key)
+			{
+				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
+				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
+			}
+		}
+
+		// ──────────────────────────────────────────────────────────────────────────
+		//  Component: CMS Server
+		// ──────────────────────────────────────────────────────────────────────────
+
+		private static async Task ConfigureCmsComponent()
+		{
+			string defaultDir = Path.Combine(FishMMODevRoot, "FishMMO-CMS", "FishMMO-CMS.Server");
+			string? targetDir = PromptComponentDirectory(defaultDir);
+			if (targetDir == null) return;
+
+			await RunActionMenu("CMS Server", targetDir,
+				writeBase: async dir => await WriteCmsSettings(dir, "appsettings.json"),
+				writeEnvOverride: async dir =>
+				{
+					string? envName = PromptEnvironmentName();
+					if (envName == null) return;
+					await WriteCmsSettings(dir, $"appsettings.{envName}.json");
+				},
+				generateSecrets: GenerateCmsSecretsFile);
+		}
+
+		private static async Task WriteCmsSettings(string targetDir, string fileName)
+		{
+			string filePath = Path.Combine(targetDir, fileName);
+
+			string? existingDsn = null;
+			if (File.Exists(filePath))
+			{
+				try
+				{
+					string text = await File.ReadAllTextAsync(filePath, Encoding.UTF8);
+					JsonObject? existing = JsonNode.Parse(text)?.AsObject();
+					existingDsn = existing?["ConnectionStrings"]?["DefaultConnection"]?.GetValue<string>();
+				}
+				catch { /* use defaults */ }
+			}
+
+			await Log.Info("FishMMOInstaller", $"Configuring: {filePath}");
+			Console.WriteLine("Press Enter to keep the current value shown in brackets.");
+			Console.WriteLine();
+
+			string npgsqlDsn = PromptNpgsqlDsn(existingDsn);
+
+			JsonObject root = await LoadOrCreateJsonObject(filePath);
+
+			JsonObject connStrings = EnsureObject(root, "ConnectionStrings");
+			connStrings["DefaultConnection"] = JsonValue.Create(npgsqlDsn);
+
+			await WriteJsonObjectSecure(filePath, root);
+			await Log.Info("FishMMOInstaller", $"{fileName} written and secured at: {filePath}");
+		}
+
+		private static async Task GenerateCmsSecretsFile(string targetDir)
+		{
+			Console.WriteLine("Select output format:");
+			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
+			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
+			Console.WriteLine("0 : Back");
+
+			ConsoleKeyInfo key = Console.ReadKey(true);
+			Console.WriteLine();
+			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
+			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2) return;
+
+			Console.WriteLine("Enter the CMS database connection string secret.");
+			Console.WriteLine();
+			string dsn = PromptNpgsqlDsn(existingDsn: null);
+
+			var secrets = new Dictionary<string, string>
+			{
+				["ConnectionStrings__DefaultConnection"] = dsn,
+			};
+
+			switch (key.Key)
+			{
+				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
+				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
+			}
+		}
+
+		// ──────────────────────────────────────────────────────────────────────────
+		//  Shared action-menu runner
+		// ──────────────────────────────────────────────────────────────────────────
+
+		private static async Task RunActionMenu(
+			string componentName,
+			string targetDir,
+			Func<string, Task> writeBase,
+			Func<string, Task> writeEnvOverride,
+			Func<string, Task> generateSecrets)
+		{
+			Console.WriteLine($"Configure {componentName} at: {targetDir}");
+			Console.WriteLine();
+			Console.WriteLine("Select action:");
+			Console.WriteLine("1 : Write / update appsettings.json");
+			Console.WriteLine("2 : Write / update environment override (appsettings.<env>.json)");
+			Console.WriteLine("3 : Generate secrets environment-variable file");
+			Console.WriteLine("0 : Back");
+
+			ConsoleKeyInfo key = Console.ReadKey(true);
+			Console.WriteLine();
+
+			switch (key.Key)
+			{
+				case ConsoleKey.D1: await writeBase(targetDir); break;
+				case ConsoleKey.D2: await writeEnvOverride(targetDir); break;
+				case ConsoleKey.D3: await generateSecrets(targetDir); break;
+				case ConsoleKey.D0:
+				case ConsoleKey.NumPad0:
+					return;
+				default:
+					if (key.KeyChar == '0') return;
+					break;
+			}
+		}
+
+		// ──────────────────────────────────────────────────────────────────────────
+		//  Secrets file writers (generalized — accept dict of envVar → value)
+		// ──────────────────────────────────────────────────────────────────────────
+
+		private static async Task WriteFishSecretsSnippet(Dictionary<string, string> secrets)
 		{
 			string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 			string fishConfDir = Path.Combine(homeDir, ".config", "fish", "conf.d");
@@ -186,15 +608,15 @@ namespace FishMMO.Installer
 			Directory.CreateDirectory(fishConfDir);
 
 			var sb = new StringBuilder();
-			sb.AppendLine("# FishMMO database secrets — written by FishMMO Installer");
+			sb.AppendLine("# FishMMO secrets — written by FishMMO Installer");
 			sb.AppendLine("# These environment variables override appsettings.json values.");
 			sb.AppendLine("# .NET IConfiguration maps double-underscore __ to JSON nesting:");
 			sb.AppendLine("#   Npgsql__Password  ->  appsettings.json : Npgsql.Password");
 			sb.AppendLine();
-			sb.AppendLine($"set -gx Npgsql__Password \"{EscapeFishString(npgsqlPassword)}\"");
-			if (!string.IsNullOrWhiteSpace(redisPassword))
+			foreach (KeyValuePair<string, string> kvp in secrets)
 			{
-				sb.AppendLine($"set -gx Redis__Password  \"{EscapeFishString(redisPassword)}\"");
+				if (!string.IsNullOrEmpty(kvp.Value))
+					sb.AppendLine($"set -gx {kvp.Key} \"{EscapeFishString(kvp.Value)}\"");
 			}
 
 			await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
@@ -207,21 +629,21 @@ namespace FishMMO.Installer
 			Console.WriteLine($"To activate now, run:  source \"{filePath}\"");
 		}
 
-		private static async Task WriteSystemdEnvFile(string targetDir, string npgsqlPassword, string redisPassword)
+		private static async Task WriteSystemdEnvFile(string targetDir, Dictionary<string, string> secrets)
 		{
 			string filePath = Path.Combine(targetDir, "fishmmo-secrets.env");
 
 			var sb = new StringBuilder();
-			sb.AppendLine("# FishMMO database secrets — written by FishMMO Installer");
+			sb.AppendLine("# FishMMO secrets — written by FishMMO Installer");
 			sb.AppendLine("# Use with: EnvironmentFile=/path/to/fishmmo-secrets.env in a systemd service unit,");
 			sb.AppendLine("# or env_file: in a docker-compose service definition.");
 			sb.AppendLine("# .NET IConfiguration maps double-underscore __ to JSON nesting:");
 			sb.AppendLine("#   Npgsql__Password  ->  appsettings.json : Npgsql.Password");
 			sb.AppendLine();
-			sb.AppendLine($"Npgsql__Password={EscapeEnvFileValue(npgsqlPassword)}");
-			if (!string.IsNullOrWhiteSpace(redisPassword))
+			foreach (KeyValuePair<string, string> kvp in secrets)
 			{
-				sb.AppendLine($"Redis__Password={EscapeEnvFileValue(redisPassword)}");
+				if (!string.IsNullOrEmpty(kvp.Value))
+					sb.AppendLine($"{kvp.Key}={EscapeEnvFileValue(kvp.Value)}");
 			}
 
 			await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
@@ -409,22 +831,112 @@ namespace FishMMO.Installer
 			return s;
 		}
 
-		private static string? PromptTargetDirectory(string exeDir, string dbSubDir)
+		private static string? PromptComponentDirectory(string defaultDir)
 		{
-			Console.WriteLine("Select target directory for configuration files:");
-			Console.WriteLine($"1 : Executable dir  {exeDir}");
-			Console.WriteLine($"2 : Database dir    {dbSubDir}");
-			Console.WriteLine("0 : Back");
-
-			ConsoleKeyInfo key = Console.ReadKey(true);
 			Console.WriteLine();
+			Console.WriteLine($"Target directory [{defaultDir}]:");
+			Console.Write("  Press Enter to use default, or type a custom path (0 to cancel): ");
+			string? input = Console.ReadLine()?.Trim();
+			if (string.IsNullOrEmpty(input)) return defaultDir;
+			if (input == "0") return null;
+			return input;
+		}
 
-			return key.Key switch
+		private static string? PromptEnvironmentName()
+		{
+			Console.WriteLine("Select environment:");
+			Console.WriteLine("1 : Development");
+			Console.WriteLine("2 : Production");
+			Console.WriteLine("0 : Back");
+			ConsoleKeyInfo k = Console.ReadKey(true);
+			Console.WriteLine();
+			return k.Key switch
 			{
-				ConsoleKey.D1 => exeDir,
-				ConsoleKey.D2 => dbSubDir,
+				ConsoleKey.D1 => "Development",
+				ConsoleKey.D2 => "Production",
 				_ => null,
 			};
+		}
+
+		/// <summary>
+		/// Prompts for individual Npgsql connection string fields and returns a composed DSN.
+		/// Used by web servers and other components that use ConnectionStrings format
+		/// (e.g. <c>Host=...;Port=...;Database=...;Username=...;Password=...;Ssl Mode=Prefer;</c>).
+		/// </summary>
+		private static string PromptNpgsqlDsn(string? existingDsn)
+		{
+			Dictionary<string, string> parts = ParseNpgsqlDsn(existingDsn ?? string.Empty);
+			Console.WriteLine();
+			Console.WriteLine("--- PostgreSQL Connection String ---");
+			string host = PromptString("  Host", parts.GetValueOrDefault("host", "127.0.0.1"));
+			string port = PromptString("  Port", parts.GetValueOrDefault("port", "5432"));
+			string db   = PromptString("  Database",
+				parts.GetValueOrDefault("database",
+				parts.GetValueOrDefault("initial catalog", "fish_mmo_postgresql")));
+			string user = PromptString("  Username",
+				parts.GetValueOrDefault("username",
+				parts.GetValueOrDefault("user id", "user")));
+			string pass = InstallerProcessHelper.PromptForPassword(
+				$"  Password [{MaskSecret(parts.GetValueOrDefault("password", ""))}]: ");
+			if (string.IsNullOrEmpty(pass))
+				pass = parts.GetValueOrDefault("password", "change_me");
+			string ssl = PromptString("  Ssl Mode (Disable / Prefer / Require / VerifyFull)",
+				parts.GetValueOrDefault("ssl mode", "Prefer"));
+			return $"Host={host};Port={port};Database={db};Username={user};Password={pass};Ssl Mode={ssl};";
+		}
+
+		private static Dictionary<string, string> ParseNpgsqlDsn(string dsn)
+		{
+			var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+			foreach (string part in dsn.Split(';', StringSplitOptions.RemoveEmptyEntries))
+			{
+				int eq = part.IndexOf('=');
+				if (eq > 0)
+					result[part[..eq].Trim()] = part[(eq + 1)..].Trim();
+			}
+			return result;
+		}
+
+		private static ulong PromptUlong(string label, ulong defaultValue)
+		{
+			while (true)
+			{
+				Console.Write($"{label} [{defaultValue}]: ");
+				string? input = Console.ReadLine();
+				if (string.IsNullOrWhiteSpace(input)) return defaultValue;
+				if (ulong.TryParse(input.Trim(), out ulong result)) return result;
+				Console.WriteLine("  Enter a valid unsigned integer (e.g. Discord server/guild ID).");
+			}
+		}
+
+		/// <summary>
+		/// Loads an existing JSON file as a <see cref="JsonObject"/>, or returns an empty
+		/// object if the file is absent or unparseable.
+		/// </summary>
+		private static async Task<JsonObject> LoadOrCreateJsonObject(string filePath)
+		{
+			if (!File.Exists(filePath)) return new JsonObject();
+			try
+			{
+				string text = await File.ReadAllTextAsync(filePath, Encoding.UTF8);
+				return JsonNode.Parse(text)?.AsObject() ?? new JsonObject();
+			}
+			catch
+			{
+				return new JsonObject();
+			}
+		}
+
+		/// <summary>
+		/// Writes a <see cref="JsonObject"/> to <paramref name="filePath"/> with pretty-print
+		/// formatting, creating parent directories as needed, and applies chmod 600 on Linux.
+		/// </summary>
+		private static async Task WriteJsonObjectSecure(string filePath, JsonObject root)
+		{
+			string? dir = Path.GetDirectoryName(filePath);
+			if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+			await File.WriteAllTextAsync(filePath, root.ToJsonString(PrettyJson), Encoding.UTF8);
+			await ApplySecurePermissions(filePath);
 		}
 
 		private static string PromptString(string label, string defaultValue)

@@ -1,10 +1,39 @@
 # IPFetchServer
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Directory Structure](#directory-structure)
+- [Middleware Pipeline](#middleware-pipeline)
+- [Endpoints](#endpoints)
+- [Key Components](#key-components)
+- [Configuration](#configuration)
+- [Security](#security)
+- [External Dependencies](#external-dependencies)
+- [Requirements](#requirements)
+- [Flow Diagram](#flow-diagram)
+
 ## Overview
 
 ASP.NET Core Web API that provides login server IP address discovery for FishMMO clients. Unity clients query this service to obtain the list of active login servers before connecting. The server reads login server records from PostgreSQL, caches results in memory, and gates access through a custom middleware that rejects non-FishMMO requests.
 
 Designed to run behind NGINX as a reverse proxy (via `api.fishmmo.com`). NGINX terminates SSL and forwards requests over plain HTTP to Kestrel on localhost.
+
+## Supported Platforms
+
+| Target | Status |
+|---|---|
+| .NET 8.0 — Linux  | Yes (recommended) |
+| .NET 8.0 — Windows | Yes |
+| .NET 8.0 — macOS  | Yes |
+
+| Requirement | Version |
+|---|---|
+| .NET SDK | 8.0+ |
+| PostgreSQL | 14+ (with `LoginServers` table) |
+| NGINX | Recommended for production (SSL termination) |
 
 ## Architecture
 
@@ -46,6 +75,15 @@ IpFetchServer/
 3. **`UnityOnlyMiddleware`** - checks `X-FishMMO` header equals `"Client"`. Returns 403 if missing/invalid.
 4. **`UseRouting` + `UseAuthorization`** - standard ASP.NET routing.
 5. **`MapControllers`** - maps attribute-routed controller endpoints.
+
+## Key Components
+
+| Component | Responsibility |
+|---|---|
+| `LoginServerController` | Single-endpoint controller backing `GET /loginserver`. Reads from EF Core `NpgsqlDbContext.LoginServers` and serializes `{ Address, Port }` records. |
+| `UnityOnlyMiddleware` | Rejects requests that do not carry `X-FishMMO: Client`. Returns `403` for non-Unity callers. |
+| `IMemoryCache` (built-in) | 300-second TTL cache that absorbs the read-heavy traffic from clients between rare DB updates. |
+| `NpgsqlDbContextFactory` | EF Core context factory used per-request to avoid scoped-context concurrency issues. |
 
 ## Endpoints
 
@@ -129,3 +167,22 @@ export WebServer__HttpPort=8080
 - .NET 8.0 SDK or later
 - PostgreSQL database with `LoginServers` table
 - NGINX reverse proxy (recommended for production)
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|"HTTPS api.fishmmo.com/loginserver"| Nginx[NGINX SSL termination]
+    Nginx -->|"HTTP localhost:8080"| Kestrel[Kestrel]
+    subgraph Server[IPFetchServer]
+        Kestrel --> Fwd[ForwardedHeaders]
+        Fwd --> Cors[CORS AllowXFishMMO]
+        Cors --> Unity["UnityOnlyMiddleware - requires X-FishMMO: Client"]
+        Unity --> Ctrl[LoginServerController]
+        Ctrl -->|"cache hit (300s TTL)"| Cache[IMemoryCache]
+        Ctrl -->|cache miss| EF[EF Core / Npgsql]
+        EF --> DB[("PostgreSQL LoginServers table")]
+    end
+    Cache -. JSON list .-> Client
+    DB -. populate cache .-> Cache
+```

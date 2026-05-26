@@ -231,6 +231,17 @@ Item rewards attempt inventory first. If the inventory lacks sufficient free slo
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Event[Game event] --> Eval[Achievement evaluators]
+    Eval -->|match definition| Def[Achievement definition]
+    Def --> Prog[Progress update]
+    Prog --> Store[Per-character storage]
+    Prog -->|complete| Reward[Grant rewards]
+```
+
 ### Achievement Lifecycle
 
 ```

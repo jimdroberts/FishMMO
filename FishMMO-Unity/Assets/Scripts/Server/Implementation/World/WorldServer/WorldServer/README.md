@@ -164,6 +164,18 @@ if (server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData runtim
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Login[LoginServer] -->|client hand-off| World[WorldServerSystem]
+    World --> Auth[WorldServer.Authentication]
+    World --> WS[WorldScene routing]
+    WS --> Scenes[SceneServer pool]
+    Scenes -->|state sync| World
+    World --> Login
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        SERVER STARTUP                               │

@@ -284,6 +284,17 @@ authenticator.OnClientAuthenticationResult += (conn, authenticated) =>
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|connect + token| Auth[Server Authentication]
+    Auth -->|verify token| DB[(PostgreSQL Tokens)]
+    Auth -->|attach session| Conn[Connection state]
+    Auth -->|approve / reject| Client
+    Auth -->|on failure| Kick[KickRequest]
+```
+
 ### SRP-6a Authentication (LoginServer)
 
 #### Phase 1: Key Exchange (Inline — No Channel)

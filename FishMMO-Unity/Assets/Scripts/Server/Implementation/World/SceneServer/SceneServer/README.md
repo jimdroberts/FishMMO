@@ -174,6 +174,22 @@ sceneServerSystem.UnloadScene(sceneHandle);
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|hand-off from WorldServer| SS[SceneServerSystem]
+    SS --> CharSys[Character]
+    SS --> Inv[CharacterInventory]
+    SS --> Chat[Chat]
+    SS --> Guild[Guild]
+    SS --> Party[Party]
+    SS --> Interact[Interactable]
+    SS --> Achv[Achievement]
+    SS -->|persist| DB[(PostgreSQL)]
+    SS -->|tick / broadcast| Client
+```
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                    InitializeOnce()                          │

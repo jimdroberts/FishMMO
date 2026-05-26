@@ -217,6 +217,18 @@ ClientManager.Broadcast(broadcast);
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|CreateAccount request| Sys[AccountCreationSystem]
+    Sys -->|validate username/password| Sys
+    Sys -->|check existing| DB[(PostgreSQL Accounts)]
+    DB -->|exists?| Sys
+    Sys -->|hash + insert| DB
+    Sys -->|result code| Client
+```
+
 ```
 ┌─────────┐    CreateAccountBroadcast     ┌────────────────────────────────┐
 │  Client  │ ──────────────────────────▶  │   Network Thread (UDP Gate)    │

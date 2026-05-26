@@ -209,6 +209,23 @@ if (Server.DataContainerRegistry.TryGet<MyRuntimeData>(out var data))
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart TD
+    Main[Server entry] --> Boot[Bootstrap]
+    Boot --> Auth[Authentication]
+    Boot --> Acct[Account]
+    Boot --> RT[RuntimeData]
+    Boot --> Kick[KickRequest]
+    Boot --> Login[LoginServer subsystems]
+    Boot --> World[WorldServer subsystems]
+    Boot --> Scene[SceneServer subsystems]
+    Auth --> DB[(PostgreSQL)]
+    Acct --> DB
+    RT --> Cache[Runtime registries]
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        ServerLauncher                               │

@@ -219,6 +219,19 @@ public class MyCustomBootstrap : BootstrapSystem
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart TD
+    Entry[Process / scene start] --> Boot[Bootstrap]
+    Boot --> Cfg[Configuration]
+    Boot --> Log[Logging]
+    Boot --> Reg[Service / system registration]
+    Reg --> Sys1[Shared systems]
+    Reg --> Sys2[Domain systems]
+    Boot --> Ready[Ready signal]
+```
+
 ### Full Bootstrap Loading Pipeline
 
 ```

@@ -12,7 +12,7 @@ namespace FishMMO.Installer
 	/// migration execution, and database deletion.
 	/// Supports Windows and Linux (Arch/CachyOS via pacman, Ubuntu/Debian via apt, RHEL/Fedora via dnf/yum).
 	/// </summary>
-	public static class PostgreSQLInstaller
+	public static partial class PostgreSQLInstaller
 	{
 		/// <summary>
 		/// Installs PostgreSQL on the current platform by dispatching to the appropriate
@@ -295,6 +295,7 @@ namespace FishMMO.Installer
 				{
 					await connection.OpenAsync();
 					await WarnIfTrustAuthAsync(connection);
+					await HardenPostgreSQLAsync(connection, appSettings);
 					await Log.Info("FishMMOInstaller", "Successfully connected to PostgreSQL server.");
 
 					if (InstallerProcessHelper.PromptForYesNo($"Create Database '{appSettings.Npgsql.Database}'?"))

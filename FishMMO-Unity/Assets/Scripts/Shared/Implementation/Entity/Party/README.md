@@ -163,6 +163,18 @@ PartyRank : byte
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Char[Character] --> Party[PartySystem]
+    Party --> Members[Member list]
+    Party --> Loot[Loot rules]
+    Party --> XP[XP share]
+    Party -->|persist| DB[(PostgreSQL Parties)]
+    Members --> UI[Party UI]
+```
+
 ### Creation
 
 1. Client sends `PartyCreateBroadcast`.

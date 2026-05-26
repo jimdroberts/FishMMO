@@ -253,6 +253,17 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|party op| Sys[PartySystem]
+    Sys -->|invite / accept| Members[Member registry]
+    Sys -->|persist| DB[(PostgreSQL Parties)]
+    Sys -->|broadcast| Client
+    Sys -->|cross-scene sync| World[WorldServer]
+```
+
 ### Create Party
 
 ```

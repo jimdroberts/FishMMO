@@ -155,12 +155,30 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Persists the build type environment to EditorPrefs.
+		/// Used by Dashboard popups and CLI build entry points.
+		/// </summary>
+		public static void SetBuildType(BuildTypeEnvironment buildType)
+		{
+			EditorPrefs.SetInt(PREF_BUILD_TYPE, (int)buildType);
+		}
+
+		/// <summary>
 		/// Gets the current OS target environment (Windows, Linux, or WebGL).
 		/// </summary>
 		/// <returns>The current OSTargetEnvironment.</returns>
 		public static OSTargetEnvironment GetOSTarget()
 		{
 			return (OSTargetEnvironment)EditorPrefs.GetInt(PREF_OS_TARGET, (int)OSTargetEnvironment.Windows);
+		}
+
+		/// <summary>
+		/// Persists the OS target environment to EditorPrefs.
+		/// Used by Dashboard popups and CLI build entry points.
+		/// </summary>
+		public static void SetOSTarget(OSTargetEnvironment osTarget)
+		{
+			EditorPrefs.SetInt(PREF_OS_TARGET, (int)osTarget);
 		}
 
 		/// <summary>

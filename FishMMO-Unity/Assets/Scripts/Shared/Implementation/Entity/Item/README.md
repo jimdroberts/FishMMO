@@ -439,3 +439,15 @@ CharacterBehaviour
 ## License
 
 This project is subject to the FishMMO project license.
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    Pickup[Pickup / loot / craft] --> Inst[Item instance]
+    Inst --> Tmpl[Item template]
+    Inst --> Inv[Inventory]
+    Inv --> Equip[Equipment slots]
+    Equip --> Stats[Character stats]
+    Inv -->|persist| DB[(PostgreSQL)]
+```

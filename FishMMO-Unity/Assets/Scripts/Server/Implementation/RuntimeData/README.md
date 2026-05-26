@@ -328,6 +328,19 @@ public class PartySystem : ServerBehaviour, IPartySystem<NetworkConnection>
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Boot[Server bootstrap] --> Load[Load runtime data]
+    Load --> ScriptableObjs[ScriptableObject registries]
+    Load --> DBData[(DB seed data)]
+    ScriptableObjs --> RD[RuntimeData container]
+    DBData --> RD
+    RD --> Sys1[Systems]
+    RD --> Sys2[Lookups by id/name]
+```
+
 ```
 Server.Start()
     │

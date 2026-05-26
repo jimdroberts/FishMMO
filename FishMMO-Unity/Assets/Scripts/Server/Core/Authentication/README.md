@@ -374,6 +374,17 @@ private async Task ProcessSrpVerifyAsync(
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Net[Network connection] --> Core[BaseServerAuthenticator]
+    Core -->|SRP / Token handshake| Auth[FishMMO-Auth services]
+    Auth -->|verify| DB[(PostgreSQL)]
+    Core -->|approve| Pipeline[Server pipeline]
+    Core -->|reject| Disc[Disconnect]
+```
+
 ### Thread Model
 
 ```

@@ -203,6 +203,17 @@ Equipment uses `ItemGenerator.Generate(1, template)` to produce a deterministic 
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|CreateCharacter request| Sys[CharacterCreateSystem]
+    Sys -->|validate name + archetype| Naming[NamingService]
+    Sys -->|insert character| DB[(PostgreSQL Characters)]
+    Sys -->|seed inventory + spawn| DB
+    Sys -->|result| Client
+```
+
 ```
 ┌────────┐  CharacterCreateBroadcast   ┌──────────────────────────────────────┐
 │ Client ├─────────────────────────────►│ OnServerCharacterCreateBroadcastRcvd │

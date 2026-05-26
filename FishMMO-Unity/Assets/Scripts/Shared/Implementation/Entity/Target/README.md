@@ -155,6 +155,17 @@ This prevents the player from always targeting themselves when the camera is beh
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Char[Character] -->|select| Target[Target system]
+    Target -->|validate range + LOS| Check[Targeting rules]
+    Check --> Active[Active target]
+    Active --> Ability[Ability system]
+    Active --> UI[Target UI]
+```
+
 ### UpdateTarget Flow
 
 ```

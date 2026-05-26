@@ -197,6 +197,18 @@ This prevents unbounded fire-and-forget tasks and preserves operation order per 
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Owner[Character] -->|summon / dismiss| Sys[PetSystem]
+    Sys -->|load pet state| DB[(PostgreSQL Pets)]
+    Sys -->|spawn AI| Pet[Pet entity]
+    Pet -->|tick / commands| Sys
+    Sys -->|persist diffs| DB
+    Sys -->|broadcast| Clients[Nearby Clients]
+```
+
 ### Pet Follow
 
 ```

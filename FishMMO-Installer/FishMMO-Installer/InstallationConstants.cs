@@ -223,5 +223,93 @@ namespace FishMMO.Installer
 		/// and discovered by dotnet ef database update.
 		/// </summary>
 		public const string MigrationsOutputDirectory = "Migrations";
+
+		// ---------------------------------------------------------------------
+		// Redis
+		// ---------------------------------------------------------------------
+
+		/// <summary>Default Redis listen port.</summary>
+		public const string RedisDefaultPort = "6379";
+
+		/// <summary>Default Linux systemd service name for Redis.</summary>
+		public const string RedisLinuxServiceName = "redis";
+
+		/// <summary>Default Linux configuration file path for Redis.</summary>
+		public const string RedisLinuxConfigurationPath = "/etc/redis/redis.conf";
+
+		/// <summary>Default Windows service name used by the Memurai/Redis-on-Windows fork installed by this tool.</summary>
+		public const string RedisWindowsServiceName = "Memurai";
+
+		// ---------------------------------------------------------------------
+		// PgBouncer configuration generation
+		// ---------------------------------------------------------------------
+
+		/// <summary>Linux configuration directory for PgBouncer.</summary>
+		public const string PgBouncerLinuxConfigDirectory = "/etc/pgbouncer";
+
+		/// <summary>Linux pgbouncer.ini path.</summary>
+		public const string PgBouncerLinuxIniPath = "/etc/pgbouncer/pgbouncer.ini";
+
+		/// <summary>Linux userlist.txt path.</summary>
+		public const string PgBouncerLinuxUserlistPath = "/etc/pgbouncer/userlist.txt";
+
+		/// <summary>Dedicated auth lookup role used by PgBouncer to call the auth_query function.</summary>
+		public const string PgBouncerAuthUser = "fishmmo_pgb_auth";
+
+		// ---------------------------------------------------------------------
+		// FishMMO repository layout (monorepo at ~/Dev/FishMMO Dev)
+		// ---------------------------------------------------------------------
+
+		/// <summary>Root path of the FishMMO monorepo workspace on Linux/macOS.</summary>
+		public static readonly string FishMMOMonorepoRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO Dev");
+
+		/// <summary>Path to the FishMMO-Setup directory containing canonical nginx.conf, .cfg files, and environment overlays.</summary>
+		public static readonly string FishMMOSetupPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-Setup");
+
+		/// <summary>FishMMO-Setup/Development directory (Development environment overlay assets).</summary>
+		public static readonly string FishMMOSetupDevelopmentPath = Path.Combine(FishMMOSetupPath, "Development");
+
+		/// <summary>FishMMO-Setup/Release directory (Release/Production environment overlay assets).</summary>
+		public static readonly string FishMMOSetupReleasePath = Path.Combine(FishMMOSetupPath, "Release");
+
+		// ---------------------------------------------------------------------
+		// Systemd unit file targets
+		// ---------------------------------------------------------------------
+
+		/// <summary>Linux directory where generated systemd service unit files are placed.</summary>
+		public const string LinuxSystemdUnitDirectory = "/etc/systemd/system";
+
+		/// <summary>Service-name prefix applied to all FishMMO-managed systemd units.</summary>
+		public const string FishMMOServiceNamePrefix = "fishmmo-";
+
+		// ---------------------------------------------------------------------
+		// FishMMO-Unity project + CLI build entry points
+		// ---------------------------------------------------------------------
+
+		/// <summary>Absolute path to the FishMMO-Unity project root (contains Assets/, ProjectSettings/, Packages/).</summary>
+		public static readonly string FishMMOUnityProjectPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-Unity");
+
+		/// <summary>Fully-qualified Unity -executeMethod target for a client player build.</summary>
+		public const string UnityBuildClientMethod = "FishMMO.Shared.CustomBuildTool.Core.CustomBuildTool.BuildClientCLI";
+
+		/// <summary>Fully-qualified Unity -executeMethod target for a server player build.</summary>
+		public const string UnityBuildServerMethod = "FishMMO.Shared.CustomBuildTool.Core.CustomBuildTool.BuildServerCLI";
+
+		/// <summary>Fully-qualified Unity -executeMethod target for an Addressables-only build.</summary>
+		public const string UnityBuildAddressablesMethod = "FishMMO.Shared.CustomBuildTool.Core.CustomBuildTool.BuildAddressablesCLI";
+
+		/// <summary>Fully-qualified Unity -executeMethod target for a Client + Addressables combined build.</summary>
+		public const string UnityBuildClientWithAddressablesMethod = "FishMMO.Shared.CustomBuildTool.Core.CustomBuildTool.BuildClientWithAddressablesCLI";
+
+		/// <summary>Fully-qualified Unity -executeMethod target for a Server + Addressables combined build.</summary>
+		public const string UnityBuildServerWithAddressablesMethod = "FishMMO.Shared.CustomBuildTool.Core.CustomBuildTool.BuildServerWithAddressablesCLI";
+
+		/// <summary>Default Linux install root for Unity Hub-managed editors. Combined with version + Editor/Unity.</summary>
+		public static readonly string UnityLinuxEditorRoot = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Unity", "Hub", "Editor");
+
+		/// <summary>Default Windows install root for Unity Hub-managed editors. Combined with version + Editor\Unity.exe.</summary>
+		public static readonly string UnityWindowsEditorRoot = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Unity", "Hub", "Editor");
 	}
 }

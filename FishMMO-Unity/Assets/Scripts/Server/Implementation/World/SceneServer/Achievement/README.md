@@ -156,6 +156,18 @@ Behavior:
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Trigger[Game event] --> Sys[AchievementSystem]
+    Sys -->|check definitions| Defs[Achievement defs]
+    Sys -->|update progress| DB[(PostgreSQL Achievements)]
+    Sys -->|completed?| Reward[Grant rewards]
+    Reward --> Client[Unity Client]
+    Sys -->|broadcast| Client
+```
+
 ### Progress Update
 
 ```

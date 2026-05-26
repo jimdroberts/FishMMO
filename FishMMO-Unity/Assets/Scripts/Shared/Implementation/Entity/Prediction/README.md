@@ -215,6 +215,18 @@ AbilityController (Order=100)  → Activates abilities, checks cooldowns + resou
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Input[Local input] --> Predict[Client predict]
+    Predict --> State[Local state]
+    Server[Server tick] -->|snapshot| Reconcile[Reconcile]
+    Reconcile --> Predict
+    Predict --> Replay[Replay unacked inputs]
+    Replay --> State
+```
+
 ### Per-Tick Pipeline
 
 ```

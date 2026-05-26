@@ -243,6 +243,19 @@ networkManager.ClientManager.StopConnection();
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    User[Player] -->|enters credentials| UI[Auth UI]
+    UI --> Client[ClientAuthenticationSystem]
+    Client -->|SRP / Token handshake| LoginSrv[LoginServer]
+    LoginSrv -->|verify| DB[(PostgreSQL Accounts)]
+    LoginSrv -->|session token + world list| Client
+    Client --> UI
+    UI -->|connect to selected world| World[WorldServer]
+```
+
 ### Phase 1: Key Exchange (X25519 ECDH)
 
 ```

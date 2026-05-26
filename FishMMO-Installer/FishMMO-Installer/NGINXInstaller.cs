@@ -332,5 +332,118 @@ namespace FishMMO.Installer
 
 			return string.Empty;
 		}
+
+		/// <summary>
+		/// Deploys the canonical FishMMO <c>nginx.conf</c> from
+		/// <see cref="InstallationConstants.FishMMOSetupPath"/> to the system NGINX config
+		/// location and reloads the service. Existing files are backed up once with
+		/// <c>.pre-fishmmo.bak</c>. Runs <c>nginx -t</c> before reload to validate syntax.
+		/// </summary>
+		public static async Task DeployNginxConfigAsync()
+		{
+			Console.Clear();
+			await Log.Info("FishMMOInstaller", "--- Deploy FishMMO nginx.conf ---");
+
+			string sourcePath = Path.Combine(InstallationConstants.FishMMOSetupPath, "nginx.conf");
+			if (!File.Exists(sourcePath))
+			{
+				await Log.Error("FishMMOInstaller", $"Source config not found at '{sourcePath}'.");
+				return;
+			}
+
+			if (!await IsNGINXInstalledAsync())
+			{
+				await Log.Warning("FishMMOInstaller", "NGINX is not installed. Install NGINX first, then deploy the config.");
+				return;
+			}
+
+			string sourceContent;
+			try
+			{
+				sourceContent = await File.ReadAllTextAsync(sourcePath);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("FishMMOInstaller", $"Failed to read '{sourcePath}'", ex);
+				return;
+			}
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				const string destPath = "/etc/nginx/nginx.conf";
+				await LinuxConfigHardeningHelper.EnsureBackupAsync(destPath);
+				if (!await LinuxConfigHardeningHelper.SudoInstallAsync(sourceContent, destPath, "root", "root", "0644"))
+				{
+					return;
+				}
+
+				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+				bool valid = await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+					"sudo nginx -t",
+					"nginx -t reported configuration errors. The previous config is preserved as '/etc/nginx/nginx.conf.pre-fishmmo.bak'.");
+
+				if (!valid)
+				{
+					await Log.Warning("FishMMOInstaller",
+						"Validation failed. To revert: sudo install -o root -g root -m 0644 /etc/nginx/nginx.conf.pre-fishmmo.bak /etc/nginx/nginx.conf");
+					return;
+				}
+
+				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+					"sudo systemctl reload nginx",
+					"NGINX reload failed. Check 'sudo journalctl -u nginx -n 50'."))
+				{
+					return;
+				}
+
+				await Log.Info("FishMMOInstaller", "FishMMO nginx.conf deployed to /etc/nginx/nginx.conf and NGINX reloaded.");
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				string nginxHome = GetExpectedWindowsNginxHomePath();
+				string destPath = Path.Combine(nginxHome, "conf", "nginx.conf");
+				if (!File.Exists(destPath))
+				{
+					await Log.Error("FishMMOInstaller", $"Destination not found at '{destPath}'. Install NGINX first.");
+					return;
+				}
+
+				string backupPath = destPath + LinuxConfigHardeningHelper.BackupSuffix;
+				try
+				{
+					if (!File.Exists(backupPath))
+					{
+						File.Copy(destPath, backupPath);
+					}
+					await File.WriteAllTextAsync(destPath, sourceContent);
+				}
+				catch (Exception ex)
+				{
+					await Log.Error("FishMMOInstaller", $"Failed to deploy '{destPath}'", ex);
+					return;
+				}
+
+				string nginxExe = Path.Combine(nginxHome, "nginx.exe");
+				bool valid = await InstallerProcessHelper.RunProcessAsync(nginxExe, "-t",
+					(exitCode, _, _) => exitCode == 0);
+				if (!valid)
+				{
+					await Log.Warning("FishMMOInstaller",
+						$"nginx -t reported configuration errors. Previous config preserved as '{backupPath}'.");
+					return;
+				}
+
+				await InstallerProcessHelper.RunProcessAsync("sc.exe",
+					$"stop \"{InstallationConstants.NGINXWindowsServiceName}\"");
+				await InstallerProcessHelper.RunProcessAsync("sc.exe",
+					$"start \"{InstallationConstants.NGINXWindowsServiceName}\"");
+
+				await Log.Info("FishMMOInstaller", $"FishMMO nginx.conf deployed to '{destPath}' and service restarted.");
+			}
+			else
+			{
+				await Log.Warning("FishMMOInstaller", "Unsupported operating system for NGINX config deployment.");
+			}
+		}
 	}
 }

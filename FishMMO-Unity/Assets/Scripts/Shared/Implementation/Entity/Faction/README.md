@@ -209,6 +209,17 @@ NPCs use a different faction path than players:
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Entity[Character / NPC] --> Faction[FactionSystem]
+    Faction --> Rel[Relationship matrix]
+    Rel -->|friendly / neutral / hostile| Combat[Combat eligibility]
+    Rel --> AI[NPC AI]
+    Faction --> Rep[Reputation tracking]
+```
+
 ### Alliance Resolution
 
 ```

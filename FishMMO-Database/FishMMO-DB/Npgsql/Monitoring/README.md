@@ -2,6 +2,48 @@
 
 Unified monitoring namespace for database observability, health checks, and performance metrics.
 
+## Table of Contents
+
+- [Description](#description)
+- [Supported Platforms](#supported-platforms)
+- [Directory Structure](#directory-structure)
+- [Architecture](#architecture)
+- [Namespaces](#namespaces)
+- [Key Components](#key-components)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Future Expansions](#future-expansions)
+- [Design Principles](#design-principles)
+- [Integration Points](#integration-points)
+- [Flow Diagram](#flow-diagram)
+
+## Description
+
+The `Monitoring/` namespace provides the observability layer for `FishMMO.Database.Npgsql`. It is split into three single-responsibility sub-namespaces — **Health** (is the database reachable?), **Metrics** (how fast and how often?), and **Diagnostics** (which queries are slow?) — that are composed together by `NpgsqlDbContextFactory` and surfaced to Unity by `FishMMO.Database.Unity.DatabaseHealthService`. All trackers are thread-safe and toggleable so they can be enabled selectively per environment via `appsettings.json`.
+
+## Supported Platforms
+
+| Target | Status |
+|---|---|
+| .NET Standard 2.1 (FishMMO-DB.csproj) | Yes |
+| .NET 8.0 host (servers, tools) | Yes |
+| Unity 6.3 LTS | Yes (via `Unity/DatabaseHealthService`) |
+
+| Requirement | Notes |
+|---|---|
+| EF Core | Connection interceptors used to drive `ConnectionPoolMetrics` |
+| Npgsql | Underlying PostgreSQL provider |
+
+## Architecture
+
+```
+NpgsqlDbContextFactory
+├── ConnectionPoolMetrics       (Metrics/) — driven by EF Core interceptors
+├── DatabaseMetricsTracker      (Metrics/) — success / failure / latency aggregates
+├── QueryPerformanceTracker     (Diagnostics/) — per-operation percentiles, slow query events
+└── DatabaseHealthMonitor       (Health/) — SELECT 1 probe + status classification
+```
+
 ## Directory Structure
 
 ```
@@ -223,3 +265,29 @@ The Monitoring namespace is designed to accommodate:
 - **Services**: Integrate QueryPerformanceTracker for operation-level monitoring
 - **Unity**: DatabaseHealthService for game server monitoring
 - **Configuration**: All monitoring components configurable via appsettings.json
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    App[Service call<br/>e.g. IAccountService] -->|tracked op| QPT[QueryPerformanceTracker]
+    App --> Factory[NpgsqlDbContextFactory]
+    Factory -->|CreateDbContext| Ctx[NpgsqlDbContext]
+    Ctx -->|connection open/close interceptor| CPM[ConnectionPoolMetrics]
+    Ctx --> DB[(PostgreSQL)]
+
+    QPT -->|slow query| SlowEvt[OnSlowQueryDetected]
+    QPT --> Summary[QueryMetrics<br/>avg / P95 / P99]
+
+    Probe[DatabaseHealthMonitor] -->|SELECT 1| DB
+    Probe --> HResult[HealthCheckResult<br/>Healthy/Degraded/Unhealthy]
+
+    DMT[DatabaseMetricsTracker] -->|aggregates| MSum[MetricsSummary]
+    App -->|RecordSuccess/Failure| DMT
+
+    HResult --> Unity[Unity DatabaseHealthService]
+    CPM --> Unity
+    Summary --> Unity
+    SlowEvt --> Unity
+    Unity --> Ext[External alerting]
+```

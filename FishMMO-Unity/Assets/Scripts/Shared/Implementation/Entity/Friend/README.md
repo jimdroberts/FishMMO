@@ -155,6 +155,16 @@ This ensures:
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Char[Character] --> FList[Friend list]
+    FList --> Presence[Presence tracker]
+    Presence -->|online/offline| UI[Friend UI]
+    FList -->|persist| DB[(PostgreSQL Friends)]
+```
+
 ### 1. Adding a Friend
 
 ```

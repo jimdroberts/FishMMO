@@ -177,6 +177,17 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Caller[Character/Guild/Pet create] --> Sys[NamingSystem]
+    Sys -->|profanity + length + chars| Rules[Validation rules]
+    Sys -->|uniqueness query| DB[(PostgreSQL)]
+    Rules --> Sys
+    Sys -->|approve / reject| Caller
+```
+
 ### Forward Naming (ID → Name)
 
 ```

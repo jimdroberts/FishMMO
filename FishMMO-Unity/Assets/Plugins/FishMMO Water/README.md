@@ -1,25 +1,128 @@
-# FishMMO Realistic Water Shader Tutorial
+# FishMMO Realistic Water Shader
 
-## Overview
+A self-contained URP water rendering package for FishMMO worlds. It ships a single
+HLSL shader (`RealisticWaterShader`), a small companion `InfiniteOceanSetup`
+MonoBehaviour, three ready-to-use materials (Ocean / Lake / Beach), and a
+texture conventions guide. Together they provide animated waves, dual-layer
+normal mapping, depth-aware shoreline foam, Fresnel edge transparency and an
+optional infinite-ocean LOD that extends the surface to the camera's far clip
+plane.
 
-This package provides a complete realistic water shader solution that supports:
-- Realistic water surface with dual-layer normal mapping
-- Beach waves with procedural foam generation
-- Shoreline tide effects with wave displacement
-- Depth-based transparency and color blending
-- Fresnel reflections and specular highlights
-- Animated wave motion with customizable parameters
+This README is both a reference for the package and a long-form ShaderGraph
+tutorial for users who want to rebuild or extend the shader themselves.
 
-**Included Approaches:**
-1. **Complete Shader File** (`RealisticWaterShader.shader`) - Ready to use HLSL shader
-2. **ShaderGraph Tutorial** - Step-by-step guide to recreate in ShaderGraph
-3. **Pre-configured Materials** - Ocean, Lake, and Beach presets
+## Table of Contents
 
-## Prerequisites
+- [Description](#fishmmo-realistic-water-shader)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Key Components](#key-components)
+- [Configuration](#configuration)
+- [Flow Diagram](#flow-diagram)
+- [Tutorial: Basic Water Setup](#basic-water-setup)
+- [Tutorial: Wave Animation](#wave-animation)
+- [Tutorial: Normal Mapping](#normal-mapping)
+- [Tutorial: Beach Waves and Foam](#beach-waves-and-foam)
+- [Tutorial: Shoreline Tides](#shoreline-tides)
+- [Tutorial: Depth and Transparency](#depth-and-transparency)
+- [Tutorial: Final Polish](#final-polish)
+- [Usage Instructions](#usage-instructions)
+- [Troubleshooting](#troubleshooting)
+- [Infinite Ocean System](#infinite-ocean-system)
+- [Advanced Features](#advanced-features)
+- [File Structure](#file-structure)
 
-- Unity 2022.3+ with URP (Universal Render Pipeline)
-- ShaderGraph package installed
-- Basic understanding of ShaderGraph nodes
+## Supported Platforms
+
+| Platform | Status | Notes |
+| --- | --- | --- |
+| Windows (D3D11/D3D12) | Supported | Primary development target |
+| Linux (Vulkan)        | Supported | Headless servers do not need this asset |
+| macOS (Metal)         | Supported | URP Metal pipeline |
+| Android / iOS         | Best-effort | Lower texture resolutions recommended |
+| WebGL                 | Best-effort | Disable infinite ocean for performance |
+
+Requirements:
+
+| Requirement | Version |
+| --- | --- |
+| Unity              | 6.3 LTS (2022.3+ also tested) |
+| Render Pipeline    | Universal Render Pipeline (URP) |
+| ShaderGraph        | URP-bundled version |
+
+## Architecture
+
+```
+FishMMO Water/
+├── README.md                          # This document (overview + tutorial)
+├── QUICKSTART.md                      # Minimal "drop a plane in the scene" guide
+├── Shaders/
+│   └── RealisticWaterShader.shader    # Complete HLSL URP shader
+├── Scripts/
+│   └── InfiniteOceanSetup.cs          # MonoBehaviour driver for the infinite-ocean LOD
+├── Materials/
+│   ├── OceanWater.mat                 # Deep ocean preset
+│   ├── LakeWater.mat                  # Calm lake preset
+│   └── BeachWater.mat                 # Shoreline preset
+└── Textures/
+    └── README.md                      # Required / optional texture specifications
+```
+
+Data flow in the runtime is:
+
+1. `InfiniteOceanSetup` (optional) configures the water plane every frame to
+   follow the camera and feeds far-clip / fade parameters into the material.
+2. URP renders the mesh with `RealisticWaterShader`, which samples scene depth
+   and two animated normal layers, computes foam + Fresnel, and writes a
+   transparent surface.
+3. The three preset materials simply expose different parameter values for the
+   same shader.
+
+## Key Components
+
+| Component | Type | Responsibility |
+| --- | --- | --- |
+| `RealisticWaterShader.shader` | HLSL Shader | Vertex displacement, dual normal mapping, depth-based foam, Fresnel, infinite-ocean LOD. |
+| `InfiniteOceanSetup.cs`       | MonoBehaviour | Anchors the water plane to the active camera and pushes far-clip / fade parameters into the bound material. |
+| `OceanWater.mat`              | Material | Deep-ocean preset (large waves, dark color, infinite ocean enabled). |
+| `LakeWater.mat`               | Material | Calm-lake preset (small waves, no infinite ocean). |
+| `BeachWater.mat`              | Material | Shoreline preset (mid waves, tides, partial infinite ocean). |
+| `Textures/`                   | Asset folder | Project-supplied normal maps and foam noise; see `Textures/README.md`. |
+
+## Configuration
+
+Material properties exposed by `RealisticWaterShader` (grouped):
+
+- **Color**: `WaterColor`, `ShallowColor`, `FoamColor`, `FarOceanColor`,
+  `Transparency`.
+- **Waves**: `WaveSpeed`, `WaveHeight`, `WaveFrequency`, `WaveDirection`.
+- **Normals**: `NormalMap`, `WaveNormalMap`, `NormalStrength`, `NormalSpeed`,
+  `NormalScale`.
+- **Foam**: `FoamNoise`, `FoamDistance`, `FoamIntensity`, `FoamCutoff`,
+  `FoamSmoothness`, `ShorelineSmoothing`.
+- **Tides**: `TideHeight`, `TideSpeed`, `TideOffset`.
+- **Surface**: `Smoothness`, `Metallic`, `FresnelPower`.
+- **Infinite Ocean**: `EnableInfiniteOcean`, `FarOceanFadeDistance`,
+  `HorizonBlend`, `DistanceWaveReduction`.
+
+Recommended values are listed in the [Usage Instructions](#usage-instructions)
+section below. Required texture formats are documented in
+[Textures/README.md](Textures/README.md).
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    Cam[Active Camera] -->|position + far clip| Setup[InfiniteOceanSetup]
+    Setup -->|sets parameters| Mat[Water Material]
+    Mat --> Shader[RealisticWaterShader]
+    Mesh[Water plane] --> Shader
+    SceneDepth[(Scene depth texture)] --> Shader
+    Normals[Normal + foam textures] --> Shader
+    Shader -->|transparent surface| Frame[Rendered frame]
+```
+
+---
 
 ## Tutorial Structure
 

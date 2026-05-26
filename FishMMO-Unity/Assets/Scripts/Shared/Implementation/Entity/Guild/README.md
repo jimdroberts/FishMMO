@@ -189,6 +189,18 @@ This ensures:
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Char[Character] --> Guild[GuildSystem]
+    Guild --> Roster[Member roster]
+    Guild --> Roles[Role / permissions]
+    Guild --> Bank[Guild bank]
+    Guild --> Persist[(PostgreSQL Guilds)]
+    Roster --> Chat[Guild chat channel]
+```
+
 ### 1. Creating a Guild
 
 ```

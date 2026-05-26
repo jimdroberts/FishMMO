@@ -231,6 +231,17 @@ This is an integrated module within the FishMMO project. No separate installatio
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Char[Character] -->|interact| Target[Interactable entity]
+    Target --> Sys[InteractableSystem]
+    Sys -->|range + cooldown| Sys
+    Sys --> Handler[Per-type handler]
+    Handler --> Effect[Loot / dialogue / portal / quest]
+```
+
 ### Interaction Flow
 
 ```

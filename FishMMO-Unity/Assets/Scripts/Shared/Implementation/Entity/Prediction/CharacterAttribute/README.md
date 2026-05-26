@@ -230,6 +230,16 @@ All external systems use `AddModifier()` / `SetModifier()` which operate on `Ext
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Sources[Base + Buffs + Equipment + Talents] --> Calc[CharacterAttributeSystem]
+    Calc --> Snapshot[Predicted attribute snapshot]
+    Server[Server tick] -->|authoritative| Calc
+    Calc -->|publish| Listeners[UI / abilities / combat]
+```
+
 ### Value Calculation Flow
 
 ```

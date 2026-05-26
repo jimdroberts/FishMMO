@@ -28,7 +28,7 @@ A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, an
   - [Configure Constants.cs Domains](#configure-constantscs-domains)
   - [Server Configuration Files](#server-configuration-files)
   - [FishMMO-AppHealthMonitor](#fishmmo-apphealthmonitor)
-- [Project Flow Diagram](#project-flow-diagram)
+- [Flow Diagram](#flow-diagram)
 - [License](#license)
 
 ---
@@ -746,7 +746,7 @@ sudo systemctl enable --now apphealthmonitor
 
 ---
 
-## Project Flow Diagram
+## Flow Diagram
 
 ```mermaid
 flowchart TB

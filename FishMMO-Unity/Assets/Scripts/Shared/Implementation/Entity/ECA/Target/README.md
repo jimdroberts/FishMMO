@@ -2,6 +2,69 @@
 
 The Target Selector system is the **targeting layer** of FishMMO's ECA (Event-Condition-Action) framework. Selectors decide *which* `GameObject`s a `Trigger`, `BaseCondition`, or `BaseAction` operates on. They are serialized inline on assets via `[SerializeReference] [SubclassSelector]`, so designers pick a concrete type from a dropdown in the Inspector.
 
+## Table of Contents
+
+- [Description](#eca-target-selector-system)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Key Components](#key-components)
+- [Configuration](#configuration)
+- [Flow Diagram](#flow-diagram)
+- [1. Where selectors live](#1-where-selectors-live)
+- [2. The execution model](#2-the-execution-model)
+- [3. Anatomy of `TargetSelector`](#3-anatomy-of-targetselector)
+- [4. Selector catalogue](#4-selector-catalogue)
+- [5. Designer cookbook](#5-designer-cookbook)
+- [6. Resolution in actions and conditions](#6-resolution-in-actions-and-conditions)
+- [7. Determinism notes](#7-determinism-notes)
+- [8. Writing a new selector](#8-writing-a-new-selector)
+- [9. Quick reference: lifecycle invariants](#9-quick-reference-lifecycle-invariants)
+- [10. Condition & action framework hooks](#10-condition--action-framework-hooks)
+
+## Supported Platforms
+
+| Platform | Status | Notes |
+| --- | --- | --- |
+| Windows / Linux / macOS (Editor) | Supported | Primary authoring environment. |
+| Standalone Players (Win / Linux / macOS) | Supported | Selectors execute in client and server builds. |
+| Headless Linux Server | Supported | Selectors run on the SceneServer for authoritative target resolution. |
+| Android / iOS / WebGL | Supported | Only the client-side selector evaluations run on these platforms. |
+
+Requirements: Unity 6.3 LTS with FishNet. Selectors depend only on the shared FishMMO entity layer; no platform-specific APIs.
+
+## Architecture
+
+Selectors are pure data: a `BaseTargetSelector` subclass holds parameters in `[SerializeField]` fields and exposes a `Resolve(...)` method. Triggers / conditions / actions invoke `Resolve` to obtain an `IReadOnlyList<GameObject>` and then operate on that list. There is no runtime registration step — types are discovered by Unity's `SerializeReference` system.
+
+```
+Entity/ECA/Target/
+├── BaseTargetSelector.cs          # Abstract base (Resolve + helpers)
+├── SelfTargetSelector.cs          # The invoking entity
+├── OwnerTargetSelector.cs         # The owner / source character
+├── NearestTargetSelector.cs       # Closest matching candidate
+├── RadiusTargetSelector.cs        # All entities within radius
+├── ConeTargetSelector.cs          # Cone-shaped AoE
+├── TaggedTargetSelector.cs        # Filter by tag
+├── FactionTargetSelector.cs       # Filter by faction relationship
+└── ChainTargetSelector.cs         # Chain / composite selectors
+```
+
+## Key Components
+
+| Component | Purpose |
+| --- | --- |
+| `BaseTargetSelector` | Abstract base; defines `Resolve(context, candidates)` and helper filters. |
+| `SelfTargetSelector` | Returns the invoking `GameObject`. |
+| `NearestTargetSelector` | Returns the single closest valid target from a candidate set. |
+| `RadiusTargetSelector` | Returns all valid entities within a configured radius. |
+| `ConeTargetSelector` | Returns entities inside a forward-facing cone. |
+| `TaggedTargetSelector` / `FactionTargetSelector` | Filtering selectors layered on top of source selectors. |
+| `ChainTargetSelector` | Pipes one selector's output into the next. |
+
+## Configuration
+
+Selectors are configured in-place on `ScriptableObject` assets that reference triggers / conditions / actions. The configurable surface is per-selector and exposed via Unity's Inspector. There is no separate `appsettings` file — designers tune values directly on the assets.
+
 ---
 
 ## 1. Where selectors live
@@ -325,3 +388,14 @@ Warnings are non-blocking — they appear in the Console attached to the offendi
 ### 10.12 Inline triggers share the asset-trigger code path
 
 Some host MonoBehaviours (e.g. `WorldDayNightCycle`) author triggers inline via `[Serializable]` types like `WorldSceneTrigger` rather than referencing a `Trigger` asset. These inline types must not reimplement the execution loop; instead they delegate to `TriggerExecution.RunInline(selector, conditions, onConditionsMetActions, onConditionsNotMetActions, eventData)`. The helper centralises selector fan-out, per-target `EventData.Fork`, condition evaluation, and the met/not-met branch dispatch — the same logic `Trigger.Execute` uses. Any future fix made to the asset path (fault isolation, ambient `ConditionFilter`, fan-out rules, …) is therefore inherited automatically by inline triggers. Inline triggers also mirror the `OnExecuted` instrumentation event and expose an editor-only `Sanitize()` so their host's `OnValidate` can null-strip `SubclassSelector` remnants exactly like `Trigger.OnValidate` does on the asset.
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    Event[Event] --> ECA[ECA pipeline]
+    ECA --> Cond[Condition match]
+    Cond --> Target[Target resolver]
+    Target --> Action[Action handler]
+    Action --> Effect[Effect on entity]
+```

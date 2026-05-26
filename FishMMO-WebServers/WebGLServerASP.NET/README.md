@@ -1,10 +1,45 @@
 # WebGLServerASP.NET
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Directory Structure](#directory-structure)
+- [Middleware Pipeline](#middleware-pipeline)
+- [Key Components](#key-components)
+- [Configuration](#configuration)
+- [Security](#security)
+- [Deployment](#deployment)
+- [External Dependencies](#external-dependencies)
+- [Requirements](#requirements)
+- [Flow Diagram](#flow-diagram)
+
 ## Overview
 
 ASP.NET Core static file server purpose-built for serving Unity WebGL builds to browsers. Serves all content from `wwwroot/`, supports HTTP range requests for efficient streaming of large `.wasm`/`.data` files, and applies permissive CORS headers for cross-origin WebGL loading.
 
 Designed to run behind NGINX as a reverse proxy (via `play.fishmmo.com`). NGINX terminates SSL and forwards requests over plain HTTP to Kestrel on localhost.
+
+## Supported Platforms
+
+| Target | Status |
+|---|---|
+| .NET 8.0 — Linux | Yes (recommended) |
+| .NET 8.0 — Windows | Yes |
+| .NET 8.0 — macOS | Yes |
+
+| Client Browser | Notes |
+|---|---|
+| Chromium / Chrome / Edge | Full support |
+| Firefox | Full support |
+| Safari | Full support (Range requests required for large `.wasm`) |
+
+| Requirement | Version |
+|---|---|
+| .NET SDK | 8.0+ |
+| Unity WebGL build | Output placed into `wwwroot/` |
+| NGINX | Recommended for production |
 
 ## Architecture
 
@@ -136,3 +171,26 @@ Custom middleware that handles HTTP range requests for efficient streaming of la
 - .NET 8.0 SDK or later
 - Unity WebGL build output in `wwwroot/`
 - NGINX reverse proxy (recommended for production)
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    Browser[Browser] -->|"HTTPS play.fishmmo.com"| Nginx[NGINX SSL termination]
+    Nginx -->|"HTTP localhost:8000"| Kestrel[Kestrel]
+    subgraph Server[WebGLServer]
+        Kestrel --> Fwd[ForwardedHeaders]
+        Fwd --> Cors[CORS AllowAllOrigins]
+        Cors --> Defaults[UseDefaultFiles index.html]
+        Defaults --> Static[UseStaticFiles wwwroot/]
+        Static --> Range[RangeRequestMiddleware]
+        Range -->|no Range header| Full[200 full file]
+        Range -->|Range present| Partial[206 partial content]
+        Range -->|missing| NF[404]
+        Range -->|out of bounds| OOB[416]
+    end
+    Full --> Browser
+    Partial --> Browser
+    NF --> Browser
+    OOB --> Browser
+```

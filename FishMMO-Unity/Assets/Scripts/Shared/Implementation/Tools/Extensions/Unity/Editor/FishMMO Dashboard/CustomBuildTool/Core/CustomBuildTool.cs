@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditorInternal;
 using System.IO;
 using System.Collections.Generic;
 using System;
@@ -137,7 +138,10 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			if (BuildEnvironmentOptions.IsCompiling())
 			{
 				UnityEngine.Debug.LogWarning("[CustomBuildTool] Cannot start build while scripts are compiling. Please wait for compilation to finish.");
-				EditorUtility.DisplayDialog("Build Blocked", "Scripts are currently compiling.\nPlease wait for compilation to finish before building.", "OK");
+				if (CanShowDialog())
+				{
+					EditorUtility.DisplayDialog("Build Blocked", "Scripts are currently compiling.\nPlease wait for compilation to finish before building.", "OK");
+				}
 				return;
 			}
 
@@ -172,7 +176,10 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			if (BuildEnvironmentOptions.IsCompiling())
 			{
 				UnityEngine.Debug.LogWarning("[CustomBuildTool] Cannot start addressables build while scripts are compiling. Please wait for compilation to finish.");
-				EditorUtility.DisplayDialog("Build Blocked", "Scripts are currently compiling.\nPlease wait for compilation to finish before building addressables.", "OK");
+				if (CanShowDialog())
+				{
+					EditorUtility.DisplayDialog("Build Blocked", "Scripts are currently compiling.\nPlease wait for compilation to finish before building addressables.", "OK");
+				}
 				return;
 			}
 
@@ -307,12 +314,146 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			catch (System.Exception ex)
 			{
 				Log.Error("BuildTool", $"Build executable failed: {ex.Message}");
-				EditorUtility.DisplayDialog("Build Failed", $"Build process failed:\n{ex.Message}", "OK");
+				if (CanShowDialog())
+				{
+					EditorUtility.DisplayDialog("Build Failed", $"Build process failed:\n{ex.Message}", "OK");
+				}
+				// In batch mode, surface non-zero exit so CI / installer detects the failure.
+				if (Application.isBatchMode)
+				{
+					EditorApplication.Exit(1);
+				}
 			}
 			finally
 			{
 				Log.Shutdown();
 			}
+		}
+
+		/// <summary>
+		/// Returns true when it is safe to open a modal EditorUtility dialog.
+		/// Suppresses dialogs in -batchmode / CI / headless invocations to avoid
+		/// HeadlessException or indefinite hangs waiting for user input.
+		/// </summary>
+		private static bool CanShowDialog()
+		{
+			if (Application.isBatchMode) return false;
+			if (!InternalEditorUtility.isHumanControllingUs) return false;
+			return true;
+		}
+
+		// =====================================================================
+		// CLI entry points invoked by the FishMMO-Installer via:
+		//   Unity -batchmode -nographics -projectPath <FishMMO-Unity>
+		//         -executeMethod FishMMO.Shared.CustomBuildTool.Core.CustomBuildTool.<Method>
+		//         -fishmmoOSTarget <Windows|Linux|WebGL>
+		//         -quit -logFile -
+		// Each method parses CLI args, sets EditorPrefs, and dispatches to the
+		// existing pref-driven build entry points. Build type is implied by the
+		// CLI entry name (Client / Server). Addressables CLI honours the
+		// -fishmmoBuildType arg if supplied so server-only / client-only bundles
+		// can be generated from CI.
+		// =====================================================================
+
+		/// <summary>CLI entry: build the Client player. OS target read from -fishmmoOSTarget arg.</summary>
+		public static void BuildClientCLI()
+		{
+			RunCliBuild(BuildTypeEnvironment.Client, includeAddressables: false, addressablesOnly: false);
+		}
+
+		/// <summary>CLI entry: build the Server player. OS target read from -fishmmoOSTarget arg.</summary>
+		public static void BuildServerCLI()
+		{
+			RunCliBuild(BuildTypeEnvironment.Server, includeAddressables: false, addressablesOnly: false);
+		}
+
+		/// <summary>CLI entry: build Addressables only. Defaults to Client build type unless -fishmmoBuildType supplied.</summary>
+		public static void BuildAddressablesCLI()
+		{
+			BuildTypeEnvironment buildType = BuildEnvironmentOptions.GetBuildType();
+			if (TryGetArg("-fishmmoBuildType", out string buildTypeArg)
+				&& Enum.TryParse(buildTypeArg, true, out BuildTypeEnvironment parsed))
+			{
+				buildType = parsed;
+			}
+			RunCliBuild(buildType, includeAddressables: true, addressablesOnly: true);
+		}
+
+		/// <summary>CLI entry: build the Client player AND addressables together.</summary>
+		public static void BuildClientWithAddressablesCLI()
+		{
+			RunCliBuild(BuildTypeEnvironment.Client, includeAddressables: true, addressablesOnly: false);
+		}
+
+		/// <summary>CLI entry: build the Server player AND addressables together.</summary>
+		public static void BuildServerWithAddressablesCLI()
+		{
+			RunCliBuild(BuildTypeEnvironment.Server, includeAddressables: true, addressablesOnly: false);
+		}
+
+		/// <summary>
+		/// Shared CLI dispatcher. Parses -fishmmoOSTarget, applies prefs, invokes the
+		/// pref-driven build entry points, and forces a non-zero exit on failure when
+		/// running in batch mode so the caller (installer / CI) can detect the result.
+		/// </summary>
+		private static void RunCliBuild(BuildTypeEnvironment buildType, bool includeAddressables, bool addressablesOnly)
+		{
+			try
+			{
+				OSTargetEnvironment osTarget = OSTargetEnvironment.Windows;
+				if (TryGetArg("-fishmmoOSTarget", out string osArg)
+					&& Enum.TryParse(osArg, true, out OSTargetEnvironment parsedOs))
+				{
+					osTarget = parsedOs;
+				}
+
+				if (buildType == BuildTypeEnvironment.Server && osTarget == OSTargetEnvironment.WebGL)
+				{
+					UnityEngine.Debug.LogError("[CustomBuildTool] WebGL Server builds are not supported. Aborting.");
+					if (Application.isBatchMode) EditorApplication.Exit(2);
+					return;
+				}
+
+				BuildEnvironmentOptions.SetBuildType(buildType);
+				BuildEnvironmentOptions.SetOSTarget(osTarget);
+				BuildEnvironmentOptions.SwitchToEnvironmentBuildTarget();
+
+				if (includeAddressables)
+				{
+					BuildAddressablesWithEnvironmentOptions();
+				}
+
+				if (!addressablesOnly)
+				{
+					BuildGameWithEnvironmentOptions();
+				}
+
+				if (Application.isBatchMode)
+				{
+					EditorApplication.Exit(0);
+				}
+			}
+			catch (Exception ex)
+			{
+				UnityEngine.Debug.LogError($"[CustomBuildTool] CLI build failed: {ex.Message}\n{ex.StackTrace}");
+				if (Application.isBatchMode) EditorApplication.Exit(1);
+			}
+		}
+
+		/// <summary>Returns the value of a CLI flag (e.g. -fishmmoOSTarget Linux).</summary>
+		private static bool TryGetArg(string name, out string value)
+		{
+			string[] args = Environment.GetCommandLineArgs();
+			for (int i = 0; i < args.Length - 1; i++)
+			{
+				if (string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase))
+				{
+					value = args[i + 1];
+					return true;
+				}
+			}
+			value = string.Empty;
+			return false;
 		}
 
 		/// <summary>

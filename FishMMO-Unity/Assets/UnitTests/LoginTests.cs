@@ -143,34 +143,92 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public async Task Login_TwoSequentialAttempts_BothComplete()
+		public async Task Login_SequentialSessionsSameServer_StateProperlyReset()
 		{
 			try
 			{
-				await AuthTestTrace.LogTestStart(nameof(Login_TwoSequentialAttempts_BothComplete),
-					"Test: Two sequential login attempts.\n"
-					+ "Procedure: Perform two logins in sequence with the same credentials.\n"
-					+ "Expected: Both logins succeed.\n"
-					+ "Failure: Any failure indicates a bug in session handling or state cleanup.");
-				using AuthTestHarness h1 = new AuthTestHarness();
-				h1.Store.SeedAccount("dan", "first-pass");
-				ClientAuthenticationResult r1 = await DriveLogin(h1, "dan", "first-pass");
-				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, r1);
+				await AuthTestTrace.LogTestStart(nameof(Login_SequentialSessionsSameServer_StateProperlyReset),
+					"Test: Two sequential auth sessions through the same server instance.\n"
+					+ "Procedure: Log in with connection ID 1, then simulate a reconnect (connection ID 2) via ReconnectAs() and log in again through the same server core.\n"
+					+ "Expected: Both sessions return LoginSuccess. The server must isolate per-connection state by connection ID so that state from session 1 (conn=1) does not interfere with session 2 (conn=2).\n"
+					+ "Also verifies that each session issues fresh ephemeral material: the server public key and handshake cookie must differ between sessions.\n"
+					+ "Failure: If session 2 fails or returns stale/duplicate material, the server's per-connection state is not correctly keyed or reset between connections.");
 
-				using AuthTestHarness h2 = new AuthTestHarness();
-				h2.Store.SeedAccount("dan", "first-pass");
-				ClientAuthenticationResult r2 = await DriveLogin(h2, "dan", "first-pass");
-				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, r2);
-				await AuthTestTrace.Log("LoginTests", "SUCCESS", nameof(Login_TwoSequentialAttempts_BothComplete));
+				using AuthTestHarness h = new AuthTestHarness();
+				h.Store.SeedAccount("dan", "first-pass");
+
+				// ── Session 1: connection ID 1 ───────────────────────────────────
+				await AuthTestTrace.Log("LoginTests", "STEP", "Starting session 1 (conn=1)...");
+				ClientAuthenticationResult r1 = await DriveLogin(h, "dan", "first-pass");
+				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, r1,
+					$"Session 1 must succeed, got {r1}.");
+				LogAssert.IsTrue(h.Client.ReceivedSuccess, "Session 1: client must flag ReceivedSuccess.");
+
+				// Snapshot session-1 material for distinctness assertions after session 2.
+				byte[]? pubKey1 = h.Server.LastServerPublicKey != null
+					? (byte[])h.Server.LastServerPublicKey.Clone() : null;
+				byte[]? cookie1 = h.Server.LastChallengeCookie != null
+					? (byte[])h.Server.LastChallengeCookie.Clone() : null;
+				int srpVerifyCountAfterSession1 = h.Client.SrpVerifySends.Count;
+				int srpProofCountAfterSession1 = h.Client.SrpProofSends.Count;
+
+				// ── Reconnect: simulate disconnect → reconnect under new connection ID ───
+				await AuthTestTrace.Log("LoginTests", "STEP", "Reconnecting as conn=2 (simulated disconnect + reconnect)...");
+				h.Client.ReconnectAs(2);
+
+				// ── Session 2: connection ID 2 ───────────────────────────────────
+				await AuthTestTrace.Log("LoginTests", "STEP", "Starting session 2 (conn=2)...");
+				ClientAuthenticationResult r2 = await DriveLogin(h, "dan", "first-pass");
+				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, r2,
+					$"Session 2 must succeed on the same server instance, got {r2}. "
+					+ "If this fails, the server is not correctly isolating per-connection state by connection ID.");
+				LogAssert.IsTrue(h.Client.ReceivedSuccess, "Session 2: client must flag ReceivedSuccess.");
+
+				// Session 2 must have emitted its own SRP messages (not short-circuited).
+				LogAssert.IsTrue(h.Client.SrpVerifySends.Count > srpVerifyCountAfterSession1,
+					"Session 2 must emit its own SrpVerify — the server must have accepted a fresh handshake on conn=2.");
+				LogAssert.IsTrue(h.Client.SrpProofSends.Count > srpProofCountAfterSession1,
+					"Session 2 must emit its own SrpProof — the full SRP exchange must have run for the new connection.");
+
+				// The server must issue fresh ephemeral material for each connection: same key reuse
+				// would indicate the server is sharing or caching per-connection ECDH state.
+				if (pubKey1 != null && h.Server.LastServerPublicKey != null)
+				{
+					bool sameKey = pubKey1.Length == h.Server.LastServerPublicKey.Length;
+					if (sameKey)
+					{
+						for (int i = 0; i < pubKey1.Length; i++)
+						{
+							if (pubKey1[i] != h.Server.LastServerPublicKey[i]) { sameKey = false; break; }
+						}
+					}
+					LogAssert.IsFalse(sameKey,
+						"Session 2 server public key must differ from session 1 — X25519 keys must be per-connection ephemeral.");
+				}
+				if (cookie1 != null && h.Server.LastChallengeCookie != null)
+				{
+					bool sameCookie = cookie1.Length == h.Server.LastChallengeCookie.Length;
+					if (sameCookie)
+					{
+						for (int i = 0; i < cookie1.Length; i++)
+						{
+							if (cookie1[i] != h.Server.LastChallengeCookie[i]) { sameCookie = false; break; }
+						}
+					}
+					LogAssert.IsFalse(sameCookie,
+						"Session 2 handshake cookie must differ from session 1 — cookies must be freshly generated per connection.");
+				}
+
+				await AuthTestTrace.Log("LoginTests", "SUCCESS", nameof(Login_SequentialSessionsSameServer_StateProperlyReset));
 			}
 			catch (Exception ex)
 			{
-				await AuthTestTrace.Log("LoginTests", "FAILURE", $"{nameof(Login_TwoSequentialAttempts_BothComplete)}: {ex.Message}\n{ex.StackTrace}");
+				await AuthTestTrace.Log("LoginTests", "FAILURE", $"{nameof(Login_SequentialSessionsSameServer_StateProperlyReset)}: {ex.Message}\n{ex.StackTrace}");
 				throw;
 			}
 			finally
 			{
-				await AuthTestTrace.LogTestEnd(nameof(Login_TwoSequentialAttempts_BothComplete));
+				await AuthTestTrace.LogTestEnd(nameof(Login_SequentialSessionsSameServer_StateProperlyReset));
 			}
 		}
 

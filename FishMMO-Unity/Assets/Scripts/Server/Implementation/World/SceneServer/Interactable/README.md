@@ -348,6 +348,18 @@ The following handlers are auto-discovered and registered via reflection:
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|interact request| Sys[InteractableSystem]
+    Sys -->|range + cooldown check| Sys
+    Sys -->|invoke handler| Handler[Interactable handler]
+    Handler -->|loot / dialogue / portal| Effects
+    Effects -->|persist| DB[(PostgreSQL)]
+    Effects -->|broadcast| Client
+```
+
 ### Generic Interaction Dispatch
 
 ```

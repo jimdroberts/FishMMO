@@ -271,6 +271,17 @@ Both inbound broadcast handlers require authentication (`requireAuthentication =
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Scene[SceneServer] --> SCS[SceneChannelSystem]
+    SCS -->|register channels| Registry[Channel Registry]
+    Client[Unity Client] -->|join channel| SCS
+    SCS -->|broadcast events| Client
+    SCS -->|world events| World[WorldServer]
+```
+
 ### Channel List (Load / Request)
 
 ```

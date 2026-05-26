@@ -218,6 +218,18 @@ The delta serializer's `ReferenceEquals(prev, next)` check then skips the per-el
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Cast[Ability cast] --> CD[CooldownSystem]
+    CD -->|start timer| Buffer[Predicted cooldowns]
+    Tick[Network tick] --> CD
+    CD -->|reconcile server tick| Sync[Server snapshot]
+    Sync --> CD
+    CD -->|expired| Ready[Ability ready]
+```
+
 ### Cooldown Lifecycle
 
 ```

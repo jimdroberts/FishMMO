@@ -218,6 +218,18 @@ Observer-targeted messages resolve the destination character via `BaseCharacter.
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Apply[Buff apply event] --> Sys[BuffSystem]
+    Sys -->|register on owner| Owner[Character / Entity]
+    Tick[Network tick] --> Sys
+    Sys -->|periodic effect| Owner
+    Server[Server snapshot] -->|reconcile| Sys
+    Sys -->|expire / cleanse| Owner
+```
+
 ### Buff Lifecycle
 
 #### 1. Application

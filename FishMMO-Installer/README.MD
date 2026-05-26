@@ -2,6 +2,22 @@
 
 FishMMO-Installer is a cross-platform .NET 8 console tool that automates FishMMO server dependency setup. It provides an interactive menu-driven interface to install and configure all infrastructure components required to run a FishMMO game server.
 
+## Table of Contents
+
+- [Description](#fishmmo-installer)
+- [Supported Platforms](#supported-platforms)
+- [Menu Structure](#menu-structure)
+- [Key Component Versions](#key-component-versions)
+- [Architecture](#architecture)
+- [Configuration & Environment](#configuration--environment)
+- [Prerequisites](#prerequisites)
+- [Build and Run](#build-and-run)
+- [appsettings.json Example](#appsettingsjson-example)
+- [Operational checks after installation](#operational-checks-after-installation)
+- [NGINX setup guide (per OS)](#nginx-setup-guide-per-os)
+- [Flow Diagram](#flow-diagram)
+- [License](#license)
+
 ## Supported Platforms
 
 | Platform | Install Strategy |
@@ -420,6 +436,28 @@ Expected outcome:
 - Do **NOT** public-forward `8000`, `8080`, `8090`.
 - Do **NOT** public-forward `7770-7899` unless intentionally bypassing NGINX websocket path routing.
 - Primary public surface should be only `80` and `443`.
+
+---
+
+## Flow Diagram
+
+```mermaid
+flowchart TD
+    User[Operator] -->|launches| App[FishMMO-Installer]
+    App --> Menu{Main menu}
+    Menu -->|1| Runtime[Runtime & Tooling<br/>DotNet / VSBuildTools]
+    Menu -->|2| DB[Database<br/>PostgreSQL + PgBouncer]
+    Menu -->|3| Web[Web Server<br/>NGINX + LetsEncrypt]
+    Menu -->|4| Unity[Unity & Build<br/>Unity + ProjectBuild]
+    Menu -->|5| Cfg[Configuration<br/>AppSettings editor]
+    Runtime --> Helper[InstallerProcessHelper<br/>OS-aware exec]
+    DB --> Helper
+    Web --> Helper
+    Unity --> Helper
+    Helper -->|apt / pacman / dnf / winget| OS[(Host OS)]
+    Cfg -->|writes| Settings[(appsettings.json)]
+    OS --> Verify[Operational checks]
+```
 
 ---
 

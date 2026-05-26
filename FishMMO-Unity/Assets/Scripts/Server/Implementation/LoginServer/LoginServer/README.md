@@ -138,6 +138,20 @@ The asset menu path is defined by:
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|authenticate| Auth[LoginServer.Authentication]
+    Auth -->|account lookup| DB[(PostgreSQL)]
+    Auth -->|token issued| Sys[LoginServerSystem]
+    Sys --> AC[AccountCreation]
+    Sys --> CC[CharacterCreate]
+    Sys --> CS[CharacterSelect]
+    Sys --> SS[ServerSelect]
+    Sys -->|hand off| World[WorldServer]
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    LoginServerSystem Lifecycle                      │

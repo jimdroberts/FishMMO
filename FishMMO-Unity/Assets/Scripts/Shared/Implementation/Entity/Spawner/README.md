@@ -188,6 +188,17 @@ Typical use: Boss encounters where all mobs must be defeated before the encounte
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Scene[Scene load] --> Spawner[Spawner entity]
+    Spawner --> Pool[Spawn pool]
+    Spawner -->|on timer / on empty| Spawn[Instantiate entity]
+    Spawn --> Scene
+    Spawn -->|death| Spawner
+```
+
 ### Spawn Lifecycle
 
 #### Initialization (`OnStartNetwork`)

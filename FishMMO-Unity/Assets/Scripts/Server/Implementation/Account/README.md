@@ -211,6 +211,16 @@ accountManager.Clear();
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    AcctOp[Account-scoped op] --> Sys[AccountSystem]
+    Sys -->|lookup| DB[(PostgreSQL Accounts)]
+    Sys -->|update status| DB
+    Sys -->|notify| Connections[Client connections]
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                   Account System — Connection Lifecycle                  │

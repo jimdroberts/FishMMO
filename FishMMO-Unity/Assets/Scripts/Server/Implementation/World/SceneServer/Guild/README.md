@@ -275,6 +275,17 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|guild op| Sys[GuildSystem]
+    Sys -->|persist roster + roles| DB[(PostgreSQL Guilds)]
+    Sys -->|cross-scene broadcast| World[WorldServer]
+    World -->|fan-out| Scenes[Other SceneServers]
+    Sys -->|UI events| Client
+```
+
 ### Guild Creation
 
 ```

@@ -373,6 +373,18 @@ All release paths follow **save-then-release** ordering via `SaveAndReleaseChara
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Spawn[Character spawn request] --> Sys[CharacterSystem]
+    Sys -->|load state| DB[(PostgreSQL Characters)]
+    Sys -->|instantiate| Scene[Scene world]
+    Scene -->|tick / state changes| Sys
+    Sys -->|persist diffs| DB
+    Sys -->|broadcast updates| Clients[Nearby Clients]
+```
+
 ### Character Load Pipeline
 
 ```

@@ -190,6 +190,16 @@ internal override async Task<ClientAuthenticationResult> TryLoginAsync(
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|token from LoginServer| WAuth[WorldServer.Authentication]
+    WAuth -->|validate token| DB[(PostgreSQL Tokens)]
+    WAuth -->|character payload| Scene[Route to SceneServer]
+    Scene --> SceneSrv[SceneServer]
+```
+
 ### Full Authentication Pipeline
 
 ```

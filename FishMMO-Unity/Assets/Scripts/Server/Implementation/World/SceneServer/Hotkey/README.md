@@ -166,6 +166,17 @@ Creates and seeds the character hotkey list with `Constants.Configuration.Maximu
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|set hotkey| Sys[HotkeySystem]
+    Sys -->|validate slot + binding| Sys
+    Sys -->|persist| DB[(PostgreSQL Hotkeys)]
+    Sys -->|ack| Client
+    Client -->|load on login| Sys
+```
+
 ### Single Hotkey Set
 
 ```

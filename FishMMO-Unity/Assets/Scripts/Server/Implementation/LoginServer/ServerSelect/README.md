@@ -203,6 +203,17 @@ Server kicks connection with KickReason.UnusualActivity
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|RequestServerList| Sys[ServerSelectSystem]
+    Sys -->|active world servers| DB[(PostgreSQL WorldServers)]
+    Sys -->|server list + load| Client
+    Client -->|SelectServer| Sys
+    Sys -->|connection ticket| World[WorldServer]
+```
+
 ### Server List Request Flow
 
 ```

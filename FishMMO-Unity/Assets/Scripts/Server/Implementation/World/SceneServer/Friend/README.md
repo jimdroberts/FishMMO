@@ -168,6 +168,17 @@ This prevents unbounded fire-and-forget tasks and preserves operation order per 
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|friend op| Sys[FriendSystem]
+    Sys -->|persist| DB[(PostgreSQL Friends)]
+    Sys -->|online presence| World[WorldServer]
+    World --> Sys
+    Sys -->|status + list| Client
+```
+
 ### Add Friend
 
 ```

@@ -282,6 +282,17 @@ On initialization, inspector values are clamped to safe minimums:
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|inventory ops| Sys[CharacterInventorySystem]
+    Sys -->|validate| Items[Item registry]
+    Sys -->|persist| DB[(PostgreSQL Inventory)]
+    Sys -->|broadcast| Client
+    Sys -->|equip changes| Char[CharacterSystem]
+```
+
 ### Inventory Remove
 
 ```

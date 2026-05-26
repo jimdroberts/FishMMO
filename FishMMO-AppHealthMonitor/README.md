@@ -1,212 +1,287 @@
-# FishMMO AppHealthMonitor
+# FishMMO-AppHealthMonitor
 
-## Overview
+A small, focused **process supervisor** that launches, monitors, and restarts
+one or more FishMMO server executables. It is intended to be the "service
+manager" for headless Unity server builds (LoginServer, WorldServer,
+SceneServer) and any auxiliary processes (IPFetch, Patcher API, etc.) when a
+full systemd/Docker setup isn't desired.
 
-**FishMMO AppHealthMonitor** is a daemon-style application that monitors, manages, and maintains the health of multiple configured applications. It provides automatic restarts with circuit breaker protection, resource usage monitoring, and a command-driven console interface for real-time control.
+The supervisor performs **process liveness, TCP/UDP/WebSocket port probes, CPU
+and memory thresholds, exponential-backoff restarts, and a circuit breaker** to
+stop hammering a permanently broken process.
 
-## Features
+---
 
-- **Multi-application monitoring** with per-app configuration, health checks, and resource tracking
-- **Interactive console** with start, stop, force-kill, force-restart, status, and shutdown commands
-- **Headless mode** for production daemon deployments (auto-starts monitoring, auto-shuts down after cycle completion, suppresses interactive prompt)
-- **Circuit breaker** with configurable failure thresholds, exponential backoff with jitter, and automatic restart
-- **CPU and memory monitoring** with configurable thresholds and transient failure tolerance
-- **Port health checks** via TCP, UDP, and WebSocket with configurable timeouts and host address
-- **Graceful and forced shutdown** with platform-specific signals (SIGTERM on Linux/macOS, CloseMainWindow on Windows)
-- **Signal handling** — Ctrl+C always suppresses default termination; SIGTERM interception is enabled on supported Unix platforms to ensure `DisposeAsync` runs and child processes are cleaned up
-- **Kill-before-launch lifecycle** preventing port-bind conflicts, with atomic process reference management
-- **Drift-free health check cadence** via `PeriodicTimer`
-- **Comprehensive startup validation** — executable paths, strict port/PortType consistency, duplicate names, upper-bound limits, host format, and config deserialization errors
-- **Fail-fast startup policy** — any invalid application configuration aborts daemon startup
-- **Thread-safe counters** using `Interlocked.Increment` for failure tracking with `Volatile`/`Interlocked` synchronization throughout
-- **Race-free disposal** — cycle completion is captured before cancellation with bounded timeout awaiting
-- **Cancellable console input** via .NET 8's native `ReadLineAsync(CancellationToken)` with EOF-triggered shutdown in interactive mode
-- **IPv6-safe WebSocket probing** with double-bracket prevention for pre-bracketed addresses
-- **Structured logging** with configurable output via FishMMO-Logger
-- **Cross-platform** — Windows, Linux, macOS
+## Table of Contents
+
+- [Description](#description)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Key Components](#key-components)
+- [Configuration](#configuration)
+  - [`appsettings.json` shape](#appsettingsjson-shape)
+  - [Per-application options](#per-application-options)
+- [Console Commands](#console-commands)
+- [Build & Run](#build--run)
+- [Headless Mode](#headless-mode)
+- [Known Limitations](#known-limitations)
+- [Flow Diagram](#flow-diagram)
+
+---
+
+## Description
+
+The daemon reads `appsettings.json`, validates every per-application config
+(applying sensible defaults), and starts one `HealthMonitor` task per
+application. Each `HealthMonitor` launches its process, waits for the configured
+initial-health-check delay, then enters a polling loop that:
+
+1. Verifies the process is still alive.
+2. Probes the configured port(s) using `TcpHealthChecker`, `UdpHealthChecker`,
+   or `WebSocketHealthChecker` (selected by `PortType`).
+3. Optionally samples CPU and memory usage and compares to configured
+   thresholds (with a tolerance counter to ignore transient spikes).
+4. On consecutive failures, kills the process gracefully (with a force-kill
+   fallback) and restarts it with exponential backoff capped at
+   `MaxRestartDelaySeconds` and limited to `MaxRestartAttempts`.
+5. After `CircuitBreakerFailureThreshold` consecutive failures across launches,
+   the circuit breaker trips and that application is parked until a manual
+   `start` / `force-restart` command.
+
+A `CommandHandler` exposes interactive console commands so an operator can
+inspect status and intervene without restarting the supervisor itself.
+
+---
+
+## Supported Platforms
+
+| Target | Status | Notes |
+|---|---|---|
+| .NET 8.0 — Linux  | Yes | Recommended (uses `/proc` for CPU sampling) |
+| .NET 8.0 — Windows | Yes | Uses Win32 performance counters |
+| .NET 8.0 — macOS  | Best-effort | Process monitoring works; CPU sampling may be coarser |
+
+| Requirement | Version |
+|---|---|
+| .NET SDK | 8.0+ |
+| File-system access to monitored executables | Required |
+| Permission to bind probe sockets to `HealthCheckHost` | Required |
+
+---
 
 ## Architecture
 
-| File | Responsibility |
-|------|----------------|
-| `Program.cs` | Entry point — config loading, logging init, Ctrl+C and SIGTERM lifecycle, exit codes on all error paths |
-| `AppConfig.cs` | Configuration POCO with defaults, validation, path resolution, and deduplication |
-| `DaemonOrchestrator.cs` | Daemon lifecycle, monitor creation/cleanup, start/stop signaling, race-free disposal |
-| `HealthMonitor.cs` | Per-app monitoring loop — process lifecycle, health checks, circuit breaker, restarts |
-| `CommandHandler.cs` | Console command registration, dispatch, headless mode, EOF-safe stdin behavior, bounded force-kill cleanup waiting |
-| `HealthCheckerFactory.cs` | Creates `IHealthChecker` instances from `PortType` enums with null-guard and UDP-only warning |
-| `TcpHealthChecker.cs` | TCP connect probe with timeout and input validation |
-| `UdpHealthChecker.cs` | UDP send probe (fire-and-forget) with input validation |
-| `WebSocketHealthChecker.cs` | WebSocket connect-only probe with IPv6 safety |
-| `IHealthChecker.cs` | Health checker interface contract |
-| `ConsoleCommand.cs` | Immutable command record with constructor validation |
-| `HealthMonitorStatus.cs` | Immutable status snapshot record with computed `StateLabel` property |
-| `PortType.cs` | Enum: TCP, UDP, WebSocket |
-
-## Getting Started
-
-### Prerequisites
-- .NET 8.0 SDK or newer
-- Windows, Linux, or macOS
-
-### Building
-
-```bash
-cd FishMMO-AppHealthMonitor
-dotnet build
+```
+FishMMO-AppHealthMonitor/AppHealthMonitor/
+├── Program.cs                # Entry point; builds DaemonOrchestrator + CommandHandler
+├── DaemonOrchestrator.cs     # Manages monitor lifecycle, start/stop signalling, shutdown
+├── CommandHandler.cs         # Interactive console command loop
+├── ConsoleCommand.cs         # record: Name, Description, Func<Task> Action
+├── HealthMonitor.cs          # One per app — launch / probe / restart loop
+├── HealthMonitorStatus.cs    # Snapshot DTO used by 'status' command
+├── HealthCheckerFactory.cs   # Selects TCP/UDP/WebSocket probe per PortType
+├── IHealthChecker.cs         # Probe contract: Task<bool> CheckAsync(...)
+├── TcpHealthChecker.cs       # TCP connect probe
+├── UdpHealthChecker.cs       # UDP send/receive probe
+├── WebSocketHealthChecker.cs # WebSocket upgrade probe
+├── PortType.cs               # enum: TCP, UDP, WebSocket
+├── AppConfig.cs              # Per-application config + validation
+└── appsettings.json          # Headless flag + Applications[] array
 ```
 
-### Running
+---
 
-```bash
-dotnet run --project AppHealthMonitor/AppHealthMonitor.csproj
-```
+## Key Components
 
-Or run the compiled binary directly:
-```bash
-./AppHealthMonitor/bin/Debug/net8.0/AppHealthMonitor
-```
-
-### Installing .NET 8 SDK
-
-**Windows:** Download from [dotnet.microsoft.com](https://dotnet.microsoft.com/download/dotnet/8.0)
-
-**Arch / CachyOS:**
-```bash
-sudo pacman -S dotnet-sdk
-```
-
-**Ubuntu:**
-```bash
-wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-sudo dpkg -i packages-microsoft-prod.deb && rm packages-microsoft-prod.deb
-sudo apt-get update && sudo apt-get install -y dotnet-sdk-8.0
-```
-
-### Running as a Systemd Service (Linux)
-
-Create `/etc/systemd/system/apphealthmonitor.service`:
-```ini
-[Unit]
-Description=FishMMO Application Health Monitor
-After=network.target
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/home/username/FishMMO-AppHealthMonitor
-ExecStart=/home/username/FishMMO-AppHealthMonitor/AppHealthMonitor/bin/Release/net8.0/AppHealthMonitor
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-> For framework-dependent deployments, use:
-> `ExecStart=/usr/bin/dotnet /path/to/AppHealthMonitor.dll`
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now apphealthmonitor
-sudo systemctl status apphealthmonitor
-```
+| Component | Responsibility |
+|---|---|
+| `DaemonOrchestrator` | Top-level lifecycle. Builds the per-app `HealthMonitor` set, exposes `TrySignalStart()`, `CancelCurrentMonitoring()`, `GetActiveMonitorStatuses()`, and `Shutdown()`. |
+| `HealthMonitor` | Owns one child process. Implements launch, settle-delay, probe loop, threshold breach detection, graceful + forced kill, and exponential-backoff restart with a circuit breaker. |
+| `HealthMonitorStatus` | Read-only snapshot for the `status` console command (name, PID, state, restart counters, failure counters). |
+| `HealthCheckerFactory` | Returns the right `IHealthChecker` for each `PortType` declared in the app config. |
+| `IHealthChecker` / `Tcp`/`Udp`/`WebSocket` checkers | Stateless probes invoked per cycle. |
+| `AppConfig` | Strongly-typed app entry. `TryApplyDefaultsAndValidate(out error)` enforces sane minimums (e.g., `CheckIntervalSeconds >= 5`), resolves the exe path, and normalizes `HealthCheckHost`. |
+| `CommandHandler` | Cancellable `ReadLineAsync` loop; dispatches `start`, `stop`, `status`, `force-kill`, `force-restart`, `shutdown`, `exit`, `help`. |
+| `ConsoleCommand` | `record` of `(Name, Description, Func<Task> Action)` registered at construction. |
 
 ---
 
 ## Configuration
 
-### appsettings.json
+The daemon loads `appsettings.json` from its working directory. The file has
+two top-level fields:
 
-Each entry in the `Applications` array defines an application to monitor. Names must be unique.
+| Field | Description |
+|---|---|
+| `Headless` | `false` (default) keeps the interactive console open. `true` disables stdin reads — appropriate for systemd / Docker. |
+| `Applications` | Array of per-application configs (see below). |
 
-> Replace all sample `ApplicationExePath` values with real executable paths before running. Placeholder paths will fail startup validation.
+### `appsettings.json` shape
 
 ```json
 {
   "Headless": false,
   "Applications": [
     {
-      "Name": "MyApp",
-      "ApplicationExePath": "/path/to/your/application",
-      "MonitoredPort": 12345,
-      "PortTypes": ["TCP", "UDP"],
-      "LaunchArguments": "--option value",
-      "CheckIntervalSeconds": 10,
+      "Name": "LoginServer",
+      "ApplicationExePath": "/path/to/GameServer",
+      "LaunchArguments": "LOGIN",
+      "MonitoredPort": 7770,
+      "PortTypes": [ "TCP", "UDP" ],
+
+      "CheckIntervalSeconds": 30,
       "LaunchDelaySeconds": 2,
-      "CpuThresholdPercent": 80,
-      "MemoryThresholdMB": 500,
-      "GracefulShutdownTimeoutSeconds": 15,
-      "ForceKillTimeoutSeconds": 5,
-      "HealthCheckHost": "127.0.0.1",
-      "ResourceCheckFailureThreshold": 2,
-      "InitialRestartDelaySeconds": 5,
-      "MaxRestartDelaySeconds": 60,
-      "MaxRestartAttempts": 3,
       "InitialHealthCheckDelaySeconds": 30,
       "PostLaunchSettleDelaySeconds": 5,
+
+      "CpuThresholdPercent": 0,
+      "MemoryThresholdMB": 0,
+      "ResourceCheckFailureThreshold": 2,
+
+      "GracefulShutdownTimeoutSeconds": 10,
+      "ForceKillTimeoutSeconds": 5,
+
+      "InitialRestartDelaySeconds": 5,
+      "MaxRestartDelaySeconds": 60,
+      "MaxRestartAttempts": 5,
+      "CircuitBreakerFailureThreshold": 3,
+
       "PortCheckTimeoutMs": 2000,
       "WebSocketCheckTimeoutMs": 5000,
-      "CircuitBreakerFailureThreshold": 5
+      "HealthCheckHost": "127.0.0.1"
     }
   ]
 }
 ```
 
-> Path separators are handled cross-platform. Paths are resolved once via `Path.GetFullPath` at startup.
+### Per-application options
 
-#### Global Options
+| Field | Default / Min | Description |
+|---|---|---|
+| `Name` | required | Friendly name used in logs and `status`. |
+| `ApplicationExePath` | required | Absolute or relative path to the executable; resolved via `Path.GetFullPath` and verified to exist. |
+| `LaunchArguments` | `""` | Optional command-line arguments. |
+| `MonitoredPort` | `0` | `0` means **process-only** monitoring (no port probe). |
+| `PortTypes` | `[]` | Subset of `TCP`, `UDP`, `WebSocket`. Empty = process-only. |
+| `CheckIntervalSeconds` | min `5` | Probe interval. |
+| `LaunchDelaySeconds` | `0` | Wait this long **after** launching *this* app before launching the *next* one in the list (lets the previous app initialize). Not applied to the last app. |
+| `InitialHealthCheckDelaySeconds` | min `1` | Delay before the first probe after launch — lets the process fully boot. |
+| `PostLaunchSettleDelaySeconds` | min `1` | Pause after launch / restart before resuming probes. |
+| `CpuThresholdPercent` | `0` | `0` disables CPU monitoring. CPU% is computed against `Environment.ProcessorCount` (logical cores). |
+| `MemoryThresholdMB` | `0` | `0` disables memory monitoring. |
+| `ResourceCheckFailureThreshold` | min `1` | Consecutive CPU/mem breaches required before triggering a restart. Filters out transient `/proc` errors. |
+| `GracefulShutdownTimeoutSeconds` | min `1` | Time allowed for graceful close before force-kill. |
+| `ForceKillTimeoutSeconds` | min `1` | How long to wait for a force-killed process to fully exit. |
+| `InitialRestartDelaySeconds` | min `1` | Base delay for exponential backoff. |
+| `MaxRestartDelaySeconds` | min `1` | Cap for exponential backoff. |
+| `MaxRestartAttempts` | min `1` | After this many restarts, the circuit breaker may trip. |
+| `CircuitBreakerFailureThreshold` | min `1` | Consecutive failures across launches that trip the breaker. |
+| `PortCheckTimeoutMs` | min `1` | TCP / UDP probe timeout. |
+| `WebSocketCheckTimeoutMs` | min `1` | WebSocket probe timeout (the upgrade handshake needs more time than a raw TCP connect). |
+| `HealthCheckHost` | `"127.0.0.1"` | Probe target host; must match the interface the app actually binds to. |
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| **Headless** | Launches apps with no window; auto-starts monitoring; auto-shuts down after cycle completion; suppresses console prompt | `false` |
+`AppConfig.TryApplyDefaultsAndValidate(out string error)` runs at startup and
+rejects the configuration with a precise error message if any constraint is
+violated.
 
-#### Application Options
-
-| Option | Description | Default | Range |
-|--------|-------------|---------|-------|
-| **Name** | Unique display name *(required)* | — | — |
-| **ApplicationExePath** | Path to executable *(required, validated at startup)* | — | — |
-| **MonitoredPort** | Port to health-check (`0` = process-only) | `0` | 0–65535 |
-| **PortTypes** | Port types to check: `TCP`, `UDP`, `WebSocket` (auto-deduplicated) | `[]` | — |
-| **LaunchArguments** | Command-line arguments | `""` | — |
-| **CheckIntervalSeconds** | Health check interval | `5` | 5–3600 |
-| **LaunchDelaySeconds** | Delay before launching the next monitor | `0` | 0–3600 |
-| **CpuThresholdPercent** | CPU threshold for restart (`0` = disabled) | `0` | 0–100 |
-| **MemoryThresholdMB** | Memory threshold in MB (`0` = disabled) | `0` | 0–1048576 |
-| **GracefulShutdownTimeoutSeconds** | Graceful shutdown wait | `1` | 1–120 |
-| **ForceKillTimeoutSeconds** | Force-kill wait | `1` | 1–60 |
-| **HealthCheckHost** | Target address for port checks | `127.0.0.1` | Valid host/IP |
-| **ResourceCheckFailureThreshold** | Consecutive resource failures before restart | `1` | 1–100 |
-| **InitialRestartDelaySeconds** | Initial backoff delay | `1` | 1–600 |
-| **MaxRestartDelaySeconds** | Maximum backoff delay (with ±20% jitter) | `1` | 1–3600 |
-| **MaxRestartAttempts** | Max consecutive restarts before giving up | `1` | 1–100 |
-| **InitialHealthCheckDelaySeconds** | Delay before first health check after launch | `1` | 1–600 |
-| **PostLaunchSettleDelaySeconds** | Settle delay after launch/restart | `1` | 1–300 |
-| **PortCheckTimeoutMs** | TCP/UDP check timeout | `1` | 1–30000 |
-| **WebSocketCheckTimeoutMs** | WebSocket check timeout | `1` | 1–60000 |
-| **CircuitBreakerFailureThreshold** | Consecutive port failures to trigger restart | `1` | 1–100 |
-
-> Values below the minimum are clamped automatically. Any invalid application entry causes startup to fail fast. `MonitoredPort` must always be in the range `0..65535`; when `PortTypes` is configured, `MonitoredPort` must be `1..65535`.
-
-### Logging
-
-Configured via `logging.json` (FishMMO-Logger). The daemon starts in fail-fast mode: if `logging.json` is missing or invalid, startup aborts with a non-zero exit code.
+---
 
 ## Console Commands
 
+When `Headless = false`, the supervisor reads commands from stdin. All commands
+are case-sensitive.
+
 | Command | Description |
-|---------|-------------|
-| `help` | List all commands |
-| `start` | Start monitoring all applications |
-| `stop` | Gracefully stop all monitored applications |
-| `force-kill` | Immediately terminate all applications |
-| `force-restart` | Immediately terminate and restart all applications |
-| `status` | Show monitoring state (`ACTIVE`/`WAITING`), PID, state (`STARTING`/`HEALTHY`/`DOWN`/`EXHAUSTED`), restart count, port/resource failure counts |
-| `shutdown` / `exit` | Gracefully stop the daemon and all applications |
+|---|---|
+| `help` | Lists all available commands. |
+| `start` | Starts monitoring all configured applications. No-op if already active. |
+| `stop` | Gracefully terminates monitored applications and returns to the waiting state. |
+| `force-kill` | Immediately terminates all monitored applications, bypassing graceful shutdown. |
+| `force-restart` | Immediately terminates and then restarts all applications. |
+| `status` | Prints per-application: PID, state, restart count / max, consecutive port and resource failures. |
+| `shutdown` | Gracefully stops the daemon and every monitored application. |
+| `exit` | Alias for `shutdown`. |
+
+---
+
+## Build & Run
+
+```bash
+dotnet build FishMMO-AppHealthMonitor.sln -c Release
+dotnet run   --project AppHealthMonitor/AppHealthMonitor.csproj
+```
+
+Place `appsettings.json` in the working directory the supervisor is launched
+from (it is copied to the build output for convenience).
+
+---
+
+## Headless Mode
+
+Set `"Headless": true` to disable the stdin command reader. In this mode:
+
+- The supervisor starts monitoring immediately on launch.
+- It can only be stopped by sending the process a termination signal
+  (`SIGTERM` on Linux / `Ctrl+C`) — which triggers the same graceful shutdown
+  path as the `shutdown` command.
+
+This mode is appropriate for `systemd`, Windows Services, and Docker.
+
+---
 
 ## Known Limitations
 
-- **UDP health checks** can only confirm the OS accepted a datagram, not that the application received it. Use TCP or WebSocket for reliable checks. A warning is logged when UDP is the only configured port type.
-- **WebSocket TLS** is not supported — the checker connects via `ws://` only.
-- **Health check host** defaults to `127.0.0.1`. IPv6-only applications should set `HealthCheckHost` to `"::1"`. Pre-bracketed IPv6 addresses (e.g., `[::1]`) are handled correctly.
+- **Single config file.** Hot-reload of `appsettings.json` is not supported —
+  restart the supervisor after edits.
+- **No structured metrics export.** Restart counters and probe results are
+  logged via `FishMMO-Logger` but not exposed as Prometheus metrics.
+- **CPU sampling assumes logical cores.** On systems where you want to gate
+  against physical cores only, treat `CpuThresholdPercent` as a relative
+  threshold and tune it accordingly.
+- **Process discovery is by spawned-PID only.** The supervisor does not adopt
+  a pre-existing process; if you kill the supervisor, you must also stop the
+  child processes manually before restarting it (or it will spawn duplicates
+  on next launch).
+
+---
+
+## Flow Diagram
+
+```mermaid
+flowchart TD
+    Start([Daemon start]) --> Load[Load appsettings.json]
+    Load --> Validate[Per-app TryApplyDefaultsAndValidate]
+    Validate --> Build[Build HealthMonitor per app]
+    Build --> Wait{Headless?}
+    Wait -- yes --> Signal[Auto-signal start]
+    Wait -- no --> Cmd[Console command loop]
+    Cmd -->|start / force-restart| Signal
+    Cmd -->|status| Status[Print HealthMonitorStatus]
+    Cmd -->|stop| CancelCycle
+    Cmd -->|force-kill| ForceKill
+    Cmd -->|shutdown / exit| Shutdown
+
+    Signal --> Launch[Launch process + LaunchDelaySeconds gap]
+    Launch --> Settle[PostLaunchSettleDelaySeconds]
+    Settle --> InitDelay[InitialHealthCheckDelaySeconds]
+    InitDelay --> Probe[Probe loop every CheckIntervalSeconds]
+
+    Probe --> Alive{Process alive?}
+    Alive -- no --> Restart
+    Alive -- yes --> Port[TCP / UDP / WS probe]
+    Port --> Res[CPU / memory sample]
+    Res --> OK{All within thresholds?}
+    OK -- yes --> Probe
+    OK -- no --> Counters[Increment failure counters]
+    Counters --> Trip{Threshold or<br/>circuit breaker?}
+    Trip -- restart --> Kill["Graceful kill<br/>(GracefulShutdownTimeoutSeconds)"]
+    Kill -.->|timeout| ForceKill[Force kill + wait ForceKillTimeoutSeconds]
+    Kill --> Restart[Exponential backoff:<br/>Initial → Max,<br/>up to MaxRestartAttempts]
+    ForceKill --> Restart
+    Restart --> Breaker{Circuit breaker tripped?}
+    Breaker -- no --> Launch
+    Breaker -- yes --> Parked[Parked until manual start / force-restart]
+
+    CancelCycle --> Wait
+    Shutdown --> Stop([Daemon exits])
+```

@@ -215,6 +215,18 @@ await FallbackToWorldSceneAsync(conn, accountName);
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|enter zone| World[WorldServer]
+    World --> WS[WorldSceneSystem]
+    WS -->|find/spawn scene host| Reg[(SceneServer Registry)]
+    Reg --> WS
+    WS -->|hand-off ticket| Client
+    Client -->|connect| Scene[SceneServer]
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        AUTHENTICATION                               │

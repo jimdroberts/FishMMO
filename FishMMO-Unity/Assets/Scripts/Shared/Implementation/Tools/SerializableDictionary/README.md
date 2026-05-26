@@ -246,6 +246,17 @@ public class MultiDemo : MonoBehaviour
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Field[Public dictionary field] --> Inspect[Unity Inspector]
+    Inspect --> Serializer[ISerializationCallbackReceiver]
+    Serializer -->|keys/values arrays| Disk[Scene / asset YAML]
+    Disk -->|deserialize| Serializer
+    Serializer -->|rebuild dict| Runtime[Runtime Dictionary]
+```
+
 ```
                     ┌──────────────────────────┐
                     │   Unity Serialization     │

@@ -199,6 +199,19 @@ Server sends: ServerListBroadcast { Servers = [ { Name, LastPulse, Address, Port
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|RequestCharacterList| Sys[CharacterSelectSystem]
+    Sys -->|query by account| DB[(PostgreSQL Characters)]
+    DB --> Sys
+    Sys -->|character list| Client
+    Client -->|SelectCharacter| Sys
+    Sys -->|set last selected| DB
+    Sys -->|hand off to WorldServer| World[WorldServer]
+```
+
 ### Character List Flow
 
 ```

@@ -2,6 +2,59 @@
 
 Production-ready Unity MonoBehaviour for comprehensive database monitoring in Unity headless servers.
 
+## Table of Contents
+
+- [Description](#description)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Events](#events)
+- [Manual Operations](#manual-operations)
+- [Status Display](#status-display)
+- [Integration Example](#integration-example)
+- [Performance Notes](#performance-notes)
+- [Troubleshooting](#troubleshooting)
+- [Production Recommendations](#production-recommendations)
+- [Flow Diagram](#flow-diagram)
+- [See Also](#see-also)
+
+## Description
+
+`DatabaseHealthService` is a Unity MonoBehaviour wrapper around the `FishMMO.Database.Npgsql.Monitoring` stack. Drop it into a headless server scene, hand it an initialized `Database` instance, and it will periodically poll connectivity, sample the connection pool, log aggregated performance metrics, and raise `UnityEvent`/C# events that can be wired into alerting systems (Slack, PagerDuty, Discord webhook, etc.). All thresholds and intervals are configurable from the Unity Inspector.
+
+## Supported Platforms
+
+| Target | Status |
+|---|---|
+| Unity 6.3 LTS — headless Linux server build | Yes (recommended) |
+| Unity 6.3 LTS — headless Windows server build | Yes |
+| Unity 6.3 LTS — Editor (Play Mode) | Yes (for development) |
+
+| Requirement | Notes |
+|---|---|
+| FishMMO-DB DLL | Must be present in `Assets/Dependencies/` |
+| PostgreSQL | 14+, reachable from the headless server |
+
+## Architecture
+
+```
+Unity Scene
+└── GameObject "DatabaseHealthMonitor"
+    └── DatabaseHealthService (MonoBehaviour)
+        ├── ref Database (FishMMO.Database)
+        │     └── NpgsqlDbContextFactory
+        │           └── Monitoring/
+        │                 ├── Health/DatabaseHealthMonitor
+        │                 ├── Metrics/DatabaseMetricsTracker
+        │                 └── Diagnostics/QueryPerformanceTracker
+        └── Inspector-driven coroutines:
+              ├── HealthCheckLoop      (every healthCheckInterval)
+              ├── PoolMonitorLoop      (every poolCheckInterval)
+              └── MetricsLogLoop       (every metricsLogInterval)
+```
+
 ## Features
 
 ✅ **Automatic Health Checks** - Periodic connectivity and response time monitoring  
@@ -277,6 +330,36 @@ public class GameServerManager : MonoBehaviour
 3. **Log health reports** to persistent storage for historical analysis
 4. **Monitor pool exhaustion** - indicates need to increase `MaxPoolSize`
 5. **Track slow queries** - optimize or add indexes for recurring slow operations
+
+## Flow Diagram
+
+```mermaid
+flowchart TD
+    Start[Scene loads] --> Add[AddComponent DatabaseHealthService]
+    Add --> Init["Initialize(database)"]
+    Init --> Start3[Start coroutines]
+    Start3 --> Health[HealthCheckLoop]
+    Start3 --> Pool[PoolMonitorLoop]
+    Start3 --> Metrics[MetricsLogLoop]
+
+    Health -->|SELECT 1| DB[(PostgreSQL)]
+    DB -->|ok/fail + ms| Result[HealthCheckResult]
+    Result --> Evt1[OnHealthStatusChanged]
+
+    Pool -->|read counters| CPM[ConnectionPoolMetrics]
+    CPM --> Util{Utilization}
+    Util -->|"greater than warn"| Warn[Console warning]
+    Util -->|"greater than critical"| Crit[Console error]
+    Util --> Evt2[OnPoolStatusChanged]
+
+    Metrics -->|read tracker| QPT[QueryPerformanceTracker]
+    QPT -->|slow query| Evt3[OnSlowQueryDetected]
+    QPT -->|summary| Log[Console summary]
+
+    Evt1 --> Ext[External alerting<br/>Slack / PagerDuty / Discord]
+    Evt2 --> Ext
+    Evt3 --> Ext
+```
 
 ## See Also
 

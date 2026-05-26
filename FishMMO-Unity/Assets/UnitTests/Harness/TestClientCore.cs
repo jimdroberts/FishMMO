@@ -78,6 +78,20 @@ namespace FishMMO.UnitTests.Harness
 			AccountVerifySends.Clear();
 		}
 
+		/// <summary>
+		/// Simulates a client disconnect and reconnect under a new logical connection ID.
+		/// Resets all per-session state (equivalent to <see cref="ResetForNextAttempt"/>) and
+		/// updates the connection ID used when routing sends to the server. Does NOT clear the
+		/// session-capture lists (<see cref="SrpVerifySends"/>, <see cref="SrpProofSends"/>)
+		/// so that tests can compare material across multiple sessions on the same instance.
+		/// </summary>
+		/// <param name="newConnectionId">The connection ID the server will see for the next session.</param>
+		public void ReconnectAs(int newConnectionId)
+		{
+			ResetForNextAttempt();
+			clientId = newConnectionId;
+		}
+
 		#region Convenience helpers for tests
 
 		/// <summary>

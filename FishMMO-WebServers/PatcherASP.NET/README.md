@@ -1,10 +1,39 @@
 # FishMMO Patch Server (ASP.NET)
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Directory Structure](#directory-structure)
+- [Middleware Pipeline](#middleware-pipeline)
+- [Endpoints](#endpoints)
+- [Key Components](#key-components)
+- [Configuration](#configuration)
+- [Security](#security)
+- [External Dependencies](#external-dependencies)
+- [Requirements](#requirements)
+- [Flow Diagram](#flow-diagram)
+
 ## Overview
 
 ASP.NET Core patch delivery server for FishMMO clients. Determines the latest available patch version by scanning the patch directory on startup, then serves versioned `.zip` patch files to clients that are behind the current version. Access is gated to FishMMO clients only via custom middleware.
 
 Designed to run behind NGINX as a reverse proxy (via `api.fishmmo.com`). NGINX terminates SSL and forwards requests over plain HTTP to Kestrel on localhost.
+
+## Supported Platforms
+
+| Target | Status |
+|---|---|
+| .NET 8.0 — Linux | Yes (recommended) |
+| .NET 8.0 — Windows | Yes |
+| .NET 8.0 — macOS | Yes |
+
+| Requirement | Version |
+|---|---|
+| .NET SDK | 8.0+ |
+| `Patches/` directory | Required, populated by `PatchGenerator` |
+| NGINX | Recommended for production |
 
 ## Architecture
 
@@ -146,4 +175,26 @@ Examples:
 
 - .NET 8.0 SDK or later
 - `Patches/` directory with properly named `.zip` files
+
+## Flow Diagram
+
+```mermaid
+flowchart TD
+    Boot[Server start] --> Scan[PatchVersionService scans Patches/]
+    Scan --> Track[Track highest target version as LatestVersion]
+    Track --> Ready[Ready for requests]
+
+    Client[Unity Client] -->|GET /latest_version| Ready
+    Ready -->|"{ latest_version }"| Client
+
+    Client -->|GET /clientVersion| Cmp{Client greater or equal to latest?}
+    Cmp -- yes --> AlreadyUpdated["{ status: AlreadyUpdated }"]
+    Cmp -- no --> Lookup["Look for Patches/clientVer-latestVer.zip"]
+    Lookup -->|found| Stream[Stream as application/octet-stream]
+    Lookup -->|missing| NotFound[404]
+
+    Stream --> Client
+    AlreadyUpdated --> Client
+    NotFound --> Client
+```
 - NGINX reverse proxy (recommended for production)

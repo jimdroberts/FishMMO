@@ -3,7 +3,71 @@
 EditMode unit tests for the FishMMO authentication stack. The harness pairs
 `ClientAuthenticatorCore` and `SrpAuthenticatorCore<TConnection>` from the
 `FishMMO-Auth` DLLs in-process and routes all `Send*` / `Broadcast*` calls
-synchronously, completely bypassing FishNet and the network transport.
+synchronously, completely bypassing FishNet and the network transport. This
+gives deterministic, fast (sub-second) coverage of the full SRP-6a + X25519
+ECDH handshake, TOTP enrollment, account-locking, and kick-request flows
+without spinning up servers or network sockets.
+
+## Table of Contents
+
+- [Description](#fishmmo-auth-unit-tests)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Key Components](#key-components)
+- [Configuration](#configuration)
+- [Running](#running)
+- [Layout](#layout)
+- [Test inventory](#test-inventory)
+- [State machine driven by each login test](#state-machine-driven-by-each-login-test)
+- [`InMemoryAccountStore` API](#inmemoryaccountstore-api)
+- [Extending](#extending)
+- [Known limitations](#known-limitations)
+- [Flow Diagram](#flow-diagram)
+
+## Supported Platforms
+
+| Platform | Status | Notes |
+| --- | --- | --- |
+| Unity Editor on Windows / Linux / macOS | Supported | Run via Test Runner (EditMode) or `FishMMO / Unit Tests` menu. |
+| CI (Unity batch mode) | Supported | `-runTests -testPlatform EditMode -testCategory FishMMO.UnitTests`. |
+| Player builds | Not applicable | EditMode tests are excluded from player builds. |
+
+Requirements: Unity 6.3 LTS, the `FishMMO-Auth` DLLs present in `Assets/Dependencies/`, and the Unity Test Framework package.
+
+## Architecture
+
+```
+Assets/UnitTests/
+├── FishMMO.UnitTests.asmdef         # EditMode-only assembly definition
+├── Auth/
+│   ├── AuthHarness.cs               # Pairs ClientAuthenticatorCore + SrpAuthenticatorCore in-process
+│   ├── InMemoryAccountStore.cs      # IAccountStore double (no DB)
+│   ├── FakeConnection.cs            # FishNet-free connection stub
+│   ├── LoginTests.cs                # Happy / unhappy login paths
+│   ├── TotpTests.cs                 # TOTP enrollment + 2FA login
+│   ├── HandshakeTests.cs            # X25519 + SRP-6a handshake invariants
+│   └── KickTests.cs                 # Server-initiated disconnect paths
+└── README.md                        # This document
+```
+
+Tests do not touch PostgreSQL, FishNet, sockets, or any singleton state — each
+test instantiates a fresh harness and account store.
+
+## Key Components
+
+| Component | Purpose |
+| --- | --- |
+| `AuthHarness` | Constructs a paired client / server authenticator, wires `Send*` and `Broadcast*` to direct in-process calls, drives the test scenario. |
+| `InMemoryAccountStore` | Implements the same surface as the production account store, but keeps state in dictionaries — see [`InMemoryAccountStore` API](#inmemoryaccountstore-api). |
+| `FakeConnection` | Replaces FishNet's `NetworkConnection` so the server authenticator can talk to a virtual client. |
+| Test classes | Cover login, TOTP, handshake, and kick scenarios — see [Test inventory](#test-inventory). |
+
+## Configuration
+
+These tests are configuration-free: no environment variables, `appsettings`,
+or external services are read. Verbose logging is toggled via the
+`FishMMO / Unit Tests / Run All EditMode Tests (Verbose)` menu, which sets
+the `FISHMMO_TEST_VERBOSE` define for the run.
 
 ---
 
@@ -247,3 +311,19 @@ h.Client.SrpProofInterceptor = original =>
 - **Token auth bypasses real decryption.** `TestClientCore.SendTokenAuth` validates the pending token string directly against `InMemoryAccountStore.ValidateToken` rather than decrypting it with the session key. This exercises token-state logic without needing a full `TokenAuthenticatorCore` worker setup.
 - **Single connection per harness.** `AuthTestHarness` uses a fixed connection ID (`1`). Consecutive `AttemptLogin` / `AttemptTokenLogin` calls on the same harness will fail if the previous attempt left the server's `SrpAccountManager` in a non-`None` state (e.g. after a disconnect). Use a fresh `AuthTestHarness` per attempt when testing failure-recovery sequences.
 
+
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    Test[Test method] --> Harness[AuthHarness]
+    Harness --> Client[ClientAuthenticatorCore]
+    Harness --> Server[SrpAuthenticatorCore]
+    Server --> Store[InMemoryAccountStore]
+    Client -- Send/Broadcast --> Server
+    Server -- Send/Broadcast --> Client
+    Server --> Conn[FakeConnection]
+    Harness --> Assertions[NUnit assertions]
+    Assertions -->|pass / fail| Test
+```

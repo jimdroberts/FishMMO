@@ -164,6 +164,16 @@ if (database.ServiceRegistry.TryGet<IKickRequestService>(out var kickService))
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Trigger[Auth fail / admin / dup login] --> Sys[KickRequestSystem]
+    Sys -->|reason code| Conn[Connection]
+    Conn -->|broadcast disconnect| Client[Unity Client]
+    Sys -->|audit| Log[Logger]
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    KickRequestSystem                        │

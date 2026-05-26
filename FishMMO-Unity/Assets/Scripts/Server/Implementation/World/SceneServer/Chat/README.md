@@ -279,6 +279,18 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Client[Unity Client] -->|chat message| Sys[ChatSystem]
+    Sys -->|RateLimiter + moderation| Sys
+    Sys -->|persist| DB[(PostgreSQL Chat)]
+    Sys -->|route by channel| Channels{Channel}
+    Channels -->|World/Guild/Party| Targets[Subscribed clients]
+    Sys -->|bridge| Discord[FishMMO-DiscordBot]
+```
+
 ### Inbound Message Pipeline
 
 ```

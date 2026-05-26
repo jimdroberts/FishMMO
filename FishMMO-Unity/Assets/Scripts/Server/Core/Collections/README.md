@@ -219,6 +219,16 @@ These collections are configured at construction time or per-call through method
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    System[Server system] --> Coll[Server collection]
+    Coll -->|add / remove| Pool[Internal pool]
+    Pool --> Lookup[Lookups by id/key]
+    Coll -->|events| Listener[Subscribed systems]
+```
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                     Server Update Loop                           │

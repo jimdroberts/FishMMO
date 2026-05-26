@@ -259,6 +259,17 @@ formatter.WriteColoredParts(
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    App[Game / server code] -->|Log.X| Facade[FishMMO-Logger]
+    Facade --> File[File sink]
+    Facade --> Email[Email sink]
+    Facade --> Unity[Unity console adapter]
+    Cfg[logging.json] -->|configures| Facade
+```
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Application Code                             │

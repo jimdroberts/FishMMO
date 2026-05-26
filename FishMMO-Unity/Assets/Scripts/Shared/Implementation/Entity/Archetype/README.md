@@ -216,3 +216,17 @@ CharacterBehaviour
 ## License
 
 This project is subject to the FishMMO project license.
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    CharCreate[Character creation] --> Pick[Archetype selection]
+    Pick --> Def[Archetype definition]
+    Def --> Stats[Starting stats]
+    Def --> Abilities[Starting abilities]
+    Def --> Items[Starting inventory]
+    Stats --> Char[Character]
+    Abilities --> Char
+    Items --> Char
+```

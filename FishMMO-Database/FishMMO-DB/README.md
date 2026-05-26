@@ -1,3 +1,99 @@
+# FishMMO-DB
+
+`FishMMO-DB` is the data-access library shared by every FishMMO server (Login / World / Scene), every backend web service (IPFetch, Patcher), and the Unity Editor / headless server builds. It centralises the EF Core `DbContext`, the Npgsql provider configuration, the per-domain service catalog (`IAccountService`, `ICharacterService`, `IChatService`, …), connection-pool monitoring, query performance tracking, and the Redis adapter. All consumers depend on `IDatabase` + `IDatabaseServiceRegistry` so domain code never sees the underlying provider.
+
+This document describes the project layout, the supported platforms, and — at length — how to wire environment configuration (`appsettings.json`, `FISHMMO_ENVIRONMENT`, OS-specific environment variable persistence) for development, CI, and production deployments.
+
+## Table of Contents
+
+- [Description](#description)
+- [Supported Platforms](#supported-platforms)
+- [Architecture](#architecture)
+- [Key Components](#key-components)
+- [Configuration](#configuration)
+- [Recommended appsettings files](#recommended-appsettings-files)
+- [Environment variables by OS](#environment-variables-by-os)
+- [Overriding individual settings via environment variables](#overriding-individual-settings-via-environment-variables)
+- [Database.cs setup examples](#databasecs-setup-examples)
+- [Npgsql service usage examples](#npgsql-service-usage-examples)
+- [Securing appsettings.json](#securing-appsettingsjson)
+- [Flow Diagram](#flow-diagram)
+- [Notes](#notes)
+
+## Supported Platforms
+
+| Target | Status |
+|---|---|
+| .NET Standard 2.1 (this library) | Yes |
+| .NET 8.0 hosts (LoginServer / WorldServer / SceneServer launchers, web services) | Yes |
+| Unity 6.3 LTS (Editor + headless server builds) | Yes |
+| Linux / Windows / macOS | All supported |
+
+| Backing Store | Notes |
+|---|---|
+| PostgreSQL | 14+ recommended. Primary persistence (Npgsql / EF Core). |
+| Redis | Optional. Used for cross-server caching and pub/sub via `RedisDbContextFactory`. |
+| PgBouncer | Recommended in front of PostgreSQL for transaction pooling. |
+
+## Architecture
+
+```
+FishMMO-DB/
+├── Data/                       POCO entities + enums shared across servers
+├── Migrations/                 EF Core migrations (created by FishMMO-DB-Migrator)
+├── Exceptions/                 Typed database exceptions
+├── Npgsql/                     Concrete PostgreSQL implementation
+│   ├── NpgsqlDbContext.cs        EF Core DbContext
+│   ├── NpgsqlDbContextFactory.cs Factory + interceptors + monitoring wiring
+│   ├── NpgsqlDbConfiguration.cs  Reads IConfiguration → connection string
+│   ├── NpgsqlServiceRegistry.cs  IDatabaseServiceRegistry implementation
+│   ├── Entities/                 EF Core entity types
+│   ├── EntityConfigurations/     Fluent EF Core configurations
+│   ├── Services/                 Per-domain service implementations
+│   │   └── Interfaces/             IAccountService, ICharacterService, …
+│   └── Monitoring/               Health / Metrics / Diagnostics (see Monitoring/README.md)
+├── Redis/
+│   └── RedisDbContextFactory.cs  Redis adapter
+├── Unity/
+│   └── DatabaseHealthService.cs  Unity MonoBehaviour wrapper (see Unity/README.md)
+├── Database.cs                 High-level orchestrator (IDatabase implementation)
+├── IDatabase.cs                Public contract consumed by servers / services
+├── IDatabaseServiceRegistry.cs Per-domain service registry contract
+├── AppSettings.cs              Strongly-typed appsettings.json binder
+├── DatabaseConfigurationHelper.cs  Convenience helpers for IConfiguration builders
+├── DatabaseErrorCodes.cs       Stable error code enum returned via DatabaseResult
+├── DatabaseResult.cs           Result<T> envelope (IsSuccess / ErrorCode / Data)
+└── appsettings.json            Default config (do NOT commit secrets)
+```
+
+## Key Components
+
+| Component | Responsibility |
+|---|---|
+| `Database` | High-level orchestrator. Wraps an `INpgsqlDbContextFactory` and an `IDatabaseServiceRegistry`. Consumed by servers as `IDatabase`. |
+| `IDatabase` | Public contract: `ServiceRegistry`, `ContextFactory`, async lifecycle. |
+| `IDatabaseServiceRegistry` | Per-domain service lookup (`TryGet<TService>(out var svc)`). |
+| `NpgsqlDbContext` / `NpgsqlDbContextFactory` | EF Core context + factory with connection interceptors driving `ConnectionPoolMetrics`. |
+| `NpgsqlServiceRegistry` | Wires `IAccountService`, `ICharacterService`, `IChatService`, `ILoginServerService`, etc. |
+| `NpgsqlDbConfiguration` | Builds the connection string from `IConfiguration` (`ConnectionStrings:NpgsqlConnection` or `Npgsql:*`). |
+| `AppSettings` | Strongly-typed binder for `appsettings.json` (Npgsql, Redis, QueryPerformanceTracking, Logging). |
+| `DatabaseResult<T>` / `DatabaseErrorCodes` | Uniform error envelope returned from every service. |
+| `Monitoring/` (under Npgsql) | Health probes, pool metrics, query performance diagnostics. See [`Npgsql/Monitoring/README.md`](./Npgsql/Monitoring/README.md). |
+| `Unity/DatabaseHealthService` | MonoBehaviour that surfaces all of the above to Unity headless servers. See [`Unity/README.md`](./Unity/README.md). |
+| `RedisDbContextFactory` | Optional Redis adapter for caching / pub-sub. |
+
+## Configuration
+
+`FishMMO-DB` reads configuration through the standard ASP.NET / .NET Generic Host `IConfiguration` pipeline. The recommended source order is:
+
+1. `appsettings.json` (default values, committed)
+2. `appsettings.{FISHMMO_ENVIRONMENT}.json` (per-environment overrides, NOT committed)
+3. Environment variables (typically used for secrets)
+
+The selected environment is controlled by `FISHMMO_ENVIRONMENT` (preferred). `DOTNET_ENVIRONMENT` is also honoured as a fallback. The remainder of this document covers the OS-specific mechanics for persisting these variables and the supported override keys.
+
+---
+
 # FishMMO-DB Environment Configuration
 
 This library supports layered configuration in this order:
@@ -356,4 +452,24 @@ Protecting `appsettings.json` (and any environment-specific overrides) is essent
 
 - Prefer `FISHMMO_ENVIRONMENT` for environment configuration.
 - Keep secrets out of source control; use environment variables or secret stores.
+
+## Flow Diagram
+
+```mermaid
+flowchart LR
+    Host[Server / Service host] -->|build| Cfg[IConfiguration<br/>appsettings.json + env]
+    Cfg --> NCfg[NpgsqlDbConfiguration]
+    NCfg --> Factory[NpgsqlDbContextFactory]
+    Factory -->|interceptors| Mon[Monitoring<br/>Health / Metrics / Diagnostics]
+    Factory -->|CreateDbContext| Ctx[NpgsqlDbContext]
+    Ctx --> DB[(PostgreSQL)]
+    Factory --> Reg[NpgsqlServiceRegistry]
+    Reg --> Svcs[IAccountService<br/>ICharacterService<br/>IChatService<br/>ILoginServerService<br/>...]
+    Svcs -->|DatabaseResult&lt;T&gt;| Game[Game / Web logic]
+
+    Cfg -. optional .-> RCfg[Redis settings]
+    RCfg --> RFact[RedisDbContextFactory]
+    RFact --> Redis[(Redis)]
+    RFact --> Game
+```
 - In production, set `enableLogging: false` to avoid sensitive data logging.

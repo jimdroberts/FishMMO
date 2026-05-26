@@ -390,6 +390,19 @@ Use the following checks to verify the Ability system is functioning correctly:
 
 ## Flow Diagram
 
+### High-Level Overview
+
+```mermaid
+flowchart LR
+    Input[Player input] --> Pred[Client-side prediction]
+    Pred --> Ability[AbilitySystem]
+    Ability --> CD[Cooldown]
+    Ability --> Buff[Buff/debuff apply]
+    Ability -->|simulate effects| Local[Local state]
+    Server[Server ability tick] -->|reconcile| Pred
+    Pred -->|replay if mismatch| Local
+```
+
 ### Ability Lifecycle
 
 ```
