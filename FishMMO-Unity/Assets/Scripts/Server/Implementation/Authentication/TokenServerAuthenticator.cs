@@ -68,23 +68,29 @@ namespace FishMMO.Server.Implementation
 		#region DB Implementations (called by TokenCore)
 
 		/// <summary>
-		/// Fetches the HMAC signing key for the specified LoginServer from the database.
+		/// Fetches the token-embedded HMAC signing key from the database.
 		/// Returns <c>null</c> if the service is unavailable, the key is not found, or the key is too short.
 		/// </summary>
-		private async Task<byte[]> FetchSigningKeyCoreAsync(long loginServerId)
+		private async Task<byte[]> FetchSigningKeyCoreAsync(long loginServerId, long signingKeyId)
 		{
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var svc))
 			{
-				await Log.Warning(LogPrefix, $"Signing key service unavailable for LoginServer {loginServerId}.");
+				await Log.Warning(LogPrefix, $"Signing key service unavailable for LoginServer {loginServerId}, key {signingKeyId}.");
 				return null;
 			}
 
-			var result = await svc.FetchByLoginServerIdAsync(loginServerId);
+			var result = await svc.FetchByIdAsync(signingKeyId);
 
 			if (!result.IsSuccess || result.Data.HmacKey == null)
 			{
-				await Log.Warning(LogPrefix, $"Signing key not found for LoginServer {loginServerId}.");
+				await Log.Warning(LogPrefix, $"Signing key {signingKeyId} not found for LoginServer {loginServerId}.");
+				return null;
+			}
+
+			if (result.Data.LoginServerId != loginServerId)
+			{
+				await Log.Warning(LogPrefix, $"Signing key {signingKeyId} belongs to LoginServer {result.Data.LoginServerId}, not {loginServerId}.");
 				return null;
 			}
 
@@ -97,6 +103,36 @@ namespace FishMMO.Server.Implementation
 			var key = new byte[result.Data.HmacKey.Length];
 			Buffer.BlockCopy(result.Data.HmacKey, 0, key, 0, key.Length);
 			return key;
+		}
+
+		/// <summary>
+		/// Fetches the latest signing key for renewal token issuance.
+		/// </summary>
+		private async Task<(byte[] Key, long KeyId)> FetchCurrentSigningKeyCoreAsync(long loginServerId)
+		{
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var svc))
+			{
+				await Log.Warning(LogPrefix, $"Signing key service unavailable for LoginServer {loginServerId}.");
+				return (null, 0);
+			}
+
+			var result = await svc.FetchByLoginServerIdAsync(loginServerId);
+			if (!result.IsSuccess || result.Data.HmacKey == null)
+			{
+				await Log.Warning(LogPrefix, $"Current signing key not found for LoginServer {loginServerId}.");
+				return (null, 0);
+			}
+
+			if (result.Data.HmacKey.Length < CryptoHelper.HmacKeyLength)
+			{
+				await Log.Warning(LogPrefix, $"Current signing key too short for LoginServer {loginServerId}.");
+				return (null, 0);
+			}
+
+			var key = new byte[result.Data.HmacKey.Length];
+			Buffer.BlockCopy(result.Data.HmacKey, 0, key, 0, key.Length);
+			return (key, result.Data.ID);
 		}
 
 		/// <summary>
@@ -137,7 +173,8 @@ namespace FishMMO.Server.Implementation
 			if (!am.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData) || encryptionData == null)
 				return;
 
-			byte[] signingKey = await FetchSigningKeyCoreAsync(loginServerId);
+			var currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
+			byte[] signingKey = currentSigningKey.Key;
 			if (signingKey == null)
 			{
 				await Log.Warning(LogPrefix, $"Renewal token skipped for '{accountName}': signing key unavailable for LoginServer {loginServerId}.");
@@ -153,6 +190,7 @@ namespace FishMMO.Server.Implementation
 					encryptionData,
 					accountName,
 					loginServerId,
+					currentSigningKey.KeyId,
 					expirationMinutes,
 					signingKey,
 					accessLevel,
@@ -276,8 +314,8 @@ namespace FishMMO.Server.Implementation
 
 			// ── DB callbacks ─────────────────────────────────────────────────
 			/// <inheritdoc/>
-			protected override Task<byte[]> FetchSigningKeyAsync(long loginServerId) =>
-				_outer.FetchSigningKeyCoreAsync(loginServerId);
+			protected override Task<byte[]> FetchSigningKeyAsync(long loginServerId, long signingKeyId) =>
+				_outer.FetchSigningKeyCoreAsync(loginServerId, signingKeyId);
 
 			/// <inheritdoc/>
 			protected override Task<bool> CheckTokenRevocationAsync(string tokenHash) =>

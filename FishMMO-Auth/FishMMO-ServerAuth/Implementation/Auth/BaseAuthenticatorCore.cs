@@ -340,17 +340,23 @@ namespace FishMMO.Auth.Implementation
 			}
 
 			// ── Per-IP rate limit ─────────────────────────────────────────
+			// Fail closed: if we cannot resolve a usable rate-limit key (no remote IP, parse
+			// failure, etc.), drop the connection rather than allowing it to bypass the
+			// per-IP debounce. Otherwise an attacker that strips remote-IP info from their
+			// transport could flood handshakes without ever hitting the rate limiter.
 			string rateLimitKey = ResolveRateLimitKey(conn);
-			if (!string.IsNullOrEmpty(rateLimitKey))
+			if (string.IsNullOrEmpty(rateLimitKey))
 			{
-				DateTime nowUtc = DateTime.UtcNow;
-				if (handshakeIpNextAllowedUtc.TryGetValue(rateLimitKey, out DateTime nextAllowed) && nowUtc < nextAllowed)
-				{
-					DisconnectConnection(conn, graceful: true);
-					return;
-				}
-				handshakeIpNextAllowedUtc[rateLimitKey] = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
+				DisconnectConnection(conn, graceful: true);
+				return;
 			}
+			DateTime nowUtc = DateTime.UtcNow;
+			if (handshakeIpNextAllowedUtc.TryGetValue(rateLimitKey, out DateTime nextAllowed) && nowUtc < nextAllowed)
+			{
+				DisconnectConnection(conn, graceful: true);
+				return;
+			}
+			handshakeIpNextAllowedUtc[rateLimitKey] = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
 
 			// ── Global rate limit ─────────────────────────────────────────
 			if (Interlocked.Increment(ref globalHandshakeCount) > MaxGlobalHandshakesPerSecond)

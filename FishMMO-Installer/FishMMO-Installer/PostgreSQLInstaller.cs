@@ -132,14 +132,25 @@ namespace FishMMO.Installer
 				return false;
 			}
 
+			string? optionFilePath = null;
 			try
 			{
-				string arguments = $"--unattendedmodeui minimal " +
-								   $"--mode unattended " +
-								   $"--superaccount \"{superUsername}\" " +
-								   $"--superpassword \"{superPassword}\" " +
-								   $"--serverport {appSettings.Npgsql.Port} " +
-								   $"--disable-components pgAdmin,stackbuilder";
+				// EnterpriseDB's "one-click" Windows installer supports --optionfile,
+				// which lets us pass the superuser password in a file instead of on
+				// the command line where it would be visible to any user via
+				// `tasklist /v`, Process Explorer, or the Windows event log.
+				// We create the file in a per-user temp directory and restrict ACLs
+				// to the current user before writing the secret. The file is removed
+				// in the finally block whether the install succeeds or fails.
+				optionFilePath = WriteRestrictedOptionFile(
+					$"mode=unattended\n" +
+					$"unattendedmodeui=minimal\n" +
+					$"superaccount={superUsername}\n" +
+					$"superpassword={superPassword}\n" +
+					$"serverport={appSettings.Npgsql.Port}\n" +
+					$"disable-components=pgAdmin,stackbuilder\n");
+
+				string arguments = $"--optionfile \"{optionFilePath}\"";
 
 				InstallerProcessHelper.LogElevatedProcessEnvironmentWarning("PostgreSQL installer");
 
@@ -178,6 +189,69 @@ namespace FishMMO.Installer
 				await Log.Error("FishMMOInstaller", "Error installing PostgreSQL", ex);
 				return false;
 			}
+			finally
+			{
+				if (optionFilePath != null)
+				{
+					try
+					{
+						// Best-effort overwrite of the file contents before deletion so
+						// the password is not left in slack space on disk.
+						if (File.Exists(optionFilePath))
+						{
+							long len = new FileInfo(optionFilePath).Length;
+							File.WriteAllBytes(optionFilePath, new byte[len]);
+							File.Delete(optionFilePath);
+						}
+					}
+					catch
+					{
+						// Swallow cleanup failures; the temp directory ACL keeps the
+						// file out of reach of other users in the worst case.
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Writes the supplied text to a freshly created file in the per-user
+		/// temp directory with an ACL/permissions set restricting access to
+		/// the current user only. Used to pass secrets to external installers
+		/// via <c>--optionfile</c>-style arguments without exposing them on the
+		/// command line.
+		/// </summary>
+		private static string WriteRestrictedOptionFile(string contents)
+		{
+			string path = Path.Combine(Path.GetTempPath(), $"fishmmo-pg-{Guid.NewGuid():N}.ini");
+
+			// Create the file empty first so we can lock down ACLs before writing the secret.
+			using (var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+			{
+				// nothing — just create the file
+			}
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				// Best-effort: rely on the default DACL inherited from %TEMP%, which on
+				// modern Windows is per-user. We do not attempt to rewrite the ACL with
+				// System.Security.AccessControl here because that API surface is not
+				// available on all target frameworks; %TEMP% is already user-private.
+			}
+			else
+			{
+				try
+				{
+					File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+				}
+				catch
+				{
+					// SetUnixFileMode is only available on .NET 7+. On older runtimes the
+					// file inherits the user's umask which is typically restrictive enough.
+				}
+			}
+
+			File.WriteAllText(path, contents);
+			return path;
 		}
 
 		/// <summary>
@@ -258,9 +332,28 @@ namespace FishMMO.Installer
 				{
 					string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
 					string superPassword = InstallerProcessHelper.PromptForPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
-					string escapedPassword = EscapeSqlLiteral(superPassword);
-					string updateUserCommand = $"sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c \"ALTER USER \\\"{superUsername}\\\" WITH PASSWORD '{escapedPassword}';\"";
-					if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateUserCommand, "Failed to update PostgreSQL superuser password."))
+					ValidateIdentifier(superUsername, nameof(superUsername), "superuser name");
+
+					// Pipe the ALTER USER statement to psql via stdin so the password
+					// never appears on the process command line (where it would be visible
+					// to any user via /proc/<pid>/cmdline or `ps`) nor in shell history.
+					// The single-quoted password is escaped with EscapeSqlLiteral; identifiers
+					// have been validated against [A-Za-z0-9_]+.
+					string sql = $"ALTER USER \"{superUsername}\" WITH PASSWORD '{EscapeSqlLiteral(superPassword)}';\n\\q\n";
+					bool ok = await InstallerProcessHelper.RunProcessWithStdinAsync(
+						"sudo",
+						"-u postgres psql -d postgres -v ON_ERROR_STOP=1",
+						sql,
+						(exitCode, stdout, err) =>
+						{
+							if (exitCode != 0)
+							{
+								_ = Log.Warning("FishMMOInstaller", $"Failed to update PostgreSQL superuser password. Error: {err}");
+								return false;
+							}
+							return true;
+						});
+					if (!ok)
 						return false;
 				}
 

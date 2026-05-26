@@ -8,9 +8,22 @@ namespace FishMMO.Database.Npgsql.Entities
 	public class AccountEntity
 	{
 		/// <summary>
-		/// Unique account name (primary key).
+		/// Unique account name (primary key) — preserves the casing the user registered with.
 		/// </summary>
 		public string Name { get; set; }
+
+		/// <summary>
+		/// Case-insensitive lookup column for <see cref="Name"/>. Computed as <c>LOWER(name)</c> in the database
+		/// and bound by a UNIQUE index so that two accounts cannot differ only in case.
+		/// Application code must filter on this column (lowercased input) for all account-name lookups.
+		/// </summary>
+		public string NameLowercase { get; set; }
+
+		/// <summary>
+		/// PostgreSQL <c>xmin</c> system column exposed as an EF Core concurrency token to detect
+		/// concurrent modifications. Updated automatically by the database on every row change.
+		/// </summary>
+		public uint Version { get; set; }
 
 		/// <summary>
 		/// SRP password salt.

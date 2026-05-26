@@ -22,22 +22,23 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for ExistsAsync hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
+		/// Filters on the case-insensitive <c>NameLowercase</c> computed column.
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<bool>> accountExistsByNameQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountName, CancellationToken ct) =>
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountNameLower, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
-					.Any(a => a.Name == accountName));
+					.Any(a => a.NameLowercase == accountNameLower));
 
 		/// <summary>
-		/// Compiled query for FetchForLoginAsync by account name.
+		/// Compiled query for FetchForLoginAsync by account name (case-insensitive).
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
 		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<AccountEntity?>> getAccountForLoginByNameQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountName, CancellationToken ct) =>
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountNameLower, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
-					.FirstOrDefault(a => a.Name == accountName));
+					.FirstOrDefault(a => a.NameLowercase == accountNameLower));
 #pragma warning restore CS8619
 
 		/// <summary>
@@ -52,14 +53,14 @@ namespace FishMMO.Database.Npgsql.Services
 #pragma warning restore CS8619
 
 		/// <summary>
-		/// Compiled query for FetchLastLoginAsync by account name.
+		/// Compiled query for FetchLastLoginAsync by account name (case-insensitive).
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
 		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<DateTime?>> getLastLoginByNameQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountName, CancellationToken ct) =>
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountNameLower, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
-					.Where(a => a.Name == accountName)
+					.Where(a => a.NameLowercase == accountNameLower)
 					.Select(a => (DateTime?)a.LastLogin)
 					.FirstOrDefault());
 #pragma warning restore CS8619
@@ -115,7 +116,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var lastLogin = email
 					? await getLastLoginByEmailQuery(dbContext, username, cancellationToken).ConfigureAwait(false)
-					: await getLastLoginByNameQuery(dbContext, username, cancellationToken).ConfigureAwait(false);
+					: await getLastLoginByNameQuery(dbContext, username.ToLowerInvariant(), cancellationToken).ConfigureAwait(false);
 				if (lastLogin == null)
 				{
 					throw new DatabaseEntityNotFoundException("Account", username);
@@ -170,12 +171,14 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				// Insert preserves the user's original casing in `name` while the case-insensitive
+				// UNIQUE index on the generated `name_lowercase` column rejects case-variant duplicates.
 				var sql = $@"INSERT INTO {TableName} (name, salt, verifier, access_level, email, age)
 					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}})
-					ON CONFLICT (name) DO NOTHING";
+					ON CONFLICT (name_lowercase) DO NOTHING";
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { accountName, salt, verifier, (byte)AccessLevel.Player, email, age },
+					new object[] { accountName.ToLowerInvariant(), salt, verifier, (byte)AccessLevel.Player, email, age },
 					cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected <= 0)
@@ -214,7 +217,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteReadAsync(async dbContext =>
 				email
 					? await getAccountForLoginByEmailQuery(dbContext, username, cancellationToken).ConfigureAwait(false)
-					: await getAccountForLoginByNameQuery(dbContext, username, cancellationToken).ConfigureAwait(false),
+					: await getAccountForLoginByNameQuery(dbContext, username.ToLowerInvariant(), cancellationToken).ConfigureAwait(false),
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
@@ -258,9 +261,9 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var sql = $@"UPDATE {TableName} SET last_login = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET last_login = {{0}} WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { now, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { now, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -281,7 +284,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteReadAsync(async dbContext =>
-				await accountExistsByNameQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false),
+				await accountExistsByNameQuery(dbContext, accountName.ToLowerInvariant(), cancellationToken).ConfigureAwait(false),
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -334,9 +337,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET email = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET email = {{0}} WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { (object?)email ?? DBNull.Value, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { (object?)email ?? DBNull.Value, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -367,9 +370,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET age = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET age = {{0}} WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { age, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { age, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -400,9 +403,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET totp_secret = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET totp_secret = {{0}} WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { encryptedTotpSecret, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { encryptedTotpSecret, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -426,9 +429,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET totp_enabled = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET totp_enabled = {{0}} WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { enabled, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { enabled, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -453,9 +456,9 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var sql = $@"UPDATE {TableName} SET totp_verified_at = {{0}}, totp_enabled = true, last_totp_window = {{1}} WHERE name = {{2}} AND totp_verified_at IS NULL";
+				var sql = $@"UPDATE {TableName} SET totp_verified_at = {{0}}, totp_enabled = true, last_totp_window = {{1}} WHERE name_lowercase = {{2}} AND totp_verified_at IS NULL";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { now, totpWindow, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { now, totpWindow, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -479,9 +482,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET last_totp_window = {{0}} WHERE name = {{1}} AND last_totp_window < {{0}}";
+				var sql = $@"UPDATE {TableName} SET last_totp_window = {{0}} WHERE name_lowercase = {{1}} AND last_totp_window < {{0}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { totpWindow, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { totpWindow, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -504,9 +507,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET totp_secret = NULL, totp_enabled = false, totp_verified_at = NULL, last_totp_window = 0 WHERE name = {{0}}";
+				var sql = $@"UPDATE {TableName} SET totp_secret = NULL, totp_enabled = false, totp_verified_at = NULL, last_totp_window = 0 WHERE name_lowercase = {{0}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -537,9 +540,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET discord_link_code = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET discord_link_code = {{0}} WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { (object?)linkCode ?? DBNull.Value, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { (object?)linkCode ?? DBNull.Value, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -586,9 +589,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET verified = true, verify_code = 0 WHERE name = {{0}} AND verify_code = {{1}} AND verified = false";
+				var sql = $@"UPDATE {TableName} SET verified = true, verify_code = 0 WHERE name_lowercase = {{0}} AND verify_code = {{1}} AND verified = false";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { accountName, verifyCode }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { accountName.ToLowerInvariant(), verifyCode }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -612,9 +615,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET verify_code = {{0}} WHERE name = {{1}}";
+				var sql = $@"UPDATE {TableName} SET verify_code = {{0}} WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { verifyCode, accountName }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { verifyCode, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{

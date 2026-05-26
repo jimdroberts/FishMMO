@@ -35,6 +35,29 @@ namespace FishMMO.Shared
 		/// </summary>
 		public string FileName { get; set; } = DEFAULT_FILENAME;
 
+
+		/// <summary>
+		/// Resolves a setting value, preferring the environment variable
+		/// <c>FISHMMO_CONFIG_{NAME}</c> (uppercased, '.'/':' -&gt; '_') over the
+		/// in-memory config dictionary. This allows operators to override
+		/// sensitive values (DB passwords, signing keys, etc.) without
+		/// committing them to disk.
+		/// </summary>
+		private bool TryResolveRawValue(string name, out string value)
+		{
+			if (!string.IsNullOrEmpty(name))
+			{
+				string envKey = "FISHMMO_CONFIG_" + name.ToUpperInvariant().Replace('.', '_').Replace(':', '_').Replace('-', '_');
+				string envVal = Environment.GetEnvironmentVariable(envKey);
+				if (envVal != null)
+				{
+					value = envVal;
+					return true;
+				}
+			}
+			return settings.TryGetValue(name, out value);
+		}
+
 		/// <summary>
 		/// Initializes a new instance of the Configuration class with a specified default file directory.
 		/// Throws an <see cref="ArgumentNullException"/> if the provided directory path is null or empty.
@@ -376,7 +399,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGet<T>(string name, out T result, T defaultValue = default!) where T : IConvertible
 		{
-			if (settings.TryGetValue(name, out string settingValue))
+			if (TryResolveRawValue(name, out string settingValue))
 			{
 				try
 				{
@@ -410,7 +433,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found; otherwise, false.</returns>
 		public bool TryGetString(string name, out string? result, string? defaultValue = null)
 		{
-			if (settings.TryGetValue(name, out result))
+			if (TryResolveRawValue(name, out result))
 			{
 				return true;
 			}
@@ -428,7 +451,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetChar(string name, out char result, char defaultValue = default(char))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return char.TryParse(setting, out result);
 			}
@@ -447,7 +470,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetByte(string name, out byte result, byte defaultValue = default(byte))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return byte.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -466,7 +489,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetSByte(string name, out sbyte result, sbyte defaultValue = default(sbyte))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return sbyte.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -485,7 +508,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetShort(string name, out short result, short defaultValue = default(short))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return short.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -504,7 +527,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetUShort(string name, out ushort result, ushort defaultValue = default(ushort))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return ushort.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -523,7 +546,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetInt(string name, out int result, int defaultValue = default(int))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return int.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -542,7 +565,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetUInt(string name, out uint result, uint defaultValue = default(uint))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return uint.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -561,7 +584,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetLong(string name, out long result, long defaultValue = default(long))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return long.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -580,7 +603,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetULong(string name, out ulong result, ulong defaultValue = default(ulong))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return ulong.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -598,7 +621,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetBool(string name, out bool result, bool defaultValue = default(bool))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return bool.TryParse(setting, out result);
 			}
@@ -617,7 +640,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetFloat(string name, out float result, float defaultValue = default(float))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return float.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
 			}
@@ -636,7 +659,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetDouble(string name, out double result, double defaultValue = default(double))
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				return double.TryParse(setting, NumberStyles.Any, cultureInfo.NumberFormat, out result);
 			}
@@ -656,7 +679,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetEnum<TEnum>(string name, out TEnum result, TEnum defaultValue = default(TEnum)) where TEnum : struct, Enum
 		{
-			if (settings.TryGetValue(name, out string setting))
+			if (TryResolveRawValue(name, out string setting))
 			{
 				// Enum.TryParse is used for robust parsing, including case-insensitivity.
 				if (Enum.TryParse(setting, true, out TEnum parsedEnum))

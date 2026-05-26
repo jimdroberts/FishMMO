@@ -272,6 +272,60 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
+		/// Runs a process asynchronously, writing the supplied text to the
+		/// process's standard input before closing it. Used to deliver
+		/// secrets (e.g. passwords for <c>psql</c> meta-commands) without
+		/// exposing them on the process command line or in shell history.
+		/// </summary>
+		/// <param name="command">Process executable.</param>
+		/// <param name="arguments">Arguments for the process.</param>
+		/// <param name="stdinText">Text to write to stdin (followed by EOF).</param>
+		/// <param name="processResult">Optional callback receiving (exitCode, stdout, stderr).</param>
+		/// <returns>True if process succeeded, otherwise false.</returns>
+		public static async Task<bool> RunProcessWithStdinAsync(string command, string arguments, string stdinText, Func<int, string, string, bool>? processResult = null)
+		{
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = command;
+				process.StartInfo.Arguments = arguments;
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.CreateNoWindow = true;
+				process.StartInfo.RedirectStandardInput = true;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
+
+				process.Start();
+
+				var outputTask = process.StandardOutput.ReadToEndAsync();
+				var errorTask = process.StandardError.ReadToEndAsync();
+
+				try
+				{
+					if (!string.IsNullOrEmpty(stdinText))
+					{
+						await process.StandardInput.WriteAsync(stdinText);
+					}
+				}
+				finally
+				{
+					process.StandardInput.Close();
+				}
+
+				await Task.WhenAll(outputTask, errorTask);
+				await process.WaitForExitAsync();
+
+				string output = outputTask.Result;
+				string error = errorTask.Result;
+
+				if (processResult != null)
+				{
+					return processResult.Invoke(process.ExitCode, output, error);
+				}
+				return process.ExitCode == 0;
+			}
+		}
+
+		/// <summary>
 		/// Prompts the user for input in the console.
 		/// </summary>
 		/// <param name="prompt">Prompt message.</param>

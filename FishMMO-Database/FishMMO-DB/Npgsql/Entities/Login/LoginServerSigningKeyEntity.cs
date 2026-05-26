@@ -13,6 +13,24 @@ namespace FishMMO.Database.Npgsql.Entities
 		public byte[] HmacKey { get; set; }
 		public DateTime TimeCreated { get; set; }
 
+		/// <summary>
+		/// Whether this key is currently the active key used to sign new tokens.
+		/// Old keys remain in the table (IsActive=false) so in-flight tokens can still be verified
+		/// during the rotation overlap window.
+		/// </summary>
+		public bool IsActive { get; set; } = true;
+
+		/// <summary>
+		/// UTC timestamp at which the key became active (typically equals TimeCreated).
+		/// </summary>
+		public DateTime ActivatedAtUtc { get; set; }
+
+		/// <summary>
+		/// UTC timestamp at which the key was rotated out (became inactive). Null while active.
+		/// Used to bound the verification overlap window and to identify which keys are safe to delete.
+		/// </summary>
+		public DateTime? RotatedAtUtc { get; set; }
+
 		// Navigation property
 		public LoginServerEntity LoginServer { get; set; }
 	}

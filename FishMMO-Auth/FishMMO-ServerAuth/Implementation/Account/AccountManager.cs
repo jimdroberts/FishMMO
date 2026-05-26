@@ -200,12 +200,12 @@ namespace FishMMO.Auth.Implementation
 					return false;
 				}
 
-				accountData.AuthState = next;
-
 				if (onSuccess != null && !onSuccess.Invoke(accountData))
 				{
 					return false;
 				}
+
+				accountData.AuthState = next;
 
 				if (next == AuthState.SrpSuccess || next == AuthState.Authenticated)
 				{

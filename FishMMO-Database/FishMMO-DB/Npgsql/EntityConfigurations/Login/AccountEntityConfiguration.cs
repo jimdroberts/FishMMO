@@ -21,6 +21,19 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasMaxLength(50);
 
+			// Case-insensitive lookup column. PostgreSQL stores LOWER(name) and a UNIQUE index
+			// on this column prevents two accounts that differ only in case.
+			builder.Property(e => e.NameLowercase)
+				.HasColumnName("name_lowercase")
+				.HasComputedColumnSql("LOWER(name)", stored: true);
+
+			// xmin concurrency token — PostgreSQL system column updated on every row change.
+			builder.Property(e => e.Version)
+				.HasColumnName("xmin")
+				.HasColumnType("xid")
+				.ValueGeneratedOnAddOrUpdate()
+				.IsConcurrencyToken();
+
 			builder.Property(e => e.Salt)
 				.IsRequired()
 				.HasMaxLength(256);
@@ -71,6 +84,10 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.AccessLevel);
 
 			builder.HasIndex(e => e.TimeCreated);
+
+			// Case-insensitive uniqueness for account names via the computed name_lowercase column.
+			builder.HasIndex(e => e.NameLowercase)
+				.IsUnique();
 
 			// Unique index on email when provided
 			builder.HasIndex(e => e.Email)

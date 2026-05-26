@@ -21,6 +21,7 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		/// <param name="username">Account name to embed in the token.</param>
 		/// <param name="loginServerId">ID of the issuing login server.</param>
+		/// <param name="signingKeyId">Database ID of the signing key used for this token.</param>
 		/// <param name="expiresUtc">Token expiration timestamp (UTC).</param>
 		/// <param name="signingKey">HMAC-SHA256 signing key. Must be at least <see cref="CryptoHelper.HmacKeyLength"/> bytes.</param>
 		/// <param name="accessLevel">Account access level to embed.</param>
@@ -28,6 +29,7 @@ namespace FishMMO.Auth.Implementation
 		public static byte[]? BuildToken(
 			string username,
 			long loginServerId,
+			long signingKeyId,
 			DateTime expiresUtc,
 			byte[] signingKey,
 			AccessLevel accessLevel)
@@ -35,7 +37,7 @@ namespace FishMMO.Auth.Implementation
 			if (signingKey == null || signingKey.Length < CryptoHelper.HmacKeyLength)
 				return null;
 
-			return CryptoHelper.BuildAuthToken(username, loginServerId, expiresUtc, signingKey, accessLevel);
+			return CryptoHelper.BuildAuthToken(username, loginServerId, signingKeyId, expiresUtc, signingKey, accessLevel);
 		}
 
 		/// <summary>
@@ -59,6 +61,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="encryptionData">Connection encryption state (keys, nonces, version).</param>
 		/// <param name="username">Account name to embed in the token.</param>
 		/// <param name="loginServerId">ID of the issuing login server.</param>
+		/// <param name="signingKeyId">Database ID of the signing key used for this token.</param>
 		/// <param name="tokenExpirationMinutes">Token validity duration in minutes.</param>
 		/// <param name="signingKey">HMAC-SHA256 signing key.</param>
 		/// <param name="accessLevel">Account access level to embed.</param>
@@ -68,6 +71,7 @@ namespace FishMMO.Auth.Implementation
 			ConnectionEncryptionData encryptionData,
 			string username,
 			long loginServerId,
+			long signingKeyId,
 			int tokenExpirationMinutes,
 			byte[] signingKey,
 			AccessLevel accessLevel,
@@ -75,7 +79,7 @@ namespace FishMMO.Auth.Implementation
 		{
 			rawTokenForHashing = null;
 
-			byte[]? rawToken = BuildToken(username, loginServerId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes), signingKey, accessLevel);
+			byte[]? rawToken = BuildToken(username, loginServerId, signingKeyId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes), signingKey, accessLevel);
 			if (rawToken == null)
 				return null;
 
@@ -125,6 +129,9 @@ namespace FishMMO.Auth.Implementation
 			/// <summary>Login server ID extracted from the verified token.</summary>
 			public long LoginServerId;
 
+			/// <summary>Signing-key database ID extracted from the verified token.</summary>
+			public long SigningKeyId;
+
 			/// <summary>Access level extracted from the verified token.</summary>
 			public AccessLevel AccessLevel;
 
@@ -158,17 +165,20 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="encryptionData">Connection encryption state.</param>
 		/// <param name="seq">Broadcast sequence number.</param>
 		/// <param name="rawToken">Decrypted raw token bytes (caller must zero after use).</param>
-		/// <param name="loginServerId">Extracted login server ID for signing key lookup.</param>
+		/// <param name="loginServerId">Extracted login server ID for signing key ownership checks.</param>
+		/// <param name="signingKeyId">Extracted signing-key ID for signing key lookup.</param>
 		/// <returns><c>true</c> if decryption and partial parse succeeded.</returns>
 		public static bool TryDecryptAndPartialParse(
 			byte[] encryptedToken,
 			ConnectionEncryptionData encryptionData,
 			uint seq,
 			out byte[]? rawToken,
-			out long loginServerId)
+			out long loginServerId,
+			out long signingKeyId)
 		{
 			rawToken = null;
 			loginServerId = 0;
+			signingKeyId = 0;
 
 			if (seq == 0 || !encryptionData.TryConsumeReceiveSequence(seq))
 				return false;
@@ -193,9 +203,9 @@ namespace FishMMO.Auth.Implementation
 				return false;
 			}
 
-			// Token format: [1B version][1B tokenType][2B nameLen BE][name][1B accessLevel][8B serverId]...
+			// Token format: [1B version][1B tokenType][2B nameLen BE][name][1B accessLevel][8B serverId][8B signingKeyId]...
 			int nameLen = (rawToken[2] << 8) | rawToken[3];
-			if (nameLen <= 0 || 4 + nameLen + 1 + 8 + 8 + CryptoHelper.HmacTagLength > rawToken.Length)
+			if (nameLen <= 0 || 4 + nameLen + 1 + 8 + 8 + 8 + CryptoHelper.HmacTagLength > rawToken.Length)
 			{
 				CryptographicOperations.ZeroMemory(rawToken);
 				rawToken = null;
@@ -205,6 +215,17 @@ namespace FishMMO.Auth.Implementation
 			int serverIdOffset = 4 + nameLen + 1;
 			for (int i = 0; i < 8; i++)
 				loginServerId = (loginServerId << 8) | rawToken[serverIdOffset + i];
+
+			int signingKeyIdOffset = serverIdOffset + 8;
+			for (int i = 0; i < 8; i++)
+				signingKeyId = (signingKeyId << 8) | rawToken[signingKeyIdOffset + i];
+
+			if (signingKeyId <= 0)
+			{
+				CryptographicOperations.ZeroMemory(rawToken);
+				rawToken = null;
+				return false;
+			}
 
 			return true;
 		}
@@ -222,12 +243,14 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="preParseLoginServerId">
 		/// Login server ID from partial parse. Cross-checked against the HMAC-verified value.
 		/// </param>
+		/// <param name="preParseSigningKeyId">Signing-key ID from partial parse. Cross-checked against the HMAC-verified value.</param>
 		/// <returns>Verification result with parsed token fields.</returns>
 		public static TokenVerifyResult VerifyToken(
 			byte[] rawToken,
 			byte[] hmacKey,
 			bool signingKeyFound,
-			long preParseLoginServerId)
+			long preParseLoginServerId,
+			long preParseSigningKeyId)
 		{
 			var result = new TokenVerifyResult
 			{
@@ -239,6 +262,7 @@ namespace FishMMO.Auth.Implementation
 				hmacKey,
 				out result.AccountName,
 				out result.LoginServerId,
+				out result.SigningKeyId,
 				out result.AccessLevel,
 				out result.ExpiresUtc);
 
@@ -248,9 +272,9 @@ namespace FishMMO.Auth.Implementation
 				return result;
 			}
 
-			// Cross-check: parsedServerId inside HMAC envelope must match the
+			// Cross-check: parsed IDs inside HMAC envelope must match the
 			// pre-HMAC partial parse to detect token tampering.
-			if (result.LoginServerId != preParseLoginServerId)
+			if (result.LoginServerId != preParseLoginServerId || result.SigningKeyId != preParseSigningKeyId)
 			{
 				result.IsValid = false;
 				return result;

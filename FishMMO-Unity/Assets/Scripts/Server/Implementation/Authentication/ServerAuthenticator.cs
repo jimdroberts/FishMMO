@@ -41,6 +41,15 @@ namespace FishMMO.Server.Implementation
 			set { _loginServerId = value; if (_core != null) _core.LoginServerId = value; }
 		}
 
+		/// <summary>Backing field for <see cref="TokenSigningKeyId"/>.</summary>
+		private long _tokenSigningKeyId;
+		/// <summary>Database ID of the HMAC signing key used for issued tokens.</summary>
+		public long TokenSigningKeyId
+		{
+			get => _tokenSigningKeyId;
+			set { _tokenSigningKeyId = value; if (_core != null) _core.TokenSigningKeyId = value; }
+		}
+
 		/// <summary>HMAC signing key for token generation. Set by LoginServerSystem after workers start.</summary>
 		public byte[] TokenSigningKey
 		{
@@ -66,6 +75,7 @@ namespace FishMMO.Server.Implementation
 					$"Actual type: {Server.AccountManager?.GetType().FullName ?? "null"}.");
 			_core = new ServerAuthenticatorCore(this, sam);
 			_core.LoginServerId = _loginServerId;
+			_core.TokenSigningKeyId = _tokenSigningKeyId;
 			_core.TokenExpirationMinutes = tokenExpirationMinutes;
 		}
 
@@ -276,8 +286,8 @@ namespace FishMMO.Server.Implementation
 					}
 				}
 				if (matchedHash == null) return false;
-				await rcSvc.ConsumeCodeAsync(username, matchedHash);
-				return true;
+				var consumeResult = await rcSvc.ConsumeCodeAsync(username, matchedHash);
+				return consumeResult.IsSuccess;
 			}
 			else
 			{
@@ -287,11 +297,10 @@ namespace FishMMO.Server.Implementation
 					plaintextSecret = CryptoHelper.TwoFactor.DecryptTotpSecret(totpMasterKeySnapshot, username, accountResult.Data.TotpSecret);
 					var (valid, windowUsed) = CryptoHelper.TwoFactor.VerifyTotpCode(plaintextSecret, totpCode, accountResult.Data.LastTotpWindow);
 					if (!valid) return false;
-					if (accountResult.Data.TotpVerifiedAt == null)
-						await accountService.PersistTotpVerifiedAtAsync(username, windowUsed);
-					else
-						await accountService.PersistLastTotpWindowAsync(username, windowUsed);
-					return true;
+					var persistResult = accountResult.Data.TotpVerifiedAt == null
+						? await accountService.PersistTotpVerifiedAtAsync(username, windowUsed)
+						: await accountService.PersistLastTotpWindowAsync(username, windowUsed);
+					return persistResult.IsSuccess;
 				}
 				finally
 				{

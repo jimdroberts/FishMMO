@@ -2,6 +2,7 @@ using FishMMO.Database;
 using FishMMO.Logging;
 using Microsoft.Extensions.Configuration;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -41,6 +42,8 @@ namespace FishMMO.Installer
 		{
 			WriteIndented = true,
 		};
+
+		private const string ClientGateSecretEnvVar = "FISHMMO_CLIENT_GATE_SECRET";
 
 		/// <summary>Conventional FishMMO dev workspace root: ~/Dev/FishMMO Dev/</summary>
 		private static string FishMMODevRoot => Path.Combine(
@@ -310,12 +313,6 @@ namespace FishMMO.Installer
 
 		private static async Task GenerateWebServerSecretsFile(string targetDir, bool hasNpgsqlDsn)
 		{
-			if (!hasNpgsqlDsn)
-			{
-				Console.WriteLine("This web server component has no secrets to export.");
-				return;
-			}
-
 			Console.WriteLine("Select output format:");
 			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
 			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
@@ -326,18 +323,36 @@ namespace FishMMO.Installer
 			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
 			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2) return;
 
-			Console.WriteLine("Enter the PostgreSQL connection string secret for this web server.");
-			string dsn = PromptNpgsqlDsn(existingDsn: null);
-
 			var secrets = new Dictionary<string, string>
 			{
-				["ConnectionStrings__NpgsqlConnection"] = dsn,
+				[ClientGateSecretEnvVar] = GenerateClientGateSecret(),
 			};
+
+			if (hasNpgsqlDsn)
+			{
+				Console.WriteLine("Enter the PostgreSQL connection string secret for this web server.");
+				string dsn = PromptNpgsqlDsn(existingDsn: null);
+				secrets["ConnectionStrings__NpgsqlConnection"] = dsn;
+			}
 
 			switch (key.Key)
 			{
 				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
 				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
+			}
+		}
+
+		private static string GenerateClientGateSecret()
+		{
+			byte[] secretBytes = new byte[32];
+			RandomNumberGenerator.Fill(secretBytes);
+			try
+			{
+				return Convert.ToBase64String(secretBytes);
+			}
+			finally
+			{
+				CryptographicOperations.ZeroMemory(secretBytes);
 			}
 		}
 

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using FishMMO.Logging;
@@ -197,12 +198,25 @@ namespace FishMMO.WebServer
 			}
 
 			// Hard cap: if we're still over capacity after the time-based sweep
-			// (e.g., a burst of fresh nonces), drop the lot. The next legitimate
-			// request will re-populate. This keeps memory bounded under a flood.
-			if (seenNonces.Count >= NonceCacheCapacity)
+			// (e.g., a burst of fresh nonces), evict the oldest-expiring entries via LRU
+			// rather than clearing the entire cache. Clearing would allow a flood of fresh
+			// nonces to evict legitimate still-valid nonces and enable replay of those
+			// previously-seen nonces until their original expiry. LRU bounds memory while
+			// preserving replay-protection for the most recent legitimate traffic.
+			int over = seenNonces.Count - NonceCacheCapacity;
+			if (over > 0)
 			{
-				Log.Warning(LogChannel, $"Nonce cache exceeded {NonceCacheCapacity}; clearing.");
-				seenNonces.Clear();
+				int target = Math.Max(over, NonceCacheCapacity / 4);
+				Log.Warning(LogChannel, $"Nonce cache exceeded {NonceCacheCapacity}; evicting {target} oldest entries.");
+				var victims = seenNonces
+					.OrderBy(kv => kv.Value)
+					.Take(target)
+					.Select(kv => kv.Key)
+					.ToArray();
+				foreach (var key in victims)
+				{
+					seenNonces.TryRemove(key, out _);
+				}
 			}
 		}
 

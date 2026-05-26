@@ -74,9 +74,10 @@ namespace FishMMO.Client
 			{
 				mac = hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical));
 			}
-			// Best-effort zero of the secret buffer copy; the underlying constant
-			// lives in the loaded assembly image regardless.
-			Array.Clear(secret, 0, secret.Length);
+			// Cryptographically zero the secret buffer copy to remove it from
+			// process memory promptly (resistant to JIT eliding a plain Array.Clear).
+			// The underlying constant still lives in the loaded assembly image regardless.
+			CryptographicOperations.ZeroMemory(secret);
 
 			return Version + "." + ts.ToString() + "." + nonce + "." + ToBase64Url(mac);
 		}

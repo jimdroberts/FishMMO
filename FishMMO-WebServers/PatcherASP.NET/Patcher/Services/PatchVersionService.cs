@@ -122,6 +122,19 @@ public class PatchVersionService : IDisposable
 		var patchesPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, patchesDirectoryConfig));
 		PatchesRoot = patchesPath.EndsWith(Path.DirectorySeparatorChar) ? patchesPath : patchesPath + Path.DirectorySeparatorChar;
 
+		// Defence-in-depth: even though the value comes from local config and is
+		// resolved relative to BaseDirectory, an attacker who can write a config
+		// file with a value containing ".." segments or an absolute path could
+		// otherwise pivot the patcher to serve files from anywhere on disk.
+		// Refuse to start if PatchesRoot escapes BaseDirectory.
+		string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+		if (!baseDir.EndsWith(Path.DirectorySeparatorChar)) baseDir += Path.DirectorySeparatorChar;
+		if (!PatchesRoot.StartsWith(baseDir, StringComparison.Ordinal))
+		{
+			throw new InvalidOperationException(
+				$"Patches:DirectoryName resolves to '{PatchesRoot}' which is outside the application base directory '{baseDir}'. Refusing to start.");
+		}
+
 		if (!Directory.Exists(patchesPath))
 		{
 			Log.Warning("PatchVersionService", $"Patches directory not found: {patchesPath}. Setting latest version to 0.0.0.");

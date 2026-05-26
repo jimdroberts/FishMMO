@@ -173,14 +173,14 @@ namespace FishMMO.Auth.Implementation
 			{
 				if (!TokenService.TryDecryptAndPartialParse(
 					request.EncryptedToken, request.EncryptionData, request.Seq,
-					out rawToken, out long loginServerId))
+					out rawToken, out long loginServerId, out long signingKeyId))
 				{
 					await Log.Warning(LogPrefix, "Token decryption or parse failed.");
 					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
 					return;
 				}
 
-				hmacKey = await FetchSigningKeyAsync(loginServerId);
+				hmacKey = await FetchSigningKeyAsync(loginServerId, signingKeyId);
 				bool keyFound = hmacKey != null;
 				RefreshAuthTtl(conn);
 
@@ -194,7 +194,7 @@ namespace FishMMO.Auth.Implementation
 				TokenService.TokenVerifyResult verifyResult;
 				try
 				{
-					verifyResult = TokenService.VerifyToken(rawToken!, hmacKey!, keyFound, loginServerId);
+					verifyResult = TokenService.VerifyToken(rawToken!, hmacKey!, keyFound, loginServerId, signingKeyId);
 				}
 				finally
 				{
@@ -378,7 +378,7 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		/// <param name="loginServerId">Login server database ID.</param>
 		/// <returns>A fresh copy of the HMAC key, or null.</returns>
-		protected abstract Task<byte[]> FetchSigningKeyAsync(long loginServerId);
+		protected abstract Task<byte[]> FetchSigningKeyAsync(long loginServerId, long signingKeyId);
 
 		/// <summary>
 		/// Checks whether a token has been revoked, using its SHA-256 hex hash.

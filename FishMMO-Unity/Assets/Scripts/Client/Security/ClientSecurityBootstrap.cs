@@ -27,11 +27,21 @@ namespace FishMMO.Client.Security
 		private const string ConfigFileName = "client-security.json";
 
 		/// <summary>
+		/// File name expected under StreamingAssets for client security configuration.
+		/// </summary>
+		public const string StreamingAssetsConfigFileName = ConfigFileName;
+
+		/// <summary>
 		/// Compile-time fallback pins (base64 SHA-256(SPKI)). Populate these
 		/// with the SPKI hashes of <c>api.fishmmo.com</c> + at least one backup
 		/// key before shipping a release build.
 		/// </summary>
 		private static readonly string[] DefaultPins = Array.Empty<string>();
+
+		/// <summary>
+		/// Number of compile-time fallback certificate pins configured for release-build validation.
+		/// </summary>
+		public static int DefaultPinCount => DefaultPins.Length;
 
 		/// <summary>
 		/// Whether to fall back to "temporal validity only" when no pins are

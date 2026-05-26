@@ -148,6 +148,11 @@ namespace FishMMO.Auth.Implementation
 		public long LoginServerId { get; set; }
 
 		/// <summary>
+		/// Database ID of the HMAC signing key used for token generation.
+		/// </summary>
+		public long TokenSigningKeyId { get; set; }
+
+		/// <summary>
 		/// Token validity duration in minutes.
 		/// </summary>
 		public float TokenExpirationMinutes { get; set; } = 10f;
@@ -1107,6 +1112,7 @@ namespace FishMMO.Auth.Implementation
 				encryptionData,
 				username,
 				LoginServerId,
+				TokenSigningKeyId,
 				(int)TokenExpirationMinutes,
 				signingKey,
 				accessLevel,

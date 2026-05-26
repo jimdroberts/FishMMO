@@ -6,13 +6,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
 	/// <summary>
 	/// Service interface for managing per-LoginServer HMAC signing keys.
-	/// The LoginServer upserts its signing key on startup; WorldServers and SceneServers
-	/// fetch the key by LoginServerId to validate auth tokens.
+	/// The LoginServer inserts a fresh signing key on startup; WorldServers and SceneServers
+	/// fetch the key by token-embedded key ID to validate auth tokens.
 	/// </summary>
 	public interface ILoginServerSigningKeyService
 	{
 		/// <summary>
-		/// Inserts or updates the HMAC signing key for a LoginServer.
+		/// Inserts a fresh HMAC signing key for a LoginServer and returns its database ID.
 		/// Called by the LoginServer on startup.
 		/// </summary>
 		Task<DatabaseResult<LoginServerSigningKeyData>> UpsertAsync(
@@ -26,6 +26,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </summary>
 		Task<DatabaseResult<LoginServerSigningKeyData>> FetchByLoginServerIdAsync(
 			long loginServerId,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches a signing key by its token-embedded database ID.
+		/// </summary>
+		Task<DatabaseResult<LoginServerSigningKeyData>> FetchByIdAsync(
+			long signingKeyId,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>

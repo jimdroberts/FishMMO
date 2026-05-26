@@ -124,6 +124,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				authenticator.TokenSigningKey = hmacKey;
 				authenticator.LoginServerId = runtimeData.ID;
+				authenticator.TokenSigningKeyId = keyResult.Data.ID;
 
 				// Derive a TOTP master key from the HMAC signing key using HMAC-SHA256
 				// with a domain separator. This key encrypts TOTP secrets at rest in the DB.
