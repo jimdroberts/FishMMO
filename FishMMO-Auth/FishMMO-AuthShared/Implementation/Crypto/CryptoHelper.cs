@@ -331,6 +331,12 @@ namespace FishMMO.Auth.Implementation
 			if (ourPrivateKey == null) throw new ArgumentNullException(nameof(ourPrivateKey));
 			if (peerPublicKey == null) throw new ArgumentNullException(nameof(peerPublicKey));
 			if (handshakeTranscriptHash == null) throw new ArgumentNullException(nameof(handshakeTranscriptHash));
+			// Reject known small-order points BEFORE running ECDH.
+			// The post-ECDH all-zero check below catches the same class of input,
+			// but pre-checking gives a clearer error path and protects against any
+			// future BouncyCastle behaviour change.
+			if (!IsValidX25519PublicKey(peerPublicKey))
+				throw new CryptographicException("X25519 peer public key is a known small-order point.");
 			var priv = new Org.BouncyCastle.Crypto.Parameters.X25519PrivateKeyParameters(ourPrivateKey, 0);
 			var pub = new Org.BouncyCastle.Crypto.Parameters.X25519PublicKeyParameters(peerPublicKey, 0);
 			byte[] rawShared = new byte[32];
@@ -356,6 +362,78 @@ namespace FishMMO.Auth.Implementation
 			CryptographicOperations.ZeroMemory(rawShared);
 			return derived;
 		}
+
+		/// <summary>
+		/// Validates a peer-supplied X25519 public key against the
+		/// well-known small-order point blacklist (RFC 7748 §6.1). Returns <c>false</c>
+		/// for any input that would collapse the ECDH shared secret to a predictable
+		/// value regardless of the local private key.
+		/// </summary>
+		/// <remarks>
+		/// <para>The blacklist below covers the seven distinct small-order x-coordinates
+		/// plus their high-bit-set variants (X25519 implementations mask off the top
+		/// bit, so both forms must be rejected explicitly).</para>
+		/// <para>Comparison is byte-wise but constant-time per entry to avoid leaking
+		/// which (if any) blacklist entry matched. This is informational — a malicious
+		/// peer already knows their own public key — but reduces the risk of side-channel
+		/// regressions in the surrounding handshake code.</para>
+		/// </remarks>
+		/// <param name="publicKey">32-byte X25519 public key (peer-supplied).</param>
+		/// <returns><c>true</c> if the key is not on the small-order blacklist.</returns>
+		public static bool IsValidX25519PublicKey(byte[] publicKey)
+		{
+			if (publicKey == null || publicKey.Length != 32) return false;
+			int matchAccumulator = 0;
+			for (int i = 0; i < SmallOrderX25519Points.Length; i++)
+			{
+				byte[] bad = SmallOrderX25519Points[i];
+				int diff = 0;
+				for (int j = 0; j < 32; j++)
+					diff |= publicKey[j] ^ bad[j];
+				// diff == 0  =>  match; OR (1 - clamp(diff)) into accumulator.
+				matchAccumulator |= ((diff - 1) >> 31) & 1;
+			}
+			return matchAccumulator == 0;
+		}
+
+		// RFC 7748 §6.1 small-order point blacklist. Both low-bit-cleared and
+		// high-bit-set forms are listed because the high bit is masked by every
+		// conforming X25519 implementation, making both byte-patterns yield the
+		// same curve point.
+		private static readonly byte[][] SmallOrderX25519Points = new byte[][]
+		{
+			// 0 (point at infinity)
+			new byte[32],
+			// 1
+			new byte[] { 0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+						 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 },
+			// 325606250916557431795983626356110631294008115727848805560023387167927233504
+			new byte[] { 0xe0,0xeb,0x7a,0x7c,0x3b,0x41,0xb8,0xae,0x16,0x56,0xe3,0xfa,0xf1,0x9f,0xc4,0x6a,
+						 0xda,0x09,0x8d,0xeb,0x9c,0x32,0xb1,0xfd,0x86,0x62,0x05,0x16,0x5f,0x49,0xb8,0x00 },
+			// 39382357235489614581723060781553021112529911719440698176882885853963445705823
+			new byte[] { 0x5f,0x9c,0x95,0xbc,0xa3,0x50,0x8c,0x24,0xb1,0xd0,0xb1,0x55,0x9c,0x83,0xef,0x5b,
+						 0x04,0x44,0x5c,0xc4,0x58,0x1c,0x8e,0x86,0xd8,0x22,0x4e,0xdd,0xd0,0x9f,0x11,0x57 },
+			// p - 1
+			new byte[] { 0xec,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+						 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x7f },
+			// p
+			new byte[] { 0xed,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+						 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x7f },
+			// p + 1
+			new byte[] { 0xee,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+						 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x7f },
+			// High-bit-set variants (top bit ignored by X25519, so these alias the above).
+			new byte[] { 0xe0,0xeb,0x7a,0x7c,0x3b,0x41,0xb8,0xae,0x16,0x56,0xe3,0xfa,0xf1,0x9f,0xc4,0x6a,
+						 0xda,0x09,0x8d,0xeb,0x9c,0x32,0xb1,0xfd,0x86,0x62,0x05,0x16,0x5f,0x49,0xb8,0x80 },
+			new byte[] { 0x5f,0x9c,0x95,0xbc,0xa3,0x50,0x8c,0x24,0xb1,0xd0,0xb1,0x55,0x9c,0x83,0xef,0x5b,
+						 0x04,0x44,0x5c,0xc4,0x58,0x1c,0x8e,0x86,0xd8,0x22,0x4e,0xdd,0xd0,0x9f,0x11,0xd7 },
+			new byte[] { 0xec,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+						 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff },
+			new byte[] { 0xed,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+						 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff },
+			new byte[] { 0xee,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+						 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff },
+		};
 
 		/// <summary>
 		/// Generates a cryptographically secure random key of the specified length in bytes.
@@ -642,30 +720,40 @@ namespace FishMMO.Auth.Implementation
 			public bool TryConsumeSequence(uint seq)
 			{
 				if (disposed) throw new ObjectDisposedException(nameof(GcmNonceContext));
-				for (int attempt = 0; attempt < MaxCasRetries; attempt++)
-				{
-					long current = Interlocked.Read(ref counter);
-					// Guard: if the counter has reached uint.MaxValue, no further
-					// sequences can be consumed. Without this, (current + 1) as long
-					// would be 4294967296 and the uint cast would wrap to 0, accepting
-					// a replayed seq-0 on an exhausted counter.
-					if (current >= uint.MaxValue)
-						return false;
-					if (seq == (uint)(current + 1))
-					{
-						long exchanged = Interlocked.CompareExchange(ref counter, seq, current);
-						if (exchanged == current)
-							return true;
-						// CAS failed — another thread advanced the counter concurrently. Retry.
-						// Under normal single-producer usage this should never happen.
-					}
-					else
-					{
-						return false;
-					}
-				}
-				// Exhausted retries under extreme contention — treat as failure.
-				return false;
+				// Single-attempt CAS. The documented threading model
+				// is single-producer-per-direction. Looping on CAS contention masked
+				// real protocol-misuse bugs by sometimes accepting messages from a
+				// racing reader. We now surface the misuse as a hard "return false".
+				long current = Interlocked.Read(ref counter);
+				// Guard: if the counter has reached uint.MaxValue, no further sequences
+				// can be consumed. Without this, (current + 1) as long would be
+				// 4294967296 and the uint cast would wrap to 0, accepting a replayed
+				// seq-0 on an exhausted counter.
+				if (current >= uint.MaxValue) return false;
+				if (seq != (uint)(current + 1)) return false;
+				return Interlocked.CompareExchange(ref counter, seq, current) == current;
+			}
+
+			/// <summary>
+			/// Atomically validates and consumes a contiguous range
+			/// of receive sequence numbers <c>[baseSeq, baseSeq + count - 1]</c> in a
+			/// single CAS. Used by multi-field protocol decoders (SRP verify,
+			/// account-creation payload) that must not leave the counter advanced
+			/// partway through a logical message if one field fails to decrypt.
+			/// </summary>
+			/// <param name="baseSeq">First sequence number in the range.</param>
+			/// <param name="count">Number of consecutive sequences to consume; must be &gt; 0.</param>
+			/// <returns><c>true</c> on success; <c>false</c> on duplicate, gap, exhaustion or invalid count.</returns>
+			public bool TryConsumeSequenceRange(uint baseSeq, uint count)
+			{
+				if (disposed) throw new ObjectDisposedException(nameof(GcmNonceContext));
+				if (count == 0) return false;
+				long current = Interlocked.Read(ref counter);
+				if (current >= uint.MaxValue) return false;
+				if (baseSeq != (uint)(current + 1)) return false;
+				long last = current + count;
+				if (last > uint.MaxValue) return false;
+				return Interlocked.CompareExchange(ref counter, last, current) == current;
 			}
 
 			/// <summary>
@@ -1168,9 +1256,19 @@ namespace FishMMO.Auth.Implementation
 			public const int DefaultRecoveryCodeCount = 8;
 
 			/// <summary>
-			/// PBKDF2 iteration count for recovery code hashing.
+			/// PBKDF2 iteration count for recovery code hashing. Raised from
+			/// 100_000 to 600_000 to align with OWASP 2023 guidance for PBKDF2-HMAC-SHA256. The new
+			/// hash is written with a versioned envelope ("v2:&lt;iters&gt;:salt:hash") so the cost
+			/// can be tuned without breaking existing stored hashes; <see cref="VerifyRecoveryCode"/>
+			/// transparently accepts the legacy "salt:hash" format at the original 100_000 iterations.
 			/// </summary>
-			private const int Pbkdf2Iterations = 100_000;
+			private const int Pbkdf2Iterations = 600_000;
+
+			/// <summary>Legacy PBKDF2 iteration count for verifying hashes written before H2.</summary>
+			private const int Pbkdf2IterationsLegacy = 100_000;
+
+			/// <summary>Versioned envelope prefix written by <see cref="HashRecoveryCode"/>.</summary>
+			private const string RecoveryCodeEnvelopeV2Prefix = "v2:";
 
 			/// <summary>
 			/// PBKDF2 salt length in bytes.
@@ -1419,22 +1517,29 @@ namespace FishMMO.Auth.Implementation
 			/// <summary>
 			/// Hashes a recovery code with PBKDF2-SHA256 for secure at-rest storage.
 			/// </summary>
+			/// <param name="accountId">Account identifier (e.g. username). Bound
+			/// into the PBKDF2 input so a stolen recovery-code hash cannot be reused across accounts
+			/// even if the cleartext code happens to collide.</param>
 			/// <param name="plaintextCode">Plaintext recovery code.</param>
-			/// <returns>String in format "base64(salt):base64(hash)" for database storage.</returns>
-			public static string HashRecoveryCode(string plaintextCode)
+			/// <returns>String in format "v2:&lt;iterations&gt;:base64(salt):base64(hash)" for database storage.</returns>
+			public static string HashRecoveryCode(string accountId, string plaintextCode)
 			{
+				if (string.IsNullOrEmpty(accountId))
+					throw new ArgumentNullException(nameof(accountId));
 				if (string.IsNullOrEmpty(plaintextCode))
 					throw new ArgumentNullException(nameof(plaintextCode));
 
-				string normalized = plaintextCode.Trim().ToUpperInvariant();
+				string normalizedCode = plaintextCode.Trim().ToUpperInvariant();
+				string normalizedAccount = accountId.Trim().ToLowerInvariant();
 
 				byte[] salt = GenerateKey(Pbkdf2SaltLength);
-				byte[] codeBytes = Encoding.UTF8.GetBytes(normalized);
+				byte[] codeBytes = Encoding.UTF8.GetBytes(normalizedAccount + "|" + normalizedCode);
 
 				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
 				{
 					byte[] hash = pbkdf2.GetBytes(Pbkdf2HashLength);
-					string result = Convert.ToBase64String(salt) + ":" + Convert.ToBase64String(hash);
+					string result = RecoveryCodeEnvelopeV2Prefix + Pbkdf2Iterations.ToString(System.Globalization.CultureInfo.InvariantCulture)
+						+ ":" + Convert.ToBase64String(salt) + ":" + Convert.ToBase64String(hash);
 					CryptographicOperations.ZeroMemory(salt);
 					CryptographicOperations.ZeroMemory(hash);
 					CryptographicOperations.ZeroMemory(codeBytes);
@@ -1443,26 +1548,49 @@ namespace FishMMO.Auth.Implementation
 			}
 
 			/// <summary>
-			/// Verifies a submitted recovery code against a stored PBKDF2-SHA256 hash.
+			/// Verifies a submitted recovery code against a stored PBKDF2-SHA256 hash. Accepts both
+			/// the v2 envelope ("v2:&lt;iters&gt;:salt:hash" — account-bound) and the legacy
+			/// ("salt:hash" — not account-bound, 100_000 iterations) format.
 			/// </summary>
+			/// <param name="accountId">Account identifier. Used only when verifying v2 hashes.</param>
 			/// <param name="submitted">Plaintext recovery code submitted by the user.</param>
-			/// <param name="storedHash">Stored hash in "base64(salt):base64(hash)" format.</param>
+			/// <param name="storedHash">Stored hash in v2 or legacy envelope format.</param>
 			/// <returns><c>true</c> if the code matches; <c>false</c> otherwise.</returns>
-			public static bool VerifyRecoveryCode(string submitted, string storedHash)
+			public static bool VerifyRecoveryCode(string accountId, string submitted, string storedHash)
 			{
 				if (string.IsNullOrEmpty(submitted) || string.IsNullOrEmpty(storedHash))
 					return false;
 
-				string[] parts = storedHash.Split(':');
-				if (parts.Length != 2)
-					return false;
+				bool isV2 = storedHash.StartsWith(RecoveryCodeEnvelopeV2Prefix, StringComparison.Ordinal);
+				string[] parts;
+				int iterations;
+				string saltBase64;
+				string hashBase64;
+
+				if (isV2)
+				{
+					parts = storedHash.Substring(RecoveryCodeEnvelopeV2Prefix.Length).Split(':');
+					if (parts.Length != 3) return false;
+					if (!int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out iterations) || iterations < Pbkdf2IterationsLegacy)
+						return false;
+					saltBase64 = parts[1];
+					hashBase64 = parts[2];
+				}
+				else
+				{
+					parts = storedHash.Split(':');
+					if (parts.Length != 2) return false;
+					iterations = Pbkdf2IterationsLegacy;
+					saltBase64 = parts[0];
+					hashBase64 = parts[1];
+				}
 
 				byte[] salt;
 				byte[] expectedHash;
 				try
 				{
-					salt = Convert.FromBase64String(parts[0]);
-					expectedHash = Convert.FromBase64String(parts[1]);
+					salt = Convert.FromBase64String(saltBase64);
+					expectedHash = Convert.FromBase64String(hashBase64);
 				}
 				catch (FormatException)
 				{
@@ -1476,10 +1604,25 @@ namespace FishMMO.Auth.Implementation
 					return false;
 				}
 
-				string normalized = submitted.Trim().ToUpperInvariant();
-				byte[] codeBytes = Encoding.UTF8.GetBytes(normalized);
+				string normalizedCode = submitted.Trim().ToUpperInvariant();
+				byte[] codeBytes;
+				if (isV2)
+				{
+					if (string.IsNullOrEmpty(accountId))
+					{
+						CryptographicOperations.ZeroMemory(salt);
+						CryptographicOperations.ZeroMemory(expectedHash);
+						return false;
+					}
+					string normalizedAccount = accountId.Trim().ToLowerInvariant();
+					codeBytes = Encoding.UTF8.GetBytes(normalizedAccount + "|" + normalizedCode);
+				}
+				else
+				{
+					codeBytes = Encoding.UTF8.GetBytes(normalizedCode);
+				}
 
-				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
+				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, iterations, HashAlgorithmName.SHA256))
 				{
 					byte[] computedHash = pbkdf2.GetBytes(Pbkdf2HashLength);
 					bool result = FixedTimeEquals(computedHash, expectedHash);
@@ -1519,10 +1662,22 @@ namespace FishMMO.Auth.Implementation
 				var totp = new Totp(plaintextSecret, step: TotpStepSeconds, mode: OtpHashMode.Sha1, totpSize: TotpDigits);
 
 				long timeWindowUsed;
-				// previous: 1 allows one expired window for clock drift / slow typing.
-				// future: 0 rejects codes from upcoming windows to prevent pre-computed
-				// code submission (the server clock is authoritative).
-				bool valid = totp.VerifyTotp(submittedCode, out timeWindowUsed, new VerificationWindow(previous: 1, future: 0));
+				bool valid;
+				try
+				{
+					// previous: 1 allows one expired window for clock drift / slow typing.
+					// future: 0 rejects codes from upcoming windows to prevent pre-computed
+					// code submission (the server clock is authoritative).
+					valid = totp.VerifyTotp(submittedCode, out timeWindowUsed, new VerificationWindow(previous: 1, future: 0));
+				}
+				finally
+				{
+					// OtpNet's Totp copies the secret into a private
+					// InMemoryKey/byte[] field that has no public zeroize API. Reach into the
+					// instance via reflection and overwrite any byte[] field we find so the
+					// secret is not left dangling on the managed heap until the next GC sweep.
+					TryZeroizeTotpInternals(totp);
+				}
 
 				if (!valid)
 					return (false, 0);
@@ -1532,6 +1687,67 @@ namespace FishMMO.Auth.Implementation
 					return (false, 0);
 
 				return (true, timeWindowUsed);
+			}
+
+			/// <summary>
+			/// Best-effort reflection-based zeroize of any <c>byte[]</c> fields reachable from an
+			/// OtpNet <c>Totp</c> instance (and the embedded <c>Key</c>/<c>InMemoryKey</c> object).
+			/// Failures are swallowed — we cannot guarantee the field layout across OtpNet versions
+			/// and this is defence-in-depth on top of caller-side zeroize of <c>plaintextSecret</c>.
+			/// </summary>
+			private static void TryZeroizeTotpInternals(object totp)
+			{
+				if (totp == null) return;
+				try
+				{
+					const System.Reflection.BindingFlags flags =
+						System.Reflection.BindingFlags.Instance |
+						System.Reflection.BindingFlags.Public |
+						System.Reflection.BindingFlags.NonPublic;
+
+					var visited = new System.Collections.Generic.HashSet<object>(ReferenceEqualityComparer.Instance);
+					var queue = new System.Collections.Generic.Queue<object>();
+					queue.Enqueue(totp);
+
+					while (queue.Count > 0)
+					{
+						object current = queue.Dequeue();
+						if (current == null || !visited.Add(current)) continue;
+
+						Type t = current.GetType();
+						// Walk the inheritance chain so private fields on base classes are also reached.
+						while (t != null && t != typeof(object))
+						{
+							foreach (var f in t.GetFields(flags))
+							{
+								object value;
+								try { value = f.GetValue(current); } catch { continue; }
+								if (value == null) continue;
+
+								if (value is byte[] buf && buf.Length > 0)
+								{
+									CryptographicOperations.ZeroMemory(buf);
+								}
+								else if (!f.FieldType.IsValueType && f.FieldType != typeof(string))
+								{
+									queue.Enqueue(value);
+								}
+							}
+							t = t.BaseType;
+						}
+					}
+				}
+				catch
+				{
+					// Defensive: never let a reflection failure escape into the caller.
+				}
+			}
+
+			private sealed class ReferenceEqualityComparer : System.Collections.Generic.IEqualityComparer<object>
+			{
+				public static readonly ReferenceEqualityComparer Instance = new ReferenceEqualityComparer();
+				public new bool Equals(object x, object y) => ReferenceEquals(x, y);
+				public int GetHashCode(object obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
 			}
 		}
 	}

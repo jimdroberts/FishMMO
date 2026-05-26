@@ -111,9 +111,15 @@ namespace FishMMO.Auth.Implementation
 			if (!CryptoHelper.ValidateSequenceRange(seq, 2))
 				return false;
 
-			// Decrypt username (seq - 1)
+			// Consume both sequences ATOMICALLY before decrypting.
+			// Previously we consumed seq-1, decrypted, then consumed seq — a partial
+			// failure (e.g. second consume races a concurrent reader, or the second
+			// decrypt throws) would leave the counter at seq-1 with no way to
+			// reconcile. The caller still tears the connection down on a false
+			// return, but the atomic consume guarantees the counter is either fully
+			// advanced or untouched — no half-state.
 			uint seqUsername = seq - 1;
-			if (!encryptionData.TryConsumeReceiveSequence(seqUsername))
+			if (!encryptionData.TryConsumeReceiveSequenceRange(seqUsername, 2))
 				return false;
 
 			byte[]? decryptedRawUsername = null;
@@ -133,10 +139,6 @@ namespace FishMMO.Auth.Implementation
 				{
 					throw new CryptographicException("Malformed UTF-8 in decrypted username.");
 				}
-
-				// Decrypt public ephemeral (seq)
-				if (!encryptionData.TryConsumeReceiveSequence(seq))
-					return false;
 
 				byte[] nonce2 = encryptionData.BuildReceiveNonce(seq);
 				byte[] aad2 = new byte[CryptoHelper.AadLength];

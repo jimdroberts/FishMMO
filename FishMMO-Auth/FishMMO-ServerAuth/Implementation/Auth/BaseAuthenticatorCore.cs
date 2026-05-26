@@ -303,10 +303,11 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			// Reject the X25519 all-zero (identity/low-order) point — an all-zero public key
-			// always yields an all-zero shared secret regardless of the server's private key
-			// (RFC 7748 §6.1), breaking ECDH forward secrecy entirely.
-			if (IsAllZeroX25519Key(publicKey))
+			// Reject the entire RFC 7748 §6.1 small-order point
+			// blacklist (was previously only the all-zero point). Any of these
+			// always yield an all-zero shared secret regardless of the server's
+			// private key, breaking ECDH forward secrecy entirely.
+			if (!CryptoHelper.IsValidX25519PublicKey(publicKey))
 			{
 				DisconnectConnection(conn, graceful: true);
 				return;
@@ -326,14 +327,17 @@ namespace FishMMO.Auth.Implementation
 					return;
 				}
 				string challengeIp = HandshakeService.NormalizeIp(GetConnectionAddress(conn));
-				byte[] challengeCookie = HandshakeService.ComputeHandshakeCookie(challengeIp, publicKey, HandshakeService.GetTimeBucket(), hmacKeySnapshot);
+				// Bind the connection identity into the cookie so a
+				// captured cookie cannot be replayed by another connection from the
+				// same IP (e.g. shared NAT / proxy).
+				byte[] challengeCookie = HandshakeService.ComputeHandshakeCookie(challengeIp, publicKey, HandshakeService.GetTimeBucket(), hmacKeySnapshot, GetConnectionClientId(conn));
 				BroadcastCookieChallenge(conn, challengeCookie);
 				return;
 			}
 
-			// ── Phase 2: Cookie verification ────────────────────────────
+			// ── Phase 2: Cookie verification ──────────────────────────────
 			string remoteIp = HandshakeService.NormalizeIp(GetConnectionAddress(conn));
-			if (!HandshakeService.VerifyHandshakeCookieWithRollover(cookie, remoteIp, publicKey, hmacKeySnapshot))
+			if (!HandshakeService.VerifyHandshakeCookieWithRollover(cookie, remoteIp, publicKey, hmacKeySnapshot, GetConnectionClientId(conn)))
 			{
 				DisconnectConnection(conn, graceful: true);
 				return;
@@ -513,19 +517,6 @@ namespace FishMMO.Auth.Implementation
 		#endregion
 
 		#region Static Helpers
-
-		/// <summary>
-		/// Returns <c>true</c> if every byte in <paramref name="key"/> is zero.
-		/// Used to detect the X25519 identity (all-zero / low-order) point, which
-		/// always produces an all-zero shared secret regardless of the other party's
-		/// private key (RFC 7748 §6.1).
-		/// </summary>
-		private static bool IsAllZeroX25519Key(byte[] key)
-		{
-			for (int i = 0; i < key.Length; i++)
-				if (key[i] != 0) return false;
-			return true;
-		}
 
 		#endregion
 

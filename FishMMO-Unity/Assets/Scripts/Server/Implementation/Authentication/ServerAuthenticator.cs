@@ -279,7 +279,7 @@ namespace FishMMO.Server.Implementation
 				string matchedHash = null;
 				foreach (var code in codesResult.Data)
 				{
-					if (CryptoHelper.TwoFactor.VerifyRecoveryCode(totpCode, code.CodeHash))
+					if (CryptoHelper.TwoFactor.VerifyRecoveryCode(username, totpCode, code.CodeHash))
 					{
 						matchedHash = code.CodeHash;
 						break;

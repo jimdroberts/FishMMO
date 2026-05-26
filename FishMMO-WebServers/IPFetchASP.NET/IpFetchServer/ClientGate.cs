@@ -24,8 +24,16 @@ namespace FishMMO.WebServer
 	{
 		private const string HeaderName = "X-FishMMO-Client";
 		private const string Version = "v1";
-		private const int MaxSkewSeconds = 300;
+		// Tightened from 300s to 30s to shrink the replay window.
+		// The per-process nonce cache is sized for this window; bumping it back up
+		// requires proportionally increasing NonceCacheCapacity to maintain the
+		// same eviction headroom.
+		private const int MaxSkewSeconds = 30;
 		private const int NonceCacheCapacity = 20_000;
+		// Minimum HMAC secret length in bytes. Anything shorter
+		// is rejected at startup regardless of environment — a short shared secret
+		// defeats the entire gate by being brute-forceable offline.
+		private const int MinSecretBytes = 32;
 		private const string SecretEnvVar = "FISHMMO_CLIENT_GATE_SECRET";
 		private const string LogChannel = "ClientGate";
 
@@ -34,6 +42,10 @@ namespace FishMMO.WebServer
 		// and hard-cap the size so memory cannot grow unboundedly under attack.
 		private static readonly ConcurrentDictionary<string, long> seenNonces = new();
 		private static long lastPruneTicks;
+		// Serialises the prune+evict snapshot so the LRU
+		// OrderBy snapshot cannot race with concurrent prunes producing a stale
+		// victim list that evicts still-valid nonces and leaves the cache over cap.
+		private static readonly object pruneLock = new object();
 
 		/// <summary>
 		/// Adds the gate middleware. Reads the shared secret from the
@@ -61,7 +73,27 @@ namespace FishMMO.WebServer
 				return app;
 			}
 
-			byte[] secret = Encoding.UTF8.GetBytes(secretText);
+			// Accept a comma-separated keyset so operators can
+			// rotate the shared secret by deploying with both old+new keys, waiting
+			// for clients to upgrade, then deploying again with only the new key.
+			string[] secretParts = secretText.Split(',', StringSplitOptions.RemoveEmptyEntries);
+			byte[][] secrets = new byte[secretParts.Length][];
+			for (int i = 0; i < secretParts.Length; i++)
+			{
+				byte[] s = Encoding.UTF8.GetBytes(secretParts[i].Trim());
+				// Enforce the minimum secret length up-front.
+				if (s.Length < MinSecretBytes)
+				{
+					throw new InvalidOperationException(
+						$"{SecretEnvVar} entry #{i + 1} is only {s.Length} bytes; minimum is {MinSecretBytes}. " +
+						"A short shared secret defeats the gate.");
+				}
+				secrets[i] = s;
+			}
+			if (secrets.Length == 0)
+			{
+				throw new InvalidOperationException($"{SecretEnvVar} contained no usable entries after parsing.");
+			}
 			string[] bypass = bypassPaths ?? Array.Empty<string>();
 
 			return app.Use(async (ctx, next) =>
@@ -116,19 +148,39 @@ namespace FishMMO.WebServer
 
 				// Compute expected signature.
 				// PathBase + Path + QueryString reproduces what the client signed.
-				string canonicalPath = (ctx.Request.PathBase.HasValue ? ctx.Request.PathBase.Value : string.Empty)
-					+ (ctx.Request.Path.HasValue ? ctx.Request.Path.Value : string.Empty)
+				// Collapse repeated slashes and reject traversal segments so the signed canonical string
+				// cannot be desynchronised from the routing target via path-equivalence tricks.
+				string rawCanonicalPath = (ctx.Request.PathBase.HasValue ? ctx.Request.PathBase.Value : string.Empty)
+					+ (ctx.Request.Path.HasValue ? ctx.Request.Path.Value : string.Empty);
+				string? normalizedPath = CanonicalizePath(rawCanonicalPath);
+				if (normalizedPath == null)
+				{
+					await Reject(ctx, "invalid path");
+					return;
+				}
+				string canonicalPath = normalizedPath
 					+ (ctx.Request.QueryString.HasValue ? ctx.Request.QueryString.Value : string.Empty);
 				string canonical = Version + "\n" + ctx.Request.Method.ToUpperInvariant() + "\n" + canonicalPath + "\n" + ts.ToString() + "\n" + nonce;
 
-				byte[] expectedMac;
-				using (HMACSHA256 hmac = new HMACSHA256(secret))
+				// Try every active key. Always evaluate all HMACs before deciding
+				// so we do not leak which slot matched via timing.
+				byte[] canonicalBytes = Encoding.UTF8.GetBytes(canonical);
+				bool anyMatch = false;
+				for (int i = 0; i < secrets.Length; i++)
 				{
-					expectedMac = hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical));
+					byte[] expectedMac;
+					using (HMACSHA256 hmac = new HMACSHA256(secrets[i]))
+					{
+						expectedMac = hmac.ComputeHash(canonicalBytes);
+					}
+					string expected = ToBase64Url(expectedMac);
+					if (FixedTimeEquals(sig, expected))
+					{
+						anyMatch = true;
+					}
 				}
-				string expected = ToBase64Url(expectedMac);
 
-				if (!FixedTimeEquals(sig, expected))
+				if (!anyMatch)
 				{
 					await Reject(ctx, "signature mismatch");
 					return;
@@ -187,37 +239,83 @@ namespace FishMMO.WebServer
 			long elapsedSinceLast = ticks - Interlocked.Read(ref lastPruneTicks);
 			long elapsedSeconds = elapsedSinceLast / System.Diagnostics.Stopwatch.Frequency;
 			if (elapsedSeconds < 5 && seenNonces.Count < NonceCacheCapacity) return;
-			Interlocked.Exchange(ref lastPruneTicks, ticks);
 
-			foreach (var kv in seenNonces)
+			// Serialises the prune+evict so the LRU snapshot cannot race with a concurrent prune.
+			// TryEnter (non-blocking) means a second caller arriving while a prune is in flight simply skips —
+			// the in-flight prune already covers the work.
+			if (!System.Threading.Monitor.TryEnter(pruneLock))
+				return;
+			try
 			{
-				if (kv.Value <= nowSec)
+				Interlocked.Exchange(ref lastPruneTicks, ticks);
+
+				// Snapshot first so we walk a stable view rather than the live dictionary.
+				var snapshot = seenNonces.ToArray();
+				for (int i = 0; i < snapshot.Length; i++)
 				{
-					seenNonces.TryRemove(kv.Key, out _);
+					if (snapshot[i].Value <= nowSec)
+					{
+						seenNonces.TryRemove(snapshot[i].Key, out _);
+					}
+				}
+
+				// Hard cap: if we're still over capacity after the time-based sweep
+				// (e.g., a burst of fresh nonces), evict the oldest-expiring entries via LRU
+				// rather than clearing the entire cache. Clearing would allow a flood of fresh
+				// nonces to evict legitimate still-valid nonces and enable replay of those
+				// previously-seen nonces until their original expiry. LRU bounds memory while
+				// preserving replay-protection for the most recent legitimate traffic.
+				int over = seenNonces.Count - NonceCacheCapacity;
+				if (over > 0)
+				{
+					int target = Math.Max(over, NonceCacheCapacity / 4);
+					Log.Warning(LogChannel, $"Nonce cache exceeded {NonceCacheCapacity}; evicting {target} oldest entries.");
+					// Re-snapshot post-expiry. Use Array.Sort so we operate on a fully
+					// detached copy instead of an OrderBy enumerator over the live dict.
+					var liveSnapshot = seenNonces.ToArray();
+					Array.Sort(liveSnapshot, (a, b) => a.Value.CompareTo(b.Value));
+					int evictCount = Math.Min(target, liveSnapshot.Length);
+					for (int i = 0; i < evictCount; i++)
+					{
+						seenNonces.TryRemove(liveSnapshot[i].Key, out _);
+					}
 				}
 			}
-
-			// Hard cap: if we're still over capacity after the time-based sweep
-			// (e.g., a burst of fresh nonces), evict the oldest-expiring entries via LRU
-			// rather than clearing the entire cache. Clearing would allow a flood of fresh
-			// nonces to evict legitimate still-valid nonces and enable replay of those
-			// previously-seen nonces until their original expiry. LRU bounds memory while
-			// preserving replay-protection for the most recent legitimate traffic.
-			int over = seenNonces.Count - NonceCacheCapacity;
-			if (over > 0)
+			finally
 			{
-				int target = Math.Max(over, NonceCacheCapacity / 4);
-				Log.Warning(LogChannel, $"Nonce cache exceeded {NonceCacheCapacity}; evicting {target} oldest entries.");
-				var victims = seenNonces
-					.OrderBy(kv => kv.Value)
-					.Take(target)
-					.Select(kv => kv.Key)
-					.ToArray();
-				foreach (var key in victims)
-				{
-					seenNonces.TryRemove(key, out _);
-				}
+				System.Threading.Monitor.Exit(pruneLock);
 			}
+		}
+
+		/// <summary>
+		/// Normalises the request path so client and server produce the same canonical string.
+		/// Collapses repeated slashes and rejects any path-traversal segment (raw or percent-encoded).
+		/// Returns null if the path is unsafe.
+		/// </summary>
+		private static string? CanonicalizePath(string path)
+		{
+			if (string.IsNullOrEmpty(path)) return "/";
+			for (int i = 0; i < path.Length; i++)
+			{
+				char c = path[i];
+				if (c == '\0' || c == '\\') return null;
+			}
+			// Reject any traversal-style segment (literal or percent-encoded).
+			string[] segments = path.Split('/');
+			for (int i = 0; i < segments.Length; i++)
+			{
+				string seg = segments[i];
+				if (seg == ".." || seg == ".") return null;
+				if (seg.Equals("%2e", StringComparison.OrdinalIgnoreCase)) return null;
+				if (seg.Equals("%2e%2e", StringComparison.OrdinalIgnoreCase)) return null;
+				if (seg.Equals("%2e.", StringComparison.OrdinalIgnoreCase)) return null;
+				if (seg.Equals(".%2e", StringComparison.OrdinalIgnoreCase)) return null;
+			}
+			while (path.IndexOf("//", StringComparison.Ordinal) >= 0)
+			{
+				path = path.Replace("//", "/");
+			}
+			return path;
 		}
 
 		private static async Task Reject(HttpContext ctx, string reason)

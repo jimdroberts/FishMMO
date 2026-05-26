@@ -33,6 +33,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public float PulseRate => pulseRate;
 
 		/// <summary>
+		/// Token-signing HMAC key rotation interval in hours. When the active key has been in use
+		/// for longer than this, the next periodic pulse rotates it. Set to 0 to disable rotation.
+		/// </summary>
+		/// <remarks>
+		/// The DB layer (LoginServerSigningKeyService.UpsertAsync) deactivates the prior key but
+		/// retains it for verification of in-flight tokens (default 7-day grace window enforced by
+		/// DeleteAsync). Issued auth tokens carry the signing key ID inside their HMAC envelope,
+		/// so WorldServers and SceneServers continue to validate pre-rotation tokens via FetchByIdAsync
+		/// until those tokens expire or the grace window elapses, whichever is shorter.
+		/// </remarks>
+		[SerializeField] private float signingKeyRotationHours = 24.0f;
+
+		/// <summary>UTC timestamp when the currently active signing key was issued.</summary>
+		private DateTime _signingKeyIssuedUtc;
+
+		/// <summary>Guards against re-entrant rotation while a previous rotation is still in flight.</summary>
+		private int _rotationInFlight;
+
+		/// <summary>
 		/// Initializes the login server system, registers event handlers, and adds the server to the database.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -41,6 +60,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				Log.Error("LoginServerSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// H13: Disable core dumps and unprivileged ptrace as early as possible so subsequent
+			// allocations of TOTP/signing-key material are not exposed via /proc/<pid>/mem or core
+			// files. Failure is non-fatal on platforms without prctl (Windows, macOS).
+			if (ProcessHardening.TryDisableCoreDumpAndPtrace(out string hardeningStatus))
+			{
+				Log.Debug("LoginServerSystem", $"Process hardening: {hardeningStatus}");
+			}
+			else
+			{
+				Log.Warning("LoginServerSystem", $"Process hardening skipped: {hardeningStatus}");
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
@@ -120,18 +151,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Configure the authenticator for token issuance
+			_signingKeyIssuedUtc = DateTime.UtcNow;
 			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
 			{
 				authenticator.TokenSigningKey = hmacKey;
 				authenticator.LoginServerId = runtimeData.ID;
 				authenticator.TokenSigningKeyId = keyResult.Data.ID;
 
-				// Derive a TOTP master key from the HMAC signing key using HMAC-SHA256
-				// with a domain separator. This key encrypts TOTP secrets at rest in the DB.
+				// C7: Derive the TOTP master KEK through the KMS provider abstraction. The default
+				// LocalDeriveKmsProvider preserves the legacy HMAC-SHA256 behaviour; production
+				// deployments can register an external IKmsProvider via the service registry to
+				// keep the cleartext KEK off the application heap for the process lifetime.
 				byte[] totpMasterKey;
-				using (var kdf = new HMACSHA256(hmacKey))
+				using (var localKms = new LocalDeriveKmsProvider(hmacKey))
 				{
-					totpMasterKey = kdf.ComputeHash(Encoding.UTF8.GetBytes("fishmmo-totp-master-key-v1"));
+					totpMasterKey = localKms.DeriveKey("fishmmo-totp-master-key-v1");
 				}
 				authenticator.TotpMasterKey = totpMasterKey;
 
@@ -247,6 +281,82 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					Log.Warning("LoginServerSystem", "Failed to enqueue pulse work item.");
 				}
+
+				// C6: Token signing key rotation. Inspects the age of the in-memory active key and
+				// triggers an asynchronous rotation when it exceeds the configured interval. A single
+				// rotation may be in flight at a time (CAS-guarded by _rotationInFlight).
+				if (signingKeyRotationHours > 0f &&
+					(DateTime.UtcNow - _signingKeyIssuedUtc).TotalHours >= signingKeyRotationHours &&
+					System.Threading.Interlocked.CompareExchange(ref _rotationInFlight, 1, 0) == 0)
+				{
+					if (!TryEnqueueAsyncWork(() => RotateSigningKeyAsync(runtimeData.ID)))
+					{
+						System.Threading.Interlocked.Exchange(ref _rotationInFlight, 0);
+						Log.Warning("LoginServerSystem", "Failed to enqueue signing key rotation work item.");
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Rotates the token-signing HMAC key. Generates a fresh key, persists it to the DB (which
+		/// deactivates the prior key and starts the verification grace window), and atomically swaps
+		/// the in-memory key + key ID + derived TOTP master key on the authenticator. The prior
+		/// in-memory key buffer is intentionally NOT zero-filled here: signing operations on other
+		/// threads may hold transient references, so we release the reference and let GC reclaim it
+		/// once those calls drain. Zeroization of the live key still occurs on OnDeinitialize.
+		/// </summary>
+		private async Task RotateSigningKeyAsync(long serverId)
+		{
+			try
+			{
+				if (Server == null ||
+					Server.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var signingKeyService))
+				{
+					return;
+				}
+
+				byte[] newHmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
+				DatabaseResult<LoginServerSigningKeyData> keyResult = await signingKeyService.UpsertAsync(serverId, newHmacKey);
+				if (!keyResult.IsSuccess)
+				{
+					CryptographicOperations.ZeroMemory(newHmacKey);
+					await Log.Warning("LoginServerSystem", $"Signing key rotation persistence failed: {keyResult.ErrorMessage}");
+					return;
+				}
+
+				byte[] newTotpMasterKey;
+				using (var localKms = new LocalDeriveKmsProvider(newHmacKey))
+				{
+					newTotpMasterKey = localKms.DeriveKey("fishmmo-totp-master-key-v1");
+				}
+
+				if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
+				{
+					// Reference-typed property assignments are atomic; ordering: assign key first so any
+					// concurrent reader that sees the new ID also sees the matching key.
+					authenticator.TokenSigningKey = newHmacKey;
+					authenticator.TokenSigningKeyId = keyResult.Data.ID;
+					authenticator.TotpMasterKey = newTotpMasterKey;
+
+					if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem) &&
+						accountSystem is AccountCreationSystem concreteAccountSystem)
+					{
+						concreteAccountSystem.TotpMasterKey = newTotpMasterKey;
+					}
+				}
+
+				_signingKeyIssuedUtc = DateTime.UtcNow;
+				await Log.Debug("LoginServerSystem", $"Rotated token-signing key (ServerID={serverId}, NewKeyID={keyResult.Data.ID}).");
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("LoginServerSystem", $"Error during signing key rotation: {ex}");
+			}
+			finally
+			{
+				System.Threading.Interlocked.Exchange(ref _rotationInFlight, 0);
 			}
 		}
 

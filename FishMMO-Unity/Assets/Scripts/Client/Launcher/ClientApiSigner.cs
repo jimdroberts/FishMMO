@@ -63,11 +63,17 @@ namespace FishMMO.Client
 			if (string.IsNullOrEmpty(url)) throw new ArgumentException("url", nameof(url));
 
 			string path = ExtractPath(url);
+			// Cient must apply the same path normalization the
+			// server gate uses (CanonicalizePath in ClientGate.cs) or the HMAC
+			// will not validate. Throwing here is preferable to silently signing
+			// a path the server will reject after the round trip.
+			string canonicalPath = CanonicalizePath(path)
+				?? throw new ArgumentException("URL path failed canonicalization", nameof(url));
 			long ts = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
 			string nonce = GenerateNonce();
 			string methodUpper = method.ToUpperInvariant();
 
-			string canonical = Version + "\n" + methodUpper + "\n" + path + "\n" + ts.ToString() + "\n" + nonce;
+			string canonical = Version + "\n" + methodUpper + "\n" + canonicalPath + "\n" + ts.ToString() + "\n" + nonce;
 			byte[] secret = ClientApiSecret.GetBytes();
 			byte[] mac;
 			using (HMACSHA256 hmac = new HMACSHA256(secret))
@@ -106,6 +112,41 @@ namespace FishMMO.Client
 				}
 			}
 			return "/";
+		}
+
+		/// <summary>
+		/// Mirror of <c>ClientGate.CanonicalizePath</c>.
+		/// Both sides MUST apply the same normalization or the HMAC over the
+		/// canonical string will mismatch. Returns null for unsafe paths.
+		/// </summary>
+		private static string CanonicalizePath(string path)
+		{
+			if (string.IsNullOrEmpty(path)) return "/";
+			for (int i = 0; i < path.Length; i++)
+			{
+				char c = path[i];
+				if (c == '\0' || c == '\\') return null;
+			}
+			// Query string is preserved as-is at the end; only the path portion
+			// is segment-walked for traversal checks.
+			int q = path.IndexOf('?');
+			string pathOnly = q >= 0 ? path.Substring(0, q) : path;
+			string tail = q >= 0 ? path.Substring(q) : string.Empty;
+			string[] segments = pathOnly.Split('/');
+			for (int i = 0; i < segments.Length; i++)
+			{
+				string seg = segments[i];
+				if (seg == ".." || seg == ".") return null;
+				if (seg.Equals("%2e", StringComparison.OrdinalIgnoreCase)) return null;
+				if (seg.Equals("%2e%2e", StringComparison.OrdinalIgnoreCase)) return null;
+				if (seg.Equals("%2e.", StringComparison.OrdinalIgnoreCase)) return null;
+				if (seg.Equals(".%2e", StringComparison.OrdinalIgnoreCase)) return null;
+			}
+			while (pathOnly.IndexOf("//", StringComparison.Ordinal) >= 0)
+			{
+				pathOnly = pathOnly.Replace("//", "/");
+			}
+			return pathOnly + tail;
 		}
 
 		private static string GenerateNonce()

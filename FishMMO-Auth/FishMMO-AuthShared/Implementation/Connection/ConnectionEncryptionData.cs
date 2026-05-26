@@ -105,6 +105,21 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
+		/// Atomically consumes a contiguous receive-sequence range
+		/// <c>[baseSeq, baseSeq + count - 1]</c>. Use when a single logical message
+		/// spans multiple wire-level sequence numbers (e.g. multi-field encrypted
+		/// payloads) so that a partial failure cannot leave the counter advanced
+		/// part-way through.
+		/// </summary>
+		/// <param name="baseSeq">First sequence in the range.</param>
+		/// <param name="count">Number of consecutive sequences; must be &gt; 0.</param>
+		/// <returns><c>true</c> on success; <c>false</c> on duplicate/gap/exhaustion.</returns>
+		public bool TryConsumeReceiveSequenceRange(uint baseSeq, uint count)
+		{
+			return ReceiveNonceCtx!.TryConsumeSequenceRange(baseSeq, count);
+		}
+
+		/// <summary>
 		/// Builds a receive-direction nonce for a specific sequence number.
 		/// Use after <see cref="TryConsumeReceiveSequence"/> has validated the sequence.
 		/// </summary>

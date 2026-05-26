@@ -59,6 +59,29 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private float ipBlockDurationSeconds = 300.0f; // 5 minutes
 
 		/// <summary>
+		/// Maximum number of accounts that may be created
+		/// globally within a rolling one-hour window. Per-IP and per-connection
+		/// caps alone are bypassable by an attacker with a sufficiently large IP
+		/// pool (botnet, residential-proxy abuse). A global ceiling caps the
+		/// blast radius of automated registration floods regardless of IP
+		/// diversity. Set to a value that comfortably exceeds expected organic
+		/// growth; legitimate spikes (launch days, marketing pushes) should be
+		/// handled by raising this value, not by disabling it.
+		/// </summary>
+		[Tooltip("Global hourly account creation cap. Excess requests are rejected with ServerBusy.")]
+		[SerializeField] private int maxGlobalAccountCreationsPerHour = 1000;
+
+		/// <summary>
+		/// Lock-free sliding-window state for the global hourly cap. The hour
+		/// is identified by UTC hours-since-epoch; on tick-over the counter is
+		/// reset atomically. Uses Interlocked operations rather than a lock so
+		/// the hot path stays alloc-free under contention.
+		/// </summary>
+		private long _globalCreationsCurrentHourBucket = -1;
+		private int _globalCreationsCurrentHourCount = 0;
+		private readonly object _globalCreationsCounterLock = new object();
+
+		/// <summary>
 		/// Maximum number of queued main-thread response actions processed per frame.
 		/// This time-slices response dispatch to avoid frame spikes during heavy login waves.
 		/// </summary>
@@ -101,7 +124,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Maximum cumulative verification failures per username across all connections before
 		/// a temporary lockout. Prevents botnets from distributing brute-force across IPs.
-		/// Tightened from 10 → 5 (audit 2026-05): with a 900K-value 6-digit code space, 10
+		/// Tightened from 10 → 5: with a 900K-value 6-digit code space, 10
 		/// attempts gave attackers a non-trivial probability of success when combined with
 		/// even modest IP rotation. Five attempts is still enough headroom for a legitimate
 		/// user who fat-fingers the code a few times.
@@ -427,6 +450,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return EnqueueResult.RateLimited;
 			}
 
+			// Global hourly account-creation cap. Applied
+			// AFTER the per-IP rate-limit and BEFORE enqueue so an attacker
+			// rotating IPs still pays the per-IP delay AND consumes from a
+			// shared global budget. Failures here are reported as QueueFull
+			// (which maps to ServerBusy on the wire) to avoid disclosing the
+			// existence/threshold of the global cap to a probing attacker.
+			if (!TryConsumeGlobalCreationBudget(nowUtc))
+			{
+				return EnqueueResult.QueueFull;
+			}
+
 			// Try to enqueue to centralized async worker.
 			if (TryEnqueueAsyncWork(() => ProcessAccountCreationAsync(request), request.Connection.ClientId))
 			{
@@ -434,6 +468,38 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			return EnqueueResult.QueueFull;
+		}
+
+		/// <summary>
+		/// Atomically reserves one slot from the rolling
+		/// hourly global account-creation budget. Returns false if the budget
+		/// for the current hour is exhausted. A bucket identifier set to -1
+		/// (initial / disabled) is treated as "always allow" so the cap can be
+		/// hot-disabled by zeroing <see cref="maxGlobalAccountCreationsPerHour"/>.
+		/// </summary>
+		private bool TryConsumeGlobalCreationBudget(DateTime nowUtc)
+		{
+			int cap = maxGlobalAccountCreationsPerHour;
+			if (cap <= 0)
+			{
+				return true; // Cap disabled by configuration.
+			}
+
+			long currentBucket = (long)(nowUtc - DateTime.UnixEpoch).TotalHours;
+			lock (_globalCreationsCounterLock)
+			{
+				if (_globalCreationsCurrentHourBucket != currentBucket)
+				{
+					_globalCreationsCurrentHourBucket = currentBucket;
+					_globalCreationsCurrentHourCount = 0;
+				}
+				if (_globalCreationsCurrentHourCount >= cap)
+				{
+					return false;
+				}
+				_globalCreationsCurrentHourCount++;
+				return true;
+			}
 		}
 
 		/// <summary>
@@ -514,41 +580,37 @@ namespace FishMMO.Server.Implementation.LoginServer
 						uint seqSalt = seq - 1;
 						uint seqVerifier = seq;
 
-						// Consume and decrypt username
-						if (!request.EncryptionData.TryConsumeReceiveSequence(seqUsername))
-							throw new CryptographicException("Account creation username sequence out-of-order or duplicate.");
+						// Atomic 5-sequence consume. Either all five
+						// receive slots advance or none do; we never leave the counter
+						// mid-burst on a partial decrypt failure.
+						if (!request.EncryptionData.TryConsumeReceiveSequenceRange(seqUsername, 5))
+							throw new CryptographicException("Account creation sequence range out-of-order or duplicate.");
+
+						// Decrypt username
 						byte[] nonceU = request.EncryptionData.BuildReceiveNonce(seqUsername);
 						byte[] aadU = new byte[CryptoHelper.AadLength];
 						CryptoHelper.WriteAad(aadU, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqUsername);
 						decryptedUsername = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceU, request.EncryptedUsername, aadU);
 
-						// Consume and decrypt email
-						if (!request.EncryptionData.TryConsumeReceiveSequence(seqEmail))
-							throw new CryptographicException("Account creation email sequence out-of-order or duplicate.");
+						// Decrypt email
 						byte[] nonceE = request.EncryptionData.BuildReceiveNonce(seqEmail);
 						byte[] aadE = new byte[CryptoHelper.AadLength];
 						CryptoHelper.WriteAad(aadE, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqEmail);
 						decryptedEmail = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceE, request.EncryptedEmail, aadE);
 
-						// Consume and decrypt age
-						if (!request.EncryptionData.TryConsumeReceiveSequence(seqAge))
-							throw new CryptographicException("Account creation age sequence out-of-order or duplicate.");
+						// Decrypt age
 						byte[] nonceA = request.EncryptionData.BuildReceiveNonce(seqAge);
 						byte[] aadA = new byte[CryptoHelper.AadLength];
 						CryptoHelper.WriteAad(aadA, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqAge);
 						decryptedAge = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceA, request.EncryptedAge, aadA);
 
-						// Consume and decrypt salt
-						if (!request.EncryptionData.TryConsumeReceiveSequence(seqSalt))
-							throw new CryptographicException("Account creation salt sequence out-of-order or duplicate.");
+						// Decrypt salt
 						byte[] nonceS = request.EncryptionData.BuildReceiveNonce(seqSalt);
 						byte[] aadS = new byte[CryptoHelper.AadLength];
 						CryptoHelper.WriteAad(aadS, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqSalt);
 						decryptedSalt = CryptoHelper.DecryptAES(request.EncryptionData.ClientToServerKey, nonceS, request.EncryptedSalt, aadS);
 
-						// Consume and decrypt verifier
-						if (!request.EncryptionData.TryConsumeReceiveSequence(seqVerifier))
-							throw new CryptographicException("Account creation verifier sequence out-of-order or duplicate.");
+						// Decrypt verifier
 						byte[] nonceV = request.EncryptionData.BuildReceiveNonce(seqVerifier);
 						byte[] aadV = new byte[CryptoHelper.AadLength];
 						CryptoHelper.WriteAad(aadV, (byte)CryptoHelper.AuthMessageType.CreateAccount, request.EncryptionData.AgreedVersion, seqVerifier);
@@ -759,7 +821,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 									var codeHashes = new List<string>(recoveryCodes.Length);
 									foreach (string code in recoveryCodes)
 									{
-										codeHashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(code));
+										codeHashes.Add(CryptoHelper.TwoFactor.HashRecoveryCode(username, code));
 									}
 									if (Server.Database.ServiceRegistry.TryGet<ITwoFactorRecoveryCodeService>(out var recoveryCodeService))
 									{
@@ -1268,15 +1330,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 						uint seqUsername = seq - 1;
 						uint seqCode = seq;
 
-						if (!encryptionData.TryConsumeReceiveSequence(seqUsername))
-							throw new CryptographicException("Account verify username sequence out-of-order or duplicate.");
+						// Atomic 2-sequence consume.
+						if (!encryptionData.TryConsumeReceiveSequenceRange(seqUsername, 2))
+							throw new CryptographicException("Account verify sequence range out-of-order or duplicate.");
+
 						byte[] nonceU = encryptionData.BuildReceiveNonce(seqUsername);
 						byte[] aadU = new byte[CryptoHelper.AadLength];
 						CryptoHelper.WriteAad(aadU, (byte)CryptoHelper.AuthMessageType.AccountVerify, encryptionData.AgreedVersion, seqUsername);
 						decryptedUsername = CryptoHelper.DecryptAES(encryptionData.ClientToServerKey, nonceU, encryptedUsername, aadU);
 
-						if (!encryptionData.TryConsumeReceiveSequence(seqCode))
-							throw new CryptographicException("Account verify code sequence out-of-order or duplicate.");
 						byte[] nonceC = encryptionData.BuildReceiveNonce(seqCode);
 						byte[] aadC = new byte[CryptoHelper.AadLength];
 						CryptoHelper.WriteAad(aadC, (byte)CryptoHelper.AuthMessageType.AccountVerify, encryptionData.AgreedVersion, seqCode);

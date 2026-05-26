@@ -184,10 +184,51 @@ namespace FishMMO.Auth.Implementation
 			_ = SrpService.GetStaticFakeData();
 
 			var fakeData = SrpService.GetStaticFakeData();
-			string testDerivedSalt = SrpService.DerivePerUsernameFakeSalt("__startup_length_check__", fakeSaltKey);
-			if (testDerivedSalt.Length != fakeData.Salt.Length)
-				_ = Log.Error(LogPrefix, $"Fake salt length mismatch — DerivePerUsernameFakeSalt produced {testDerivedSalt.Length} chars, FakeSrpTuple.Salt is {fakeData.Salt.Length} chars. " +
-					"This would create a ciphertext-size oracle leaking account existence.");
+
+			// The fake salt MUST be exactly the same length and character set
+			// as a real SRP verifier salt (128-char lowercase hex). A mismatch on either count creates
+			// a ciphertext-size or charset oracle that lets an unauthenticated probe distinguish
+			// existing from non-existing accounts. Probe a representative set of usernames covering
+			// extremes (very short, very long, single-character, all-digit) so a regression that
+			// depends on input length or content surfaces at startup rather than via a covert
+			// timing side-channel in production.
+			string[] probeUsernames = new[]
+			{
+				"__startup_length_check__",
+				"a",
+				"ab",
+				"abc",
+				"x",
+				"0",
+				"longuser_name_123",
+				"verylongusernameforprobetesting_padding_padding_padding"
+			};
+
+			int expectedLength = fakeData.Salt.Length;
+			foreach (string probe in probeUsernames)
+			{
+				string derived = SrpService.DerivePerUsernameFakeSalt(probe, fakeSaltKey);
+				if (derived == null || derived.Length != expectedLength)
+				{
+					string msg = $"Fake salt length mismatch \u2014 DerivePerUsernameFakeSalt(\"{probe}\") produced {derived?.Length ?? -1} chars, expected {expectedLength}. " +
+						"This would create a ciphertext-size oracle leaking account existence.";
+					_ = Log.Error(LogPrefix, msg);
+					throw new InvalidOperationException(msg);
+				}
+				// Charset: lowercase hex digits only. Any other character (uppercase, punctuation,
+				// whitespace) likewise leaks via the encoded response.
+				for (int i = 0; i < derived.Length; i++)
+				{
+					char c = derived[i];
+					bool isHex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+					if (!isHex)
+					{
+						string msg = $"Fake salt charset violation \u2014 DerivePerUsernameFakeSalt(\"{probe}\") produced non-lowercase-hex char '{c}' at index {i}.";
+						_ = Log.Error(LogPrefix, msg);
+						throw new InvalidOperationException(msg);
+					}
+				}
+			}
 
 			totpSemaphore = new SemaphoreSlim(MaxConcurrentTotpVerifications, MaxConcurrentTotpVerifications);
 

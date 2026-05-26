@@ -29,6 +29,21 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Maximum accepted byte length for an encrypted token payload.</summary>
 		private const int MaxTokenPayloadBytes = 2048;
 
+		/// <summary>
+		/// Process-lifetime random HMAC key used to equalize timing when a token's claimed
+		/// signing key cannot be resolved. Initialized once at type load — never zeroed and
+		/// never used to sign real tokens.
+		/// </summary>
+		private static readonly byte[] StaticDummyHmacKey = GenerateStaticDummyHmacKey();
+
+		private static byte[] GenerateStaticDummyHmacKey()
+		{
+			byte[] buf = new byte[CryptoHelper.HmacKeyLength];
+			using (var rng = RandomNumberGenerator.Create())
+				rng.GetBytes(buf);
+			return buf;
+		}
+
 		#endregion
 
 		#region Fields
@@ -184,11 +199,14 @@ namespace FishMMO.Auth.Implementation
 				bool keyFound = hmacKey != null;
 				RefreshAuthTtl(conn);
 
+				// Use a process-lifetime static dummy HMAC key for the
+				// "key not found" timing-equalization path rather than allocating a fresh RNG
+				// buffer per request. The value of the dummy key is irrelevant — only its
+				// presence (so HMAC verify runs to equalize timing) and length matter, and a
+				// reused buffer eliminates per-request RNG and GC pressure on a hot failure path.
 				if (!keyFound)
 				{
-					hmacKey = new byte[CryptoHelper.HmacKeyLength];
-					using (var rng = RandomNumberGenerator.Create())
-						rng.GetBytes(hmacKey);
+					hmacKey = StaticDummyHmacKey;
 				}
 
 				TokenService.TokenVerifyResult verifyResult;
@@ -198,7 +216,13 @@ namespace FishMMO.Auth.Implementation
 				}
 				finally
 				{
-					CryptographicOperations.ZeroMemory(hmacKey);
+					// Only zero a real signing key. The static dummy is shared across requests
+					// and must not be zero-filled — that would corrupt subsequent verifications
+					// and defeat the timing-equalization guarantee.
+					if (keyFound && hmacKey != null)
+					{
+						CryptographicOperations.ZeroMemory(hmacKey);
+					}
 					hmacKey = null;
 				}
 				CryptographicOperations.ZeroMemory(rawToken);
