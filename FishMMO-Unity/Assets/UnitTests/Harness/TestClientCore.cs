@@ -226,6 +226,9 @@ namespace FishMMO.UnitTests.Harness
 		{
 			AuthTestTrace.Log("Client", "Disconnect");
 			WasDisconnected = true;
+			// Complete the TCS so Drive() / DriveLogin() don't hang when the client
+			// self-disconnects (e.g., decryption failure) before an auth result arrives.
+			AuthResultTcs.TrySetResult(ClientAuthenticationResult.ServerBusy);
 		}
 
 		protected override void OnAuthResultCallback(ClientAuthenticationResult result)

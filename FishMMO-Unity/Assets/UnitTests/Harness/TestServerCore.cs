@@ -52,7 +52,8 @@ namespace FishMMO.UnitTests.Harness
 		#region BaseAuthenticatorCore<int> abstracts
 
 		protected override bool IsConnectionAuthenticated(int conn) => false;
-		protected override string GetConnectionAddress(int conn) => "127.0.0.1";
+		protected override string GetConnectionAddress(int conn) => $"127.0.0.{conn}";
+		protected override float AccountVerifyDebounceSeconds => 0f;
 		protected override int GetConnectionClientId(int conn) => conn;
 
 		protected override void BroadcastCookieChallenge(int conn, byte[] cookie)

@@ -44,8 +44,9 @@ namespace FishMMO.Auth.Implementation
 		private const float KickRequestDebounceSeconds = 10f;
 		/// <summary>Minimum seconds between SRP auth attempts from the same IP address.</summary>
 		private const float IpAuthAttemptDebounceSeconds = 1f;
-		/// <summary>Minimum seconds between account-verify debounce entries for the same identifier.</summary>
-		private const float AccountVerifyDebounceSeconds = 2f;
+		/// <summary>Minimum seconds between account-verify debounce entries for the same identifier.
+		/// Override to 0 in test subclasses to disable per-username rate limiting between sessions.</summary>
+		protected virtual float AccountVerifyDebounceSeconds => 2f;
 		/// <summary>Maximum entries in the per-account verify debounce tracker before new entries are rejected.</summary>
 		private const int MaxAccountVerifyDebounceEntries = 50_000;
 

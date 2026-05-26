@@ -303,6 +303,15 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
+			// Reject the X25519 all-zero (identity/low-order) point — an all-zero public key
+			// always yields an all-zero shared secret regardless of the server's private key
+			// (RFC 7748 §6.1), breaking ECDH forward secrecy entirely.
+			if (IsAllZeroX25519Key(publicKey))
+			{
+				DisconnectConnection(conn, graceful: true);
+				return;
+			}
+
 			// ── Phase 1: Cookie challenge ────────────────────────────────
 			if (cookie == null)
 			{
@@ -493,6 +502,23 @@ namespace FishMMO.Auth.Implementation
 		protected virtual string ResolveRateLimitKey(TConnection conn)
 		{
 			return HandshakeService.NormalizeIp(GetConnectionAddress(conn));
+		}
+
+		#endregion
+
+		#region Static Helpers
+
+		/// <summary>
+		/// Returns <c>true</c> if every byte in <paramref name="key"/> is zero.
+		/// Used to detect the X25519 identity (all-zero / low-order) point, which
+		/// always produces an all-zero shared secret regardless of the other party's
+		/// private key (RFC 7748 §6.1).
+		/// </summary>
+		private static bool IsAllZeroX25519Key(byte[] key)
+		{
+			for (int i = 0; i < key.Length; i++)
+				if (key[i] != 0) return false;
+			return true;
 		}
 
 		#endregion
