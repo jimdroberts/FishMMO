@@ -98,6 +98,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) && worldData.IsLocked)
 			{
+				loginAttemptByAccount.Remove(username);
 				return ClientAuthenticationResult.ServerFull;
 			}
 
@@ -114,12 +115,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			int recentCount = CountRecentAdmissions(DateTime.UtcNow);
 			if ((long)sceneCount + recentCount >= MaxPlayers)
 			{
+				loginAttemptByAccount.Remove(username);
 				return ClientAuthenticationResult.ServerFull;
 			}
 
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 			{
+				loginAttemptByAccount.Remove(username);
 				return ClientAuthenticationResult.ServerBusy;
 			}
 
@@ -127,6 +130,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(username, selected: true);
 			if (!fetchResult.IsSuccess)
 			{
+				loginAttemptByAccount.Remove(username);
 				return ClientAuthenticationResult.ServerBusy;
 			}
 
@@ -139,6 +143,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}
 
+			// No selected character: don't penalise the user with a 1 s debounce on a
+			// terminal failure they cannot fix without going to character selection first.
+			loginAttemptByAccount.Remove(username);
 			return ClientAuthenticationResult.NoCharacterSelected;
 		}
 

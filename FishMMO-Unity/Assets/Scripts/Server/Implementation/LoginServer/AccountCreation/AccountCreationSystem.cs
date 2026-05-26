@@ -293,6 +293,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 					"connection establishment. On a direct-Internet listener an attacker can bypass " +
 					"per-IP throttling by simply reconnecting. Disable this unless you have a proxy in front.");
 			}
+
+			// Operational warning: the global hourly account-creation cap is a primary
+			// DoS shield. Zero/negative values intentionally disable it (see
+			// TryConsumeGlobalCreationBudget) so it can be hot-toggled, but a config
+			// typo that leaves it disabled in production is a serious foot-gun. Surface
+			// this loudly at startup so it cannot pass code review unnoticed.
+			if (maxGlobalAccountCreationsPerHour <= 0)
+			{
+				Log.Warning("AccountCreationSystem",
+					$"maxGlobalAccountCreationsPerHour={maxGlobalAccountCreationsPerHour}: " +
+					"the global account-creation DoS cap is DISABLED. Account creation is now " +
+					"limited only by per-IP throttles, which a distributed attacker can bypass. " +
+					"Set a positive value (recommended: >=100) in production.");
+			}
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -784,7 +798,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 							// after maxFailedAttempts (default 5). The code is single-use and expires
 							// via DB-level TTL, so the effective attack window is narrow.
 							int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
-							DatabaseResult verifyResult = await accountService.PersistVerifyCodeAsync(username, verifyCode);
+							// 24 hour TTL: long enough for users to act on the verification email
+							// across timezones / spam-folder triage, short enough that an exposed
+							// code cannot be re-used indefinitely.
+							DateTime verifyExpiresUtc = DateTime.UtcNow.AddHours(24);
+							DatabaseResult verifyResult = await accountService.PersistVerifyCodeAsync(username, verifyCode, verifyExpiresUtc);
 							if (!verifyResult.IsSuccess)
 							{
 								await Log.Warning("AccountCreationSystem", $"PersistVerifyCodeAsync DB error for user '{username}': {verifyResult.ErrorCode} - {verifyResult.ErrorMessage}");
@@ -1399,7 +1417,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 						// TryRemove(KeyValuePair) overload so an expired entry is only
 						// evicted if no concurrent thread has updated it in the meantime
 						// — prevents losing a fresh failure counter to a stale eviction.
-						string userKey = username.ToLowerInvariant();
+						// Use NFKC + invariant-case normalisation so confusable Unicode
+						// usernames cannot bypass the per-username lockout.
+						string userKey = Authentication.NormalizeAccountLookup(username);
 						if (verifyUsernameFailures.TryGetValue(userKey, out var failInfo))
 						{
 							if (DateTime.UtcNow - failInfo.FirstFailure > VerifyUsernameLockoutDuration)
@@ -1504,8 +1524,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private void TrackVerifyUsernameFailure(string username)
 		{
-			string failKey = username?.ToLowerInvariant();
-			if (failKey == null)
+			string failKey = Authentication.NormalizeAccountLookup(username);
+			if (string.IsNullOrEmpty(failKey))
 				return;
 
 			// Hard cap: reject new entries when the tracker is full to prevent

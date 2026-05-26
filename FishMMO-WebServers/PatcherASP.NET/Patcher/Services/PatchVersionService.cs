@@ -92,22 +92,35 @@ public class PatchVersionService : IDisposable
 
 	private void ScheduleReindex()
 	{
-		// Debounce so a multi-file copy or atomic-replace burst triggers one reindex.
-		_debounceTimer ??= new Timer(_ =>
+		// Use CompareExchange so two FileSystemWatcher callbacks racing on the very
+		// first event can never construct two Timers (and leak the loser). After the timer
+		// exists, the cheap Change() call is safe to race on — Timer.Change is thread-safe.
+		Timer? existing = _debounceTimer;
+		if (existing == null)
 		{
-			lock (_reindexLock)
+			var created = new Timer(_ =>
 			{
-				try
+				lock (_reindexLock)
 				{
-					InitializeLatestVersion();
+					try
+					{
+						InitializeLatestVersion();
+					}
+					catch (Exception ex)
+					{
+						Log.Error("PatchVersionService", $"Reindex failed: {ex.Message}");
+					}
 				}
-				catch (Exception ex)
-				{
-					Log.Error("PatchVersionService", $"Reindex failed: {ex.Message}");
-				}
+			}, null, Timeout.Infinite, Timeout.Infinite);
+
+			Timer? prior = Interlocked.CompareExchange(ref _debounceTimer, created, null);
+			if (prior != null)
+			{
+				// Lost the race; drop the duplicate.
+				created.Dispose();
 			}
-		}, null, Timeout.Infinite, Timeout.Infinite);
-		_debounceTimer.Change(TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+		}
+		_debounceTimer!.Change(TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
 	}
 
 	public void Dispose()

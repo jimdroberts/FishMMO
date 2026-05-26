@@ -93,6 +93,12 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int VerifyCode { get; set; }
 
 		/// <summary>
+		/// UTC expiry timestamp for <see cref="VerifyCode"/>. Once exceeded, the code is
+		/// considered invalid and must be regenerated. Null while no verification is pending.
+		/// </summary>
+		public DateTime? VerifyCodeExpiresUtc { get; set; }
+
+		/// <summary>
 		/// Account creation timestamp (UTC).
 		/// </summary>
 		public DateTime TimeCreated { get; set; }

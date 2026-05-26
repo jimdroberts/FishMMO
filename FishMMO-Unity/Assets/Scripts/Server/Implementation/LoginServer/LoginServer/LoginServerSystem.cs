@@ -52,6 +52,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private int _rotationInFlight;
 
 		/// <summary>
+		/// 32-byte AES-256 KEK used by <see cref="KeyEnvelope"/> to wrap signing-key material before
+		/// it is written to the database. Loaded once from configuration in <see cref="InitializeOnce"/>.
+		/// </summary>
+		private byte[] _signingKeyKek;
+
+		/// <summary>
 		/// Initializes the login server system, registers event handlers, and adds the server to the database.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -133,8 +139,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			byte[] hmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
 
+			// Load the deployment-shared KEK and wrap the signing key before persistence.
+			// A DB-only attacker (read or write) cannot recover or forge usable signing keys
+			// without also possessing the KEK, which is provisioned out-of-band.
+			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out _signingKeyKek, out string kekError))
+			{
+				Log.Error("LoginServerSystem", $"Cannot persist signing key: {kekError}");
+				CryptographicOperations.ZeroMemory(hmacKey);
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			byte[] wrappedHmacKey = KeyEnvelope.Wrap(_signingKeyKek, hmacKey, SigningKeyKekProvider.BuildAad(runtimeData.ID));
+
 			Task<DatabaseResult<LoginServerSigningKeyData>> keyTask = Task.Run(() =>
-				signingKeyService.UpsertAsync(runtimeData.ID, hmacKey));
+				signingKeyService.UpsertAsync(runtimeData.ID, wrappedHmacKey));
 
 			if (!keyTask.Wait(dbRegistrationTimeoutMs))
 			{
@@ -233,6 +251,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 				concreteAccountSystem.TotpMasterKey = null;
 			}
 
+			// Zero the deployment signing-key KEK so a post-shutdown core dump cannot recover it.
+			if (this._signingKeyKek != null)
+			{
+				CryptographicOperations.ZeroMemory(this._signingKeyKek);
+				this._signingKeyKek = null;
+			}
+
 			// Deregister login server and signing key from database on shutdown
 			if (Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData) &&
 				runtimeData.ID > 0 &&
@@ -318,7 +343,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 
 				byte[] newHmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
-				DatabaseResult<LoginServerSigningKeyData> keyResult = await signingKeyService.UpsertAsync(serverId, newHmacKey);
+
+				// Wrap the rotated key under the deployment KEK before persistence. If the
+				// KEK is not yet loaded (rotation racing init) we fail closed and retry on the
+				// next tick rather than silently writing a plaintext key.
+				if (_signingKeyKek == null)
+				{
+					CryptographicOperations.ZeroMemory(newHmacKey);
+					await Log.Warning("LoginServerSystem", "Signing key rotation aborted: KEK not loaded.");
+					return;
+				}
+				byte[] wrappedNewHmacKey = KeyEnvelope.Wrap(_signingKeyKek, newHmacKey, SigningKeyKekProvider.BuildAad(serverId));
+				DatabaseResult<LoginServerSigningKeyData> keyResult = await signingKeyService.UpsertAsync(serverId, wrappedNewHmacKey);
 				if (!keyResult.IsSuccess)
 				{
 					CryptographicOperations.ZeroMemory(newHmacKey);

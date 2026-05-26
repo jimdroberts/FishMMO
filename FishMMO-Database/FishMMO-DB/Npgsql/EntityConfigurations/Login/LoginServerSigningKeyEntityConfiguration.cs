@@ -22,14 +22,24 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.LoginServerId)
 				.IsRequired();
 
+			// xmin concurrency token — PostgreSQL system column updated on every row change.
+			builder.Property(e => e.Version)
+				.HasColumnName("xmin")
+				.HasColumnType("xid")
+				.ValueGeneratedOnAddOrUpdate()
+				.IsConcurrencyToken();
+
 			builder.HasIndex(e => e.LoginServerId);
 
 			builder.HasIndex(e => new { e.LoginServerId, e.TimeCreated, e.ID });
 
-			// HMAC-SHA256 key (32 bytes)
+			// Stored signing key. Either a raw 32-byte HMAC-SHA256 key (legacy) or an
+			// AEAD-wrapped sealed blob (see FishMMO.Auth.Implementation.KeyEnvelope) when
+			// the deployment KEK is configured. Length is generous to accommodate the
+			// envelope header + nonce + ciphertext + tag without future migrations.
 			builder.Property(e => e.HmacKey)
 				.IsRequired()
-				.HasMaxLength(64);
+				.HasMaxLength(256);
 
 			// Rotation lifecycle metadata.
 			builder.Property(e => e.IsActive)
@@ -42,8 +52,12 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.RotatedAtUtc);
 
-			// Partial index supports the "current active key per login server" hot path.
+			// Partial UNIQUE index supports the "current active key per login server" hot path.
+			// Uniqueness on (login_server_id) WHERE is_active=true forces concurrent rotations
+			// to serialise at the DB level — a second active-row insert from a racing rotation
+			// is rejected by PostgreSQL, which the rotation transaction then handles cleanly.
 			builder.HasIndex(e => new { e.LoginServerId, e.IsActive })
+				.IsUnique()
 				.HasFilter("is_active = true");
 
 			// Used by rotation pruning to find old inactive keys safe to delete.

@@ -19,10 +19,19 @@ namespace FishMMO.WebServer
 			await Log.Initialize("logging.json");
 			await Log.Info("Program", "Starting WebServer application...");
 
-			CreateHostBuilder(args).Build().Run();
-
-			await Log.Shutdown();
-			await Log.Info("Program", "WebServer application shut down.");
+			try
+			{
+				CreateHostBuilder(args).Build().Run();
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("Program", $"Host terminated unexpectedly: {ex.Message}");
+			}
+			finally
+			{
+				await Log.Info("Program", "WebServer application shut down.");
+				await Log.Shutdown();
+			}
 		}
 
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
@@ -36,7 +45,12 @@ namespace FishMMO.WebServer
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
 						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8090";
-						options.ListenLocalhost(int.Parse(httpPort));
+						// Refuse to start on a malformed port rather than crashing inside Parse.
+						if (!int.TryParse(httpPort, out int port) || port <= 0 || port > 65535)
+						{
+							throw new InvalidOperationException($"WebServer:HttpPort '{httpPort}' is not a valid TCP port.");
+						}
+						options.ListenLocalhost(port);
 						// Hardening: the patcher only serves GETs (latest_version + patch download);
 						// no legitimate client uploads a body. Cap at 16 KiB.
 						options.Limits.MaxRequestBodySize = 16 * 1024;
@@ -123,6 +137,13 @@ namespace FishMMO.WebServer
 					})
 					.Configure((context, app) =>
 					{
+						app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
+						{
+							ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+							ctx.Response.ContentType = "text/plain";
+							await ctx.Response.WriteAsync("Internal Server Error");
+						}));
+
 						app.UseForwardedHeaders();
 						UseSecurityHeaders(app, context.HostingEnvironment);
 						// Client gate runs BEFORE the rate limiter so forged requests
@@ -191,6 +212,10 @@ namespace FishMMO.WebServer
 						h["Referrer-Policy"] = "no-referrer";
 					if (!h.ContainsKey("X-Frame-Options"))
 						h["X-Frame-Options"] = "DENY";
+					if (!h.ContainsKey("Permissions-Policy"))
+						h["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()";
+					if (!h.ContainsKey("Cross-Origin-Resource-Policy"))
+						h["Cross-Origin-Resource-Policy"] = "same-origin";
 					if (exposeDiagnostics)
 					{
 						h["X-Server-Version"] = serverVersion;

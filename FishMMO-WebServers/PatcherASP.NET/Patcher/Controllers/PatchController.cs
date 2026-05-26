@@ -181,7 +181,26 @@ public class PatchController : ControllerBase
 				return StatusCode(500, "Patch artifact is no longer available.");
 			}
 
-			var fileStream = new FileStream(entry.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+			// Reject symlinks/junctions. An attacker who can drop a symlink into the
+			// patches directory but cannot replace the underlying file could otherwise
+			// pivot the open() onto an arbitrary path (e.g. /etc/passwd). The patch
+			// indexer only registers real regular files; a symlink at serve-time means
+			// the tree has been tampered with since the last index.
+			if ((info.Attributes & System.IO.FileAttributes.ReparsePoint) != 0)
+			{
+				Log.Error("PatchController", $"Refusing to serve '{entry.FullPath}': symlink/junction not allowed.");
+				return StatusCode(500, "Patch artifact path failed sanity checks.");
+			}
+
+			// SequentialScan: this is a single linear download; hint to the OS to drop
+			// pages aggressively rather than pollute the page cache.
+			var fileStream = new FileStream(
+				entry.FullPath,
+				FileMode.Open,
+				FileAccess.Read,
+				FileShare.Read,
+				4096,
+				FileOptions.Asynchronous | FileOptions.SequentialScan);
 			Response.Headers["X-Patch-Sha256"] = entry.Sha256Hex;
 			Response.Headers["X-Patch-Size"] = entry.Size.ToString();
 			Response.Headers["ETag"] = "\"" + entry.Sha256Hex + "\"";

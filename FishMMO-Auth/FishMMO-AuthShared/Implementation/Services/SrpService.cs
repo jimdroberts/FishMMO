@@ -60,10 +60,17 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>Hex-encoded fake salt string, or the static fake salt if the key is unavailable.</returns>
 		public static string DerivePerUsernameFakeSalt(string username, byte[] fakeSaltKey)
 		{
-			if (fakeSaltKey == null || fakeSaltKey.Length < CryptoHelper.HmacSha512KeyLength)
+			// We require an exact-length key for two reasons: (1) HMAC-SHA512 hashes any key
+			// longer than its block size (128 bytes) down via SHA-512 first, so accepting an
+			// over-long key silently changes the derivation domain and would let two keys
+			// produce the same fake-salt mapping; (2) a too-short key is a misconfiguration —
+			// the audit-time invariant is that the operator provisioned a freshly-generated
+			// 64-byte key. Reject anything else loudly so misconfiguration cannot silently
+			// degrade per-username fake-salt uniqueness.
+			if (fakeSaltKey == null || fakeSaltKey.Length != CryptoHelper.HmacSha512KeyLength)
 				throw new ArgumentException(
-					$"fakeSaltKey must be at least {CryptoHelper.HmacSha512KeyLength} bytes. " +
-					"A missing or short key indicates server misconfiguration.",
+					$"fakeSaltKey must be exactly {CryptoHelper.HmacSha512KeyLength} bytes. " +
+					"A missing, short, or oversize key indicates server misconfiguration.",
 					nameof(fakeSaltKey));
 			using (var hmac = new HMACSHA512(fakeSaltKey))
 			{

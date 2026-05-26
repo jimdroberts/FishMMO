@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace FishMMO.Shared
@@ -87,6 +88,24 @@ namespace FishMMO.Shared
 			guildName.Length >= GuildNameMinLength &&
 			guildName.Length <= MaxGuildNameLength &&
 			GuildNameRegex.IsMatch(guildName);
+
+		/// <summary>
+		/// Produces the canonical lookup form of an account name for case-insensitive comparisons
+		/// against the persisted <c>name_lowercase</c> column and any in-memory rate-limit /
+		/// lockout dictionaries keyed by username. Trims leading/trailing whitespace, applies
+		/// Unicode NFKC normalisation so visually-equivalent confusables collapse, and
+		/// lower-cases under the invariant culture so e.g. a Turkish locale cannot bypass a
+		/// lockout via <c>I</c> vs <c>i</c> mapping. Returns the empty string for null input so
+		/// callers do not need null-guards.
+		/// </summary>
+		public static string NormalizeAccountLookup(string accountName)
+		{
+			if (string.IsNullOrEmpty(accountName))
+			{
+				return string.Empty;
+			}
+			return accountName.Trim().Normalize(NormalizationForm.FormKC).ToLowerInvariant();
+		}
 
 		/// <summary>
 		/// Validates an IP Address, Hostname, or URI.

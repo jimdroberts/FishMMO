@@ -18,6 +18,13 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.ID)
 				.ValueGeneratedOnAdd();
 
+			// xmin concurrency token — PostgreSQL system column updated on every row change.
+			builder.Property(e => e.Version)
+				.HasColumnName("xmin")
+				.HasColumnType("xid")
+				.ValueGeneratedOnAddOrUpdate()
+				.IsConcurrencyToken();
+
 			// TokenHash — SHA-256 hex of the signed token blob, unique for lookups
 			builder.Property(e => e.TokenHash)
 				.IsRequired()

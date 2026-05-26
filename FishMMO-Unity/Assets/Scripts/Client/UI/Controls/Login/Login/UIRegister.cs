@@ -75,6 +75,15 @@ namespace FishMMO.Client
 		private string pendingVerifyUsername;
 
 		/// <summary>
+		/// Absolute path of the on-disk copy of the 2FA setup payload (OTPAuth URI + recovery
+		/// codes) written during the registration flow. Tracked here so every terminal exit
+		/// from the flow (success, cancel, disconnect, server error) can scrub the file. The
+		/// payload is recoverable from server-side state until first-login is complete, so
+		/// keeping it on disk past the registration session is pure liability.
+		/// </summary>
+		private string savedTwoFactorSetupPath;
+
+		/// <summary>
 		/// Called when the client is set. Subscribes to connection and authentication events.
 		/// </summary>
 		public override void OnClientSet()
@@ -102,6 +111,7 @@ namespace FishMMO.Client
 			base.OnQuitToLogin();
 
 			pendingVerifyUsername = null;
+			DeleteSavedTwoFactorSetupFile();
 			ClearAllFields();
 			SetFormLocked(false);
 		}
@@ -127,6 +137,7 @@ namespace FishMMO.Client
 				StatusMessage.text = "";
 				SetFormLocked(false);
 				pendingVerifyUsername = null;
+				DeleteSavedTwoFactorSetupFile();
 			}
 		}
 
@@ -197,17 +208,25 @@ namespace FishMMO.Client
 
 			// Save recovery codes and otpauth URI to disk immediately so the user
 			// has a persistent copy even if they close the dialog or lose the codes.
+			// The file is best-effort: any failure here is non-fatal because the
+			// codes are also shown in the dialog. The path is tracked in
+			// savedTwoFactorSetupPath so every terminal exit from this flow can
+			// delete it — leaving the file behind would expose recovery codes to
+			// any local process that can read the persistent data folder.
 			string savePath = Path.Combine(Application.persistentDataPath, $"2fa_setup_{pendingVerifyUsername}.txt");
 			try
 			{
 				string saveContent = $"OTPAuth URI:\n{otpauthUri}\n\nRecovery Codes:\n{string.Join("\n", recoveryCodes)}\n";
 				File.WriteAllText(savePath, saveContent);
+				TryRestrictTwoFactorSetupFilePermissions(savePath);
+				savedTwoFactorSetupPath = savePath;
 				Log.Info("UIRegister", $"2FA setup data saved to: {savePath}");
 			}
 			catch (System.Exception ex)
 			{
 				Log.Warning("UIRegister", $"Failed to save 2FA setup data: {ex.Message}");
 				savePath = null;
+				savedTwoFactorSetupPath = null;
 			}
 
 			string codesDisplay = string.Join("\n", recoveryCodes);
@@ -216,7 +235,9 @@ namespace FishMMO.Client
 				otpauthUri + "\n\n" +
 				"Recovery Codes (save these somewhere safe!):\n\n" +
 				codesDisplay + "\n\n" +
-				(savePath != null ? $"Saved to: {savePath}\n\n" : "") +
+				(savePath != null
+					? $"A temporary copy was written to:\n{savePath}\n(It will be deleted once registration completes.)\n\n"
+					: "") +
 				"Press Confirm to continue to email verification.";
 
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
@@ -230,6 +251,7 @@ namespace FishMMO.Client
 					() =>
 					{
 						pendingVerifyUsername = null;
+						DeleteSavedTwoFactorSetupFile();
 						Client.ForceDisconnect();
 						SetFormLocked(false);
 						if (UIManager.TryGet("UILogin", out UILogin uiLogin))
@@ -259,6 +281,7 @@ namespace FishMMO.Client
 					() =>
 					{
 						pendingVerifyUsername = null;
+						DeleteSavedTwoFactorSetupFile();
 						Client.ForceDisconnect();
 						SetFormLocked(false);
 						if (UIManager.TryGet("UILogin", out UILogin uiLogin))
@@ -275,6 +298,7 @@ namespace FishMMO.Client
 		private void OnAccountVerified()
 		{
 			pendingVerifyUsername = null;
+			DeleteSavedTwoFactorSetupFile();
 			Client.ForceDisconnect();
 			SetFormLocked(false);
 
@@ -300,8 +324,60 @@ namespace FishMMO.Client
 				uiDialogBox.Open(message);
 			}
 			pendingVerifyUsername = null;
+			DeleteSavedTwoFactorSetupFile();
 			Client.ForceDisconnect();
 			SetFormLocked(false);
+		}
+
+		/// <summary>
+		/// Deletes the on-disk copy of the 2FA setup payload, if any. The file contains
+		/// recovery codes and the TOTP seed (otpauth URI) for the account just created;
+		/// it must not survive past the registration session. Called from every terminal
+		/// exit of the flow: verification success, user-cancel from either dialog, server-
+		/// reported failure, connection loss, and explicit quit-to-login. Failures are
+		/// swallowed because the file may not exist or may already have been cleaned.
+		/// </summary>
+		private void DeleteSavedTwoFactorSetupFile()
+		{
+			string path = savedTwoFactorSetupPath;
+			savedTwoFactorSetupPath = null;
+			if (string.IsNullOrEmpty(path)) return;
+			try
+			{
+				if (File.Exists(path))
+				{
+					File.Delete(path);
+				}
+			}
+			catch (System.Exception ex)
+			{
+				Log.Warning("UIRegister", $"Failed to delete 2FA setup file '{path}': {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Best-effort tightening of the 2FA setup file permissions so other local users
+		/// cannot read it. On Unix-style platforms we shell out to <c>chmod 600</c>; on
+		/// Windows we rely on the default per-user persistentDataPath ACL. All failures
+		/// are non-fatal — the file will still be deleted at the end of the flow.
+		/// </summary>
+		private static void TryRestrictTwoFactorSetupFilePermissions(string path)
+		{
+#if UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX || UNITY_ANDROID || UNITY_EDITOR_LINUX || UNITY_EDITOR_OSX
+			try
+			{
+				var psi = new System.Diagnostics.ProcessStartInfo("/bin/chmod", $"600 \"{path}\"")
+				{
+					UseShellExecute = false,
+					CreateNoWindow = true,
+					RedirectStandardError = true,
+					RedirectStandardOutput = true,
+				};
+				using var p = System.Diagnostics.Process.Start(psi);
+				p?.WaitForExit(500);
+			}
+			catch { /* best effort */ }
+#endif
 		}
 
 		/// <summary>

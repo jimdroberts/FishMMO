@@ -19,6 +19,13 @@ public class LoginServerController : ControllerBase
 	private readonly IMemoryCache memoryCache;
 
 	/// <summary>
+	/// Per-process gate that serialises the cache-miss DB load. Without it, a burst of
+	/// concurrent requests on a cold cache would each spawn a DbContext + query (cache
+	/// stampede), which is exactly the failure mode the cache exists to prevent.
+	/// </summary>
+	private static readonly SemaphoreSlim s_loginServersLoadGate = new SemaphoreSlim(1, 1);
+
+	/// <summary>
 	/// Initializes a new instance of the <see cref="LoginServerController"/> class.
 	/// </summary>
 	/// <param name="dbContextFactory">Factory used to create instances of <see cref="NpgsqlDbContext"/>.</param>
@@ -53,32 +60,50 @@ public class LoginServerController : ControllerBase
 
 		if (!memoryCache.TryGetValue(cacheKey, out LoginServerAddressDto[] loginServers))
 		{
-			using NpgsqlDbContext dbContext = dbContextFactory.CreateDbContext();
-			if (dbContext == null)
+			// Single-flight DB load to avoid cache stampede. The first thread that
+			// enters the gate populates the cache; later threads find the cached value on
+			// re-check and skip the DB hit entirely.
+			await s_loginServersLoadGate.WaitAsync(HttpContext.RequestAborted);
+			try
 			{
-				await Log.Error("LoginServerController", "Failed to create DbContext for LoginServerController.");
-				return StatusCode(StatusCodes.Status503ServiceUnavailable, "Login server directory temporarily unavailable.");
+				if (!memoryCache.TryGetValue(cacheKey, out loginServers))
+				{
+					using NpgsqlDbContext dbContext = dbContextFactory.CreateDbContext();
+					if (dbContext == null)
+					{
+						await Log.Error("LoginServerController", "Failed to create DbContext for LoginServerController.");
+						return StatusCode(StatusCodes.Status503ServiceUnavailable, "Login server directory temporarily unavailable.");
+					}
+
+					// Project to an immutable DTO array before caching. Caching the raw EF
+					// entities by reference would let any future mutation (or change-tracker
+					// reuse) leak into every subsequent cache hit.
+					loginServers = await dbContext.LoginServers
+						.AsNoTracking()
+						.Select(l => new LoginServerAddressDto(l.Address, l.Port))
+						.ToArrayAsync(HttpContext.RequestAborted);
+
+					var cacheEntryOptions = new MemoryCacheEntryOptions
+					{
+						AbsoluteExpirationRelativeToNow = CacheTtl(),
+					};
+
+					memoryCache.Set(cacheKey, loginServers, cacheEntryOptions);
+					// Cache miss is a routine condition; downgrade from Info to Debug to
+					// keep request-rate logs from drowning operationally important events.
+					await Log.Debug("LoginServerController", $"Cache miss. Loaded {loginServers.Length} login server(s) from DB.");
+				}
 			}
-
-			// Project to an immutable DTO array before caching. Caching the raw EF
-			// entities by reference would let any future mutation (or change-tracker
-			// reuse) leak into every subsequent cache hit.
-			loginServers = await dbContext.LoginServers
-				.AsNoTracking()
-				.Select(l => new LoginServerAddressDto(l.Address, l.Port))
-				.ToArrayAsync();
-
-			var cacheEntryOptions = new MemoryCacheEntryOptions
+			finally
 			{
-				AbsoluteExpirationRelativeToNow = CacheTtl(),
-			};
-
-			memoryCache.Set(cacheKey, loginServers, cacheEntryOptions);
-			await Log.Info("LoginServerController", $"Cache miss. Loaded {loginServers.Length} login server(s) from DB.");
+				s_loginServersLoadGate.Release();
+			}
 		}
 		else
 		{
-			await Log.Info("LoginServerController", "Cache hit for login servers.");
+			// Cache hit is a routine condition; downgrade from Info to Debug to
+			// keep request-rate logs from drowning operationally important events.
+			await Log.Debug("LoginServerController", "Cache hit for login servers.");
 		}
 
 		if (loginServers == null || loginServers.Length == 0)

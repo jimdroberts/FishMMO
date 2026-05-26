@@ -587,11 +587,32 @@ namespace FishMMO.Database.Npgsql.Services
 					Authentication.InvalidUsernameError);
 			}
 
+			// Reject the sentinel verify_code=0 early. Allowing it through would let a caller
+			// "verify" any account whose VerifyCode column still defaults to 0 (i.e. never had a
+			// code generated, or was already verified previously).
+			if (verifyCode == 0)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid verification code or account already verified.");
+			}
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET verified = true, verify_code = 0 WHERE name_lowercase = {{0}} AND verify_code = {{1}} AND verified = false";
+				// Single atomic check-and-update: succeed only if the supplied code matches a
+				// pending, unexpired verification request for this account. verify_code <> 0
+				// rejects the sentinel column-default value defensively even though the caller
+				// also pre-screens it above.
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET verified = true, verify_code = 0, verify_code_expires_utc = NULL
+					WHERE name_lowercase = {{0}}
+						AND verify_code = {{1}}
+						AND verify_code <> 0
+						AND verified = false
+						AND (verify_code_expires_utc IS NULL OR verify_code_expires_utc > CURRENT_TIMESTAMP)";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { accountName.ToLowerInvariant(), verifyCode }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{
@@ -604,6 +625,7 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult> PersistVerifyCodeAsync(
 			string accountName,
 			int verifyCode,
+			DateTime expiresUtc,
 			CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(accountName))
@@ -615,9 +637,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET verify_code = {{0}} WHERE name_lowercase = {{1}}";
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET verify_code = {{0}}, verify_code_expires_utc = {{1}}
+					WHERE name_lowercase = {{2}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { verifyCode, accountName.ToLowerInvariant() }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { verifyCode, expiresUtc, normalized }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{

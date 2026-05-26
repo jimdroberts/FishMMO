@@ -162,7 +162,16 @@ namespace FishMMO.Auth.Implementation
 			SendNonceCtx = null;
 			ReceiveNonceCtx?.Dispose();
 			ReceiveNonceCtx = null;
-			PublicKey = null;
+			if (PublicKey != null)
+			{
+				// Zero the peer public key before dropping the reference. Public keys
+				// are not secret cryptographically, but their byte buffer may have been
+				// pooled or share a backing array with other handshake state, and an
+				// attacker with read-only memory access could otherwise correlate this
+				// session’s key bytes against transport captures.
+				CryptographicOperations.ZeroMemory(PublicKey);
+				PublicKey = null;
+			}
 		}
 
 		/// <summary>

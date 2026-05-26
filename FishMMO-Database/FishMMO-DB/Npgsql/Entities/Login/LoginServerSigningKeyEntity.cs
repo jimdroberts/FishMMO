@@ -14,6 +14,13 @@ namespace FishMMO.Database.Npgsql.Entities
 		public DateTime TimeCreated { get; set; }
 
 		/// <summary>
+		/// PostgreSQL <c>xmin</c> system column exposed as an EF Core concurrency token to detect
+		/// concurrent rotations writing the same row. Updated automatically by the database on
+		/// every row change.
+		/// </summary>
+		public uint Version { get; set; }
+
+		/// <summary>
 		/// Whether this key is currently the active key used to sign new tokens.
 		/// Old keys remain in the table (IsActive=false) so in-flight tokens can still be verified
 		/// during the rotation overlap window.

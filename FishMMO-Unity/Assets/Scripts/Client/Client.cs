@@ -513,7 +513,34 @@ namespace FishMMO.Client
 		/// </summary>
 		void OnApplicationPause(bool isPaused)
 		{
-			// Handle pause state here. (This is useful for VR Headsets/Android devices that suspend the application instead of exiting)
+			// On mobile / VR the OS may freeze or kill the process at any moment after a
+			// background transition without ever invoking OnApplicationQuit. Make a
+			// best-effort token revocation so the cached auth token cannot outlive the
+			// session if the process is silently terminated. Failure is non-fatal: the
+			// underlying call handles disconnected/no-token states.
+			if (isPaused)
+			{
+				try
+				{
+					LoginAuthenticator?.RevokeAndClearAuthToken();
+				}
+				catch { /* best effort during suspend */ }
+			}
+		}
+
+		/// <summary>
+		/// Final shutdown hook. Mirrors <see cref="QuitToLogin"/>'s token-revocation
+		/// behaviour so that closing the game (Alt-F4, dock-quit, OS shutdown) cannot
+		/// leave a valid auth token cached on disk past the process lifetime. The
+		/// underlying revoke call is safe when the connection is already torn down.
+		/// </summary>
+		void OnApplicationQuit()
+		{
+			try
+			{
+				LoginAuthenticator?.RevokeAndClearAuthToken();
+			}
+			catch { /* best effort during shutdown */ }
 		}
 
 		/// <summary>

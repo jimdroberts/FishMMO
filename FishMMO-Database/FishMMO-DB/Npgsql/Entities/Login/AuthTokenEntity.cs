@@ -17,6 +17,13 @@ namespace FishMMO.Database.Npgsql.Entities
 		public DateTime ExpiresUtc { get; set; }
 		public bool Revoked { get; set; }
 
+		/// <summary>
+		/// PostgreSQL <c>xmin</c> system column exposed as an EF Core concurrency token to detect
+		/// concurrent revocations or future per-token mutations. Updated automatically by the
+		/// database on every row change.
+		/// </summary>
+		public uint Version { get; set; }
+
 		// Navigation properties
 		public AccountEntity Account { get; set; }
 		public LoginServerEntity LoginServer { get; set; }

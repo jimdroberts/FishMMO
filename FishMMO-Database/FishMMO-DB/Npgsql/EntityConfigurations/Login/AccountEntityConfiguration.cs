@@ -76,6 +76,10 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(0);
 
+			// Verification code expiry. Null while no verification is pending; bounded so an
+			// abandoned code cannot remain a guess-target indefinitely.
+			builder.Property(e => e.VerifyCodeExpiresUtc);
+
 			builder.Property(e => e.LastLogin)
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");

@@ -33,8 +33,12 @@ namespace FishMMO.Database.Npgsql.Entities
 			// UsedAt — null until consumed
 			builder.Property(e => e.UsedAt);
 
-			// Filtered index: unused codes per account for fast lookup
+			// Filtered UNIQUE index: unused codes per account for fast lookup. Uniqueness
+			// is defence-in-depth so an accidental duplicate insert of the same hash for the
+			// same account is rejected at the DB layer — the application layer must already
+			// dedupe but a slip cannot create two redeemable copies of one code.
 			builder.HasIndex(e => new { e.AccountName, e.CodeHash })
+				.IsUnique()
 				.HasFilter("used_at IS NULL");
 
 			// Foreign key to accounts

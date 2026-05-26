@@ -91,6 +91,31 @@ namespace FishMMO.Server.Core.Collections
 		}
 
 		/// <summary>
+		/// Removes a key from the tracker if present. Useful for cancelling a debounce
+		/// window when the operation it was guarding has already failed and the caller
+		/// wants to allow an immediate retry rather than make the user wait out the window.
+		/// </summary>
+		/// <param name="key">Tracker key to remove.</param>
+		/// <returns><c>true</c> if the key existed and was removed; otherwise <c>false</c>.</returns>
+		public bool Remove(TKey key)
+		{
+			lock (gate)
+			{
+				if (!nextAllowedUtc.Remove(key))
+				{
+					return false;
+				}
+
+				if (queueNodes.TryGetValue(key, out LinkedListNode<ExpiryQueueNode> node))
+				{
+					expiryQueue.Remove(node);
+					queueNodes.Remove(key);
+				}
+				return true;
+			}
+		}
+
+		/// <summary>
 		/// Sweeps expired keys with bounded scan and removal limits.
 		/// </summary>
 		/// <param name="nowUtc">Current UTC timestamp.</param>

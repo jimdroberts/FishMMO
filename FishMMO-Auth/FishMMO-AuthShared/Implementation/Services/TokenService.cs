@@ -180,7 +180,10 @@ namespace FishMMO.Auth.Implementation
 			loginServerId = 0;
 			signingKeyId = 0;
 
-			if (seq == 0 || !encryptionData.TryConsumeReceiveSequence(seq))
+			// Sequence validity (non-zero + non-replay) is enforced by TryConsumeReceiveSequence:
+			// the GcmNonceContext rejects seq=0 (initial counter is 0, so a request would have to
+			// be "one greater than 0", i.e. 1) and any sequence that is not exactly current+1.
+			if (!encryptionData.TryConsumeReceiveSequence(seq))
 				return false;
 
 			try

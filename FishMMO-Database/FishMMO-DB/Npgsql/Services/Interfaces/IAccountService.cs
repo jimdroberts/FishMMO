@@ -262,17 +262,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Sets the verification code for an account.
-		/// A random int is generated and stored; the same code is sent to the account email.
-		/// The user must provide this code to verify their account.
+		/// Sets the verification code for an account, along with the UTC expiry timestamp
+		/// after which the code is no longer redeemable.
 		/// </summary>
 		/// <param name="accountName">The account name.</param>
 		/// <param name="verifyCode">The randomly generated verification code.</param>
+		/// <param name="expiresUtc">UTC instant after which the code is invalid.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>DatabaseResult indicating success or failure.</returns>
 		Task<DatabaseResult> PersistVerifyCodeAsync(
 			string accountName,
 			int verifyCode,
+			DateTime expiresUtc,
 			CancellationToken cancellationToken = default);
 	}
 }

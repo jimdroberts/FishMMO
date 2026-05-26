@@ -42,6 +42,15 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 		}
 
+		/// <summary>
+		/// Verification overlap window (in days) during which rotated-out keys are still kept in
+		/// the table so in-flight tokens signed before rotation can be validated. Set once at
+		/// application startup before any LoginServer rotation occurs; defaults to 7 days. The
+		/// value is read at every <see cref="DeleteAsync"/> call so a process can adjust it
+		/// without requiring DI changes.
+		/// </summary>
+		public static int KeyOverlapWindowDays { get; set; } = 7;
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<LoginServerSigningKeyData>> UpsertAsync(
 			long loginServerId,
@@ -64,32 +73,48 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				// Mark all previously active keys for this LoginServer as rotated.
-				// They remain in the table for the verification overlap window so in-flight tokens
-				// signed with the old key can still be validated until DeleteAsync prunes them.
-				var deactivateSql = $@"UPDATE {TableName}
-					SET is_active = false, rotated_at_utc = CURRENT_TIMESTAMP
-					WHERE login_server_id = {{0}} AND is_active = true";
-				await dbContext.Database
-					.ExecuteSqlRawAsync(deactivateSql, new object[] { loginServerId }, cancellationToken)
-					.ConfigureAwait(false);
+				// Wrap the deactivate + insert in an explicit transaction so a failure of the
+				// INSERT after the UPDATE succeeds cannot leave the LoginServer with no active
+				// signing key. The DB partial UNIQUE index on (login_server_id) WHERE
+				// is_active=true additionally serialises concurrent rotations: the second writer's
+				// INSERT is rejected and its transaction rolls back cleanly.
+				var strategy = dbContext.Database.CreateExecutionStrategy();
+				return await strategy.ExecuteAsync(async () =>
+				{
+					await using var tx = await dbContext.Database
+						.BeginTransactionAsync(cancellationToken)
+						.ConfigureAwait(false);
 
-				var sql = $@"INSERT INTO {TableName} (login_server_id, hmac_key, is_active, activated_at_utc)
-					VALUES ({{0}}, {{1}}, true, CURRENT_TIMESTAMP)
-					RETURNING id, login_server_id, hmac_key, time_created";
+					// Mark all previously active keys for this LoginServer as rotated.
+					// They remain in the table for the verification overlap window so in-flight tokens
+					// signed with the old key can still be validated until DeleteAsync prunes them.
+					var deactivateSql = $@"UPDATE {TableName}
+						SET is_active = false, rotated_at_utc = CURRENT_TIMESTAMP
+						WHERE login_server_id = {{0}} AND is_active = true";
+					await dbContext.Database
+						.ExecuteSqlRawAsync(deactivateSql, new object[] { loginServerId }, cancellationToken)
+						.ConfigureAwait(false);
 
-				return await ExecuteReturningAsync(
-					dbContext,
-					sql,
-					new object[] { loginServerId, hmacKey },
-					reader => new LoginServerSigningKeyEntity
-					{
-						ID = reader.GetInt64(0),
-						LoginServerId = reader.GetInt64(1),
-						HmacKey = (byte[])reader.GetValue(2),
-						TimeCreated = reader.GetDateTime(3),
-					},
-					cancellationToken).ConfigureAwait(false);
+					var sql = $@"INSERT INTO {TableName} (login_server_id, hmac_key, is_active, activated_at_utc)
+						VALUES ({{0}}, {{1}}, true, CURRENT_TIMESTAMP)
+						RETURNING id, login_server_id, hmac_key, time_created";
+
+					var entity = await ExecuteReturningAsync(
+						dbContext,
+						sql,
+						new object[] { loginServerId, hmacKey },
+						reader => new LoginServerSigningKeyEntity
+						{
+							ID = reader.GetInt64(0),
+							LoginServerId = reader.GetInt64(1),
+							HmacKey = (byte[])reader.GetValue(2),
+							TimeCreated = reader.GetDateTime(3),
+						},
+						cancellationToken).ConfigureAwait(false);
+
+					await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+					return entity;
+				}).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -163,9 +188,14 @@ namespace FishMMO.Database.Npgsql.Services
 				// verification overlap window. This prevents accidentally invalidating tokens
 				// that were issued just before a rotation. Active keys are never deleted here —
 				// callers wanting a hard purge must rotate first via UpsertAsync.
+				int overlapDays = KeyOverlapWindowDays;
+				if (overlapDays < 0)
+				{
+					overlapDays = 0;
+				}
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
-					$"DELETE FROM {TableName} WHERE login_server_id = {{0}} AND is_active = false AND rotated_at_utc IS NOT NULL AND rotated_at_utc < (CURRENT_TIMESTAMP - INTERVAL '7 days')",
-					new object[] { loginServerId },
+					$"DELETE FROM {TableName} WHERE login_server_id = {{0}} AND is_active = false AND rotated_at_utc IS NOT NULL AND rotated_at_utc < (CURRENT_TIMESTAMP - ({{1}} * INTERVAL '1 day'))",
+					new object[] { loginServerId, overlapDays },
 					cancellationToken)
 					.ConfigureAwait(false);
 

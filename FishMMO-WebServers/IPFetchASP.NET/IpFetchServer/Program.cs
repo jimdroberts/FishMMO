@@ -139,7 +139,34 @@ namespace FishMMO.WebServer
 					})
 					.Configure((context, app) =>
 					{
+						// A non-cleared exception handler must run before any other middleware
+						// so unhandled framework exceptions surface as opaque 500s instead of
+						// leaking stack traces in the dev default page.
+						app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
+						{
+							ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+							ctx.Response.ContentType = "text/plain";
+							await ctx.Response.WriteAsync("Internal Server Error");
+						}));
+
 						app.UseForwardedHeaders();
+
+						// After UseForwardedHeaders has resolved the real client IP, reject any
+						// request still missing a RemoteIpAddress. This only happens when the proxy
+						// chain is misconfigured or the request bypassed NGINX entirely; both cases
+						// would silently coalesce into a single “unknown” rate-limit bucket and let
+						// an attacker escape per-IP throttling.
+						app.Use(async (ctx, next) =>
+						{
+							if (ctx.Connection.RemoteIpAddress == null)
+							{
+								ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+								await Log.Warning("Program", $"Request rejected: unresolved client IP for {ctx.Request.Path}");
+								return;
+							}
+							await next();
+						});
+
 						UseSecurityHeaders(app, context.HostingEnvironment);
 						// Client gate runs BEFORE the rate limiter so forged requests
 						// from generic crawlers don't consume per-IP tokens. Loopback
@@ -211,6 +238,10 @@ namespace FishMMO.WebServer
 						h["Referrer-Policy"] = "no-referrer";
 					if (!h.ContainsKey("X-Frame-Options"))
 						h["X-Frame-Options"] = "DENY";
+					if (!h.ContainsKey("Permissions-Policy"))
+						h["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()";
+					if (!h.ContainsKey("Cross-Origin-Resource-Policy"))
+						h["Cross-Origin-Resource-Policy"] = "same-origin";
 					if (exposeDiagnostics)
 					{
 						h["X-Server-Version"] = serverVersion;

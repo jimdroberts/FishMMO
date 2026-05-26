@@ -34,6 +34,28 @@ namespace FishMMO.Server.Implementation
 		/// <summary>The token-specific core instance. Null until <see cref="InitializeCoreInstance"/> is called.</summary>
 		private TokenCore _core;
 
+		/// <summary>
+		/// Lazily loaded 32-byte AES-256 KEK used to unwrap signing-key blobs returned by the DB.
+		/// Cached for the lifetime of the authenticator. <c>null</c> until first fetch attempt.
+		/// </summary>
+		private byte[] _signingKeyKek;
+
+		/// <summary>
+		/// Loads (and caches) the deployment KEK. Returns <c>null</c> on failure and emits a
+		/// warning log; callers must fail closed.
+		/// </summary>
+		private byte[] TryGetSigningKeyKek()
+		{
+			if (this._signingKeyKek != null) return this._signingKeyKek;
+			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out byte[] kek, out string error))
+			{
+				_ = Log.Warning(LogPrefix, $"Signing-key KEK unavailable: {error}");
+				return null;
+			}
+			this._signingKeyKek = kek;
+			return kek;
+		}
+
 		/// <inheritdoc/>
 		protected override BaseAuthenticatorCore<NetworkConnection> Core => _core;
 
@@ -94,15 +116,26 @@ namespace FishMMO.Server.Implementation
 				return null;
 			}
 
-			if (result.Data.HmacKey.Length < CryptoHelper.HmacKeyLength)
+			// HmacKey is an AES-256-GCM envelope keyed on the deployment KEK with AAD bound
+			// to the owning LoginServer id. Unwrap and fail closed on any tag/AAD/structural error.
+			byte[] kek = TryGetSigningKeyKek();
+			if (kek == null) return null;
+
+			byte[] unwrapped = KeyEnvelope.Unwrap(kek, result.Data.HmacKey, SigningKeyKekProvider.BuildAad(loginServerId));
+			if (unwrapped == null)
 			{
+				await Log.Warning(LogPrefix, $"Signing key {signingKeyId} failed AEAD unwrap for LoginServer {loginServerId}.");
+				return null;
+			}
+
+			if (unwrapped.Length < CryptoHelper.HmacKeyLength)
+			{
+				CryptographicOperations.ZeroMemory(unwrapped);
 				await Log.Warning(LogPrefix, $"Signing key too short for LoginServer {loginServerId}.");
 				return null;
 			}
 
-			var key = new byte[result.Data.HmacKey.Length];
-			Buffer.BlockCopy(result.Data.HmacKey, 0, key, 0, key.Length);
-			return key;
+			return unwrapped;
 		}
 
 		/// <summary>
@@ -124,15 +157,24 @@ namespace FishMMO.Server.Implementation
 				return (null, 0);
 			}
 
-			if (result.Data.HmacKey.Length < CryptoHelper.HmacKeyLength)
+			byte[] kek = TryGetSigningKeyKek();
+			if (kek == null) return (null, 0);
+
+			byte[] unwrapped = KeyEnvelope.Unwrap(kek, result.Data.HmacKey, SigningKeyKekProvider.BuildAad(loginServerId));
+			if (unwrapped == null)
 			{
+				await Log.Warning(LogPrefix, $"Current signing key failed AEAD unwrap for LoginServer {loginServerId}.");
+				return (null, 0);
+			}
+
+			if (unwrapped.Length < CryptoHelper.HmacKeyLength)
+			{
+				CryptographicOperations.ZeroMemory(unwrapped);
 				await Log.Warning(LogPrefix, $"Current signing key too short for LoginServer {loginServerId}.");
 				return (null, 0);
 			}
 
-			var key = new byte[result.Data.HmacKey.Length];
-			Buffer.BlockCopy(result.Data.HmacKey, 0, key, 0, key.Length);
-			return (key, result.Data.ID);
+			return (unwrapped, result.Data.ID);
 		}
 
 		/// <summary>
@@ -173,7 +215,17 @@ namespace FishMMO.Server.Implementation
 			if (!am.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData) || encryptionData == null)
 				return;
 
+			// Renewal is a best-effort path but a transient DB blip here forces the
+			// client back through full SRP at the LoginServer, which compounds load
+			// during exactly the conditions that caused the blip. Make one short
+			// retry with linear backoff before giving up.
 			var currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
+			if (currentSigningKey.Key == null)
+			{
+				await Task.Delay(150);
+				if (!conn.IsActive) return;
+				currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
+			}
 			byte[] signingKey = currentSigningKey.Key;
 			if (signingKey == null)
 			{
