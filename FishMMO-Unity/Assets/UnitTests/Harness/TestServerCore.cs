@@ -41,6 +41,14 @@ namespace FishMMO.UnitTests.Harness
 		/// <summary>Number of <see cref="BroadcastAuthResult"/> calls.</summary>
 		public int AuthResultBroadcastCount { get; private set; }
 
+		/// <summary>
+		/// Optional hook invoked before the encrypted server proof (M2) is forwarded to the
+		/// client in <see cref="BroadcastSrpSuccess"/>. Return a mutated copy to simulate a
+		/// MITM tampering with M2; return <c>null</c> to drop the message entirely.
+		/// If not set, the original proof is forwarded unchanged.
+		/// </summary>
+		public Func<byte[], byte[]?>? SrpSuccessInterceptor;
+
 		#region BaseAuthenticatorCore<int> abstracts
 
 		protected override bool IsConnectionAuthenticated(int conn) => false;
@@ -96,7 +104,13 @@ namespace FishMMO.UnitTests.Harness
 		protected override void BroadcastSrpSuccess(int conn, byte[] encryptedServerProof, ClientAuthenticationResult result, byte[]? encryptedToken)
 		{
 			AuthTestTrace.Log("Server", "BroadcastSrpSuccess", $"conn={conn} result={result} proof={AuthTestTrace.Hex(encryptedServerProof)} token={AuthTestTrace.Hex(encryptedToken)}");
-			client!.OnSrpSuccessReceived(encryptedServerProof, result, encryptedToken ?? Array.Empty<byte>());
+			byte[]? outProof = SrpSuccessInterceptor is null ? encryptedServerProof : SrpSuccessInterceptor(encryptedServerProof);
+			if (outProof is null)
+			{
+				AuthTestTrace.Log("Server", "BroadcastSrpSuccess.dropped");
+				return;
+			}
+			client!.OnSrpSuccessReceived(outProof, result, encryptedToken ?? Array.Empty<byte>());
 		}
 
 		protected override void EnqueueMainThread(int conn, Action action) => action();

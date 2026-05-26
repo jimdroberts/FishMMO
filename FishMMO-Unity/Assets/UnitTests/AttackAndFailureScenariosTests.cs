@@ -249,5 +249,35 @@ namespace FishMMO.UnitTests
                 await AuthTestTrace.LogTestEnd(nameof(TwoFactor_AccountRequires2FA_ReturnsTwoFactorRequired));
             }
         }
+
+		[Test]
+		public async Task Login_PendingKick_AccountRejected()
+		{
+			try
+			{
+				await AuthTestTrace.LogTestStart(
+					nameof(Login_PendingKick_AccountRejected),
+					"Test: An account flagged with a pending kick is refused at login.\n"
+					+ "Procedure: Seed a valid account, mark it with SetPendingKick, then attempt a normal SRP login.\n"
+					+ "Expected: Login must NOT return LoginSuccess — the server's CheckHasPendingKickAsync guard must trigger.\n"
+					+ "Failure: If LoginSuccess is returned, the pending-kick check is being bypassed, allowing a kicked session to reconnect immediately.");
+				using AuthTestHarness h = new AuthTestHarness();
+				h.Store.SeedAccount("kickme", "valid-password");
+				h.Store.SetPendingKick("kickme", true);
+				ClientAuthenticationResult result = await h.Client.AttemptLogin("kickme", "valid-password", timeoutMs: AwaitTimeoutMs);
+				LogAssert.AreNotEqual(ClientAuthenticationResult.LoginSuccess, result,
+					$"A user with a pending kick must be refused (got {result}).");
+				await AuthTestTrace.Log("AttackAndFailureScenariosTests", "SUCCESS", nameof(Login_PendingKick_AccountRejected));
+			}
+			catch (Exception ex)
+			{
+				await AuthTestTrace.Log("AttackAndFailureScenariosTests", "FAILURE", $"{nameof(Login_PendingKick_AccountRejected)}: {ex.Message}\n{ex.StackTrace}");
+				throw;
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_PendingKick_AccountRejected));
+			}
+		}
     }
 }

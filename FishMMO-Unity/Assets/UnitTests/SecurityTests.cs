@@ -908,6 +908,108 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		// ───────────────────────── X25519 low-order-point attack ─────────────────────────
+
+		/// <summary>
+		/// X25519 low-order point: a valid-length (32-byte) all-zero public key is the
+		/// canonical low-order point that produces an all-zero shared secret regardless of
+		/// the server's private key. A well-hardened server must reject it before performing
+		/// ECDH, treating it the same as any other weak/malformed key.
+		/// </summary>
+		[Test]
+		public void Security_ZeroFilledX25519PublicKey_IsRejected()
+		{
+			try
+			{
+				AuthTestTrace.LogTestStart(
+					nameof(Security_ZeroFilledX25519PublicKey_IsRejected),
+					"Test: Zero-filled X25519 public key (low-order point) is rejected.\n"
+					+ "Procedure: Submit a valid-length (32-byte) all-zero public key during phase-1 handshake.\n"
+					+ "Expected: Server must disconnect and not issue a cookie or progress to ECDH.\n"
+					+ "Failure: If the server proceeds, it will compute an all-zero shared secret, breaking forward secrecy.\n"
+					+ "This test ensures the server rejects X25519 low-order-point inputs."
+				).GetAwaiter().GetResult();
+
+				using AuthTestHarness h = new AuthTestHarness();
+				// 32 bytes, all zeros — valid length but the X25519 low-order point.
+				byte[] zeroKey = new byte[32];
+				bool threw = false;
+				try { h.Server.OnHandshakeReceived(1, zeroKey, cookie: null!, minVersion: 1, maxVersion: 1); }
+				catch { threw = true; }
+
+				LogAssert.IsTrue(h.Server.WasDisconnected || threw,
+					"Server must refuse (disconnect or throw) on a zero-filled X25519 public key.");
+				LogAssert.AreEqual(0, h.Server.CookieChallengeCount,
+					"No cookie challenge must be issued for a zero-filled (low-order-point) public key.");
+				LogAssert.AreEqual(0, h.Server.ServerHandshakeCount,
+					"No server handshake must be emitted for a zero-filled public key.");
+				AuthTestTrace.Log("SecurityTests", "SUCCESS", nameof(Security_ZeroFilledX25519PublicKey_IsRejected)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("SecurityTests", "FAILURE", $"{nameof(Security_ZeroFilledX25519PublicKey_IsRejected)}: {ex.Message}\n{ex.StackTrace}").GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(Security_ZeroFilledX25519PublicKey_IsRejected)).GetAwaiter().GetResult();
+			}
+		}
+
+		// ───────────────────────── server-proof (M2) tampering ─────────────────────────
+
+		/// <summary>
+		/// Tampered server proof (M2): flipping a bit in the encrypted M2 that the server
+		/// broadcasts back to the client must cause the client to reject the session — it
+		/// must not flag <c>ReceivedSuccess</c>. If the client ignores M2 verification and
+		/// always accepts success, a MITM could strip or corrupt M2 and observe the client
+		/// completing authentication without the server having completed SRP.
+		/// </summary>
+		[Test]
+		public async Task Security_TamperedServerProof_M2_ClientDoesNotAccept()
+		{
+			try
+			{
+				await AuthTestTrace.LogTestStart(
+					nameof(Security_TamperedServerProof_M2_ClientDoesNotAccept),
+					"Test: Tampered server SRP proof (M2) is rejected by the client.\n"
+					+ "Procedure: Flip a bit in the encrypted M2 (server→client) before it reaches the client, then complete the login.\n"
+					+ "Expected: Client must not flag ReceivedSuccess — M2 verification must fail and the session must not be established.\n"
+					+ "Failure: If the client accepts the tampered M2, it indicates the client does not verify the server proof.\n"
+					+ "This test ensures mutual authentication: both sides verify each other's SRP proof."
+				);
+
+				using AuthTestHarness h = new AuthTestHarness();
+				h.Store.SeedAccount("mallory", "tamper-m2-pw");
+
+				// Install a server-side interceptor that flips a bit in the encrypted M2
+				// before it is forwarded to the client.
+				h.Server.SrpSuccessInterceptor = (original) =>
+				{
+					byte[] tampered = (byte[])original.Clone();
+					int idx = tampered.Length / 2;
+					tampered[idx] ^= 0x20;
+					return tampered;
+				};
+
+				ClientAuthenticationResult result = await Drive(h, "mallory", "tamper-m2-pw");
+				LogAssert.AreNotEqual(ClientAuthenticationResult.LoginSuccess, result,
+					"Tampered M2 must NEVER be accepted by the client as login success.");
+				LogAssert.IsFalse(h.Client.ReceivedSuccess,
+					"Client must not flag ReceivedSuccess when the server proof (M2) is corrupted.");
+				await AuthTestTrace.Log("SecurityTests", "SUCCESS", nameof(Security_TamperedServerProof_M2_ClientDoesNotAccept));
+			}
+			catch (Exception ex)
+			{
+				await AuthTestTrace.Log("SecurityTests", "FAILURE", $"{nameof(Security_TamperedServerProof_M2_ClientDoesNotAccept)}: {ex.Message}\n{ex.StackTrace}");
+				throw;
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Security_TamperedServerProof_M2_ClientDoesNotAccept));
+			}
+		}
+
 		private static void AssertAllDistinct(byte[][] samples, string label)
 		{
 			for (int i = 0; i < samples.Length; i++)

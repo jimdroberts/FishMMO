@@ -173,5 +173,33 @@ namespace FishMMO.UnitTests
 				await AuthTestTrace.LogTestEnd(nameof(Login_TwoSequentialAttempts_BothComplete));
 			}
 		}
+
+		[Test]
+		public async Task Login_SameCredentials_CaseSensitivePassword_Rejected()
+		{
+			try
+			{
+				await AuthTestTrace.LogTestStart(nameof(Login_SameCredentials_CaseSensitivePassword_Rejected),
+					"Test: SRP password matching is case-sensitive.\n"
+					+ "Procedure: Seed an account with a mixed-case password, then attempt login with the all-uppercase version.\n"
+					+ "Expected: InvalidUsernameOrPassword — SRP key derivation must not normalize case.\n"
+					+ "Failure: If login succeeds, the SRP derivation path is silently lowercasing the password, which weakens the credential space and may cause cross-platform auth mismatches.");
+				using AuthTestHarness h = new AuthTestHarness();
+				h.Store.SeedAccount("casey", "CorrectPassword123");
+				ClientAuthenticationResult result = await DriveLogin(h, "casey", "CORRECTPASSWORD123");
+				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, result,
+					$"Uppercase variant of the password must not authenticate (SRP is case-sensitive), got {result}.");
+				await AuthTestTrace.Log("LoginTests", "SUCCESS", nameof(Login_SameCredentials_CaseSensitivePassword_Rejected));
+			}
+			catch (Exception ex)
+			{
+				await AuthTestTrace.Log("LoginTests", "FAILURE", $"{nameof(Login_SameCredentials_CaseSensitivePassword_Rejected)}: {ex.Message}\n{ex.StackTrace}");
+				throw;
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_SameCredentials_CaseSensitivePassword_Rejected));
+			}
+		}
 	}
 }

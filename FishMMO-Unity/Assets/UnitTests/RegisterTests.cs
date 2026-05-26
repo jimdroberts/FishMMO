@@ -196,5 +196,54 @@ namespace FishMMO.UnitTests
 				await AuthTestTrace.LogTestEnd(nameof(Register_DifferentCredentials_ProduceDifferentEncryptedPayloads));
 			}
 		}
+
+		[Test]
+		public async Task Register_SameCredentialsTwoAttempts_ProduceDifferentSalts()
+		{
+			try
+			{
+				await AuthTestTrace.LogTestStart(
+					nameof(Register_SameCredentialsTwoAttempts_ProduceDifferentSalts),
+					"Test: SRP salt is randomized on every registration attempt.\n"
+					+ "Procedure: Perform two independent registration attempts with the identical username and password, then compare the encrypted salt payloads.\n"
+					+ "Expected: The encrypted salt must differ between the two attempts because a fresh random salt is generated each time.\n"
+					+ "Failure: If the salts are identical, the SRP registration path is reusing a fixed or deterministic salt, which weakens the credential's resistance to offline dictionary attacks."
+				);
+				const string user = "saltcheck";
+				const string pass = "identical-password";
+				const string email = "saltcheck@example.test";
+
+				using AuthTestHarness h1 = new AuthTestHarness();
+				await DriveHandshakeAndCapture(h1, user, pass, email, age: 25);
+
+				using AuthTestHarness h2 = new AuthTestHarness();
+				await DriveHandshakeAndCapture(h2, user, pass, email, age: 25);
+
+				await AuthTestTrace.Log("RegisterTests", "STEP", "Comparing encrypted salt payloads from two identical registration attempts...");
+				LogAssert.AreEqual(1, h1.Client.CreateAccountSends.Count);
+				LogAssert.AreEqual(1, h2.Client.CreateAccountSends.Count);
+
+				byte[] salt1 = h1.Client.CreateAccountSends[0].EncryptedSalt;
+				byte[] salt2 = h2.Client.CreateAccountSends[0].EncryptedSalt;
+				LogAssert.AreNotEqual(System.Convert.ToBase64String(salt1), System.Convert.ToBase64String(salt2),
+					"Two registration attempts with identical credentials must produce different encrypted salts — salt must be randomized per attempt.");
+
+				// The verifiers must also differ because they are derived from the fresh salt.
+				byte[] v1 = h1.Client.CreateAccountSends[0].EncryptedVerifier;
+				byte[] v2 = h2.Client.CreateAccountSends[0].EncryptedVerifier;
+				LogAssert.AreNotEqual(System.Convert.ToBase64String(v1), System.Convert.ToBase64String(v2),
+					"Different salts must produce different verifiers even for the same password.");
+				await AuthTestTrace.Log("RegisterTests", "SUCCESS", nameof(Register_SameCredentialsTwoAttempts_ProduceDifferentSalts));
+			}
+			catch (Exception ex)
+			{
+				await AuthTestTrace.Log("RegisterTests", "FAILURE", $"{nameof(Register_SameCredentialsTwoAttempts_ProduceDifferentSalts)}: {ex.Message}\n{ex.StackTrace}");
+				throw;
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Register_SameCredentialsTwoAttempts_ProduceDifferentSalts));
+			}
+		}
 	}
 }
