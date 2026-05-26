@@ -77,10 +77,10 @@ namespace FishMMO.Client
 			{
 				URL = url,
 				Method = UnityWebRequest.kHttpVerbGET,
-				Headers = new Dictionary<string, string>
-				{
-					{ "X-FishMMO", "Client" }
-				},
+				// No custom headers — the cosmetic "X-FishMMO: Client" header was not a
+				// security boundary (trivially spoofable) and only made it easier for
+				// an attacker to identify our launcher traffic by header signature.
+				Headers = new Dictionary<string, string>(),
 				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
 				Timeout = WebRequestTimeout,
 				MaxRetries = MaxRetries,

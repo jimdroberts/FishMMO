@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks;
 using FishNet.Connection;
 using FishMMO.Database;
@@ -35,12 +37,28 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private const int SweepMaxRemove = 64;
 
 		/// <summary>
+		/// Window during which a recently admitted username still counts against the
+		/// <see cref="MaxPlayers"/> cap, even if the DB-derived <c>ConnectionCount</c>
+		/// has not yet been refreshed by <c>UpdateConnectionCountAsync</c>.
+		/// Closes the read-then-admit race where N concurrent token authentications
+		/// all observe the same pre-refresh count and slip past the cap together.
+		/// </summary>
+		private static readonly TimeSpan RecentAdmissionWindow = TimeSpan.FromSeconds(30.0);
+
+		/// <summary>
 		/// Tracks last TryLoginAsync attempt time per account for rate limiting.
 		/// Prevents repeated expensive DB calls (FetchByAccountAsync) from rapid re-auth attempts.
 		/// Entries expire automatically and are swept via <see cref="OnAuthSweep"/>.
 		/// </summary>
 		private readonly ExpiringKeyTracker<string> loginAttemptByAccount =
 			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Per-account "recently admitted" timestamps, used to bound the burst-admission
+		/// race window described on <see cref="RecentAdmissionWindow"/>. Periodically swept.
+		/// </summary>
+		private readonly ConcurrentDictionary<string, DateTime> recentAdmissionsByAccount =
+			new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Maximum number of players allowed to connect to the world server.
@@ -83,9 +101,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ClientAuthenticationResult.ServerFull;
 			}
 
-			// Check if the world server is full.
-			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) &&
-				sceneData.ConnectionCount >= MaxPlayers)
+			// Atomic admission check: combine the DB-derived ConnectionCount with the number
+			// of *recently admitted* usernames whose impact may not have reached the DB yet.
+			// Without this, N concurrent token-auth workers can each observe the same
+			// pre-refresh ConnectionCount and all squeeze past a check that says "one slot
+			// left". The conservative direction here is "slightly under-admit" if a username
+			// is already counted in ConnectionCount; the cost is at most one rejected reconnect
+			// within the 30 s window, which the client retries.
+			int sceneCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData)
+				? sceneData.ConnectionCount
+				: 0;
+			int recentCount = CountRecentAdmissions(DateTime.UtcNow);
+			if ((long)sceneCount + recentCount >= MaxPlayers)
 			{
 				return ClientAuthenticationResult.ServerFull;
 			}
@@ -105,10 +132,37 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (fetchResult.Data.HasValue)
 			{
+				// Reserve a slot for the brief window before UpdateConnectionCountAsync
+				// notices this admission. Repeated admissions for the same username (e.g.
+				// fast reconnect) overwrite the timestamp rather than double-counting.
+				recentAdmissionsByAccount[username] = DateTime.UtcNow;
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}
 
 			return ClientAuthenticationResult.NoCharacterSelected;
+		}
+
+		/// <summary>
+		/// Returns the number of distinct usernames admitted within the last
+		/// <see cref="RecentAdmissionWindow"/>. Inline sweep — the map is small and this
+		/// method is called once per <see cref="TryLoginAsync"/>, which is rate-limited.
+		/// </summary>
+		private int CountRecentAdmissions(DateTime now)
+		{
+			DateTime cutoff = now - RecentAdmissionWindow;
+			int count = 0;
+			foreach (var kvp in recentAdmissionsByAccount)
+			{
+				if (kvp.Value >= cutoff)
+				{
+					count++;
+				}
+				else
+				{
+					recentAdmissionsByAccount.TryRemove(kvp.Key, out _);
+				}
+			}
+			return count;
 		}
 
 		/// <summary>
@@ -118,6 +172,19 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			base.OnAuthSweep();
 			loginAttemptByAccount.SweepExpired(DateTime.UtcNow, SweepMaxScan, SweepMaxRemove);
+
+			// Bounded sweep of the recent-admission map. Keeps the dictionary from
+			// retaining stale entries across server uptime even if no new logins arrive.
+			DateTime cutoff = DateTime.UtcNow - RecentAdmissionWindow;
+			int scanned = 0;
+			foreach (var kvp in recentAdmissionsByAccount)
+			{
+				if (++scanned > SweepMaxScan) break;
+				if (kvp.Value < cutoff)
+				{
+					recentAdmissionsByAccount.TryRemove(kvp.Key, out _);
+				}
+			}
 		}
 	}
 }

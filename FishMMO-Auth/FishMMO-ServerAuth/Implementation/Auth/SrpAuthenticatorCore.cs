@@ -649,6 +649,15 @@ namespace FishMMO.Auth.Implementation
 				string salt;
 				string verifier;
 				AccessLevel accessLevel;
+				// Carry the unverified flag through the SRP exchange instead of
+				// short-circuiting here: an early AccountUnverified reject leaks
+				// "this username exists" to anyone who can guess account names.
+				// We instead let the client complete the M1 proof against the
+				// real verifier; a wrong password still returns the same
+				// InvalidUsernameOrPassword as for any non-existent account, and
+				// only a correct password reveals AccountUnverified (which is
+				// useful information to the legitimate owner anyway).
+				bool isUnverified = false;
 
 				if (!lookupResult.IsSuccess)
 				{
@@ -663,6 +672,10 @@ namespace FishMMO.Auth.Implementation
 					{
 						if (isEmail)
 						{
+							// Email-based login of an unverified account still uses
+							// fake state: revealing "this *email* exists in the system"
+							// is a stronger privacy leak than the same fact about a
+							// username, since emails are reused across services.
 							salt = SrpService.DerivePerUsernameFakeSalt(username!, fakeSaltKey!);
 							verifier = SrpService.GetStaticFakeData().Verifier;
 							accessLevel = AccessLevel.Player;
@@ -670,8 +683,15 @@ namespace FishMMO.Auth.Implementation
 						}
 						else
 						{
-							RejectAndPurge(conn, ClientAuthenticationResult.AccountUnverified);
-							return;
+							// Username-based unverified account: use the real salt+verifier
+							// so the client can prove knowledge of the password; the
+							// AccountUnverified result is only sent if the proof succeeds
+							// (see ProcessSrpProofAsync).
+							salt = lookupResult.Salt;
+							verifier = lookupResult.Verifier;
+							accessLevel = lookupResult.AccessLevel;
+							isUnverified = true;
+							await Log.Debug(LogPrefix, "Carrying real SRP state for unverified username-based login; AccountUnverified deferred until after M1.");
 						}
 					}
 					else
@@ -685,7 +705,7 @@ namespace FishMMO.Auth.Implementation
 
 				result = ClientAuthenticationResult.SrpVerify;
 
-				if (!srpAccountManager.AddConnectionAccount(conn, username!, publicEphemeral!, salt, verifier, accessLevel))
+				if (!srpAccountManager.AddConnectionAccount(conn, username!, publicEphemeral!, salt, verifier, accessLevel, isUnverified))
 				{
 					RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 					return;
@@ -773,6 +793,7 @@ namespace FishMMO.Auth.Implementation
 			string? serverProof = null;
 			string? username = null;
 			AccessLevel accessLevel = AccessLevel.Player;
+			bool isUnverified = false;
 
 			bool proofValid = AccountManager.TryAdvanceAuthState(conn, AuthState.ProofPending, AuthState.SrpSuccess, (a) =>
 			{
@@ -781,6 +802,7 @@ namespace FishMMO.Auth.Implementation
 					serverProof = proof;
 					username = a.SrpData.UserName;
 					accessLevel = a.AccessLevel;
+					isUnverified = a.IsUnverified;
 					return true;
 				}
 				return false;
@@ -789,6 +811,17 @@ namespace FishMMO.Auth.Implementation
 			if (!proofValid || serverProof == null || username == null)
 			{
 				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+				return;
+			}
+
+			// Defer the AccountUnverified result until *after* a valid M1 proof so
+			// that wrong-password attempts on an unverified account are
+			// indistinguishable from any other failed login (no username-existence
+			// oracle). The legitimate owner who knows their password gets a
+			// meaningful "verify your email" response.
+			if (isUnverified)
+			{
+				RejectAndPurge(conn, ClientAuthenticationResult.AccountUnverified);
 				return;
 			}
 
@@ -823,10 +856,20 @@ namespace FishMMO.Auth.Implementation
 				{
 					bool totpRequired = false;
 					byte[]? totpMasterKeySnapshot = totpMasterKey;
-					if (totpMasterKeySnapshot != null && totpMasterKeySnapshot.Length == 32 &&
-						totpEnabledByClientId.TryGetValue(GetConnectionClientId(conn), out bool cachedTotpEnabled) &&
+					if (totpEnabledByClientId.TryGetValue(GetConnectionClientId(conn), out bool cachedTotpEnabled) &&
 						cachedTotpEnabled)
 					{
+						// Server-side 2FA enforcement: this account has TotpEnabled=true in the
+						// database (set when TwoFactorSetup completed). The login MUST go through
+						// the TOTP/recovery-code path. If the master key required to decrypt the
+						// user's TOTP secret is not configured, we cannot verify codes — refuse
+						// the login rather than silently regressing to non-2FA authentication.
+						if (totpMasterKeySnapshot == null || totpMasterKeySnapshot.Length != 32)
+						{
+							await Log.Error(LogPrefix, $"Account '{username}' has TotpEnabled=true but TotpMasterKey is not configured (length {(totpMasterKeySnapshot?.Length ?? 0)}). Refusing login to prevent 2FA bypass.");
+							RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
+							return;
+						}
 						totpRequired = true;
 					}
 

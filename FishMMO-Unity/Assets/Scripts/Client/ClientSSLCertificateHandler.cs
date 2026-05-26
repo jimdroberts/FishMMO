@@ -1,23 +1,21 @@
 ﻿using UnityEngine.Networking;
+using FishMMO.Client.Security;
 
 namespace FishMMO.Client
 {
 	/// <summary>
 	/// Custom SSL certificate handler for UnityWebRequest on the client.
-	/// Used to validate server SSL certificates during HTTPS requests.
+	///
+	/// Delegates all validation to <see cref="ClientCertificatePinning"/> which
+	/// performs SHA-256(SPKI) pinning plus temporal-validity checks via
+	/// BouncyCastle. Configure pins during client bootstrap with
+	/// <c>ClientCertificatePinning.Configure(...)</c>.
 	/// </summary>
 	public class ClientSSLCertificateHandler : CertificateHandler
 	{
-		/// <summary>
-		/// Validates the server SSL certificate.
-		/// Always returns true, accepting all certificates.
-		/// </summary>
-		/// <param name="certificateData">The raw certificate data received from the server.</param>
-		/// <returns>True to accept the certificate, false to reject.</returns>
 		protected override bool ValidateCertificate(byte[] certificateData)
 		{
-			// Accepts all certificates. For production, implement proper validation logic.
-			return true;
+			return ClientCertificatePinning.ValidateCertificate(certificateData);
 		}
 	}
 }

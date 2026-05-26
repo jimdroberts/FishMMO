@@ -77,5 +77,19 @@ namespace FishMMO.Shared.Core
 			bool raw = Evaluate(initiator, eventData);
 			return Invert ? !raw : raw;
 		}
+
+		/// <summary>
+		/// Returns a short, designer-facing tooltip line describing this condition's effect,
+		/// or <c>null</c> when the condition has nothing to contribute. Override on concrete
+		/// conditions that should appear in ability/quest/dialogue tooltips (e.g. attribute
+		/// requirements, faction membership). Returning <c>null</c> or whitespace omits the
+		/// line entirely.
+		/// </summary>
+		/// <remarks>
+		/// The base implementation returns <c>null</c>. Aggregators
+		/// (<see cref="BaseAbilityTemplate"/>) skip null/whitespace contributions, so most
+		/// conditions need not override.
+		/// </remarks>
+		public virtual string GetTooltipContribution() => null;
 	}
 }

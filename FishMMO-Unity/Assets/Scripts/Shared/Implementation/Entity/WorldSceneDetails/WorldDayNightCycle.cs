@@ -112,6 +112,12 @@ namespace FishMMO.Shared
 		private const float DynamicGIUpdateInterval = 1f;
 		private float dynamicGITimer;
 
+		// Cached MaterialPropertyBlock used by SetAlpha so we never instantiate per-renderer
+		// material clones (which would leak each frame and break batching).
+		private MaterialPropertyBlock fadePropertyBlock;
+		private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+		private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
+
 		/// <summary>
 		/// Unity Awake callback. Initializes the day/night cycle, sets the initial skybox,
 		/// creates the blend material, and fires scene-load ECA triggers.
@@ -180,7 +186,7 @@ namespace FishMMO.Shared
 				}
 
 				UpdateDayNightRotation(currentGameTimeOfDay, RotateObjects);
-				UpdateDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
+				UpdateDayNightFading();
 			}
 		}
 
@@ -206,6 +212,11 @@ namespace FishMMO.Shared
 		private float GetGameTimeOfDay()
 		{
 			float secondsPerGameDay = DayCycleDuration + NightCycleDuration;
+			// TimeManager.TicksToTime(TickType.Tick) returns (tick * tickDelta) and is
+			// synchronized client<->server by FishNet's built-in tick-sync, so both sides
+			// compute identical currentGameTimeOfDay values. The offlineElapsedSeconds
+			// fallback only applies when no NetworkManager is present in the scene
+			// (offline / single-player editor testing).
 			if (timeManager != null && timeManager.TickDelta > 0.0d)
 			{
 				return (float)(timeManager.TicksToTime(TickType.Tick) % secondsPerGameDay);
@@ -385,9 +396,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Fades objects in or out based on day/night status.
+		/// Fades objects in or out based on day/night status. Uses cached renderers and a
+		/// MaterialPropertyBlock so no per-frame allocations or shared-material mutations occur.
 		/// </summary>
-		private void UpdateDayNightFading(float gameTimeOfDay, List<GameObject> dayFadeObjects, List<GameObject> nightFadeObjects)
+		private void UpdateDayNightFading()
 		{
 #if !UNITY_SERVER
 			float alpha = 0.0f;
@@ -436,20 +448,48 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sets the alpha of each cached renderer's material.
+		/// Sets the alpha tint on each cached renderer using a <see cref="MaterialPropertyBlock"/>.
+		/// This avoids cloning the renderer's <c>sharedMaterial</c> (which would leak an instance
+		/// per renderer per frame and break SRP batching). Writes both <c>_BaseColor</c> (URP/Lit)
+		/// and <c>_Color</c> (legacy/built-in) so the same call works across shader variants.
 		/// </summary>
 		private void SetAlpha(Renderer[] renderers, float alpha)
 		{
 #if !UNITY_SERVER
+			if (fadePropertyBlock == null)
+			{
+				fadePropertyBlock = new MaterialPropertyBlock();
+			}
+
 			for (int i = 0; i < renderers.Length; ++i)
 			{
 				Renderer r = renderers[i];
-				if (r != null)
+				if (r == null)
 				{
-					Color color = r.material.color;
-					color.a = alpha;
-					r.material.color = color;
+					continue;
 				}
+
+				r.GetPropertyBlock(fadePropertyBlock);
+
+				// Seed RGB from the shared material colour if available so we only mutate alpha.
+				Color baseColor = Color.white;
+				Material shared = r.sharedMaterial;
+				if (shared != null)
+				{
+					if (shared.HasProperty(BaseColorPropertyId))
+					{
+						baseColor = shared.GetColor(BaseColorPropertyId);
+					}
+					else if (shared.HasProperty(ColorPropertyId))
+					{
+						baseColor = shared.GetColor(ColorPropertyId);
+					}
+				}
+				baseColor.a = alpha;
+
+				fadePropertyBlock.SetColor(BaseColorPropertyId, baseColor);
+				fadePropertyBlock.SetColor(ColorPropertyId, baseColor);
+				r.SetPropertyBlock(fadePropertyBlock);
 			}
 #endif
 		}
@@ -473,5 +513,28 @@ namespace FishMMO.Shared
 				}
 			}
 		}
+
+#if UNITY_EDITOR
+		/// <summary>
+		/// Editor-only null-strip for every <see cref="WorldSceneTrigger"/> list, mirroring
+		/// <c>Core.Trigger.OnValidate</c>. Removes <c>SubclassSelector</c> remnants from
+		/// <c>Conditions</c>/action lists so designers never see lingering null elements.
+		/// </summary>
+		private void OnValidate()
+		{
+			SanitizeAll(onSceneLoadTriggers);
+			SanitizeAll(onDayStartTriggers);
+			SanitizeAll(onNightStartTriggers);
+		}
+
+		private static void SanitizeAll(List<WorldSceneTrigger> triggers)
+		{
+			if (triggers == null) return;
+			for (int i = 0; i < triggers.Count; ++i)
+			{
+				triggers[i]?.Sanitize();
+			}
+		}
+#endif
 	}
 }

@@ -75,11 +75,9 @@ namespace FishMMO.Server.Implementation
 		/// <returns>IEnumerator for coroutine.</returns>
 		private System.Collections.IEnumerator OnAwaitingConnectionReady()
 		{
-			// Wait for the connection to the current server to start before we connect the client
-			while (!NetworkManager.IsServerStarted)
-			{
-				yield return new WaitForSeconds(0.5f);
-			}
+			// WaitUntil yields once per frame and resumes immediately when the
+			// server start flag flips (no 500ms polling delay).
+			yield return new WaitUntil(() => NetworkManager.IsServerStarted);
 			yield return null;
 		}
 

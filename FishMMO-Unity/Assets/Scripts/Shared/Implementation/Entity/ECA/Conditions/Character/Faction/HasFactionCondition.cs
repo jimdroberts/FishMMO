@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// Evaluates true if the character has the specified <see cref="FactionTemplate"/> in their faction controller.
 	/// </summary>
 	[Serializable]
-	public sealed class HasFactionCondition : BaseCondition, ITooltipContributor
+	public sealed class HasFactionCondition : BaseCondition
 	{
 		/// <summary>
 		/// The faction template the character must belong to.
@@ -33,10 +33,8 @@ namespace FishMMO.Shared
 			return factionController.Factions.ContainsKey(FactionTemplate.ID);
 		}
 
-		/// <summary>
-		/// Returns the tooltip contribution for this condition.
-		/// </summary>
-		public string GetTooltipContribution()
+		/// <inheritdoc />
+		public override string GetTooltipContribution()
 		{
 			return FactionTemplate?.Name;
 		}

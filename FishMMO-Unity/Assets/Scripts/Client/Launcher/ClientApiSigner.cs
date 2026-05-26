@@ -1,0 +1,128 @@
+using System;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace FishMMO.Client
+{
+	/// <summary>
+	/// Produces the <c>X-FishMMO-Client</c> request signature that gates the
+	/// public web endpoints (IpFetch, Patcher, WebGL). The gate is a defence
+	/// against generic crawlers / opportunistic scanners and ties an API call
+	/// to a fresh timestamp + nonce so that captured headers cannot be
+	/// trivially replayed.
+	///
+	/// Header format:
+	///     X-FishMMO-Client: v1.&lt;ts&gt;.&lt;nonce&gt;.&lt;sig&gt;
+	///
+	///   ts    — UNIX seconds (UTC). Server rejects timestamps outside ±300s.
+	///   nonce — 16 random bytes, base64url, no padding. Server LRU-tracks
+	///           recent nonces to reject replays inside the skew window.
+	///   sig   — base64url(HMAC-SHA256(secret, "v1\n{METHOD}\n{PATH}\n{ts}\n{nonce}")).
+	///
+	/// The shared secret is compiled into the client (see
+	/// <see cref="ClientApiSecret"/>). It is NOT a credential and confers no
+	/// authority on its own — it is a low-friction filter that anyone with
+	/// the binary can extract, but that all opportunistic non-FishMMO traffic
+	/// will lack. Treat it as approximately equivalent to a User-Agent check
+	/// hardened against trivial spoofing and replay.
+	/// </summary>
+	internal static class ClientApiSigner
+	{
+		private const string HeaderName = "X-FishMMO-Client";
+		private const string Version = "v1";
+
+		/// <summary>
+		/// Computes the gate header for the given HTTP method + absolute URL
+		/// and inserts it into <paramref name="headers"/>. Existing entries
+		/// for the header name are overwritten. Returns the header value for
+		/// callers that need to apply it to a raw <c>UnityWebRequest</c>.
+		/// </summary>
+		/// <param name="headers">Destination header dictionary; may be null.</param>
+		/// <param name="method">HTTP verb (GET, POST, …). Case-insensitive.</param>
+		/// <param name="url">The absolute request URL. The path component is signed.</param>
+		public static string SignAndAdd(Dictionary<string, string> headers, string method, string url)
+		{
+			string value = BuildHeaderValue(method, url);
+			if (headers != null)
+			{
+				headers[HeaderName] = value;
+			}
+			return value;
+		}
+
+		/// <summary>The header name to set on the outgoing request.</summary>
+		public static string HeaderKey => HeaderName;
+
+		/// <summary>
+		/// Builds the signed header value without mutating any caller state.
+		/// </summary>
+		public static string BuildHeaderValue(string method, string url)
+		{
+			if (string.IsNullOrEmpty(method)) throw new ArgumentException("method", nameof(method));
+			if (string.IsNullOrEmpty(url)) throw new ArgumentException("url", nameof(url));
+
+			string path = ExtractPath(url);
+			long ts = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+			string nonce = GenerateNonce();
+			string methodUpper = method.ToUpperInvariant();
+
+			string canonical = Version + "\n" + methodUpper + "\n" + path + "\n" + ts.ToString() + "\n" + nonce;
+			byte[] secret = ClientApiSecret.GetBytes();
+			byte[] mac;
+			using (HMACSHA256 hmac = new HMACSHA256(secret))
+			{
+				mac = hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical));
+			}
+			// Best-effort zero of the secret buffer copy; the underlying constant
+			// lives in the loaded assembly image regardless.
+			Array.Clear(secret, 0, secret.Length);
+
+			return Version + "." + ts.ToString() + "." + nonce + "." + ToBase64Url(mac);
+		}
+
+		/// <summary>
+		/// Extracts the path component (with query) used in the canonical string.
+		/// Falls back to "/" if the URL cannot be parsed; the server will then
+		/// reject the request with a 401 — which is preferable to silently
+		/// signing the wrong canonical input.
+		/// </summary>
+		private static string ExtractPath(string url)
+		{
+			if (Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+			{
+				// PathAndQuery includes the leading slash and any query string.
+				return uri.PathAndQuery;
+			}
+			// Best-effort fallback: strip the scheme+authority manually.
+			int schemeIdx = url.IndexOf("://", StringComparison.Ordinal);
+			if (schemeIdx >= 0)
+			{
+				int pathIdx = url.IndexOf('/', schemeIdx + 3);
+				if (pathIdx >= 0)
+				{
+					return url.Substring(pathIdx);
+				}
+			}
+			return "/";
+		}
+
+		private static string GenerateNonce()
+		{
+			byte[] buf = new byte[16];
+			using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+			{
+				rng.GetBytes(buf);
+			}
+			return ToBase64Url(buf);
+		}
+
+		private static string ToBase64Url(byte[] bytes)
+		{
+			string s = Convert.ToBase64String(bytes);
+			// RFC 4648 §5 url-safe alphabet, padding stripped.
+			s = s.Replace('+', '-').Replace('/', '_').TrimEnd('=');
+			return s;
+		}
+	}
+}

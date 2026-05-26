@@ -73,6 +73,21 @@ namespace FishMMO.Client
 		/// </summary>
 		public List<ServerAddress> LoginServerAddresses;
 		/// <summary>
+		/// UTC time (<see cref="Time.realtimeSinceStartup"/> reference frame) at
+		/// which <see cref="LoginServerAddresses"/> was last populated. Used by
+		/// <see cref="GetLoginServerList"/> to invalidate stale caches after
+		/// <see cref="LoginServerCacheTtlSeconds"/>. Initialized to a sentinel
+		/// (<see cref="float.NegativeInfinity"/>) so the first call always fetches.
+		/// </summary>
+		private float loginServerAddressesFetchedAt = float.NegativeInfinity;
+		/// <summary>
+		/// Maximum age (seconds) of <see cref="LoginServerAddresses"/> before the
+		/// next login attempt forces a fresh APIHost lookup. Without a TTL a
+		/// long-running client process keeps using a stale set of login mirrors
+		/// across operator migrations, masking outages and preventing rollouts.
+		/// </summary>
+		public float LoginServerCacheTtlSeconds = 300f;
+		/// <summary>
 		/// List of scenes to preload when entering the world.
 		/// </summary>
 		public List<AddressableSceneLoadData> WorldPreloadScenes = new List<AddressableSceneLoadData>();
@@ -81,9 +96,29 @@ namespace FishMMO.Client
 		/// </summary>
 		public byte MaxReconnectAttempts = 10;
 		/// <summary>
-		/// Time to wait between reconnect attempts (in seconds).
+		/// Time to wait between reconnect attempts (in seconds). Used as the
+		/// base for exponential backoff (see <see cref="ComputeReconnectDelay"/>).
 		/// </summary>
 		public float ReconnectAttemptWaitTime = 5f;
+		/// <summary>
+		/// Hard ceiling on the reconnect delay applied by exponential backoff.
+		/// </summary>
+		public float MaxReconnectDelay = 60f;
+		/// <summary>
+		/// Per-request timeout (seconds) applied to the <c>loginserver</c>
+		/// discovery <see cref="UnityWebRequest"/>. Prevents a half-open TLS
+		/// connection on a misbehaving APIHost mirror from stalling login
+		/// indefinitely; on timeout we fall through to the next candidate host.
+		/// </summary>
+		public int LoginServerRequestTimeoutSeconds = 10;
+		/// <summary>
+		/// Hard upper bound (seconds) on how long
+		/// <see cref="OnAwaitingConnectionReady"/> waits for the previous client
+		/// connection to fully tear down before issuing a new
+		/// <c>StartConnection</c>. Guards against a stuck FishNet transport state
+		/// machine that never raises <see cref="LocalConnectionState.Stopped"/>.
+		/// </summary>
+		public float ConnectionStopTimeoutSeconds = 10f;
 		/// <summary>
 		/// Reference to the client postboot system for scene management.
 		/// </summary>
@@ -334,16 +369,63 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Handles log messages received by the application, disconnects on exceptions.
+		/// Handles log messages received by the application. Force-disconnects ONLY
+		/// when the exception clearly originates from the networking/auth pipeline
+		/// AND a connection is currently active. Unrelated managed exceptions
+		/// (UI, addressables, third-party plugins, etc.) are logged but no longer
+		/// tear down the network connection.
 		/// </summary>
 		private void Application_logMessageReceived(string condition, string stackTrace, LogType type)
 		{
-			if (type == LogType.Exception)
+			if (type != LogType.Exception)
 			{
-				Log.Error("Client", $"{stackTrace}");
-
-				ForceDisconnect();
+				return;
 			}
+
+			Log.Error("Client", $"{stackTrace}");
+
+			// If we are not currently connected (or actively connecting), a stray
+			// exception cannot represent a corrupted networking state — leave the
+			// rest of the app alone.
+			if (clientState == LocalConnectionState.Stopped)
+			{
+				return;
+			}
+
+			// Only escalate to ForceDisconnect for exceptions that look like they
+			// came from the network/auth/transport stack. This keeps unrelated
+			// gameplay or UI errors from tearing down the session.
+			if (string.IsNullOrEmpty(stackTrace) || !IsNetworkRelatedStackTrace(stackTrace))
+			{
+				return;
+			}
+
+			ForceDisconnect();
+		}
+
+		/// <summary>
+		/// Heuristic check: does the supplied stack trace mention any of the
+		/// networking, authentication, or transport subsystems whose failure
+		/// should terminate the current session? Markers are deliberately
+		/// scoped to the network stack itself so that exceptions thrown from
+		/// gameplay broadcast handlers (which run on the network thread but
+		/// represent user code) do NOT force a disconnect.
+		/// </summary>
+		private static bool IsNetworkRelatedStackTrace(string stackTrace)
+		{
+			// Specific namespaces / type names that indicate the transport,
+			// FishNet client manager, or our authenticator pipeline is in a
+			// corrupted state. Substrings are anchored to namespace boundaries
+			// (trailing '.') wherever possible to avoid accidental matches in
+			// unrelated type names.
+			return stackTrace.IndexOf("FishNet.Managing.", StringComparison.Ordinal) >= 0
+				|| stackTrace.IndexOf("FishNet.Transporting.", StringComparison.Ordinal) >= 0
+				|| stackTrace.IndexOf("FishNet.Serializing.", StringComparison.Ordinal) >= 0
+				|| stackTrace.IndexOf("FishMMO.Shared.Network.", StringComparison.Ordinal) >= 0
+				|| stackTrace.IndexOf("FishMMO.Client.Authentication", StringComparison.Ordinal) >= 0
+				|| stackTrace.IndexOf("LoginAuthenticator", StringComparison.Ordinal) >= 0
+				|| stackTrace.IndexOf("SrpAuthenticator", StringComparison.Ordinal) >= 0
+				|| stackTrace.IndexOf("ClientAuthenticator", StringComparison.Ordinal) >= 0;
 		}
 
 		/// <summary>
@@ -356,7 +438,15 @@ namespace FishMMO.Client
 #endif
 
 #if !UNITY_EDITOR
-			Configuration.GlobalSettings.Save();
+			try
+			{
+				// Best-effort: never let a settings-save IO error block teardown.
+				Configuration.GlobalSettings.Save();
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("Client", $"Failed to save global settings on shutdown: {ex.Message}");
+			}
 #endif
 
 #if !UNITY_SERVER
@@ -442,6 +532,18 @@ namespace FishMMO.Client
 				ForceDisconnect();
 			}
 
+			// Wipe the cached auth token on explicit logout. The token's lifetime
+			// is still bounded by the server's tokenExpirationMinutes window, but
+			// dropping it locally makes credential rotation effective immediately
+			// and removes the token from process memory. We also send a best-effort
+			// RevokeTokenBroadcast so the server marks the token revoked in the DB
+			// before its TTL elapses; RevokeAndClearAuthToken zeroes the local copy
+			// whether or not the broadcast can be delivered.
+			if (LoginAuthenticator != null)
+			{
+				LoginAuthenticator.RevokeAndClearAuthToken();
+			}
+
 			reconnectsAttempted = 0;
 			nextReconnect = -1;
 			currentConnectionType = ServerConnectionType.None;
@@ -518,8 +620,8 @@ namespace FishMMO.Client
 						// we can reconnect to the world server and scene servers
 						if (CanReconnect)
 						{
-							// wait until we can reconnect again
-							nextReconnect = ReconnectAttemptWaitTime;
+							// wait until we can reconnect again (exponential backoff w/ jitter)
+							nextReconnect = ComputeReconnectDelay(reconnectsAttempted);
 
 							// show the reconnect screen?
 							OnReconnectAttempt?.Invoke(reconnectsAttempted, MaxReconnectAttempts);
@@ -589,6 +691,12 @@ namespace FishMMO.Client
 			// WebGL clients connect through NGINX, which terminates SSL and
 			// routes wss://game.fishmmo.com/ws/{port} to the correct backend.
 			// Rewrite the raw IP:port from the server into the NGINX path format.
+			//
+			// Security note: on the WebGL/Bayou transport TLS is handled by the
+			// browser using the system CA bundle; ClientCertificatePinning does
+			// NOT apply to this connection (UnityWebSocket cannot expose the leaf
+			// certificate). Defence here relies on HSTS at the edge and correctly
+			// configured CAA records for game.fishmmo.com.
 			address = Constants.Configuration.GameHost + "/ws/" + port;
 			port = 443;
 #endif
@@ -612,7 +720,7 @@ namespace FishMMO.Client
 		{
 			if (nextReconnect < 0)
 			{
-				nextReconnect = ReconnectAttemptWaitTime;
+				nextReconnect = ComputeReconnectDelay(reconnectsAttempted);
 			}
 			if (reconnectsAttempted < MaxReconnectAttempts)
 			{
@@ -627,8 +735,39 @@ namespace FishMMO.Client
 			{
 				reconnectsAttempted = 0;
 				nextReconnect = -1;
+				// Drop the cached login-server list so the next login flow re-fetches
+				// it via APIHost. If the world server has been permanently moved,
+				// re-discovery is the only way the client can find the new host
+				// without a restart.
+				LoginServerAddresses = null;
+				loginServerAddressesFetchedAt = float.NegativeInfinity;
 				OnReconnectFailed?.Invoke();
 			}
+		}
+
+		/// <summary>
+		/// Computes the next reconnect delay using exponential backoff with
+		/// ±25% jitter, capped at <see cref="MaxReconnectDelay"/>. Backoff
+		/// avoids thundering herds against the world server when a transient
+		/// outage simultaneously drops many clients.
+		/// </summary>
+		/// <param name="attempt">
+		///   Zero-based attempt index. The first retry waits
+		///   <see cref="ReconnectAttemptWaitTime"/>, the second waits roughly
+		///   2× that, and so on.
+		/// </param>
+		private float ComputeReconnectDelay(int attempt)
+		{
+			float baseDelay = ReconnectAttemptWaitTime <= 0 ? 1f : ReconnectAttemptWaitTime;
+			int shift = attempt < 0 ? 0 : Math.Min(attempt, 6); // clamp 2^n to avoid overflow
+			float backoff = baseDelay * (1 << shift);
+			if (backoff > MaxReconnectDelay)
+			{
+				backoff = MaxReconnectDelay;
+			}
+			// ±25% jitter
+			float jitter = UnityEngine.Random.Range(0.75f, 1.25f);
+			return backoff * jitter;
 		}
 
 		/// <summary>
@@ -639,10 +778,25 @@ namespace FishMMO.Client
 		/// <param name="isWorldServer">True if connecting to a world server.</param>
 		IEnumerator OnAwaitingConnectionReady(string address, ushort port, bool isWorldServer)
 		{
-			// wait for the connection to the current server to stop
-			while (clientState != LocalConnectionState.Stopped)
+			// Wait until the existing connection has fully torn down, but bound the
+			// wait so a transport stuck in Stopping never freezes the connect flow.
+			// clientState is kept current by ClientManager_OnClientConnectionState.
+			if (clientState != LocalConnectionState.Stopped)
 			{
-				yield return new WaitForSeconds(0.1f);
+				float waitDeadline = Time.realtimeSinceStartup + Mathf.Max(0.1f, ConnectionStopTimeoutSeconds);
+				while (clientState != LocalConnectionState.Stopped &&
+					   Time.realtimeSinceStartup < waitDeadline)
+				{
+					yield return null;
+				}
+				if (clientState != LocalConnectionState.Stopped)
+				{
+					Log.Warning("Client",
+						$"Timed out after {ConnectionStopTimeoutSeconds:0.0}s waiting for previous " +
+						"connection to stop; forcing teardown before reconnect.");
+					NetworkManager.ClientManager.StopConnection();
+					yield return null;
+				}
 			}
 
 			if (forceDisconnect)
@@ -723,68 +877,163 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFetchFail, Action<List<ServerAddress>> onFetchComplete)
 		{
-			if (LoginServerAddresses != null &&
-				LoginServerAddresses.Count > 0)
+			// Bounded-age cache: honour an existing list only while it is fresher
+			// than LoginServerCacheTtlSeconds. Without this a long-lived client
+			// retains stale mirrors across operator migrations indefinitely.
+			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0)
 			{
-				onFetchComplete?.Invoke(LoginServerAddresses);
-			}
-			else if (Configuration.GlobalSettings.TryGetString("APIHost", out string apiHost))
-			{
-				// Pick a random API Host address if available.
-				string[] apiServers = apiHost.Split(",");
-				if (apiServers != null && apiServers.Length > 1)
+				float age = Time.realtimeSinceStartup - loginServerAddressesFetchedAt;
+				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds)
 				{
-					apiHost = apiServers.GetRandom();
-				}
-
-				using (UnityWebRequest request = UnityWebRequest.Get(apiHost + "loginserver"))
-				{
-					request.SetRequestHeader("X-FishMMO", "Client");
-					request.certificateHandler = new ClientSSLCertificateHandler();
-
-					yield return request.SendWebRequest();
-
-					if (request.result == UnityWebRequest.Result.ConnectionError)
-					{
-						onFetchFail?.Invoke("Connection Error: " + request.error);
-					}
-					else if (request.result == UnityWebRequest.Result.ProtocolError)
-					{
-						onFetchFail?.Invoke("Protocol Error: " + request.error);
-					}
-					else if (request.result == UnityWebRequest.Result.DataProcessingError)
-					{
-						onFetchFail?.Invoke("Data Processing Error: " + request.error);
-					}
-					else
-					{
-						// Parse JSON response
-						string jsonResponse = request.downloadHandler.text;
-
-						// Replace lowercase field names with PascalCase to fit our type
-						jsonResponse = jsonResponse.Replace("\"address\"", "\"Address\"")
-												   .Replace("\"port\"", "\"Port\"");
-
-						jsonResponse = "{\"Addresses\":" + jsonResponse.ToString() + "}";
-						ServerAddresses result = JsonUtility.FromJson<ServerAddresses>(jsonResponse);
-
-						// Do something with the server list
-						foreach (ServerAddress server in result.Addresses)
-						{
-							Log.Debug("Client", $"New Login Server Address:{server.Address}, Port: {server.Port}");
-						}
-
-						// Assign our LoginServerAddresses
-						LoginServerAddresses = result.Addresses;
-
-						onFetchComplete?.Invoke(result.Addresses);
-					}
+					onFetchComplete?.Invoke(LoginServerAddresses);
+					yield break;
 				}
 			}
-			else
+
+			// Resolve the configured APIHost candidates with randomized failover order.
+			List<string> candidates = ApiHostResolver.GetCandidates();
+			if (candidates.Count == 0)
 			{
 				onFetchFail?.Invoke("Failed to configure APIHost.");
+				yield break;
 			}
+
+			// Happy-Eyeballs-style staggered parallel probing: fire the first
+			// candidate immediately, then a new candidate every staggerSeconds
+			// until one succeeds. The first valid response wins; the rest are
+			// aborted+disposed. This bounds the failover delay (no longer
+			// timeout-per-host serial waits) without flooding all mirrors on
+			// every healthy login.
+			const float staggerSeconds = 0.25f;
+			List<PendingApiCandidate> pending = new List<PendingApiCandidate>(candidates.Count);
+			float lastStartedAt = float.NegativeInfinity;
+			int nextToStart = 0;
+			string lastError = null;
+			List<ServerAddress> winner = null;
+
+			try
+			{
+				while (winner == null)
+				{
+					// Stagger-start the next candidate if appropriate.
+					if (nextToStart < candidates.Count &&
+						(pending.Count == 0 || Time.realtimeSinceStartup - lastStartedAt >= staggerSeconds))
+					{
+						string apiHost = candidates[nextToStart++];
+						string loginServerUrl = apiHost + "loginserver";
+						UnityWebRequest request = UnityWebRequest.Get(loginServerUrl);
+						request.certificateHandler = new ClientSSLCertificateHandler();
+						// Hardening: refuse HTTP redirects. The loginserver endpoint URL is
+						// authoritative; a 3xx response is either misconfiguration or MITM.
+						request.redirectLimit = 0;
+						// Sign the request so the gateway will accept it. See ClientApiSigner.
+						request.SetRequestHeader(ClientApiSigner.HeaderKey, ClientApiSigner.BuildHeaderValue(UnityWebRequest.kHttpVerbGET, loginServerUrl));
+						if (LoginServerRequestTimeoutSeconds > 0)
+						{
+							request.timeout = LoginServerRequestTimeoutSeconds;
+						}
+						UnityWebRequestAsyncOperation op = request.SendWebRequest();
+						pending.Add(new PendingApiCandidate { Request = request, Operation = op, ApiHost = apiHost });
+						lastStartedAt = Time.realtimeSinceStartup;
+					}
+
+					// Bail out if everything has been started and all are finished without success.
+					bool anyInFlight = false;
+					for (int i = 0; i < pending.Count; i++)
+					{
+						if (pending[i].Request == null) continue;
+						if (!pending[i].Operation.isDone) { anyInFlight = true; continue; }
+
+						// Inspect the completed request.
+						PendingApiCandidate done = pending[i];
+						pending[i] = new PendingApiCandidate { Request = null, Operation = null, ApiHost = done.ApiHost };
+						try
+						{
+							string apiHostForLog = ApiHostResolver.SanitizeForLog(done.ApiHost);
+							if (done.Request.result == UnityWebRequest.Result.ConnectionError)
+							{
+								lastError = "Connection Error: " + done.Request.error;
+								Log.Debug("Client", $"APIHost {apiHostForLog} unreachable ({done.Request.error}); trying next.");
+								continue;
+							}
+							if (done.Request.result == UnityWebRequest.Result.ProtocolError)
+							{
+								lastError = "Protocol Error: " + done.Request.error;
+								Log.Debug("Client", $"APIHost {apiHostForLog} returned protocol error ({done.Request.error}); trying next.");
+								continue;
+							}
+							if (done.Request.result == UnityWebRequest.Result.DataProcessingError)
+							{
+								lastError = "Data Processing Error: " + done.Request.error;
+								Log.Debug("Client", $"APIHost {apiHostForLog} data processing error ({done.Request.error}); trying next.");
+								continue;
+							}
+
+							// The server returns { "Addresses": [ { "Address": ..., "Port": ... }, ... ] }
+							// in PascalCase to match the Unity ServerAddresses type directly.
+							string jsonResponse = done.Request.downloadHandler.text;
+							ServerAddresses parsed = JsonUtility.FromJson<ServerAddresses>(jsonResponse);
+							if (parsed == null || parsed.Addresses == null)
+							{
+								lastError = "Failed to parse login server list.";
+								Log.Debug("Client", $"APIHost {apiHostForLog} returned unparseable response; trying next.");
+								continue;
+							}
+
+							foreach (ServerAddress server in parsed.Addresses)
+							{
+								Log.Debug("Client", $"New Login Server Address:{server.Address}, Port: {server.Port}");
+							}
+
+							winner = parsed.Addresses;
+							break;
+						}
+						finally
+						{
+							done.Request.Dispose();
+						}
+					}
+
+					if (winner != null) break;
+					if (!anyInFlight && nextToStart >= candidates.Count) break;
+					yield return null;
+				}
+
+				if (winner != null)
+				{
+					LoginServerAddresses = winner;
+					loginServerAddressesFetchedAt = Time.realtimeSinceStartup;
+					onFetchComplete?.Invoke(winner);
+				}
+				else
+				{
+					onFetchFail?.Invoke(lastError ?? "Failed to reach any configured APIHost.");
+				}
+			}
+			finally
+			{
+				// Abort and dispose any still-in-flight or unread candidates.
+				for (int i = 0; i < pending.Count; i++)
+				{
+					if (pending[i].Request != null)
+					{
+						try { pending[i].Request.Abort(); } catch { }
+						try { pending[i].Request.Dispose(); } catch { }
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Bookkeeping for a single in-flight APIHost candidate inside the
+		/// Happy-Eyeballs-style login-server probe. Held in a list and walked
+		/// per yield to detect the first successful result.
+		/// </summary>
+		private struct PendingApiCandidate
+		{
+			public UnityWebRequest Request;
+			public UnityWebRequestAsyncOperation Operation;
+			public string ApiHost;
 		}
 
 		/// <summary>

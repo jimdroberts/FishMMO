@@ -306,6 +306,16 @@ namespace FishMMO.Auth.Implementation
 			// ── Phase 1: Cookie challenge ────────────────────────────────
 			if (cookie == null)
 			{
+				// Enforce protocol version intersection before issuing a cookie.
+				try
+				{
+					CryptoHelper.NegotiateProtocolVersion(minVersion, maxVersion);
+				}
+				catch (Exception)
+				{
+					DisconnectConnection(conn, graceful: true);
+					return;
+				}
 				string challengeIp = HandshakeService.NormalizeIp(GetConnectionAddress(conn));
 				byte[] challengeCookie = HandshakeService.ComputeHandshakeCookie(challengeIp, publicKey, HandshakeService.GetTimeBucket(), hmacKeySnapshot);
 				BroadcastCookieChallenge(conn, challengeCookie);

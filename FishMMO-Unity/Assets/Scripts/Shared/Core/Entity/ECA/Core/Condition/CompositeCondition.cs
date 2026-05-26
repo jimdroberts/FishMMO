@@ -41,11 +41,25 @@ namespace FishMMO.Shared.Core
 				return true;
 			}
 
+			// Respect the ambient condition filter (e.g. AbilityEvent skipping already-paid
+			// IResourceCost conditions at execution time). Without this, a designer who
+			// nests an IResourceCost-bearing condition inside a CompositeCondition would
+			// see it re-evaluated post-activation and silently fail.
+			System.Func<BaseCondition, bool> filter = eventData?.ConditionFilter;
+
 			if (Operator == ConditionOperator.AND)
 			{
 				foreach (var condition in Conditions)
 				{
-					if (condition == null || !condition.Check(initiator, eventData))
+					if (condition == null)
+					{
+						continue;
+					}
+					if (filter != null && !filter(condition))
+					{
+						continue;
+					}
+					if (!condition.Check(initiator, eventData))
 					{
 						return false;
 					}
@@ -54,14 +68,26 @@ namespace FishMMO.Shared.Core
 			}
 			else
 			{
+				bool anyEvaluated = false;
 				foreach (var condition in Conditions)
 				{
-					if (condition != null && condition.Check(initiator, eventData))
+					if (condition == null)
+					{
+						continue;
+					}
+					if (filter != null && !filter(condition))
+					{
+						continue;
+					}
+					anyEvaluated = true;
+					if (condition.Check(initiator, eventData))
 					{
 						return true;
 					}
 				}
-				return false;
+				// All children filtered out → vacuously true (matches AND behavior with
+				// an empty list and avoids surprising "OR with no candidates → false").
+				return !anyEvaluated;
 			}
 		}
 	}

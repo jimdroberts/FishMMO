@@ -258,6 +258,22 @@ namespace FishMMO.Auth.Implementation
 						AccountManager.RemoveConnectionAccount(conn);
 					}
 				});
+
+				// Reconnect-only token refresh: after a successful token auth, fire the
+				// post-auth hook so the host can issue a freshly-minted auth token with a
+				// refreshed expiration window over the existing AES-GCM session channel.
+				// Failures here are non-fatal — the client retains its current token.
+				if (authenticated)
+				{
+					try
+					{
+						await OnTokenAuthSuccessAsync(conn, verifyResult.AccountName!, verifyResult.AccessLevel, loginServerId);
+					}
+					catch (Exception renewEx)
+					{
+						await Log.Warning(LogPrefix, $"OnTokenAuthSuccessAsync hook threw (non-fatal): {renewEx.Message}");
+					}
+				}
 			}
 			catch (Exception ex)
 			{
@@ -299,6 +315,25 @@ namespace FishMMO.Auth.Implementation
 		protected virtual Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult defaultResult, string username)
 		{
 			return Task.FromResult(defaultResult);
+		}
+
+		/// <summary>
+		/// Invoked once after a successful token authentication (and the resulting auth-result
+		/// broadcast). Override to mint and push a fresh auth token to the client over the
+		/// existing AES-GCM session channel, extending the effective session lifetime
+		/// past the original LoginServer-issued token's expiration.
+		/// <para>
+		/// Exceptions thrown here are caught by the caller and logged as warnings; they
+		/// do not invalidate the just-completed authentication.
+		/// </para>
+		/// </summary>
+		/// <param name="conn">The newly authenticated connection.</param>
+		/// <param name="accountName">Account name extracted from the verified token.</param>
+		/// <param name="accessLevel">Access level extracted from the verified token.</param>
+		/// <param name="loginServerId">Login server ID extracted from the verified token (used to look up the HMAC signing key for the renewal).</param>
+		protected virtual Task OnTokenAuthSuccessAsync(TConnection conn, string accountName, AccessLevel accessLevel, long loginServerId)
+		{
+			return Task.CompletedTask;
 		}
 
 		#endregion

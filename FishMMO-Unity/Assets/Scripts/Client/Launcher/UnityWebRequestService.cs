@@ -79,6 +79,19 @@ namespace FishMMO.Client
 				{
 					request.timeout = config.Timeout;
 
+					// Hardening: never follow HTTP redirects automatically. All launcher
+					// endpoints are configured directly (loginserver, patches, news); a 3xx
+					// response means either a misconfiguration or an active MITM trying to
+					// pivot the request. Refusing redirects converts these into a hard fail
+					// instead of silently following the attacker's Location header.
+					request.redirectLimit = 0;
+
+					// Hardening: disable HTTP/1.1 100-Continue for upload bodies. Launcher
+					// traffic is GET-only and has no request body; this is a defensive
+					// no-op for non-upload paths but prevents downgrade surprises if a
+					// future caller switches to POST.
+					request.useHttpContinue = false;
+
 					// Add custom headers
 					foreach (var header in config.Headers)
 					{

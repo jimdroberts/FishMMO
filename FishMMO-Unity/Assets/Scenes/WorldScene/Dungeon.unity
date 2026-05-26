@@ -659,6 +659,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 520637846}
   _networkObjectCache: {fileID: 520637846}
   InteractionRange: 3.5
+  onInteractTriggers: []
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 1770604219}
   DestinationID: 
@@ -2467,6 +2468,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1334146826}
   - component: {fileID: 1334146825}
+  - component: {fileID: 1334146827}
   m_Layer: 0
   m_Name: WorldSceneSettings
   m_TagString: Untagged
@@ -2489,22 +2491,6 @@ MonoBehaviour:
   MaxClients: 100
   SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
     type: 3}
-  DefaultSceneFog: {fileID: 11400000, guid: e37548aba1d69c14cb2bd288e7882f76, type: 2}
-  DayNightCycle: 1
-  DayCycleDuration: 10800
-  NightCycleDuration: 10800
-  DaySkyboxMaterial: {fileID: 2100000, guid: 316068aec7de8294ba9429fc2bc910b9, type: 2}
-  NightSkyBoxMaterial: {fileID: 2100000, guid: 16eb23baeafad21469a3509842b500e3, type: 2}
-  RotateObjects:
-  - {fileID: 1426385472}
-  DayObjects:
-  - {fileID: 1426385474}
-  NightObjects:
-  - {fileID: 1426385473}
-  FadeThreshold: 1
-  DayFadeObjects: []
-  NightFadeObjects: []
-  isDaytime: 1
 --- !u!4 &1334146826
 Transform:
   m_ObjectHideFlags: 0
@@ -2520,6 +2506,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1334146827
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1334146824}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4458062391465654f95653bd76754463, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WorldDayNightCycle
+  DayNightCycle: 1
+  DayCycleDuration: 10800
+  NightCycleDuration: 10800
+  DaySkyboxMaterial: {fileID: 0}
+  NightSkyBoxMaterial: {fileID: 0}
+  RotateObjects: []
+  DayObjects: []
+  NightObjects: []
+  FadeThreshold: 1
+  DayFadeObjects: []
+  NightFadeObjects: []
+  isDaytime: 1
+  onSceneLoadTriggers: []
+  onDayStartTriggers: []
+  onNightStartTriggers: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &1343630978
 GameObject:
   m_ObjectHideFlags: 0
@@ -2924,24 +2940,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d9b40c4bb7d3f5d4c965814c5433ce65, type: 3}
---- !u!1 &1426385472 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 6291631714174163124, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-    type: 3}
-  m_PrefabInstance: {fileID: 1426385471}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &1426385473 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 6086499326591653024, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-    type: 3}
-  m_PrefabInstance: {fileID: 1426385471}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &1426385474 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1313084549160260347, guid: d9b40c4bb7d3f5d4c965814c5433ce65,
-    type: 3}
-  m_PrefabInstance: {fileID: 1426385471}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1427581217
 GameObject:
   m_ObjectHideFlags: 0
@@ -3579,7 +3577,7 @@ MonoBehaviour:
   Collider: {fileID: 0}
   Terrain: {fileID: 1327666854}
   OnRegionEnter:
-  - {fileID: 11400000, guid: 22297f79efd99de43a9e8079889ee4b4, type: 2}
+  - {fileID: 0}
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}

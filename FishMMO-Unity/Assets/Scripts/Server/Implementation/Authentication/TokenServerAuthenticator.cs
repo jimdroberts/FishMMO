@@ -12,6 +12,7 @@ using FishMMO.Auth.Core;
 using FishMMO.Auth.Implementation;
 using FishMMO.Shared;
 using FishMMO.Logging;
+using UnityEngine;
 
 namespace FishMMO.Server.Implementation
 {
@@ -23,6 +24,13 @@ namespace FishMMO.Server.Implementation
 	/// </summary>
 	public class TokenServerAuthenticator : BaseServerAuthenticator
 	{
+		/// <summary>
+		/// Lifetime of renewal-issued auth tokens, in minutes. Used when this World/Scene
+		/// server mints a fresh token immediately after a successful <see cref="TokenAuthBroadcast"/>
+		/// (the reconnect-only refresh flow). Inspector-configurable.
+		/// </summary>
+		[SerializeField] private float renewalTokenExpirationMinutes = 10f;
+
 		/// <summary>The token-specific core instance. Null until <see cref="InitializeCoreInstance"/> is called.</summary>
 		private TokenCore _core;
 
@@ -106,6 +114,96 @@ namespace FishMMO.Server.Implementation
 			return result.Data.Revoked;
 		}
 
+		/// <summary>
+		/// Mints a fresh AES-GCM-encrypted auth token for <paramref name="conn"/> using
+		/// the existing session encryption channel, persists its hash, and pushes it to
+		/// the client via <see cref="RenewTokenResponseBroadcast"/>. Called once
+		/// immediately after a successful <see cref="TokenAuthBroadcast"/> (reconnect-only
+		/// refresh). Failures are logged and swallowed — the client retains its current
+		/// token in that case.
+		/// </summary>
+		/// <param name="conn">The newly authenticated connection.</param>
+		/// <param name="accountName">Account name extracted from the verified token.</param>
+		/// <param name="accessLevel">Access level extracted from the verified token.</param>
+		/// <param name="loginServerId">Originating LoginServer ID (used to look up the HMAC signing key).</param>
+		private async Task IssueRenewalTokenCoreAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId)
+		{
+			if (conn == null || !conn.IsActive)
+				return;
+
+			if (Server.AccountManager is not IAccountManager<NetworkConnection> am)
+				return;
+
+			if (!am.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData) || encryptionData == null)
+				return;
+
+			byte[] signingKey = await FetchSigningKeyCoreAsync(loginServerId);
+			if (signingKey == null)
+			{
+				await Log.Warning(LogPrefix, $"Renewal token skipped for '{accountName}': signing key unavailable for LoginServer {loginServerId}.");
+				return;
+			}
+
+			byte[] rawTokenForHashing = null;
+			try
+			{
+				int expirationMinutes = Math.Max(1, (int)renewalTokenExpirationMinutes);
+
+				byte[] encryptedToken = TokenService.GenerateAndEncryptToken(
+					encryptionData,
+					accountName,
+					loginServerId,
+					expirationMinutes,
+					signingKey,
+					accessLevel,
+					out rawTokenForHashing);
+
+				if (encryptedToken == null || rawTokenForHashing == null)
+				{
+					await Log.Warning(LogPrefix, $"Renewal token generation failed for '{accountName}'.");
+					return;
+				}
+
+				string tokenHash = TokenService.HashToken(rawTokenForHashing);
+
+				if (Server.Database?.ServiceRegistry != null &&
+					Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var tokenSvc))
+				{
+					var r = await tokenSvc.IssueAsync(tokenHash, accountName, loginServerId, DateTime.UtcNow.AddMinutes(expirationMinutes));
+					if (!r.IsSuccess)
+					{
+						await Log.Warning(LogPrefix, $"Renewal IssueAsync DB error for '{accountName}': {r.ErrorCode} - {r.ErrorMessage}");
+						return;
+					}
+				}
+				else
+				{
+					await Log.Warning(LogPrefix, $"Renewal token skipped for '{accountName}': IAuthTokenService unavailable.");
+					return;
+				}
+
+				// Capture seq from the encrypted-token framing if available, otherwise leave 0
+				// (the wire format embeds its own sequence; this field is informational here).
+				EnqueueMainThreadAction(() =>
+				{
+					if (conn.IsActive)
+					{
+						NetworkManager.ServerManager.Broadcast(conn,
+							new RenewTokenResponseBroadcast { Token = encryptedToken, Seq = 0 },
+							false, Channel.Reliable);
+					}
+				});
+			}
+			finally
+			{
+				if (rawTokenForHashing != null)
+				{
+					CryptographicOperations.ZeroMemory(rawTokenForHashing);
+				}
+				CryptographicOperations.ZeroMemory(signingKey);
+			}
+		}
+
 		#endregion
 
 		#region Inner Core (bridges FishNet callbacks to TokenAuthenticatorCore)
@@ -184,6 +282,10 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override Task<bool> CheckTokenRevocationAsync(string tokenHash) =>
 				_outer.CheckTokenRevocationCoreAsync(tokenHash);
+
+			/// <inheritdoc/>
+			protected override Task OnTokenAuthSuccessAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId) =>
+				_outer.IssueRenewalTokenCoreAsync(conn, accountName, accessLevel, loginServerId);
 		}
 
 		#endregion

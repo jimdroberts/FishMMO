@@ -51,6 +51,23 @@ namespace FishMMO.Shared.Core
 		public DeterministicRNG RNG { get; set; }
 
 		/// <summary>
+		/// Optional ambient filter applied to every condition evaluation occurring within
+		/// this trigger fire. When non-null, returning <c>false</c> from the filter causes
+		/// the condition to be skipped (treated as if not present) at every level —
+		/// top-level <see cref="Core.Trigger.Conditions"/>, nested
+		/// <see cref="CompositeCondition"/> children, and selector-scoped
+		/// <see cref="TargetSelector.AreConditionsMet"/> calls. Carried across
+		/// <see cref="Fork(GameObject, ICharacter)"/> so target fan-outs preserve the
+		/// filter context.
+		/// <para>
+		/// Set by <see cref="Core.Trigger.Execute(EventData)"/> from
+		/// <see cref="Core.Trigger.ShouldEvaluateCondition(BaseCondition)"/>. Designers
+		/// and authors of new triggers/selectors generally do not need to touch this.
+		/// </para>
+		/// </summary>
+		public System.Func<BaseCondition, bool> ConditionFilter { get; set; }
+
+		/// <summary>
 		/// Returns the type name of this event data instance.
 		/// </summary>
 		public override string ToString() => GetType().Name;
@@ -148,6 +165,7 @@ namespace FishMMO.Shared.Core
 				scoped.SetTarget(target);
 			}
 			scoped.RNG = RNG;
+			scoped.ConditionFilter = ConditionFilter;
 			scoped.Merge(this);
 			return scoped;
 		}
@@ -211,30 +229,60 @@ namespace FishMMO.Shared.Core
 		}
 
 		/// <summary>
-		/// Attempts to retrieve a sub-payload of type <typeparamref name="T"/>.
+		/// Attempts to retrieve a sub-payload of type <typeparamref name="T"/>. Performs an
+		/// exact-type lookup first (the fast path); if no payload is registered under that
+		/// exact key, falls back to a linear scan returning the first stored payload
+		/// assignable to <typeparamref name="T"/>. This lets callers request a base type
+		/// (e.g. <c>TryGet&lt;AbilityCollisionEventData&gt;()</c>) and still receive a
+		/// designer-authored subclass payload.
 		/// </summary>
 		/// <typeparam name="T">The type of event data to retrieve.</typeparam>
 		/// <param name="data">The retrieved sub-payload, or default if not found.</param>
 		/// <returns>True if found; otherwise, false.</returns>
 		public bool TryGet<T>(out T data) where T : EventData
 		{
-			if (eventDataDictionary.TryGetValue(typeof(T), out EventData foundData))
+			// Fast path: exact concrete type registered under typeof(T).
+			if (eventDataDictionary.TryGetValue(typeof(T), out EventData foundData) && foundData is T exact)
 			{
-				data = foundData as T;
-				return data != null;
+				data = exact;
+				return true;
 			}
+
+			// Fallback: scan for the first payload assignable to T so requests for a base
+			// type still match subclass payloads keyed by their concrete type.
+			foreach (EventData candidate in eventDataDictionary.Values)
+			{
+				if (candidate is T match)
+				{
+					data = match;
+					return true;
+				}
+			}
+
 			data = default(T);
 			return false;
 		}
 
 		/// <summary>
-		/// Checks if a sub-payload of type <typeparamref name="T"/> exists.
+		/// Checks if a sub-payload of type <typeparamref name="T"/> exists. Honors the same
+		/// inheritance fallback as <see cref="TryGet{T}"/>.
 		/// </summary>
 		/// <typeparam name="T">The type of event data to check for.</typeparam>
 		/// <returns>True if found; otherwise, false.</returns>
 		public bool Contains<T>() where T : EventData
 		{
-			return eventDataDictionary.ContainsKey(typeof(T));
+			if (eventDataDictionary.ContainsKey(typeof(T)))
+			{
+				return true;
+			}
+			foreach (EventData candidate in eventDataDictionary.Values)
+			{
+				if (candidate is T)
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 }

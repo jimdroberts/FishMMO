@@ -88,5 +88,18 @@ namespace FishMMO.Shared.Core
 			target = (eventData?.TargetCharacter ?? initiator);
 			return target != null;
 		}
+
+		/// <summary>
+		/// Returns a short, designer-facing tooltip line describing this action's effect, or
+		/// <c>null</c> when the action has nothing to contribute. Override on actions that
+		/// produce a player-visible outcome (damage, heal, buff apply, knockback, etc.) so
+		/// ability tooltips can list effects without designer authoring text twice.
+		/// </summary>
+		/// <remarks>
+		/// The base implementation returns <c>null</c>. Aggregators
+		/// (<see cref="BaseAbilityTemplate"/>) skip null/whitespace contributions, so most
+		/// actions need not override.
+		/// </remarks>
+		public virtual string GetTooltipContribution() => null;
 	}
 }

@@ -93,6 +93,18 @@ namespace FishMMO.Server.Implementation
 			InitializeCoreInstance();
 			workerCts = new CancellationTokenSource();
 			Core.InitializeWorkers(workerCts.Token);
+
+			// Operational warning: keying rate limits by FishNet ClientId is only safe
+			// behind a trusted proxy. On a direct-Internet listener an attacker can
+			// reset their bucket simply by reconnecting, defeating the throttle entirely.
+			if (useConnectionIdForRateLimit)
+			{
+				_ = Log.Warning(LogPrefix,
+					"useConnectionIdForRateLimit=true: rate limits are keyed by FishNet ClientId. " +
+					"This is ONLY safe behind a trusted reverse proxy / load balancer. On a direct-Internet " +
+					"listener an attacker can bypass per-IP throttling by reconnecting. Disable this unless " +
+					"a proxy fronts this server.");
+			}
 		}
 
 		/// <summary>

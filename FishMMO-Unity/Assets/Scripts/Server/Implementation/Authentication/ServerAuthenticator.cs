@@ -75,6 +75,9 @@ namespace FishMMO.Server.Implementation
 			networkManager.ServerManager.RegisterBroadcast<SrpVerifyBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpProofBroadcast>(OnServerSrpProofBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<TwoFactorVerifyBroadcast>(OnServerTwoFactorVerifyBroadcastReceived, false);
+			// RevokeTokenBroadcast must be accepted from unauthenticated connections (the
+			// client may invoke it after the auth channel has been torn down on logout).
+			networkManager.ServerManager.RegisterBroadcast<RevokeTokenBroadcast>(OnServerRevokeTokenBroadcastReceived, false);
 		}
 
 		/// <summary>Calls <see cref="SrpAuthenticatorCore{TConnection}.TickRateLimits"/> every frame.</summary>
@@ -95,6 +98,64 @@ namespace FishMMO.Server.Implementation
 		/// <summary>Routes an incoming <see cref="TwoFactorVerifyBroadcast"/> to the core TOTP verification handler.</summary>
 		internal void OnServerTwoFactorVerifyBroadcastReceived(NetworkConnection conn, TwoFactorVerifyBroadcast msg, Channel channel)
 			=> _core?.OnTwoFactorVerifyReceived(conn, msg.Code, msg.Seq);
+
+		/// <summary>
+		/// Handles an incoming <see cref="RevokeTokenBroadcast"/> from a client that is explicitly
+		/// logging out. Hashes the raw token bytes and asks the DB to mark the row revoked. The
+		/// broadcast is best-effort and rate-limit-bounded by FishNet's connection lifecycle;
+		/// invalid or unknown tokens are silently ignored to avoid leaking validity oracles.
+		/// </summary>
+		internal void OnServerRevokeTokenBroadcastReceived(NetworkConnection conn, RevokeTokenBroadcast msg, Channel channel)
+		{
+			// Validate payload bounds up front on the network thread; defer DB work to a Task.
+			if (msg.Token == null || msg.Token.Length == 0 || msg.Token.Length > 4096)
+			{
+				return;
+			}
+
+			// Copy so the deserialized buffer is not mutated by FishNet after we hand off.
+			byte[] tokenCopy = new byte[msg.Token.Length];
+			Buffer.BlockCopy(msg.Token, 0, tokenCopy, 0, tokenCopy.Length);
+
+			_ = Task.Run(async () =>
+			{
+				string tokenHash = null;
+				try
+				{
+					tokenHash = TokenService.HashToken(tokenCopy);
+				}
+				finally
+				{
+					CryptographicOperations.ZeroMemory(tokenCopy);
+				}
+
+				if (string.IsNullOrEmpty(tokenHash))
+				{
+					return;
+				}
+
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
+				{
+					return;
+				}
+
+				try
+				{
+					var r = await svc.RevokeByHashAsync(tokenHash);
+					if (!r.IsSuccess)
+					{
+						// Treat "not found" as a non-event: an attacker could otherwise probe
+						// for valid token hashes by observing log differences.
+						await Log.Debug(LogPrefix, $"RevokeByHashAsync returned {r.ErrorCode} for client-initiated revoke.");
+					}
+				}
+				catch (Exception ex)
+				{
+					await Log.Warning(LogPrefix, $"Exception during client-initiated token revoke: {ex.Message}");
+				}
+			});
+		}
 
 		#endregion
 
@@ -223,7 +284,7 @@ namespace FishMMO.Server.Implementation
 				byte[] plaintextSecret = null;
 				try
 				{
-					plaintextSecret = CryptoHelper.TwoFactor.DecryptTotpSecret(totpMasterKeySnapshot, accountResult.Data.TotpSecret);
+					plaintextSecret = CryptoHelper.TwoFactor.DecryptTotpSecret(totpMasterKeySnapshot, username, accountResult.Data.TotpSecret);
 					var (valid, windowUsed) = CryptoHelper.TwoFactor.VerifyTotpCode(plaintextSecret, totpCode, accountResult.Data.LastTotpWindow);
 					if (!valid) return false;
 					if (accountResult.Data.TotpVerifiedAt == null)

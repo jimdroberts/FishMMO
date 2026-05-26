@@ -4,6 +4,24 @@ using FishMMO.Auth.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
+	/// Broadcast sent by the client during an explicit logout to ask the LoginServer to
+	/// revoke its currently-held auth token before its TTL expires. The token is sent
+	/// as the raw HMAC-signed bytes the LoginServer originally issued (and which the
+	/// client decrypted into memory on SrpSuccess). The server hashes the bytes via
+	/// <c>TokenService.HashToken</c> and matches the row in <c>IAuthTokenService</c>.
+	///
+	/// Security note: this broadcast is sent over the FishNet transport without
+	/// additional encryption; the server's AES-GCM auth channel has typically been
+	/// torn down by the time the user logs out. Because the only purpose is to
+	/// revoke the token the eavesdropper would have captured anyway, this is safe.
+	/// </summary>
+	public struct RevokeTokenBroadcast : IBroadcast
+	{
+		/// <summary>Raw (HMAC-signed) auth token bytes the LoginServer originally issued.</summary>
+		public byte[] Token;
+	}
+
+	/// <summary>
 	/// Broadcast sent by the client to create a new account, containing SRP username, salt, and verifier.
 	/// </summary>
 	public struct CreateAccountBroadcast : IBroadcast
@@ -137,6 +155,23 @@ namespace FishMMO.Shared
 		public byte[] Token;
 
 		/// <summary>Explicit message sequence number (client->server).</summary>
+		public uint Seq;
+	}
+
+	/// <summary>
+	/// Broadcast sent by a World or Scene server immediately after a successful
+	/// <see cref="TokenAuthBroadcast"/> authentication, carrying a freshly-minted
+	/// auth token with a refreshed expiration window. The client decrypts the new
+	/// token over the existing AES-GCM session channel and replaces its stored
+	/// token so that future reconnects continue working past the original
+	/// LoginServer-issued token's expiration.
+	/// </summary>
+	public struct RenewTokenResponseBroadcast : IBroadcast
+	{
+		/// <summary>AES-GCM encrypted signed auth token (server-&gt;client).</summary>
+		public byte[] Token;
+
+		/// <summary>Explicit message sequence number (server-&gt;client).</summary>
 		public uint Seq;
 	}
 

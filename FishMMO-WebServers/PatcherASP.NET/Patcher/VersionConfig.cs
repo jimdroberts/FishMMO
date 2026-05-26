@@ -8,31 +8,15 @@ using FishMMO.Logging;
 /// </summary>
 public class VersionConfig : IComparable<VersionConfig?>
 {
-	/// <summary>
-	/// Major version component (e.g., the "1" in 1.2.3).
-	/// </summary>
 	public int Major = 0;
-
-	/// <summary>
-	/// Minor version component (e.g., the "2" in 1.2.3).
-	/// </summary>
 	public int Minor = 0;
-
-	/// <summary>
-	/// Patch version component (e.g., the "3" in 1.2.3).
-	/// </summary>
 	public int Patch = 0;
-
 	/// <summary>
 	/// Optional pre-release identifier (e.g., "alpha" in 1.2.3.alpha).
-	/// An empty string indicates a normal (non pre-release) version.
+	/// Constrained to [A-Za-z0-9-] characters only; never contains path separators.
 	/// </summary>
 	public string PreRelease = "";
 
-	/// <summary>
-	/// The full version string representation constructed from the components.
-	/// Examples: "1.2.3" or "1.2.3.alpha".
-	/// </summary>
 	public string FullVersion
 	{
 		get
@@ -46,11 +30,11 @@ public class VersionConfig : IComparable<VersionConfig?>
 		}
 	}
 
-	/// <summary>
-	/// Parses a version string (e.g., "1.2.3" or "1.2.3.alpha") into a new VersionConfig instance.
-	/// </summary>
-	/// <param name="versionString">The version string to parse.</param>
-	/// <returns>A new VersionConfig instance populated with the parsed version, or null if parsing fails.</returns>
+	// Pre-release is intentionally constrained to safe characters so parsed
+	// values can never be used to construct a directory-escaping file path.
+	private static readonly Regex VersionRegex =
+		new Regex(@"^(\d{1,9})\.(\d{1,9})\.(\d{1,9})(?:\.([A-Za-z0-9\-]{1,32}))?$", RegexOptions.Compiled);
+
 	public static VersionConfig? Parse(string versionString)
 	{
 		if (string.IsNullOrWhiteSpace(versionString))
@@ -59,148 +43,113 @@ public class VersionConfig : IComparable<VersionConfig?>
 			return null;
 		}
 
-		Match match = Regex.Match(versionString, @"^(\d+)\.(\d+)\.(\d+)(?:\.(.+))?$");
+		Match match = VersionRegex.Match(versionString);
 
-		if (match.Success)
+		if (!match.Success)
 		{
-			VersionConfig config = new VersionConfig();
-			config.Major = int.Parse(match.Groups[1].Value);
-			config.Minor = int.Parse(match.Groups[2].Value);
-			config.Patch = int.Parse(match.Groups[3].Value);
-			config.PreRelease = match.Groups.Count > 4 && match.Groups[4].Success ? match.Groups[4].Value : "";
-			return config;
-		}
-		else
-		{
-			Log.Warning("VersionConfig", $"VersionConfig.Parse: Failed to parse version string '{versionString}'. Expected format: Major.Minor.Patch[.PreRelease]");
+			Log.Warning("VersionConfig", $"VersionConfig.Parse: Failed to parse version string '{versionString}'. Expected Major.Minor.Patch[.PreRelease] with PreRelease in [A-Za-z0-9-]{{1,32}}.");
 			return null;
 		}
+
+		VersionConfig config = new VersionConfig
+		{
+			Major = int.Parse(match.Groups[1].Value),
+			Minor = int.Parse(match.Groups[2].Value),
+			Patch = int.Parse(match.Groups[3].Value),
+			PreRelease = match.Groups[4].Success ? match.Groups[4].Value : "",
+		};
+		return config;
 	}
 
-	/// <summary>
-	/// Compares this VersionConfig instance with another.
-	/// Returns:
-	/// -1 if this version is older
-	///  0 if versions are equal
-	///  1 if this version is newer
-	/// </summary>
 	public int CompareTo(VersionConfig? other)
 	{
-		if (other == null) return 1; // Any version is newer than null
+		if (other == null) return 1;
+		if (this.Major != other.Major) return this.Major.CompareTo(other.Major);
+		if (this.Minor != other.Minor) return this.Minor.CompareTo(other.Minor);
+		if (this.Patch != other.Patch) return this.Patch.CompareTo(other.Patch);
 
-		// Compare Major
-		if (this.Major != other.Major)
-			return this.Major.CompareTo(other.Major);
-
-		// Compare Minor
-		if (this.Minor != other.Minor)
-			return this.Minor.CompareTo(other.Minor);
-
-		// Compare Patch
-		if (this.Patch != other.Patch)
-			return this.Patch.CompareTo(other.Patch);
-
-		// Handle pre-release identifiers (e.g., 1.0.0-alpha < 1.0.0-beta < 1.0.0)
-		// SemVer rules: A pre-release version has lower precedence than a normal version.
-		// Pre-release comparison is lexicographical ASCII sort.
-		if (!string.IsNullOrEmpty(this.PreRelease) && !string.IsNullOrEmpty(other.PreRelease))
+		// SemVer 2.0.0 §11: a normal version has higher precedence than any
+		// pre-release. When both have pre-release identifiers we compare them
+		// per dotted segment: purely-numeric segments compare numerically and
+		// have lower precedence than alphanumeric segments; otherwise we
+		// compare lexicographically with ordinal (case-sensitive) semantics.
+		// Our regex currently restricts PreRelease to a single segment, but we
+		// implement the full algorithm so future relaxation does not silently
+		// invert ordering.
+		bool aPre = !string.IsNullOrEmpty(this.PreRelease);
+		bool bPre = !string.IsNullOrEmpty(other.PreRelease);
+		if (aPre && bPre)
 		{
-			// Both have pre-release tags, compare them lexicographically
-			return string.Compare(this.PreRelease, other.PreRelease, StringComparison.OrdinalIgnoreCase);
+			return ComparePreReleaseIdentifiers(this.PreRelease, other.PreRelease);
 		}
-		else if (!string.IsNullOrEmpty(this.PreRelease))
-		{
-			// This has pre-release, other does not -> other is newer
-			return -1;
-		}
-		else if (!string.IsNullOrEmpty(other.PreRelease))
-		{
-			// Other has pre-release, this does not -> this is newer
-			return 1;
-		}
-
-		return 0; // Versions are effectively equal
+		else if (aPre) return -1;
+		else if (bPre) return 1;
+		return 0;
 	}
 
-	/// <summary>
-	/// Equality operator. Returns true when both versions represent the same
-	/// semantic version (including pre-release equality, case-insensitive for pre-release).
-	/// </summary>
+	private static int ComparePreReleaseIdentifiers(string a, string b)
+	{
+		string[] aParts = a.Split('.');
+		string[] bParts = b.Split('.');
+		int common = Math.Min(aParts.Length, bParts.Length);
+		for (int i = 0; i < common; i++)
+		{
+			string ap = aParts[i];
+			string bp = bParts[i];
+			bool aIsNum = ulong.TryParse(ap, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out ulong aNum);
+			bool bIsNum = ulong.TryParse(bp, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out ulong bNum);
+			if (aIsNum && bIsNum)
+			{
+				int c = aNum.CompareTo(bNum);
+				if (c != 0) return c;
+			}
+			else if (aIsNum) return -1; // numeric < alphanumeric
+			else if (bIsNum) return 1;
+			else
+			{
+				int c = string.CompareOrdinal(ap, bp);
+				if (c != 0) return c;
+			}
+		}
+		// Longer identifier list (with all leading parts equal) has higher precedence.
+		return aParts.Length.CompareTo(bParts.Length);
+	}
+
 	public static bool operator ==(VersionConfig? a, VersionConfig? b)
 	{
 		if (ReferenceEquals(a, b)) return true;
 		if (ReferenceEquals(a, null) || ReferenceEquals(b, null)) return false;
 		return a.CompareTo(b) == 0;
 	}
-
-	/// <summary>
-	/// Inequality operator.
-	/// </summary>
-	public static bool operator !=(VersionConfig? a, VersionConfig? b)
-	{
-		return !(a == b);
-	}
-
-	/// <summary>
-	/// Less-than operator based on semantic version ordering.
-	/// </summary>
+	public static bool operator !=(VersionConfig? a, VersionConfig? b) => !(a == b);
 	public static bool operator <(VersionConfig? a, VersionConfig? b)
 	{
-		if (a is null) return b is not null; // null < any non-null
+		if (a is null) return b is not null;
 		if (b is null) return false;
 		return a.CompareTo(b) < 0;
 	}
-
-	/// <summary>
-	/// Greater-than operator based on semantic version ordering.
-	/// </summary>
 	public static bool operator >(VersionConfig? a, VersionConfig? b)
 	{
 		if (a is null) return false;
 		if (b is null) return true;
 		return a.CompareTo(b) > 0;
 	}
+	public static bool operator <=(VersionConfig? a, VersionConfig? b) => a < b || a == b;
+	public static bool operator >=(VersionConfig? a, VersionConfig? b) => a > b || a == b;
 
-	/// <summary>
-	/// Less-than-or-equal operator.
-	/// </summary>
-	public static bool operator <=(VersionConfig? a, VersionConfig? b)
-	{
-		return a < b || a == b;
-	}
-
-	/// <summary>
-	/// Greater-than-or-equal operator.
-	/// </summary>
-	public static bool operator >=(VersionConfig? a, VersionConfig? b)
-	{
-		return a > b || a == b;
-	}
-
-	/// <summary>
-	/// Determines whether this instance is equal to another object.
-	/// </summary>
-	public override bool Equals(object? obj)
-	{
-		return Equals(obj as VersionConfig);
-	}
-
-	/// <summary>
-	/// Determines whether this instance is equal to another <see cref="VersionConfig"/> instance.
-	/// Comparison includes Major, Minor, Patch and a case-insensitive comparison of PreRelease.
-	/// </summary>
+	public override bool Equals(object? obj) => Equals(obj as VersionConfig);
 	public bool Equals(VersionConfig? other)
 	{
 		if (other is null) return false;
+		// SemVer pre-release identifiers are case-sensitive (Ordinal). Equality
+		// must agree with CompareTo or the operators below produce contradictory
+		// results (a == b but a.CompareTo(b) != 0).
 		return this.Major == other.Major
 			&& this.Minor == other.Minor
 			&& this.Patch == other.Patch
-			&& string.Equals(this.PreRelease, other.PreRelease, StringComparison.OrdinalIgnoreCase);
+			&& string.Equals(this.PreRelease, other.PreRelease, StringComparison.Ordinal);
 	}
 
-	/// <summary>
-	/// Returns a hash code for this version instance suitable for use in hashing structures.
-	/// </summary>
 	public override int GetHashCode()
 	{
 		unchecked

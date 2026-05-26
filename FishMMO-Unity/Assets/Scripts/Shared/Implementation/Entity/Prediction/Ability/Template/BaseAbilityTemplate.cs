@@ -196,6 +196,8 @@ namespace FishMMO.Shared
 			// Append resource cost and requirement sections from all condition sources.
 			bool hasResources = false;
 			bool hasRequirements = false;
+			bool hasTargeting = false;
+			bool hasEffects = false;
 
 			AppendConditionLines(builder, ActivationConditions, ref hasResources, ref hasRequirements);
 
@@ -203,9 +205,11 @@ namespace FishMMO.Shared
 			{
 				foreach (ITooltip tooltip in combineList)
 				{
-					if (tooltip is AbilityEvent abilityEvent && abilityEvent.Conditions != null)
+					if (tooltip is AbilityEvent abilityEvent)
 					{
 						AppendConditionLines(builder, abilityEvent.Conditions, ref hasResources, ref hasRequirements);
+						AppendSelectorLine(builder, abilityEvent.TargetSelector, ref hasTargeting);
+						AppendActionLines(builder, abilityEvent.OnConditionsMetActions, ref hasEffects);
 					}
 					else if (tooltip is BaseAbilityTemplate template && template.ActivationConditions != null)
 					{
@@ -245,20 +249,60 @@ namespace FishMMO.Shared
 						hasResources = true;
 					}
 					builder.AddLine($"{resourceCost.ResourceTemplate.Name}: {resourceCost.ResourceAmount}", 51, TooltipColors.Title, false, "120%");
+					continue;
 				}
-				else if (condition is ITooltipContributor contributor)
+
+				string contribution = condition.GetTooltipContribution();
+				if (!string.IsNullOrWhiteSpace(contribution))
 				{
-					string contribution = contributor.GetTooltipContribution();
-					if (!string.IsNullOrWhiteSpace(contribution))
+					if (!hasRequirements)
 					{
-						if (!hasRequirements)
-						{
-							builder.AddLine("Requirements:", 60, TooltipColors.Label);
-							hasRequirements = true;
-						}
-						builder.AddLine(contribution, 61, TooltipColors.Title, false, "120%");
+						builder.AddLine("Requirements:", 60, TooltipColors.Label);
+						hasRequirements = true;
 					}
+					builder.AddLine(contribution, 61, TooltipColors.Title, false, "120%");
 				}
+			}
+		}
+
+		/// <summary>
+		/// Appends an event's <see cref="TargetSelector"/> contribution as a single "Targeting:" line.
+		/// </summary>
+		private static void AppendSelectorLine(TooltipBuilder builder, TargetSelector selector, ref bool hasTargeting)
+		{
+			if (selector == null) return;
+			string contribution = selector.GetTooltipContribution();
+			if (string.IsNullOrWhiteSpace(contribution)) return;
+
+			if (!hasTargeting)
+			{
+				builder.AddLine("Targeting:", 55, TooltipColors.Label);
+				hasTargeting = true;
+			}
+			builder.AddLine(contribution, 56, TooltipColors.Title, false, "120%");
+		}
+
+		/// <summary>
+		/// Appends effect lines from a list of actions to the builder. Each action that returns
+		/// a non-empty <see cref="BaseAction.GetTooltipContribution"/> produces one line under
+		/// the "Effects:" header.
+		/// </summary>
+		private static void AppendActionLines(TooltipBuilder builder, List<BaseAction> actions, ref bool hasEffects)
+		{
+			if (actions == null) return;
+
+			foreach (BaseAction action in actions)
+			{
+				if (action == null) continue;
+				string contribution = action.GetTooltipContribution();
+				if (string.IsNullOrWhiteSpace(contribution)) continue;
+
+				if (!hasEffects)
+				{
+					builder.AddLine("Effects:", 70, TooltipColors.Label);
+					hasEffects = true;
+				}
+				builder.AddLine(contribution, 71, TooltipColors.Title, false, "120%");
 			}
 		}
 	}

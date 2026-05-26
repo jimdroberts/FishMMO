@@ -26,7 +26,7 @@ namespace FishMMO.Auth.Core
 		/// <param name="accessLevel">The access level for the account.</param>
 		/// <returns><c>true</c> if SRP data was set and state advanced; <c>false</c> if the
 		/// connection was not in the expected state.</returns>
-		bool AddConnectionAccount(TConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel);
+		bool AddConnectionAccount(TConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel, bool isUnverified = false);
 
 		/// <summary>
 		/// Sweeps and removes stale unauthenticated connection state to bound SRP/encryption memory growth.

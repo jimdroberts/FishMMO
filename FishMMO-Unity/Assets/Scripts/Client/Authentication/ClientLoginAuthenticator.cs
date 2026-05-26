@@ -4,6 +4,7 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using FishMMO.Auth.Core;
 using FishMMO.Shared;
 using FishMMO.Auth.Implementation;
@@ -238,6 +239,7 @@ namespace FishMMO.Client
 			base.NetworkManager.ClientManager.RegisterBroadcast<SrpSuccessBroadcast>(OnClientSrpSuccessBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<ClientAuthResultBroadcast>(OnClientAuthResultBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<TwoFactorSetupBroadcast>(OnClientTwoFactorSetupBroadcastReceived);
+			base.NetworkManager.ClientManager.RegisterBroadcast<RenewTokenResponseBroadcast>(OnClientRenewTokenResponseBroadcastReceived);
 		}
 
 		/// <summary>
@@ -306,6 +308,69 @@ namespace FishMMO.Client
 			_core?.ClearAuthToken();
 		}
 
+		/// <summary>
+		/// Best-effort server-side token revocation: if a token is currently stored and
+		/// the client connection is active, sends a <see cref="RevokeTokenBroadcast"/>
+		/// to the LoginServer with the raw token bytes. The server will hash and revoke
+		/// it via <c>IAuthTokenService</c>. Either way, the local copy is zeroed
+		/// immediately so the token cannot be reused by this process.
+		///
+		/// Safe to call when there is no active connection — the broadcast is simply
+		/// dropped by FishNet and the local token is still cleared.
+		/// </summary>
+		public void RevokeAndClearAuthToken()
+		{
+			if (_core == null) return;
+			if (!_core.TryConsumeStoredTokenForRevoke(out byte[] tokenCopy) || tokenCopy == null)
+			{
+				return;
+			}
+			try
+			{
+				if (Client != null)
+				{
+					// Bounded retry: a single FishNet broadcast failure (e.g. transport
+					// state churn during logout) shouldn't silently lose the revocation.
+					// We deliberately keep the loop tight (no awaitable delay) because
+					// this is fire-and-forget and called on the UI thread.
+					const int MaxRevokeAttempts = 3;
+					Exception lastEx = null;
+					for (int attempt = 0; attempt < MaxRevokeAttempts; attempt++)
+					{
+						try
+						{
+							Client.Broadcast(new RevokeTokenBroadcast { Token = tokenCopy }, Channel.Reliable);
+							lastEx = null;
+							break;
+						}
+						catch (Exception ex)
+						{
+							lastEx = ex;
+						}
+					}
+					if (lastEx != null)
+					{
+						FishMMO.Logging.Log.Warning("ClientLoginAuthenticator", $"RevokeTokenBroadcast send failed after {MaxRevokeAttempts} attempts: {lastEx.Message}");
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				FishMMO.Logging.Log.Warning("ClientLoginAuthenticator", $"RevokeTokenBroadcast send failed: {ex.Message}");
+			}
+			finally
+			{
+				// Always zero the local copy — server-side revocation may have
+				// missed delivery, but this process must not retain the bytes.
+				// CryptographicOperations.ZeroMemory prevents the JIT from eliding
+				// the write (Array.Clear can be optimized away as dead).
+				if (tokenCopy != null)
+				{
+					CryptographicOperations.ZeroMemory(tokenCopy);
+				}
+			}
+		}
+
 		// ── Connection lifecycle ──────────────────────────────────────────────
 
 		/// <summary>
@@ -371,6 +436,18 @@ namespace FishMMO.Client
 		private void OnClientTwoFactorSetupBroadcastReceived(TwoFactorSetupBroadcast msg, Channel channel)
 		{
 			_core.OnTwoFactorSetupReceived(msg.OtpauthUri, msg.RecoveryCodes);
+		}
+
+		/// <summary>
+		/// Handles a server-pushed renewed auth token sent immediately after a successful
+		/// <see cref="TokenAuthBroadcast"/> authentication on a World or Scene server.
+		/// Decrypts the token over the existing AES-GCM session channel via the core and
+		/// replaces the stored token used for future reconnect attempts.
+		/// </summary>
+		private void OnClientRenewTokenResponseBroadcastReceived(RenewTokenResponseBroadcast msg, Channel channel)
+		{
+			if (_core == null) return;
+			_core.TryApplyRenewedToken(msg.Token);
 		}
 	}
 }

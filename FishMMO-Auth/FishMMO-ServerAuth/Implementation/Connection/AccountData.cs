@@ -31,6 +31,17 @@ namespace FishMMO.Auth.Implementation
 		public ServerSrpData? SrpData { get; private set; }
 
 		/// <summary>
+		/// True when the underlying account exists but has not yet completed email
+		/// verification. We carry this flag through the SRP exchange so that the
+		/// AccountUnverified response can be deferred until *after* a successful
+		/// M1 proof — wrong-password attempts on an unverified account still return
+		/// the same InvalidUsernameOrPassword as any other failed login, removing
+		/// the username-existence oracle that an early reject would create.
+		/// Reset by <see cref="Clear"/>.
+		/// </summary>
+		public bool IsUnverified { get; private set; }
+
+		/// <summary>
 		/// Initializes a new instance of the <see cref="AccountData"/> class at Handshake state.
 		/// Used when encryption data is first established, before any auth-specific data is known.
 		/// </summary>
@@ -58,10 +69,12 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		/// <param name="accessLevel">The access level from the database.</param>
 		/// <param name="srpData">The SRP session data.</param>
-		public void SetSrpData(AccessLevel accessLevel, ServerSrpData srpData)
+		/// <param name="isUnverified">Whether the account is unverified pending email confirmation.</param>
+		public void SetSrpData(AccessLevel accessLevel, ServerSrpData srpData, bool isUnverified = false)
 		{
 			AccessLevel = accessLevel;
 			SrpData = srpData;
+			IsUnverified = isUnverified;
 		}
 
 		/// <summary>
@@ -80,6 +93,7 @@ namespace FishMMO.Auth.Implementation
 		{
 			AuthState = AuthState.None;
 			AccessLevel = AccessLevel.Player;
+			IsUnverified = false;
 			if (SrpData != null)
 			{
 				SrpData.Clear();

@@ -274,3 +274,54 @@ Migrated examples: [ApplyDamageAction](../Actions/Character/ApplyDamageAction.cs
 `TriggerExecution` wraps both condition evaluation and action invocation in try/catch:
 - A throwing **condition** is treated as a failed condition (the trigger takes the not-met branch) and the exception is logged at error level — it does not crash the whole trigger.
 - A throwing **action** is logged at error level; sibling actions and fan-out targets continue to execute. Throwing actions do **not** trigger `StopChainOnFailure` semantics — that flag is reserved for *intentional* failure via `IAbortableAction.TryExecute` returning false. Designer-authored content cannot poison the chain by raising an exception.
+
+### 10.5 Condition filter propagation
+
+A `Trigger` subclass may override `ShouldEvaluateCondition` to skip categories of conditions during execution (e.g. `AbilityEvent` skips `IResourceCost` conditions because the cost was already paid at activation). The filter is published on `EventData.ConditionFilter` at the start of `ExecuteForTarget` and carried across `Fork`, so it applies uniformly at three levels:
+
+1. Top-level `Trigger.Conditions` (via `TriggerExecution.AreConditionsMet`).
+2. Children of any `CompositeCondition` nested in those lists.
+3. Per-candidate `TargetSelector.Conditions` evaluated during selector fan-out.
+
+This means a designer can nest a `HasResourceCondition` (or any other `IResourceCost`) inside a composite or behind a selector filter without it being silently double-charged at execution time. An OR composite that has all of its children filtered out evaluates to **true** (matching the empty-list behavior of AND), so an "OR of resource-paid conditions" doesn't collapse into a falsy gate after activation.
+
+### 10.6 Tooltip contribution
+
+`BaseCondition`, `BaseAction`, and `TargetSelector` each expose a `virtual string GetTooltipContribution() => null;` hook. Override on concrete types that should appear in ability/quest/dialogue tooltips; returning `null` or whitespace omits the line. `BaseAbilityTemplate.BuildTooltip` aggregates contributions into four ordered sections per `AbilityEvent`:
+
+| Section | Source | Sort order |
+|---|---|---|
+| Resource Cost | `IResourceCost`-implementing conditions | 50 |
+| Targeting | `AbilityEvent.TargetSelector.GetTooltipContribution()` | 55 |
+| Requirements | Other conditions' `GetTooltipContribution()` | 60 |
+| Effects | `OnConditionsMetActions[*].GetTooltipContribution()` | 70 |
+
+Designers no longer need to author tooltip text twice: a `Deal 50 fire damage` ApplyDamageAction implementation can simply override the hook and the tooltip line will appear automatically.
+
+### 10.7 Instrumentation hook
+
+`Trigger.OnExecuted` is a static `event Action<Trigger, EventData>` invoked once per `Execute()` call (after fan-out completes). Subscribers receive the firing trigger asset and the *original* event data passed to `Execute` (not the per-target fork). Exceptions thrown by subscribers are caught and logged so a misbehaving recorder/audit subscriber can't poison gameplay. Use for replay, server-side audit, editor instrumentation, or to wire a breakpoint into any trigger fire without modifying it.
+
+### 10.8 Editor validation
+
+`Trigger.OnValidate` (editor-only) strips null entries that Unity may leave after `SubclassSelector` type renames and warns on common authoring mistakes:
+- Both action lists empty (trigger has no observable effect).
+- `OnConditionsNotMetActions` populated while `Conditions` is empty (not-met branch is unreachable).
+
+Warnings are non-blocking — they appear in the Console attached to the offending asset. Designers can re-run the checks on demand via the `Validate Now` context-menu entry on any `Trigger` asset.
+
+### 10.9 Polymorphic payload lookup
+
+`EventData.TryGet<T>()` first does an exact-type dictionary lookup; if that misses it falls back to a linear scan returning the first stored payload assignable to `T`. This lets a designer-authored subclass of e.g. `AbilityCollisionEventData` still be retrieved by code that asks for the base type, removing a sharp edge that previously required callers to know the concrete subclass key.
+
+### 10.10 Per-trigger verbose logging
+
+`Trigger` exposes a `Verbose` toggle (Inspector → *Debug* group). When checked, the trigger's own lifecycle logs (conditions met / not met / no targets produced) are promoted from `Log.Debug` to `Log.Info` so a single misbehaving asset can be diagnosed without flipping the global log level for the whole project.
+
+### 10.11 Designer-facing action ordering
+
+`OnConditionsMetActions` and `OnConditionsNotMetActions` are executed top-to-bottom. When an action implements `IAbortableAction` and has `StopChainOnFailure` set, a failed `TryExecute` aborts every action below it in the same list (and any remaining targets in the action's own fan-out). Put resource-cost / can-afford gates at the top of the list so they short-circuit cleanly. The list `[Tooltip]` text reminds designers of this contract.
+
+### 10.12 Inline triggers share the asset-trigger code path
+
+Some host MonoBehaviours (e.g. `WorldDayNightCycle`) author triggers inline via `[Serializable]` types like `WorldSceneTrigger` rather than referencing a `Trigger` asset. These inline types must not reimplement the execution loop; instead they delegate to `TriggerExecution.RunInline(selector, conditions, onConditionsMetActions, onConditionsNotMetActions, eventData)`. The helper centralises selector fan-out, per-target `EventData.Fork`, condition evaluation, and the met/not-met branch dispatch — the same logic `Trigger.Execute` uses. Any future fix made to the asset path (fault isolation, ambient `ConditionFilter`, fan-out rules, …) is therefore inherited automatically by inline triggers. Inline triggers also mirror the `OnExecuted` instrumentation event and expose an editor-only `Sanitize()` so their host's `OnValidate` can null-strip `SubclassSelector` remnants exactly like `Trigger.OnValidate` does on the asset.

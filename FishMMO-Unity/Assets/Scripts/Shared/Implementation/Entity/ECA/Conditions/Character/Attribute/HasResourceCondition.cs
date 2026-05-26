@@ -5,10 +5,10 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Condition that checks if a character has at least a required amount of a specified resource attribute (e.g., Mana, Health).
-	/// Also implements <see cref="IResourceCost"/> for ability resource cost aggregation and <see cref="ITooltipContributor"/> for tooltip display.
+	/// Also implements <see cref="IResourceCost"/> for ability resource cost aggregation and overrides <see cref="BaseCondition.GetTooltipContribution"/> for tooltip display.
 	/// </summary>
 	[Serializable]
-	public class HasResourceCondition : BaseCondition, IResourceCost, ITooltipContributor
+	public class HasResourceCondition : BaseCondition, IResourceCost
 	{
 		/// <summary>
 		/// The resource attribute template to check (e.g., Mana, Health).
@@ -54,10 +54,8 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		/// <summary>
-		/// Returns the tooltip contribution showing the resource cost.
-		/// </summary>
-		public string GetTooltipContribution()
+		/// <inheritdoc />
+		public override string GetTooltipContribution()
 		{
 			if (Template != null && RequiredAmount > 0)
 			{

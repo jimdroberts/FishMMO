@@ -69,8 +69,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Hard cap on the number of unique IPs tracked in the <see cref="IAccountCreationSystemMappingData.IpFailureTracker"/>.
 		/// Prevents unbounded dictionary growth if an attacker floods from spoofed or rotating IPs.
-		/// When the cap is reached, new AddOrUpdate calls are silently skipped — the request still
-		/// fails (result code unchanged), but no new IP entry is stored.
+		/// When the cap is reached, <see cref="TryTrackIpFailure"/> returns <c>false</c> so the caller can
+		/// fail closed (disconnect the request) rather than silently skipping the increment, which would
+		/// let the offender stay just under the per-IP block threshold indefinitely.
 		/// </summary>
 		private const int MaxIpFailureTrackerEntries = 50_000;
 
@@ -100,13 +101,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Maximum cumulative verification failures per username across all connections before
 		/// a temporary lockout. Prevents botnets from distributing brute-force across IPs.
+		/// Tightened from 10 → 5 (audit 2026-05): with a 900K-value 6-digit code space, 10
+		/// attempts gave attackers a non-trivial probability of success when combined with
+		/// even modest IP rotation. Five attempts is still enough headroom for a legitimate
+		/// user who fat-fingers the code a few times.
 		/// </summary>
-		private const int MaxVerifyFailuresPerUsername = 10;
+		private const int MaxVerifyFailuresPerUsername = 5;
 
 		/// <summary>
 		/// How long a per-username verification lockout lasts after exceeding <see cref="MaxVerifyFailuresPerUsername"/>.
+		/// Extended from 30 → 60 minutes to outlast typical email-delivery windows and reduce
+		/// the duty cycle available to a distributed brute-force attacker.
 		/// </summary>
-		private static readonly TimeSpan VerifyUsernameLockoutDuration = TimeSpan.FromMinutes(30);
+		private static readonly TimeSpan VerifyUsernameLockoutDuration = TimeSpan.FromMinutes(60);
 
 		/// <summary>
 		/// Maximum entries allowed in the per-username verification failure tracker before new
@@ -250,6 +257,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Server.NetworkWrapper.RegisterBroadcast<AccountVerifyBroadcast>(OnServerAccountVerifyBroadcastReceived, false);
 
 			Log.Debug("AccountCreationSystem", $"Initialized (RateLimit={ipRateLimitSeconds}s, MaxFailures={maxFailedAttempts}, BlockDuration={ipBlockDurationSeconds}s)");
+
+			// Operational warning: ClientId-keyed rate limiting only makes sense behind a
+			// trusted proxy that prevents arbitrary client reconnection. On a direct-Internet
+			// listener it lets an attacker reset their rate-limit bucket simply by reconnecting,
+			// so surface this loudly at startup so it cannot be enabled by accident.
+			if (useConnectionIdForRateLimit)
+			{
+				Log.Warning("AccountCreationSystem",
+					"useConnectionIdForRateLimit=true: rate limits are keyed by FishNet ClientId. " +
+					"This is ONLY safe behind a trusted reverse proxy / load balancer that authenticates " +
+					"connection establishment. On a direct-Internet listener an attacker can bypass " +
+					"per-IP throttling by simply reconnecting. Disable this unless you have a proxy in front.");
+			}
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -723,7 +743,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 									byte[] totpSecret = CryptoHelper.TwoFactor.GenerateTotpSecret();
 
 									// Encrypt for DB at-rest storage.
-									string encryptedTotpSecret = CryptoHelper.TwoFactor.EncryptTotpSecret(totpMasterKeySnapshot, totpSecret);
+									string encryptedTotpSecret = CryptoHelper.TwoFactor.EncryptTotpSecret(totpMasterKeySnapshot, username, totpSecret);
 										DatabaseResult totpSecretResult = await accountService.PersistTotpSecretAsync(username, encryptedTotpSecret);
 										if (!totpSecretResult.IsSuccess)
 										{
@@ -803,7 +823,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 						}
 						else
 						{
-							// Map database error codes to client-facing results
+							// Map database error codes to client-facing results.
+							//
+							// All foreseeable validation/uniqueness branches are collapsed to
+							// InvalidUsernameOrPassword so the client (and any on-the-wire
+							// observer) cannot distinguish "username taken" from "format invalid"
+							// and enumerate accounts via the registration endpoint. Genuine server
+							// faults still surface as ServerBusy because the client needs to know
+							// to back off and retry.
 							result = dbResult.ErrorCode switch
 							{
 								DatabaseErrorCodes.UniqueViolation => ClientAuthenticationResult.InvalidUsernameOrPassword,
@@ -811,9 +838,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 								_ => ClientAuthenticationResult.ServerBusy,
 							};
 
-							// Track failure atomically (skip if tracker is at capacity to prevent unbounded growth).
-							if (mappingData.IpFailureTracker.Count < MaxIpFailureTrackerEntries)
-								mappingData.IpFailureTracker.AddOrUpdate(request.IpAddress, 1, (_, existing) => existing + 1);
+							// Fail-closed: when the IP failure tracker is at capacity we cannot
+							// safely record another failure, so disconnect the offender immediately
+							// rather than silently skipping the increment (which would let an
+							// attacker stay just under the per-IP block threshold indefinitely).
+							if (!TryTrackIpFailure(mappingData, request.IpAddress))
+							{
+								NetworkConnection capacityConn = request.Connection;
+								TryEnqueueMainThread(() =>
+								{
+									if (capacityConn != null && capacityConn.IsActive)
+										capacityConn.Disconnect(true);
+								});
+							}
 							runtimeData.IncrementRejected();
 						}
 					}
@@ -829,10 +866,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 
 					// Track failure against IP for blocking (e.g., garbage-payload decryption exceptions).
-					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var failMappingData)
-						&& failMappingData.IpFailureTracker.Count < MaxIpFailureTrackerEntries)
+					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var failMappingData))
 					{
-						failMappingData.IpFailureTracker.AddOrUpdate(request.IpAddress, 1, (_, existing) => existing + 1);
+						TryTrackIpFailure(failMappingData, request.IpAddress);
 					}
 				}
 			}
@@ -1297,14 +1333,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					else
 					{
-						// Per-username brute-force check (runs after decryption reveals the username).
+						// Per-username brute-force check. Uses the CAS-style
+						// TryRemove(KeyValuePair) overload so an expired entry is only
+						// evicted if no concurrent thread has updated it in the meantime
+						// — prevents losing a fresh failure counter to a stale eviction.
 						string userKey = username.ToLowerInvariant();
 						if (verifyUsernameFailures.TryGetValue(userKey, out var failInfo))
 						{
 							if (DateTime.UtcNow - failInfo.FirstFailure > VerifyUsernameLockoutDuration)
 							{
-								// Window expired — evict stale entry.
-								verifyUsernameFailures.TryRemove(userKey, out _);
+								// Window expired — try to evict, but only if the entry we
+								// observed is the one still in the map. If a concurrent
+								// TrackVerifyUsernameFailure has already reset it, the CAS
+								// fails and we leave their fresh entry intact.
+								// NOTE: ConcurrentDictionary.TryRemove(KeyValuePair) isn't available
+								// in Unity's runtime; ICollection<KVP>.Remove provides the same CAS.
+								((ICollection<KeyValuePair<string, (int Count, DateTime FirstFailure)>>)verifyUsernameFailures)
+									.Remove(new KeyValuePair<string, (int Count, DateTime FirstFailure)>(userKey, failInfo));
 							}
 							else if (failInfo.Count >= MaxVerifyFailuresPerUsername)
 							{
@@ -1324,11 +1369,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 					// Track failures for rate limiting.
 					if (result != ClientAuthenticationResult.AccountVerified)
 					{
-						// Per-IP failure tracking (skip if tracker is at capacity).
+						// Per-IP failure tracking. Fail-closed: when the tracker is at
+						// capacity, disconnect the offender immediately so they cannot stay
+						// just under the per-IP block threshold.
 						if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData)
-							&& mappingData.IpFailureTracker.Count < MaxIpFailureTrackerEntries)
+							&& !TryTrackIpFailure(mappingData, ipAddress))
 						{
-							mappingData.IpFailureTracker.AddOrUpdate(ipAddress, 1, (_, existing) => existing + 1);
+							NetworkConnection capacityConn = conn;
+							TryEnqueueMainThread(() =>
+							{
+								if (capacityConn != null && capacityConn.IsActive)
+									capacityConn.Disconnect(true);
+							});
+							return;
 						}
 
 						// Per-username failure tracking.
@@ -1356,7 +1409,36 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
+		/// Tracks a failure against <paramref name="ipAddress"/> in the per-IP failure
+		/// counter. Returns <c>false</c> when the tracker is at capacity AND the IP
+		/// is not already present — the caller should treat that as a fail-closed
+		/// signal (disconnect) rather than silently ignoring the failure, otherwise
+		/// an attacker can exhaust the tracker to escape the per-IP block.
+		/// Existing IPs are always incremented regardless of capacity.
+		/// </summary>
+		private static bool TryTrackIpFailure(IAccountCreationSystemMappingData mappingData, string ipAddress)
+		{
+			if (mappingData == null || string.IsNullOrEmpty(ipAddress))
+				return true;
+
+			// Capacity check is racy by design — the AddOrUpdate below tolerates
+			// transient over-shoot by a handful of entries which the periodic sweep
+			// removes. The check is here purely to bound peak memory at ~50K.
+			if (mappingData.IpFailureTracker.Count >= MaxIpFailureTrackerEntries &&
+				!mappingData.IpFailureTracker.ContainsKey(ipAddress))
+			{
+				return false;
+			}
+			mappingData.IpFailureTracker.AddOrUpdate(ipAddress, 1, (_, existing) => existing + 1);
+			return true;
+		}
+
+		/// <summary>
 		/// Tracks a verification failure for the given username in the per-username rate limiter.
+		/// Atomically resets the (count, firstFailure) pair when an existing entry's lockout
+		/// window has already elapsed — i.e., this single AddOrUpdate handles both the
+		/// "first failure", "continuing failure within window", and "window expired, start a
+		/// fresh window" cases without TOCTOU races against concurrent updates or sweeps.
 		/// </summary>
 		private void TrackVerifyUsernameFailure(string username)
 		{
@@ -1365,15 +1447,26 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 
 			// Hard cap: reject new entries when the tracker is full to prevent
-			// unbounded memory growth from unique-username flood attacks.
+			// unbounded memory growth from unique-username flood attacks. Existing
+			// entries are still incremented so a real lockout still applies even
+			// when the tracker is at capacity.
 			if (verifyUsernameFailures.Count >= MaxVerifyUsernameFailureEntries &&
 				!verifyUsernameFailures.ContainsKey(failKey))
 				return;
 
+			DateTime now = DateTime.UtcNow;
 			verifyUsernameFailures.AddOrUpdate(
 				failKey,
-				_ => (1, DateTime.UtcNow),
-				(_, existing) => (existing.Count + 1, existing.FirstFailure));
+				_ => (1, now),
+				(_, existing) =>
+				{
+					// Window expired between observation and increment — start fresh
+					// atomically so a concurrent sweep can't double-decrement us back
+					// to zero or lose the increment entirely.
+					if (now - existing.FirstFailure > VerifyUsernameLockoutDuration)
+						return (1, now);
+					return (existing.Count + 1, existing.FirstFailure);
+				});
 		}
 
 		/// <summary>

@@ -8,6 +8,7 @@ using FishMMO.Shared;
 using FishMMO.Logging;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 
 namespace FishMMO.Client
@@ -111,6 +112,19 @@ namespace FishMMO.Client
 		/// Stores the latest client version string fetched from the patch server.
 		/// </summary>
 		private string latestVersionString;
+		/// <summary>
+		/// Expected SHA-256 (lowercase hex) of the patch zip for the current client
+		/// version, as reported by the patch server. Empty when the server did not
+		/// supply one; in that case the download is not integrity-checked.
+		/// </summary>
+		private string expectedPatchSha256;
+		/// <summary>
+		/// Base URL of the APIHost candidate that responded successfully during the
+		/// most recent version check. Used so that the subsequent patch download
+		/// targets the same endpoint (instead of re-randomizing and potentially
+		/// hitting a different mirror with a different patch).
+		/// </summary>
+		private string selectedApiHost;
 		/// <summary>
 		/// Full path to the external updater executable.
 		/// </summary>
@@ -343,10 +357,25 @@ namespace FishMMO.Client
 		/// <param name="link">The URL string extracted from the clicked link.</param>
 		private void HandleHtmlLinkClicked(string link)
 		{
-			if (link.Contains("http") || link.Contains("www"))
+			// Strict URI parsing + scheme allowlist. The previous substring check would
+			// happily open "javascript:...", "file://...", or anything containing the
+			// literal string "http" (e.g. "chrome-http-pwn://...") through the OS URL
+			// handler. Restrict to absolute http(s) URIs only.
+			if (string.IsNullOrWhiteSpace(link))
 			{
-				Application.OpenURL(link);
+				return;
 			}
+			if (!Uri.TryCreate(link, UriKind.Absolute, out Uri uri))
+			{
+				Log.Warning("ClientLauncher", $"Refusing to open non-absolute link: {link}");
+				return;
+			}
+			if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+			{
+				Log.Warning("ClientLauncher", $"Refusing to open link with disallowed scheme '{uri.Scheme}': {link}");
+				return;
+			}
+			Application.OpenURL(uri.AbsoluteUri);
 		}
 
 		/// <summary>
@@ -407,10 +436,19 @@ namespace FishMMO.Client
 
 			string tempFilePath = Constants.GetTemporaryPath();
 
+			// Use the APIHost that succeeded during the version check so the patch we
+			// download corresponds to the version we were told about. Fall back to the
+			// hard-coded default only if no candidate has been selected yet (shouldn't
+			// happen in normal flow because Update is gated by a successful version check).
+			string patchApiHost = !string.IsNullOrEmpty(selectedApiHost)
+				? selectedApiHost
+				: Constants.Configuration.APIHost;
+
 			// Delegate patch download to patch server service
 			StartCoroutine(PatchServerService.DownloadPatch(
-				$"{Constants.Configuration.APIHost}{MainBootstrapSystem.GameVersion}",
+				$"{patchApiHost}{MainBootstrapSystem.GameVersion}",
 				tempFilePath,
+				expectedPatchSha256,
 				onComplete: () =>
 				{
 					SetLauncherState(LauncherState.ApplyingPatch);
@@ -453,46 +491,88 @@ namespace FishMMO.Client
 		{
 			SetLauncherState(LauncherState.CheckingVersion);
 
-			// Delegate to patch server service
-			yield return StartCoroutine(PatchServerService.GetLatestVersion(
-				Constants.Configuration.APIHost,
-				onComplete: (serverVersion) =>
-				{
-					latestVersionString = serverVersion.ToString(); // Store for updater launch
-					Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
+			List<string> candidates = ApiHostResolver.GetCandidates();
+			if (candidates.Count == 0)
+			{
+				Log.Error("ClientLauncher", "No APIHost candidates configured.");
+				SetLauncherState(LauncherState.VersionCheckFailed);
+				yield break;
+			}
 
-					VersionConfig clientVersion;
-					try
-					{
-						clientVersion = VersionConfig.Parse(MainBootstrapSystem.GameVersion);
-					}
-					catch (ArgumentException ex)
-					{
-						Log.Error("ClientLauncher", string.Format(UIText.ErrorParsingVersion, MainBootstrapSystem.GameVersion) + $" Exception: {ex.Message}");
-						SetLauncherState(LauncherState.VersionError);
-						return;
-					}
+			string lastError = null;
+			VersionConfig serverVersion = default;
+			PatchInfo patchInfo = default;
+			bool succeeded = false;
+			string successfulHost = null;
 
-					// Compare client and server versions to determine the appropriate action.
-					if (clientVersion < serverVersion)
+			for (int i = 0; i < candidates.Count && !succeeded; i++)
+			{
+				string host = candidates[i];
+				bool callbackFired = false;
+				string attemptError = null;
+
+				yield return StartCoroutine(PatchServerService.GetLatestVersion(
+					host,
+					MainBootstrapSystem.GameVersion,
+					onComplete: (sv, info) =>
 					{
-						PlayButton_Update();
-					}
-					else if (clientVersion > serverVersion)
+						callbackFired = true;
+						serverVersion = sv;
+						patchInfo = info;
+						successfulHost = host;
+						succeeded = true;
+					},
+					onError: (error) =>
 					{
-						Log.Warning("ClientLauncher", string.Format(UIText.LogDebugClientVersionAhead, MainBootstrapSystem.GameVersion, latestVersionString));
-						SetLauncherState(LauncherState.ClientAhead);
-					}
-					else
-					{
-						SetLauncherState(LauncherState.ReadyToPlay);
-					}
-				},
-				onError: (error) =>
+						callbackFired = true;
+						attemptError = error;
+					}));
+
+				if (!succeeded)
 				{
-					Log.Error("ClientLauncher", error);
-					SetLauncherState(LauncherState.VersionCheckFailed);
-				}));
+					lastError = attemptError ?? (callbackFired ? "Unknown error" : "No response");
+					Log.Debug("ClientLauncher", $"APIHost {host} version check failed ({lastError}); trying next.");
+				}
+			}
+
+			if (!succeeded)
+			{
+				Log.Error("ClientLauncher", lastError ?? "All APIHost candidates failed.");
+				SetLauncherState(LauncherState.VersionCheckFailed);
+				yield break;
+			}
+
+			selectedApiHost = successfulHost;
+			latestVersionString = serverVersion.ToString(); // Store for updater launch
+			expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
+			Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
+
+			VersionConfig clientVersion;
+			try
+			{
+				clientVersion = VersionConfig.Parse(MainBootstrapSystem.GameVersion);
+			}
+			catch (ArgumentException ex)
+			{
+				Log.Error("ClientLauncher", string.Format(UIText.ErrorParsingVersion, MainBootstrapSystem.GameVersion) + $" Exception: {ex.Message}");
+				SetLauncherState(LauncherState.VersionError);
+				yield break;
+			}
+
+			// Compare client and server versions to determine the appropriate action.
+			if (clientVersion < serverVersion)
+			{
+				PlayButton_Update();
+			}
+			else if (clientVersion > serverVersion)
+			{
+				Log.Warning("ClientLauncher", string.Format(UIText.LogDebugClientVersionAhead, MainBootstrapSystem.GameVersion, latestVersionString));
+				SetLauncherState(LauncherState.ClientAhead);
+			}
+			else
+			{
+				SetLauncherState(LauncherState.ReadyToPlay);
+			}
 		}
 
 		/// <summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -1171,10 +1172,24 @@ namespace FishMMO.Auth.Implementation
 			private const int TotpDigits = 6;
 
 			/// <summary>
-			/// Fixed AAD used when encrypting TOTP secrets at rest with the server master key.
-			/// Prevents cross-context decryption if the same master key is accidentally reused.
+			/// AAD prefix for v2 TOTP at-rest envelopes. The full AAD is built per-call as
+			/// <c>"fishmmo-totp-secret-v2|" + lower(username) + "|kv=" + kekVersion</c> so that
+			/// (a) an envelope encrypted for one user cannot be decrypted for another, and
+			/// (b) a downgrade across KEK versions is rejected by GCM tag verification.
 			/// </summary>
-			private static readonly byte[] TotpSecretAad = Encoding.ASCII.GetBytes("fishmmo-totp-secret-v1");
+			private const string TotpSecretAadPrefixV2 = "fishmmo-totp-secret-v2|";
+
+			/// <summary>
+			/// On-disk version byte for the TOTP at-rest envelope. Bumping this is a breaking
+			/// change for existing rows in the <c>account.totp_secret</c> column.
+			/// </summary>
+			private const byte TotpEnvelopeVersion = 2;
+
+			/// <summary>
+			/// Length in bytes of the random salt used to derive the per-user TOTP KEK
+			/// via HKDF-SHA256. 16 bytes is well above the 128-bit collision-resistance threshold.
+			/// </summary>
+			private const int TotpKekSaltLength = 16;
 
 			/// <summary>
 			/// Generates a cryptographically random TOTP secret.
@@ -1186,64 +1201,159 @@ namespace FishMMO.Auth.Implementation
 			}
 
 			/// <summary>
-			/// Encrypts a TOTP secret for at-rest storage in the database using AES-256-GCM
-			/// with the server's persistent master key.
+			/// Encrypts a TOTP secret for at-rest storage using AES-256-GCM under a per-user
+			/// data-encryption key derived from the server master KEK via HKDF-SHA256.
 			/// </summary>
-			/// <param name="masterKey">32-byte persistent server master key.</param>
-			/// <param name="plaintextSecret">Plaintext TOTP secret (20 bytes).</param>
-			/// <returns>Base64-encoded string containing nonce + ciphertext + GCM tag.</returns>
-			public static string EncryptTotpSecret(byte[] masterKey, byte[] plaintextSecret)
+			/// <remarks>
+			/// Envelope layout (binary, then base64-encoded):
+			/// <code>
+			/// [1B  version  = TotpEnvelopeVersion]
+			/// [4B  kekVersion (big-endian uint32)]
+			/// [16B salt    (random, HKDF salt)]
+			/// [12B nonce   (random, GCM IV)]
+			/// [N B ciphertext + 16B GCM tag]
+			/// </code>
+			/// Per-user data key = <c>HKDF-SHA256(IKM=masterKek, salt=salt, info="totp|"+lower(username)+"|kv="+kekVersion, L=32)</c>.
+			/// AAD = UTF-8 of <c>"fishmmo-totp-secret-v2|"+lower(username)+"|kv="+kekVersion</c>.
+			/// Both the salt and the username binding make every envelope unique per account
+			/// and prevent ciphertext transplant across users or KEK versions.
+			/// </remarks>
+			/// <param name="masterKek">32-byte persistent server master KEK (NOT the data key).</param>
+			/// <param name="username">Account name the secret belongs to. Normalised to lowercase invariant for binding.</param>
+			/// <param name="plaintextSecret">Plaintext TOTP secret (typically 20 bytes).</param>
+			/// <param name="kekVersion">Master-KEK version identifier (>= 1). Allows offline re-wrap on key rotation.</param>
+			/// <returns>Base64-encoded envelope suitable for direct storage.</returns>
+			public static string EncryptTotpSecret(byte[] masterKek, string username, byte[] plaintextSecret, int kekVersion = 1)
 			{
-				if (masterKey == null || masterKey.Length != 32)
-					throw new ArgumentException("Master key must be exactly 32 bytes.", nameof(masterKey));
+				if (masterKek == null || masterKek.Length != 32)
+					throw new ArgumentException("Master KEK must be exactly 32 bytes.", nameof(masterKek));
+				if (string.IsNullOrEmpty(username))
+					throw new ArgumentException("Username is required.", nameof(username));
 				if (plaintextSecret == null || plaintextSecret.Length == 0)
 					throw new ArgumentNullException(nameof(plaintextSecret));
+				if (kekVersion <= 0)
+					throw new ArgumentOutOfRangeException(nameof(kekVersion));
 
-				// Random nonce (not session-based) for at-rest encryption.
+				byte[] salt = GenerateKey(TotpKekSaltLength);
 				byte[] nonce = GenerateKey(GcmNonceLength);
-				byte[] ciphertext = EncryptAES(masterKey, nonce, plaintextSecret, TotpSecretAad);
+				byte[] kek = null;
+				byte[] ciphertext = null;
+				byte[] envelope = null;
+				byte[] aad = null;
+				try
+				{
+					kek = DeriveTotpKek(masterKek, username, kekVersion, salt);
+					aad = BuildTotpAad(username, kekVersion);
+					ciphertext = EncryptAES(kek, nonce, plaintextSecret, aad);
 
-				// Format: nonce || ciphertext (includes GCM tag)
-				byte[] combined = new byte[nonce.Length + ciphertext.Length];
-				Buffer.BlockCopy(nonce, 0, combined, 0, nonce.Length);
-				Buffer.BlockCopy(ciphertext, 0, combined, nonce.Length, ciphertext.Length);
+					int headerLen = 1 + 4 + TotpKekSaltLength + GcmNonceLength;
+					envelope = new byte[headerLen + ciphertext.Length];
+					envelope[0] = TotpEnvelopeVersion;
+					envelope[1] = (byte)((kekVersion >> 24) & 0xFF);
+					envelope[2] = (byte)((kekVersion >> 16) & 0xFF);
+					envelope[3] = (byte)((kekVersion >> 8) & 0xFF);
+					envelope[4] = (byte)(kekVersion & 0xFF);
+					int off = 5;
+					Buffer.BlockCopy(salt, 0, envelope, off, TotpKekSaltLength); off += TotpKekSaltLength;
+					Buffer.BlockCopy(nonce, 0, envelope, off, GcmNonceLength); off += GcmNonceLength;
+					Buffer.BlockCopy(ciphertext, 0, envelope, off, ciphertext.Length);
 
-				string result = Convert.ToBase64String(combined);
-				CryptographicOperations.ZeroMemory(nonce);
-				CryptographicOperations.ZeroMemory(combined);
-				return result;
+					return Convert.ToBase64String(envelope);
+				}
+				finally
+				{
+					CryptographicOperations.ZeroMemory(salt);
+					CryptographicOperations.ZeroMemory(nonce);
+					if (kek != null) CryptographicOperations.ZeroMemory(kek);
+					if (ciphertext != null) CryptographicOperations.ZeroMemory(ciphertext);
+					if (envelope != null) CryptographicOperations.ZeroMemory(envelope);
+					if (aad != null) CryptographicOperations.ZeroMemory(aad);
+				}
 			}
 
 			/// <summary>
-			/// Decrypts a TOTP secret from its at-rest database representation.
+			/// Decrypts a v2 TOTP at-rest envelope produced by <see cref="EncryptTotpSecret"/>.
+			/// Older single-key envelopes are NOT supported; rotation must be performed by
+			/// out-of-band re-wrap tooling that decrypts under the old scheme and re-encrypts
+			/// via this method.
 			/// </summary>
-			/// <param name="masterKey">32-byte persistent server master key.</param>
-			/// <param name="storedValue">Base64-encoded string from <see cref="EncryptTotpSecret"/>.</param>
+			/// <param name="masterKek">32-byte persistent server master KEK.</param>
+			/// <param name="username">Account name the envelope belongs to. Must match the value
+			/// supplied at encrypt-time (case-insensitive); a mismatch causes the GCM tag to fail.</param>
+			/// <param name="storedValue">Base64-encoded envelope from <see cref="EncryptTotpSecret"/>.</param>
 			/// <returns>Plaintext TOTP secret. Caller must zeroize when done.</returns>
-			public static byte[] DecryptTotpSecret(byte[] masterKey, string storedValue)
+			public static byte[] DecryptTotpSecret(byte[] masterKek, string username, string storedValue)
 			{
-				if (masterKey == null || masterKey.Length != 32)
-					throw new ArgumentException("Master key must be exactly 32 bytes.", nameof(masterKey));
+				if (masterKek == null || masterKek.Length != 32)
+					throw new ArgumentException("Master KEK must be exactly 32 bytes.", nameof(masterKek));
+				if (string.IsNullOrEmpty(username))
+					throw new ArgumentException("Username is required.", nameof(username));
 				if (string.IsNullOrEmpty(storedValue))
 					throw new ArgumentNullException(nameof(storedValue));
 
-				byte[] combined = Convert.FromBase64String(storedValue);
-				if (combined.Length <= GcmNonceLength)
-					throw new CryptographicException("Stored TOTP secret is too short.");
+				byte[] envelope = Convert.FromBase64String(storedValue);
+				const int headerLen = 1 + 4 + TotpKekSaltLength + GcmNonceLength;
+				if (envelope.Length <= headerLen)
+					throw new CryptographicException("Stored TOTP envelope is too short.");
+				if (envelope[0] != TotpEnvelopeVersion)
+					throw new CryptographicException("Unsupported TOTP envelope version.");
 
+				int kekVersion = (envelope[1] << 24) | (envelope[2] << 16) | (envelope[3] << 8) | envelope[4];
+				if (kekVersion <= 0)
+					throw new CryptographicException("Invalid TOTP KEK version.");
+
+				byte[] salt = new byte[TotpKekSaltLength];
+				Buffer.BlockCopy(envelope, 5, salt, 0, TotpKekSaltLength);
 				byte[] nonce = new byte[GcmNonceLength];
-				Buffer.BlockCopy(combined, 0, nonce, 0, GcmNonceLength);
+				Buffer.BlockCopy(envelope, 5 + TotpKekSaltLength, nonce, 0, GcmNonceLength);
+				byte[] ciphertext = new byte[envelope.Length - headerLen];
+				Buffer.BlockCopy(envelope, headerLen, ciphertext, 0, ciphertext.Length);
 
-				byte[] ciphertext = new byte[combined.Length - GcmNonceLength];
-				Buffer.BlockCopy(combined, GcmNonceLength, ciphertext, 0, ciphertext.Length);
+				byte[] kek = null;
+				byte[] aad = null;
+				try
+				{
+					kek = DeriveTotpKek(masterKek, username, kekVersion, salt);
+					aad = BuildTotpAad(username, kekVersion);
+					return DecryptAES(kek, nonce, ciphertext, aad);
+				}
+				finally
+				{
+					CryptographicOperations.ZeroMemory(salt);
+					CryptographicOperations.ZeroMemory(nonce);
+					CryptographicOperations.ZeroMemory(ciphertext);
+					CryptographicOperations.ZeroMemory(envelope);
+					if (kek != null) CryptographicOperations.ZeroMemory(kek);
+					if (aad != null) CryptographicOperations.ZeroMemory(aad);
+				}
+			}
 
-				byte[] plaintext = DecryptAES(masterKey, nonce, ciphertext, TotpSecretAad);
+			/// <summary>
+			/// Derives the per-user, per-version 32-byte data-encryption key for a TOTP envelope
+			/// via HKDF-SHA256. The KEK output is suitable for direct use as an AES-256-GCM key.
+			/// </summary>
+			private static byte[] DeriveTotpKek(byte[] masterKek, string username, int kekVersion, byte[] salt)
+			{
+				string info = "totp|" + username.ToLowerInvariant() + "|kv=" + kekVersion.ToString(CultureInfo.InvariantCulture);
+				byte[] infoBytes = Encoding.UTF8.GetBytes(info);
+				try
+				{
+					return HkdfSha256(salt, masterKek, infoBytes, 32);
+				}
+				finally
+				{
+					CryptographicOperations.ZeroMemory(infoBytes);
+				}
+			}
 
-				CryptographicOperations.ZeroMemory(nonce);
-				CryptographicOperations.ZeroMemory(ciphertext);
-				CryptographicOperations.ZeroMemory(combined);
-
-				return plaintext;
+			/// <summary>
+			/// Builds the AES-GCM associated-data (AAD) for a TOTP envelope. The AAD binds the
+			/// ciphertext to a specific account and KEK version, defeating cross-row transplant.
+			/// </summary>
+			private static byte[] BuildTotpAad(string username, int kekVersion)
+			{
+				string aad = TotpSecretAadPrefixV2 + username.ToLowerInvariant() + "|kv=" + kekVersion.ToString(CultureInfo.InvariantCulture);
+				return Encoding.UTF8.GetBytes(aad);
 			}
 
 			/// <summary>

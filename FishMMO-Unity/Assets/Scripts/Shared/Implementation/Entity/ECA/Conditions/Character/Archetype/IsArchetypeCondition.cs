@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// Condition that checks if a character is of a specified archetype.
 	/// </summary>
 	[Serializable]
-	public class IsArchetypeCondition : BaseCondition, ITooltipContributor
+	public class IsArchetypeCondition : BaseCondition
 	{
 		/// <summary>
 		/// The archetype template to check against the character's archetype.
@@ -47,10 +47,8 @@ namespace FishMMO.Shared
 			return archetypeController.Template != null && archetypeController.Template.ID == ArchetypeTemplate.ID;
 		}
 
-		/// <summary>
-		/// Returns the tooltip contribution showing the archetype requirement.
-		/// </summary>
-		public string GetTooltipContribution()
+		/// <inheritdoc />
+		public override string GetTooltipContribution()
 		{
 			return ArchetypeTemplate?.Name;
 		}

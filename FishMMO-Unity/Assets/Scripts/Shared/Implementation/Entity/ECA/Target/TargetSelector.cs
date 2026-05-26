@@ -22,17 +22,16 @@ namespace FishMMO.Shared
 	/// </para>
 	/// </summary>
 	[Serializable]
-	public abstract class TargetSelector : IConditionalTargetSelector
+	public abstract class TargetSelector
 	{
 		/// <summary>
-		/// List of conditions that must be met for a target to be valid.
+		/// Conditions that must be met for a target to be valid. Evaluated per-candidate
+		/// inside <see cref="AreConditionsMet"/>. Honors the ambient
+		/// <see cref="EventData.ConditionFilter"/> via <see cref="TriggerExecution.AreConditionsMet"/>.
 		/// </summary>
 		[Tooltip("Conditions that must be met for a target to be valid.")]
 		[SerializeReference, SubclassSelector]
-		private List<BaseCondition> conditions = new List<BaseCondition>();
-
-		/// <inheritdoc/>
-		public List<BaseCondition> Conditions { get { return conditions; } set { conditions = value; } }
+		public List<BaseCondition> Conditions = new List<BaseCondition>();
 
 		/// <summary>
 		/// Selects targets based on the supplied event context.
@@ -41,6 +40,13 @@ namespace FishMMO.Shared
 		/// (when set) or <see cref="EventData.Initiator"/> typically serves as the spatial origin.</param>
 		/// <returns>The selected GameObjects.</returns>
 		public abstract IEnumerable<GameObject> SelectTargets(EventData eventData);
+
+		/// <summary>
+		/// Returns a short, designer-facing tooltip line describing this selector's targeting
+		/// (e.g. "Nearest enemy within 10m"), or <c>null</c> when the selector has nothing
+		/// to contribute. Override on selectors that have player-visible targeting semantics.
+		/// </summary>
+		public virtual string GetTooltipContribution() => null;
 
 		/// <summary>
 		/// Returns the spatial origin for this selector — preferring <see cref="EventData.Target"/>,
@@ -68,7 +74,7 @@ namespace FishMMO.Shared
 		/// <returns>True when no conditions exist, or all conditions pass.</returns>
 		protected bool AreConditionsMet(GameObject target, EventData eventData)
 		{
-			if (conditions == null || conditions.Count == 0)
+			if (Conditions == null || Conditions.Count == 0)
 			{
 				return true;
 			}
@@ -79,7 +85,7 @@ namespace FishMMO.Shared
 			}
 
 			EventData scoped = ForkForCandidate(target, eventData);
-			return TriggerExecution.AreConditionsMet(conditions, scoped);
+			return TriggerExecution.AreConditionsMet(Conditions, scoped);
 		}
 
 		/// <summary>

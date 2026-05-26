@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	/// Condition that checks if a character has a required value for a specified attribute, with optional inversion.
 	/// </summary>
 	[Serializable]
-	public class HasRequiredAttribute : BaseCondition, ITooltipContributor
+	public class HasRequiredAttribute : BaseCondition
 	{
 		[Header("Stat Requirements")]
 		/// <summary>
@@ -55,10 +55,8 @@ namespace FishMMO.Shared
 			return meetsRequirement;
 		}
 
-		/// <summary>
-		/// Returns the tooltip contribution showing the attribute requirement.
-		/// </summary>
-		public string GetTooltipContribution()
+		/// <inheritdoc />
+		public override string GetTooltipContribution()
 		{
 			if (Template != null && RequiredValue > 0)
 			{

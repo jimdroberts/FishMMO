@@ -635,6 +635,18 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
+		/// Stores a raw auth token for use in the next token auth flow.
+		/// Intended for test harnesses that need to inject a token without going through the full SRP flow.
+		/// </summary>
+		/// <param name="rawToken">Raw token bytes to store. Must not be null or empty.</param>
+		protected void SetStoredAuthToken(byte[] rawToken)
+		{
+			if (storedAuthToken != null)
+				CryptographicOperations.ZeroMemory(storedAuthToken);
+			storedAuthToken = rawToken;
+		}
+
+		/// <summary>
 		/// Zeroes and clears the stored auth token.
 		/// Call on explicit logout or when the token is no longer needed.
 		/// </summary>
@@ -644,6 +656,67 @@ namespace FishMMO.Auth.Implementation
 			{
 				CryptographicOperations.ZeroMemory(storedAuthToken);
 				storedAuthToken = null;
+			}
+		}
+
+		/// <summary>
+		/// Returns a defensive copy of the currently stored auth token (the raw,
+		/// HMAC-signed bytes the LoginServer issued) for the sole purpose of sending
+		/// a server-side revocation request, then zeroes and clears the stored copy.
+		/// Returns <c>false</c> if no token is currently held.
+		///
+		/// Security note: the returned bytes are transmitted to the server in cleartext
+		/// (the auth pipeline's AES-GCM channel has typically been torn down by the time
+		/// the user explicitly logs out). The server hashes the bytes and matches them
+		/// against the persisted token-hash row, then marks it revoked. Because the token
+		/// is being revoked anyway, any eavesdropper who captures it gains nothing.
+		/// </summary>
+		/// <param name="tokenCopy">Defensive copy of the stored token, or <c>null</c> when none was held.</param>
+		/// <returns><c>true</c> when a token was returned; <c>false</c> when none was held.</returns>
+		public bool TryConsumeStoredTokenForRevoke(out byte[]? tokenCopy)
+		{
+			if (storedAuthToken == null)
+			{
+				tokenCopy = null;
+				return false;
+			}
+			tokenCopy = new byte[storedAuthToken.Length];
+			System.Buffer.BlockCopy(storedAuthToken, 0, tokenCopy, 0, storedAuthToken.Length);
+			CryptographicOperations.ZeroMemory(storedAuthToken);
+			storedAuthToken = null;
+			return true;
+		}
+
+		/// <summary>
+		/// Decrypts a freshly-minted auth token received mid-session from a World/Scene
+		/// server (over the existing AES-GCM session channel) and replaces the currently
+		/// stored token. Used by the reconnect-only token-refresh flow so that future
+		/// reconnect attempts continue working past the original token's expiration.
+		/// </summary>
+		/// <param name="encryptedToken">AES-GCM encrypted auth token bytes from the server.</param>
+		/// <returns><c>true</c> if the token was decrypted and stored; <c>false</c> on
+		/// missing session keys, empty payload, or decryption failure.</returns>
+		public bool TryApplyRenewedToken(byte[]? encryptedToken)
+		{
+			if (encryptedToken == null || encryptedToken.Length == 0) return false;
+			if (receiveNonceCtx == null || serverToClientKey == null) return false;
+
+			try
+			{
+				byte[] newToken = SrpService.ClientDecryptAuthToken(encryptedToken, serverToClientKey, receiveNonceCtx, agreedVersion);
+				if (newToken == null || newToken.Length == 0) return false;
+
+				if (storedAuthToken != null)
+				{
+					CryptographicOperations.ZeroMemory(storedAuthToken);
+				}
+				storedAuthToken = newToken;
+				return true;
+			}
+			catch (CryptographicException ex)
+			{
+				_ = Log.Warning(LogPrefix, $"Renewed auth token decryption failed (non-fatal): {ex.Message}");
+				return false;
 			}
 		}
 

@@ -41,7 +41,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="accessLevel">The access level for the account.</param>
 		/// <returns><c>true</c> if SRP data was set and state advanced; <c>false</c> if the
 		/// connection was not in the expected state.</returns>
-		public bool AddConnectionAccount(TConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel)
+		public bool AddConnectionAccount(TConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel, bool isUnverified = false)
 		{
 			ServerSrpData srpData = new ServerSrpData(SrpParameters.Create2048<SHA512>(),
 													  accountName,
@@ -58,7 +58,7 @@ namespace FishMMO.Auth.Implementation
 					return false;
 				}
 
-				accountData.SetSrpData(accessLevel, srpData);
+				accountData.SetSrpData(accessLevel, srpData, isUnverified);
 				accountData.AuthState = AuthState.WaitingForProof;
 
 				connectionAccounts.Remove(connection);
