@@ -136,7 +136,7 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default nginx.conf path used in Linux setup automation.
 		/// </summary>
-		public static readonly string LinuxNginxConfigurationPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO Dev", "FishMMO-Setup", "nginx.conf");
+		public static readonly string LinuxNginxConfigurationPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO-Dev", "FishMMO-Setup", "nginx.conf");
 
 		/// <summary>
 		/// Default web root for ACME HTTP-01 challenges in Linux deployments.
@@ -146,7 +146,7 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default FishMMO web servers directory path used for operational context prompts.
 		/// </summary>
-		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO Dev", "FishMMO-WebServers");
+		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO-Dev", "FishMMO-WebServers");
 
 		/// <summary>
 		/// Download URL for the Visual Studio Build Tools bootstrapper.
@@ -257,11 +257,11 @@ namespace FishMMO.Installer
 		public const string PgBouncerAuthUser = "fishmmo_pgb_auth";
 
 		// ---------------------------------------------------------------------
-		// FishMMO repository layout (monorepo at ~/Dev/FishMMO Dev)
+		// FishMMO repository layout (monorepo at ~/Dev/FishMMO-Dev)
 		// ---------------------------------------------------------------------
 
 		/// <summary>Root path of the FishMMO monorepo workspace on Linux/macOS.</summary>
-		public static readonly string FishMMOMonorepoRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO Dev");
+		public static readonly string FishMMOMonorepoRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO-Dev");
 
 		/// <summary>Path to the FishMMO-Setup directory containing canonical nginx.conf, .cfg files, and environment overlays.</summary>
 		public static readonly string FishMMOSetupPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-Setup");

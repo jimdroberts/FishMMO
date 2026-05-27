@@ -75,7 +75,8 @@ namespace FishMMO.Installer
 			{
 				await Log.Warning("FishMMOInstaller",
 					$"Could not locate a Unity Editor install for version {InstallationConstants.UnityDefaultVersion}. " +
-					"Install Unity Hub + the target Editor version first (menu 4 -> 1 / 4 -> 2).");
+					"Install Unity Hub + the target Editor version first (menu 4 -> 1 / 4 -> 2), " +
+					"or set the FISHMMO_UNITY_EXE environment variable to the Unity executable path.");
 				return;
 			}
 
@@ -103,6 +104,44 @@ namespace FishMMO.Installer
 				$"-fishmmoBuildType {buildType}",
 				$"-fishmmoOSTarget {osTarget}",
 				$"-logFile \"{logPath}\"");
+
+			// Add -standaloneBuildSubtarget "Server" for server builds
+			if (buildType == UnityBuildType.Server)
+			{
+				args += " -standaloneBuildSubtarget \"Server\"";
+			}
+
+			// Add -overrideMonoSearchPath for Linux, dynamically resolved
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				// Try to resolve MonoBleedingEdge path relative to the Unity executable
+				string? monoPath = TryResolveMonoBleedingEdgePath(unityExe);
+				if (!string.IsNullOrWhiteSpace(monoPath))
+				{
+					args += $" -overrideMonoSearchPath \"{monoPath}\"";
+				}
+				else
+				{
+					await Log.Warning("FishMMOInstaller", "Could not resolve MonoBleedingEdge path for -overrideMonoSearchPath. Unity may fail to start.");
+				}
+			}
+
+			// Helper to resolve MonoBleedingEdge path
+			static string? TryResolveMonoBleedingEdgePath(string unityExePath)
+			{
+				try
+				{
+					// Handles both .../Editor/Unity and .../Editor/Unity.exe
+					var editorDir = Path.GetDirectoryName(unityExePath); // .../Editor
+					if (editorDir == null) return null;
+					var monoPath = Path.Combine(editorDir, "Data", "MonoBleedingEdge", "lib", "mono", "unityjit-linux");
+					return Directory.Exists(monoPath) ? monoPath : null;
+				}
+				catch
+				{
+					return null;
+				}
+			}
 
 			bool success = await InstallerProcessHelper.RunProcessAsync(unityExe, args,
 				(exitCode, stdout, stderr) =>
@@ -145,34 +184,253 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Locates the Unity Editor executable for <see cref="InstallationConstants.UnityDefaultVersion"/>.
-		/// On Linux: <c>~/Unity/Hub/Editor/&lt;version&gt;/Editor/Unity</c>.
-		/// On Windows: <c>%ProgramFiles%\Unity\Hub\Editor\&lt;version&gt;\Editor\Unity.exe</c>.
-		/// Allows override via the <c>FISHMMO_UNITY_EXE</c> environment variable.
+		/// Cached Unity executable path, set after the first successful resolve so subsequent
+		/// builds in the same session do not re-prompt or re-query Unity Hub.
 		/// </summary>
-		private static Task<string?> ResolveUnityExecutableAsync()
+		private static string? _cachedUnityExe;
+
+		/// <summary>
+		/// Locates the Unity Editor executable for <see cref="InstallationConstants.UnityDefaultVersion"/>.
+		/// Resolution order:
+		/// <list type="number">
+		///   <item>Cached value from a previous successful resolve in this session.</item>
+		///   <item><c>FISHMMO_UNITY_EXE</c> environment variable.</item>
+		///   <item>Default Unity Hub install path for the configured version.</item>
+		///   <item>Unity Hub CLI (<c>unityhub -- --headless editors --installed</c>) output.</item>
+		///   <item>Common alternate install locations (e.g. <c>/opt</c>).</item>
+		///   <item>Interactive prompt for a user-supplied path.</item>
+		/// </list>
+		/// </summary>
+		private static async Task<string?> ResolveUnityExecutableAsync()
 		{
-			string? envOverride = Environment.GetEnvironmentVariable("FISHMMO_UNITY_EXE");
-			if (!string.IsNullOrWhiteSpace(envOverride) && File.Exists(envOverride))
+			if (!string.IsNullOrWhiteSpace(_cachedUnityExe) && File.Exists(_cachedUnityExe))
 			{
-				return Task.FromResult<string?>(envOverride);
+				return _cachedUnityExe;
 			}
 
 			string version = InstallationConstants.UnityDefaultVersion;
 
+			// 1. Environment variable override.
+			string? envOverride = Environment.GetEnvironmentVariable("FISHMMO_UNITY_EXE");
+			if (!string.IsNullOrWhiteSpace(envOverride))
+			{
+				if (File.Exists(envOverride))
+				{
+					await Log.Info("FishMMOInstaller", $"Using Unity executable from FISHMMO_UNITY_EXE: {envOverride}");
+					return _cachedUnityExe = envOverride;
+				}
+				await Log.Warning("FishMMOInstaller", $"FISHMMO_UNITY_EXE is set to '{envOverride}' but the file does not exist. Falling back to auto-detection.");
+			}
+
+			// 2. Default Unity Hub install path for the configured version.
+			string defaultPath = GetDefaultUnityExecutablePath(version);
+			if (File.Exists(defaultPath))
+			{
+				await Log.Info("FishMMOInstaller", $"Found Unity editor at default location: {defaultPath}");
+				return _cachedUnityExe = defaultPath;
+			}
+
+			// 3. Ask Unity Hub CLI which editors it knows about.
+			string? hubReported = await TryResolveFromUnityHubAsync(version);
+			if (!string.IsNullOrWhiteSpace(hubReported))
+			{
+				await Log.Info("FishMMOInstaller", $"Found Unity editor via Unity Hub CLI: {hubReported}");
+				return _cachedUnityExe = hubReported;
+			}
+
+			// 4. Probe common alternate install locations.
+			string? probed = TryProbeAlternateLocations(version);
+			if (!string.IsNullOrWhiteSpace(probed))
+			{
+				await Log.Info("FishMMOInstaller", $"Found Unity editor via filesystem probe: {probed}");
+				return _cachedUnityExe = probed;
+			}
+
+			// 5. Prompt the user for a manual path.
+			string? manual = await PromptForUnityExecutablePathAsync(version, defaultPath);
+			if (!string.IsNullOrWhiteSpace(manual))
+			{
+				return _cachedUnityExe = manual;
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Returns the OS-appropriate default Unity Hub editor executable path for the given version.
+		/// </summary>
+		private static string GetDefaultUnityExecutablePath(string version)
+		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				string winPath = Path.Combine(InstallationConstants.UnityWindowsEditorRoot, version, "Editor", "Unity.exe");
-				return Task.FromResult<string?>(File.Exists(winPath) ? winPath : null);
+				return Path.Combine(InstallationConstants.UnityWindowsEditorRoot, version, "Editor", "Unity.exe");
 			}
+			return Path.Combine(InstallationConstants.UnityLinuxEditorRoot, version, "Editor", "Unity");
+		}
 
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+		/// <summary>
+		/// Queries the Unity Hub CLI for installed editors and returns the path that matches
+		/// the requested version, or <c>null</c> if Hub is not available or the version is not installed.
+		/// Each output line looks like: <c>6000.3.2f1 , installed at /path/to/Editor/Unity</c>.
+		/// </summary>
+		private static async Task<string?> TryResolveFromUnityHubAsync(string version)
+		{
+			string hubPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+				? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Unity Hub", "Unity Hub.exe")
+				: "/usr/bin/unityhub";
+
+			if (!File.Exists(hubPath) && !RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 			{
-				string linuxPath = Path.Combine(InstallationConstants.UnityLinuxEditorRoot, version, "Editor", "Unity");
-				return Task.FromResult<string?>(File.Exists(linuxPath) ? linuxPath : null);
+				return null;
 			}
 
-			return Task.FromResult<string?>(null);
+			(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
+			string arguments = $"{argPrefix} \"\\\"{hubPath}\\\" -- --headless editors --installed\"";
+
+			string? resolved = null;
+			await InstallerProcessHelper.RunProcessAsync(shell, arguments, (exitCode, output, error) =>
+			{
+				if (exitCode != 0 || string.IsNullOrWhiteSpace(output))
+				{
+					return false;
+				}
+
+				using var reader = new StringReader(output);
+				string? line;
+				while ((line = reader.ReadLine()) != null)
+				{
+					string trimmed = line.TrimStart();
+					if (!trimmed.StartsWith(version, StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+
+					// Match "installed at <path>" — the path is the remainder of the line.
+					const string marker = "installed at";
+					int markerIndex = trimmed.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+					if (markerIndex < 0)
+					{
+						continue;
+					}
+
+					string candidate = trimmed[(markerIndex + marker.Length)..].Trim().Trim('"');
+					if (File.Exists(candidate))
+					{
+						resolved = candidate;
+						return true;
+					}
+
+					// Some Hub builds report the editor directory; append the executable name.
+					string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Unity.exe" : "Unity";
+					string withExe = Path.Combine(candidate, exeName);
+					if (File.Exists(withExe))
+					{
+						resolved = withExe;
+						return true;
+					}
+				}
+				return false;
+			});
+
+			return resolved;
+		}
+
+		/// <summary>
+		/// Probes a small set of well-known alternate install locations for the editor executable.
+		/// </summary>
+		private static string? TryProbeAlternateLocations(string version)
+		{
+			var candidates = new List<string>();
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				string? programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+				string? localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+				if (!string.IsNullOrEmpty(programFilesX86))
+				{
+					candidates.Add(Path.Combine(programFilesX86, "Unity", "Hub", "Editor", version, "Editor", "Unity.exe"));
+				}
+				if (!string.IsNullOrEmpty(localAppData))
+				{
+					candidates.Add(Path.Combine(localAppData, "Unity", "Hub", "Editor", version, "Editor", "Unity.exe"));
+				}
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+				candidates.Add(Path.Combine(home, ".local", "share", "unityhub", "Editor", version, "Editor", "Unity"));
+				candidates.Add(Path.Combine(home, "UnityHub", "Editor", version, "Editor", "Unity"));
+				candidates.Add(Path.Combine("/opt", "Unity", "Hub", "Editor", version, "Editor", "Unity"));
+				candidates.Add(Path.Combine("/opt", "unityhub", "Editor", version, "Editor", "Unity"));
+				candidates.Add(Path.Combine("/opt", "Unity", "Editor", "Unity"));
+			}
+
+			foreach (string candidate in candidates)
+			{
+				if (File.Exists(candidate))
+				{
+					return candidate;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Interactively asks the user for a Unity executable path. Accepts either the full
+		/// path to the editor binary or the parent directory containing it.
+		/// </summary>
+		private static async Task<string?> PromptForUnityExecutablePathAsync(string version, string defaultPath)
+		{
+			await Log.Warning("FishMMOInstaller",
+				$"Could not auto-detect Unity Editor {version}. Expected default location: {defaultPath}");
+
+			Console.WriteLine();
+			Console.WriteLine($"Please enter the full path to the Unity {version} executable.");
+			Console.WriteLine("  - Linux example:   /home/<user>/Unity/Hub/Editor/" + version + "/Editor/Unity");
+			Console.WriteLine("  - Windows example: C:\\Program Files\\Unity\\Hub\\Editor\\" + version + "\\Editor\\Unity.exe");
+			Console.WriteLine("You can also enter the directory that contains the Unity executable.");
+			Console.WriteLine("Tip: set the FISHMMO_UNITY_EXE environment variable to skip this prompt next time.");
+			Console.WriteLine("Leave blank to cancel.");
+
+			string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Unity.exe" : "Unity";
+
+			for (int attempt = 0; attempt < 3; attempt++)
+			{
+				string? input = InstallerProcessHelper.PromptForInput("Unity executable path: ");
+				if (string.IsNullOrWhiteSpace(input))
+				{
+					await Log.Info("FishMMOInstaller", "Unity path entry cancelled by user.");
+					return null;
+				}
+
+				string candidate = input.Trim().Trim('"');
+
+				if (File.Exists(candidate))
+				{
+					return candidate;
+				}
+
+				if (Directory.Exists(candidate))
+				{
+					string withExe = Path.Combine(candidate, exeName);
+					if (File.Exists(withExe))
+					{
+						return withExe;
+					}
+
+					string nestedExe = Path.Combine(candidate, "Editor", exeName);
+					if (File.Exists(nestedExe))
+					{
+						return nestedExe;
+					}
+				}
+
+				await Log.Warning("FishMMOInstaller", $"No Unity executable found at '{candidate}'. Please try again.");
+			}
+
+			await Log.Warning("FishMMOInstaller", "Unity path entry failed after 3 attempts.");
+			return null;
 		}
 
 		private static UnityBuildType PromptForBuildType()

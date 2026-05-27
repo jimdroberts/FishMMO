@@ -28,6 +28,7 @@ namespace FishMMO.UnitTests.Harness
 			Server = new TestServerCore(accountManager, Store)
 			{
 				TokenSigningKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength),
+				TokenSigningKeyId = 1, // ensure tests use a positive signing key id
 				TotpMasterKey = CryptoHelper.GenerateKey(32),
 				LoginServerId = loginServerId,
 			};
