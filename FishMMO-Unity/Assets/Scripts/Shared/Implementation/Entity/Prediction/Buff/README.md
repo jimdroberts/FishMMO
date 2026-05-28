@@ -71,7 +71,12 @@ This system is an integrated module of the FishMMO Unity project. No separate in
 IBuffController buffController = target.GetComponent<BuffController>();
 
 // Apply a buff template (handles stacking, FX, events)
-buffController.Apply(myBuffTemplate);
+// Determine application tick. Prefer a TickEventData from trigger EventData when available,
+// otherwise fall back to the character's local tick.
+uint tick = target.GetLocalTick();
+// if (eventData != null && eventData.TryGet(out TickEventData td)) tick = td.Tick;
+
+buffController.Apply(myBuffTemplate, tick);
 ```
 
 **Removing a buff:**
@@ -164,7 +169,7 @@ All events are defined on `IBuffController`:
 
 The buff system is consumed by and interacts with:
 
-- **Ability System** — Abilities apply buffs/debuffs to targets via `BuffController.Apply(template)`.
+- **Ability System** — Abilities apply buffs/debuffs to targets via `BuffController.Apply(template, currentTick)` (prefer passing `TickEventData.Tick` from triggers or `ICharacter.LocalTick` as a fallback).
 - **CharacterAttribute System** — `AttributeBuffTemplate` modifies attributes via `AddModifier()` on the `ExternalModifier` layer.
 - **CharacterDamageController** — `RemoveAll()` is called on kill to clear all non-permanent buffs.
 - **Item System** — Items may apply buffs on use or equip.
@@ -195,7 +200,7 @@ The buff system is consumed by and interacts with:
 | `CharacterObserverBuffAddBroadcast` | Observer-targeted add buff updates with `CharacterID` routing |
 | `CharacterObserverBuffRemoveBroadcast` | Observer-targeted remove buff updates with `CharacterID` routing |
 
-Client broadcasts use `Apply(BaseBuffTemplate)` (the gameplay path), not `Apply(Buff buff)`, because they represent new game events rather than state restoration.
+Client broadcasts use `Apply(BaseBuffTemplate, uint currentTick)` (the gameplay path), not `Apply(Buff buff)`, because they represent new game events rather than state restoration. Broadcast handlers supply a local tick when applying observer visuals.
 
 Observer-targeted messages resolve the destination character via `BaseCharacter.ClientCharacters[msg.CharacterID]`, then apply changes through the resolved `IBuffController`.
 
@@ -203,7 +208,7 @@ Observer-targeted messages resolve the destination character via `BaseCharacter.
 
 | Check | How to Verify | Expected Result |
 |-------|---------------|-----------------|
-| Buff applies correctly | Apply a buff template via `BuffController.Apply(template)` | Buff appears in controller dictionary; `OnAddBuff`/`OnAddDebuff` event fires |
+| Buff applies correctly | Apply a buff template via `BuffController.Apply(template, currentTick)` (prefer `TickEventData.Tick` or `ICharacter.LocalTick`) | Buff appears in controller dictionary; `OnAddBuff`/`OnAddDebuff` event fires |
 | Stacking works | Apply same buff multiple times (up to `MaxStacks`) | `Stacks` increments; attribute modifiers accumulate |
 | Duration expiration | Wait for `ExpiryTick` to be reached | Stacks decrement one at a time; buff removed when stacks reach 0 |
 | Tick fires | Apply buff with non-zero `TickRate` | `OnTick` called when `NextTickTick` is reached |
@@ -238,13 +243,13 @@ A buff enters the system through one of two `Apply` overloads on `BuffController
 
 | Overload | Entry Point | Use Case |
 |----------|------------|----------|
-| `Apply(BaseBuffTemplate)` | Gameplay trigger (ability, item, region) | Creates a new `Buff`, calls `buff.Apply(Character)`, handles stacking + FX |
+| `Apply(BaseBuffTemplate, uint currentTick)` | Gameplay trigger (ability, item, region) | Creates a new `Buff`, calls `buff.Apply(Character)`, handles stacking + FX |
 | `Apply(Buff buff)` | DB load / network payload (`ReadPayload`) | Receives pre-constructed `Buff` with existing `Stacks`, calls `buff.Apply(Character)` + re-applies stack modifiers without incrementing `Stacks` |
 
-**Application flow** (`Apply(BaseBuffTemplate)`):
+**Application flow** (`Apply(BaseBuffTemplate, uint currentTick)`):
 
 ```
-Apply(template)
+Apply(template, currentTick)
   ├── Buff already exists?
   │   └── No  → Create Buff(template.ID)
   │            → buff.Apply(Character)           // Template.OnApply → AddModifier(+V) per attribute

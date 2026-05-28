@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 #if UNITY_SERVER
-using System;
 using FishNet.Broadcast;
 #endif
 using FishNet.Connection;
@@ -32,33 +31,17 @@ namespace FishMMO.Shared
 #if UNITY_SERVER
 		/// <summary>
 		/// Dirty non-resource attribute template ids pending a network flush.
+		/// Resource attributes (HP/MP/Stamina) are intentionally NOT tracked here — their
+		/// values are conveyed deterministically each tick via
+		/// <see cref="CharacterReconcileData.ResourceState"/> and reach all observers via
+		/// FishNet Prediction V2 state forwarding.
 		/// </summary>
 		private readonly HashSet<int> dirtyAttributeTemplateIDs = new HashSet<int>();
-
-		/// <summary>
-		/// Dirty resource attribute template ids pending a network flush.
-		/// </summary>
-		private readonly HashSet<int> dirtyResourceTemplateIDs = new HashSet<int>();
 
 		/// <summary>
 		/// Last base values sent to interested connections for non-resource attributes.
 		/// </summary>
 		private readonly Dictionary<int, int> lastSentAttributeValues = new Dictionary<int, int>();
-
-		/// <summary>
-		/// Last base values sent to interested connections for resource attributes.
-		/// </summary>
-		private readonly Dictionary<int, int> lastSentResourceValues = new Dictionary<int, int>();
-
-		/// <summary>
-		/// Last current values sent to interested connections for resource attributes.
-		/// </summary>
-		private readonly Dictionary<int, float> lastSentResourceCurrentValues = new Dictionary<int, float>();
-
-		/// <summary>
-		/// Epsilon used when comparing resource current values for network-dirty suppression.
-		/// </summary>
-		private const float ResourceCurrentValueEpsilon = 0.0001f;
 #endif
 
 		/// <summary>
@@ -110,11 +93,6 @@ namespace FishMMO.Shared
 		/// Accumulator for tracking time between regeneration ticks. Increments by deltaTime and triggers a tick when it exceeds regenTickRate.
 		/// </summary>
 		private List<CharacterAttributeUpdateBroadcast> reusableAttributeUpdates = new List<CharacterAttributeUpdateBroadcast>();
-
-		/// <summary>
-		/// Accumulator for tracking time between regeneration ticks. Increments by deltaTime and triggers a tick when it exceeds regenTickRate.
-		/// </summary>
-		private List<CharacterResourceAttributeUpdateBroadcast> reusableResourceUpdates = new List<CharacterResourceAttributeUpdateBroadcast>();
 
 		/// <summary>
 		/// Propagation depth counter for batched attribute graph updates.
@@ -328,10 +306,7 @@ namespace FishMMO.Shared
 
 #if UNITY_SERVER
 			dirtyAttributeTemplateIDs.Clear();
-			dirtyResourceTemplateIDs.Clear();
 			lastSentAttributeValues.Clear();
-			lastSentResourceValues.Clear();
-			lastSentResourceCurrentValues.Clear();
 #endif
 		}
 
@@ -551,10 +526,9 @@ namespace FishMMO.Shared
 			if (!ResourceAttributes.ContainsKey(instance.Template.ID))
 			{
 				ResourceAttributes.Add(instance.Template.ID, instance);
-#if UNITY_SERVER
-				instance.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
-				instance.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
-#endif
+				// No dirty-tracking subscription for resource attributes: their values
+				// are reconciled each tick via CharacterReconcileData.ResourceState and
+				// forwarded to observers by FishNet Prediction V2 state forwarding.
 			}
 		}
 
@@ -566,7 +540,9 @@ namespace FishMMO.Shared
 		{
 			if (base.TimeManager != null)
 			{
-				base.TimeManager.OnTick -= TimeManager_OnTick;
+				// Subscribe/unsubscribe on OnPostTick so flushing observes attribute
+				// mutations produced by CharacterPredictionController's OnTick replicate pass.
+				base.TimeManager.OnPostTick -= TimeManager_OnTick;
 			}
 
 			base.OnStopNetwork();
@@ -589,7 +565,12 @@ namespace FishMMO.Shared
 				regenTickInterval = td > 0.0 ? (uint)Mathf.Max(1, Mathf.CeilToInt((float)(regenTickRate / td))) : 1u;
 
 #if UNITY_SERVER
-				base.TimeManager.OnTick += TimeManager_OnTick;
+				// Use OnPostTick so FlushDirtyAttributeUpdates() always runs AFTER
+				// CharacterPredictionController's OnTick replicate pass, regardless of
+				// NetworkBehaviour subscription order. Without this, dirty attribute
+				// flushes could miss mutations produced by Buff.Apply or Regenerate on the
+				// same tick.
+				base.TimeManager.OnPostTick += TimeManager_OnTick;
 #endif
 			}
 		}
@@ -604,7 +585,9 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Marks all known attributes and resources as dirty so they are included in the next flush.
+		/// Marks all known non-resource attributes as dirty so they are included in the next flush.
+		/// Resource attributes are intentionally excluded: their values are conveyed each tick
+		/// via <see cref="CharacterReconcileData.ResourceState"/> under state forwarding.
 		/// </summary>
 		private void MarkAllAttributesDirty()
 		{
@@ -612,36 +595,28 @@ namespace FishMMO.Shared
 			{
 				dirtyAttributeTemplateIDs.Add(attribute.Template.ID);
 			}
-
-			foreach (CharacterResourceAttribute resource in ResourceAttributes.Values)
-			{
-				dirtyResourceTemplateIDs.Add(resource.Template.ID);
-			}
 		}
 
 		/// <summary>
 		/// Handles local attribute update notifications and marks corresponding ids as dirty.
+		/// Resource attributes are not tracked: their state flows through reconcile.
 		/// </summary>
 		/// <param name="attribute">The updated attribute.</param>
 		private void CharacterAttribute_OnAttributeUpdated(CharacterAttribute attribute)
 		{
-			if (attribute == null || attribute.Template == null)
+			if (attribute == null || attribute.Template == null || attribute is CharacterResourceAttribute)
 			{
 				return;
 			}
 
-			if (attribute is CharacterResourceAttribute)
-			{
-				dirtyResourceTemplateIDs.Add(attribute.Template.ID);
-			}
-			else
-			{
-				dirtyAttributeTemplateIDs.Add(attribute.Template.ID);
-			}
+			dirtyAttributeTemplateIDs.Add(attribute.Template.ID);
 		}
 
 		/// <summary>
-		/// Flushes dirty non-resource and resource attributes to the owning client and observers using single or batch broadcasts.
+		/// Flushes dirty non-resource attributes to owner and observers in batches.
+		/// Resource attributes (HP/MP/Stamina) are intentionally NOT flushed here —
+		/// they ride <see cref="CharacterReconcileData.ResourceState"/> each tick and reach
+		/// all observers automatically via FishNet Prediction V2 state forwarding.
 		/// </summary>
 		private void FlushDirtyAttributeUpdates()
 		{
@@ -651,7 +626,6 @@ namespace FishMMO.Shared
 			}
 
 			FlushDirtyAttributes();
-			FlushDirtyResourceAttributes();
 		}
 
 		/// <summary>
@@ -688,49 +662,6 @@ namespace FishMMO.Shared
 
 			dirtyAttributeTemplateIDs.Clear();
 			SendAttributeUpdates(reusableAttributeUpdates);
-		}
-
-		/// <summary>
-		/// Flushes dirty resource attributes and broadcasts either a single update or a packed batch.
-		/// </summary>
-		private void FlushDirtyResourceAttributes()
-		{
-			if (dirtyResourceTemplateIDs.Count == 0)
-			{
-				return;
-			}
-
-			reusableResourceUpdates.Clear();
-			foreach (int templateID in dirtyResourceTemplateIDs)
-			{
-				if (!resourceAttributes.TryGetValue(templateID, out CharacterResourceAttribute resource) || resource?.Template == null)
-				{
-					continue;
-				}
-
-				float currentValue = resource.CurrentValue;
-				int value = resource.Value;
-
-				bool currentUnchanged = lastSentResourceCurrentValues.TryGetValue(templateID, out float lastCurrent) && Math.Abs(lastCurrent - currentValue) <= ResourceCurrentValueEpsilon;
-				bool valueUnchanged = lastSentResourceValues.TryGetValue(templateID, out int lastValue) && lastValue == value;
-				if (currentUnchanged && valueUnchanged)
-				{
-					continue;
-				}
-
-				reusableResourceUpdates.Add(new CharacterResourceAttributeUpdateBroadcast()
-				{
-					TemplateID = templateID,
-					CurrentValue = currentValue,
-					Value = value,
-				});
-
-				lastSentResourceCurrentValues[templateID] = currentValue;
-				lastSentResourceValues[templateID] = value;
-			}
-
-			dirtyResourceTemplateIDs.Clear();
-			SendResourceUpdates(reusableResourceUpdates);
 		}
 
 		/// <summary>
@@ -780,26 +711,6 @@ namespace FishMMO.Shared
 			}
 
 			CharacterObserverAttributeUpdateBroadcast observerBroadcast = new CharacterObserverAttributeUpdateBroadcast
-			{
-				CharacterID = Character.ID,
-				Attributes = updates,
-			};
-			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
-		}
-
-		/// <summary>
-		/// Sends resource attribute updates as either a single broadcast or a packed batch.
-		/// Owner is excluded because owner resources are reconciled through prediction state.
-		/// </summary>
-		/// <param name="updates">Collected updates to send.</param>
-		private void SendResourceUpdates(List<CharacterResourceAttributeUpdateBroadcast> updates)
-		{
-			if (updates == null || updates.Count == 0 || Character == null)
-			{
-				return;
-			}
-
-			CharacterObserverResourceAttributeUpdateBroadcast observerBroadcast = new CharacterObserverResourceAttributeUpdateBroadcast
 			{
 				CharacterID = Character.ID,
 				Attributes = updates,
@@ -1091,7 +1002,30 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			Regenerate();
+			// Regen state mutation (regenTickAccum advance, resource value Gain) must
+			// run every replay tick to stay in lock-step with the authoritative server, but
+			// the OnAttributeUpdated notifications that resource.Gain raises must NOT fire
+			// once per replay tick (UI flicker / repeated ECA). Wrap Regenerate() in a
+			// propagation scope and discard pendingNotifications when replaying so the
+			// authoritative reconcile (ApplyResourceState) remains the sole source of
+			// client-visible resource update events.
+			if (state.ContainsReplayed())
+			{
+				BeginPropagation();
+				try
+				{
+					Regenerate();
+				}
+				finally
+				{
+					pendingNotifications.Clear();
+					EndPropagation();
+				}
+			}
+			else
+			{
+				Regenerate();
+			}
 		}
 
 		/// <summary>
@@ -1131,11 +1065,10 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
 			ClientManager.RegisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
 
-			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
-			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
-
 			ClientManager.RegisterBroadcast<CharacterObserverAttributeUpdateBroadcast>(OnClientCharacterObserverAttributeUpdateBroadcastReceived);
-			ClientManager.RegisterBroadcast<CharacterObserverResourceAttributeUpdateBroadcast>(OnClientCharacterObserverResourceAttributeUpdateBroadcastReceived);
+			// Resource attribute (HP/MP/Stamina) updates are conveyed via
+			// CharacterReconcileData.ResourceState under FishNet Prediction V2 state forwarding;
+			// no resource-broadcast registrations are required.
 		}
 
 		/// <summary>
@@ -1150,11 +1083,7 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
 				ClientManager.UnregisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
 
-				ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
-				ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
-
 				ClientManager.UnregisterBroadcast<CharacterObserverAttributeUpdateBroadcast>(OnClientCharacterObserverAttributeUpdateBroadcastReceived);
-				ClientManager.UnregisterBroadcast<CharacterObserverResourceAttributeUpdateBroadcast>(OnClientCharacterObserverResourceAttributeUpdateBroadcastReceived);
 			}
 		}
 
@@ -1201,35 +1130,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Server sent a resource attribute update broadcast.
-		/// </summary>
-		private void OnClientCharacterResourceAttributeUpdateBroadcastReceived(CharacterResourceAttributeUpdateBroadcast msg, Channel channel)
-		{
-			if (base.IsOwner)
-			{
-				return;
-			}
-
-			SetResourceAttribute(msg.TemplateID, msg.Value, msg.CurrentValue);
-		}
-
-		/// <summary>
-		/// Server sent a multiple resource attribute update broadcast.
-		/// </summary>
-		private void OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived(CharacterResourceAttributeUpdateMultipleBroadcast msg, Channel channel)
-		{
-			if (base.IsOwner)
-			{
-				return;
-			}
-
-			foreach (CharacterResourceAttributeUpdateBroadcast subMsg in msg.Attributes)
-			{
-				SetResourceAttribute(subMsg.TemplateID, subMsg.Value, subMsg.CurrentValue);
-			}
-		}
-
-		/// <summary>
 		/// Server sent observer-targeted non-resource attribute updates for a specific character.
 		/// </summary>
 		private void OnClientCharacterObserverAttributeUpdateBroadcastReceived(CharacterObserverAttributeUpdateBroadcast msg, Channel channel)
@@ -1242,22 +1142,6 @@ namespace FishMMO.Shared
 			foreach (CharacterAttributeUpdateBroadcast subMsg in msg.Attributes)
 			{
 				attributeController.SetAttribute(subMsg.TemplateID, subMsg.Value);
-			}
-		}
-
-		/// <summary>
-		/// Server sent observer-targeted resource attribute updates for a specific character.
-		/// </summary>
-		private void OnClientCharacterObserverResourceAttributeUpdateBroadcastReceived(CharacterObserverResourceAttributeUpdateBroadcast msg, Channel channel)
-		{
-			if (!TryGetCachedCharacterAttributeController(msg.CharacterID, out ICharacterAttributeController attributeController))
-			{
-				return;
-			}
-
-			foreach (CharacterResourceAttributeUpdateBroadcast subMsg in msg.Attributes)
-			{
-				attributeController.SetResourceAttribute(subMsg.TemplateID, subMsg.Value, subMsg.CurrentValue);
 			}
 		}
 #endif

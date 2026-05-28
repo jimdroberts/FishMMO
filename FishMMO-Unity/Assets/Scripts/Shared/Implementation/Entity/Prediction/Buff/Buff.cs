@@ -49,9 +49,27 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Fixed time step per tick for duration UI conversions.
-		/// Cached from <c>TimeManager.TickDelta</c> at application time.
+		/// Cached from <c>TimeManager.TickDelta</c> at application time and refreshed every
+		/// tick by <see cref="BuffController.Tick"/> so that <see cref="RemainingSeconds"/>
+		/// always reports against the latest tick rate even if this buff was constructed
+		/// before <c>TimeManager</c> was ready (the constructor may have been handed 0).
 		/// </summary>
 		private float tickDelta;
+
+		/// <summary>
+		/// Updates the cached tick-delta used by <see cref="RemainingSeconds"/>. Called by
+		/// <see cref="BuffController.Tick"/> every tick so UI duration bars never get stuck
+		/// reporting 0 when a buff was constructed before TimeManager became available.
+		/// Ignores non-positive values to preserve the last good delta.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void SetTickDelta(float tickDelta)
+		{
+			if (tickDelta > 0f)
+			{
+				this.tickDelta = tickDelta;
+			}
+		}
 
 		/// <summary>
 		/// Creates a new buff instance from a fresh application.
@@ -70,16 +88,16 @@ namespace FishMMO.Shared
 			Template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
 			if (Template == null)
 			{
-				ExpiryTick   = currentTick;  // treat missing template as instantly expired
+				ExpiryTick = currentTick;  // treat missing template as instantly expired
 				NextTickTick = currentTick;
-				Stacks       = stacks;
-				TickCount    = tickCount;
+				Stacks = stacks;
+				TickCount = tickCount;
 				return;
 			}
-			ExpiryTick   = currentTick + DurationToTicks(Template.Duration,  tickDelta);
-			NextTickTick = currentTick + DurationToTicks(Template.TickRate,  tickDelta);
-			Stacks       = stacks;
-			TickCount    = tickCount;
+			ExpiryTick = currentTick + DurationToTicks(Template.Duration, tickDelta);
+			NextTickTick = currentTick + DurationToTicks(Template.TickRate, tickDelta);
+			Stacks = stacks;
+			TickCount = tickCount;
 		}
 
 		/// <summary>
@@ -95,11 +113,11 @@ namespace FishMMO.Shared
 		public Buff(int templateID, uint expiryTick, uint nextTickTick, float tickDelta, int stacks, int tickCount)
 		{
 			this.tickDelta = tickDelta;
-			Template     = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
-			ExpiryTick   = expiryTick;
+			Template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
+			ExpiryTick = expiryTick;
 			NextTickTick = nextTickTick;
-			Stacks       = stacks;
-			TickCount    = tickCount;
+			Stacks = stacks;
+			TickCount = tickCount;
 		}
 
 		/// <summary>

@@ -47,6 +47,15 @@ namespace FishMMO.Shared
 		/// Cached reference to the character's GameObject.
 		/// </summary>
 		public GameObject GameObject { get; private set; }
+
+		/// <summary>
+		/// The current local TimeManager tick for this character's context.
+		/// Exposed as a convenience for callers that need the absolute tick.
+		/// </summary>
+		public uint LocalTick
+		{
+			get { return base.TimeManager != null ? base.TimeManager.LocalTick : 0u; }
+		}
 		/// <summary>
 		/// Collider attached to the character, used for physics and interactions.
 		/// </summary>

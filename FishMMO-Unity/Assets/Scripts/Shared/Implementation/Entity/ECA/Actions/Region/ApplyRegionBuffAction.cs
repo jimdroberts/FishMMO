@@ -37,7 +37,16 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			buffController.Apply(Buff);
+			// Use region event's reconciling info: prefer TickEventData if present, otherwise use the character's local tick.
+			if (eventData != null && eventData.TryGet(out TickEventData tickData))
+			{
+				buffController.Apply(Buff, tickData.Tick);
+			}
+			else
+			{
+				uint tick = initiator.GetLocalTick();
+				buffController.Apply(Buff, tick);
+			}
 		}
 	}
 }

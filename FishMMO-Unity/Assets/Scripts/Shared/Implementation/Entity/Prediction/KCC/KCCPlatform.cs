@@ -110,6 +110,17 @@ namespace FishMMO.Shared
 		private List<Vector3> goals = new();
 
 		/// <summary>
+		/// Velocity of the platform during its most recently completed <see cref="PerformReplicate"/>
+		/// tick, in world units per second. Players riding the platform read this value so the
+		/// inherited platform velocity is independent of whether the player's NetworkBehaviour
+		/// ticks before or after this platform within the same network tick (FishNet does not
+		/// guarantee a deterministic OnTick order across separate NetworkObjects). Lag is at most
+		/// one tick (acceptable for moving-platform inheritance) but the value is consistent
+		/// between server and client because it is computed inside the deterministic [Replicate].
+		/// </summary>
+		public Vector3 LastCompletedTickVelocity { get; private set; }
+
+		/// <summary>
 		/// Network collision component used to detect player entry and exit on the platform.
 		/// </summary>
 		[SerializeField]
@@ -220,10 +231,17 @@ namespace FishMMO.Shared
 		{
 			float delta = (float)TimeManager.TickDelta;
 
+			Vector3 from = transform.position;
 			Vector3 goal = goals[goalIndex];
-			Vector3 next = Vector3.MoveTowards(transform.position, goal, delta * moveRate);
+			Vector3 next = Vector3.MoveTowards(from, goal, delta * moveRate);
 
 			transform.position = next;
+
+			// Capture the velocity this tick produced. Players read this in their own
+			// [Replicate] so they inherit a consistent velocity regardless of cross-
+			// NetworkObject tick ordering. delta is guarded against zero in pathological
+			// configurations (tick rate misconfiguration).
+			LastCompletedTickVelocity = delta > 0f ? (next - from) / delta : Vector3.zero;
 
 			float sqrDistance = (next - goal).sqrMagnitude;
 			if (sqrDistance < 0.0001f)
@@ -245,6 +263,19 @@ namespace FishMMO.Shared
 		{
 			transform.position = rd.Position;
 			goalIndex = rd.GoalIndex;
+			// LastCompletedTickVelocity is intentionally not reconciled — it will be refreshed
+			// on the next PerformReplicate (which runs once per replayed tick).
+		}
+
+		/// <inheritdoc/>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+			// Clear cached per-tick state so a despawn/respawn cycle does not leak velocity
+			// from the previous spawn into the next one (which could otherwise launch the
+			// first rider that steps on the freshly-respawned platform).
+			LastCompletedTickVelocity = Vector3.zero;
+			goalIndex = 0;
 		}
 	}
 }

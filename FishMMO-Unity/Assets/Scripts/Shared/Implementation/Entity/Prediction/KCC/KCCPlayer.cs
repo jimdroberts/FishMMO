@@ -211,9 +211,15 @@ namespace FishMMO.Shared
 			Vector3 platformVelocity = Vector3.zero;
 			if (currentPlatform != null)
 			{
-				Vector3 platformPosition = currentPlatform.transform.position;
-				platformVelocity = (platformPosition - lastPlatformPosition) / deltaTime;
-				lastPlatformPosition = platformPosition;
+				// Use the platform's deterministically-cached per-tick velocity rather than
+				// computing (currentPosition - lastPlatformPosition)/dt locally. FishNet does
+				// not guarantee a deterministic tick order across NetworkObjects, so reading
+				// the platform's transform directly could observe an updated or pre-update
+				// position depending on whether the platform's [Replicate] ran first. The
+				// cached value is the velocity from the platform's most recently completed
+				// tick and is identical on server and client.
+				platformVelocity = currentPlatform.LastCompletedTickVelocity;
+				lastPlatformPosition = currentPlatform.transform.position;
 			}
 			Motor.SetPlatformVelocity(platformVelocity);
 
@@ -320,6 +326,13 @@ namespace FishMMO.Shared
 		[ServerRpc(RunLocally = true, RequireOwnership = true)]
 		public void SetOrientationMethod(OrientationMethod method)
 		{
+			// Server-side enum validation, never trust client-supplied enum
+			// values. A malicious or buggy client could send out-of-range integers that
+			// silently cast to undefined enum members and corrupt the KCC controller.
+			if (!System.Enum.IsDefined(typeof(OrientationMethod), method))
+			{
+				return;
+			}
 			CharacterController.OrientationMethod = method;
 		}
 	}

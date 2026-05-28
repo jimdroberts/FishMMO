@@ -43,9 +43,10 @@ namespace FishMMO.Shared
 			if (template.Buff != null &&
 				player.TryGet(out IBuffController buffController))
 			{
+				uint tick = (eventData != null && eventData.TryGet(out TickEventData td)) ? td.Tick : player.GetLocalTick();
 				for (int i = 0; i < template.BuffStackCount; i++)
 				{
-					buffController.Apply(template.Buff);
+					buffController.Apply(template.Buff, tick);
 				}
 			}
 

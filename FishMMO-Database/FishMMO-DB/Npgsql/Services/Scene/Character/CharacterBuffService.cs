@@ -114,10 +114,11 @@ namespace FishMMO.Database.Npgsql.Services
 				var remainingTimeArray = activeBuffs.Select(b => b.RemainingTime).ToArray();
 				var tickTimeArray = activeBuffs.Select(b => b.TickTime).ToArray();
 				var stacksArray = activeBuffs.Select(b => b.Stacks).ToArray();
+				var tickCountArray = activeBuffs.Select(b => b.TickCount).ToArray();
 
 				var sql = $@"
 					INSERT INTO {TableName}
-						(character_id, template_id, version, remaining_time, tick_time, stacks, time_created, deleted, time_deleted)
+						(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count, time_created, deleted, time_deleted)
 					SELECT
 						u.character_id,
 						u.template_id,
@@ -125,7 +126,8 @@ namespace FishMMO.Database.Npgsql.Services
 						u.remaining_time,
 						u.tick_time,
 						u.stacks,
-						{{6}},
+						u.tick_count,
+						{{7}},
 						FALSE,
 						NULL
 					FROM UNNEST(
@@ -134,13 +136,15 @@ namespace FishMMO.Database.Npgsql.Services
 						{{2}}::bigint[],
 						{{3}}::real[],
 						{{4}}::real[],
-						{{5}}::integer[]
-					) AS u(character_id, template_id, version, remaining_time, tick_time, stacks)
+						{{5}}::integer[],
+						{{6}}::integer[]
+					) AS u(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count)
 					ON CONFLICT (character_id, template_id)
 					DO UPDATE SET
 						remaining_time = EXCLUDED.remaining_time,
 						tick_time = EXCLUDED.tick_time,
 						stacks = EXCLUDED.stacks,
+						tick_count = EXCLUDED.tick_count,
 						deleted = FALSE,
 						time_deleted = NULL,
 						version = EXCLUDED.version
@@ -151,7 +155,7 @@ namespace FishMMO.Database.Npgsql.Services
 					dbContext,
 					sql,
 					activeBuffs.Count,
-					new object[] { characterIdArray, templateIdArray, versionArray, remainingTimeArray, tickTimeArray, stacksArray, now },
+					new object[] { characterIdArray, templateIdArray, versionArray, remainingTimeArray, tickTimeArray, stacksArray, tickCountArray, now },
 					"One or more buffs were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -219,7 +223,8 @@ namespace FishMMO.Database.Npgsql.Services
 					templateID: b.TemplateID,
 					remainingTime: b.RemainingTime,
 					tickTime: b.TickTime,
-					stacks: b.Stacks
+					stacks: b.Stacks,
+					tickCount: b.TickCount
 				)).ToList();
 
 				return (IReadOnlyList<CharacterBuffData>)buffs;

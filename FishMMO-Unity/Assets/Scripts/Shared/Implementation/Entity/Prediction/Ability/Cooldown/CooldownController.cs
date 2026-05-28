@@ -48,15 +48,25 @@ namespace FishMMO.Shared
 		private bool snapshotDirty = true;
 
 		/// <summary>
+		/// True while <see cref="OnReplicate"/> is executing a replayed (reconcile replay) tick.
+		/// Mutation helpers (<see cref="RemoveCooldown"/>) check this flag to suppress UI / ECA
+		/// events that would otherwise fire on every replayed tick.
+		/// External callers (non-prediction paths) leave this <c>false</c> so events fire normally.
+		/// </summary>
+		private bool isReplayingTick;
+
+		/// <summary>
 		/// Cached tick delta for converting between seconds and ticks.
 		/// Eagerly initialized from <see cref="TimeManager.TickDelta"/> in
-		/// <see cref="OnStartNetwork"/>. Falls back to lazy initialization if unavailable.
+		/// <see cref="OnStartNetwork"/>.
 		/// </summary>
 		private float cachedTickDelta;
 
 		/// <summary>
 		/// Returns the fixed time step per tick. Caches on first access.
-		/// Falls back to <see cref="Time.fixedDeltaTime"/> if TimeManager is unavailable.
+		/// Throws if accessed before <see cref="OnStartNetwork"/> has run — using a wall-clock
+		/// fallback (e.g. Time.fixedDeltaTime) would silently desync cooldown expiry between
+		/// clients running at different tick rates (per §3.2).
 		/// </summary>
 		internal float TickDelta
 		{
@@ -66,7 +76,14 @@ namespace FishMMO.Shared
 				{
 					cachedTickDelta = (float)base.TimeManager.TickDelta;
 				}
-				return cachedTickDelta > 0f ? cachedTickDelta : Time.fixedDeltaTime;
+				if (cachedTickDelta <= 0f)
+				{
+					throw new System.InvalidOperationException(
+						"CooldownController.TickDelta: TimeManager not available. " +
+						"Cooldown calculations require a deterministic tick delta — " +
+						"ensure OnStartNetwork has run before invoking cooldown logic.");
+				}
+				return cachedTickDelta;
 			}
 		}
 
@@ -101,7 +118,14 @@ namespace FishMMO.Shared
 		/// <param name="channel">Transport channel.</param>
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
 		{
-			ExpireElapsed(input.GetTick());
+			// Gate event emission for replayed ticks. The deterministic state mutation
+			// (removing expired entries) still runs every replay tick so the dictionary remains
+			// in lock-step with the authoritative server; only the OnRemoveCooldown ECA / UI
+			// notification is suppressed during replay.
+			bool wasReplaying = isReplayingTick;
+			isReplayingTick = state.ContainsReplayed();
+			try { ExpireElapsed(input.GetTick()); }
+			finally { isReplayingTick = wasReplaying; }
 		}
 
 		/// <summary>
@@ -315,7 +339,10 @@ namespace FishMMO.Shared
 			cooldowns.Remove(id);
 			snapshotDirty = true;
 
-			if (base.IsOwner)
+			// Skip event invocation when invoked from a replayed prediction tick to
+			// avoid duplicate UI / ECA dispatch. Non-replay callers (live owner ExpireElapsed
+			// pass, external code) still fire the event.
+			if (base.IsOwner && !isReplayingTick)
 			{
 				ICooldownController.OnRemoveCooldown?.Invoke(id);
 			}

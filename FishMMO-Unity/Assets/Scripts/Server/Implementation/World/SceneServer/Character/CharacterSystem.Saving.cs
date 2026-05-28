@@ -2,6 +2,7 @@ using FishNet.Connection;
 using FishNet.Object;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -55,9 +56,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Snapshot character data on the main thread
 			var characterDataList = new List<CharacterData>(data.CharactersByID.Count);
+			var buffDataList = new List<CharacterBuffData>(data.CharactersByID.Count * 4);
+			var attributeDataList = new List<CharacterAttributeData>(data.CharactersByID.Count * 16);
+			var abilityDataList = new List<CharacterAbilityData>(data.CharactersByID.Count * 8);
 			foreach (var character in data.CharactersByID.Values)
 			{
 				characterDataList.Add(BuildCharacterData(character));
+				AppendBuffData(character, buffDataList);
+				AppendAttributeData(character, attributeDataList);
+				AppendAbilityData(character, abilityDataList);
 			}
 
 			// Capture session tokens so we can refresh leases even if individual saves fail
@@ -67,6 +74,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				runtimeData.EndSave();
 				Log.Warning("CharacterSystem", "OnPeriodicSave: Failed to enqueue SaveAllCharactersAsync work item.");
+			}
+
+			if (buffDataList.Count > 0)
+			{
+				EnqueueAsyncWork(() => SaveBuffsAsync(buffDataList));
+			}
+			if (attributeDataList.Count > 0)
+			{
+				EnqueueAsyncWork(() => SaveAttributesAsync(attributeDataList));
+			}
+			if (abilityDataList.Count > 0)
+			{
+				EnqueueAsyncWork(() => SaveAbilitiesAsync(abilityDataList));
 			}
 		}
 
@@ -86,11 +106,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Snapshot character data on the main thread
 			CharacterData charData = BuildCharacterData(character);
+			var buffDataList = new List<CharacterBuffData>(8);
+			var attributeDataList = new List<CharacterAttributeData>(16);
+			var abilityDataList = new List<CharacterAbilityData>(8);
+			AppendBuffData(character, buffDataList);
+			AppendAttributeData(character, attributeDataList);
+			AppendAbilityData(character, abilityDataList);
 
 			// Save then fully release session (Online → Offline)
 			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, sessionInfo)))
 			{
 				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID}.");
+			}
+
+			if (buffDataList.Count > 0)
+			{
+				EnqueueAsyncWork(() => SaveBuffsAsync(buffDataList));
+			}
+			if (attributeDataList.Count > 0)
+			{
+				EnqueueAsyncWork(() => SaveAttributesAsync(attributeDataList));
+			}
+			if (abilityDataList.Count > 0)
+			{
+				EnqueueAsyncWork(() => SaveAbilitiesAsync(abilityDataList));
 			}
 
 			// Immediately log out for now.. we could add a timeout later on..?
@@ -300,5 +339,204 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync failed for character {characterID}: {ex.Message}");
 			}
 		}
+
+		#region Buff / Attribute / Ability Snapshot + Persistence
+
+		/// <summary>
+		/// Appends a snapshot of the character's active buffs (with deterministic tick→seconds conversion).
+		/// Main-thread only. Each appended DTO has its Version bumped on the runtime Buff for optimistic concurrency.
+		/// </summary>
+		private void AppendBuffData(IPlayerCharacter character, List<CharacterBuffData> buffs)
+		{
+			if (!character.TryGet(out IBuffController buffController) || buffController.Buffs.Count == 0)
+			{
+				return;
+			}
+
+			var timeManager = Server?.NetworkWrapper?.NetworkManager?.TimeManager;
+			if (timeManager == null)
+			{
+				return;
+			}
+			float tickDelta = (float)timeManager.TickDelta;
+			uint currentTick = timeManager.LocalTick;
+
+			foreach (var kvp in buffController.Buffs)
+			{
+				Buff buff = kvp.Value;
+				if (buff == null || buff.Template == null)
+				{
+					continue;
+				}
+
+				// Convert absolute ticks → remaining seconds. Clamp negatives to 0 (about to expire).
+				int remainingTicks = (int)(buff.ExpiryTick - currentTick);
+				int nextTickTicks = (int)(buff.NextTickTick - currentTick);
+				float remainingTime = remainingTicks > 0 ? remainingTicks * tickDelta : 0f;
+				float tickTime = nextTickTicks > 0 ? nextTickTicks * tickDelta : 0f;
+
+				buff.Version++;
+				buffs.Add(new CharacterBuffData(
+					id: 0,
+					version: buff.Version,
+					characterID: character.ID,
+					templateID: buff.Template.ID,
+					remainingTime: remainingTime,
+					tickTime: tickTime,
+					stacks: buff.Stacks,
+					tickCount: buff.TickCount
+				));
+			}
+		}
+
+		/// <summary>
+		/// Appends a snapshot of the character's attributes (base + resources) including external modifier.
+		/// Main-thread only. Each appended DTO has its Version bumped on the runtime attribute.
+		/// </summary>
+		private void AppendAttributeData(IPlayerCharacter character, List<CharacterAttributeData> attributes)
+		{
+			if (!character.TryGet(out ICharacterAttributeController attrController))
+			{
+				return;
+			}
+
+			foreach (var kvp in attrController.Attributes)
+			{
+				var attr = kvp.Value;
+				attr.Version++;
+				attributes.Add(new CharacterAttributeData(
+					id: 0,
+					version: attr.Version,
+					characterID: character.ID,
+					templateID: kvp.Key,
+					value: attr.Value,
+					currentValue: 0.0f
+				));
+			}
+			foreach (var kvp in attrController.ResourceAttributes)
+			{
+				var resAttr = kvp.Value;
+				resAttr.Version++;
+				attributes.Add(new CharacterAttributeData(
+					id: 0,
+					version: resAttr.Version,
+					characterID: character.ID,
+					templateID: kvp.Key,
+					value: resAttr.Value,
+					currentValue: resAttr.CurrentValue
+				));
+			}
+		}
+
+		/// <summary>
+		/// Appends a snapshot of the character's crafted abilities (template + event IDs).
+		/// Cooldowns are NOT persisted by design — they reset on relog (gameplay-friendly).
+		/// Main-thread only. Each appended DTO has its Version bumped on the runtime Ability.
+		/// </summary>
+		private void AppendAbilityData(IPlayerCharacter character, List<CharacterAbilityData> abilities)
+		{
+			if (!character.TryGet(out IAbilityController abilityController) || abilityController.KnownAbilities.Count == 0)
+			{
+				return;
+			}
+
+			foreach (var kvp in abilityController.KnownAbilities)
+			{
+				Ability ability = kvp.Value;
+				if (ability == null || ability.Template == null)
+				{
+					continue;
+				}
+
+				List<int> eventIds = ability.AbilityEvents.Keys.ToList();
+
+				ability.Version++;
+				abilities.Add(new CharacterAbilityData(
+					id: ability.ID,
+					version: ability.Version,
+					characterID: character.ID,
+					templateID: ability.Template.ID,
+					abilityEvents: eventIds,
+					cooldown: 0.0f
+				));
+			}
+		}
+
+		/// <summary>
+		/// Persists a snapshot of buff state asynchronously.
+		/// </summary>
+		private async Task SaveBuffsAsync(List<CharacterBuffData> buffs)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterBuffService>(out var buffService))
+				{
+					return;
+				}
+
+				DatabaseResult result = await buffService.PersistAsync(buffs);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterSystem", $"SaveBuffsAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SaveBuffsAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Persists a snapshot of attribute state asynchronously.
+		/// </summary>
+		private async Task SaveAttributesAsync(List<CharacterAttributeData> attributes)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterAttributeService>(out var attrService))
+				{
+					return;
+				}
+
+				DatabaseResult result = await attrService.PersistAsync(attributes);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterSystem", $"SaveAttributesAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SaveAttributesAsync failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Persists a snapshot of crafted ability state asynchronously.
+		/// </summary>
+		private async Task SaveAbilitiesAsync(List<CharacterAbilityData> abilities)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterAbilityService>(out var abilityService))
+				{
+					return;
+				}
+
+				DatabaseResult result = await abilityService.PersistAsync(abilities);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterSystem", $"SaveAbilitiesAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SaveAbilitiesAsync failed: {ex.Message}");
+			}
+		}
+
+		#endregion
 	}
 }

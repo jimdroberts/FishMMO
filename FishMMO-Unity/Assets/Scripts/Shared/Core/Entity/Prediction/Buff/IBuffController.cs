@@ -60,13 +60,20 @@ namespace FishMMO.Shared.Core
 		/// Applies a buff to the character by template, creating a new instance if needed and handling stacking.
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
-		void Apply(BaseBuffTemplate template);
+
+		/// <summary>
+		/// Applies a buff to the character using the provided absolute network tick as the application moment.
+		/// Use this from prediction-path callers to ensure deterministic ExpiryTick calculation.
+		/// </summary>
+		/// <param name="template">The buff template to apply.</param>
+		/// <param name="currentTick">The absolute network tick at the moment of application.</param>
+		void Apply(BaseBuffTemplate template, uint currentTick);
 
 		/// <summary>
 		/// Applies a buff instance to the character if not already present, invoking appropriate events.
 		/// </summary>
 		/// <param name="buff">The buff instance to apply.</param>
-		void Apply(Buff buff);
+		void Apply(Buff buff, bool suppressFX = false);
 
 		/// <summary>
 		/// Removes a buff by template ID, invoking removal events and cleaning up.

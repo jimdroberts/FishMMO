@@ -29,6 +29,16 @@ namespace FishMMO.Shared
 		{
 			base.OnStartNetwork();
 
+			// State forwarding is REQUIRED for non-owner observers to receive reconciles and stay in sync.
+			// Without it, only the owning client + server run the predicted state machine; observers will desync.
+			if (base.NetworkObject != null && !base.NetworkObject.EnableStateForwarding)
+			{
+				FishMMO.Logging.Log.Warning(
+					"CharacterPredictionController",
+					$"State forwarding is disabled on NetworkObject '{base.NetworkObject.name}'. Predicted observers will desync. " +
+					"Enable 'State Forwarding' on the NetworkObject's Prediction settings.");
+			}
+
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick += TimeManager_OnTick;
@@ -70,7 +80,11 @@ namespace FishMMO.Shared
 
 		public override void CreateReconcile()
 		{
-			if (base.IsServerStarted)
+			// Also gate on IsSpawned. CreateReconcile can be invoked by FishNet
+			// after OnStartNetwork begins but before the NetworkObject is fully spawned;
+			// dispatching reconcile in that window NREs through subsystem controllers
+			// whose internal state isn't fully wired yet.
+			if (base.IsServerStarted && base.IsSpawned)
 			{
 				CharacterReconcileData data = default;
 				for (int i = 0; i < controllers.Length; i++)

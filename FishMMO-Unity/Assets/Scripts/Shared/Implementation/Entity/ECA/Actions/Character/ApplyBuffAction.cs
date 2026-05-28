@@ -46,7 +46,16 @@ namespace FishMMO.Shared
 				int stacks = StacksValue.GetValue(initiator, eventData);
 				for (int i = 0; i < stacks; ++i)
 				{
-					buffController.Apply(BuffTemplate);
+					// If the triggering EventData carries a deterministic tick (prediction path), use it.
+					if (eventData != null && eventData.TryGet(out TickEventData tickData))
+					{
+						buffController.Apply(BuffTemplate, tickData.Tick);
+					}
+					else
+					{
+						uint tick = target.GetLocalTick();
+						buffController.Apply(BuffTemplate, tick);
+					}
 				}
 			}
 		}

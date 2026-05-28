@@ -1,4 +1,6 @@
 using NUnit.Framework;
+using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
+using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
@@ -37,47 +39,47 @@ namespace FishMMO.UnitTests
 
 		[Test]
 		public void Encode_Zero_ReturnsZero()
-			=> Assert.That(Encode(0), Is.EqualTo(0UL));
+			=> LogAssert.AreEqual(0UL, Encode(0));
 
 		[Test]
 		public void Encode_One_ReturnsTwo()
-			=> Assert.That(Encode(1), Is.EqualTo(2UL));
+			=> LogAssert.AreEqual(2UL, Encode(1));
 
 		[Test]
 		public void Encode_Two_ReturnsFour()
-			=> Assert.That(Encode(2), Is.EqualTo(4UL));
+			=> LogAssert.AreEqual(4UL, Encode(2));
 
 		[Test]
 		public void Encode_NegativeOne_ReturnsOne()
-			=> Assert.That(Encode(-1), Is.EqualTo(1UL));
+			=> LogAssert.AreEqual(1UL, Encode(-1));
 
 		[Test]
 		public void Encode_NegativeTwo_ReturnsThree()
-			=> Assert.That(Encode(-2), Is.EqualTo(3UL));
+			=> LogAssert.AreEqual(3UL, Encode(-2));
 
 		[Test]
 		public void Encode_127_Returns254()
-			=> Assert.That(Encode(127), Is.EqualTo(254UL));
+			=> LogAssert.AreEqual(254UL, Encode(127));
 
 		[Test]
 		public void Encode_Negative128_Returns255()
-			=> Assert.That(Encode(-128), Is.EqualTo(255UL));
+			=> LogAssert.AreEqual(255UL, Encode(-128));
 
 		[Test]
 		public void Encode_1000_Returns2000()
-			=> Assert.That(Encode(1000), Is.EqualTo(2000UL));
+			=> LogAssert.AreEqual(2000UL, Encode(1000));
 
 		[Test]
 		public void Encode_Negative1000_Returns1999()
-			=> Assert.That(Encode(-1000), Is.EqualTo(1999UL));
+			=> LogAssert.AreEqual(1999UL, Encode(-1000));
 
 		[Test]
 		public void Encode_LongMaxValue_ReturnsULongMaxMinusOne()
-			=> Assert.That(Encode(LongMax), Is.EqualTo(ULongMax - 1));
+			=> LogAssert.AreEqual(ULongMax - 1UL, Encode(LongMax));
 
 		[Test]
 		public void Encode_LongMinValue_ReturnsULongMax()
-			=> Assert.That(Encode(LongMin), Is.EqualTo(ULongMax));
+			=> LogAssert.AreEqual(ULongMax, Encode(LongMin));
 
 		// ═════════════════════════════════════════════════════════════════════
 		// 2. ZigZagDecode — known expected values
@@ -85,43 +87,43 @@ namespace FishMMO.UnitTests
 
 		[Test]
 		public void Decode_Zero_ReturnsZero()
-			=> Assert.That(Decode(0), Is.EqualTo(0L));
+			=> LogAssert.AreEqual(0L, Decode(0));
 
 		[Test]
 		public void Decode_One_ReturnsNegativeOne()
-			=> Assert.That(Decode(1), Is.EqualTo(-1L));
+			=> LogAssert.AreEqual(-1L, Decode(1));
 
 		[Test]
 		public void Decode_Two_ReturnsOne()
-			=> Assert.That(Decode(2), Is.EqualTo(1L));
+			=> LogAssert.AreEqual(1L, Decode(2));
 
 		[Test]
 		public void Decode_Three_ReturnsNegativeTwo()
-			=> Assert.That(Decode(3), Is.EqualTo(-2L));
+			=> LogAssert.AreEqual(-2L, Decode(3));
 
 		[Test]
 		public void Decode_254_Returns127()
-			=> Assert.That(Decode(254), Is.EqualTo(127L));
+			=> LogAssert.AreEqual(127L, Decode(254));
 
 		[Test]
 		public void Decode_255_ReturnsNegative128()
-			=> Assert.That(Decode(255), Is.EqualTo(-128L));
+			=> LogAssert.AreEqual(-128L, Decode(255));
 
 		[Test]
 		public void Decode_2000_Returns1000()
-			=> Assert.That(Decode(2000), Is.EqualTo(1000L));
+			=> LogAssert.AreEqual(1000L, Decode(2000));
 
 		[Test]
 		public void Decode_1999_ReturnsNegative1000()
-			=> Assert.That(Decode(1999), Is.EqualTo(-1000L));
+			=> LogAssert.AreEqual(-1000L, Decode(1999));
 
 		[Test]
 		public void Decode_ULongMaxMinusOne_ReturnsLongMax()
-			=> Assert.That(Decode(ULongMax - 1), Is.EqualTo(LongMax));
+			=> LogAssert.AreEqual(LongMax, Decode(ULongMax - 1));
 
 		[Test]
 		public void Decode_ULongMax_ReturnsLongMin()
-			=> Assert.That(Decode(ULongMax), Is.EqualTo(LongMin));
+			=> LogAssert.AreEqual(LongMin, Decode(ULongMax));
 
 		// ═════════════════════════════════════════════════════════════════════
 		// 3. Round-trip — spot values
@@ -134,9 +136,28 @@ namespace FishMMO.UnitTests
 			LongMax, LongMin
 		};
 
+		[SetUp]
+		public void TestSetup()
+		{
+			AuthTestTrace.LogTestStart(TestContext.CurrentContext.Test.Name, "ZigZag encode/decode unit test")
+				.GetAwaiter().GetResult();
+		}
+
+		[TearDown]
+		public void TestTeardown()
+		{
+			var status = TestContext.CurrentContext.Result.Outcome.Status;
+			if (status == NUnit.Framework.Interfaces.TestStatus.Passed)
+				AuthTestTrace.Log("ZigZagTests", "SUCCESS", TestContext.CurrentContext.Test.Name).GetAwaiter().GetResult();
+			else
+				AuthTestTrace.Log("ZigZagTests", "FAILURE", $"{TestContext.CurrentContext.Test.Name}: {TestContext.CurrentContext.Result.Message}")
+					.GetAwaiter().GetResult();
+			AuthTestTrace.LogTestEnd(TestContext.CurrentContext.Test.Name).GetAwaiter().GetResult();
+		}
+
 		[TestCaseSource(nameof(RoundTripCases))]
 		public void RoundTrip_Encode_ThenDecode_ReturnsOriginal(long value)
-			=> Assert.That(Decode(Encode(value)), Is.EqualTo(value));
+			=> LogAssert.AreEqual(value, Decode(Encode(value)));
 
 		// ═════════════════════════════════════════════════════════════════════
 		// 4. Exhaustive round-trip sweep
@@ -148,7 +169,7 @@ namespace FishMMO.UnitTests
 			int failures = 0;
 			for (long v = -500_000L; v <= 500_000L; v++)
 				if (Decode(Encode(v)) != v) failures++;
-			Assert.That(failures, Is.Zero,
+			LogAssert.AreEqual(0, failures,
 				$"{failures} values in [−500 000, +500 000] did not survive a round-trip.");
 		}
 
@@ -167,7 +188,7 @@ namespace FishMMO.UnitTests
 
 		[TestCaseSource(nameof(AgreementCases))]
 		public void Encode_MatchesReferenceFormula(long value)
-			=> Assert.That(Encode(value), Is.EqualTo(ReferenceEncode(value)));
+			=> LogAssert.AreEqual(ReferenceEncode(value), Encode(value));
 
 		// ═════════════════════════════════════════════════════════════════════
 		// 6. Sign-boundary continuity
@@ -185,7 +206,7 @@ namespace FishMMO.UnitTests
 		[TestCase(4L, 8UL)]
 		[TestCase(5L, 10UL)]
 		public void Encode_SignBoundary_MapsCorrectly(long input, ulong expected)
-			=> Assert.That(Encode(input), Is.EqualTo(expected));
+			=> LogAssert.AreEqual(expected, Encode(input));
 
 		// ═════════════════════════════════════════════════════════════════════
 		// 7. Bit-property invariants
@@ -195,7 +216,7 @@ namespace FishMMO.UnitTests
 		public void Encode_NonNegative_ProducesEvenResult()
 		{
 			for (long v = 0; v <= 10_000; v++)
-				Assert.That(Encode(v) % 2, Is.Zero,
+				LogAssert.AreEqual(0UL, Encode(v) % 2,
 					$"Encode({v}) = {Encode(v)} is not even.");
 		}
 
@@ -203,7 +224,7 @@ namespace FishMMO.UnitTests
 		public void Encode_Negative_ProducesOddResult()
 		{
 			for (long v = -1; v >= -10_000; v--)
-				Assert.That(Encode(v) % 2, Is.EqualTo(1UL),
+				LogAssert.AreEqual(1UL, Encode(v) % 2,
 					$"Encode({v}) = {Encode(v)} is not odd.");
 		}
 
@@ -211,7 +232,7 @@ namespace FishMMO.UnitTests
 		public void Encode_NonNegatives_AreMonotonicallyIncreasing()
 		{
 			for (long v = 0; v < 9_999; v++)
-				Assert.That(Encode(v), Is.LessThan(Encode(v + 1)),
+				LogAssert.IsTrue(Encode(v) < Encode(v + 1),
 					$"Encode({v}) >= Encode({v + 1}): ordering violated.");
 		}
 
@@ -220,7 +241,7 @@ namespace FishMMO.UnitTests
 		{
 			// More negative → larger encoded value (farther from zero)
 			for (long v = -9_999; v < -1; v++)
-				Assert.That(Encode(v), Is.GreaterThan(Encode(v + 1)),
+				LogAssert.IsTrue(Encode(v) > Encode(v + 1),
 					$"Encode({v}) <= Encode({v + 1}): ordering violated.");
 		}
 
@@ -229,7 +250,7 @@ namespace FishMMO.UnitTests
 		{
 			// |n| == |-n|, so enc(-n) == enc(n) - 1
 			for (long v = 1; v <= 10_000; v++)
-				Assert.That(Encode(-v), Is.EqualTo(Encode(v) - 1),
+				LogAssert.AreEqual(Encode(v) - 1UL, Encode(-v),
 					$"Encode(-{v}) != Encode({v}) - 1.");
 		}
 	}

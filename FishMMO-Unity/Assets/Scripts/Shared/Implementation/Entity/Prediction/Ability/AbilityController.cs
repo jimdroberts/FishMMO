@@ -255,6 +255,11 @@ namespace FishMMO.Shared
 			Character.TryGet(out cachedAttributeController);
 			Character.TryGet(out cachedInventoryController);
 			Character.TryGet(out cachedTargetController);
+
+			// Eagerly initialize the deterministic RNG so the first WritePayload,
+			// OnCreateReconcile, and ResetState paths all observe the same seed.
+			// Without this, lazy initialization races could produce a one-tick seed mismatch.
+			EnsureAbilitySeedGenerator();
 		}
 
 		public override void OnStopNetwork()
@@ -286,6 +291,9 @@ namespace FishMMO.Shared
 			queuedAbilityID = NO_ABILITY;
 			localInputFlags = 0;
 			replicatedFlags = 0;
+			// Clear the server-side denial sentinel so a respawn/possession does not
+			// carry over a stale Denied bit into the next reconcile.
+			wasDenied = false;
 			Cancel();
 
 			// Ensure no stale slot locks remain after state reset.
@@ -440,7 +448,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					started = TryStartAbility(activationData);
+					started = TryStartAbility(activationData, state);
 				}
 
 				// Server tracks denial so OnCreateReconcile can set the Denied flag.
@@ -503,10 +511,10 @@ namespace FishMMO.Shared
 						}
 					}
 				}
-				else if (state.ContainsTicked())
+				else if (state.ContainsTicked() && activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsActualData))
 				{
-					// No-op today (CharacterReconcileData has no unmanaged resources),
-					// but called for IReconcileData contract compliance.
+					// Only cache lastCreatedData if this tick's input is actual data (not default/empty),
+					// matching KCCPlayer observer prediction pattern.
 					lastCreatedData.Dispose();
 					lastCreatedData = activationData;
 					hasLastCreatedData = true;
@@ -660,6 +668,5 @@ namespace FishMMO.Shared
 				cameraRotation = character.Transform.rotation;
 			}
 		}
-
 	}
 }

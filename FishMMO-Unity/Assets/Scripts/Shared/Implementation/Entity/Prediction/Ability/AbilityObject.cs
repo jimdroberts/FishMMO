@@ -511,9 +511,15 @@ namespace FishMMO.Shared
 			abilityObject.destroyed = false;
 
 			var timeManager = caster.NetworkObject?.TimeManager;
+			if (timeManager == null)
+			{
+				throw new System.InvalidOperationException(
+					"AbilityObject.Initialize: caster has no TimeManager. " +
+					"Ability simulation requires deterministic TickDelta — caster must be spawned (per §3.2).");
+			}
 			abilityObject.timeManager = timeManager;
-			abilityObject.tickDelta = timeManager != null ? (float)timeManager.TickDelta : Time.fixedDeltaTime;
-			abilityObject.isServer = timeManager != null && timeManager.NetworkManager.IsServerStarted;
+			abilityObject.tickDelta = (float)timeManager.TickDelta;
+			abilityObject.isServer = timeManager.NetworkManager.IsServerStarted;
 
 			if (timeManager != null)
 			{
@@ -660,10 +666,16 @@ namespace FishMMO.Shared
 			// and don't need their own eagerly-created snapshot.
 
 			TimeManager timeManager = source.timeManager ?? source.Caster?.NetworkObject?.TimeManager;
+			if (source.tickDelta <= 0.0f && timeManager == null)
+			{
+				throw new System.InvalidOperationException(
+					"AbilityObject child clone: no source tickDelta and no TimeManager available. " +
+					"Deterministic simulation requires a valid tick delta (per §3.2).");
+			}
 			abilityObject.timeManager = timeManager;
 			abilityObject.tickDelta = source.tickDelta > 0.0f
 				? source.tickDelta
-				: (timeManager != null ? (float)timeManager.TickDelta : Time.fixedDeltaTime);
+				: (float)timeManager.TickDelta;
 			abilityObject.initialized = true;
 
 			if (timeManager != null)

@@ -25,6 +25,9 @@ namespace FishMMO.Shared
 		private const ushort COOLDOWN_BIT = 1 << 6;
 		private const ushort BUFF_BIT = 1 << 7;
 		private const ushort RNG_STATE_BIT = 1 << 8;
+		// Bits 9..15 are reserved for future fields. The flag mask is a ushort (16 bits);
+		// 9 are currently in use. When adding new fields, take the next bit and update
+		// both WriteDelta and ReadDelta in lock-step.
 
 		/// <summary>
 		/// Registers the custom delta serializers at runtime.

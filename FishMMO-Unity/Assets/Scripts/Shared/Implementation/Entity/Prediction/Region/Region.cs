@@ -170,6 +170,9 @@ namespace FishMMO.Shared
 			{
 				//Log.Debug($"OnEnter: {character.CharacterName} Entered {gameObject.name}");
 				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
+				// Attach deterministic tick payload for callers that need it.
+				uint tickEnter = base.TimeManager != null ? base.TimeManager.LocalTick : 0u;
+				eventData.Add(new TickEventData(character, tickEnter));
 				for (int i = 0; i < OnRegionEnter.Count; ++i)
 				{
 					OnRegionEnter[i]?.Execute(eventData);
@@ -200,6 +203,8 @@ namespace FishMMO.Shared
 			if (OnRegionStay != null)
 			{
 				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
+				uint tickStay = base.TimeManager != null ? base.TimeManager.LocalTick : 0u;
+				eventData.Add(new TickEventData(character, tickStay));
 				for (int i = 0; i < OnRegionStay.Count; ++i)
 				{
 					OnRegionStay[i]?.Execute(eventData);
@@ -231,6 +236,8 @@ namespace FishMMO.Shared
 			{
 				//Log.Debug($"OnExit: {character.CharacterName} Exited {gameObject.name}");
 				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
+				uint tickExit = base.TimeManager != null ? base.TimeManager.LocalTick : 0u;
+				eventData.Add(new TickEventData(character, tickExit));
 				for (int i = 0; i < OnRegionExit.Count; ++i)
 				{
 					OnRegionExit[i]?.Execute(eventData);

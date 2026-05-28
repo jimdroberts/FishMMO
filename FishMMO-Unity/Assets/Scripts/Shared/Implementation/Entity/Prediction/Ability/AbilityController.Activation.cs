@@ -142,7 +142,7 @@ namespace FishMMO.Shared
 		/// locking the tick count at cast start keeps client and server deterministic
 		/// without needing to reconcile a changing duration.
 		/// </remarks>
-		private bool TryStartAbility(AbilityActivationReplicateData activationData)
+		private bool TryStartAbility(AbilityActivationReplicateData activationData, ReplicateState state)
 		{
 			if (CanActivate(activationData.QueuedAbilityID, activationData.GetTick(), out Ability newAbility))
 			{
@@ -157,9 +157,15 @@ namespace FishMMO.Shared
 				{
 					replicatedFlags.DisableBit(AbilityActivationFlags.IsHeld);
 				}
-				if (base.IsServerStarted)
+				// Only fire the activate ECA on the authoritative first-execution tick.
+				// Without the !ContainsReplayed gate, every reconcile replay would re-invoke
+				// the trigger graph, double-firing achievements, sound, or DB writes wired
+				// into onAbilityActivateTriggers.
+				if (base.IsServerStarted && !state.ContainsReplayed())
 				{
-					Character.Invoke(onAbilityActivateTriggers, new AbilityEventData(Character, currentAbilityID));
+					AbilityEventData aed = new AbilityEventData(Character, currentAbilityID);
+					aed.Add(new TickEventData(Character, activationData.GetTick()));
+					Character.Invoke(onAbilityActivateTriggers, aed);
 				}
 				return true;
 			}
@@ -350,7 +356,9 @@ namespace FishMMO.Shared
 				AddCooldown(validatedAbility, activationData.GetTick());
 				if (base.IsServerStarted)
 				{
-					Character.Invoke(onAbilityCompleteTriggers, new AbilityEventData(Character, validatedAbility.ID));
+					AbilityEventData aed = new AbilityEventData(Character, validatedAbility.ID);
+					aed.Add(new TickEventData(Character, activationData.GetTick()));
+					Character.Invoke(onAbilityCompleteTriggers, aed);
 				}
 			}
 
@@ -370,14 +378,7 @@ namespace FishMMO.Shared
 			consumable = null;
 
 			// This method is only called from ProcessActiveConsumable, which already
-			// returns early if !IsActivating. The assert catches call-order mistakes
-			// during development without paying a runtime cost in release builds.
-			if (!IsActivating)
-				Log.Warning("AbilityController", "ValidateActiveConsumable called while no ability is active.");
-			if (!IsActivating)
-			{
-				return false;
-			}
+			// returns early if !IsActivating. No need to check or warn again here.
 
 			if (!CanManipulate())
 			{
@@ -850,6 +851,10 @@ namespace FishMMO.Shared
 
 
 			// Validate the consumable can be used (charges, cooldown, etc.)
+			// LocalTick is correct here: this is a client-side input pre-filter that QUEUES
+			// the activation for the next replicate tick. The server re-validates authoritatively
+			// in OnReplicate using the simulated tick — so this is not part of the deterministic
+			// state machine and may use the live wall-clock tick safely.
 			if (!consumable.CanConsume(PlayerCharacter, item, base.TimeManager.LocalTick)) return;
 
 			// Ensure we are not already activating an ability or an interrupt is waiting to be processed
