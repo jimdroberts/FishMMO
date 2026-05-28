@@ -1,6 +1,10 @@
+
 using System;
 using NUnit.Framework;
 using FishMMO.Shared;
+using UnityEngine;
+using System.Reflection;
+using FishMMO.Shared.Core;
 using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
@@ -46,9 +50,29 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class BuffExpiryTests
 	{
+		[SetUp]
+		public void SetUp()
+		{
+			var template = ScriptableObject.CreateInstance<MockBuffTemplate>();
+			template.Duration = DurationSeconds;
+			template.TickRate = 1.0f;
+			template.name = "TestBuffTemplate";
+
+			template.AddToCache(template.name);
+
+			TemplateID = template.ID;
+		}
+
+		// Minimal mock template for testing
+		private class MockBuffTemplate : BaseBuffTemplate
+		{
+			public override void OnApply(Buff buff, ICharacter target) { }
+			public override void OnRemove(Buff buff, ICharacter target) { }
+		}
+
 		// ── Shared constants ──────────────────────────────────────────────────────
 
-		private const int TemplateID = 1;
+		private static int TemplateID = 1;
 		private const float TickDelta30 = 1.0f / 30f; // 30 tps — realistic session value
 		private const float DurationSeconds = 30f;
 
@@ -372,10 +396,10 @@ namespace FishMMO.UnitTests
 				var restored = new Buff(entry.TemplateID, entry.ExpiryTick, entry.NextTickTick,
 					TickDelta30, entry.Stacks, entry.TickCount);
 
-				LogAssert.AreEqual(source.ExpiryTick,   restored.ExpiryTick,   "ExpiryTick must round-trip.");
+				LogAssert.AreEqual(source.ExpiryTick, restored.ExpiryTick, "ExpiryTick must round-trip.");
 				LogAssert.AreEqual(source.NextTickTick, restored.NextTickTick, "NextTickTick must round-trip.");
-				LogAssert.AreEqual(source.Stacks,       restored.Stacks,       "Stacks must round-trip.");
-				LogAssert.AreEqual(source.TickCount,    restored.TickCount,    "TickCount must round-trip — required for cumulative-tick reversal on restore.");
+				LogAssert.AreEqual(source.Stacks, restored.Stacks, "Stacks must round-trip.");
+				LogAssert.AreEqual(source.TickCount, restored.TickCount, "TickCount must round-trip — required for cumulative-tick reversal on restore.");
 
 				AuthTestTrace.Log("BuffExpiryTests", "SUCCESS",
 					nameof(ReconcileEntry_RoundTrip_PreservesAllTickAndStackFields)).GetAwaiter().GetResult();
@@ -414,11 +438,11 @@ namespace FishMMO.UnitTests
 
 				var baseline = new BuffReconcileEntry
 				{
-					TemplateID   = 42,
-					ExpiryTick   = 10_000u,
+					TemplateID = 42,
+					ExpiryTick = 10_000u,
 					NextTickTick = 9_500u,
-					Stacks       = 2,
-					TickCount    = 5,
+					Stacks = 2,
+					TickCount = 5,
 				};
 
 				LogAssert.IsTrue(baseline.Equals(baseline),
@@ -477,11 +501,19 @@ namespace FishMMO.UnitTests
 
 				var a = new BuffReconcileEntry
 				{
-					TemplateID = 7, ExpiryTick = 1234u, NextTickTick = 1200u, Stacks = 1, TickCount = 4,
+					TemplateID = 7,
+					ExpiryTick = 1234u,
+					NextTickTick = 1200u,
+					Stacks = 1,
+					TickCount = 4,
 				};
 				var b = new BuffReconcileEntry
 				{
-					TemplateID = 7, ExpiryTick = 1234u, NextTickTick = 1200u, Stacks = 1, TickCount = 4,
+					TemplateID = 7,
+					ExpiryTick = 1234u,
+					NextTickTick = 1200u,
+					Stacks = 1,
+					TickCount = 4,
 				};
 
 				LogAssert.IsTrue(a.Equals(b), "Entries with identical fields must compare equal.");
@@ -766,10 +798,10 @@ namespace FishMMO.UnitTests
 					.GetAwaiter().GetResult();
 
 				uint applyTick = 200u;
-				LogAssert.AreEqual(0u, DurationToTicks(0f, TickDelta30),  "0 seconds → 0 ticks.");
+				LogAssert.AreEqual(0u, DurationToTicks(0f, TickDelta30), "0 seconds → 0 ticks.");
 				LogAssert.AreEqual(0u, DurationToTicks(-1f, TickDelta30), "negative seconds → 0 ticks.");
-				LogAssert.AreEqual(0u, DurationToTicks(1f, 0f),           "0 tickDelta → 0 ticks (guard against div-by-zero).");
-				LogAssert.AreEqual(0u, DurationToTicks(1f, -0.1f),        "negative tickDelta → 0 ticks.");
+				LogAssert.AreEqual(0u, DurationToTicks(1f, 0f), "0 tickDelta → 0 ticks (guard against div-by-zero).");
+				LogAssert.AreEqual(0u, DurationToTicks(1f, -0.1f), "negative tickDelta → 0 ticks.");
 
 				var buff = new Buff(TemplateID, applyTick, applyTick, TickDelta30, 0, 0);
 				LogAssert.IsTrue(buff.HasExpired(applyTick),
