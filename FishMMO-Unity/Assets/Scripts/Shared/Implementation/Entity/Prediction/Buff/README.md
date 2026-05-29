@@ -21,6 +21,8 @@
 
 The Buff system is a data-driven, template-based framework for applying temporary (or permanent) effects to FishMMO characters. It supports tick-based expiration, tick-based periodic effects, stacking, attribute modification, FX instantiation, and FishNet network synchronization with deterministic prediction via `IPredictableController` (Order=80). Buffs and debuffs share the same pipeline, distinguished only by an `IsDebuff` flag on the template.
 
+> Note: See the Detailed File-Level Topology in the parent `Prediction/README.md` (`../README.md#detailed-file-level-topology`) for a file-level call/serialization topology and per-file interactions.
+
 ## Supported Platforms
 
 | Platform | Status | Notes |

@@ -21,6 +21,8 @@
 
 The Cooldown system manages per-ability cooldowns for FishMMO characters using immutable, tick-based `CooldownInstance` structs. Cooldowns are recorded as `(StartTick, DurationTicks)` pairs and expire via integer comparison: `(currentTick - StartTick) >= DurationTicks`. This design is perfectly deterministic across client and server — no per-tick mutation is needed, eliminating float drift and double-subtract risks during reconcile replay.
 
+> Note: See the Detailed File-Level Topology in the parent `Prediction/README.md` (`../../README.md#detailed-file-level-topology`) for a file-level call/serialization topology and per-file interactions.
+
 `CooldownController` implements `IPredictableController` (Order=90), running after `BuffController` (80) and before `CharacterAttributeController` (95) in the unified prediction pipeline driven by `CharacterPredictionController`. On each tick, it calls `ExpireElapsed()` to remove finished cooldowns. Reconcile snapshots use `CooldownReconcileEntry[]` arrays with index-delta compression for bandwidth-efficient network synchronization.
 
 ## Supported Platforms

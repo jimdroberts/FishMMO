@@ -31,6 +31,8 @@
 
 The Ability system is a server-authoritative, template-driven framework for abilities in FishMMO. It handles the full ability lifecycle — learning, queuing, activation, spawning, ticking, collision, and destruction — using FishNet's Replicate/Reconcile prediction model with deterministic RNG seeds for mismatch detection. Abilities are composed from ScriptableObject templates and modular Event-Condition-Action (ECA) events that can be combined at runtime through an ability crafting system. The system includes per-ability cooldown tracking, a snapshot mechanism for detached ability objects that outlive their caster, and speed/cast-time reduction via character attributes.
 
+> Note: See the Detailed File-Level Topology in the parent `Prediction/README.md` (`../README.md#detailed-file-level-topology`) for a file-level call/serialization topology and per-file interactions.
+
 ## Supported Platforms
 
 | Platform | Status | Notes |
