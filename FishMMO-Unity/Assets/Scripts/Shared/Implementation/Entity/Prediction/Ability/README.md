@@ -491,7 +491,7 @@ Ability/
 ├── AbilityObject.cs                    # Spawned ability object (MonoBehaviour, lifetime/collision/tick management)
 ├── AbilityObjectSnapshot.cs            # Immutable snapshot for detached ability objects
 ├── Activation/
-│   ├── AbilityActivationReplicateData.cs           # IReplicateData: ActivationFlags (int), QueuedAbilityID (long)
+│   └── AbilityActivationReplicateData.cs    # IReplicateData: ActivationFlags (int), QueuedAbilityID (long)
 ├── Cooldown/
 │   ├── CooldownController.cs           # Per-entity cooldown manager (CharacterBehaviour, ICooldownController, IPredictableController Order=90)
 │   ├── CooldownInstance.cs             # Cooldown data: StartTick (uint), DurationTicks (uint)

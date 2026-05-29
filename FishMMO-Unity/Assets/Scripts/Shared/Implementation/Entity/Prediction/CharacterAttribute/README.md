@@ -347,8 +347,9 @@ CharacterAttribute/
 ├── CharacterResourceAttribute.cs          # Depletable resource (HP/MP/Stamina) with CurrentValue
 ├── CharacterAttributeController.cs        # Per-entity controller (CharacterBehaviour, ICharacterAttributeController, IPredictableController Order=95)
 ├── CharacterDamageController.cs           # Damage, heal, and kill logic (CharacterBehaviour, ICharacterDamageController)
-├── CharacterAttributeResourceState.cs     # Snapshot struct for reconciliation [UseGlobalCustomSerializer]
-├── CharacterAttributeResourceStateSerializer.cs # Delta + full serializer for CharacterAttributeResourceState
+├── CharacterAttributeResourceState.cs     # Snapshot struct for resource reconciliation [UseGlobalCustomSerializer]
+├── CharacterAttributeResourceStateSerializer.cs # Regular + delta serializer; [RuntimeInitializeOnLoadMethod(BeforeSceneLoad)] registers the delta delegates
+├── AttributeReconcileEntry.cs             # Snapshot entry for NON-resource attributes (Value + ExternalModifier) with index-delta WriteArrayDelta/ReadArrayDelta
 └── Template/
     ├── CharacterAttributeTemplate.cs          # ScriptableObject blueprint (value, bounds, relationships, formulas)
     ├── CharacterAttributeTemplateDatabase.cs  # Master list of all templates
@@ -363,9 +364,10 @@ CharacterAttribute/
 #### Related Files (Outside This Directory)
 
 ```
-Shared/Core/Entity/Prediction/CharacterAttribute/                                 # Core interfaces (ICharacterAttributeController, ICharacterDamageController)
-Shared/Implementation/Entity/Prediction/CharacterAttribute/Activation/CharacterAttributeResourceStateSerializer.cs  # Delta + full serializer
-Shared/Implementation/Entity/Prediction/                               # CharacterPredictionController, CharacterReplicateData, CharacterReconcileData
+Shared/Core/Entity/Prediction/CharacterAttribute/                                    # Core interfaces (ICharacterAttributeController, ICharacterDamageController)
+Shared/Implementation/Entity/Prediction/CharacterPredictionController.cs             # Drives OnReplicate / OnCreateReconcile / OnReconcile
+Shared/Implementation/Entity/Prediction/CharacterReconcileData.cs                    # Carries ResourceState + Attributes[] in the unified snapshot
+Shared/Implementation/Entity/Prediction/CharacterReconcileDataDeltaSerializer.cs     # Invokes the resource bitmask + AttributeReconcileEntry index-delta
 ```
 
 ### Inheritance Hierarchies
