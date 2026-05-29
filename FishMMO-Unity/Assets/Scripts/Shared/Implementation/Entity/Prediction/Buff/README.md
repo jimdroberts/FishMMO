@@ -184,25 +184,31 @@ The buff system is consumed by and interacts with:
 
 ### Network Synchronization
 
-#### Payload Serialization (FishNet Reader/Writer)
+Buff state is **fully reconcile-driven** and reaches owner and observers
+through FishNet Prediction V2 state forwarding. There are no per-buff
+add/remove broadcasts. Each authoritative tick, `BuffController` writes
+its current set of `BuffReconcileEntry` records into
+`CharacterReconcileData.Buffs`, and `CharacterReconcileDataDeltaSerializer`
+ships only the entries that changed (index-delta with a packed
+`(deltaFlag | count)` 16-bit header — see `BuffReconcileEntry.WriteArrayDelta`).
+
+On the receiving side, `BuffController.OnReconcile` calls
+`RestoreFromReconcile(rd.Buffs)` which performs an incremental Add/Remove
+patch against the local cached snapshot, then fires queued
+`OnAddBuff`/`OnAddDebuff`/`OnRemoveBuff`/`OnRemoveDebuff` events *after*
+the patch loop completes so observers never see a half-restored set.
+
+#### Payload Serialization (Persistence / DB)
+
+For non-prediction code paths (DB save/load, character export) the
+controller still exposes `WritePayload` / `ReadPayload`:
 
 - **WritePayload**: Writes `Int32(count)`, then for each buff: `Int32(templateID)`, `Single(remainingTime)`, `Single(tickTime)`, `Int32(stacks)`.
 - **ReadPayload**: Reads the payload and calls `Apply(Buff buff)` for each entry, which re-applies all attribute modifiers.
 
-#### Client Broadcast Receivers
-
-| Broadcast | Purpose |
-|-----------|---------|
-| `BuffAddBroadcast` | Owner-targeted add buff update |
-| `BuffAddMultipleBroadcast` | Owner-targeted bulk add buff update |
-| `BuffRemoveBroadcast` | Owner-targeted remove buff update |
-| `BuffRemoveMultipleBroadcast` | Owner-targeted bulk remove buff update |
-| `CharacterObserverBuffAddBroadcast` | Observer-targeted add buff updates with `CharacterID` routing |
-| `CharacterObserverBuffRemoveBroadcast` | Observer-targeted remove buff updates with `CharacterID` routing |
-
-Client broadcasts use `Apply(BaseBuffTemplate, uint currentTick)` (the gameplay path), not `Apply(Buff buff)`, because they represent new game events rather than state restoration. Broadcast handlers supply a local tick when applying observer visuals.
-
-Observer-targeted messages resolve the destination character via `BaseCharacter.ClientCharacters[msg.CharacterID]`, then apply changes through the resolved `IBuffController`.
+These are only invoked outside the prediction pipeline (for example, when
+a character is loaded from the database). Live in-session sync uses
+reconcile exclusively.
 
 ## Operational Checks
 
@@ -214,8 +220,8 @@ Observer-targeted messages resolve the destination character via `BaseCharacter.
 | Tick fires | Apply buff with non-zero `TickRate` | `OnTick` called when `NextTickTick` is reached |
 | Removal cleans up | Call `Remove(buffID)` | All modifiers reversed; `OnRemoveBuff`/`OnRemoveDebuff` fires |
 | Permanent buff protection | Call `RemoveAll()` with `IsPermanent` buff active | Permanent buff remains |
-| Network sync (owner) | Apply buff on server | `BuffAddBroadcast` received on owning client; buff applied locally |
-| Network sync (observer) | Apply buff on server with nearby observers | `CharacterObserverBuffAddBroadcast` received; buff visible on observed character |
+| Network sync (owner) | Apply buff on server | Buff appears on owning client on the next reconcile via `CharacterReconcileData.Buffs` |
+| Network sync (observer) | Apply buff on server with nearby observers | Buff appears on observers through FishNet Prediction V2 state forwarding (same reconcile path as owner) |
 | DB persistence | Save character with active buffs, reload | Buffs restored via `ReadPayload` → `Apply(Buff buff)` with correct stacks/time |
 | FX instantiation | Apply buff with `FXPrefab` set | FX prefab spawned as child of `MeshRoot`; self-destroys after effect |
 | Modifier balance | Apply and fully remove a stacked buff | Net modifier change is zero (every `+V` paired with `-V`) |
@@ -375,8 +381,9 @@ Buff/
 
 ```
 Shared/Implementation/Entity/Prediction/Buff/BuffReconcileEntry.cs   # Reconcile snapshot entry + index-delta array serialization
-Shared/Implementation/Network/Character/BuffBroadcasts.cs       # FishNet broadcast structs for buff add/remove
-Shared/Implementation/Entity/BaseCharacter.cs                   # Client-side character cache used for observer routing
+Shared/Implementation/Entity/Prediction/CharacterReconcileData.cs    # Unified reconcile payload that carries Buffs[]
+Shared/Implementation/Entity/Prediction/CharacterReconcileDataDeltaSerializer.cs  # Delta writer that ships only changed buff entries
+Shared/Implementation/Entity/BaseCharacter.cs                        # Client-side character cache used for observer routing
 ```
 
 ### Inheritance Hierarchies

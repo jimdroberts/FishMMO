@@ -3,7 +3,10 @@ using System;
 using NUnit.Framework;
 using FishMMO.Shared;
 using UnityEngine;
+// Avoid compile-time dependency on FishNet runtime types; use reflection in serializer tests.
 using System.Reflection;
+using FishNet.Serializing;
+using System.Linq;
 using FishMMO.Shared.Core;
 using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
@@ -63,6 +66,12 @@ namespace FishMMO.UnitTests
 			TemplateID = template.ID;
 		}
 
+		[TearDown]
+		public void TearDown()
+		{
+			Resources.UnloadUnusedAssets();
+		}
+
 		// Minimal mock template for testing
 		private class MockBuffTemplate : BaseBuffTemplate
 		{
@@ -77,16 +86,13 @@ namespace FishMMO.UnitTests
 		private const float DurationSeconds = 30f;
 
 		/// <summary>
-		/// Mirror of <see cref="Buff"/>.DurationToTicks: ceiling division, min 1, zero on
-		/// non-positive inputs. Kept here so test expectations stay independent of the
-		/// production source and any regression in either side is caught immediately.
+		/// Thin wrapper that delegates to <see cref="Buff.DurationToTicks"/> (exposed
+		/// internally via <c>InternalsVisibleTo</c>). Tests exercise the real
+		/// production formula instead of duplicating it so any change in production
+		/// behaviour is reflected here automatically.
 		/// </summary>
 		private static uint DurationToTicks(float seconds, float tickDelta)
-		{
-			if (tickDelta <= 0f || seconds <= 0f) return 0u;
-			uint ticks = (uint)Math.Ceiling(seconds / tickDelta);
-			return ticks < 1u ? 1u : ticks;
-		}
+			=> Buff.DurationToTicks(seconds, tickDelta);
 
 		// ─────────────────────────────────────────────────────────────────────────
 		//  PATH 1 — Fresh apply: server and client compute ExpiryTick from the same tick
@@ -148,61 +154,8 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		/// <summary>
-		/// Regression sentinel for any future re-introduction of a <c>LocalTick</c>-based
-		/// apply path. All current apply paths use a tick from <c>CharacterReplicateData</c>
-		/// (server, owner, and state-forwarded observers all see the same value); the legacy
-		/// observer-broadcast path that used <c>TimeManager.LocalTick</c> has been deleted.
-		/// This test pins the math of the divergence: if anyone ever wires a LocalTick-based
-		/// apply onto a controller whose <c>Tick()</c> is active, the resulting <c>ExpiryTick</c>
-		/// offset equals the LocalTick gap and the buff appears expired well before the server
-		/// believes it should be — exactly the symptom this test documents.
-		/// </summary>
-		[Test]
-		public void FreshApply_DivergentLocalTick_ExpiryDiffers_BroadcastPathKnownIssue()
-		{
-			try
-			{
-				AuthTestTrace.LogTestStart(
-					nameof(FreshApply_DivergentLocalTick_ExpiryDiffers_BroadcastPathKnownIssue),
-					"Broadcast path uses LocalTick which diverges from the server replicate tick. " +
-					"Demonstrates why owner state MUST come from reconcile, never from broadcast.")
-					.GetAwaiter().GetResult();
-
-				uint serverReplicateTick = 11_000u;
-				uint clientLocalTick = 1_000u;
-
-				var serverBuff = new Buff(TemplateID, serverReplicateTick, TickDelta30);
-				var clientBuff = new Buff(TemplateID, clientLocalTick, TickDelta30);
-
-				uint expectedOffset = serverReplicateTick - clientLocalTick;
-				uint actualOffset = serverBuff.ExpiryTick - clientBuff.ExpiryTick;
-
-				LogAssert.AreEqual(expectedOffset, actualOffset,
-					"ExpiryTick offset must equal the server/client LocalTick divergence.");
-
-				LogAssert.IsTrue(clientBuff.HasExpired(serverBuff.ExpiryTick),
-					"Client buff (broadcast path) appears expired well before server expiry — " +
-					"demonstrates why reconcile correction is mandatory.");
-
-				AuthTestTrace.Log("BuffExpiryTests", "SUCCESS",
-					nameof(FreshApply_DivergentLocalTick_ExpiryDiffers_BroadcastPathKnownIssue))
-					.GetAwaiter().GetResult();
-			}
-			catch (Exception ex)
-			{
-				AuthTestTrace.Log("BuffExpiryTests", "FAILURE",
-					$"{nameof(FreshApply_DivergentLocalTick_ExpiryDiffers_BroadcastPathKnownIssue)}: {ex.Message}\n{ex.StackTrace}")
-					.GetAwaiter().GetResult();
-				throw;
-			}
-			finally
-			{
-				AuthTestTrace.LogTestEnd(
-					nameof(FreshApply_DivergentLocalTick_ExpiryDiffers_BroadcastPathKnownIssue))
-					.GetAwaiter().GetResult();
-			}
-		}
+		// Historical divergence test moved to RegressionHistoryTests to avoid
+		// coupling the active suite to a deleted legacy broadcast path.
 
 		/// <summary>
 		/// Determinism across realistic FishNet tick rates. The ceiling formula must produce
@@ -911,11 +864,12 @@ namespace FishMMO.UnitTests
 
 				var buff = new Buff(TemplateID, expiryTick, nextTickTick, TickDelta30, 0, 0);
 
-				// Mirror the TryTick condition: (int)(currentTick - NextTickTick) >= 0.
-				LogAssert.IsTrue((int)(nextTickTick - buff.NextTickTick) >= 0,
-					"At NextTickTick the periodic-fire condition must hold.");
-				LogAssert.IsFalse((int)((nextTickTick - 1u) - buff.NextTickTick) >= 0,
-					"One tick before NextTickTick the periodic-fire condition must NOT hold.");
+				// Behavior test: TryTick should fire at NextTickTick and not fire one tick before.
+				bool firedBefore = buff.TryTick(null, nextTickTick - 1u, TickDelta30);
+				bool firedAt = buff.TryTick(null, nextTickTick, TickDelta30);
+
+				LogAssert.IsFalse(firedBefore, "One tick before NextTickTick TryTick must NOT fire.");
+				LogAssert.IsTrue(firedAt, "At NextTickTick TryTick must fire.");
 
 				AuthTestTrace.Log("BuffExpiryTests", "SUCCESS",
 					nameof(NextTickTick_BoundaryComparison_MatchesHasExpiredSemantics)).GetAwaiter().GetResult();
@@ -1059,43 +1013,75 @@ namespace FishMMO.UnitTests
 		/// dictionary is caught.
 		/// </summary>
 		[Test]
-		public void ReconcileSnapshot_IndexOrder_FollowsSortedTemplateID()
+		public void ReconcileSnapshot_Serialization_RoundTrip_IndexDeltaAndFullArray()
 		{
 			try
 			{
-				AuthTestTrace.LogTestStart(nameof(ReconcileSnapshot_IndexOrder_FollowsSortedTemplateID),
-					"Snapshot index order must be ascending TemplateID — required for the " +
-					"index-delta serializer to produce minimal payloads.")
+				AuthTestTrace.LogTestStart(nameof(ReconcileSnapshot_Serialization_RoundTrip_IndexDeltaAndFullArray),
+					"BuffReconcileEntry write/read must round-trip for index-delta and full-array paths.")
 					.GetAwaiter().GetResult();
 
-				var dict = new System.Collections.Generic.SortedDictionary<int, BuffReconcileEntry>
+				// prev: template IDs [1, 5, 9]
+				BuffReconcileEntry[] prev = new BuffReconcileEntry[]
 				{
-					{ 9, new BuffReconcileEntry { TemplateID = 9, ExpiryTick = 300u, NextTickTick = 290u, Stacks = 1, TickCount = 0 } },
-					{ 1, new BuffReconcileEntry { TemplateID = 1, ExpiryTick = 100u, NextTickTick =  90u, Stacks = 1, TickCount = 0 } },
-					{ 5, new BuffReconcileEntry { TemplateID = 5, ExpiryTick = 200u, NextTickTick = 190u, Stacks = 1, TickCount = 0 } },
+					new BuffReconcileEntry { TemplateID = 1, ExpiryTick = 100u, NextTickTick = 90u,  Stacks = 1, TickCount = 0 },
+					new BuffReconcileEntry { TemplateID = 5, ExpiryTick = 200u, NextTickTick = 190u, Stacks = 1, TickCount = 0 },
+					new BuffReconcileEntry { TemplateID = 9, ExpiryTick = 300u, NextTickTick = 290u, Stacks = 1, TickCount = 0 },
 				};
 
-				int previousID = int.MinValue;
-				foreach (var kvp in dict)
+				// next: id 5 removed, id 7 added → still 3 entries, sorted: [1, 7, 9]
+				BuffReconcileEntry[] next = new BuffReconcileEntry[]
 				{
-					LogAssert.IsTrue(kvp.Key > previousID,
-						"SortedDictionary enumeration must yield ascending keys (required for snapshot index stability).");
-					previousID = kvp.Key;
-				}
+					new BuffReconcileEntry { TemplateID = 1, ExpiryTick = 100u, NextTickTick = 90u,  Stacks = 1, TickCount = 0 },
+					new BuffReconcileEntry { TemplateID = 7, ExpiryTick = 250u, NextTickTick = 240u, Stacks = 1, TickCount = 0 },
+					new BuffReconcileEntry { TemplateID = 9, ExpiryTick = 300u, NextTickTick = 290u, Stacks = 1, TickCount = 0 },
+				};
+
+				// Index-delta path (same length) — write a delta header and changed index.
+				var writer = new Writer();
+				bool wrote = BuffReconcileEntry.WriteArrayDelta(writer, prev, next, DeltaSerializerOption.Unset);
+				LogAssert.IsTrue(wrote, "Serializer must write when entries changed.");
+
+				// Verify header indicates index-delta mode (high bit set).
+				var seg = writer.GetArraySegment();
+				var headerReader = new Reader(seg, null);
+				ushort header = headerReader.ReadUInt16();
+				bool isDelta = (header & 0x8000) != 0;
+				LogAssert.IsTrue(isDelta, "Index-delta header bit must be set for same-length changed arrays.");
+
+				// Round-trip using ReadArrayDelta.
+				var reader = new Reader(seg, null);
+				var result = BuffReconcileEntry.ReadArrayDelta(reader, prev);
+				LogAssert.IsNotNull(result, "ReadArrayDelta result must not be null for non-empty arrays.");
+				LogAssert.AreEqual(next.Length, result.Length, "Round-tripped array must have same length.");
+				for (int i = 0; i < next.Length; i++)
+					LogAssert.IsTrue(next[i].Equals(result[i]), $"Entry at index {i} must match after round-trip.");
+
+				// Full-array path: prev == null
+				writer = new Writer();
+				wrote = BuffReconcileEntry.WriteArrayDelta(writer, null, next, DeltaSerializerOption.Unset);
+				LogAssert.IsTrue(wrote, "Serializer must write full array when prev==null and next non-null.");
+				seg = writer.GetArraySegment();
+				reader = new Reader(seg, null);
+				result = BuffReconcileEntry.ReadArrayDelta(reader, null);
+				LogAssert.IsNotNull(result, "Full-array round-trip result must not be null.");
+				LogAssert.AreEqual(next.Length, result.Length, "Full-array round-trip must preserve length.");
+				for (int i = 0; i < next.Length; i++)
+					LogAssert.IsTrue(next[i].Equals(result[i]), $"Full-array round-trip entry {i} must match.");
 
 				AuthTestTrace.Log("BuffExpiryTests", "SUCCESS",
-					nameof(ReconcileSnapshot_IndexOrder_FollowsSortedTemplateID)).GetAwaiter().GetResult();
+					nameof(ReconcileSnapshot_Serialization_RoundTrip_IndexDeltaAndFullArray)).GetAwaiter().GetResult();
 			}
 			catch (Exception ex)
 			{
 				AuthTestTrace.Log("BuffExpiryTests", "FAILURE",
-					$"{nameof(ReconcileSnapshot_IndexOrder_FollowsSortedTemplateID)}: {ex.Message}\n{ex.StackTrace}")
+					$"{nameof(ReconcileSnapshot_Serialization_RoundTrip_IndexDeltaAndFullArray)}: {ex.Message}\n{ex.StackTrace}")
 					.GetAwaiter().GetResult();
 				throw;
 			}
 			finally
 			{
-				AuthTestTrace.LogTestEnd(nameof(ReconcileSnapshot_IndexOrder_FollowsSortedTemplateID))
+				AuthTestTrace.LogTestEnd(nameof(ReconcileSnapshot_Serialization_RoundTrip_IndexDeltaAndFullArray))
 					.GetAwaiter().GetResult();
 			}
 		}

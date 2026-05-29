@@ -6,12 +6,13 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Custom delta serializers for <see cref="CharacterReconcileData"/>.
 	/// <para>
-	/// <b>Delta serializer</b>: Writes a 2-byte bitmask (9 bits for 9 fields)
+	/// <b>Delta serializer</b>: Writes a 2-byte bitmask (10 bits for 10 fields)
 	/// followed by delta-encoded values for only the changed fields.
 	/// The nested <see cref="KinematicCharacterController.KinematicCharacterMotorState"/> and
 	/// <see cref="CharacterAttributeResourceState"/> use their own delta serializers,
-	/// so savings compound. Cooldowns and buffs use index-delta compression via
-	/// <see cref="CooldownReconcileEntry"/> and <see cref="BuffReconcileEntry"/>.
+	/// so savings compound. Cooldowns, buffs, and non-resource attributes use index-delta
+	/// compression via <see cref="CooldownReconcileEntry"/>, <see cref="BuffReconcileEntry"/>,
+	/// and <see cref="AttributeReconcileEntry"/>.
 	/// </para>
 	/// </summary>
 	public static class CharacterReconcileDataDeltaSerializer
@@ -25,8 +26,9 @@ namespace FishMMO.Shared
 		private const ushort COOLDOWN_BIT = 1 << 6;
 		private const ushort BUFF_BIT = 1 << 7;
 		private const ushort RNG_STATE_BIT = 1 << 8;
-		// Bits 9..15 are reserved for future fields. The flag mask is a ushort (16 bits);
-		// 9 are currently in use. When adding new fields, take the next bit and update
+		private const ushort ATTRIBUTE_BIT = 1 << 9;
+		// Bits 10..15 are reserved for future fields. The flag mask is a ushort (16 bits);
+		// 10 are currently in use. When adding new fields, take the next bit and update
 		// both WriteDelta and ReadDelta in lock-step.
 
 		/// <summary>
@@ -41,7 +43,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Delta writer for <see cref="CharacterReconcileData"/>.
-		/// Writes a 2-byte bitmask indicating which of the 9 fields changed,
+		/// Writes a 2-byte bitmask indicating which of the 10 fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
 		private static bool WriteDelta(
@@ -82,6 +84,9 @@ namespace FishMMO.Shared
 
 			if (WriteRngStateDelta(writer, prev, next, option))
 				flags |= RNG_STATE_BIT;
+
+			if (AttributeReconcileEntry.WriteArrayDelta(writer, prev.Attributes, next.Attributes, option))
+				flags |= ATTRIBUTE_BIT;
 
 			if (flags != 0 || forceWrite)
 			{
@@ -130,7 +135,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Delta reader for <see cref="CharacterReconcileData"/>.
 		/// Reads the bitmask and reconstructs only the changed fields.
-		/// Bits 9–15 of the flags are reserved for future fields.
+		/// Bits 10–15 of the flags are reserved for future fields.
 		/// Unknown bits are silently ignored for forward compatibility.
 		/// </summary>
 		private static CharacterReconcileData ReadDelta(
@@ -171,6 +176,9 @@ namespace FishMMO.Shared
 				result.RngS2 = reader.ReadUInt32();
 				result.RngS3 = reader.ReadUInt32();
 			}
+
+			if ((flags & ATTRIBUTE_BIT) != 0)
+				result.Attributes = AttributeReconcileEntry.ReadArrayDelta(reader, prev.Attributes);
 
 			return result;
 		}

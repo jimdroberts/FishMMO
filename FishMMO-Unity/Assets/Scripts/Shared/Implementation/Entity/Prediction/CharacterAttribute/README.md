@@ -141,48 +141,54 @@ The `Modifier` property returns the total: `FormulaModifier + ExternalModifier`.
 
 #### Payload Serialization (FishNet Reader/Writer)
 
-- **WritePayload**: Writes `(templateID, value)` for regular attributes; `(templateID, value, currentValue)` for resource attributes.
+- **WritePayload**: Writes `(templateID, value)` for regular attributes; `(templateID, value, currentValue)` for resource attributes. Used during initial spawn / state transfer only.
 - **ReadPayload**: Reads and applies via `SetAttribute()` / `SetResourceAttribute()`.
 
-#### Client Broadcast Receivers
+#### Reconcile-Driven Synchronization (unified)
 
-| Broadcast | Purpose |
-|-----------|---------|
-| `CharacterAttributeUpdateBroadcast` | Owner-targeted single attribute update |
-| `CharacterAttributeUpdateMultipleBroadcast` | Owner-targeted batch attribute update |
-| `CharacterResourceAttributeUpdateBroadcast` | Legacy owner resource update path (owner currently reconcile-driven) |
-| `CharacterResourceAttributeUpdateMultipleBroadcast` | Legacy owner resource batch path |
-| `CharacterObserverAttributeUpdateBroadcast` | Observer-targeted attribute updates with `CharacterID` routing |
-| `CharacterObserverResourceAttributeUpdateBroadcast` | Observer-targeted resource updates with `CharacterID` routing |
+**There are no client broadcast handlers for attributes.** Both base (non-resource) and
+resource attributes are replicated each prediction tick via `CharacterReconcileData`
+and reach owner *and* observers automatically through FishNet Prediction V2 state
+forwarding. The previous `CharacterAttributeUpdateBroadcast` /
+`CharacterAttributeUpdateMultipleBroadcast` / `CharacterObserverAttributeUpdateBroadcast`
+types were removed entirely along with the per-tick dirty-flush pipeline.
 
-Observer-targeted updates are routed through the client character cache (`BaseCharacter.ClientCharacters`) to resolve the target `ICharacterAttributeController` by `CharacterID`.
+| Reconcile field | Carries |
+|-----------------|---------|
+| `CharacterReconcileData.ResourceState` (`CharacterAttributeResourceState`) | Resource attributes (HP/MP/Stamina) — base value, `CurrentValue`, `RegenTickAccum` |
+| `CharacterReconcileData.Attributes` (`AttributeReconcileEntry[]`) | Non-resource attributes — `TemplateID`, `Value`, `ExternalModifier` |
+
+`AttributeReconcileEntry[]` uses index-delta compression with a packed 16-bit header
+(high bit = delta mode, low 15 bits = entry count) and `ReferenceEquals` fast-pathing:
+unchanged ticks contribute **zero bytes**. `FormulaModifier` is intentionally NOT
+replicated — it is recomputed locally via the dependency graph in `ApplyChildren()`.
 
 #### Reconciliation
 
-`CharacterAttributeResourceState` is a snapshot struct containing `RegenDelta`, `Health`, `Mana`, `Stamina`, and max/final caps (`MaxHealth`, `MaxMana`, `MaxStamina`). Used by FishNet's Replicate/Reconcile prediction system via `GetResourceState()` / `ApplyResourceState()`.
+`CharacterAttributeResourceState` is a snapshot struct containing `RegenTickAccum`, `Health`, `Mana`, `Stamina`, and max/final caps (`MaxHealth`, `MaxMana`, `MaxStamina`). Used by FishNet's Replicate/Reconcile prediction system via `GetResourceState()` / `ApplyResourceState()`. `RegenTickAccum` is an integer tick counter (replacing the legacy float `RegenDelta`) which guarantees deterministic client/server agreement on the exact tick a regen pulse fires.
 
 ### Prediction Pipeline
 
 `CharacterAttributeController` implements `IPredictableController` (Order=95), running after `BuffController` (80) and `CooldownController` (90), and before `AbilityController` (100). This ensures regenerated resources are available for same-tick ability activation checks.
 
-| Method              | Behaviour                                                                    |
-|---------------------|------------------------------------------------------------------------------|
-| `PopulateInput`     | No-op (attributes have no input)                                             |
-| `OnReplicate`       | Calls `Regenerate(tickDelta)` — applies resource regeneration per tick       |
-| `OnCreateReconcile` | Writes `GetResourceState()` → `CharacterAttributeResourceState` struct       |
-| `OnReconcile`       | Calls `ApplyResourceState(rd.ResourceState)` to restore authoritative values |
+| Method              | Behaviour                                                                                |
+|---------------------|------------------------------------------------------------------------------------------|
+| `PopulateInput`     | No-op (attributes have no input)                                                         |
+| `OnReplicate`       | Calls `Regenerate()` — advances integer `regenTickAccum` and fires a regen pulse when it reaches `regenTickInterval`. During reconcile replay the per-tick `OnAttributeUpdated` notifications are discarded so UI subscribers only react to the authoritative reconcile. |
+| `OnCreateReconcile` | Writes `GetResourceState()` to `ResourceState` **and** `CreateAttributeSnapshot()` to `Attributes[]` (sorted by `TemplateID`). The snapshot array is cached and re-emitted across ticks when no attribute mutated, so the delta serializer's `ReferenceEquals` check produces zero network bytes. |
+| `OnReconcile`       | Calls `ApplyResourceState(rd.ResourceState)` **and** `ApplyAttributeSnapshot(rd.Attributes)` to restore authoritative values. Dirty-tracking is suppressed during the restore so the cached snapshot retains identity. |
 
 #### CharacterAttributeResourceState
 
-| Field        | Type    | Description                                       |
-|--------------|---------|---------------------------------------------------|
-| `RegenDelta` | `float` | Accumulated regeneration time delta               |
-| `Health`     | `float` | Current health resource value                     |
-| `MaxHealth`  | `int`   | Maximum health (FinalValue of health attribute)   |
-| `Mana`       | `float` | Current mana resource value                       |
-| `MaxMana`    | `int`   | Maximum mana (FinalValue of mana attribute)       |
-| `Stamina`    | `float` | Current stamina resource value                    |
-| `MaxStamina` | `int`   | Maximum stamina (FinalValue of stamina attribute) |
+| Field             | Type    | Description                                                  |
+|-------------------|---------|--------------------------------------------------------------|
+| `RegenTickAccum`  | `uint`  | Integer tick counter toward the next regen pulse             |
+| `Health`          | `float` | Current health resource value                                |
+| `MaxHealth`       | `int`   | Maximum health (FinalValue of health attribute)              |
+| `Mana`            | `float` | Current mana resource value                                  |
+| `MaxMana`         | `int`   | Maximum mana (FinalValue of mana attribute)                  |
+| `Stamina`         | `float` | Current stamina resource value                               |
+| `MaxStamina`      | `int`   | Maximum stamina (FinalValue of stamina attribute)            |
 
 Delta serialization uses a 7-bit byte bitmask — only changed fields are transmitted, typically 3-4 bytes instead of 28.
 
@@ -223,8 +229,8 @@ All external systems use `AddModifier()` / `SetModifier()` which operate on `Ext
 | External modifier persistence | Apply a buff, then trigger formula recalculation | `ExternalModifier` value unchanged |
 | Damage/resistance calculation | Deal damage with a `DamageAttributeTemplate` | Health reduced by `RawDamage - Resistance.FinalValue` (clamped ≥ 0) |
 | Regeneration tick | Wait for `regenTickRate` seconds (default 5.0) in Play mode with regen attributes set | Resource `CurrentValue` increases by regen amount |
-| Network sync (owner) | Modify attribute server-side | Owner receives `CharacterAttributeUpdateBroadcast` |
-| Network sync (observer) | Modify another character's attribute | Observer receives `CharacterObserverAttributeUpdateBroadcast` |
+| Network sync (owner)    | Modify any attribute server-side          | Owner receives the change in the next `CharacterReconcileData` (resources via `ResourceState`, others via `Attributes[]`) |
+| Network sync (observer) | Modify another character's attribute      | Observer receives the change via FishNet Prediction V2 state forwarding (no broadcast)                                   |
 | Reconciliation | Simulate prediction mismatch | `ApplyResourceState()` corrects client resource values |
 | Immortality flag | Set `Immortal = true`, apply damage | No health change, no `OnDamaged` event |
 

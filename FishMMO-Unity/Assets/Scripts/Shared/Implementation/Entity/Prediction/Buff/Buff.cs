@@ -228,8 +228,13 @@ namespace FishMMO.Shared
 		/// matching <see cref="CooldownInstance"/>'s convention. Returns at least 1 tick
 		/// for any positive duration so the buff always survives at least one tick.
 		/// </summary>
+		/// <remarks>
+		/// Exposed as <c>internal</c> so the unit test assembly can validate this
+		/// formula against production rather than re-implementing it. Production
+		/// callers remain within <see cref="Buff"/>.
+		/// </remarks>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private static uint DurationToTicks(float seconds, float tickDelta)
+		internal static uint DurationToTicks(float seconds, float tickDelta)
 		{
 			if (tickDelta <= 0f || seconds <= 0f)
 			{

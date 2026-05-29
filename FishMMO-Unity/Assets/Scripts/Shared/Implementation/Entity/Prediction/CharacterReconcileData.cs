@@ -91,6 +91,22 @@ namespace FishMMO.Shared
 		public BuffReconcileEntry[] Buffs;
 
 		/// <summary>
+		/// Snapshot of all non-resource character attributes (base value + external modifier) at the reconcile tick.
+		/// Null when the controller is uninitialized or has no attributes.
+		/// <para>
+		/// Resource attributes (HP/MP/Stamina) are NOT included here — they ride
+		/// <see cref="ResourceState"/> because they also carry <c>CurrentValue</c> and
+		/// <c>RegenTickAccum</c> which non-resource attributes do not have.
+		/// </para>
+		/// <para>
+		/// Producers MUST emit entries sorted by <c>TemplateID</c> ascending so the
+		/// index-delta serializer in <see cref="CharacterReconcileDataDeltaSerializer"/>
+		/// can keep indices stable across ticks.
+		/// </para>
+		/// </summary>
+		public AttributeReconcileEntry[] Attributes;
+
+		/// <summary>
 		/// Full xoshiro128** internal state of the ability seed generator.
 		/// Required because the 128-bit RNG state cannot be reconstructed from
 		/// the 32-bit <see cref="Seed"/> output alone. Without this, a single

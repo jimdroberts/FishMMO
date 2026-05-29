@@ -1,8 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-#if UNITY_SERVER
-using FishNet.Broadcast;
-#endif
 using FishNet.Connection;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
@@ -17,7 +14,9 @@ namespace FishMMO.Shared
 	/// Controls all character attributes and resource attributes for an entity.
 	/// Handles initialization from template databases, network payload serialization,
 	/// parent/child/dependency relationship wiring, tick-based resource regeneration,
-	/// and client-side broadcast synchronization via FishNet.
+	/// and reconcile-driven synchronization of both base and resource attributes
+	/// via the unified <see cref="CharacterReconcileData"/>. There is no longer a
+	/// separate broadcast path for non-resource attributes.
 	/// </summary>
 	public class CharacterAttributeController : CharacterBehaviour, ICharacterAttributeController, IPredictableController
 	{
@@ -28,21 +27,28 @@ namespace FishMMO.Shared
 		/// </summary>
 		public int Order => 95;
 
-#if UNITY_SERVER
 		/// <summary>
-		/// Dirty non-resource attribute template ids pending a network flush.
-		/// Resource attributes (HP/MP/Stamina) are intentionally NOT tracked here — their
-		/// values are conveyed deterministically each tick via
-		/// <see cref="CharacterReconcileData.ResourceState"/> and reach all observers via
-		/// FishNet Prediction V2 state forwarding.
+		/// Cached non-resource attribute snapshot, rebuilt lazily by
+		/// <see cref="CreateAttributeSnapshot"/>. Held by reference and re-emitted
+		/// across consecutive ticks when no attribute mutated, so the delta
+		/// serializer's <c>ReferenceEquals</c> fast-path produces zero network bytes.
 		/// </summary>
-		private readonly HashSet<int> dirtyAttributeTemplateIDs = new HashSet<int>();
+		private AttributeReconcileEntry[] cachedAttributeSnapshot;
 
 		/// <summary>
-		/// Last base values sent to interested connections for non-resource attributes.
+		/// When true, <see cref="cachedAttributeSnapshot"/> is stale and must be rebuilt
+		/// on the next <see cref="CreateAttributeSnapshot"/> call.
 		/// </summary>
-		private readonly Dictionary<int, int> lastSentAttributeValues = new Dictionary<int, int>();
-#endif
+		private bool attributeSnapshotDirty = true;
+
+		/// <summary>
+		/// While true, attribute-update notifications (raised during reconcile restore)
+		/// MUST NOT mark <see cref="cachedAttributeSnapshot"/> dirty. Reconcile restores
+		/// the canonical state from the server snapshot — invalidating the snapshot here
+		/// would force a needless rebuild and break <c>ReferenceEquals</c> identity on
+		/// the next tick when nothing has actually changed.
+		/// </summary>
+		private bool suppressAttributeDirty;
 
 		/// <summary>
 		/// Reference to the ScriptableObject database containing all character attribute templates.
@@ -88,11 +94,6 @@ namespace FishMMO.Shared
 		[SerializeField]
 		[Tooltip("Time in seconds between resource regeneration ticks.")]
 		private float regenTickRate = 5.0f;
-
-		/// <summary>
-		/// Accumulator for tracking time between regeneration ticks. Increments by deltaTime and triggers a tick when it exceeds regenTickRate.
-		/// </summary>
-		private List<CharacterAttributeUpdateBroadcast> reusableAttributeUpdates = new List<CharacterAttributeUpdateBroadcast>();
 
 		/// <summary>
 		/// Propagation depth counter for batched attribute graph updates.
@@ -220,9 +221,8 @@ namespace FishMMO.Shared
 				Log.Error("CharacterAttributeController", "Character Attribute Database is missing!");
 			}
 
-#if UNITY_SERVER
-			MarkAllAttributesDirty();
-#endif
+			// Force the next reconcile snapshot to include every initial attribute value.
+			attributeSnapshotDirty = true;
 		}
 
 		/// <summary>
@@ -304,10 +304,9 @@ namespace FishMMO.Shared
 				characterResourceAttribute.SetCurrentValue(characterResourceAttribute.FinalValue);
 			}
 
-#if UNITY_SERVER
-			dirtyAttributeTemplateIDs.Clear();
-			lastSentAttributeValues.Clear();
-#endif
+			// Force the next reconcile snapshot to rebuild from scratch.
+			cachedAttributeSnapshot = null;
+			attributeSnapshotDirty = true;
 		}
 
 		/// <summary>
@@ -442,11 +441,28 @@ namespace FishMMO.Shared
 			if (!Attributes.ContainsKey(instance.Template.ID))
 			{
 				Attributes.Add(instance.Template.ID, instance);
-#if UNITY_SERVER
+				// Both client and server need a fresh reconcile snapshot when the
+				// attribute set changes (length-changed path produces a full-array
+				// write that replaces any cached index-delta state).
 				instance.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
 				instance.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
-#endif
+				attributeSnapshotDirty = true;
 			}
+		}
+
+		/// <summary>
+		/// Invalidates the cached reconcile snapshot when any tracked attribute mutates,
+		/// unless we are currently inside an authoritative reconcile restore (in which
+		/// case the snapshot already matches the server and should not be marked dirty).
+		/// Resource attributes are excluded — they ride <see cref="CharacterReconcileData.ResourceState"/>.
+		/// </summary>
+		private void CharacterAttribute_OnAttributeUpdated(CharacterAttribute attribute)
+		{
+			if (suppressAttributeDirty || attribute == null || attribute is CharacterResourceAttribute)
+			{
+				return;
+			}
+			attributeSnapshotDirty = true;
 		}
 
 		/// <summary>
@@ -532,25 +548,9 @@ namespace FishMMO.Shared
 			}
 		}
 
-#if UNITY_SERVER
 		/// <summary>
-		/// Unsubscribes from network tick updates.
-		/// </summary>
-		public override void OnStopNetwork()
-		{
-			if (base.TimeManager != null)
-			{
-				// Subscribe/unsubscribe on OnPostTick so flushing observes attribute
-				// mutations produced by CharacterPredictionController's OnTick replicate pass.
-				base.TimeManager.OnPostTick -= TimeManager_OnTick;
-			}
-
-			base.OnStopNetwork();
-		}
-#endif
-
-		/// <summary>
-		/// Initializes the tick-based regen interval and (server only) subscribes to tick updates.
+		/// Initializes the tick-based regen interval. Attribute state replication is handled
+		/// entirely through the unified reconcile pipeline — there is no per-tick flush subscription.
 		/// </summary>
 		public override void OnStartNetwork()
 		{
@@ -563,210 +563,8 @@ namespace FishMMO.Shared
 			{
 				double td = base.TimeManager.TickDelta;
 				regenTickInterval = td > 0.0 ? (uint)Mathf.Max(1, Mathf.CeilToInt((float)(regenTickRate / td))) : 1u;
-
-#if UNITY_SERVER
-				// Use OnPostTick so FlushDirtyAttributeUpdates() always runs AFTER
-				// CharacterPredictionController's OnTick replicate pass, regardless of
-				// NetworkBehaviour subscription order. Without this, dirty attribute
-				// flushes could miss mutations produced by Buff.Apply or Regenerate on the
-				// same tick.
-				base.TimeManager.OnPostTick += TimeManager_OnTick;
-#endif
 			}
 		}
-
-#if UNITY_SERVER
-		/// <summary>
-		/// Called on network tick to flush dirty attribute updates in batches.
-		/// </summary>
-		private void TimeManager_OnTick()
-		{
-			FlushDirtyAttributeUpdates();
-		}
-
-		/// <summary>
-		/// Marks all known non-resource attributes as dirty so they are included in the next flush.
-		/// Resource attributes are intentionally excluded: their values are conveyed each tick
-		/// via <see cref="CharacterReconcileData.ResourceState"/> under state forwarding.
-		/// </summary>
-		private void MarkAllAttributesDirty()
-		{
-			foreach (CharacterAttribute attribute in Attributes.Values)
-			{
-				dirtyAttributeTemplateIDs.Add(attribute.Template.ID);
-			}
-		}
-
-		/// <summary>
-		/// Handles local attribute update notifications and marks corresponding ids as dirty.
-		/// Resource attributes are not tracked: their state flows through reconcile.
-		/// </summary>
-		/// <param name="attribute">The updated attribute.</param>
-		private void CharacterAttribute_OnAttributeUpdated(CharacterAttribute attribute)
-		{
-			if (attribute == null || attribute.Template == null || attribute is CharacterResourceAttribute)
-			{
-				return;
-			}
-
-			dirtyAttributeTemplateIDs.Add(attribute.Template.ID);
-		}
-
-		/// <summary>
-		/// Flushes dirty non-resource attributes to owner and observers in batches.
-		/// Resource attributes (HP/MP/Stamina) are intentionally NOT flushed here —
-		/// they ride <see cref="CharacterReconcileData.ResourceState"/> each tick and reach
-		/// all observers automatically via FishNet Prediction V2 state forwarding.
-		/// </summary>
-		private void FlushDirtyAttributeUpdates()
-		{
-			if (!base.IsServerStarted || !base.IsSpawned)
-			{
-				return;
-			}
-
-			FlushDirtyAttributes();
-		}
-
-		/// <summary>
-		/// Flushes dirty non-resource attributes and broadcasts either a single update or a packed batch.
-		/// </summary>
-		private void FlushDirtyAttributes()
-		{
-			if (dirtyAttributeTemplateIDs.Count == 0)
-			{
-				return;
-			}
-
-			reusableAttributeUpdates.Clear();
-			foreach (int templateID in dirtyAttributeTemplateIDs)
-			{
-				if (!attributes.TryGetValue(templateID, out CharacterAttribute attribute) || attribute?.Template == null)
-				{
-					continue;
-				}
-
-				int current = attribute.Value;
-				if (lastSentAttributeValues.TryGetValue(templateID, out int last) && last == current)
-				{
-					continue;
-				}
-
-				reusableAttributeUpdates.Add(new CharacterAttributeUpdateBroadcast()
-				{
-					TemplateID = templateID,
-					Value = current,
-				});
-				lastSentAttributeValues[templateID] = current;
-			}
-
-			dirtyAttributeTemplateIDs.Clear();
-			SendAttributeUpdates(reusableAttributeUpdates);
-		}
-
-		/// <summary>
-		/// Sends non-resource attribute updates to owner and observers using separate payload types.
-		/// </summary>
-		/// <param name="updates">Collected updates to send.</param>
-		private void SendAttributeUpdates(List<CharacterAttributeUpdateBroadcast> updates)
-		{
-			if (updates == null || updates.Count == 0)
-			{
-				return;
-			}
-
-			SendOwnerAttributeUpdates(updates);
-			SendObserverAttributeUpdates(updates);
-		}
-
-		/// <summary>
-		/// Sends non-resource attribute updates to the owning connection.
-		/// </summary>
-		/// <param name="updates">Collected updates to send.</param>
-		private void SendOwnerAttributeUpdates(List<CharacterAttributeUpdateBroadcast> updates)
-		{
-			if (updates.Count == 1)
-			{
-				BroadcastToOwnerOnly(Character, updates[0], Channel.Reliable);
-			}
-			else
-			{
-				CharacterAttributeUpdateMultipleBroadcast batchBroadcast = new CharacterAttributeUpdateMultipleBroadcast
-				{
-					Attributes = updates,
-				};
-				BroadcastToOwnerOnly(Character, batchBroadcast, Channel.Reliable);
-			}
-		}
-
-		/// <summary>
-		/// Sends non-resource attribute updates to observer connections with character routing context.
-		/// </summary>
-		/// <param name="updates">Collected updates to send.</param>
-		private void SendObserverAttributeUpdates(List<CharacterAttributeUpdateBroadcast> updates)
-		{
-			if (Character == null)
-			{
-				return;
-			}
-
-			CharacterObserverAttributeUpdateBroadcast observerBroadcast = new CharacterObserverAttributeUpdateBroadcast
-			{
-				CharacterID = Character.ID,
-				Attributes = updates,
-			};
-			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
-		}
-
-		/// <summary>
-		/// Broadcasts the payload to only the owner of the character.
-		/// </summary>
-		/// <typeparam name="T">Broadcast payload type.</typeparam>
-		/// <param name="character">Character whose owner should receive the payload.</param>
-		/// <param name="broadcast">Broadcast payload.</param>
-		/// <param name="channel">Transport channel.</param>
-		private static void BroadcastToOwnerOnly<T>(ICharacter character, T broadcast, Channel channel)
-			where T : struct, IBroadcast
-		{
-			if (character == null)
-			{
-				return;
-			}
-
-			NetworkConnection owner = character.Owner;
-			if (owner != null && owner.IsActive)
-			{
-				owner.Broadcast(broadcast, true, channel);
-			}
-		}
-
-		/// <summary>
-		/// Broadcasts the payload to all current observers of the character, excluding the owner.
-		/// </summary>
-		/// <typeparam name="T">Broadcast payload type.</typeparam>
-		/// <param name="character">Character whose observer connections should receive the payload.</param>
-		/// <param name="broadcast">Broadcast payload.</param>
-		/// <param name="channel">Transport channel.</param>
-		private static void BroadcastToObserversOnly<T>(ICharacter character, T broadcast, Channel channel)
-			where T : struct, IBroadcast
-		{
-			if (character == null || character.Observers == null)
-			{
-				return;
-			}
-
-			NetworkConnection owner = character.Owner;
-			foreach (NetworkConnection observer in character.Observers)
-			{
-				if (observer == null || observer == owner || !observer.IsActive)
-				{
-					continue;
-				}
-
-				observer.Broadcast(broadcast, true, channel);
-			}
-		}
-#endif
 
 		/// <summary>
 		/// Initializes parent/child/dependency relationships for all resource attributes.
@@ -1029,121 +827,112 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Writes resource reconcile state for this tick.
+		/// Writes the full reconcile snapshot for this tick: resource state plus
+		/// the sorted-by-template-ID non-resource attribute snapshot.
 		/// </summary>
 		/// <param name="reconcileData">Mutable unified reconcile payload.</param>
 		public void OnCreateReconcile(ref CharacterReconcileData reconcileData)
 		{
 			reconcileData.ResourceState = GetResourceState();
+			reconcileData.Attributes = CreateAttributeSnapshot();
 		}
 
 		/// <summary>
-		/// Restores resource state from authoritative reconcile data.
+		/// Restores resource state and the full non-resource attribute snapshot
+		/// from authoritative reconcile data. Notifications are batched through
+		/// the propagation system; dirty-tracking is suppressed during the restore
+		/// so the rebuilt snapshot retains <c>ReferenceEquals</c> identity.
 		/// </summary>
 		/// <param name="rd">Unified reconcile payload.</param>
 		/// <param name="channel">Transport channel.</param>
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
 			ApplyResourceState(rd.ResourceState);
+			ApplyAttributeSnapshot(rd.Attributes);
 		}
 
-#if !UNITY_SERVER
 		/// <summary>
-		/// Called when the character starts on the client. Registers broadcast handlers for attribute synchronization.
-		/// Disables the controller for non-owners.
+		/// Builds (or returns cached) a sorted-by-TemplateID array of non-resource
+		/// attribute entries for the reconcile snapshot.
+		/// <para>
+		/// The cache is invalidated by <see cref="CharacterAttribute_OnAttributeUpdated"/>
+		/// whenever any tracked non-resource attribute mutates. When unchanged, the
+		/// same array reference is returned across consecutive ticks, allowing
+		/// <see cref="AttributeReconcileEntry.WriteArrayDelta"/> to skip the array
+		/// entirely via <c>ReferenceEquals</c>.
+		/// </para>
 		/// </summary>
-		public override void OnStartCharacter()
+		private AttributeReconcileEntry[] CreateAttributeSnapshot()
 		{
-			base.OnStartCharacter();
-
-			if (!base.IsOwner)
+			if (!attributeSnapshotDirty && cachedAttributeSnapshot != null)
 			{
-				enabled = false;
-				return;
+				return cachedAttributeSnapshot;
 			}
 
-			ClientManager.RegisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
-			ClientManager.RegisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
-
-			ClientManager.RegisterBroadcast<CharacterObserverAttributeUpdateBroadcast>(OnClientCharacterObserverAttributeUpdateBroadcastReceived);
-			// Resource attribute (HP/MP/Stamina) updates are conveyed via
-			// CharacterReconcileData.ResourceState under FishNet Prediction V2 state forwarding;
-			// no resource-broadcast registrations are required.
-		}
-
-		/// <summary>
-		/// Called when the character stops on the client. Unregisters broadcast handlers for attribute synchronization.
-		/// </summary>
-		public override void OnStopCharacter()
-		{
-			base.OnStopCharacter();
-
-			if (base.IsOwner)
+			int count = attributes.Count;
+			if (count == 0)
 			{
-				ClientManager.UnregisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
-				ClientManager.UnregisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
-
-				ClientManager.UnregisterBroadcast<CharacterObserverAttributeUpdateBroadcast>(OnClientCharacterObserverAttributeUpdateBroadcastReceived);
-			}
-		}
-
-		/// <summary>
-		/// Resolves a target character attribute controller from the client character cache.
-		/// </summary>
-		/// <param name="characterID">Target character ID.</param>
-		/// <param name="attributeController">Resolved attribute controller if available.</param>
-		/// <returns>True if a target controller was resolved.</returns>
-		private static bool TryGetCachedCharacterAttributeController(long characterID, out ICharacterAttributeController attributeController)
-		{
-			attributeController = null;
-			if (characterID <= 0)
-			{
-				return false;
+				cachedAttributeSnapshot = null;
+				attributeSnapshotDirty = false;
+				return null;
 			}
 
-			if (!BaseCharacter.ClientCharacters.TryGetValue(characterID, out ICharacter character) ||
-				character == null)
+			// Collect into a flat array, then sort by TemplateID so index-delta
+			// comparisons in subsequent ticks remain meaningful.
+			AttributeReconcileEntry[] snapshot = new AttributeReconcileEntry[count];
+			int i = 0;
+			foreach (CharacterAttribute attribute in attributes.Values)
 			{
-				return false;
+				snapshot[i++] = new AttributeReconcileEntry
+				{
+					TemplateID = attribute.Template.ID,
+					Value = attribute.Value,
+					ExternalModifier = attribute.ExternalModifier,
+				};
 			}
+			System.Array.Sort(snapshot, (a, b) => a.TemplateID.CompareTo(b.TemplateID));
 
-			return character.TryGet(out attributeController);
+			cachedAttributeSnapshot = snapshot;
+			attributeSnapshotDirty = false;
+			return snapshot;
 		}
 
 		/// <summary>
-		/// Server sent an attribute update broadcast.
+		/// Applies an authoritative non-resource attribute snapshot from the server.
+		/// Iterates the entries and writes <c>Value</c> + <c>ExternalModifier</c> into the
+		/// matching <see cref="CharacterAttribute"/>. <c>FormulaModifier</c> is recomputed
+		/// locally via the dependency graph (intentionally not replicated).
 		/// </summary>
-		private void OnClientCharacterAttributeUpdateBroadcastReceived(CharacterAttributeUpdateBroadcast msg, Channel channel)
+		/// <param name="snapshot">The reconciled snapshot. May be null when the controller has no attributes.</param>
+		private void ApplyAttributeSnapshot(AttributeReconcileEntry[] snapshot)
 		{
-			SetAttribute(msg.TemplateID, msg.Value);
-		}
-
-		/// <summary>
-		/// Server sent a multiple attribute update broadcast.
-		/// </summary>
-		private void OnClientCharacterAttributeUpdateMultipleBroadcastReceived(CharacterAttributeUpdateMultipleBroadcast msg, Channel channel)
-		{
-			foreach (CharacterAttributeUpdateBroadcast subMsg in msg.Attributes)
-			{
-				SetAttribute(subMsg.TemplateID, subMsg.Value);
-			}
-		}
-
-		/// <summary>
-		/// Server sent observer-targeted non-resource attribute updates for a specific character.
-		/// </summary>
-		private void OnClientCharacterObserverAttributeUpdateBroadcastReceived(CharacterObserverAttributeUpdateBroadcast msg, Channel channel)
-		{
-			if (!TryGetCachedCharacterAttributeController(msg.CharacterID, out ICharacterAttributeController attributeController))
+			if (snapshot == null || snapshot.Length == 0 || attributes.Count == 0)
 			{
 				return;
 			}
 
-			foreach (CharacterAttributeUpdateBroadcast subMsg in msg.Attributes)
+			// Suppress dirty-tracking: the values we are writing match the
+			// server, so the cached snapshot already represents canonical state.
+			// Batch notifications so derived attributes settle before listeners fire.
+			suppressAttributeDirty = true;
+			BeginPropagation();
+			try
 			{
-				attributeController.SetAttribute(subMsg.TemplateID, subMsg.Value);
+				for (int i = 0; i < snapshot.Length; i++)
+				{
+					AttributeReconcileEntry entry = snapshot[i];
+					if (attributes.TryGetValue(entry.TemplateID, out CharacterAttribute attribute))
+					{
+						attribute.SetValue(entry.Value);
+						attribute.SetModifier(entry.ExternalModifier);
+					}
+				}
+			}
+			finally
+			{
+				EndPropagation();
+				suppressAttributeDirty = false;
 			}
 		}
-#endif
 	}
 }

@@ -4,7 +4,8 @@
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "FishMMO.Shared"
+        "FishMMO.Shared",
+        "FishNet.Runtime"
     ],
     "includePlatforms": [
         "Editor"
