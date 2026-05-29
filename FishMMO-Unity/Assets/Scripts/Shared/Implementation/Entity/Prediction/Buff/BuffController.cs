@@ -218,6 +218,7 @@ namespace FishMMO.Shared
 						reader.ReadUInt32(); // nextTickTick
 						reader.ReadInt32();  // stacks
 						reader.ReadInt32();  // tickCount
+						reader.ReadInt32();  // cumulativeTickMultiplier
 					}
 				}
 				return;
@@ -229,8 +230,10 @@ namespace FishMMO.Shared
 				uint nextTickTick = reader.ReadUInt32();
 				int stacks = reader.ReadInt32();
 				int tickCount = reader.ReadInt32();
+				int cumulativeTickMultiplier = reader.ReadInt32();
 
 				Buff buff = new Buff(templateID, expiryTick, nextTickTick, tickDelta, stacks, tickCount);
+				buff.CumulativeTickMultiplier = cumulativeTickMultiplier;
 				Apply(buff, suppressFX: false);
 			}
 		}
@@ -256,6 +259,7 @@ namespace FishMMO.Shared
 				writer.WriteUInt32(buff.NextTickTick);
 				writer.WriteInt32(buff.Stacks);
 				writer.WriteInt32(buff.TickCount);
+				writer.WriteInt32(buff.CumulativeTickMultiplier);
 			}
 		}
 
@@ -300,15 +304,17 @@ namespace FishMMO.Shared
 					IBuffController.OnBuffTick?.Invoke(buff, currentTick);
 				}
 
-				if (!buff.HasExpired(currentTick))
+				// Fire the periodic effect BEFORE the expiry check so a buff that both
+				// ticks and expires on the same absolute tick still delivers its final
+				// effect. Without this, the last tick of any buff whose Duration is an
+				// exact multiple of TickRate is silently skipped.
+				if (buff.TryTick(Character, currentTick, tickDelta))
 				{
-					if (buff.TryTick(Character, currentTick, tickDelta))
-					{
-						// NextTickTick and TickCount changed — reconcile snapshot is stale.
-						snapshotDirty = true;
-					}
+					// NextTickTick, TickCount, and CumulativeTickMultiplier changed.
+					snapshotDirty = true;
 				}
-				else
+
+				if (buff.HasExpired(currentTick))
 				{
 					if (buff.Stacks > 0)
 					{
@@ -467,13 +473,22 @@ namespace FishMMO.Shared
 			if (buffs.TryGetValue(buffID, out Buff buffInstance))
 			{
 				snapshotDirty = true;
-				// Remove all remaining stack modifiers before removing the base effect
-				while (buffInstance.Stacks > 0)
+				// try/catch ensures buffs.Remove always executes even if OnRemoveStack or
+				// OnRemove throws. Without this guard a single throwing template permanently
+				// strands the buff in the dictionary, re-ticking it every frame and blocking
+				// future applications of the same template.
+				try
 				{
-					buffInstance.RemoveStack(Character);
+					while (buffInstance.Stacks > 0)
+					{
+						buffInstance.RemoveStack(Character);
+					}
+					buffInstance.Remove(Character);
 				}
-
-				buffInstance.Remove(Character);
+				catch (System.Exception ex)
+				{
+					Log.Warning("BuffController", $"Remove: OnRemove/OnRemoveStack threw for template {buffID}: {ex}");
+				}
 				buffs.Remove(buffID);
 
 				// Gate UI/ECA dispatch when invoked from a replayed tick.
@@ -553,15 +568,21 @@ namespace FishMMO.Shared
 				int key = removeAllBuffer[i];
 				if (buffs.TryGetValue(key, out Buff buff))
 				{
-					while (buff.Stacks > 0)
+					try
 					{
-						buff.RemoveStack(Character);
+						while (buff.Stacks > 0)
+						{
+							buff.RemoveStack(Character);
+						}
+						buff.Remove(Character);
 					}
-
-					buff.Remove(Character);
+					catch (System.Exception ex)
+					{
+						Log.Warning("BuffController", $"RemoveAll: OnRemove/OnRemoveStack threw for template {key}: {ex}");
+					}
 					buffs.Remove(key);
 
-					if (!ignoreInvokeRemove)
+					if (!ignoreInvokeRemove && !isReplayingTick)
 					{
 						if (buff.Template.IsDebuff)
 						{
@@ -571,6 +592,7 @@ namespace FishMMO.Shared
 						{
 							IBuffController.OnRemoveBuff?.Invoke(buff);
 						}
+						Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buff));
 					}
 				}
 			}
@@ -615,6 +637,7 @@ namespace FishMMO.Shared
 					NextTickTick = kvp.Value.NextTickTick,
 					Stacks = kvp.Value.Stacks,
 					TickCount = kvp.Value.TickCount,
+					CumulativeTickMultiplier = kvp.Value.CumulativeTickMultiplier,
 				};
 			}
 			snapshotDirty = false;
@@ -668,6 +691,7 @@ namespace FishMMO.Shared
 						existing.ExpiryTick = entry.ExpiryTick;
 						existing.NextTickTick = entry.NextTickTick;
 						existing.TickCount = entry.TickCount;
+						existing.CumulativeTickMultiplier = entry.CumulativeTickMultiplier;
 					}
 					else
 					{
@@ -678,6 +702,7 @@ namespace FishMMO.Shared
 							tickDelta,
 							0,
 							entry.TickCount);
+						buff.CumulativeTickMultiplier = entry.CumulativeTickMultiplier;
 
 						if (buff.Template == null)
 						{
@@ -705,11 +730,18 @@ namespace FishMMO.Shared
 			{
 				if (buffs.TryGetValue(key, out Buff toRemove))
 				{
-					while (toRemove.Stacks > 0)
+					try
 					{
-						toRemove.RemoveStack(Character);
+						while (toRemove.Stacks > 0)
+						{
+							toRemove.RemoveStack(Character);
+						}
+						toRemove.Remove(Character);
 					}
-					toRemove.Remove(Character);
+					catch (System.Exception ex)
+					{
+						Log.Warning("BuffController", $"RestoreFromReconcile: OnRemove threw for template {key}: {ex}");
+					}
 					buffs.Remove(key);
 					reconcileRemovedEvents.Add(toRemove);
 				}

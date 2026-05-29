@@ -165,11 +165,10 @@ namespace FishMMO.Shared
 		/// Backed by a list to avoid per-call delegate array allocation.
 		/// </summary>
 		/// <remarks>
-		/// Handlers are iterated with a forward index loop. If a handler modifies the
-		/// list during its <c>Invoke()</c> (e.g., unsubscribes itself), the iteration
-		/// will skip or double-invoke entries. Current handlers are simple boolean
-		/// checks with no side-effects, so this is safe. If side-effecting handlers
-		/// are added in the future, switch to reverse iteration or snapshot the list.
+		/// Handlers are iterated in REVERSE so that a handler that unsubscribes itself
+		/// during its <c>Invoke()</c> does not cause the next entry to be skipped (forward
+		/// iteration would shift the indices). Adding a new handler during iteration is
+		/// still unsupported and will produce an extra invoke on the inserted handler.
 		/// </remarks>
 		public event Func<bool> OnCanManipulate
 		{

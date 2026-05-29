@@ -113,6 +113,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Applies resistance modifiers to the damage amount for the target character.
 		/// Subtracts the target's resistance value from the incoming damage and clamps the result.
+		/// <para>
+		/// If <paramref name="target"/> has no <see cref="ICharacterAttributeController"/> the
+		/// resistance lookup is skipped and the original <paramref name="amount"/> is returned
+		/// unchanged — absence of an attribute controller means no registered resistance stats,
+		/// not immunity.
+		/// </para>
 		/// </summary>
 		/// <param name="target">The character receiving damage.</param>
 		/// <param name="amount">The base damage amount.</param>
@@ -123,19 +129,37 @@ namespace FishMMO.Shared
 			const int MIN_DAMAGE = 0;
 			const int MAX_DAMAGE = 999999;
 
-			if (target == null ||
-				!target.TryGet(out ICharacterAttributeController attributeController) ||
-				damageAttribute == null)
+			if (target == null || damageAttribute == null)
+			{
 				return 0;
+			}
 
-			// If the target has a resistance attribute for this damage type, subtract its value from the damage.
-			if (attributeController.TryGetAttribute(damageAttribute.Resistance.ID, out CharacterAttribute resistance))
+			// No attribute controller means no resistance stats — pass through at full value.
+			// Returning 0 here would make the character silently invulnerable, which is wrong.
+			if (!target.TryGet(out ICharacterAttributeController attributeController))
+			{
+				return amount;
+			}
+
+			// Resistance may be null for damage types that intentionally bypass all resistance
+			// (environmental hazards, true damage, etc.). Guard before accessing .ID to prevent NPE.
+			if (damageAttribute.Resistance != null &&
+				attributeController.TryGetAttribute(damageAttribute.Resistance.ID, out CharacterAttribute resistance))
 			{
 				amount = (amount - resistance.FinalValue).Clamp(MIN_DAMAGE, MAX_DAMAGE);
 			}
 			return amount;
 		}
 
+		/// <summary>
+		/// Applies damage to this character from an attacker. Handles resistance calculation,
+		/// kill detection, and ECA trigger dispatch. Does nothing if the character is immortal
+		/// or already dead. Resistance-reduced damage below 1 is silently discarded.
+		/// </summary>
+		/// <param name="attacker">The character dealing damage, or null for environmental damage.</param>
+		/// <param name="amount">Base damage before resistance is applied.</param>
+		/// <param name="damageAttribute">The damage type; determines which resistance stat is checked.</param>
+		/// <param name="ignoreAchievements">If true, suppresses ECA trigger dispatch for this hit.</param>
 		public void Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute, bool ignoreAchievements = false)
 		{
 			if (Immortal)
@@ -184,6 +208,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Kills this character, distributing kill rewards, invoking ECA triggers, removing
+		/// all buffs, and killing any owned pet. Does nothing if the character is immortal.
+		/// </summary>
+		/// <param name="killer">The character responsible for the kill, or null for non-player kills.</param>
 		public void Kill(ICharacter killer)
 		{
 			if (Immortal)
@@ -229,29 +258,52 @@ namespace FishMMO.Shared
 			ICharacterDamageController.OnKilled?.Invoke(killer, Character);
 		}
 
+		/// <summary>
+		/// Heals this character by the specified amount. Events and ECA triggers are only
+		/// fired when healing actually changes the resource value; healing a dead character,
+		/// healing for zero, or attempting to heal a full-health character are all silent no-ops.
+		/// </summary>
+		/// <param name="healer">The character providing the healing, or null.</param>
+		/// <param name="amount">The amount to heal.</param>
+		/// <param name="ignoreAchievements">If true, suppresses ECA trigger dispatch.</param>
 		public void Heal(ICharacter healer, int amount, bool ignoreAchievements = false)
 		{
-			if (ResourceInstance != null && ResourceInstance.CurrentValue > 0.0f)
+			if (ResourceInstance == null || ResourceInstance.CurrentValue <= 0.0f)
 			{
-				ResourceInstance.Gain(amount);
+				return;
+			}
 
-				ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
+			float valueBefore = ResourceInstance.CurrentValue;
+			ResourceInstance.Gain(amount);
 
-				if (!ignoreAchievements)
+			// Suppress events if nothing actually changed (amount == 0 or resource was already full).
+			// Firing OnHealed/achievement triggers for 0-effective healing wastes ECA evaluation
+			// and can cause false achievement awards.
+			if (ResourceInstance.CurrentValue <= valueBefore)
+			{
+				return;
+			}
+
+			ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
+
+			if (!ignoreAchievements)
+			{
+				// Invoke healer's OnHeal triggers (e.g. achievements for healing)
+				if (healer != null &&
+					healer.TryGet(out ICharacterDamageController healerDamage))
 				{
-					// Invoke healer's OnHeal triggers (e.g. achievements for healing)
-					if (healer != null &&
-						healer.TryGet(out ICharacterDamageController healerDamage))
-					{
-						healer.Invoke(healerDamage.OnHealTriggers, new HealEventData(healer, Character, amount));
-					}
-
-					// Invoke healed character's OnHealed triggers (e.g. achievements for being healed)
-					Character.Invoke(OnHealedTriggers, new HealEventData(Character, healer, amount));
+					healer.Invoke(healerDamage.OnHealTriggers, new HealEventData(healer, Character, amount));
 				}
+
+				// Invoke healed character's OnHealed triggers (e.g. achievements for being healed)
+				Character.Invoke(OnHealedTriggers, new HealEventData(Character, healer, amount));
 			}
 		}
 
+		/// <summary>
+		/// Fully restores this character's health resource to its maximum (final) value.
+		/// Does nothing if the character is dead.
+		/// </summary>
 		public void CompleteHeal()
 		{
 			if (ResourceInstance != null && ResourceInstance.CurrentValue > 0.0f)
@@ -259,6 +311,18 @@ namespace FishMMO.Shared
 				float toHeal = ResourceInstance.FinalValue - ResourceInstance.CurrentValue;
 				ResourceInstance.Gain(toHeal);
 			}
+		}
+
+		/// <summary>
+		/// Clears the cached health resource attribute reference so it is re-resolved on the
+		/// next access. Prevents a stale object reference if the
+		/// <see cref="CharacterAttributeController"/> is re-initialized (character pooling,
+		/// hot-reload, or any scenario where attribute instances are recreated).
+		/// </summary>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+			resourceInstance = null;
 		}
 	}
 }

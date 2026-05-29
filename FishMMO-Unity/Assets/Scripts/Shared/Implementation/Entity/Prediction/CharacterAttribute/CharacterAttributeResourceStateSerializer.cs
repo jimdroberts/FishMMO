@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static void WriteCharacterAttributeResourceState(this Writer writer, CharacterAttributeResourceState value)
 		{
-			writer.WriteUInt32(value.RegenTickAccum);
+			writer.WriteUInt32(value.NextRegenTick);
 			writer.WriteSingle(value.Health);
 			writer.WriteInt32(value.MaxHealth);
 			writer.WriteSingle(value.Mana);
@@ -52,7 +52,7 @@ namespace FishMMO.Shared
 		{
 			return new CharacterAttributeResourceState()
 			{
-				RegenTickAccum = reader.ReadUInt32(),
+				NextRegenTick = reader.ReadUInt32(),
 				Health = reader.ReadSingle(),
 				MaxHealth = reader.ReadInt32(),
 				Mana = reader.ReadSingle(),
@@ -66,18 +66,18 @@ namespace FishMMO.Shared
 
 		#region Delta Serializer (prediction)
 
-		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.RegenTickAccum"/>.</summary>
-		private const byte REGEN_ACCUM_BIT = 1 << 0;
+		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.NextRegenTick"/>.</summary>
+		private const byte NEXT_REGEN_TICK_BIT = 1 << 0;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Health"/>.</summary>
-		private const byte HEALTH_BIT      = 1 << 1;
+		private const byte HEALTH_BIT = 1 << 1;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.MaxHealth"/>.</summary>
-		private const byte MAX_HEALTH_BIT  = 1 << 2;
+		private const byte MAX_HEALTH_BIT = 1 << 2;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Mana"/>.</summary>
-		private const byte MANA_BIT        = 1 << 3;
+		private const byte MANA_BIT = 1 << 3;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.MaxMana"/>.</summary>
-		private const byte MAX_MANA_BIT    = 1 << 4;
+		private const byte MAX_MANA_BIT = 1 << 4;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Stamina"/>.</summary>
-		private const byte STAMINA_BIT     = 1 << 5;
+		private const byte STAMINA_BIT = 1 << 5;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.MaxStamina"/>.</summary>
 		private const byte MAX_STAMINA_BIT = 1 << 6;
 
@@ -100,7 +100,7 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// Float fields (Health, Mana, Stamina) use raw <c>WriteSingle</c>
 		/// with manual equality checks because FishNet does not expose a public
-		/// <c>WriteDeltaSingle</c> for scalar floats. Int/uint fields (RegenTickAccum,
+		/// <c>WriteDeltaSingle</c> for scalar floats. Int/uint fields (NextRegenTick,
 		/// MaxHealth, MaxMana, MaxStamina) use <c>WriteDeltaInt32</c> which benefits
 		/// from varint delta encoding.
 		///
@@ -127,8 +127,8 @@ namespace FishMMO.Shared
 
 			bool forceWrite = option != DeltaSerializerOption.Unset;
 
-			if (writer.WriteDeltaInt32((int)prev.RegenTickAccum, (int)next.RegenTickAccum, option))
-				flags |= REGEN_ACCUM_BIT;
+			if (writer.WriteDeltaInt32((int)prev.NextRegenTick, (int)next.NextRegenTick, option))
+				flags |= NEXT_REGEN_TICK_BIT;
 
 			if (forceWrite || prev.Health != next.Health)
 			{
@@ -185,8 +185,8 @@ namespace FishMMO.Shared
 			byte flags = reader.ReadUInt8Unpacked();
 			CharacterAttributeResourceState result = prev;
 
-			if ((flags & REGEN_ACCUM_BIT) != 0)
-				result.RegenTickAccum = (uint)reader.ReadDeltaInt32((int)prev.RegenTickAccum);
+			if ((flags & NEXT_REGEN_TICK_BIT) != 0)
+				result.NextRegenTick = (uint)reader.ReadDeltaInt32((int)prev.NextRegenTick);
 
 			if ((flags & HEALTH_BIT) != 0)
 				result.Health = reader.ReadSingle();

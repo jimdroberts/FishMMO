@@ -10,13 +10,13 @@ namespace FishMMO.Shared
 	public struct CharacterAttributeResourceState
 	{
 		/// <summary>
-		/// Tick counter for resource regeneration. Incremented each prediction tick;
-		/// when it reaches <see cref="CharacterAttributeController.regenTickInterval"/>,
-		/// a regen pulse fires and the counter resets. Integer ticks eliminate the float
-		/// drift that caused client/server regen to fire on different ticks.
+		/// Absolute simulation tick at which the next resource-regeneration pulse should fire.
+		/// Reconciled so both client and server advance regeneration from the same tick,
+		/// eliminating the modulo-scheduling race that occurs when TickDelta changes at runtime
+		/// (a new modulo interval can produce an immediate spurious pulse or a long gap).
+		/// Zero means regeneration has not been scheduled yet (controller not yet started).
 		/// </summary>
-		public uint RegenTickAccum;
-
+		public uint NextRegenTick;
 		/// <summary>
 		/// The current health value of the character.
 		/// </summary>

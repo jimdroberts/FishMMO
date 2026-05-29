@@ -182,7 +182,8 @@ namespace FishMMO.Shared
 				{
 					int index = reader.ReadUInt16();
 					AttributeReconcileEntry entry = ReadFrom(reader);
-					if (index >= 0 && index < prevLength)
+					// index is read from a ushort (range 0–65535), so the >= 0 check is always true.
+					if (index < prevLength)
 					{
 						entries[index] = entry;
 					}

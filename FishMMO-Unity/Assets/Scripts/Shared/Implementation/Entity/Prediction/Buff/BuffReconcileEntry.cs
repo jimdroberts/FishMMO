@@ -32,6 +32,14 @@ namespace FishMMO.Shared
 		public int TickCount;
 
 		/// <summary>
+		/// Running sum of <c>(1 + Stacks)</c> for each tick that has fired on this buff.
+		/// See <see cref="Buff.CumulativeTickMultiplier"/> for the rationale.
+		/// Carried in the reconcile entry so rollback replay and post-reconcile
+		/// buff removal both reverse exactly the cumulative modifier applied.
+		/// </summary>
+		public int CumulativeTickMultiplier;
+
+		/// <summary>
 		/// Compares all fields for equality. Used by the delta serializer
 		/// to determine which entries changed between ticks.
 		/// </summary>
@@ -41,7 +49,8 @@ namespace FishMMO.Shared
 				   ExpiryTick == other.ExpiryTick &&
 				   NextTickTick == other.NextTickTick &&
 				   Stacks == other.Stacks &&
-				   TickCount == other.TickCount;
+				   TickCount == other.TickCount &&
+				   CumulativeTickMultiplier == other.CumulativeTickMultiplier;
 		}
 
 		/// <inheritdoc/>
@@ -60,6 +69,7 @@ namespace FishMMO.Shared
 				hash = (hash * 397) ^ NextTickTick.GetHashCode();
 				hash = (hash * 397) ^ Stacks;
 				hash = (hash * 397) ^ TickCount;
+				hash = (hash * 397) ^ CumulativeTickMultiplier;
 				return hash;
 			}
 		}
@@ -74,6 +84,7 @@ namespace FishMMO.Shared
 			writer.WriteUInt32(NextTickTick);
 			writer.WriteInt32(Stacks);
 			writer.WriteInt32(TickCount);
+			writer.WriteInt32(CumulativeTickMultiplier);
 		}
 
 		/// <summary>
@@ -88,6 +99,7 @@ namespace FishMMO.Shared
 				NextTickTick = reader.ReadUInt32(),
 				Stacks = reader.ReadInt32(),
 				TickCount = reader.ReadInt32(),
+				CumulativeTickMultiplier = reader.ReadInt32(),
 			};
 		}
 
@@ -208,7 +220,8 @@ namespace FishMMO.Shared
 				{
 					int index = reader.ReadUInt16();
 					BuffReconcileEntry entry = ReadFrom(reader);
-					if (index >= 0 && index < prevLength)
+					// index is cast from ushort (range 0–65535), so >= 0 is always true.
+					if (index < prevLength)
 					{
 						entries[index] = entry;
 					}

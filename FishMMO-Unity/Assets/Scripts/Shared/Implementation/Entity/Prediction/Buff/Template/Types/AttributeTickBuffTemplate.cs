@@ -59,15 +59,17 @@ namespace FishMMO.Shared
 			if (buff == null || target == null || TickAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
 
-			int totalTicks = buff.TickCount;
-			int multiplier = 1 + buff.Stacks;
-
+			// Use CumulativeTickMultiplier rather than (TickCount * (1 + currentStacks)).
+			// If stacks were added or removed while the buff was active, each tick fired
+			// with the Stacks value at THAT moment. CumulativeTickMultiplier is the exact
+			// sum of (1 + Stacks) across every tick that fired, so reversing it produces
+			// perfect symmetry regardless of stack changes between ticks.
 			for (int i = 0; i < TickAttributes.Count; i++)
 			{
 				BuffAttributeTemplate tickAttribute = TickAttributes[i];
 				if (tickAttribute?.Template == null) continue;
 
-				int totalModifier = tickAttribute.Value * totalTicks * multiplier;
+				int totalModifier = tickAttribute.Value * buff.CumulativeTickMultiplier;
 				if (totalModifier == 0) continue;
 
 				if (attributeController.TryGetAttribute(tickAttribute.Template.ID, out CharacterAttribute characterAttribute))

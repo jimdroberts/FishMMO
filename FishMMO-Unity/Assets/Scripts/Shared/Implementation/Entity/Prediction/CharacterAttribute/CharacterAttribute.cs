@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -57,7 +58,7 @@ namespace FishMMO.Shared
 		/// Attributes that depend on this attribute (parents in the attribute hierarchy).
 		/// When this attribute changes, these parent attributes may need to update as well.
 		/// </summary>
-		private Dictionary<string, CharacterAttribute> parents = new Dictionary<string, CharacterAttribute>();
+		private SortedDictionary<int, CharacterAttribute> parents = new SortedDictionary<int, CharacterAttribute>();
 
 		/// <summary>
 		/// Attributes that this attribute depends on (children in the attribute hierarchy).
@@ -152,6 +153,30 @@ namespace FishMMO.Shared
 				UpdateValues();
 			}
 		}
+
+		/// <summary>
+		/// Sets the base value directly without recomputing derived values or notifying listeners.
+		/// Used exclusively for two-phase reconcile in
+		/// <see cref="CharacterAttributeController.ApplyAttributeSnapshot"/>; the caller is
+		/// responsible for calling <see cref="UpdateValues(bool)"/> after all values have been
+		/// applied to guarantee a single correct graph evaluation pass with no intermediate states.
+		/// </summary>
+		/// <param name="newValue">The new base value.</param>
+		public void SetValueDirect(int newValue)
+		{
+			value = newValue;
+		}
+
+		/// <summary>
+		/// Sets the external modifier directly without recomputing derived values or notifying listeners.
+		/// Used exclusively for two-phase reconcile alongside <see cref="SetValueDirect"/>.
+		/// </summary>
+		/// <param name="newValue">The new external modifier value.</param>
+		public void SetModifierDirect(int newValue)
+		{
+			externalModifier = newValue;
+		}
+
 		/// <summary>
 		/// Sets the final value directly. Use with caution; normally final value is calculated.
 		/// </summary>
@@ -195,7 +220,15 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Gets the parent attributes (attributes that depend on this attribute).
 		/// </summary>
-		public Dictionary<string, CharacterAttribute> Parents { get { return parents; } }
+		/// <summary>
+		/// Parents of this attribute, keyed by Template.ID. <see cref="SortedDictionary{TKey,TValue}"/>
+		/// with the default <c>int</c> comparer guarantees ascending-ID iteration order across
+		/// all platforms, runtimes, and rehash events — required for prediction determinism
+		/// so the formula evaluation cascade produces bit-identical results on server and
+		/// client during reconcile replay. Keying by ID (not name) also survives template
+		/// renames without affecting binary sort order.
+		/// </summary>
+		public SortedDictionary<int, CharacterAttribute> Parents { get { return parents; } }
 
 		/// <summary>
 		/// Gets the child attributes (attributes this attribute depends on).
@@ -238,9 +271,9 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddParent(CharacterAttribute parent)
 		{
-			if (!parents.ContainsKey(parent.Template.Name))
+			if (!parents.ContainsKey(parent.Template.ID))
 			{
-				parents.Add(parent.Template.Name, parent);
+				parents.Add(parent.Template.ID, parent);
 			}
 		}
 
@@ -251,7 +284,7 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveParent(CharacterAttribute parent)
 		{
-			parents.Remove(parent.Template.Name);
+			parents.Remove(parent.Template.ID);
 		}
 
 		/// <summary>
@@ -372,11 +405,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Maximum recursion depth for the attribute propagation chain inside
+		/// <see cref="UpdateValues(bool)"/>. The graph is validated to be acyclic at
+		/// startup by <c>CharacterAttributeController.ValidateGraphAcyclic</c>, making
+		/// this depth unreachable under normal operation. The guard exists for runtime
+		/// graph-mutation bugs (dynamic rewiring, malformed template injection at runtime)
+		/// that could otherwise produce a stack overflow without a clear error message.
+		/// </summary>
+		private const int MaxPropagationDepth = 256;
+
+		/// <summary>
 		/// Updates the attribute's values and propagates changes to parent attributes if needed.
 		/// </summary>
 		public void UpdateValues()
 		{
-			UpdateValues(false);
+			UpdateValues(false, 0);
 		}
 
 		/// <summary>
@@ -393,6 +436,27 @@ namespace FishMMO.Shared
 		/// <param name="forceUpdate">If true, forces update even if value is unchanged.</param>
 		public void UpdateValues(bool forceUpdate)
 		{
+			UpdateValues(forceUpdate, 0);
+		}
+
+		/// <summary>
+		/// Internal depth-tracked implementation of <see cref="UpdateValues(bool)"/>.
+		/// The <paramref name="depth"/> parameter is incremented on each recursive parent
+		/// call; exceeding <see cref="MaxPropagationDepth"/> logs a Critical error and
+		/// halts propagation to prevent a stack overflow from a runtime graph mutation bug.
+		/// </summary>
+		private void UpdateValues(bool forceUpdate, int depth)
+		{
+			if (depth > MaxPropagationDepth)
+			{
+				Log.Error("CharacterAttribute",
+					$"UpdateValues exceeded MaxPropagationDepth ({MaxPropagationDepth}) on attribute " +
+					$"TemplateID={Template.ID} ({Template.name}). The attribute graph may have been " +
+					"mutated at runtime to create excessive chain depth or an undiscovered cycle. " +
+					"Halting propagation to prevent a stack overflow.");
+				return;
+			}
+
 			bool isRoot = characterAttributeController != null && !characterAttributeController.IsPropagating;
 			if (isRoot)
 			{
@@ -403,12 +467,12 @@ namespace FishMMO.Shared
 
 			ApplyChildren();
 
-			// If the final value changed, propagate the update to all parents
+			// If the final value changed, propagate the update to all parents.
 			if (forceUpdate || finalValue != oldFinalValue)
 			{
 				foreach (CharacterAttribute parent in parents.Values)
 				{
-					parent.UpdateValues();
+					parent.UpdateValues(false, depth + 1);
 				}
 			}
 

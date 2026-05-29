@@ -727,7 +727,8 @@ namespace FishMMO.Shared
 			// Non-deterministic external handlers (e.g., UI MouseMode gating).
 			// These are client-only checks that the server never evaluates.
 			// Excluding them from CanActivate prevents divergence during replay.
-			for (int i = 0; i < canManipulateHandlers.Count; i++)
+			// Reverse iteration so a handler unsubscribing itself does not skip the next entry.
+			for (int i = canManipulateHandlers.Count - 1; i >= 0; i--)
 			{
 				if (!canManipulateHandlers[i].Invoke())
 				{
@@ -841,7 +842,8 @@ namespace FishMMO.Shared
 			if (!CanManipulate()) return;
 
 			// Client-side pre-filter: check external handlers (e.g. UI MouseMode).
-			for (int i = 0; i < canManipulateHandlers.Count; i++)
+			// Reverse iteration so a handler unsubscribing itself does not skip the next entry.
+			for (int i = canManipulateHandlers.Count - 1; i >= 0; i--)
 			{
 				if (!canManipulateHandlers[i].Invoke())
 				{

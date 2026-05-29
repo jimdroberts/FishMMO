@@ -95,10 +95,13 @@ namespace FishMMO.Shared.Core
 		void AddAttribute(CharacterAttribute instance);
 
 		/// <summary>
-		/// Regenerates resource attributes (e.g., health, mana) by one tick.
-		/// Uses integer tick counting internally to avoid float-drift desync.
+		/// Advances tick-driven regen for resource attributes (e.g., health, mana).
+		/// A pulse fires when <c>tick % regenTickInterval == 0</c>; an internal
+		/// monotonic guard prevents double-advancement under replay, resimulation,
+		/// or future-state execution.
 		/// </summary>
-		void Regenerate();
+		/// <param name="tick">Authoritative simulation tick for this replicate step.</param>
+		void Regenerate(uint tick);
 
 		/// <summary>
 		/// Applies a resource state (health, mana, stamina, regen delta) to the controller.

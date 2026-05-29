@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -41,6 +42,17 @@ namespace FishMMO.Shared
 		/// Serialized in payload for deterministic restoration.
 		/// </summary>
 		public int TickCount;
+
+		/// <summary>
+		/// Running sum of <c>(1 + Stacks)</c> for every tick that has fired on this buff instance.
+		/// Tracks the exact cumulative multiplier applied by templates such as
+		/// <see cref="AttributeTickBuffTemplate"/> so that <c>OnRemove</c> can reverse
+		/// the precise total modifier regardless of how many times <see cref="Stacks"/>
+		/// changed between tick firings. Reconciled via
+		/// <see cref="BuffReconcileEntry.CumulativeTickMultiplier"/> so rollback replay
+		/// and post-reconcile removal both produce correct reversal.
+		/// </summary>
+		public int CumulativeTickMultiplier;
 
 		/// <summary>
 		/// The template that defines this buff's behavior and properties.
@@ -167,13 +179,29 @@ namespace FishMMO.Shared
 		/// <param name="currentTick">The current network tick.</param>
 		/// <param name="tickDelta">Fixed seconds-per-tick of the active session.</param>
 		/// <returns>True if the tick fired (snapshot must be marked dirty).</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		// AggressiveInlining intentionally absent: the try/catch prevents the JIT from
+		// inlining this method regardless, so the attribute would be silently ignored.
 		public bool TryTick(ICharacter target, uint currentTick, float tickDelta)
 		{
 			if ((int)(currentTick - NextTickTick) >= 0)
 			{
-				Template.OnTick(this, target);
+				try
+				{
+					Template.OnTick(this, target);
+				}
+				catch (System.Exception ex)
+				{
+					// Without this catch, a throwing OnTick leaves NextTickTick un-advanced,
+					// causing the tick to re-fire on every subsequent game tick — flooding the
+					// server with redundant calls and desync'ing prediction state permanently.
+					Log.Warning("Buff", $"OnTick threw on template {Template?.ID.ToString() ?? "unknown"}: {ex}");
+				}
 				TickCount++;
+				// Accumulate the per-tick multiplier using Stacks as it was when OnTick
+				// fired. AttributeTickBuffTemplate.OnTick uses (1 + Stacks) as its
+				// multiplier; recording that same value here lets OnRemove reverse the
+				// exact total modifier regardless of stack changes during the buff's life.
+				CumulativeTickMultiplier += (1 + Stacks);
 				ResetTickTime(currentTick, tickDelta);
 				return true;
 			}
