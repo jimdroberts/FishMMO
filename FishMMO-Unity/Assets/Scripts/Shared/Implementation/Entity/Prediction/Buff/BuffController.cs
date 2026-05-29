@@ -340,12 +340,11 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// <b>Tick source:</b> Use the explicit tick overload to make the source deterministic.
 		/// </remarks>
-
 		/// <summary>
 		/// Applies a buff using the provided absolute network tick as the application time.
 		/// This should be used by prediction-path callers to compute ExpiryTick deterministically.
 		/// </summary>
-		public void Apply(BaseBuffTemplate template, uint currentTick)
+		public void Apply(BaseBuffTemplate template, PredictionTick currentTick)
 		{
 			if (template == null) return;
 
@@ -397,6 +396,17 @@ namespace FishMMO.Shared
 			{
 				template.OnApplyFX(buffInstance, Character);
 			}
+		}
+
+		/// <summary>
+		/// Applies a buff from a server-authoritative context using a raw server tick.
+		/// Identical to the prediction-path Apply but accepts a raw uint so that
+		/// non-prediction callers have a named, intentional path that is visible in
+		/// code review. Never call this from OnReplicate.
+		/// </summary>
+		public void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick)
+		{
+			Apply(template, new PredictionTick(serverTick));
 		}
 
 		/// <summary>

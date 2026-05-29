@@ -41,21 +41,29 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (target.TryGet(out IBuffController buffController))
+			if (!target.TryGet(out IBuffController buffController))
 			{
-				int stacks = StacksValue.GetValue(initiator, eventData);
-				for (int i = 0; i < stacks; ++i)
+				return;
+			}
+
+			int stacks = StacksValue.GetValue(initiator, eventData);
+
+			bool isPredictionPath = false;
+			TickEventData tickData = null;
+			if (eventData != null)
+			{
+				isPredictionPath = eventData.TryGet(out tickData);
+			}
+
+			for (int i = 0; i < stacks; ++i)
+			{
+				if (isPredictionPath)
 				{
-					// If the triggering EventData carries a deterministic tick (prediction path), use it.
-					if (eventData != null && eventData.TryGet(out TickEventData tickData))
-					{
-						buffController.Apply(BuffTemplate, tickData.Tick);
-					}
-					else
-					{
-						uint tick = target.GetLocalTick();
-						buffController.Apply(BuffTemplate, tick);
-					}
+					buffController.Apply(BuffTemplate, tickData.Tick);
+				}
+				else
+				{
+					buffController.ApplyAuthoritative(BuffTemplate, target.GetLocalTick());
 				}
 			}
 		}

@@ -20,10 +20,7 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			if (initiator == null || Buff == null)
-			{
-				return;
-			}
+			if (initiator == null || Buff == null) return;
 
 			if (eventData != null &&
 				eventData.TryGet(out RegionEventData regionData) &&
@@ -32,21 +29,15 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!initiator.TryGet(out IBuffController buffController))
-			{
-				return;
-			}
+			if (!initiator.TryGet(out IBuffController buffController)) return;
 
-			// Use region event's reconciling info: prefer TickEventData if present, otherwise use the character's local tick.
+			uint tick = initiator.GetLocalTick();
 			if (eventData != null && eventData.TryGet(out TickEventData tickData))
 			{
-				buffController.Apply(Buff, tickData.Tick);
+				tick = tickData.Tick; // already a raw uint from LocalTick in Region.cs
 			}
-			else
-			{
-				uint tick = initiator.GetLocalTick();
-				buffController.Apply(Buff, tick);
-			}
+
+			buffController.ApplyAuthoritative(Buff, tick);
 		}
 	}
 }

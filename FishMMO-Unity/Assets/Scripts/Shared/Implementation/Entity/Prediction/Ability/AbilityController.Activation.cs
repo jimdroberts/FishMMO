@@ -164,7 +164,7 @@ namespace FishMMO.Shared
 				if (base.IsServerStarted && !state.ContainsReplayed())
 				{
 					AbilityEventData aed = new AbilityEventData(Character, currentAbilityID);
-					aed.Add(new TickEventData(Character, activationData.GetTick()));
+					aed.Add(new TickEventData(Character, activationData.GetPredictionTick()));
 					Character.Invoke(onAbilityActivateTriggers, aed);
 				}
 				return true;
@@ -357,7 +357,7 @@ namespace FishMMO.Shared
 				if (base.IsServerStarted)
 				{
 					AbilityEventData aed = new AbilityEventData(Character, validatedAbility.ID);
-					aed.Add(new TickEventData(Character, activationData.GetTick()));
+					aed.Add(new TickEventData(Character, activationData.GetPredictionTick()));
 					Character.Invoke(onAbilityCompleteTriggers, aed);
 				}
 			}

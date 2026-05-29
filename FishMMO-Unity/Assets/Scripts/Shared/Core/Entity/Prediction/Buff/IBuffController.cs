@@ -67,13 +67,21 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
 		/// <param name="currentTick">The absolute network tick at the moment of application.</param>
-		void Apply(BaseBuffTemplate template, uint currentTick);
+		void Apply(BaseBuffTemplate template, PredictionTick currentTick);
+
+		/// <summary>
+		/// Applies a buff from a server-authoritative context (not the prediction path).
+		/// Uses the provided raw server tick directly. Do NOT call this from within
+		/// OnReplicate — use Apply(BaseBuffTemplate, PredictionTick) instead.
+		/// </summary>
+		void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick);
 
 		/// <summary>
 		/// Applies a buff instance to the character if not already present, invoking appropriate events.
 		/// </summary>
 		/// <param name="buff">The buff instance to apply.</param>
 		void Apply(Buff buff, bool suppressFX = false);
+
 
 		/// <summary>
 		/// Removes a buff by template ID, invoking removal events and cleaning up.
