@@ -79,7 +79,7 @@ namespace FishMMO.Shared
 		public uint ObserverPredictionWindowTicks = 1;
 
 		/// <inheritdoc/>
-		public int Order => 0;
+		public int Order => 110;
 
 		/// <summary>
 		/// Sets the current platform and snapshots its position for velocity calculation.
