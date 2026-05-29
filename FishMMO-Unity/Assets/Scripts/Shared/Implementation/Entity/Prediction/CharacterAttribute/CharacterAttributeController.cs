@@ -294,6 +294,12 @@ namespace FishMMO.Shared
 			// reconcile corrects it.
 			regenTickAccum = 0;
 
+			// Defensively clear the cached interval as well. OnStartNetwork recomputes
+			// it from TimeManager.TickDelta on the next spawn, so we must not let a
+			// stale value from a previous session leak into the gap between ResetState
+			// and OnStartNetwork (Regenerate guards on regenTickInterval == 0 → no-op).
+			regenTickInterval = 0u;
+
 			// Reset propagation state to prevent stale notifications.
 			propagationDepth = 0;
 			pendingNotifications.Clear();

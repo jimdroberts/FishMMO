@@ -192,6 +192,12 @@ replicated — it is recomputed locally via the dependency graph in `ApplyChildr
 
 Delta serialization uses a 7-bit byte bitmask — only changed fields are transmitted, typically 3-4 bytes instead of 28.
 
+> **Lifecycle note (defensive guard, 2025 audit):**
+> `regenTickInterval` is computed in `OnStartNetwork` from `TimeManager.TickDelta` and is also explicitly cleared by `ResetState`. The `Regenerate()` path early-returns when `regenTickInterval == 0`, so a reset instance cannot tick at a stale rate before the next `OnStartNetwork` re-initialization. This guards object-pool / re-spawn reuse paths.
+
+> **EditMode / unit-test note:**
+> `CharacterAttributeResourceStateSerializer.RegisterDeltaSerializers` is decorated with `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`, which only fires in PlayMode. EditMode tests must invoke the registration method via reflection during fixture setup before exercising `GenericDeltaWriter<CharacterAttributeResourceState>.Write` / `GenericDeltaReader<CharacterAttributeResourceState>.Read`. See `Assets/UnitTests/Prediction/CharacterAttributeResourceStateSerializerTests.cs` for the canonical pattern.
+
 ### Static Events
 
 | Event (on `ICharacterDamageController`) | Signature |

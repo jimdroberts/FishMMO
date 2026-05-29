@@ -893,11 +893,13 @@ namespace FishMMO.UnitTests
 		// ─────────────────────────────────────────────────────────────────────────
 
 		/// <summary>
-		/// Regression for the "RemainingSeconds stuck at 0" bug. If a buff is constructed
-		/// before <c>TimeManager.TickDelta</c> is available, the cached <c>tickDelta</c>
-		/// would be 0 and <see cref="Buff.RemainingSeconds"/> would always return 0.
-		/// <see cref="Buff.SetTickDelta"/> (called every tick by <c>BuffController.Tick</c>)
-		/// must repair the cache and the next read must reflect the correct remaining seconds.
+		/// Defensive-guard contract for the constructor. The "RemainingSeconds stuck at 0"
+		/// failure mode used to occur when a buff was constructed before
+		/// <c>TimeManager.TickDelta</c> was available (incoming <c>tickDelta == 0</c>).
+		/// The constructor now substitutes a 30 tps fallback (<c>1f/30f</c>) so the UI
+		/// duration bar is never stuck at zero. <see cref="Buff.SetTickDelta"/> (called
+		/// every tick by <c>BuffController.Tick</c>) still repairs the cache to the
+		/// session's authoritative <c>TimeManager.TickDelta</c> when it differs from 30 tps.
 		/// </summary>
 		[Test]
 		public void SetTickDelta_RepairsZeroInitializedTickDelta_RemainingSecondsCorrects()
@@ -905,20 +907,24 @@ namespace FishMMO.UnitTests
 			try
 			{
 				AuthTestTrace.LogTestStart(nameof(SetTickDelta_RepairsZeroInitializedTickDelta_RemainingSecondsCorrects),
-					"A buff constructed with tickDelta=0 must heal once SetTickDelta is invoked " +
-					"with the real value. UI duration bars must not stay stuck at 0.")
+					"A buff constructed with tickDelta=0 must fall back to the 30 tps assumption " +
+					"so RemainingSeconds is never stuck at 0, and SetTickDelta must still update " +
+					"the cache to the session's authoritative TickDelta.")
 					.GetAwaiter().GetResult();
 
 				uint applyTick = 1_000u;
 				uint expiryTick = applyTick + 900u; // 900 ticks at 30 tps = 30 s
 
-				// Simulate the bug condition: TimeManager not ready, BuffController passed 0.
+				// Simulate the historical bug condition: TimeManager not ready, caller passed 0.
 				var buff = new Buff(TemplateID, expiryTick, expiryTick, 0f, 0, 0);
 
-				LogAssert.AreEqual(0f, buff.RemainingSeconds(applyTick),
-					"Before SetTickDelta, RemainingSeconds returns 0 (the documented bug).");
+				float fallback = 1f / 30f;
+				float expectedFallback = (expiryTick - applyTick) * fallback;
+				LogAssert.AreEqual(expectedFallback, buff.RemainingSeconds(applyTick),
+					"Defensive guard: tickDelta<=0 falls back to 1/30, RemainingSeconds is correct, " +
+					"never stuck at 0.");
 
-				// BuffController.Tick refreshes the cache.
+				// BuffController.Tick refreshes the cache to the actual session tick rate.
 				buff.SetTickDelta(TickDelta30);
 
 				float expected = (expiryTick - applyTick) * TickDelta30;

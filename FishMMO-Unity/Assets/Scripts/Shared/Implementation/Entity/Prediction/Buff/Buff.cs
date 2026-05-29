@@ -84,6 +84,16 @@ namespace FishMMO.Shared
 		/// <param name="tickCount">The number of ticks that have already fired (for restoration).</param>
 		public Buff(int templateID, uint currentTick, float tickDelta, int stacks = 0, int tickCount = 0)
 		{
+			// Defensive guard: if a caller constructs a buff before TimeManager.TickDelta
+			// is available, tickDelta arrives as 0. DurationToTicks(_, 0) returns 0, which
+			// collapses ExpiryTick / NextTickTick onto currentTick and causes the buff to
+			// expire on the same tick it was applied. Fall back to a 30 tps assumption so
+			// the buff still survives at least one Tick() evaluation; SetTickDelta will
+			// repair the cached value on the next BuffController.Tick.
+			if (tickDelta <= 0f)
+			{
+				tickDelta = 1f / 30f;
+			}
 			this.tickDelta = tickDelta;
 			Template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
 			if (Template == null)
@@ -112,6 +122,13 @@ namespace FishMMO.Shared
 		/// <param name="tickCount">The number of ticks that have already fired.</param>
 		public Buff(int templateID, uint expiryTick, uint nextTickTick, float tickDelta, int stacks, int tickCount)
 		{
+			// Defensive guard: never let a stuck-at-zero tickDelta corrupt the UI duration
+			// bar (RemainingSeconds would always return 0). SetTickDelta repairs the cache
+			// on the next BuffController.Tick once TimeManager is available.
+			if (tickDelta <= 0f)
+			{
+				tickDelta = 1f / 30f;
+			}
 			this.tickDelta = tickDelta;
 			Template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
 			ExpiryTick = expiryTick;

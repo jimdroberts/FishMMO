@@ -356,6 +356,9 @@ Each `BuffReconcileEntry` captures the minimum state needed to restore a buff:
 
 Array delta serialization uses index-based compression: unchanged entries are skipped, only modified/added/removed entries are transmitted.
 
+> **Defensive guard (2025 audit):**
+> Both `Buff` constructors coerce a non-positive `tickDelta` parameter to `1f / 30f` before computing `ExpiryTick` / `NextTickTick`. This prevents a `Buff` constructed before `TimeManager.TickDelta` is populated from collapsing `ExpiryTick` onto `applyTick` and immediately expiring. `SetTickDelta(...)` then resets the cached delta to the session's authoritative value once the network is fully up. See `Assets/UnitTests/Prediction/BuffExpiryTests.cs::SetTickDelta_RepairsZeroInitializedTickDelta_RemainingSecondsCorrects`.
+
 ## Project Structure
 
 ### Directory Structure
