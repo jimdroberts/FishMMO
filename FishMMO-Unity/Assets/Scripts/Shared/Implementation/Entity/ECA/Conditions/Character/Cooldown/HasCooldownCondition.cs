@@ -29,11 +29,38 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			// Only replicate-domain TickEventData can be used directly. Raw authoritative
+			// ticks must be mapped through the cooldown controller so comparisons happen
+			// in the same domain as CooldownController.ExpireElapsed(input.GetTick()).
 			uint currentTick = 0;
-			if (characterToCheck.NetworkObject != null &&
-				characterToCheck.NetworkObject.TimeManager != null)
+			TickEventData tickData = null;
+			if (eventData != null &&
+				eventData.TryGet(out tickData) &&
+				tickData.IsReplicateTick &&
+				tickData.IsForCharacter(characterToCheck))
 			{
-				currentTick = characterToCheck.NetworkObject.TimeManager.LocalTick;
+				currentTick = tickData.Tick;
+			}
+			else
+			{
+				uint serverTick = 0u;
+				if (eventData != null &&
+					eventData.TryGet(out AbilityTickEventData abilityTickData) &&
+					abilityTickData.CurrentTick != 0u)
+				{
+					serverTick = abilityTickData.CurrentTick;
+				}
+				else if (tickData != null && !tickData.IsReplicateTick)
+				{
+					serverTick = tickData.Tick;
+				}
+				else if (characterToCheck.NetworkObject != null &&
+					characterToCheck.NetworkObject.TimeManager != null)
+				{
+					serverTick = characterToCheck.NetworkObject.TimeManager.LocalTick;
+				}
+
+				currentTick = cooldownController.ResolveAuthoritativeTick(serverTick);
 			}
 
 			return cooldownController.IsOnCooldown(AbilityID, currentTick);

@@ -266,7 +266,8 @@ namespace FishMMO.Shared
 
 			if (Character.TryGet(out ICooldownController cooldownController))
 			{
-				cooldownController.Read(reader, base.TimeManager.LocalTick);
+				uint currentTick = cooldownController.ResolveAuthoritativeTick(base.TimeManager.LocalTick);
+				cooldownController.Read(reader, currentTick);
 			}
 		}
 

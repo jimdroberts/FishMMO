@@ -46,6 +46,16 @@ namespace FishMMO.Client
 			ICooldownController.OnRemoveCooldown -= CooldownController_OnRemoveCooldown;
 		}
 
+		private uint GetCurrentCooldownTick()
+		{
+			uint localTick = InstanceFinder.TimeManager != null ? InstanceFinder.TimeManager.LocalTick : 0u;
+			if (Character != null && Character.TryGet(out ICooldownController cooldownController))
+			{
+				return cooldownController.ResolveAuthoritativeTick(localTick);
+			}
+			return localTick;
+		}
+
 		/// <summary>
 		/// Handles the event when a cooldown is added for a reference ID.
 		/// Updates the cooldown mask value if relevant.
@@ -60,7 +70,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			uint currentTick = InstanceFinder.TimeManager.LocalTick;
+			uint currentTick = GetCurrentCooldownTick();
 			float remaining = cooldown.RemainingTime(currentTick);
 
 			// Only update if cooldown times are valid
@@ -85,7 +95,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			uint currentTick = InstanceFinder.TimeManager.LocalTick;
+			uint currentTick = GetCurrentCooldownTick();
 			float remaining = cooldown.RemainingTime(currentTick);
 
 			// Only update if cooldown times are valid

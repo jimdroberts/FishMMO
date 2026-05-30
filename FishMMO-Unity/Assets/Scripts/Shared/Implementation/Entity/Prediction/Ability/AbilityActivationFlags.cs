@@ -10,7 +10,8 @@
 	/// "data present" marker without consuming an extra field in the replicate struct.
 	/// </para>
 	/// <para>
-	/// <b>Constraint:</b> All values must remain in the range 0–15 (bits 0–15).
+	/// <b>Constraint:</b> All enum values are bit positions and must remain in the
+	/// range 0–15 (bits 0–15 after shifting).
 	/// <see cref="CharacterReconcileData.Pack"/> stores flags in the lower 16 bits.
 	/// Values at or above 16 will be silently truncated during reconcile.
 	/// </para>

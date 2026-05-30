@@ -223,8 +223,33 @@ namespace FishMMO.Shared
 			}
 			Motor.SetPlatformVelocity(platformVelocity);
 
-			Motor.UpdatePhase1(deltaTime);
-			Motor.UpdatePhase2(deltaTime);
+			// Stamina consumed by sprint/jump inside the motor update (KCCController.UpdateVelocity)
+			// must still re-simulate during reconcile replay to keep the predicted stamina value
+			// correct, but the OnAttributeUpdated notifications it raises must NOT fire during
+			// replay (UI flicker / duplicate ECA). This mirrors the suppression that BuffController
+			// and CharacterAttributeController already apply around their own replay-time mutations.
+			// KCC runs last (Order 110), so the attribute controller is not already in a suppression
+			// scope here; the depth counter inside the controller handles any nesting safely.
+			ICharacterAttributeController attributeController = null;
+			bool suppressAttributeNotifications = state.ContainsReplayed() &&
+				CharacterController.Character != null &&
+				CharacterController.Character.TryGet(out attributeController);
+			if (suppressAttributeNotifications)
+			{
+				attributeController.BeginNotificationSuppression();
+			}
+			try
+			{
+				Motor.UpdatePhase1(deltaTime);
+				Motor.UpdatePhase2(deltaTime);
+			}
+			finally
+			{
+				if (suppressAttributeNotifications && attributeController != null)
+				{
+					attributeController.EndNotificationSuppression();
+				}
+			}
 
 			Motor.Transform.SetPositionAndRotation(Motor.TransientPosition, Motor.TransientRotation);
 		}

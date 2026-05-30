@@ -196,7 +196,8 @@ namespace FishMMO.Shared
 				return null;
 
 			// Verify usability: not on cooldown and meets activation conditions.
-			if (cooldownController.IsOnCooldown(ability.ID, controller.TimeManager.LocalTick))
+			uint currentTick = cooldownController.ResolveAuthoritativeTick(controller.TimeManager.LocalTick);
+			if (cooldownController.IsOnCooldown(ability.ID, currentTick))
 				return null;
 
 			EventData activationCheckData = null;

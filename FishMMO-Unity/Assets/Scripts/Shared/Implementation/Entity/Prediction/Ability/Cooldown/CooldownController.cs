@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using FishNet.Managing.Timing;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -16,6 +17,8 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class CooldownController : CharacterBehaviour, ICooldownController, IPredictableController
 	{
+		private const uint MissingRawTick = 0u;
+
 		/// <summary>
 		/// Execution order in the unified prediction pipeline.
 		/// Runs before <see cref="AbilityController"/> so newly elapsed cooldowns
@@ -41,6 +44,20 @@ namespace FishMMO.Shared
 		/// <see cref="Clear"/>, and <see cref="RestoreFromReconcile"/>.
 		/// </summary>
 		private CooldownReconcileEntry[] cachedSnapshot;
+
+		/// <summary>
+		/// The replicate input tick captured at the start of each <see cref="OnReplicate"/> call.
+		/// Used by server-authoritative cooldown queries to compare against cooldown start ticks
+		/// in the same domain as <see cref="ExpireElapsed"/>.
+		/// </summary>
+		private uint lastReplicateTick = TimeManager.UNSET_TICK;
+
+		/// <summary>
+		/// The <c>TimeManager.LocalTick</c> observed when <see cref="lastReplicateTick"/> was captured.
+		/// Used to preserve the raw-authoritative-to-replicate tick offset for cooldown queries
+		/// outside the immediate prediction pipeline step.
+		/// </summary>
+		private uint lastReplicateLocalTick = TimeManager.UNSET_TICK;
 
 		/// <summary>
 		/// When true, <see cref="cachedSnapshot"/> is stale and must be rebuilt.
@@ -118,14 +135,57 @@ namespace FishMMO.Shared
 		/// <param name="channel">Transport channel.</param>
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
 		{
+			uint inputTick = input.GetTick();
+			if (lastReplicateTick == TimeManager.UNSET_TICK &&
+				inputTick != TimeManager.UNSET_TICK &&
+				base.TimeManager != null)
+			{
+				TranslatePreReplicateCooldownTicks(GetSignedTickOffset(base.TimeManager.LocalTick, inputTick,
+					nameof(TranslatePreReplicateCooldownTicks)));
+			}
+			lastReplicateTick = inputTick;
+			lastReplicateLocalTick = base.TimeManager != null ? base.TimeManager.LocalTick : lastReplicateTick;
+
 			// Gate event emission for replayed ticks. The deterministic state mutation
 			// (removing expired entries) still runs every replay tick so the dictionary remains
 			// in lock-step with the authoritative server; only the OnRemoveCooldown ECA / UI
 			// notification is suppressed during replay.
 			bool wasReplaying = isReplayingTick;
 			isReplayingTick = state.ContainsReplayed();
-			try { ExpireElapsed(input.GetTick()); }
+			try { ExpireElapsed(inputTick); }
 			finally { isReplayingTick = wasReplaying; }
+		}
+
+		/// <summary>
+		/// Converts cooldowns created before the first replicate tick from raw LocalTick space into
+		/// the replicate-tick domain used by <see cref="ExpireElapsed"/>.
+		/// </summary>
+		/// <param name="tickOffset">Signed offset from raw LocalTick space to replicate-tick space.</param>
+		private void TranslatePreReplicateCooldownTicks(int tickOffset)
+		{
+			if (tickOffset == 0 || cooldowns.Count == 0)
+			{
+				return;
+			}
+
+			keysToRemove.Clear();
+			foreach (KeyValuePair<long, CooldownInstance> pair in cooldowns)
+			{
+				keysToRemove.Add(pair.Key);
+			}
+
+			float tickDelta = TickDelta;
+			for (int i = 0; i < keysToRemove.Count; i++)
+			{
+				long key = keysToRemove[i];
+				CooldownInstance cooldown = cooldowns[key];
+				cooldowns[key] = new CooldownInstance(
+					AddSignedTickOffset(cooldown.StartTick, tickOffset),
+					cooldown.DurationTicks,
+					tickDelta);
+			}
+			keysToRemove.Clear();
+			snapshotDirty = true;
 		}
 
 		/// <summary>
@@ -151,6 +211,8 @@ namespace FishMMO.Shared
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
+			lastReplicateTick = TimeManager.UNSET_TICK;
+			lastReplicateLocalTick = TimeManager.UNSET_TICK;
 			cooldowns.Clear();
 			keysToRemove.Clear();
 		}
@@ -158,7 +220,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Reads cooldown data from a network reader, discarding any entries that have
 		/// already expired relative to <paramref name="currentTick"/>.
-		/// Wire format: int count, then per cooldown: long abilityID, uint startTick, uint durationTicks.
+		/// Wire format: uint payloadReferenceTick, int count, then per cooldown:
+		/// long abilityID, uint startTick, uint durationTicks.
 		/// </summary>
 		/// <remarks>
 		/// This is a <b>payload / initial-sync</b> path (e.g., spawning, scene load),
@@ -166,13 +229,16 @@ namespace FishMMO.Shared
 		/// <see cref="CooldownReconcileEntry"/> via <c>WriteArrayDelta</c>/<c>ReadArrayDelta</c>.
 		/// </remarks>
 		/// <param name="reader">The network reader.</param>
-		/// <param name="currentTick">Current network tick used to discard expired entries.</param>
+		/// <param name="currentTick">Current network tick used to translate and discard expired entries.</param>
 		public void Read(Reader reader, uint currentTick)
 		{
 			const int maxPayloadCooldowns = 4096;
 
 			cooldowns.Clear();
 			keysToRemove.Clear();
+
+			uint payloadReferenceTick = reader.ReadUInt32();
+			int tickOffset = GetSignedTickOffset(payloadReferenceTick, currentTick, nameof(Read));
 
 			int cooldownCount = reader.ReadInt32();
 			if (cooldownCount < 0 || cooldownCount > maxPayloadCooldowns)
@@ -200,13 +266,17 @@ namespace FishMMO.Shared
 			for (int i = 0; i < cooldownCount; ++i)
 			{
 				long abilityID = reader.ReadInt64();
-				uint startTick = reader.ReadUInt32();
+				uint startTick = AddSignedTickOffset(reader.ReadUInt32(), tickOffset);
 				uint durationTicks = reader.ReadUInt32();
 
 				// Skip cooldowns that have already expired by the time we receive them.
-				if (currentTick - startTick >= durationTicks)
+				if (currentTick != TimeManager.UNSET_TICK)
 				{
-					continue;
+					int elapsedTicks = (int)(currentTick - startTick);
+					if (elapsedTicks >= 0 && (uint)elapsedTicks >= durationTicks)
+					{
+						continue;
+					}
 				}
 
 				CooldownInstance cooldown = new CooldownInstance(startTick, durationTicks, td);
@@ -216,7 +286,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Writes cooldown data to a network writer.
-		/// Wire format: int count, then per cooldown: long abilityID, uint startTick, uint durationTicks.
+		/// Wire format: uint payloadReferenceTick, int count, then per cooldown:
+		/// long abilityID, uint startTick, uint durationTicks.
 		/// </summary>
 		/// <remarks>
 		/// This is a <b>payload / initial-sync</b> path. See <see cref="Read"/> remarks.
@@ -224,6 +295,7 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer.</param>
 		public void Write(Writer writer)
 		{
+			writer.WriteUInt32(GetCurrentDomainTick());
 			writer.WriteInt32(cooldowns.Count);
 			foreach (KeyValuePair<long, CooldownInstance> cooldown in cooldowns)
 			{
@@ -231,6 +303,40 @@ namespace FishMMO.Shared
 				writer.WriteUInt32(cooldown.Value.StartTick);
 				writer.WriteUInt32(cooldown.Value.DurationTicks);
 			}
+		}
+
+		private uint GetCurrentDomainTick()
+		{
+			if (base.TimeManager == null)
+			{
+				return lastReplicateTick;
+			}
+
+			return ResolveAuthoritativeTick(base.TimeManager.LocalTick);
+		}
+
+		internal static int GetSignedTickOffset(uint sourceReferenceTick, uint targetReferenceTick, string context)
+		{
+			if (sourceReferenceTick == TimeManager.UNSET_TICK || targetReferenceTick == TimeManager.UNSET_TICK)
+			{
+				return 0;
+			}
+
+			long delta = (long)targetReferenceTick - sourceReferenceTick;
+			if (delta < int.MinValue || delta > int.MaxValue)
+			{
+				Log.Warning("CooldownController",
+					$"{context}: tick offset from {sourceReferenceTick} to {targetReferenceTick} is outside the supported signed range; leaving serialized cooldown ticks unchanged.");
+				return 0;
+			}
+
+			return (int)delta;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		internal static uint AddSignedTickOffset(uint tick, int tickOffset)
+		{
+			return unchecked((uint)((long)tick + tickOffset));
 		}
 
 		/// <summary>
@@ -280,6 +386,29 @@ namespace FishMMO.Shared
 		public bool IsOnCooldown(long id, uint currentTick)
 		{
 			return cooldowns.TryGetValue(id, out CooldownInstance cd) && cd.IsOnCooldown(currentTick);
+		}
+
+		/// <summary>
+		/// Maps a raw authoritative tick to the current replicate-domain tick when available.
+		/// </summary>
+		/// <param name="serverTick">Fallback authoritative tick.</param>
+		/// <returns>The mapped replicate-domain tick if one can be derived, otherwise <paramref name="serverTick"/>.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public uint ResolveAuthoritativeTick(uint serverTick)
+		{
+			if (lastReplicateTick == TimeManager.UNSET_TICK ||
+				lastReplicateLocalTick == TimeManager.UNSET_TICK)
+			{
+				return serverTick;
+			}
+
+			if (serverTick == TimeManager.UNSET_TICK || serverTick == MissingRawTick)
+			{
+				return lastReplicateTick;
+			}
+
+			int tickOffset = GetSignedTickOffset(lastReplicateLocalTick, serverTick, nameof(ResolveAuthoritativeTick));
+			return AddSignedTickOffset(lastReplicateTick, tickOffset);
 		}
 
 		/// <summary>
@@ -401,10 +530,31 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Restores cooldown state from a reconcile snapshot, replacing all current entries.
+		/// Restores cooldown state from a reconcile snapshot, replacing current entries only when they differ.
 		/// </summary>
 		public void RestoreFromReconcile(CooldownReconcileEntry[] entries)
 		{
+			bool changed = cooldowns.Count != (entries == null ? 0 : entries.Length);
+			if (!changed && entries != null)
+			{
+				for (int i = 0; i < entries.Length; i++)
+				{
+					CooldownReconcileEntry entry = entries[i];
+					if (!cooldowns.TryGetValue(entry.AbilityID, out CooldownInstance cooldown) ||
+						cooldown.StartTick != entry.StartTick ||
+						cooldown.DurationTicks != entry.DurationTicks)
+					{
+						changed = true;
+						break;
+					}
+				}
+			}
+
+			if (!changed)
+			{
+				return;
+			}
+
 			cooldowns.Clear();
 			snapshotDirty = true;
 			if (entries == null)

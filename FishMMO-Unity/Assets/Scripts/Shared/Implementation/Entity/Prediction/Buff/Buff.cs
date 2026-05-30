@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using FishNet.Managing.Timing;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -27,7 +28,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// The absolute network tick at which the next <see cref="BaseBuffTemplate.OnTick"/>
-		/// should fire. Resets to <c>currentTick + tickRateTicks</c> after each fire.
+		/// should fire. Advances by one tick-rate interval after each fire so missed
+		/// intervals catch up without drifting the cadence to the late current tick.
 		/// </summary>
 		public uint NextTickTick;
 
@@ -155,7 +157,8 @@ namespace FishMMO.Shared
 		/// duration &lt; 2^31 ticks (~810 days at 30 tps).
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool HasExpired(uint currentTick) => (int)(currentTick - ExpiryTick) >= 0;
+		public bool HasExpired(uint currentTick) =>
+			ExpiryTick != TimeManager.UNSET_TICK && (int)(currentTick - ExpiryTick) >= 0;
 
 		/// <summary>
 		/// Computes the remaining buff duration in seconds for the given tick.
@@ -183,7 +186,21 @@ namespace FishMMO.Shared
 		// inlining this method regardless, so the attribute would be silently ignored.
 		public bool TryTick(ICharacter target, uint currentTick, float tickDelta)
 		{
-			if ((int)(currentTick - NextTickTick) >= 0)
+			if (Template == null || NextTickTick == TimeManager.UNSET_TICK)
+			{
+				return false;
+			}
+
+			uint tickRateTicks = DurationToTicks(Template.TickRate, tickDelta);
+			if (tickRateTicks == 0u)
+			{
+				return false;
+			}
+
+			uint lastEligibleTick = ExpiryTick != TimeManager.UNSET_TICK &&
+				(int)(currentTick - ExpiryTick) >= 0 ? ExpiryTick : currentTick;
+			bool fired = false;
+			while ((int)(lastEligibleTick - NextTickTick) >= 0)
 			{
 				try
 				{
@@ -202,10 +219,10 @@ namespace FishMMO.Shared
 				// multiplier; recording that same value here lets OnRemove reverse the
 				// exact total modifier regardless of stack changes during the buff's life.
 				CumulativeTickMultiplier += (1 + Stacks);
-				ResetTickTime(currentTick, tickDelta);
-				return true;
+				NextTickTick += tickRateTicks;
+				fired = true;
 			}
-			return false;
+			return fired;
 		}
 
 		/// <summary>

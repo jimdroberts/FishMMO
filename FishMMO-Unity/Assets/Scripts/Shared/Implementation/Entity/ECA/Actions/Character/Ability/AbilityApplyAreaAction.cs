@@ -72,6 +72,11 @@ namespace FishMMO.Shared
 						return;
 					}
 
+					// Extract tick context once from the parent event so each child collision
+					// event inherits it. Without this, downstream ApplyBuffAction falls back
+					// to TimeManager.LocalTick and loses tick alignment in prediction paths.
+					eventData.TryGet(out TickEventData tickToPropagate);
+
 					for (int i = 0; i < hitCount; i++)
 					{
 						var hit = hits[i];
@@ -81,6 +86,10 @@ namespace FishMMO.Shared
 						if (targetCharacter != null)
 						{
 							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(initiator, targetCharacter, abilityObject, null, abilityObject.RNG);
+							if (tickToPropagate != null)
+							{
+								collisionEvent.Add(tickToPropagate);
+							}
 
 							foreach (var trigger in onHitEvents.Values)
 							{

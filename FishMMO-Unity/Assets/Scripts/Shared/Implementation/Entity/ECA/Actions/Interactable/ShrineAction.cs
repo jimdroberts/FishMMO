@@ -43,10 +43,12 @@ namespace FishMMO.Shared
 			if (template.Buff != null &&
 				player.TryGet(out IBuffController buffController))
 			{
-				uint tick = (eventData != null && eventData.TryGet(out TickEventData td)) ? td.Tick : player.GetLocalTick();
 				for (int i = 0; i < template.BuffStackCount; i++)
 				{
-					buffController.Apply(template.Buff, tick);
+					// Shrine interaction is server-authoritative. ApplyAuthoritative
+					// self-corrects to the replicate domain via BuffController's last replicate tick;
+					// the tick argument is only used as a fallback pre-first-replication.
+					buffController.ApplyAuthoritative(template.Buff, player.GetLocalTick());
 				}
 			}
 

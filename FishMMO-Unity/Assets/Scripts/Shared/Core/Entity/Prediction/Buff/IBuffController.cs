@@ -60,21 +60,24 @@ namespace FishMMO.Shared.Core
 		/// Applies a buff to the character by template, creating a new instance if needed and handling stacking.
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
-
-		/// <summary>
-		/// Applies a buff to the character using the provided absolute network tick as the application moment.
-		/// Use this from prediction-path callers to ensure deterministic ExpiryTick calculation.
-		/// </summary>
-		/// <param name="template">The buff template to apply.</param>
-		/// <param name="currentTick">The absolute network tick at the moment of application.</param>
+		/// <param name="currentTick">The replicate-domain tick at the moment of application.</param>
 		void Apply(BaseBuffTemplate template, PredictionTick currentTick);
 
 		/// <summary>
-		/// Applies a buff from a server-authoritative context (not the prediction path).
-		/// Uses the provided raw server tick directly. Do NOT call this from within
-		/// OnReplicate — use Apply(BaseBuffTemplate, PredictionTick) instead.
+		/// Applies a buff from a server-authoritative context. Implementations should map the
+		/// raw server tick back to their current replicate-tick domain when one is available.
 		/// </summary>
+		/// <param name="template">The buff template to apply.</param>
+		/// <param name="serverTick">Fallback authoritative tick used before any replicate tick exists.</param>
 		void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick);
+
+		/// <summary>
+		/// Maps a raw authoritative tick to the controller's current replicate-tick domain
+		/// when a replicate tick is available.
+		/// </summary>
+		/// <param name="serverTick">Fallback authoritative tick used before any replicate tick exists.</param>
+		/// <returns>The effective tick to use for buff comparisons.</returns>
+		uint ResolveAuthoritativeTick(uint serverTick);
 
 		/// <summary>
 		/// Applies a buff instance to the character if not already present, invoking appropriate events.
@@ -112,6 +115,8 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Restores buff state from a reconcile snapshot.
 		/// </summary>
-		void RestoreFromReconcile(BuffReconcileEntry[] entries);
+		/// <param name="entries">Authoritative buff snapshot.</param>
+		/// <param name="reconcileTick">Replicate tick associated with the reconcile snapshot.</param>
+		void RestoreFromReconcile(BuffReconcileEntry[] entries, uint reconcileTick);
 	}
 }

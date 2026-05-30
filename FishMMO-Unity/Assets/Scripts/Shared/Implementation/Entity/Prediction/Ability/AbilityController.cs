@@ -54,6 +54,9 @@ namespace FishMMO.Shared
 		/// despite the input having a queued ability. Included in the next reconcile
 		/// via <see cref="AbilityActivationFlags.Denied"/> so clients can fire
 		/// <see cref="OnAbilityDenied"/> authoritatively instead of heuristically.
+		/// Invariant: a replicate tick chooses exactly one activation path — either
+		/// ability or consumable — so one boolean denial signal cannot drop a second
+		/// same-tick denial under the current input contract.
 		/// Cleared after each <see cref="OnCreateReconcile"/>.
 		/// </summary>
 		private bool wasDenied;
@@ -634,9 +637,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Ensures the ability seed generator is initialized. Creates a new generator
-		/// from <see cref="playerSeedGenerator"/> if one does not exist, and sets
-		/// <see cref="currentSeed"/> to the first generated value.
+		/// Ensures the ability seed generator is initialized. The server allocates a new
+		/// per-character seed from <see cref="playerSeedGenerator"/>; clients initialize
+		/// from the last payload/reconcile seed without advancing the shared static RNG.
+		/// Sets <see cref="currentSeed"/> to the first generated value.
 		/// Called from <see cref="ResetState"/>, <see cref="CreateReconcile"/>, and
 		/// <see cref="WritePayload"/> — all three paths must produce identical results
 		/// when the generator is null, so the logic is centralized here.
@@ -645,7 +649,10 @@ namespace FishMMO.Shared
 		{
 			if (abilitySeedGenerator == null)
 			{
-				abilitySeed = playerSeedGenerator.Next();
+				if (base.IsServerStarted)
+				{
+					abilitySeed = playerSeedGenerator.Next();
+				}
 				abilitySeedGenerator = new DeterministicRNG(abilitySeed);
 				currentSeed = abilitySeedGenerator.Next();
 			}

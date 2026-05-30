@@ -1,0 +1,61 @@
+using System.Collections.Generic;
+using System.Reflection;
+using FishMMO.Shared;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace FishMMO.UnitTests
+{
+	/// <summary>
+	/// Regression tests for deterministic ability object container allocation helpers.
+	/// </summary>
+	[TestFixture]
+	public class AbilityObjectContainerIdTests
+	{
+		private const BindingFlags PrivateStaticFlags = BindingFlags.Static | BindingFlags.NonPublic;
+
+		/// <summary>
+		/// Verifies empty containers are treated as occupied collision slots, not same-spawn retries.
+		/// </summary>
+		[Test]
+		public void IsSameSpawnContainer_EmptyContainer_ReturnsFalse()
+		{
+			Assert.IsFalse(IsSameSpawnContainer(null, 7, new PredictionTick(100u)));
+			Assert.IsFalse(IsSameSpawnContainer(new Dictionary<int, AbilityObject>(), 7, new PredictionTick(100u)));
+		}
+
+		/// <summary>
+		/// Verifies non-empty containers are same-spawn only when every live object matches seed and tick.
+		/// </summary>
+		[Test]
+		public void IsSameSpawnContainer_NonEmptyContainer_RequiresMatchingSeedAndTick()
+		{
+			GameObject gameObject = new GameObject("AbilityObjectContainerIdTest");
+			try
+			{
+				AbilityObject abilityObject = gameObject.AddComponent<AbilityObject>();
+				abilityObject.SpawnSeed = 7;
+				abilityObject.SpawnTick = new PredictionTick(100u);
+				var container = new Dictionary<int, AbilityObject>
+				{
+					{ 1, abilityObject },
+				};
+
+				Assert.IsTrue(IsSameSpawnContainer(container, 7, new PredictionTick(100u)));
+				Assert.IsFalse(IsSameSpawnContainer(container, 8, new PredictionTick(100u)));
+				Assert.IsFalse(IsSameSpawnContainer(container, 7, new PredictionTick(101u)));
+			}
+			finally
+			{
+				Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		private static bool IsSameSpawnContainer(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
+		{
+			return (bool)typeof(AbilityObject)
+				.GetMethod("IsSameSpawnContainer", PrivateStaticFlags)
+				.Invoke(null, new object[] { container, seed, spawnTick });
+		}
+	}
+}

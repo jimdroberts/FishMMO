@@ -328,7 +328,7 @@ This section shows exactly where to place `nginx.conf`, which ports must be open
 Recommended production location:
 
 ```bash
-sudo cp "/home/$USER/Dev/FishMMO Dev/FishMMO-Setup/nginx.conf" /etc/nginx/nginx.conf
+sudo cp "/home/$USER/Dev/FishMMO-Dev/FishMMO-Setup/nginx.conf" /etc/nginx/nginx.conf
 sudo chown root:root /etc/nginx/nginx.conf
 sudo chmod 644 /etc/nginx/nginx.conf
 ```

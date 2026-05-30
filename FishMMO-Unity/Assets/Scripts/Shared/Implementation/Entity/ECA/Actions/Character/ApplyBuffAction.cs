@@ -48,12 +48,14 @@ namespace FishMMO.Shared
 
 			int stacks = StacksValue.GetValue(initiator, eventData);
 
-			bool isPredictionPath = false;
+			// Only same-character replicate-domain TickEventData can go through Apply
+			// directly. A caster's replicate tick is not necessarily in the target's
+			// controller domain, so cross-character effects must route through the
+			// target controller's authoritative mapper.
 			TickEventData tickData = null;
-			if (eventData != null)
-			{
-				isPredictionPath = eventData.TryGet(out tickData);
-			}
+			bool hasTickData = eventData != null && eventData.TryGet(out tickData);
+			bool isPredictionPath = hasTickData && tickData.IsReplicateTick && tickData.IsForCharacter(target);
+			uint authoritativeTick = hasTickData && !tickData.IsReplicateTick ? (uint)tickData.Tick : target.GetLocalTick();
 
 			for (int i = 0; i < stacks; ++i)
 			{
@@ -63,7 +65,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					buffController.ApplyAuthoritative(BuffTemplate, target.GetLocalTick());
+					buffController.ApplyAuthoritative(BuffTemplate, authoritativeTick);
 				}
 			}
 		}

@@ -187,6 +187,9 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Called when the buff is applied to a character. Must be implemented by derived classes.
+		/// When reached through <see cref="OnApplyStack"/>, <see cref="Buff.Stacks"/>
+		/// still contains the pre-increment stack count; stack-aware templates should account
+		/// for that ordering or override <see cref="OnApplyStack"/> directly.
 		/// </summary>
 		/// <param name="buff">The buff instance being applied.</param>
 		/// <param name="target">The character receiving the buff.</param>
@@ -201,7 +204,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Called when a stack of the buff is applied. Defaults to delegating to OnApply.
-		/// Override in derived classes for custom stacking behavior.
+		/// <see cref="Buff.Stacks"/> is incremented after this hook returns, so this hook
+		/// observes the previous stack count. Override in derived classes for custom stacking behavior.
 		/// </summary>
 		/// <param name="buff">The buff instance being stacked.</param>
 		/// <param name="target">The character receiving the stack.</param>

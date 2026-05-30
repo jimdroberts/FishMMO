@@ -359,7 +359,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 			float tickDelta = (float)timeManager.TickDelta;
-			uint currentTick = timeManager.LocalTick;
+			uint currentTick = buffController.ResolveAuthoritativeTick(timeManager.LocalTick);
 
 			foreach (var kvp in buffController.Buffs)
 			{

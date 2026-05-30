@@ -13,6 +13,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class AbilityObject : MonoBehaviour
 	{
+		private const int ContainerIDTickMultiplier = 1000003;
+		private const int ContainerIDProbeStep = 1;
+		private const int ContainerIDProbeSearchSlack = 1;
+
 		/// <summary>
 		/// Event invoked when a pet ability is summoned.
 		/// </summary>
@@ -49,10 +53,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float RemainingLifeTime;
 		/// <summary>
-		/// The network tick at which this ability object was spawned.
+		/// The network tick at which this ability object was spawned, expressed as a
+		/// <see cref="PredictionTick"/> sourced from the replicate input.
 		/// Used by the rollback system to identify predicted objects that need to be destroyed on reconcile mismatch.
 		/// </summary>
-		public uint SpawnTick;
+		public PredictionTick SpawnTick;
+
+		/// <summary>
+		/// Deterministic seed used to create this spawn container.
+		/// Paired with <see cref="SpawnTick"/> to distinguish a same-spawn retry from a
+		/// genuine container-ID hash collision with another active ability.
+		/// </summary>
+		internal int SpawnSeed;
 
 		/// <summary>
 		/// Random number generator for ability effects.
@@ -295,6 +307,15 @@ namespace FishMMO.Shared
 				{
 					cachedTickEventData.DeltaTime = tickDelta;
 				}
+				// Update the current tick on the cached event so OnTick-triggered ECA actions
+				// (e.g. ApplyBuffAction) receive the authoritative server tick. Carried as a
+				// plain uint on AbilityTickEventData rather than a TickEventData sub-payload
+				// to avoid per-tick heap allocation on this hot path (§1.4).
+				cachedTickEventData.CurrentTick = timeManager != null ? timeManager.LocalTick : 0u;
+				// Thread the object's deterministic RNG so OnTick ECA actions (e.g. random
+				// debuff application) can roll deterministic values. Zero-alloc: same field,
+				// same instance — no new allocation on this hot path.
+				cachedTickEventData.RNG = RNG;
 
 				foreach (var trigger in tickEvents.Values)
 				{
@@ -368,6 +389,9 @@ namespace FishMMO.Shared
 					{
 						// The trigger's own TargetSelector handles fan-out.
 						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision, RNG);
+						// Thread the raw authoritative tick. TickEventData marks this as non-replicate,
+						// so prediction-domain consumers must route it through their authoritative fallback.
+						collisionEvent.Add(new TickEventData(Caster, timeManager.LocalTick));
 						hitEvent.Execute(collisionEvent);
 					}
 				}
@@ -395,6 +419,10 @@ namespace FishMMO.Shared
 			if (destroyed) return;
 			destroyed = true;
 
+			// Capture tick before unsubscribing — timeManager.LocalTick is unavailable
+			// after the subscription is removed and the reference is nulled.
+			uint destroyTick = timeManager != null ? timeManager.LocalTick : 0u;
+
 			// Unsubscribe from tick events before cleanup.
 			if (timeManager != null)
 			{
@@ -407,6 +435,16 @@ namespace FishMMO.Shared
 			if (destroyEvents != null && Caster != null)
 			{
 				EventData destroyEvent = new EventData(Caster);
+				// Thread the raw authoritative destroy tick. TickEventData marks this as
+				// non-replicate, so prediction-domain consumers must use an authoritative fallback.
+				// Only added when a valid TimeManager tick was captured above.
+				if (destroyTick != 0u)
+				{
+					destroyEvent.Add(new TickEventData(Caster, destroyTick));
+				}
+				// Thread the object's deterministic RNG so destroy ECA actions can roll
+				// deterministic values (e.g. random loot drop, on-death proc effects).
+				destroyEvent.RNG = RNG;
 				foreach (var trigger in destroyEvents.Values)
 				{
 					trigger.Execute(destroyEvent);
@@ -445,7 +483,7 @@ namespace FishMMO.Shared
 			Transform abilitySpawner,
 			TargetInfo targetInfo,
 			int seed,
-			uint spawnTick)
+			PredictionTick spawnTick)
 		{
 			// Guard first to avoid mutating or subscribing a reused instance.
 			if (abilityObject.initialized)
@@ -494,7 +532,7 @@ namespace FishMMO.Shared
 			Ability ability,
 			ICharacter caster,
 			int seed,
-			uint spawnTick)
+			PredictionTick spawnTick)
 		{
 			abilityObject.initialized = true;
 			abilityObject.Ability = ability;
@@ -503,6 +541,7 @@ namespace FishMMO.Shared
 			abilityObject.RemainingLifeTime = ability.LifeTime;
 			abilityObject.RNG = new DeterministicRNG(seed);
 			abilityObject.SpawnTick = spawnTick;
+			abilityObject.SpawnSeed = seed;
 			// Snapshot is lazily initialized: only created when the Ability reference is
 			// about to be nulled (DetachAllAbilityObjects). This avoids 3 heap allocations
 			// (3 Dictionary copies) per spawn for the common case where
@@ -520,52 +559,93 @@ namespace FishMMO.Shared
 			abilityObject.timeManager = timeManager;
 			abilityObject.tickDelta = (float)timeManager.TickDelta;
 			abilityObject.isServer = timeManager.NetworkManager.IsServerStarted;
-
-			if (timeManager != null)
-			{
-				timeManager.OnTick += abilityObject.OnTick;
-			}
+			timeManager.OnTick += abilityObject.OnTick;
 		}
 
 		/// <summary>
 		/// Allocates a deterministic container ID for the spawned ability object.
-		/// Derives the ID from seed and spawnTick with no collision probing, ensuring
-		/// identical results on client and server regardless of <c>ability.Objects</c> state.
-		/// If a stale entry exists at the computed ID (leftover from a mispredicted spawn),
-		/// it is destroyed and replaced.
+		/// Derives the first candidate from seed and spawnTick, then probes linearly when
+		/// the slot is occupied by a different active spawn. A same seed+tick entry is a
+		/// duplicate retry and is destroyed/replaced; a different seed+tick entry is a real
+		/// hash collision and must remain alive.
 		/// </summary>
 		private static void TryAllocateContainerID(
 			Ability ability,
 			int seed,
-			uint spawnTick,
+			PredictionTick spawnTick,
 			out int containerID,
 			out Dictionary<int, AbilityObject> spawnedAbilityObjects)
 		{
 			spawnedAbilityObjects = new Dictionary<int, AbilityObject>();
-			containerID = unchecked(seed ^ ((int)spawnTick * 1000003));
+			// spawnTick.Value is used explicitly: PredictionTick has implicit operator uint but
+			// C# does not allow (int)PredictionTick directly (uint is not implicitly convertible
+			// to int), so .Value gives the raw uint for the unchecked int cast.
+			int baseContainerID = unchecked(seed ^ ((int)spawnTick.Value * ContainerIDTickMultiplier));
+			containerID = baseContainerID;
 
-			// If an existing entry occupies this slot, destroy it first.
-			// This handles two cases:
-			//   (1) A stale predicted entry leftover from a mispredicted spawn.
-			//   (2) A genuine hash collision — the hash is seed XOR (tick * 1000003),
-			//       so identical (seed, tick) pairs trivially collide, and distinct
-			//       pairs can collide by chance (birthday-problem probability grows
-			//       with active ability count). Same-tick different-seed pairs do NOT
-			//       collide because XOR preserves seed uniqueness. The simple hash has
-			//       no collision probing, so collisions are resolved by destroying
-			//       the older entry and replacing it — safe for both stale cleanup
-			//       and rare same-tick multi-cast collisions.
-			if (ability.Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> staleContainer))
+			// Probe one slot beyond the current container count: among N occupied keys,
+			// N+1 deterministic candidates must include at least one free slot.
+			int probeLimit = ability.Objects.Count + ContainerIDProbeSearchSlack;
+			for (int probe = 0; probe < probeLimit; probe++)
 			{
-				foreach (AbilityObject staleObj in staleContainer.Values)
+				if (!ability.Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> existingContainer))
 				{
-					if (staleObj != null)
+					if (probe > 0)
 					{
-						staleObj.Ability = null;
-						staleObj.DestroyAbilityObjectInternal();
+						Log.Warning("AbilityObject",
+							$"TryAllocateContainerID: resolved hash collision for ability {ability.ID} from {baseContainerID} to {containerID} after {probe} probes.");
 					}
+					return;
 				}
-				ability.Objects.Remove(containerID);
+
+				if (IsSameSpawnContainer(existingContainer, seed, spawnTick))
+				{
+					DestroyAbilityContainer(existingContainer);
+					ability.Objects.Remove(containerID);
+					return;
+				}
+
+				containerID = unchecked(containerID + ContainerIDProbeStep);
+			}
+
+			throw new InvalidOperationException(
+				$"TryAllocateContainerID: failed to find a free container ID for ability {ability.ID} after {probeLimit} probes.");
+		}
+
+		private static bool IsSameSpawnContainer(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
+		{
+			if (container == null || container.Count == 0)
+			{
+				return false;
+			}
+
+			bool sawSpawnObject = false;
+			foreach (AbilityObject abilityObject in container.Values)
+			{
+				if (abilityObject == null)
+				{
+					continue;
+				}
+
+				sawSpawnObject = true;
+				if (abilityObject.SpawnSeed != seed || abilityObject.SpawnTick.Value != spawnTick.Value)
+				{
+					return false;
+				}
+			}
+
+			return sawSpawnObject;
+		}
+
+		private static void DestroyAbilityContainer(Dictionary<int, AbilityObject> container)
+		{
+			foreach (AbilityObject staleObj in container.Values)
+			{
+				if (staleObj != null)
+				{
+					staleObj.Ability = null;
+					staleObj.DestroyAbilityObjectInternal();
+				}
 			}
 		}
 
@@ -591,6 +671,12 @@ namespace FishMMO.Shared
 			}
 
 			AbilitySpawnEventData spawnEventData = new AbilitySpawnEventData(caster, ability, abilitySpawner, targetInfo, seed, abilityObject, nextChildID, spawnedAbilityObjects);
+			// Thread the spawn tick so prediction-aware ECA actions (e.g. ApplyBuffAction)
+			// use the deterministic replicate tick rather than target.GetLocalTick().
+			spawnEventData.Add(new TickEventData(caster, abilityObject.SpawnTick));
+			// Thread the object's deterministic RNG so spawn ECA actions can roll
+			// deterministic values using a shared, already-seeded generator.
+			spawnEventData.RNG = abilityObject.RNG;
 
 			if (hasPreSpawn)
 			{
@@ -661,6 +747,7 @@ namespace FishMMO.Shared
 			abilityObject.RemainingLifeTime = source.RemainingLifeTime;
 			abilityObject.RNG = new DeterministicRNG(CreateChildSeed(seed, abilityObjectID));
 			abilityObject.SpawnTick = source.SpawnTick;
+			abilityObject.SpawnSeed = source.SpawnSeed;
 			abilityObject.Snapshot = source.Snapshot;
 			// Snapshot is lazily initialized — children share the parent's lifecycle
 			// and don't need their own eagerly-created snapshot.
@@ -696,8 +783,9 @@ namespace FishMMO.Shared
 		/// <param name="abilitySpawner">The transform used as the spawn origin.</param>
 		/// <param name="targetInfo">The targeting information for the ability.</param>
 		/// <param name="seed">The deterministic RNG seed.</param>
-		/// <param name="spawnTick">The network tick at which this object is being spawned, used for rollback.</param>
-		public static void Spawn(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed, uint spawnTick)
+		/// <param name="spawnTick">The replicate-input tick at which this object is being spawned, used for rollback.
+		/// Must be sourced from <see cref="CharacterReplicateData.GetPredictionTick"/> to preserve type-safe tick sourcing.</param>
+		public static void Spawn(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed, PredictionTick spawnTick)
 		{
 			AbilityTemplate template = ability.Template;
 			if (template == null)
@@ -739,6 +827,9 @@ namespace FishMMO.Shared
 					{
 						// The trigger's own TargetSelector handles fan-out (self / area / etc.).
 						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster, null, null, rng);
+						// Thread the spawn tick so prediction-aware ECA actions (e.g. ApplyBuffAction)
+						// use the deterministic replicate tick rather than target.GetLocalTick().
+						collisionEvent.Add(new TickEventData(caster, spawnTick));
 						hitEvent.Execute(collisionEvent);
 					}
 				}

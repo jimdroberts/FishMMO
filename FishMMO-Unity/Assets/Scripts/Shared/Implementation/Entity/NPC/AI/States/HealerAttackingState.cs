@@ -257,7 +257,7 @@ namespace FishMMO.Shared
 			Ability best = null;
 			float bestScore = float.MinValue;
 
-			uint currentTick = controller.TimeManager.LocalTick;
+			uint currentTick = cooldownController.ResolveAuthoritativeTick(controller.TimeManager.LocalTick);
 
 			EventData activationCheckData = null;
 
@@ -305,7 +305,7 @@ namespace FishMMO.Shared
 			Ability best = null;
 			float bestScore = float.MinValue;
 
-			uint currentTick = controller.TimeManager.LocalTick;
+			uint currentTick = cooldownController.ResolveAuthoritativeTick(controller.TimeManager.LocalTick);
 
 			EventData activationCheckData = null;
 

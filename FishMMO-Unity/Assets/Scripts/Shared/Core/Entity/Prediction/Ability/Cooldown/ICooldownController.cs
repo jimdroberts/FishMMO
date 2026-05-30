@@ -55,6 +55,14 @@ namespace FishMMO.Shared.Core
 		bool IsOnCooldown(long id, uint currentTick);
 
 		/// <summary>
+		/// Maps a raw authoritative tick to the controller's current replicate-tick domain
+		/// when a replicate tick is available.
+		/// </summary>
+		/// <param name="serverTick">Fallback authoritative tick used before any replicate tick exists.</param>
+		/// <returns>The effective tick to use for cooldown comparisons.</returns>
+		uint ResolveAuthoritativeTick(uint serverTick);
+
+		/// <summary>
 		/// Tries to get the remaining cooldown time in seconds for an ability.
 		/// </summary>
 		/// <param name="id">Ability ID.</param>

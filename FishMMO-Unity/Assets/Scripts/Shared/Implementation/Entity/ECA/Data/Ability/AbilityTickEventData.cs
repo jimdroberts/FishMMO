@@ -21,6 +21,15 @@ namespace FishMMO.Shared
 		public float DeltaTime;
 
 		/// <summary>
+		/// The authoritative server tick at which this tick event fired.
+		/// Set by <see cref="AbilityObject"/> each tick before event dispatch.
+		/// This is a raw authoritative tick, not a replicate-domain tick. Consumers that
+		/// compare against prediction-domain state must route it through their controller's
+		/// authoritative fallback rather than wrapping it directly as a <see cref="PredictionTick"/>.
+		/// </summary>
+		public uint CurrentTick;
+
+		/// <summary>
 		/// Initializes a new instance of the <see cref="AbilityTickEventData"/> class.
 		/// </summary>
 		/// <param name="initiator">The character initiating the tick event.</param>

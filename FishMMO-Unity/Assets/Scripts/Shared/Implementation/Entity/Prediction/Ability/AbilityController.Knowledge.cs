@@ -261,9 +261,10 @@ namespace FishMMO.Shared
 			{
 				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
 				float cooldown = ability.Cooldown * cooldownReduction;
+				uint currentTick = cooldownController.ResolveAuthoritativeTick(base.TimeManager.LocalTick);
 
 				cooldownController.AddCooldown(ability.ID, CooldownInstance.FromRemainingSeconds(
-					base.TimeManager.LocalTick, cooldown, remainingCooldown, (float)base.TimeManager.TickDelta));
+					currentTick, cooldown, remainingCooldown, (float)base.TimeManager.TickDelta));
 			}
 		}
 

@@ -31,13 +31,10 @@ namespace FishMMO.Shared
 
 			if (!initiator.TryGet(out IBuffController buffController)) return;
 
-			uint tick = initiator.GetLocalTick();
-			if (eventData != null && eventData.TryGet(out TickEventData tickData))
-			{
-				tick = tickData.Tick; // already a raw uint from LocalTick in Region.cs
-			}
-
-			buffController.ApplyAuthoritative(Buff, tick);
+			// ApplyAuthoritative self-corrects to the replicate domain via
+			// BuffController's last replicate tick. The tick argument is only used as a
+			// fallback before the first OnReplicate fires.
+			buffController.ApplyAuthoritative(Buff, initiator.GetLocalTick());
 		}
 	}
 }

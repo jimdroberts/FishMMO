@@ -56,8 +56,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the network tick for this replicate input as a <see cref="PredictionTick"/>.
 		/// This is the only sanctioned way to produce a PredictionTick — use it as the
-		/// currentTick argument when calling IBuffController.Apply or ICooldownController.Apply
-		/// from within the prediction pipeline.
+		/// currentTick argument when applying prediction-domain buff and cooldown state.
 		/// </summary>
 		public PredictionTick GetPredictionTick() => new PredictionTick(tick);
 

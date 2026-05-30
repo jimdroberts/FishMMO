@@ -97,6 +97,13 @@ namespace FishMMO.Shared
 		private bool suppressNotifications;
 
 		/// <summary>
+		/// Nesting depth for external notification-suppression scopes. This prevents
+		/// an inner replay-safe system from clearing <see cref="suppressNotifications"/>
+		/// while an outer replay/reconcile scope is still active.
+		/// </summary>
+		private int notificationSuppressionDepth;
+
+		/// <summary>
 		/// Reference to the ScriptableObject database containing all character attribute templates.
 		/// Used to initialize and manage available attributes for this character.
 		/// </summary>
@@ -200,7 +207,9 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Maximum number of consecutive notification drain passes inside a single
-		/// <see cref="EndPropagation"/> call. A well-behaved listener should never
+		/// <see cref="EndPropagation"/> call. Each pass may dispatch many listener
+		/// notifications; this caps re-enqueue depth rather than listener count.
+		/// A well-behaved listener should never
 		/// re-enqueue the attribute it just received in a way that causes unbounded
 		/// re-notification, but without graph cycles the cycle-detection in
 		/// <see cref="ValidateGraphAcyclic"/> does not cover listener-level re-entrancy.
@@ -337,6 +346,59 @@ namespace FishMMO.Shared
 				return;
 			}
 			pendingNotifications.Add(attribute);
+		}
+
+		/// <inheritdoc/>
+		public void BeginNotificationSuppression()
+		{
+			notificationSuppressionDepth++;
+			suppressNotifications = true;
+			BeginPropagation();
+		}
+
+		/// <inheritdoc/>
+		public void EndNotificationSuppression()
+		{
+			EndNotificationSuppression(nameof(EndNotificationSuppression));
+		}
+
+		private void EndNotificationSuppression(string context)
+		{
+			if (notificationSuppressionDepth <= 0)
+			{
+				notificationSuppressionDepth = 0;
+				suppressNotifications = false;
+				Log.Error("CharacterAttributeController",
+					$"{context}: EndNotificationSuppression called without a matching BeginNotificationSuppression.");
+				return;
+			}
+
+			try
+			{
+				DiscardPendingNotifications();
+			}
+			finally
+			{
+				try
+				{
+					EndPropagation();
+				}
+				catch (Exception ex)
+				{
+					propagationDepth = 0;
+					isDrainingNotifications = false;
+					pendingNotifications.Clear();
+					Log.Error("CharacterAttributeController",
+						$"{context}: EndPropagation threw while ending notification suppression; " +
+						$"propagation state forcibly reset. Exception: {ex}");
+				}
+
+				notificationSuppressionDepth--;
+				if (notificationSuppressionDepth == 0)
+				{
+					suppressNotifications = false;
+				}
+			}
 		}
 
 		/// <summary>
@@ -518,6 +580,7 @@ namespace FishMMO.Shared
 			// for the entire remaining lifetime of the entity.
 			suppressNotifications = false;
 			suppressAttributeDirty = false;
+			notificationSuppressionDepth = 0;
 
 			foreach (CharacterResourceAttribute characterResourceAttribute in ResourceAttributes.Values)
 			{
@@ -1064,6 +1127,10 @@ namespace FishMMO.Shared
 		/// replayed during rollback. The monotonic guard (<see cref="lastProcessedRegenTick"/>)
 		/// causes all replayed ticks within the rollback window to be skipped. Authoritative
 		/// resource values are restored by <see cref="ApplyResourceState"/> via reconcile.
+		/// After a deep rewind, <see cref="lastProcessedRegenTick"/> can remain ahead of
+		/// the replayed local tick until live simulation catches up, so client-side regen
+		/// presentation may pause briefly after high-RTT reconciles. Server authority is
+		/// unaffected because resource values continue to arrive through reconcile.
 		/// Future maintainers must NOT assume replay-deterministic regen — gameplay systems
 		/// that depend on intermediate regen events during replay will not observe them.
 		/// </para>
@@ -1106,6 +1173,9 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Regenerates a single resource attribute using the cached regen dependency reference.
+		/// Missed intervals intentionally catch up one simulation tick at a time in
+		/// <see cref="Regenerate"/>; <paramref name="intervals"/> is retained so the
+		/// amount calculation stays explicit if batched catch-up is introduced later.
 		/// </summary>
 		/// <param name="resourceTemplateID">The template ID of the resource to regenerate.</param>
 		/// <param name="cachedRegen">The cached regeneration dependency attribute (resolved at init).</param>
@@ -1292,35 +1362,14 @@ namespace FishMMO.Shared
 				// entire replay block, including any second-wave notifications triggered by
 				// listeners. Without this, a listener invoked by resource.Gain can mutate
 				// another attribute and re-enqueue, bypassing DiscardPendingNotifications.
-				suppressNotifications = true;
-				BeginPropagation();
+				BeginNotificationSuppression();
 				try
 				{
 					Regenerate(tick);
 				}
 				finally
 				{
-					suppressNotifications = false;
-					// Drop any residual queued notifications (Belt-and-suspenders:
-					// suppressNotifications should have prevented all enqueues above).
-					DiscardPendingNotifications();
-					// Isolate EndPropagation exceptions: if a listener throws and somehow
-					// escapes EndPropagation's own try/finally guard (e.g. re-entrant
-					// exceptions), reset propagation state manually rather than leaving
-					// propagationDepth > 0 or isDrainingNotifications stuck true permanently.
-					try
-					{
-						EndPropagation();
-					}
-					catch (Exception ex)
-					{
-						propagationDepth = 0;
-						isDrainingNotifications = false;
-						pendingNotifications.Clear();
-						Log.Error("CharacterAttributeController",
-							$"OnReplicate: EndPropagation threw during replay finally block; " +
-							$"propagation state forcibly reset to prevent permanent corruption. Exception: {ex}");
-					}
+					EndNotificationSuppression(nameof(OnReplicate));
 				}
 			}
 			else
@@ -1478,10 +1527,11 @@ namespace FishMMO.Shared
 #endif
 
 			// suppressAttributeDirty blocks CharacterAttribute_OnAttributeUpdated from marking
-			// the snapshot dirty while we write authoritative values. We invalidate explicitly
-			// in the finally block once all values are settled, which is both correct and
-			// precise: the snapshot is rebuilt on the next CreateAttributeSnapshot call and the
-			// ReferenceEquals fast-path remains valid for ticks where nothing changes afterward.
+			// the snapshot dirty while we write authoritative values. The finally block only
+			// invalidates the cached snapshot if this reconcile actually changed local state,
+			// preserving the ReferenceEquals fast-path across no-op reconcile ticks.
+			bool snapshotChanged = false;
+			bool completed = false;
 			suppressAttributeDirty = true;
 			BeginPropagation();
 			try
@@ -1499,14 +1549,23 @@ namespace FishMMO.Shared
 					reconcileSeenIDs.Add(entry.TemplateID);
 					if (attributes.TryGetValue(entry.TemplateID, out CharacterAttribute attribute))
 					{
-						attribute.SetValueDirect(entry.Value);
-						attribute.SetModifierDirect(entry.ExternalModifier);
+						if (attribute.Value != entry.Value)
+						{
+							attribute.SetValueDirect(entry.Value);
+							snapshotChanged = true;
+						}
+						if (attribute.ExternalModifier != entry.ExternalModifier)
+						{
+							attribute.SetModifierDirect(entry.ExternalModifier);
+							snapshotChanged = true;
+						}
 					}
 					else
 					{
 						// A reconcile entry with no matching live attribute is a desync.
 						// Log and continue — skipping the missing entry is safer than crashing,
 						// but the operator must investigate why server and client keyset differ.
+						snapshotChanged = true;
 						Log.Error("CharacterAttributeController",
 							$"ApplyAttributeSnapshot: reconcile entry TemplateID={entry.TemplateID} has no matching attribute on this client. Possible server/client version mismatch.");
 					}
@@ -1526,38 +1585,46 @@ namespace FishMMO.Shared
 						{
 							kvp.Value.SetValueDirect(0);
 							kvp.Value.SetModifierDirect(0);
+							snapshotChanged = true;
 						}
 					}
 				}
 
 				// Phase 2: rebuild derived values now that all raw values are settled.
-				// UpdateValues propagates to parents; since all inputs are correct the
-				// graph converges on the first pass regardless of iteration order.
+				// Snapshot order is safe even when a parent appears before its child:
+				// Phase 1 has already written every raw value, and a later child
+				// UpdateValues call propagates any changed FinalValue upward to its parents.
+				// Order can change redundant intermediate recomputes, but the acyclic graph
+				// converges to the same final values after this pass.
 				// Optimization opportunity: track changed IDs during Phase 1 and only
 				// rebuild affected subgraphs — currently O(all attributes + all edges)
 				// per reconcile, acceptable at MMO attribute-graph sizes.
-				for (int i = 0; i < snapshot.Length; i++)
+				if (snapshotChanged)
 				{
-					if (attributes.TryGetValue(snapshot[i].TemplateID, out CharacterAttribute attribute))
+					for (int i = 0; i < snapshot.Length; i++)
 					{
-						attribute.UpdateValues(false);
-					}
-				}
-
-				// Also rebuild zeroed stale attributes so their cleared values propagate
-				// upward through the formula graph. Without this, parent attributes whose
-				// formulas read a stale child's FinalValue compute wrong results even
-				// though the stale child's raw values have already been zeroed.
-				if (reconcileSeenIDs.Count < attributes.Count)
-				{
-					foreach (KeyValuePair<int, CharacterAttribute> kvp in attributes)
-					{
-						if (!reconcileSeenIDs.Contains(kvp.Key))
+						if (attributes.TryGetValue(snapshot[i].TemplateID, out CharacterAttribute attribute))
 						{
-							kvp.Value.UpdateValues(false);
+							attribute.UpdateValues(false);
+						}
+					}
+
+					// Also rebuild zeroed stale attributes so their cleared values propagate
+					// upward through the formula graph. Without this, parent attributes whose
+					// formulas read a stale child's FinalValue compute wrong results even
+					// though the stale child's raw values have already been zeroed.
+					if (reconcileSeenIDs.Count < attributes.Count)
+					{
+						foreach (KeyValuePair<int, CharacterAttribute> kvp in attributes)
+						{
+							if (!reconcileSeenIDs.Contains(kvp.Key))
+							{
+								kvp.Value.UpdateValues(false);
+							}
 						}
 					}
 				}
+				completed = true;
 			}
 			finally
 			{
@@ -1582,13 +1649,16 @@ namespace FishMMO.Shared
 				// may not cover (e.g. a StackOverflowException in a listener mid-drain).
 				pendingNotifications.Clear();
 				suppressAttributeDirty = false;
-				// Explicit snapshot invalidation: suppressAttributeDirty blocked
-				// CharacterAttribute_OnAttributeUpdated from marking dirty during the write
-				// pass, so cachedAttributeSnapshot may still contain pre-reconcile values.
-				// Invalidating here guarantees CreateAttributeSnapshot rebuilds on the next
-				// call and the outgoing snapshot always reflects post-reconcile state.
-				attributeSnapshotDirty = true;
-				cachedAttributeSnapshot = null;
+				if (snapshotChanged || !completed)
+				{
+					// Explicit snapshot invalidation: suppressAttributeDirty blocked
+					// CharacterAttribute_OnAttributeUpdated from marking dirty during the write
+					// pass, so cachedAttributeSnapshot may still contain pre-reconcile values.
+					// Invalidating here guarantees CreateAttributeSnapshot rebuilds on the next
+					// call and the outgoing snapshot always reflects post-reconcile state.
+					attributeSnapshotDirty = true;
+					cachedAttributeSnapshot = null;
+				}
 			}
 		}
 	}

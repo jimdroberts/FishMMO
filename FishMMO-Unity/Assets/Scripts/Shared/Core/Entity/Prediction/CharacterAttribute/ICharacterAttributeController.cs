@@ -140,5 +140,19 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <param name="attribute">The attribute to notify after propagation completes.</param>
 		void EnqueueNotification(CharacterAttribute attribute);
+
+		/// <summary>
+		/// Begins a scope that suppresses all attribute update notifications while still
+		/// allowing deterministic attribute/resource state mutations to run.
+		/// Used by prediction replay so UI, ECA, and passive listeners do not observe
+		/// intermediate resimulation states.
+		/// </summary>
+		void BeginNotificationSuppression();
+
+		/// <summary>
+		/// Ends a notification-suppression scope and discards any queued updates without
+		/// invoking <see cref="CharacterAttribute.OnAttributeUpdated"/> listeners.
+		/// </summary>
+		void EndNotificationSuppression();
 	}
 }

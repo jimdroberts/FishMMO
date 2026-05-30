@@ -234,7 +234,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			uint currentTick = InstanceFinder.TimeManager.LocalTick;
+			uint currentTick = buffController.ResolveAuthoritativeTick(InstanceFinder.TimeManager.LocalTick);
 
 			// Mark all existing entries as stale candidates.
 			staleBuffKeys.Clear();

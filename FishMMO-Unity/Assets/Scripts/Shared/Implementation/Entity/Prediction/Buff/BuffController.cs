@@ -1,7 +1,9 @@
 ﻿using FishNet.Connection;
+using FishNet.Managing.Timing;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
+using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Logging;
@@ -16,6 +18,8 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class BuffController : CharacterBehaviour, IBuffController, IPredictableController
 	{
+		private const uint MissingRawTick = 0u;
+
 		/// <summary>
 		/// Execution order in the unified prediction pipeline.
 		/// Runs before <see cref="AbilityController"/> so buff effects are applied
@@ -94,10 +98,40 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Cached reconcile snapshot, reused across ticks when buffs haven't changed.
-		/// Invalidated by <see cref="Apply(BaseBuffTemplate, uint)"/>, <see cref="Remove"/>,
+		/// Invalidated by <see cref="Apply(BaseBuffTemplate, PredictionTick)"/>, <see cref="Remove"/>,
 		/// <see cref="RemoveAll"/>, <see cref="RestoreFromReconcile"/>, and <see cref="Tick"/>.
 		/// </summary>
 		private BuffReconcileEntry[] cachedSnapshot;
+
+		/// <summary>
+		/// The replicate input tick captured at the start of each <see cref="OnReplicate"/> call.
+		/// Used by <see cref="ApplyAuthoritative"/> to stamp <see cref="Buff.ExpiryTick"/> in the
+		/// replicate-tick domain rather than <c>TimeManager.LocalTick</c>.
+		///
+		/// <para>
+		/// <b>Why this matters:</b> FishNet queues client inputs and the server drains them
+		/// one per tick. When the queue is depleted (client lag of K ticks),
+		/// <c>input.GetTick()</c> falls K ticks behind <c>LocalTick</c>. A buff stamped with
+		/// <c>ExpiryTick = LocalTick + D</c> would not expire until the replicate tick reaches
+		/// <c>LocalTick + D</c>, which takes <c>D + K</c> server ticks - K ticks too long.
+		/// Stamping with <c>lastReplicateTick + D</c> keeps the expiry in the replicate domain
+		/// and the wall-clock duration is always exactly <c>D * tickDelta</c> seconds.
+		/// </para>
+		///
+		/// <para>
+		/// Region physics triggers fire from KCCPlayer (Order 110), after BuffController
+		/// (Order 80) has already set this field for the current tick, so the value is
+		/// always current for the physics-triggered authoritative path.
+		/// </para>
+		/// </summary>
+		private uint lastReplicateTick = TimeManager.UNSET_TICK;
+
+		/// <summary>
+		/// The <c>TimeManager.LocalTick</c> observed when <see cref="lastReplicateTick"/> was captured.
+		/// Used to preserve the raw-authoritative-to-replicate tick offset for events that fire
+		/// outside the immediate prediction pipeline step.
+		/// </summary>
+		private uint lastReplicateLocalTick = TimeManager.UNSET_TICK;
 
 		/// <summary>
 		/// When true, <see cref="cachedSnapshot"/> is stale and must be rebuilt.
@@ -106,7 +140,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// True while <see cref="OnReplicate"/> is executing a replayed (reconcile replay) tick.
-		/// Mutation helpers (<see cref="Apply(BaseBuffTemplate, uint)"/>, <see cref="Apply(Buff, bool)"/>,
+		/// Mutation helpers (<see cref="Apply(BaseBuffTemplate, PredictionTick)"/>, <see cref="Apply(Buff, bool)"/>,
 		/// <see cref="Remove"/>) and the per-tick <see cref="IBuffController.OnBuffTick"/>
 		/// dispatch check this flag to suppress UI / ECA events and FX during replay.
 		/// Deterministic state mutations (stack changes, expiry, NextTickTick advance) still run
@@ -159,13 +193,74 @@ namespace FishMMO.Shared
 		/// <param name="channel">Transport channel.</param>
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
 		{
+			// Latch the replicate tick before Tick() so that any ApplyAuthoritative call
+			// within the same pipeline step (e.g. Region physics triggers from KCCPlayer)
+			// stamps ExpiryTick in the replicate domain rather than TimeManager.LocalTick.
+			uint inputTick = input.GetTick();
+			if (lastReplicateTick == TimeManager.UNSET_TICK &&
+				inputTick != TimeManager.UNSET_TICK &&
+				base.TimeManager != null)
+			{
+				TranslatePreReplicateBuffTicks(GetSignedTickOffset(base.TimeManager.LocalTick, inputTick,
+					nameof(TranslatePreReplicateBuffTicks)));
+			}
+			lastReplicateTick = inputTick;
+			lastReplicateLocalTick = base.TimeManager != null ? base.TimeManager.LocalTick : lastReplicateTick;
+
 			// Gate event emission for replayed ticks. The deterministic state mutation
 			// (expiry, stack updates, NextTickTick advance) still runs every replay tick; only
 			// UI/ECA/FX dispatch is suppressed so subscribers don't see duplicate events.
 			bool wasReplaying = isReplayingTick;
 			isReplayingTick = state.ContainsReplayed();
-			try { Tick(input.GetTick()); }
-			finally { isReplayingTick = wasReplaying; }
+			ICharacterAttributeController attributeController = null;
+			bool suppressAttributeNotifications = isReplayingTick &&
+				Character != null &&
+				Character.TryGet(out attributeController);
+			if (suppressAttributeNotifications)
+			{
+				attributeController.BeginNotificationSuppression();
+			}
+			try { Tick(inputTick); }
+			finally
+			{
+				try
+				{
+					if (suppressAttributeNotifications && attributeController != null)
+					{
+						attributeController.EndNotificationSuppression();
+					}
+				}
+				finally
+				{
+					isReplayingTick = wasReplaying;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Converts buffs created before the first replicate tick from raw LocalTick space into
+		/// the replicate-tick domain used by <see cref="Tick"/>.
+		/// </summary>
+		/// <param name="tickOffset">Signed offset from raw LocalTick space to replicate-tick space.</param>
+		private void TranslatePreReplicateBuffTicks(int tickOffset)
+		{
+			if (tickOffset == 0 || buffs.Count == 0)
+			{
+				return;
+			}
+
+			foreach (Buff buff in buffs.Values)
+			{
+				if (buff.ExpiryTick != TimeManager.UNSET_TICK)
+				{
+					buff.ExpiryTick = AddSignedTickOffset(buff.ExpiryTick, tickOffset);
+				}
+				if (buff.NextTickTick != TimeManager.UNSET_TICK)
+				{
+					buff.NextTickTick = AddSignedTickOffset(buff.NextTickTick, tickOffset);
+				}
+			}
+			snapshotDirty = true;
 		}
 
 		/// <summary>
@@ -184,11 +279,13 @@ namespace FishMMO.Shared
 		/// <param name="channel">Transport channel.</param>
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
-			RestoreFromReconcile(rd.Buffs);
+			RestoreFromReconcile(rd.Buffs, rd.GetTick());
 		}
 
 		/// <summary>
 		/// Reads the buff state from the network payload and applies each buff to the character.
+		/// Payload ticks are translated from the writer's reference tick into this controller's
+		/// current tick domain so remaining buff duration is preserved across spawn sync.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
 		/// <param name="reader">The network reader to read from.</param>
@@ -201,6 +298,10 @@ namespace FishMMO.Shared
 			RemoveAll(ignoreInvokeRemove: true);
 			cachedSnapshot = null;
 			snapshotDirty = true;
+
+			uint payloadReferenceTick = reader.ReadUInt32();
+			uint currentReferenceTick = GetCurrentDomainTick();
+			int tickOffset = GetSignedTickOffset(payloadReferenceTick, currentReferenceTick, nameof(ReadPayload));
 
 			int buffCount = reader.ReadInt32();
 			if (buffCount < 0 || buffCount > maxPayloadBuffs)
@@ -228,6 +329,14 @@ namespace FishMMO.Shared
 				int templateID = reader.ReadInt32();
 				uint expiryTick = reader.ReadUInt32();
 				uint nextTickTick = reader.ReadUInt32();
+				if (expiryTick != TimeManager.UNSET_TICK)
+				{
+					expiryTick = AddSignedTickOffset(expiryTick, tickOffset);
+				}
+				if (nextTickTick != TimeManager.UNSET_TICK)
+				{
+					nextTickTick = AddSignedTickOffset(nextTickTick, tickOffset);
+				}
 				int stacks = reader.ReadInt32();
 				int tickCount = reader.ReadInt32();
 				int cumulativeTickMultiplier = reader.ReadInt32();
@@ -240,11 +349,14 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Writes the current buff state to the network payload for synchronization.
+		/// The first field is the current reference tick for the serialized absolute buff ticks.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
 		/// <param name="writer">The network writer to write to.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			writer.WriteUInt32(GetCurrentDomainTick());
+
 			if (buffs.Count < 1)
 			{
 				writer.WriteInt32(0);
@@ -261,6 +373,40 @@ namespace FishMMO.Shared
 				writer.WriteInt32(buff.TickCount);
 				writer.WriteInt32(buff.CumulativeTickMultiplier);
 			}
+		}
+
+		private uint GetCurrentDomainTick()
+		{
+			if (base.TimeManager == null)
+			{
+				return lastReplicateTick;
+			}
+
+			return ResolveAuthoritativeTick(base.TimeManager.LocalTick);
+		}
+
+		internal static int GetSignedTickOffset(uint sourceReferenceTick, uint targetReferenceTick, string context)
+		{
+			if (sourceReferenceTick == TimeManager.UNSET_TICK || targetReferenceTick == TimeManager.UNSET_TICK)
+			{
+				return 0;
+			}
+
+			long delta = (long)targetReferenceTick - sourceReferenceTick;
+			if (delta < int.MinValue || delta > int.MaxValue)
+			{
+				Log.Warning("BuffController",
+					$"{context}: tick offset from {sourceReferenceTick} to {targetReferenceTick} is outside the supported signed range; leaving serialized buff ticks unchanged.");
+				return 0;
+			}
+
+			return (int)delta;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		internal static uint AddSignedTickOffset(uint tick, int tickOffset)
+		{
+			return unchecked((uint)((long)tick + tickOffset));
 		}
 
 		/// <summary>
@@ -405,14 +551,46 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Applies a buff from a server-authoritative context using a raw server tick.
-		/// Identical to the prediction-path Apply but accepts a raw uint so that
-		/// non-prediction callers have a named, intentional path that is visible in
-		/// code review. Never call this from OnReplicate.
+		/// Applies a buff from a server-authoritative context (Region triggers, Shrine interactions,
+		/// and any ECA action that lacks a TickEventData and falls back to a raw tick).
+		///
+		/// <para>
+		/// <paramref name="serverTick"/> is accepted as a fallback for callers that fire before
+		/// the first <see cref="OnReplicate"/> (e.g., spawn-time application). Once
+		/// <see cref="OnReplicate"/> has run at least once, the raw tick is translated by the
+		/// observed <c>LocalTick</c> to replicate-tick offset so that <see cref="Buff.ExpiryTick"/>
+		/// is stamped in the replicate-tick domain.
+		/// This prevents the buff from lasting longer than its intended duration when the client's
+		/// input queue is depleted and <c>input.GetTick()</c> lags behind
+		/// <c>TimeManager.LocalTick</c>.
+		/// </para>
 		/// </summary>
 		public void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick)
 		{
-			Apply(template, new PredictionTick(serverTick));
+			uint tick = ResolveAuthoritativeTick(serverTick);
+			Apply(template, new PredictionTick(tick));
+		}
+
+		/// <summary>
+		/// Maps a raw authoritative tick to the current replicate-domain tick when available.
+		/// </summary>
+		/// <param name="serverTick">Fallback authoritative tick.</param>
+		/// <returns>The mapped replicate-domain tick if one can be derived, otherwise <paramref name="serverTick"/>.</returns>
+		public uint ResolveAuthoritativeTick(uint serverTick)
+		{
+			if (lastReplicateTick == TimeManager.UNSET_TICK ||
+				lastReplicateLocalTick == TimeManager.UNSET_TICK)
+			{
+				return serverTick;
+			}
+
+			if (serverTick == TimeManager.UNSET_TICK || serverTick == MissingRawTick)
+			{
+				return lastReplicateTick;
+			}
+
+			int tickOffset = GetSignedTickOffset(lastReplicateLocalTick, serverTick, nameof(ResolveAuthoritativeTick));
+			return AddSignedTickOffset(lastReplicateTick, tickOffset);
 		}
 
 		/// <summary>
@@ -473,28 +651,17 @@ namespace FishMMO.Shared
 			if (buffs.TryGetValue(buffID, out Buff buffInstance))
 			{
 				snapshotDirty = true;
-				// try/catch ensures buffs.Remove always executes even if OnRemoveStack or
-				// OnRemove throws. Without this guard a single throwing template permanently
-				// strands the buff in the dictionary, re-ticking it every frame and blocking
-				// future applications of the same template.
-				try
+				BaseBuffTemplate template = buffInstance.Template;
+				if (!TryRemoveBuffEffects(buffInstance, buffID, nameof(Remove)))
 				{
-					while (buffInstance.Stacks > 0)
-					{
-						buffInstance.RemoveStack(Character);
-					}
-					buffInstance.Remove(Character);
-				}
-				catch (System.Exception ex)
-				{
-					Log.Warning("BuffController", $"Remove: OnRemove/OnRemoveStack threw for template {buffID}: {ex}");
+					return;
 				}
 				buffs.Remove(buffID);
 
 				// Gate UI/ECA dispatch when invoked from a replayed tick.
-				if (!isReplayingTick)
+				if (!isReplayingTick && template != null)
 				{
-					if (buffInstance.Template.IsDebuff)
+					if (template.IsDebuff)
 					{
 						IBuffController.OnRemoveDebuff?.Invoke(buffInstance);
 					}
@@ -557,7 +724,8 @@ namespace FishMMO.Shared
 			removeAllBuffer.Clear();
 			foreach (var pair in buffs)
 			{
-				if (!pair.Value.Template.IsPermanent)
+				Buff buff = pair.Value;
+				if (buff == null || buff.Template == null || !buff.Template.IsPermanent)
 				{
 					removeAllBuffer.Add(pair.Key);
 				}
@@ -568,23 +736,16 @@ namespace FishMMO.Shared
 				int key = removeAllBuffer[i];
 				if (buffs.TryGetValue(key, out Buff buff))
 				{
-					try
+					BaseBuffTemplate template = buff.Template;
+					if (!TryRemoveBuffEffects(buff, key, nameof(RemoveAll)))
 					{
-						while (buff.Stacks > 0)
-						{
-							buff.RemoveStack(Character);
-						}
-						buff.Remove(Character);
-					}
-					catch (System.Exception ex)
-					{
-						Log.Warning("BuffController", $"RemoveAll: OnRemove/OnRemoveStack threw for template {key}: {ex}");
+						continue;
 					}
 					buffs.Remove(key);
 
-					if (!ignoreInvokeRemove && !isReplayingTick)
+					if (!ignoreInvokeRemove && !isReplayingTick && template != null)
 					{
-						if (buff.Template.IsDebuff)
+						if (template.IsDebuff)
 						{
 							IBuffController.OnRemoveDebuff?.Invoke(buff);
 						}
@@ -657,9 +818,11 @@ namespace FishMMO.Shared
 		/// Calling <c>OnApplyStack</c> directly with the final Stacks value pre-set would
 		/// produce different results if any template inspects <c>buff.Stacks</c> to scale modifiers.
 		/// </remarks>
-		public void RestoreFromReconcile(BuffReconcileEntry[] entries)
+		/// <param name="entries">Authoritative buff snapshot.</param>
+		/// <param name="reconcileTick">Replicate tick associated with the reconcile snapshot.</param>
+		public void RestoreFromReconcile(BuffReconcileEntry[] entries, uint reconcileTick)
 		{
-			snapshotDirty = true;
+			bool changed = false;
 			reconcileKeysToRemove.Clear();
 			reconcileAddedEvents.Clear();
 			reconcileRemovedEvents.Clear();
@@ -677,8 +840,16 @@ namespace FishMMO.Shared
 
 					if (buffs.TryGetValue(entry.TemplateID, out Buff existing))
 					{
+						if (existing.Template == null)
+						{
+							reconcileKeysToRemove.Add(entry.TemplateID);
+							Log.Warning("BuffController", $"RestoreFromReconcile: existing buff template {entry.TemplateID} is missing; removing stale buff instead of resurrecting it.");
+							continue;
+						}
+
 						if (existing.Stacks != entry.Stacks)
 						{
+							changed = true;
 							while (existing.Stacks > entry.Stacks)
 							{
 								existing.RemoveStack(Character);
@@ -688,10 +859,26 @@ namespace FishMMO.Shared
 								existing.AddStack(Character);
 							}
 						}
-						existing.ExpiryTick = entry.ExpiryTick;
-						existing.NextTickTick = entry.NextTickTick;
-						existing.TickCount = entry.TickCount;
-						existing.CumulativeTickMultiplier = entry.CumulativeTickMultiplier;
+						if (existing.ExpiryTick != entry.ExpiryTick)
+						{
+							existing.ExpiryTick = entry.ExpiryTick;
+							changed = true;
+						}
+						if (existing.NextTickTick != entry.NextTickTick)
+						{
+							existing.NextTickTick = entry.NextTickTick;
+							changed = true;
+						}
+						if (existing.TickCount != entry.TickCount)
+						{
+							existing.TickCount = entry.TickCount;
+							changed = true;
+						}
+						if (existing.CumulativeTickMultiplier != entry.CumulativeTickMultiplier)
+						{
+							existing.CumulativeTickMultiplier = entry.CumulativeTickMultiplier;
+							changed = true;
+						}
 					}
 					else
 					{
@@ -711,6 +898,7 @@ namespace FishMMO.Shared
 
 						buff.Apply(Character);
 						buffs[buff.Template.ID] = buff;
+						changed = true;
 
 						for (int s = 0; s < entry.Stacks; s++)
 						{
@@ -730,23 +918,23 @@ namespace FishMMO.Shared
 			{
 				if (buffs.TryGetValue(key, out Buff toRemove))
 				{
-					try
+					if (TryRemoveBuffEffects(toRemove, key, nameof(RestoreFromReconcile)))
 					{
-						while (toRemove.Stacks > 0)
+						buffs.Remove(key);
+						changed = true;
+						if (toRemove.Template != null)
 						{
-							toRemove.RemoveStack(Character);
+							reconcileRemovedEvents.Add(toRemove);
 						}
-						toRemove.Remove(Character);
 					}
-					catch (System.Exception ex)
-					{
-						Log.Warning("BuffController", $"RestoreFromReconcile: OnRemove threw for template {key}: {ex}");
-					}
-					buffs.Remove(key);
-					reconcileRemovedEvents.Add(toRemove);
 				}
 			}
 			reconcileKeysToRemove.Clear();
+
+			if (changed)
+			{
+				snapshotDirty = true;
+			}
 
 			// Fire add/remove events ONCE per reconcile (not per resimulated tick) so the UI
 			// duration bar, sound system, and ECA buff triggers see authoritative
@@ -764,7 +952,12 @@ namespace FishMMO.Shared
 				{
 					IBuffController.OnAddBuff?.Invoke(added);
 				}
-				Character.Invoke(onBuffApplyTriggers, new BuffEventData(Character, added));
+				BuffEventData eventData = new BuffEventData(Character, added);
+				if (reconcileTick != TimeManager.UNSET_TICK)
+				{
+					eventData.Add(new TickEventData(Character, new PredictionTick(reconcileTick)));
+				}
+				Character.Invoke(onBuffApplyTriggers, eventData);
 			}
 			reconcileAddedEvents.Clear();
 
@@ -779,7 +972,12 @@ namespace FishMMO.Shared
 				{
 					IBuffController.OnRemoveBuff?.Invoke(removed);
 				}
-				Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, removed));
+				BuffEventData eventData = new BuffEventData(Character, removed);
+				if (reconcileTick != TimeManager.UNSET_TICK)
+				{
+					eventData.Add(new TickEventData(Character, new PredictionTick(reconcileTick)));
+				}
+				Character.Invoke(onBuffRemoveTriggers, eventData);
 			}
 			reconcileRemovedEvents.Clear();
 		}
@@ -793,8 +991,52 @@ namespace FishMMO.Shared
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
+			lastReplicateTick = TimeManager.UNSET_TICK;
+			lastReplicateLocalTick = TimeManager.UNSET_TICK;
 
 			RemoveAll(ignoreInvokeRemove: true);
+		}
+
+		private bool TryRemoveBuffEffects(Buff buff, int buffID, string context)
+		{
+			if (buff == null)
+			{
+				return true;
+			}
+
+			if (buff.Template == null)
+			{
+				Log.Warning("BuffController", $"{context}: template {buffID} is missing; dropping stale buff without effect cleanup.");
+				return true;
+			}
+
+			while (buff.Stacks > 0)
+			{
+				int stacksBefore = buff.Stacks;
+				try
+				{
+					buff.RemoveStack(Character);
+				}
+				catch (System.Exception ex)
+				{
+					Log.Warning("BuffController", $"{context}: OnRemoveStack threw for template {buffID}; keeping buff tracked to avoid orphaned modifiers. Exception: {ex}");
+					if (buff.Stacks == stacksBefore)
+					{
+						return false;
+					}
+				}
+			}
+
+			try
+			{
+				buff.Remove(Character);
+				return true;
+			}
+			catch (System.Exception ex)
+			{
+				Log.Warning("BuffController", $"{context}: OnRemove threw for template {buffID}; keeping buff tracked to avoid orphaned modifiers. Exception: {ex}");
+				return false;
+			}
 		}
 	}
 }

@@ -121,6 +121,12 @@ namespace FishMMO.Shared
 		public void EnqueueNotification(CharacterAttribute attribute) { }
 
 		/// <inheritdoc/>
+		public void BeginNotificationSuppression() { }
+
+		/// <inheritdoc/>
+		public void EndNotificationSuppression() { }
+
+		/// <inheritdoc/>
 		public void SetAttribute(int id, int value, int? modifier = null) { }
 
 		/// <inheritdoc/>

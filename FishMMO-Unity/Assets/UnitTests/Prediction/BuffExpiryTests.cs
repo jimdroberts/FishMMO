@@ -18,9 +18,9 @@ namespace FishMMO.UnitTests
 	/// reconcile delta-serialiser:
 	///
 	///   1. Fresh apply  — Buff(templateID, currentTick, tickDelta)
-	///                     Called by BuffController.Apply(BaseBuffTemplate, uint) on both
+	///                     Called by BuffController.Apply(BaseBuffTemplate, PredictionTick) on both
 	///                     server and observers (via state-forwarded Replicate), driven by
-	///                     the same input.GetTick() from CharacterReplicateData. ExpiryTick
+	///                     the same input.GetPredictionTick() from CharacterReplicateData. ExpiryTick
 	///                     is computed internally from the template duration, so the apply
 	///                     tick must match on both sides.
 	///
@@ -77,6 +77,15 @@ namespace FishMMO.UnitTests
 		{
 			public override void OnApply(Buff buff, ICharacter target) { }
 			public override void OnRemove(Buff buff, ICharacter target) { }
+		}
+
+		private class CountingTickBuffTemplate : BaseBuffTemplate
+		{
+			public int TickCalls;
+
+			public override void OnApply(Buff buff, ICharacter target) { }
+			public override void OnRemove(Buff buff, ICharacter target) { }
+			public override void OnTick(Buff buff, ICharacter target) => TickCalls++;
 		}
 
 		// ── Shared constants ──────────────────────────────────────────────────────
@@ -844,6 +853,57 @@ namespace FishMMO.UnitTests
 		// ─────────────────────────────────────────────────────────────────────────
 		//  NextTickTick semantics
 		// ─────────────────────────────────────────────────────────────────────────
+
+		/// <summary>
+		/// A delayed simulation step must catch up every scheduled periodic tick instead
+		/// of firing once and resetting from the late current tick. This protects DoT/HoT
+		/// and cumulative modifier buffs from permanently losing ticks under lag spikes.
+		/// </summary>
+		[Test]
+		public void TryTick_LagSpike_CatchesUpEveryScheduledInterval()
+		{
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(TryTick_LagSpike_CatchesUpEveryScheduledInterval),
+					"TickRate=1s at 30 TPS should fire scheduled ticks 30, 60, 90, 120 when currentTick jumps to 125.")
+					.GetAwaiter().GetResult();
+
+				var template = ScriptableObject.CreateInstance<CountingTickBuffTemplate>();
+				template.Duration = 10f;
+				template.TickRate = 1f;
+				template.name = "CountingTickBuffTemplate";
+				template.AddToCache(template.name);
+
+				var buff = new Buff(template.ID, 0u, TickDelta30);
+
+				bool fired = buff.TryTick(null, 125u, TickDelta30);
+
+				LogAssert.IsTrue(fired, "TryTick must report a mutation when at least one scheduled tick fires.");
+				LogAssert.AreEqual(4, template.TickCalls,
+					"Ticks scheduled at 30, 60, 90, and 120 must all fire when currentTick reaches 125.");
+				LogAssert.AreEqual(4, buff.TickCount,
+					"TickCount must advance once per caught-up scheduled tick.");
+				LogAssert.AreEqual(4, buff.CumulativeTickMultiplier,
+					"CumulativeTickMultiplier must account for every caught-up tick at zero stacks.");
+				LogAssert.AreEqual(150u, buff.NextTickTick,
+					"NextTickTick must preserve cadence by advancing from 120 to 150, not resetting from 125 to 155.");
+
+				AuthTestTrace.Log("BuffExpiryTests", "SUCCESS",
+					nameof(TryTick_LagSpike_CatchesUpEveryScheduledInterval)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("BuffExpiryTests", "FAILURE",
+					$"{nameof(TryTick_LagSpike_CatchesUpEveryScheduledInterval)}: {ex.Message}\n{ex.StackTrace}")
+					.GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(TryTick_LagSpike_CatchesUpEveryScheduledInterval))
+					.GetAwaiter().GetResult();
+			}
+		}
 
 		/// <summary>
 		/// <c>NextTickTick</c> uses the same signed-cast wrap comparison as <c>HasExpired</c>

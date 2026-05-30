@@ -32,18 +32,18 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Creates a new RNG seeded from an integer.
-		/// Uses SplitMix32 to expand the single int seed into 128 bits of state.
+		/// Uses a Murmur3-finalizer counter mix to expand the single int seed into 128 bits of state.
 		/// </summary>
 		/// <param name="seed">Deterministic seed value.</param>
 		public DeterministicRNG(int seed)
 		{
-			// SplitMix32-derived expansion to fill all four state words.
+			// Murmur3-finalizer counter expansion fills all four state words.
 			// Ensures even seed == 0 produces non-zero state.
 			uint z = (uint)seed;
-			s0 = SplitMix(ref z);
-			s1 = SplitMix(ref z);
-			s2 = SplitMix(ref z);
-			s3 = SplitMix(ref z);
+			s0 = Murmur3Mix(ref z);
+			s1 = Murmur3Mix(ref z);
+			s2 = Murmur3Mix(ref z);
+			s3 = Murmur3Mix(ref z);
 
 			// xoshiro requires at least one non-zero state word.
 			if ((s0 | s1 | s2 | s3) == 0)
@@ -130,11 +130,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Murmur3-finalization mix — derives a well-distributed 32-bit value from a counter.
 		/// Used internally to expand a single int seed into 128 bits of state.
-		/// Named loosely after SplitMix32 but uses the Murmur3 finalizer constants
-		/// (shift pattern is 15/13/16 rather than the strict 16/13/16 of SplitMix32).
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private static uint SplitMix(ref uint z)
+		private static uint Murmur3Mix(ref uint z)
 		{
 			z += 0x9E3779B9u;
 			z ^= z >> 15;

@@ -272,7 +272,7 @@ namespace FishMMO.Shared
 					// the server's authoritative cooldown state is already restored.
 					if (!state.ContainsReplayed())
 					{
-						AddCooldown(validatedAbility, activationData.GetTick());
+						AddCooldown(validatedAbility, activationData.GetPredictionTick());
 					}
 					// Reset ability data
 					Cancel(state);
@@ -311,7 +311,7 @@ namespace FishMMO.Shared
 																			cameraRotation * Vector3.forward,
 																			ability.Range);
 
-					AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo, currentSeed, activationData.GetTick());
+					AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo, currentSeed, activationData.GetPredictionTick());
 				}
 			}
 
@@ -353,7 +353,7 @@ namespace FishMMO.Shared
 			{
 				//Log.Debug($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
 				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
-				AddCooldown(validatedAbility, activationData.GetTick());
+				AddCooldown(validatedAbility, activationData.GetPredictionTick());
 				if (base.IsServerStarted)
 				{
 					AbilityEventData aed = new AbilityEventData(Character, validatedAbility.ID);
@@ -814,7 +814,8 @@ namespace FishMMO.Shared
 		/// Adds a cooldown for the given ability using the cooldown controller.
 		/// </summary>
 		/// <param name="ability">The ability to add a cooldown for.</param>
-		internal void AddCooldown(Ability ability, uint currentTick)
+		/// <param name="currentTick">The deterministic replicate tick at the moment of activation.</param>
+		internal void AddCooldown(Ability ability, PredictionTick currentTick)
 		{
 			if (ability.Cooldown > 0.0f &&
 				cachedCooldownController != null)
@@ -822,6 +823,7 @@ namespace FishMMO.Shared
 				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
 				float cooldown = ability.Cooldown * cooldownReduction;
 
+				// PredictionTick implicitly converts to uint for CooldownInstance.
 				cachedCooldownController.AddCooldown(ability.ID, new CooldownInstance(currentTick, cooldown, (float)base.TimeManager.TickDelta));
 			}
 		}
