@@ -65,6 +65,17 @@ namespace FishMMO.Shared
 		private bool snapshotDirty = true;
 
 		/// <summary>
+		/// Whether this controller has observed its first non-UNSET replicate tick.
+		/// Used to suppress noisy pre-replicate warnings after the first occurrence.
+		/// </summary>
+		private bool hasSeenFirstReplicate = false;
+
+		/// <summary>
+		/// Prevents repeatedly logging the same ResolveAuthoritativeTick pre-replicate warning.
+		/// </summary>
+		private bool resolveAuthoritativeWarningLogged = false;
+
+		/// <summary>
 		/// True while <see cref="OnReplicate"/> is executing a replayed (reconcile replay) tick.
 		/// Mutation helpers (<see cref="RemoveCooldown"/>) check this flag to suppress UI / ECA
 		/// events that would otherwise fire on every replayed tick.
@@ -145,6 +156,11 @@ namespace FishMMO.Shared
 			}
 			lastReplicateTick = inputTick;
 			lastReplicateLocalTick = base.TimeManager != null ? base.TimeManager.LocalTick : lastReplicateTick;
+
+			if (inputTick != TimeManager.UNSET_TICK)
+			{
+				hasSeenFirstReplicate = true;
+			}
 
 			// Gate event emission for replayed ticks. The deterministic state mutation
 			// (removing expired entries) still runs every replay tick so the dictionary remains
@@ -399,6 +415,12 @@ namespace FishMMO.Shared
 			if (lastReplicateTick == TimeManager.UNSET_TICK ||
 				lastReplicateLocalTick == TimeManager.UNSET_TICK)
 			{
+				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
+				{
+					Log.Warning("CooldownController",
+						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. ExpiryTick will be corrected by reconcile.");
+					resolveAuthoritativeWarningLogged = true;
+				}
 				return serverTick;
 			}
 

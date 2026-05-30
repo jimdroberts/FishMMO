@@ -35,6 +35,12 @@ namespace FishMMO.Shared
 		/// new entries without the overhead of a wrapper.
 		/// This ensures the snapshot is effectively immutable even if the live ability's event
 		/// dictionaries are later modified by <see cref="Ability.RemoveAbilityEvent"/>.
+		///
+		/// <para>
+		/// Do NOT cast this field to its concrete <see cref="Dictionary{TKey,TValue}"/> type.
+		/// Casting bypasses the readonly contract and may allow accidental mutation of the
+		/// snapshot's internal state.
+		/// </para>
 		/// </summary>
 		public readonly IReadOnlyDictionary<int, AbilityOnTickEvent> OnTickEvents;
 
@@ -42,12 +48,22 @@ namespace FishMMO.Shared
 		/// Snapshot of OnHit event triggers for collision hit dispatching.
 		/// See <see cref="OnTickEvents"/> for immutability rationale.
 		/// </summary>
+		/// <para>
+		/// Do NOT cast this field to its concrete <see cref="Dictionary{TKey,TValue}"/> type.
+		/// Casting bypasses the readonly contract and may allow accidental mutation of the
+		/// snapshot's internal state.
+		/// </para>
 		public readonly IReadOnlyDictionary<int, AbilityOnHitEvent> OnHitEvents;
 
 		/// <summary>
 		/// Snapshot of OnDestroy event triggers for cleanup dispatching.
 		/// See <see cref="OnTickEvents"/> for immutability rationale.
 		/// </summary>
+		/// <para>
+		/// Do NOT cast this field to its concrete <see cref="Dictionary{TKey,TValue}"/> type.
+		/// Casting bypasses the readonly contract and may allow accidental mutation of the
+		/// snapshot's internal state.
+		/// </para>
 		public readonly IReadOnlyDictionary<int, AbilityOnDestroyEvent> OnDestroyEvents;
 
 		/// <summary>

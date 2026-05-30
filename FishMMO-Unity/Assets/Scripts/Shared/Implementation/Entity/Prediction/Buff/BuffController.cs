@@ -139,6 +139,17 @@ namespace FishMMO.Shared
 		private bool snapshotDirty = true;
 
 		/// <summary>
+		/// Whether this controller has observed its first non-UNSET replicate tick.
+		/// Used to suppress noisy pre-replicate warnings after the first occurrence.
+		/// </summary>
+		private bool hasSeenFirstReplicate = false;
+
+		/// <summary>
+		/// Prevents repeatedly logging the same ResolveAuthoritativeTick pre-replicate warning.
+		/// </summary>
+		private bool resolveAuthoritativeWarningLogged = false;
+
+		/// <summary>
 		/// True while <see cref="OnReplicate"/> is executing a replayed (reconcile replay) tick.
 		/// Mutation helpers (<see cref="Apply(BaseBuffTemplate, PredictionTick)"/>, <see cref="Apply(Buff, bool)"/>,
 		/// <see cref="Remove"/>) and the per-tick <see cref="IBuffController.OnBuffTick"/>
@@ -206,6 +217,11 @@ namespace FishMMO.Shared
 			}
 			lastReplicateTick = inputTick;
 			lastReplicateLocalTick = base.TimeManager != null ? base.TimeManager.LocalTick : lastReplicateTick;
+
+			if (inputTick != TimeManager.UNSET_TICK)
+			{
+				hasSeenFirstReplicate = true;
+			}
 
 			// Gate event emission for replayed ticks. The deterministic state mutation
 			// (expiry, stack updates, NextTickTick advance) still runs every replay tick; only
@@ -500,9 +516,8 @@ namespace FishMMO.Shared
 		{
 			if (template == null) return;
 
-			snapshotDirty = true;
-
 			bool isNew = false;
+			bool changed = false;
 			if (!buffs.TryGetValue(template.ID, out Buff buffInstance))
 			{
 				// New buff: constructor is the single source of truth for ExpiryTick.
@@ -511,6 +526,7 @@ namespace FishMMO.Shared
 				buffInstance = new Buff(template.ID, currentTick, tickDelta);
 				buffInstance.Apply(Character);
 				buffs.Add(template.ID, buffInstance);
+				changed = true;
 
 				// Skip event/ECA dispatch when applied during a replayed prediction tick.
 				if (!isReplayingTick)
@@ -533,6 +549,7 @@ namespace FishMMO.Shared
 			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
 			{
 				buffInstance.AddStack(Character);
+				changed = true;
 			}
 
 			// Only refresh duration for existing buffs. New buffs already have the
@@ -540,13 +557,23 @@ namespace FishMMO.Shared
 			// would be redundant at best, and wrong if the two code paths ever diverge.
 			if (!isNew)
 			{
-				buffInstance.ResetDuration(currentTick, tickDelta);
+				uint expectedExpiry = currentTick + Buff.DurationToTicks(template.Duration, tickDelta);
+				if (expectedExpiry != buffInstance.ExpiryTick)
+				{
+					buffInstance.ResetDuration(currentTick, tickDelta);
+					changed = true;
+				}
 			}
 
 			// Skip FX dispatch during replay (FX are one-shot; replaying them duplicates effects).
 			if (!isReplayingTick)
 			{
 				template.OnApplyFX(buffInstance, Character);
+			}
+
+			if (changed)
+			{
+				snapshotDirty = true;
 			}
 		}
 
@@ -581,6 +608,12 @@ namespace FishMMO.Shared
 			if (lastReplicateTick == TimeManager.UNSET_TICK ||
 				lastReplicateLocalTick == TimeManager.UNSET_TICK)
 			{
+				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
+				{
+					Log.Warning("BuffController",
+						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. ExpiryTick will be corrected by reconcile.");
+					resolveAuthoritativeWarningLogged = true;
+				}
 				return serverTick;
 			}
 

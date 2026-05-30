@@ -44,6 +44,12 @@ namespace FishMMO.Shared
 		/// Cached reference to the object's Rigidbody, if present.
 		/// </summary>
 		public Rigidbody CachedRigidBody;
+
+		/// <summary>
+		/// Cached reference to the caster's CharacterPredictionController, if available.
+		/// Used to read the current replicate tick snapshot in a subscription-order safe way.
+		/// </summary>
+		private CharacterPredictionController predictionController;
 		/// <summary>
 		/// Number of hits this object can perform before being destroyed.
 		/// </summary>
@@ -255,6 +261,7 @@ namespace FishMMO.Shared
 			cachedTickEventData = null;
 			destroyed = false;
 			initialized = false;
+			predictionController = null;
 
 			if (timeManager != null)
 			{
@@ -311,7 +318,10 @@ namespace FishMMO.Shared
 				// (e.g. ApplyBuffAction) receive the authoritative server tick. Carried as a
 				// plain uint on AbilityTickEventData rather than a TickEventData sub-payload
 				// to avoid per-tick heap allocation on this hot path (§1.4).
-				cachedTickEventData.CurrentTick = timeManager != null ? timeManager.LocalTick : 0u;
+				cachedTickEventData.CurrentTick = predictionController != null
+					&& predictionController.CurrentLocalTickSnapshot != TimeManager.UNSET_TICK
+					? predictionController.CurrentLocalTickSnapshot
+					: (timeManager != null ? timeManager.LocalTick : 0u);
 				// Thread the object's deterministic RNG so OnTick ECA actions (e.g. random
 				// debuff application) can roll deterministic values. Zero-alloc: same field,
 				// same instance — no new allocation on this hot path.
@@ -389,9 +399,12 @@ namespace FishMMO.Shared
 					{
 						// The trigger's own TargetSelector handles fan-out.
 						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision, RNG);
-						// Thread the raw authoritative tick. TickEventData marks this as non-replicate,
+						// Thread the raw authoritative tick if available. TickEventData marks this as non-replicate,
 						// so prediction-domain consumers must route it through their authoritative fallback.
-						collisionEvent.Add(new TickEventData(Caster, timeManager.LocalTick));
+						if (timeManager != null)
+						{
+							collisionEvent.Add(new TickEventData(Caster, timeManager.LocalTick));
+						}
 						hitEvent.Execute(collisionEvent);
 					}
 				}
@@ -559,6 +572,9 @@ namespace FishMMO.Shared
 			abilityObject.timeManager = timeManager;
 			abilityObject.tickDelta = (float)timeManager.TickDelta;
 			abilityObject.isServer = timeManager.NetworkManager.IsServerStarted;
+			// Cache the caster's prediction controller (if present) so this object
+			// can read the replicate-domain tick in a subscription-order safe way.
+			abilityObject.predictionController = caster.NetworkObject?.GetComponent<CharacterPredictionController>();
 			timeManager.OnTick += abilityObject.OnTick;
 		}
 
@@ -605,6 +621,17 @@ namespace FishMMO.Shared
 					return;
 				}
 
+				// If the container exists but contains only null/stale entries, remove it
+				// and use this slot. This prevents permanent accumulation of all-null
+				// containers caused by external Destroy without proper removal.
+				if (IsContainerEffectivelyEmpty(existingContainer))
+				{
+					Log.Warning("AbilityObject",
+						$"TryAllocateContainerID: found all-null stale container at {containerID} for ability {ability.ID}. Cleaning up.");
+					ability.Objects.Remove(containerID);
+					return;
+				}
+
 				containerID = unchecked(containerID + ContainerIDProbeStep);
 			}
 
@@ -647,6 +674,16 @@ namespace FishMMO.Shared
 					staleObj.DestroyAbilityObjectInternal();
 				}
 			}
+		}
+
+		private static bool IsContainerEffectivelyEmpty(Dictionary<int, AbilityObject> container)
+		{
+			if (container == null || container.Count == 0) return true;
+			foreach (AbilityObject obj in container.Values)
+			{
+				if (obj != null) return false;
+			}
+			return true;
 		}
 
 		/// <summary>
@@ -749,6 +786,7 @@ namespace FishMMO.Shared
 			abilityObject.SpawnTick = source.SpawnTick;
 			abilityObject.SpawnSeed = source.SpawnSeed;
 			abilityObject.Snapshot = source.Snapshot;
+			abilityObject.predictionController = source.predictionController;
 			// Snapshot is lazily initialized — children share the parent's lifecycle
 			// and don't need their own eagerly-created snapshot.
 

@@ -2,6 +2,7 @@ using System;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
+using FishNet.Managing.Timing;
 using System.Collections.Generic;
 
 namespace FishMMO.Shared
@@ -13,8 +14,24 @@ namespace FishMMO.Shared
 	/// a single FishNet Prediction V2 pipeline. This avoids the issues caused by having
 	/// multiple predicted NetworkBehaviours on the same NetworkObject.
 	/// </summary>
+	/// <remarks>
+	/// <b>Dynamic components:</b> The sorted <see cref="IPredictableController"/> array
+	/// is built once in <c>Awake</c>. Components added after <c>Awake</c> completes
+	/// will not participate in the prediction pipeline. All <see cref="IPredictableController"/>
+	/// implementations must be attached to the GameObject before the scene loads.
+	/// </remarks>
 	public class CharacterPredictionController : NetworkBehaviour
 	{
+		/// <summary>
+		/// Snapshot of the current LocalTick (TimeManager.LocalTick) captured at the start of the
+		/// <see cref="TimeManager_OnTick"/> pipeline. This is the raw local authoritative tick
+		/// observed at the TimeManager level — it is NOT a replicate-domain tick.
+		/// Consumers that require a replicate-domain tick must translate this value via the
+		/// appropriate controller helpers (e.g., <c>ResolveAuthoritativeTick</c> on target controllers).
+		/// Used by external consumers (e.g., <see cref="AbilityObject"/>) to avoid subscription-order drift
+		/// between tick callbacks.
+		/// </summary>
+		public uint CurrentLocalTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
 		private IPredictableController[] controllers = Array.Empty<IPredictableController>();
 
 		private void Awake()
@@ -57,6 +74,10 @@ namespace FishMMO.Shared
 
 		private void TimeManager_OnTick()
 		{
+			// Snapshot the local authoritative tick (TimeManager.LocalTick) before any controller runs.
+			// AbilityObject.OnTick callbacks subscribe to the same TimeManager.OnTick and may fire before
+			// or after this method. Using CurrentLocalTickSnapshot avoids one-tick subscription-order drift.
+			CurrentLocalTickSnapshot = base.TimeManager != null ? base.TimeManager.LocalTick : TimeManager.UNSET_TICK;
 			CharacterReplicateData input = default;
 			if (base.IsOwner)
 			{
