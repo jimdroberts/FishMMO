@@ -105,6 +105,22 @@ namespace FishMMO.Shared
 			}
 		}
 
+		void OnDestroy()
+		{
+			if (networkTrigger != null)
+			{
+				networkTrigger.OnEnter -= NetworkCollider_OnEnter;
+				networkTrigger.OnStay -= NetworkCollider_OnStay;
+				networkTrigger.OnExit -= NetworkCollider_OnExit;
+				networkTrigger = null;
+			}
+
+			if (Parent != null)
+			{
+				Parent.Children.Remove(this);
+			}
+		}
+
 #if UNITY_EDITOR
 		/// <summary>
 		/// The color used to draw the region's gizmo in the editor.

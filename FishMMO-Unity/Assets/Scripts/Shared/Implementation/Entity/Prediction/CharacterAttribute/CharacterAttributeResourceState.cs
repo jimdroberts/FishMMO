@@ -17,6 +17,7 @@ namespace FishMMO.Shared
 		/// Zero means regeneration has not been scheduled yet (controller not yet started).
 		/// </summary>
 		public uint NextRegenTick;
+		
 		/// <summary>
 		/// The current health value of the character.
 		/// </summary>

@@ -114,10 +114,10 @@ namespace FishMMO.Shared
 		/// Applies resistance modifiers to the damage amount for the target character.
 		/// Subtracts the target's resistance value from the incoming damage and clamps the result.
 		/// <para>
-		/// If <paramref name="target"/> has no <see cref="ICharacterAttributeController"/> the
-		/// resistance lookup is skipped and the original <paramref name="amount"/> is returned
-		/// unchanged — absence of an attribute controller means no registered resistance stats,
-		/// not immunity.
+		/// If <paramref name="target"/> has no <see cref="ICharacterAttributeController"/> or
+		/// <paramref name="damageAttribute"/> is null, the resistance lookup is skipped and the
+		/// original <paramref name="amount"/> is returned unchanged — absence of resistance
+		/// metadata means untyped damage, not immunity.
 		/// </para>
 		/// </summary>
 		/// <param name="target">The character receiving damage.</param>
@@ -131,7 +131,7 @@ namespace FishMMO.Shared
 
 			if (target == null || damageAttribute == null)
 			{
-				return 0;
+				return amount;
 			}
 
 			// No attribute controller means no resistance stats — pass through at full value.

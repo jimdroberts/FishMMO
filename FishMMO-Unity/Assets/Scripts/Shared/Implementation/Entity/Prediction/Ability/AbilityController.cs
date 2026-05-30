@@ -226,7 +226,7 @@ namespace FishMMO.Shared
 		/// The remaining activation time for the current ability, or 0 if no ability is active.
 		/// Converts internal tick count back to seconds for UI and NPC AI consumers.
 		/// </summary>
-		public float RemainingActivationTime => remainingTicks * (float)base.TimeManager.TickDelta;
+		public float RemainingActivationTime => remainingTicks * (float)(base.TimeManager?.TickDelta ?? 0.0);
 
 		public override void OnAwake()
 		{
@@ -576,6 +576,17 @@ namespace FishMMO.Shared
 			if (denied && previousAbilityID != NO_ABILITY)
 			{
 				OnAbilityDenied?.Invoke(previousAbilityID);
+			}
+
+			// When the server's authoritative state has no active ability but the client
+			// was still predicting one, the cast bar must be cleared. This fires for
+			// cases where the server completed, interrupted, or never started the ability
+			// (e.g., ability completed in one tick before the client prediction caught up,
+			// or replicate was lost and the server never received the activation input).
+			// The denial case is handled above; this covers every other server-side ending.
+			if (!denied && previousAbilityID != NO_ABILITY && rd.AbilityID == NO_ABILITY)
+			{
+				OnCancel?.Invoke();
 			}
 
 			currentAbilityID = rd.AbilityID;

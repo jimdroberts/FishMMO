@@ -120,6 +120,18 @@ namespace FishMMO.Shared
 			lookInputVector = Vector3.zero;
 		}
 
+		private void OnDisable()
+		{
+			ClearCachedCharacterReferences();
+		}
+
+		private void ClearCachedCharacterReferences()
+		{
+			cachedAbilityController = null;
+			cachedAttributeController = null;
+			lastCachedCharacter = null;
+		}
+
 		/// <summary>
 		/// Lazily resolves and caches component references from <see cref="Character"/>.
 		/// Re-caches if the <see cref="Character"/> reference changes.

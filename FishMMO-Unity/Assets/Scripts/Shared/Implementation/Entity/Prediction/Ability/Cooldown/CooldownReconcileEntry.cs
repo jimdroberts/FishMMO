@@ -195,7 +195,8 @@ namespace FishMMO.Shared
 				{
 					int index = reader.ReadUInt16();
 					CooldownReconcileEntry entry = ReadFrom(reader);
-					if (index >= 0 && index < prevLength)
+					// index is cast from ushort (range 0–65535), so >= 0 is always true.
+					if (index < prevLength)
 					{
 						entries[index] = entry;
 					}

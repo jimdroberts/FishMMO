@@ -42,7 +42,7 @@ namespace FishMMO.UnitTests
 		{
 			var src = new CharacterAttributeResourceState
 			{
-				RegenTickAccum = 17u,
+				NextRegenTick = 17u,
 				Health = 123.5f,
 				MaxHealth = 200,
 				Mana = 80.25f,
@@ -56,7 +56,7 @@ namespace FishMMO.UnitTests
 			var reader = new Reader(writer.GetArraySegment(), null);
 			CharacterAttributeResourceState dst = reader.ReadCharacterAttributeResourceState();
 
-			LogAssert.AreEqual(src.RegenTickAccum, dst.RegenTickAccum, "RegenTickAccum must round-trip.");
+			LogAssert.AreEqual(src.NextRegenTick, dst.NextRegenTick, "NextRegenTick must round-trip.");
 			LogAssert.AreEqual(src.Health,         dst.Health,         "Health must round-trip.");
 			LogAssert.AreEqual(src.MaxHealth,      dst.MaxHealth,      "MaxHealth must round-trip.");
 			LogAssert.AreEqual(src.Mana,           dst.Mana,           "Mana must round-trip.");
@@ -70,7 +70,7 @@ namespace FishMMO.UnitTests
 		{
 			var prev = new CharacterAttributeResourceState
 			{
-				RegenTickAccum = 5u, Health = 100f, MaxHealth = 100, Mana = 50f, MaxMana = 50, Stamina = 25f, MaxStamina = 25
+				NextRegenTick = 5u, Health = 100f, MaxHealth = 100, Mana = 50f, MaxMana = 50, Stamina = 25f, MaxStamina = 25
 			};
 
 			var writer = new Writer();
@@ -87,10 +87,10 @@ namespace FishMMO.UnitTests
 		{
 			var prev = new CharacterAttributeResourceState
 			{
-				RegenTickAccum = 0u, Health = 80f, MaxHealth = 100, Mana = 50f, MaxMana = 50, Stamina = 25f, MaxStamina = 25
+				NextRegenTick = 0u, Health = 80f, MaxHealth = 100, Mana = 50f, MaxMana = 50, Stamina = 25f, MaxStamina = 25
 			};
 			var next = prev;
-			next.RegenTickAccum = 1u;
+			next.NextRegenTick = 1u;
 			next.Health = 85f;
 
 			var writer = new Writer();
@@ -100,7 +100,7 @@ namespace FishMMO.UnitTests
 			var reader = new Reader(writer.GetArraySegment(), null);
 			CharacterAttributeResourceState restored = GenericDeltaReader<CharacterAttributeResourceState>.Read(reader, prev);
 
-			LogAssert.AreEqual(next.RegenTickAccum, restored.RegenTickAccum, "RegenTickAccum delta must reconstruct exactly.");
+			LogAssert.AreEqual(next.NextRegenTick, restored.NextRegenTick, "NextRegenTick delta must reconstruct exactly.");
 			LogAssert.AreEqual(next.Health,         restored.Health,         "Health delta must reconstruct exactly.");
 			LogAssert.AreEqual(prev.MaxHealth,      restored.MaxHealth,      "Unchanged MaxHealth must be carried forward from prev.");
 			LogAssert.AreEqual(prev.Mana,           restored.Mana,           "Unchanged Mana must be carried forward from prev.");
@@ -114,7 +114,7 @@ namespace FishMMO.UnitTests
 		{
 			var v = new CharacterAttributeResourceState
 			{
-				RegenTickAccum = 3u, Health = 70f, MaxHealth = 90, Mana = 40f, MaxMana = 45, Stamina = 20f, MaxStamina = 30
+				NextRegenTick = 3u, Health = 70f, MaxHealth = 90, Mana = 40f, MaxMana = 45, Stamina = 20f, MaxStamina = 30
 			};
 
 			var writer = new Writer();
@@ -131,7 +131,7 @@ namespace FishMMO.UnitTests
 			var reader = new Reader(writer.GetArraySegment(), null);
 			CharacterAttributeResourceState restored = GenericDeltaReader<CharacterAttributeResourceState>.Read(reader, v);
 
-			LogAssert.AreEqual(v.RegenTickAccum, restored.RegenTickAccum, "Force-write RegenTickAccum must round-trip.");
+			LogAssert.AreEqual(v.NextRegenTick, restored.NextRegenTick, "Force-write NextRegenTick must round-trip.");
 			LogAssert.AreEqual(v.Health,         restored.Health,         "Force-write Health must round-trip.");
 			LogAssert.AreEqual(v.MaxHealth,      restored.MaxHealth,      "Force-write MaxHealth must round-trip.");
 			LogAssert.AreEqual(v.Mana,           restored.Mana,           "Force-write Mana must round-trip.");

@@ -46,7 +46,30 @@ namespace FishMMO.Shared
 		public override void OnRemove(Buff buff, ICharacter target)
 		{
 			if (target == null) return;
+			if (IsFlagProvidedByAnotherBuff(target, buff, Flag)) return;
 			target.DisableFlags(Flag);
+		}
+
+		private static bool IsFlagProvidedByAnotherBuff(ICharacter target, Buff removedBuff, CharacterFlags flag)
+		{
+			if (!target.TryGet(out IBuffController buffController)) return false;
+
+			foreach (Buff activeBuff in buffController.Buffs.Values)
+			{
+				if (activeBuff == null || ReferenceEquals(activeBuff, removedBuff)) continue;
+
+				if (activeBuff.Template is StateBuffTemplate stateTemplate && stateTemplate.Flag == flag)
+				{
+					return true;
+				}
+
+				if (activeBuff.Template is CompositeBuffTemplate compositeTemplate && compositeTemplate.AppliesFlag(flag))
+				{
+					return true;
+				}
+			}
+
+			return false;
 		}
 
 		/// <summary>

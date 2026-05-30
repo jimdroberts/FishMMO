@@ -409,7 +409,20 @@ namespace FishMMO.Shared
 		/// <param name="reader">The network reader containing serialized attribute data.</param>
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
+			const int maxPayloadAttributes = 4096;
+
 			int attributeCount = reader.ReadInt32();
+			if (attributeCount < 0)
+			{
+				Log.Error("CharacterAttributeController", $"ReadPayload: invalid attribute count {attributeCount}. Treating as empty.");
+				attributeCount = 0;
+			}
+			else if (attributeCount > maxPayloadAttributes)
+			{
+				Log.Error("CharacterAttributeController", $"ReadPayload: attribute count {attributeCount} exceeds limit {maxPayloadAttributes}. Aborting payload read.");
+				return;
+			}
+
 			if (attributeCount > 0)
 			{
 				for (int i = 0; i < attributeCount; ++i)
@@ -421,6 +434,17 @@ namespace FishMMO.Shared
 			}
 
 			int resourceAttributeCount = reader.ReadInt32();
+			if (resourceAttributeCount < 0)
+			{
+				Log.Error("CharacterAttributeController", $"ReadPayload: invalid resource attribute count {resourceAttributeCount}. Treating as empty.");
+				resourceAttributeCount = 0;
+			}
+			else if (resourceAttributeCount > maxPayloadAttributes)
+			{
+				Log.Error("CharacterAttributeController", $"ReadPayload: resource attribute count {resourceAttributeCount} exceeds limit {maxPayloadAttributes}. Aborting payload read.");
+				return;
+			}
+
 			if (resourceAttributeCount > 0)
 			{
 				for (int i = 0; i < resourceAttributeCount; ++i)

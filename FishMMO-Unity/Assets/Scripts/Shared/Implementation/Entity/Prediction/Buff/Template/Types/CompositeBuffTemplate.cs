@@ -176,8 +176,47 @@ namespace FishMMO.Shared
 			if (Flags == null) return;
 			for (int i = 0; i < Flags.Count; i++)
 			{
-				target.DisableFlags(Flags[i]);
+				CharacterFlags flag = Flags[i];
+				if (!IsFlagProvidedByAnotherBuff(target, flag))
+				{
+					target.DisableFlags(flag);
+				}
 			}
+		}
+
+		internal bool AppliesFlag(CharacterFlags flag)
+		{
+			if (Flags == null) return false;
+			for (int i = 0; i < Flags.Count; i++)
+			{
+				if (Flags[i] == flag)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private bool IsFlagProvidedByAnotherBuff(ICharacter target, CharacterFlags flag)
+		{
+			if (!target.TryGet(out IBuffController buffController)) return false;
+
+			foreach (Buff activeBuff in buffController.Buffs.Values)
+			{
+				if (activeBuff == null || ReferenceEquals(activeBuff.Template, this)) continue;
+
+				if (activeBuff.Template is StateBuffTemplate stateTemplate && stateTemplate.Flag == flag)
+				{
+					return true;
+				}
+
+				if (activeBuff.Template is CompositeBuffTemplate compositeTemplate && compositeTemplate.AppliesFlag(flag))
+				{
+					return true;
+				}
+			}
+
+			return false;
 		}
 	}
 }
