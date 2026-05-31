@@ -17,8 +17,6 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class CooldownController : CharacterBehaviour, ICooldownController, IPredictableController
 	{
-		private const uint MissingRawTick = 0u;
-
 		/// <summary>
 		/// Execution order in the unified prediction pipeline.
 		/// Runs before <see cref="AbilityController"/> so newly elapsed cooldowns
@@ -53,13 +51,6 @@ namespace FishMMO.Shared
 		private uint lastReplicateTick = TimeManager.UNSET_TICK;
 
 		/// <summary>
-		/// The <c>TimeManager.LocalTick</c> observed when <see cref="lastReplicateTick"/> was captured.
-		/// Used to preserve the raw-authoritative-to-replicate tick offset for cooldown queries
-		/// outside the immediate prediction pipeline step.
-		/// </summary>
-		private uint lastReplicateLocalTick = TimeManager.UNSET_TICK;
-
-		/// <summary>
 		/// When true, <see cref="cachedSnapshot"/> is stale and must be rebuilt.
 		/// </summary>
 		private bool snapshotDirty = true;
@@ -89,6 +80,8 @@ namespace FishMMO.Shared
 		/// <see cref="OnStartNetwork"/>.
 		/// </summary>
 		private float cachedTickDelta;
+
+		private CharacterPredictionController predictionController;
 
 		/// <summary>
 		/// Returns the fixed time step per tick. Caches on first access.
@@ -123,6 +116,7 @@ namespace FishMMO.Shared
 			{
 				cachedTickDelta = (float)base.TimeManager.TickDelta;
 			}
+			predictionController = GetComponent<CharacterPredictionController>();
 		}
 
 		/// <summary>
@@ -155,7 +149,6 @@ namespace FishMMO.Shared
 					nameof(TranslatePreReplicateCooldownTicks)));
 			}
 			lastReplicateTick = inputTick;
-			lastReplicateLocalTick = base.TimeManager != null ? base.TimeManager.LocalTick : lastReplicateTick;
 
 			if (inputTick != TimeManager.UNSET_TICK)
 			{
@@ -228,7 +221,8 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 			lastReplicateTick = TimeManager.UNSET_TICK;
-			lastReplicateLocalTick = TimeManager.UNSET_TICK;
+			hasSeenFirstReplicate = false;
+			resolveAuthoritativeWarningLogged = false;
 			cooldowns.Clear();
 			keysToRemove.Clear();
 		}
@@ -408,29 +402,29 @@ namespace FishMMO.Shared
 		/// Maps a raw authoritative tick to the current replicate-domain tick when available.
 		/// </summary>
 		/// <param name="serverTick">Fallback authoritative tick.</param>
-		/// <returns>The mapped replicate-domain tick if one can be derived, otherwise <paramref name="serverTick"/>.</returns>
+		/// <returns>The current replicate-domain tick if one can be derived, otherwise <paramref name="serverTick"/>.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public uint ResolveAuthoritativeTick(uint serverTick)
 		{
-			if (lastReplicateTick == TimeManager.UNSET_TICK ||
-				lastReplicateLocalTick == TimeManager.UNSET_TICK)
+			uint replicateReferenceTick = lastReplicateTick;
+			if (predictionController != null &&
+				predictionController.CurrentReplicateTickSnapshot != TimeManager.UNSET_TICK)
+			{
+				replicateReferenceTick = predictionController.CurrentReplicateTickSnapshot;
+			}
+
+			if (replicateReferenceTick == TimeManager.UNSET_TICK)
 			{
 				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
 				{
 					Log.Warning("CooldownController",
-						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. ExpiryTick will be corrected by reconcile.");
+						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. StartTick will be corrected by reconcile.");
 					resolveAuthoritativeWarningLogged = true;
 				}
 				return serverTick;
 			}
 
-			if (serverTick == TimeManager.UNSET_TICK || serverTick == MissingRawTick)
-			{
-				return lastReplicateTick;
-			}
-
-			int tickOffset = GetSignedTickOffset(lastReplicateLocalTick, serverTick, nameof(ResolveAuthoritativeTick));
-			return AddSignedTickOffset(lastReplicateTick, tickOffset);
+			return replicateReferenceTick;
 		}
 
 		/// <summary>

@@ -66,10 +66,23 @@ namespace FishMMO.Shared
 			// target controller's authoritative mapper.
 			TickEventData tickData = null;
 			bool hasTickData = eventData != null && eventData.TryGet(out tickData);
-			// Prediction-path (direct Apply) is only safe when the initiator and target are the same character.
-			bool isPredictionPath = hasTickData && tickData.IsReplicateTick && initiator == target;
+			// Prediction-path (direct Apply) is only safe when the tick belongs to the target controller domain.
+			bool isPredictionPath = hasTickData && tickData.IsReplicateTick && tickData.IsForCharacter(target);
 
-			uint authoritativeTick = hasTickData ? (uint)tickData.Tick : target.GetLocalTick();
+			// For cross-character authoritative application, the target controller chooses
+			// its own domain stamp. The initiator's replicate tick is in the INITIATOR's domain
+			// and must not be written directly into target-owned buff state.
+			uint authoritativeTick;
+			if (hasTickData && !tickData.IsReplicateTick)
+			{
+				// Already a raw authoritative tick (e.g. from AbilityObject.OnTick/OnCollision)
+				authoritativeTick = (uint)tickData.Tick;
+			}
+			else
+			{
+				// No tick data or already a replicate tick — use the target controller's current domain-mapped tick as authoritative.
+				authoritativeTick = buffController.GetCurrentDomainTick();
+			}
 
 			for (int i = 0; i < stacks; ++i)
 			{

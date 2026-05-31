@@ -53,6 +53,8 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class BuffExpiryTests
 	{
+		private MockBuffTemplate activeTemplate;
+
 		[SetUp]
 		public void SetUp()
 		{
@@ -63,6 +65,7 @@ namespace FishMMO.UnitTests
 
 			template.AddToCache(template.name);
 
+			activeTemplate = template;
 			TemplateID = template.ID;
 		}
 
@@ -86,6 +89,19 @@ namespace FishMMO.UnitTests
 			public override void OnApply(Buff buff, ICharacter target) { }
 			public override void OnRemove(Buff buff, ICharacter target) { }
 			public override void OnTick(Buff buff, ICharacter target) => TickCalls++;
+		}
+
+		private class ThrowingTickBuffTemplate : BaseBuffTemplate
+		{
+			public int TickCalls;
+
+			public override void OnApply(Buff buff, ICharacter target) { }
+			public override void OnRemove(Buff buff, ICharacter target) { }
+			public override void OnTick(Buff buff, ICharacter target)
+			{
+				TickCalls++;
+				throw new InvalidOperationException("Expected test tick failure.");
+			}
 		}
 
 		// ── Shared constants ──────────────────────────────────────────────────────
@@ -159,6 +175,54 @@ namespace FishMMO.UnitTests
 			finally
 			{
 				AuthTestTrace.LogTestEnd(nameof(FreshApply_SameReplicateTick_ExpiryIsDeterministic))
+					.GetAwaiter().GetResult();
+			}
+		}
+
+		/// <summary>
+		/// Permanent buffs use <see cref="TimeManager.UNSET_TICK"/> for expiry so they
+		/// never expire merely because their template duration is zero.
+		/// </summary>
+		[Test]
+		public void FreshApply_PermanentBuff_UsesUnsetExpiryTick()
+		{
+			const uint UNSET_TICK = 0;
+
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(FreshApply_PermanentBuff_UsesUnsetExpiryTick),
+					"Permanent buffs must not collapse ExpiryTick onto applyTick when Duration is zero.")
+					.GetAwaiter().GetResult();
+
+				activeTemplate.IsPermanent = true;
+				activeTemplate.Duration = 0f;
+				activeTemplate.TickRate = 0f;
+
+				uint applyTick = 1_000u;
+				var buff = new Buff(TemplateID, applyTick, TickDelta30);
+
+				LogAssert.AreEqual(UNSET_TICK, buff.ExpiryTick,
+					"Permanent buff ExpiryTick must use the non-expiring sentinel.");
+				LogAssert.AreEqual(UNSET_TICK, buff.NextTickTick,
+					"Zero tick-rate permanent buffs should not schedule periodic ticks.");
+				LogAssert.IsFalse(buff.HasExpired(applyTick),
+					"Permanent buff must not expire at the apply tick.");
+				LogAssert.IsFalse(buff.HasExpired(applyTick + 100_000u),
+					"Permanent buff must not expire at a later tick.");
+
+				AuthTestTrace.Log("BuffExpiryTests", "SUCCESS",
+					nameof(FreshApply_PermanentBuff_UsesUnsetExpiryTick)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("BuffExpiryTests", "FAILURE",
+					$"{nameof(FreshApply_PermanentBuff_UsesUnsetExpiryTick)}: {ex.Message}\n{ex.StackTrace}")
+					.GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(FreshApply_PermanentBuff_UsesUnsetExpiryTick))
 					.GetAwaiter().GetResult();
 			}
 		}
@@ -901,6 +965,60 @@ namespace FishMMO.UnitTests
 			finally
 			{
 				AuthTestTrace.LogTestEnd(nameof(TryTick_LagSpike_CatchesUpEveryScheduledInterval))
+					.GetAwaiter().GetResult();
+			}
+		}
+
+		/// <summary>
+		/// A throwing OnTick must advance the scheduled tick to avoid a retry flood,
+		/// but it must not record a successful tick for later effect reversal.
+		/// </summary>
+		[Test]
+		public void TryTick_OnTickThrows_AdvancesCadenceWithoutSuccessBookkeeping()
+		{
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(TryTick_OnTickThrows_AdvancesCadenceWithoutSuccessBookkeeping),
+					"Failed OnTick calls should skip success counters while still moving NextTickTick forward.")
+					.GetAwaiter().GetResult();
+
+				var template = ScriptableObject.CreateInstance<ThrowingTickBuffTemplate>();
+				template.Duration = 10f;
+				template.TickRate = 1f;
+				template.name = "ThrowingTickBuffTemplate";
+				template.AddToCache(template.name);
+
+				uint applyTick = 0u;
+				uint tickRateTicks = DurationToTicks(template.TickRate, TickDelta30);
+				var buff = new Buff(template.ID, applyTick, TickDelta30);
+				uint firstScheduledTick = buff.NextTickTick;
+
+				bool changed = buff.TryTick(null, firstScheduledTick, TickDelta30);
+
+				LogAssert.IsTrue(changed,
+					"TryTick must report a state change because NextTickTick advanced.");
+				LogAssert.AreEqual(1, template.TickCalls,
+					"The scheduled tick should be attempted exactly once.");
+				LogAssert.AreEqual(0, buff.TickCount,
+					"A failed tick must not increment TickCount.");
+				LogAssert.AreEqual(0, buff.CumulativeTickMultiplier,
+					"A failed tick must not add successful effect bookkeeping.");
+				LogAssert.AreEqual(firstScheduledTick + tickRateTicks, buff.NextTickTick,
+					"NextTickTick must advance so the same failing tick is not retried every game tick.");
+
+				AuthTestTrace.Log("BuffExpiryTests", "SUCCESS",
+					nameof(TryTick_OnTickThrows_AdvancesCadenceWithoutSuccessBookkeeping)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("BuffExpiryTests", "FAILURE",
+					$"{nameof(TryTick_OnTickThrows_AdvancesCadenceWithoutSuccessBookkeeping)}: {ex.Message}\n{ex.StackTrace}")
+					.GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(TryTick_OnTickThrows_AdvancesCadenceWithoutSuccessBookkeeping))
 					.GetAwaiter().GetResult();
 			}
 		}

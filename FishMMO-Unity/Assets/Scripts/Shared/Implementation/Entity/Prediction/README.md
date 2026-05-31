@@ -50,11 +50,11 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 
 | Controller                       | Order | Responsibility                                      |
 |----------------------------------|-------|-----------------------------------------------------|
-| `BuffController`                 | 80    | Buff tick/expiry, reconcile buff snapshots           |
+| `KCCPlayer`                      | 80    | Movement input, motor simulation, camera state       |
+| `BuffController`                 | 85    | Buff tick/expiry, reconcile buff snapshots           |
 | `CooldownController`             | 90    | Cooldown expiry, reconcile cooldown snapshots        |
 | `CharacterAttributeController`   | 95    | Resource regeneration, reconcile resource state      |
 | `AbilityController`              | 100   | Ability activation, spawning, RNG seed reconcile     |
-| `KCCPlayer`                      | 110   | Movement input, motor simulation, camera state       |
 
 ### Security Features
 
@@ -196,14 +196,14 @@ CreateReconcile();
 
 ### Controller Order Example
 
-If you need a buff effect to influence attribute regeneration, which then affects ability cooldown checks:
+If you need current movement/camera state to be available before buff, cooldown, attribute, and ability logic:
 
 ```
-BuffController (Order=80)      → Ticks/expires buffs, applies modifiers
+KCCPlayer (Order=80)          → Updates position/velocity/camera state
+BuffController (Order=85)      → Ticks/expires buffs, applies modifiers
 CooldownController (Order=90)  → Expires elapsed cooldowns
 CharacterAttributeController (Order=95) → Regenerates resources
 AbilityController (Order=100)  → Activates abilities, checks cooldowns + resources
-KCCPlayer (Order=110)          → Updates position/velocity
 ```
 
 ## Operational Checks
@@ -218,7 +218,7 @@ KCCPlayer (Order=110)          → Updates position/velocity
 | `IsSpawned` gate | Break in `CreateReconcile` | Guarded by `IsServerStarted && IsSpawned`; reconciles are dropped before the `NetworkObject` is fully spawned to avoid NREs through partially-wired subsystems |
 | Delta serialization | Monitor network traffic | Unchanged ticks transmit minimal bytes (bitmask-only for structs, skipped for reference-equal arrays) |
 | Replay determinism | Cause a reconcile | All controllers replay from the reconcile tick with identical results |
-| Order enforcement | Log `Order` values in `Awake()` | Sorted ascending: 80, 90, 95, 100, 110 |
+| Order enforcement | Log `Order` values in `Awake()` | Sorted ascending: 80, 85, 90, 95, 100 |
 
 ## System Architecture (Mermaid)
 
@@ -240,11 +240,11 @@ flowchart TB
 
         subgraph Subs["IPredictableController components (sorted by Order)"]
             direction TB
-            BUF["BuffController · Order 80"]:::subsystem
+            KCC["KCCPlayer · Order 80"]:::subsystem
+            BUF["BuffController · Order 85"]:::subsystem
             CD["CooldownController · Order 90"]:::subsystem
             ATT["CharacterAttributeController · Order 95"]:::subsystem
             ABI["AbilityController · Order 100"]:::subsystem
-			KCC["KCCPlayer · Order 110"]:::subsystem
         end
 
         CPC --> KCC
@@ -304,7 +304,7 @@ sequenceDiagram
     autonumber
     participant TM as TimeManager
     participant CPC as CharacterPredictionController
-    participant Subs as Subsystems (Order 80,90,95,100,110)
+    participant Subs as Subsystems (Order 80,85,90,95,100)
     participant Net as FishNet wire
     participant Cli as Owning client
 
@@ -438,11 +438,11 @@ TimeManager.OnTick()
         ▼
 ┌──────────────────────────────────────────────────┐
 │  PopulateInput (Owner only)                      │
-│  ┌─ BuffController.PopulateInput     (Order=80)  │ ← no-op
+│  ┌─ KCCPlayer.PopulateInput          (Order=80)  │
+│  ├─ BuffController.PopulateInput     (Order=85)  │ ← no-op
 │  ├─ CooldownController.PopulateInput (Order=90)  │ ← no-op
 │  ├─ CharacterAttributeController     (Order=95)  │ ← no-op
-│  ├─ AbilityController.PopulateInput  (Order=100) │
-│  └─ KCCPlayer.PopulateInput          (Order=110) │
+│  └─ AbilityController.PopulateInput  (Order=100) │
 │                                                  │
 │  Result: CharacterReplicateData populated        │
 └─────────────────────────┬────────────────────────┘
@@ -450,21 +450,21 @@ TimeManager.OnTick()
                           ▼
 ┌──────────────────────────────────────────────────┐
 │  [Replicate] (Owner + Server + Replay)           │
-│  ┌─ BuffController.OnReplicate       → Tick()    │
+│  ┌─ KCCPlayer.OnReplicate            → Motor sim │
+│  ├─ BuffController.OnReplicate       → Tick()    │
 │  ├─ CooldownController.OnReplicate   → Expire()  │
 │  ├─ CharacterAttributeController     → Regen()   │
-│  ├─ AbilityController.OnReplicate    → Activate  │
-│  └─ KCCPlayer.OnReplicate            → Motor sim │
+│  └─ AbilityController.OnReplicate    → Activate  │
 └─────────────────────────┬────────────────────────┘
                           │
                           ▼
 ┌──────────────────────────────────────────────────┐
 │  CreateReconcile (Server only)                   │
-│  ┌─ BuffController.OnCreateReconcile → Buffs[]   │
+│  ┌─ KCCPlayer.OnCreateReconcile      → MotorState│
+│  ├─ BuffController.OnCreateReconcile → Buffs[]   │
 │  ├─ CooldownController               → Cooldowns │
 │  ├─ CharacterAttributeController     → Resources │
-│  ├─ AbilityController               → Ability+RNG│
-│  └─ KCCPlayer.OnCreateReconcile      → MotorState│
+│  └─ AbilityController               → Ability+RNG│
 │                                                  │
 │  Result: CharacterReconcileData sent to client   │
 └─────────────────────────┬────────────────────────┘
@@ -472,11 +472,11 @@ TimeManager.OnTick()
                           ▼ (on mismatch)
 ┌──────────────────────────────────────────────────┐
 │  [Reconcile] (Client only)                       │
-│  ┌─ BuffController.OnReconcile      → Restore    │
+│  ┌─ KCCPlayer.OnReconcile           → Restore    │
+│  ├─ BuffController.OnReconcile      → Restore    │
 │  ├─ CooldownController.OnReconcile  → Restore    │
 │  ├─ CharacterAttributeController    → Restore    │
-│  ├─ AbilityController.OnReconcile   → Restore    │
-│  └─ KCCPlayer.OnReconcile           → Restore    │
+│  └─ AbilityController.OnReconcile   → Restore    │
 │                                                  │
 │  Then: Replay all ticks from reconcile→current   │
 └──────────────────────────────────────────────────┘
@@ -520,7 +520,7 @@ Prediction/
 │   └── Template/                               # AbilityTemplate, AbilityType, AbilitySpawnTarget, Pet*, Events/
 ├── Buff/                                       # Buff system (see Buff/README.md)
 │   ├── Buff.cs                                 # Per-buff state holder
-│   ├── BuffController.cs                       # IPredictableController (Order=80)
+│   ├── BuffController.cs                       # IPredictableController (Order=85)
 │   ├── BuffReconcileEntry.cs                   # (TemplateID, ExpiryTick, NextTickTick, Stacks) + array-delta
 │   └── Template/                               # AttributeBuffTemplate, CompositeBuffTemplate, etc.
 ├── CharacterAttribute/                         # Attribute system (see CharacterAttribute/README.md)
@@ -533,7 +533,7 @@ Prediction/
 │   ├── CharacterDamageController.cs            # Damage / heal / kill pipeline
 │   └── Template/                               # CharacterAttributeTemplate, formulas, damage/resistance
 ├── KCC/                                        # Kinematic Character Controller
-│   ├── KCCPlayer.cs                            # IPredictableController (Order=110) — movement prediction
+│   ├── KCCPlayer.cs                            # IPredictableController (Order=80) — movement prediction
 │   ├── KCCController.cs                        # Motor simulation (ICharacterController)
 │   ├── KCCCamera.cs                            # Third-person camera controller
 │   ├── KCCPlatform.cs                          # Moving platform prediction (separate NetworkObject — own [Replicate]/[Reconcile])
@@ -560,11 +560,11 @@ NetworkBehaviour
 └── CharacterPredictionController       # Drives the unified pipeline
 
 IPredictableController                  # Implemented by all subsystem controllers
-├── BuffController         (Order=80)
+├── KCCPlayer              (Order=80)
+├── BuffController         (Order=85)
 ├── CooldownController     (Order=90)
 ├── CharacterAttributeController (Order=95)
-├── AbilityController      (Order=100)
-└── KCCPlayer              (Order=110)
+└── AbilityController      (Order=100)
 ```
 
 ## License

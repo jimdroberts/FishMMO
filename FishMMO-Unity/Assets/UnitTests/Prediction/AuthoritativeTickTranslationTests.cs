@@ -42,26 +42,18 @@ namespace FishMMO.UnitTests
 		/// <summary>
 		/// Mirror of the production formula used by both
 		/// <c>BuffController.ResolveAuthoritativeTick</c> and
-		/// <c>CooldownController.ResolveAuthoritativeTick</c>. Uses the same signed
-		/// offset helpers as production so negative raw-to-replicate offsets do not
-		/// rely on unsigned subtraction wrap.
+		/// <c>CooldownController.ResolveAuthoritativeTick</c>. Once a replicate tick is
+		/// known, raw authoritative ticks collapse to that replicate-domain tick because
+		/// buff and cooldown expiry are evaluated against <c>input.GetTick()</c>.
 		/// </summary>
 		private static uint ResolveAuthoritativeTick(uint serverTick, uint lastReplicateTick, uint lastReplicateLocalTick)
 		{
-			const uint MissingRawTick = 0u;
-			if (lastReplicateTick == TimeManager.UNSET_TICK ||
-				lastReplicateLocalTick == TimeManager.UNSET_TICK)
+			if (lastReplicateTick == TimeManager.UNSET_TICK)
 			{
 				return serverTick;
 			}
 
-			if (serverTick == TimeManager.UNSET_TICK || serverTick == MissingRawTick)
-			{
-				return lastReplicateTick;
-			}
-
-			int tickOffset = BuffController.GetSignedTickOffset(lastReplicateLocalTick, serverTick, nameof(ResolveAuthoritativeTick));
-			return BuffController.AddSignedTickOffset(lastReplicateTick, tickOffset);
+			return lastReplicateTick;
 		}
 
 		/// <summary>
@@ -203,23 +195,21 @@ namespace FishMMO.UnitTests
 		// ─────────────────────────────────────────────────────────────────────────
 
 		/// <summary>
-		/// When a raw server tick is at an arbitrary offset ahead of (or behind)
-		/// <c>lastReplicateLocalTick</c>, the mapped tick must preserve that offset
-		/// relative to <c>lastReplicateTick</c>. Verifies the formula for several
-		/// realistic offsets: client lagging by 5/10/20 ticks (typical 30 Hz tick rates
-		/// at 167/333/667 ms RTT).
+		/// When a raw server tick is ahead of the captured local reference, the mapped
+		/// tick must not advance past the current replicate tick. The authoritative
+		/// fallback is a current-domain stamp, not a wall-clock elapsed-time projection.
 		/// </summary>
 		[TestCase(0)]   // Server tick == lastReplicateLocalTick → mapped == lastReplicateTick
 		[TestCase(1)]   // 1-tick lookahead (input queue head)
 		[TestCase(5)]   // 167 ms RTT @ 30 Hz
 		[TestCase(10)]  // 333 ms RTT @ 30 Hz
 		[TestCase(20)]  // 667 ms RTT @ 30 Hz (poor network)
-		public void ResolveAuthoritativeTick_ServerAheadOfReplicate_OffsetPreserved(int serverAheadBy)
+		public void ResolveAuthoritativeTick_RawLocalAhead_DoesNotAdvanceReplicateDomain(int serverAheadBy)
 		{
 			try
 			{
-				AuthTestTrace.LogTestStart($"{nameof(ResolveAuthoritativeTick_ServerAheadOfReplicate_OffsetPreserved)}({serverAheadBy})",
-					$"serverTick - lastReplicateLocalTick == {serverAheadBy} → mapped - lastReplicateTick == {serverAheadBy}.")
+				AuthTestTrace.LogTestStart($"{nameof(ResolveAuthoritativeTick_RawLocalAhead_DoesNotAdvanceReplicateDomain)}({serverAheadBy})",
+					$"serverTick - lastReplicateLocalTick == {serverAheadBy} → mapped == lastReplicateTick.")
 					.GetAwaiter().GetResult();
 
 				uint lastReplicateTick = 1_000u;
@@ -228,41 +218,42 @@ namespace FishMMO.UnitTests
 
 				uint mapped = ResolveAuthoritativeTick(serverTick, lastReplicateTick, lastReplicateLocalTick);
 
-				LogAssert.AreEqual(lastReplicateTick + (uint)serverAheadBy, mapped,
-					$"For serverTick == lastReplicateLocalTick + {serverAheadBy}, mapped must equal lastReplicateTick + {serverAheadBy}.");
+				LogAssert.AreEqual(lastReplicateTick, mapped,
+					$"For serverTick == lastReplicateLocalTick + {serverAheadBy}, mapped must stay at lastReplicateTick.");
 
 				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS",
-					$"{nameof(ResolveAuthoritativeTick_ServerAheadOfReplicate_OffsetPreserved)}({serverAheadBy})")
+					$"{nameof(ResolveAuthoritativeTick_RawLocalAhead_DoesNotAdvanceReplicateDomain)}({serverAheadBy})")
 					.GetAwaiter().GetResult();
 			}
 			catch (Exception ex)
 			{
 				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "FAILURE",
-					$"{nameof(ResolveAuthoritativeTick_ServerAheadOfReplicate_OffsetPreserved)}({serverAheadBy}): {ex.Message}\n{ex.StackTrace}")
+					$"{nameof(ResolveAuthoritativeTick_RawLocalAhead_DoesNotAdvanceReplicateDomain)}({serverAheadBy}): {ex.Message}\n{ex.StackTrace}")
 					.GetAwaiter().GetResult();
 				throw;
 			}
 			finally
 			{
-				AuthTestTrace.LogTestEnd($"{nameof(ResolveAuthoritativeTick_ServerAheadOfReplicate_OffsetPreserved)}({serverAheadBy})")
+				AuthTestTrace.LogTestEnd($"{nameof(ResolveAuthoritativeTick_RawLocalAhead_DoesNotAdvanceReplicateDomain)}({serverAheadBy})")
 					.GetAwaiter().GetResult();
 			}
 		}
 
 		/// <summary>
-		/// Region triggers and other authoritative callbacks may arrive at a raw server
-		/// tick older than the last captured <c>LocalTick</c>. The mapping must preserve
-		/// that negative offset in signed space instead of depending on unsigned wrap.
+		/// Region triggers and other authoritative callbacks may carry a raw tick older
+		/// than the last captured <c>LocalTick</c>. Because the consuming state is still
+		/// evaluated against the current replicate tick, the authoritative fallback must
+		/// not move backward in prediction-domain time either.
 		/// </summary>
 		[TestCase(1)]
 		[TestCase(5)]
 		[TestCase(20)]
-		public void ResolveAuthoritativeTick_ServerBehindReplicateLocal_OffsetPreserved(int serverBehindBy)
+		public void ResolveAuthoritativeTick_RawLocalBehind_DoesNotMoveBackwardInReplicateDomain(int serverBehindBy)
 		{
 			try
 			{
-				AuthTestTrace.LogTestStart($"{nameof(ResolveAuthoritativeTick_ServerBehindReplicateLocal_OffsetPreserved)}({serverBehindBy})",
-					$"serverTick - lastReplicateLocalTick == -{serverBehindBy} → mapped - lastReplicateTick == -{serverBehindBy}.")
+				AuthTestTrace.LogTestStart($"{nameof(ResolveAuthoritativeTick_RawLocalBehind_DoesNotMoveBackwardInReplicateDomain)}({serverBehindBy})",
+					$"serverTick - lastReplicateLocalTick == -{serverBehindBy} → mapped == lastReplicateTick.")
 					.GetAwaiter().GetResult();
 
 				uint lastReplicateTick = 1_000u;
@@ -271,25 +262,44 @@ namespace FishMMO.UnitTests
 
 				uint mapped = ResolveAuthoritativeTick(serverTick, lastReplicateTick, lastReplicateLocalTick);
 
-				LogAssert.AreEqual(lastReplicateTick - (uint)serverBehindBy, mapped,
-					$"For serverTick == lastReplicateLocalTick - {serverBehindBy}, mapped must equal lastReplicateTick - {serverBehindBy}.");
+				LogAssert.AreEqual(lastReplicateTick, mapped,
+					$"For serverTick == lastReplicateLocalTick - {serverBehindBy}, mapped must stay at lastReplicateTick.");
 
 				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS",
-					$"{nameof(ResolveAuthoritativeTick_ServerBehindReplicateLocal_OffsetPreserved)}({serverBehindBy})")
+					$"{nameof(ResolveAuthoritativeTick_RawLocalBehind_DoesNotMoveBackwardInReplicateDomain)}({serverBehindBy})")
 					.GetAwaiter().GetResult();
 			}
 			catch (Exception ex)
 			{
 				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "FAILURE",
-					$"{nameof(ResolveAuthoritativeTick_ServerBehindReplicateLocal_OffsetPreserved)}({serverBehindBy}): {ex.Message}\n{ex.StackTrace}")
+					$"{nameof(ResolveAuthoritativeTick_RawLocalBehind_DoesNotMoveBackwardInReplicateDomain)}({serverBehindBy}): {ex.Message}\n{ex.StackTrace}")
 					.GetAwaiter().GetResult();
 				throw;
 			}
 			finally
 			{
-				AuthTestTrace.LogTestEnd($"{nameof(ResolveAuthoritativeTick_ServerBehindReplicateLocal_OffsetPreserved)}({serverBehindBy})")
+				AuthTestTrace.LogTestEnd($"{nameof(ResolveAuthoritativeTick_RawLocalBehind_DoesNotMoveBackwardInReplicateDomain)}({serverBehindBy})")
 					.GetAwaiter().GetResult();
 			}
+		}
+
+		/// <summary>
+		/// User-reported branch-hang scenario: after the target controller observed
+		/// <c>inputTick=100</c> at <c>LocalTick=105</c>, the raw clock advances to 110
+		/// while the target input tick is still 100. Mapping 110 to 105 would stamp the
+		/// buff five prediction ticks in the future and extend its lifetime.
+		/// </summary>
+		[Test]
+		public void ResolveAuthoritativeTick_InputTickStalled_DoesNotAccumulateLocalTickDrift()
+		{
+			uint lastReplicateTick = 100u;
+			uint lastReplicateLocalTick = 105u;
+			uint currentRawLocalTick = 110u;
+
+			uint mapped = ResolveAuthoritativeTick(currentRawLocalTick, lastReplicateTick, lastReplicateLocalTick);
+
+			LogAssert.AreEqual(lastReplicateTick, mapped,
+				"Raw LocalTick drift must not push authoritative buff/cooldown stamps beyond the tick used by Tick(input.GetTick()).");
 		}
 
 		/// <summary>
@@ -319,9 +329,9 @@ namespace FishMMO.UnitTests
 				LogAssert.AreEqual(serverTick,
 					ResolveAuthoritativeTick(serverTick, TimeManager.UNSET_TICK, 9_999u),
 					"lastReplicateTick unset → return serverTick unchanged.");
-				LogAssert.AreEqual(serverTick,
+				LogAssert.AreEqual(9_999u,
 					ResolveAuthoritativeTick(serverTick, 9_999u, TimeManager.UNSET_TICK),
-					"lastReplicateLocalTick unset → return serverTick unchanged.");
+					"lastReplicateTick set → use the replicate-domain tick even if the local reference is unset.");
 
 				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS",
 					nameof(ResolveAuthoritativeTick_BeforeFirstReplicate_ReturnsServerTickVerbatim))

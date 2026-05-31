@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Buff system is a data-driven, template-based framework for applying temporary (or permanent) effects to FishMMO characters. It supports tick-based expiration, tick-based periodic effects, stacking, attribute modification, FX instantiation, and FishNet network synchronization with deterministic prediction via `IPredictableController` (Order=80). Buffs and debuffs share the same pipeline, distinguished only by an `IsDebuff` flag on the template.
+The Buff system is a data-driven, template-based framework for applying temporary (or permanent) effects to FishMMO characters. It supports tick-based expiration, tick-based periodic effects, stacking, attribute modification, FX instantiation, and FishNet network synchronization with deterministic prediction via `IPredictableController` (Order=85). Buffs and debuffs share the same pipeline, distinguished only by an `IsDebuff` flag on the template.
 
 > Note: See the Detailed File-Level Topology in the parent `Prediction/README.md` (`../README.md#detailed-file-level-topology`) for a file-level call/serialization topology and per-file interactions.
 
@@ -42,8 +42,8 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - **Stacking** — Buffs support up to `MaxStacks` with symmetric modifier accounting
 - **Attribute modification** — `AttributeBuffTemplate` grants bonus attributes via `AddModifier()` on the `ExternalModifier` layer
 - **FX instantiation** — Client-side visual effect prefabs attached to character mesh
-- **FishNet prediction support** — `BuffController` implements `IPredictableController` (Order=80) with Replicate/Reconcile via `BuffReconcileEntry[]`
-- **Permanent buffs** — `IsPermanent` flag protects buffs from mass-removal operations
+- **FishNet prediction support** — `BuffController` implements `IPredictableController` (Order=85) with Replicate/Reconcile via `BuffReconcileEntry[]`
+- **Permanent buffs** — `IsPermanent` flag keeps buffs from expiring and protects them from mass-removal operations
 - **Buff/debuff distinction** — Unified pipeline with `IsDebuff` flag for categorization, events, and UI
 - **Five template types** — `AttributeBuffTemplate`, `AttributeTickBuffTemplate`, `CompositeBuffTemplate`, `ResourceTickBuffTemplate`, `StateBuffTemplate`
 - **Static events** — `OnAddBuff`, `OnRemoveBuff`, `OnAddDebuff`, `OnRemoveDebuff`, `OnBuffTick` for UI and other systems
@@ -128,7 +128,7 @@ buffController.RemoveRandom(rng, includeBuffs: true, includeDebuffs: true);
 | `TickRate` | `float` | Interval in seconds between `OnTick` calls |
 | `UseCount` | `uint` | Number of times the buff can be triggered |
 | `MaxStacks` | `uint` | Maximum stack count (0 = no stacking) |
-| `IsPermanent` | `bool` | If true, `RemoveAll` and `RemoveRandom` skip this buff |
+| `IsPermanent` | `bool` | If true, buff does not expire and `RemoveAll` / `RemoveRandom` skip it |
 | `IsDebuff` | `bool` | Determines buff vs debuff categorization for events and UI |
 
 ### Attribute Modification
@@ -336,7 +336,7 @@ The system is balanced: every `+V` is paired with a `-V`.
 
 ### Prediction Pipeline
 
-`BuffController` implements `IPredictableController` (Order=80), running before `CooldownController` (90) and `AbilityController` (100) in the prediction pipeline.
+`BuffController` implements `IPredictableController` (Order=85), running after `KCCPlayer` (80) and before `CooldownController` (90), `CharacterAttributeController` (95), and `AbilityController` (100) in the prediction pipeline.
 
 | Method              | Behaviour                                                                    |
 |---------------------|------------------------------------------------------------------------------|
@@ -368,7 +368,7 @@ Array delta serialization uses index-based compression: unchanged entries are sk
 ```
 Buff/
 ├── Buff.cs                        # Runtime buff instance (tick-based timing, stacks, template ref)
-├── BuffController.cs              # Per-entity controller (CharacterBehaviour, IBuffController, IPredictableController Order=80)
+├── BuffController.cs              # Per-entity controller (CharacterBehaviour, IBuffController, IPredictableController Order=85)
 ├── BuffReconcileEntry.cs          # Reconcile snapshot entry + index-delta array serialization (WriteArrayDelta/ReadArrayDelta)
 └── Template/
     ├── BaseBuffTemplate.cs            # Abstract ScriptableObject base for all buff templates
@@ -415,7 +415,7 @@ CachedScriptableObject<BaseBuffTemplate>
 
 ```
 CharacterBehaviour
-└── BuffController : IBuffController, IPredictableController (Order=80)
+└── BuffController : IBuffController, IPredictableController (Order=85)
 ```
 
 #### Configuration Types

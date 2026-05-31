@@ -50,6 +50,12 @@ namespace FishMMO.Shared.Core
 		SortedDictionary<int, Buff> Buffs { get; }
 
 		/// <summary>
+		/// Gets the current tick in the controller's replicate-domain. This is the reference tick used for all buff comparisons.
+		/// </summary>
+		/// <returns>The current replicate-domain tick.</returns>
+		uint GetCurrentDomainTick();
+
+		/// <summary>
 		/// Deterministic buff tick — evaluates expiry and tick conditions for all active buffs.
 		/// Use this for CSP instead of relying on Unity's Update.
 		/// </summary>
@@ -64,15 +70,15 @@ namespace FishMMO.Shared.Core
 		void Apply(BaseBuffTemplate template, PredictionTick currentTick);
 
 		/// <summary>
-		/// Applies a buff from a server-authoritative context. Implementations should map the
-		/// raw server tick back to their current replicate-tick domain when one is available.
+		/// Applies a buff from a server-authoritative context. Implementations should stamp the
+		/// buff with their current replicate-domain tick when one is available.
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
 		/// <param name="serverTick">Fallback authoritative tick used before any replicate tick exists.</param>
 		void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick);
 
 		/// <summary>
-		/// Maps a raw authoritative tick to the controller's current replicate-tick domain
+		/// Maps a raw authoritative tick to the controller's current replicate-domain tick
 		/// when a replicate tick is available.
 		/// </summary>
 		/// <param name="serverTick">Fallback authoritative tick used before any replicate tick exists.</param>

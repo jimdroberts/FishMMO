@@ -23,6 +23,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The absolute network tick at which this buff expires.
 		/// A buff has expired when <c>(int)(currentTick - ExpiryTick) &gt;= 0</c>.
+		/// Permanent buffs use <see cref="TimeManager.UNSET_TICK"/>.
 		/// </summary>
 		public uint ExpiryTick;
 
@@ -113,13 +114,13 @@ namespace FishMMO.Shared
 			if (Template == null)
 			{
 				ExpiryTick = currentTick;  // treat missing template as instantly expired
-				NextTickTick = currentTick;
+				NextTickTick = TimeManager.UNSET_TICK;
 				Stacks = stacks;
 				TickCount = tickCount;
 				return;
 			}
-			ExpiryTick = currentTick + DurationToTicks(Template.Duration, tickDelta);
-			NextTickTick = currentTick + DurationToTicks(Template.TickRate, tickDelta);
+			ExpiryTick = GetExpiryTick(Template, currentTick, tickDelta);
+			NextTickTick = GetNextTickTick(Template, currentTick, tickDelta);
 			Stacks = stacks;
 			TickCount = tickCount;
 		}
@@ -167,6 +168,10 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public float RemainingSeconds(uint currentTick)
 		{
+			if (ExpiryTick == TimeManager.UNSET_TICK)
+			{
+				return Template != null && Template.Duration > 0f ? Template.Duration : 0f;
+			}
 			if (HasExpired(currentTick))
 			{
 				return 0f;
@@ -181,7 +186,7 @@ namespace FishMMO.Shared
 		/// <param name="target">The character affected by the buff.</param>
 		/// <param name="currentTick">The current network tick.</param>
 		/// <param name="tickDelta">Fixed seconds-per-tick of the active session.</param>
-		/// <returns>True if the tick fired (snapshot must be marked dirty).</returns>
+		/// <returns>True if tick state changed (snapshot must be marked dirty).</returns>
 		// AggressiveInlining intentionally absent: the try/catch prevents the JIT from
 		// inlining this method regardless, so the attribute would be silently ignored.
 		public bool TryTick(ICharacter target, uint currentTick, float tickDelta)
@@ -199,30 +204,34 @@ namespace FishMMO.Shared
 
 			uint lastEligibleTick = ExpiryTick != TimeManager.UNSET_TICK &&
 				(int)(currentTick - ExpiryTick) >= 0 ? ExpiryTick : currentTick;
-			bool fired = false;
+			bool changed = false;
 			while ((int)(lastEligibleTick - NextTickTick) >= 0)
 			{
+				bool tickSucceeded = false;
 				try
 				{
 					Template.OnTick(this, target);
+					tickSucceeded = true;
 				}
 				catch (System.Exception ex)
 				{
-					// Without this catch, a throwing OnTick leaves NextTickTick un-advanced,
-					// causing the tick to re-fire on every subsequent game tick — flooding the
-					// server with redundant calls and desync'ing prediction state permanently.
+					// Failed ticks are skipped rather than retried every game tick. Template
+					// implementations must keep OnTick atomic; generic rollback is not possible here.
 					Log.Warning("Buff", $"OnTick threw on template {Template?.ID.ToString() ?? "unknown"}: {ex}");
 				}
-				TickCount++;
-				// Accumulate the per-tick multiplier using Stacks as it was when OnTick
-				// fired. AttributeTickBuffTemplate.OnTick uses (1 + Stacks) as its
-				// multiplier; recording that same value here lets OnRemove reverse the
-				// exact total modifier regardless of stack changes during the buff's life.
-				CumulativeTickMultiplier += (1 + Stacks);
+				if (tickSucceeded)
+				{
+					TickCount++;
+					// Accumulate the per-tick multiplier using Stacks as it was when OnTick
+					// fired. AttributeTickBuffTemplate.OnTick uses (1 + Stacks) as its
+					// multiplier; recording that same value here lets OnRemove reverse the
+					// exact total modifier regardless of stack changes during the buff's life.
+					CumulativeTickMultiplier += (1 + Stacks);
+				}
 				NextTickTick += tickRateTicks;
-				fired = true;
+				changed = true;
 			}
-			return fired;
+			return changed;
 		}
 
 		/// <summary>
@@ -231,7 +240,7 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ResetDuration(uint currentTick, float tickDelta)
 		{
-			ExpiryTick = currentTick + DurationToTicks(Template.Duration, tickDelta);
+			ExpiryTick = GetExpiryTick(Template, currentTick, tickDelta);
 		}
 
 		/// <summary>
@@ -240,7 +249,30 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ResetTickTime(uint currentTick, float tickDelta)
 		{
-			NextTickTick = currentTick + DurationToTicks(Template.TickRate, tickDelta);
+			NextTickTick = GetNextTickTick(Template, currentTick, tickDelta);
+		}
+
+		internal static uint GetExpiryTick(BaseBuffTemplate template, uint currentTick, float tickDelta)
+		{
+			if (template == null)
+			{
+				return currentTick;
+			}
+			if (template.IsPermanent)
+			{
+				return TimeManager.UNSET_TICK;
+			}
+			return currentTick + DurationToTicks(template.Duration, tickDelta);
+		}
+
+		internal static uint GetNextTickTick(BaseBuffTemplate template, uint currentTick, float tickDelta)
+		{
+			if (template == null)
+			{
+				return TimeManager.UNSET_TICK;
+			}
+			uint tickRateTicks = DurationToTicks(template.TickRate, tickDelta);
+			return tickRateTicks == 0u ? TimeManager.UNSET_TICK : currentTick + tickRateTicks;
 		}
 
 		/// <summary>

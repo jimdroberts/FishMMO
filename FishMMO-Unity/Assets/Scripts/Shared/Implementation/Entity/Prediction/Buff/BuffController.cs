@@ -18,14 +18,12 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class BuffController : CharacterBehaviour, IBuffController, IPredictableController
 	{
-		private const uint MissingRawTick = 0u;
-
 		/// <summary>
 		/// Execution order in the unified prediction pipeline.
-		/// Runs before <see cref="AbilityController"/> so buff effects are applied
-		/// before ability activation and processing in the same tick.
+		/// Runs after <see cref="KCCPlayer"/> so movement/camera state is current,
+		/// and before cooldowns, attributes, and ability activation.
 		/// </summary>
-		public int Order => 80;
+		public int Order => 85;
 
 		[Header("ECA - Buffs")]
 		[Tooltip("Triggers invoked when a buff or debuff is applied to this character.")]
@@ -119,19 +117,13 @@ namespace FishMMO.Shared
 		/// </para>
 		///
 		/// <para>
-		/// Region physics triggers fire from KCCPlayer (Order 110), after BuffController
-		/// (Order 80) has already set this field for the current tick, so the value is
-		/// always current for the physics-triggered authoritative path.
+		/// Region physics triggers can fire from KCCPlayer before BuffController has
+		/// set this field for the current tick. <see cref="ResolveAuthoritativeTick"/>
+		/// therefore prefers <see cref="CharacterPredictionController.CurrentReplicateTickSnapshot"/>
+		/// when the unified prediction driver has already captured it.
 		/// </para>
 		/// </summary>
 		private uint lastReplicateTick = TimeManager.UNSET_TICK;
-
-		/// <summary>
-		/// The <c>TimeManager.LocalTick</c> observed when <see cref="lastReplicateTick"/> was captured.
-		/// Used to preserve the raw-authoritative-to-replicate tick offset for events that fire
-		/// outside the immediate prediction pipeline step.
-		/// </summary>
-		private uint lastReplicateLocalTick = TimeManager.UNSET_TICK;
 
 		/// <summary>
 		/// When true, <see cref="cachedSnapshot"/> is stale and must be rebuilt.
@@ -165,10 +157,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		private float tickDelta;
 
+		private CharacterPredictionController predictionController;
+
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
 			RefreshTickDelta();
+			predictionController = GetComponent<CharacterPredictionController>();
 		}
 
 		/// <summary>
@@ -216,7 +211,6 @@ namespace FishMMO.Shared
 					nameof(TranslatePreReplicateBuffTicks)));
 			}
 			lastReplicateTick = inputTick;
-			lastReplicateLocalTick = base.TimeManager != null ? base.TimeManager.LocalTick : lastReplicateTick;
 
 			if (inputTick != TimeManager.UNSET_TICK)
 			{
@@ -391,7 +385,8 @@ namespace FishMMO.Shared
 			}
 		}
 
-		private uint GetCurrentDomainTick()
+		/// <inheritdoc />
+		public uint GetCurrentDomainTick()
 		{
 			if (base.TimeManager == null)
 			{
@@ -557,7 +552,7 @@ namespace FishMMO.Shared
 			// would be redundant at best, and wrong if the two code paths ever diverge.
 			if (!isNew)
 			{
-				uint expectedExpiry = currentTick + Buff.DurationToTicks(template.Duration, tickDelta);
+				uint expectedExpiry = Buff.GetExpiryTick(template, currentTick, tickDelta);
 				if (expectedExpiry != buffInstance.ExpiryTick)
 				{
 					buffInstance.ResetDuration(currentTick, tickDelta);
@@ -584,11 +579,10 @@ namespace FishMMO.Shared
 		/// <para>
 		/// <paramref name="serverTick"/> is accepted as a fallback for callers that fire before
 		/// the first <see cref="OnReplicate"/> (e.g., spawn-time application). Once
-		/// <see cref="OnReplicate"/> has run at least once, the raw tick is translated by the
-		/// observed <c>LocalTick</c> to replicate-tick offset so that <see cref="Buff.ExpiryTick"/>
-		/// is stamped in the replicate-tick domain.
-		/// This prevents the buff from lasting longer than its intended duration when the client's
-		/// input queue is depleted and <c>input.GetTick()</c> lags behind
+		/// <see cref="OnReplicate"/> has run at least once, raw authoritative ticks collapse to
+		/// the current replicate-domain tick. They must not preserve elapsed <c>LocalTick</c>
+		/// drift because <see cref="Tick(uint)"/> evaluates expiry against
+		/// <c>input.GetTick()</c>, which can lag behind or stall relative to
 		/// <c>TimeManager.LocalTick</c>.
 		/// </para>
 		/// </summary>
@@ -602,11 +596,17 @@ namespace FishMMO.Shared
 		/// Maps a raw authoritative tick to the current replicate-domain tick when available.
 		/// </summary>
 		/// <param name="serverTick">Fallback authoritative tick.</param>
-		/// <returns>The mapped replicate-domain tick if one can be derived, otherwise <paramref name="serverTick"/>.</returns>
+		/// <returns>The current replicate-domain tick if one can be derived, otherwise <paramref name="serverTick"/>.</returns>
 		public uint ResolveAuthoritativeTick(uint serverTick)
 		{
-			if (lastReplicateTick == TimeManager.UNSET_TICK ||
-				lastReplicateLocalTick == TimeManager.UNSET_TICK)
+			uint replicateReferenceTick = lastReplicateTick;
+			if (predictionController != null &&
+				predictionController.CurrentReplicateTickSnapshot != TimeManager.UNSET_TICK)
+			{
+				replicateReferenceTick = predictionController.CurrentReplicateTickSnapshot;
+			}
+
+			if (replicateReferenceTick == TimeManager.UNSET_TICK)
 			{
 				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
 				{
@@ -617,13 +617,7 @@ namespace FishMMO.Shared
 				return serverTick;
 			}
 
-			if (serverTick == TimeManager.UNSET_TICK || serverTick == MissingRawTick)
-			{
-				return lastReplicateTick;
-			}
-
-			int tickOffset = GetSignedTickOffset(lastReplicateLocalTick, serverTick, nameof(ResolveAuthoritativeTick));
-			return AddSignedTickOffset(lastReplicateTick, tickOffset);
+			return replicateReferenceTick;
 		}
 
 		/// <summary>
@@ -1025,7 +1019,8 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 			lastReplicateTick = TimeManager.UNSET_TICK;
-			lastReplicateLocalTick = TimeManager.UNSET_TICK;
+			hasSeenFirstReplicate = false;
+			resolveAuthoritativeWarningLogged = false;
 
 			RemoveAll(ignoreInvokeRemove: true);
 		}

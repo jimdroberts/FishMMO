@@ -95,7 +95,14 @@ namespace FishMMO.Client
 			}
 			if (Debuffs.TryGetValue(buff.Template.ID, out UIBuffGroup buffGroup))
 			{
-				buffGroup.DurationSlider.value = buff.RemainingSeconds(currentTick) / buff.Template.Duration;
+				if (buff.Template.Duration > 0f)
+				{
+					buffGroup.DurationSlider.value = buff.RemainingSeconds(currentTick) / buff.Template.Duration;
+				}
+				else
+				{
+					buffGroup.DurationSlider.value = buffGroup.DurationSlider.maxValue;
+				}
 			}
 		}
 

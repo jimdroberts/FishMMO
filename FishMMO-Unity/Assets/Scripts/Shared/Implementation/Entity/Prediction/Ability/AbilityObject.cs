@@ -318,10 +318,7 @@ namespace FishMMO.Shared
 				// (e.g. ApplyBuffAction) receive the authoritative server tick. Carried as a
 				// plain uint on AbilityTickEventData rather than a TickEventData sub-payload
 				// to avoid per-tick heap allocation on this hot path (§1.4).
-				cachedTickEventData.CurrentTick = predictionController != null
-					&& predictionController.CurrentLocalTickSnapshot != TimeManager.UNSET_TICK
-					? predictionController.CurrentLocalTickSnapshot
-					: (timeManager != null ? timeManager.LocalTick : 0u);
+				cachedTickEventData.CurrentTick = GetCurrentAuthoritativeTick();
 				// Thread the object's deterministic RNG so OnTick ECA actions (e.g. random
 				// debuff application) can roll deterministic values. Zero-alloc: same field,
 				// same instance — no new allocation on this hot path.
@@ -343,7 +340,7 @@ namespace FishMMO.Shared
 			// A positive lifetime that has elapsed triggers destruction.
 			// Zero or negative lifetime means "infinite" — the object persists
 			// until destroyed by other means (e.g., HitCount exhaustion).
-			if (totalLifeTime > 0.0f && RemainingLifeTime < 0.0f)
+			if (totalLifeTime > 0.0f && RemainingLifeTime <= 0.0f)
 			{
 				DestroyAbilityObjectInternal();
 				return;
@@ -401,10 +398,9 @@ namespace FishMMO.Shared
 						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision, RNG);
 						// Thread the raw authoritative tick if available. TickEventData marks this as non-replicate,
 						// so prediction-domain consumers must route it through their authoritative fallback.
-						if (timeManager != null)
-						{
-							collisionEvent.Add(new TickEventData(Caster, timeManager.LocalTick));
-						}
+						uint collisionTick = GetCurrentAuthoritativeTick();
+
+						collisionEvent.Add(new TickEventData(Caster, collisionTick));
 						hitEvent.Execute(collisionEvent);
 					}
 				}
@@ -434,7 +430,7 @@ namespace FishMMO.Shared
 
 			// Capture tick before unsubscribing — timeManager.LocalTick is unavailable
 			// after the subscription is removed and the reference is nulled.
-			uint destroyTick = timeManager != null ? timeManager.LocalTick : 0u;
+			uint destroyTick = GetCurrentAuthoritativeTick();
 
 			// Unsubscribe from tick events before cleanup.
 			if (timeManager != null)
@@ -475,6 +471,26 @@ namespace FishMMO.Shared
 			Snapshot = null;
 			GameObject.SetActive(false);
 			Destroy(GameObject);
+		}
+
+		private uint GetCurrentAuthoritativeTick()
+		{
+			uint liveTick = timeManager != null ? timeManager.LocalTick : 0u;
+			if (predictionController == null)
+			{
+				return liveTick;
+			}
+
+			uint snapshotTick = predictionController.CurrentLocalTickSnapshot;
+			if (snapshotTick == TimeManager.UNSET_TICK)
+			{
+				return liveTick;
+			}
+			if (timeManager != null && snapshotTick != liveTick)
+			{
+				return liveTick;
+			}
+			return snapshotTick;
 		}
 
 		/// <summary>

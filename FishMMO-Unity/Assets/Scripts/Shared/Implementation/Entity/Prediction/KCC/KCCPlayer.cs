@@ -79,7 +79,7 @@ namespace FishMMO.Shared
 		public uint ObserverPredictionWindowTicks = 1;
 
 		/// <inheritdoc/>
-		public int Order => 110;
+		public int Order => 80;
 
 		/// <summary>
 		/// Sets the current platform and snapshots its position for velocity calculation.
@@ -228,8 +228,8 @@ namespace FishMMO.Shared
 			// correct, but the OnAttributeUpdated notifications it raises must NOT fire during
 			// replay (UI flicker / duplicate ECA). This mirrors the suppression that BuffController
 			// and CharacterAttributeController already apply around their own replay-time mutations.
-			// KCC runs last (Order 110), so the attribute controller is not already in a suppression
-			// scope here; the depth counter inside the controller handles any nesting safely.
+			// KCC runs first (Order 80), before the attribute controller enters its own replay
+			// suppression scope; the depth counter inside the controller handles any nesting safely.
 			ICharacterAttributeController attributeController = null;
 			bool suppressAttributeNotifications = state.ContainsReplayed() &&
 				CharacterController.Character != null &&

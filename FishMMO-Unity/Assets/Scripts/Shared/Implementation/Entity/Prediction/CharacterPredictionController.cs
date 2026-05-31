@@ -32,6 +32,16 @@ namespace FishMMO.Shared
 		/// between tick callbacks.
 		/// </summary>
 		public uint CurrentLocalTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
+
+		/// <summary>
+		/// Snapshot of the replicate input tick captured at the start of the current
+		/// <see cref="Replicate"/> pass. Controllers that receive callbacks before their
+		/// own ordered <c>OnReplicate</c> has run can use this as the current
+		/// replicate-domain reference instead of projecting elapsed raw <c>LocalTick</c>
+		/// time into prediction state.
+		/// </summary>
+		public uint CurrentReplicateTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
+
 		private IPredictableController[] controllers = Array.Empty<IPredictableController>();
 
 		private void Awake()
@@ -68,6 +78,8 @@ namespace FishMMO.Shared
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
+			CurrentLocalTickSnapshot = TimeManager.UNSET_TICK;
+			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
 
 			base.OnStopNetwork();
 		}
@@ -78,6 +90,7 @@ namespace FishMMO.Shared
 			// AbilityObject.OnTick callbacks subscribe to the same TimeManager.OnTick and may fire before
 			// or after this method. Using CurrentLocalTickSnapshot avoids one-tick subscription-order drift.
 			CurrentLocalTickSnapshot = base.TimeManager != null ? base.TimeManager.LocalTick : TimeManager.UNSET_TICK;
+			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			CharacterReplicateData input = default;
 			if (base.IsOwner)
 			{
@@ -93,6 +106,7 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void Replicate(CharacterReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
+			CurrentReplicateTickSnapshot = input.GetTick();
 			for (int i = 0; i < controllers.Length; i++)
 			{
 				controllers[i].OnReplicate(ref input, state, channel);

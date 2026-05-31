@@ -40,13 +40,37 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// Same-character routing uses stable character ID when the runtime reference differs.
+		/// </summary>
+		[Test]
+		public void ApplyBuffAction_SameCharacterIdReplicateTick_UsesDirectPredictionApply()
+		{
+			TestCharacter source = new TestCharacter(42, null, null);
+			TestBuffController buffController = new TestBuffController();
+			TestCharacter target = new TestCharacter(42, buffController, null);
+			EventData eventData = new EventData(source, target);
+			eventData.Add(new TickEventData(source, new PredictionTick(100u)));
+
+			ApplyBuffAction action = CreateApplyBuffAction();
+
+			action.Execute(source, eventData);
+
+			Assert.AreEqual(1, buffController.DirectApplyCalls);
+			Assert.AreEqual(100u, buffController.LastDirectApplyTick);
+			Assert.AreEqual(0, buffController.AuthoritativeApplyCalls);
+		}
+
+		/// <summary>
 		/// A caster's replicate tick must not be stamped directly onto another character's buff state.
 		/// </summary>
 		[Test]
 		public void ApplyBuffAction_CrossCharacterReplicateTick_UsesTargetAuthoritativeMapping()
 		{
 			TestCharacter caster = new TestCharacter(1, null, null);
-			TestBuffController targetBuffController = new TestBuffController();
+			TestBuffController targetBuffController = new TestBuffController
+			{
+				CurrentDomainTick = 777u,
+			};
 			TestCharacter target = new TestCharacter(2, targetBuffController, null);
 			EventData eventData = new EventData(caster, target);
 			eventData.Add(new TickEventData(caster, new PredictionTick(100u)));
@@ -57,8 +81,50 @@ namespace FishMMO.UnitTests
 
 			Assert.AreEqual(0, targetBuffController.DirectApplyCalls);
 			Assert.AreEqual(1, targetBuffController.AuthoritativeApplyCalls);
-			Assert.AreNotEqual(100u, targetBuffController.LastAuthoritativeApplyTick,
-				"The caster replicate tick must not be reinterpreted as the target's raw authoritative tick.");
+			Assert.AreEqual(777u, targetBuffController.LastAuthoritativeApplyTick,
+				"The caster replicate tick must be replaced with the target controller's current domain tick.");
+		}
+
+		/// <summary>
+		/// Raw authoritative ticks are passed through the authoritative path; the controller maps them into its own domain.
+		/// </summary>
+		[Test]
+		public void ApplyBuffAction_RawAuthoritativeTick_UsesAuthoritativeMappingInput()
+		{
+			TestBuffController buffController = new TestBuffController();
+			TestCharacter character = new TestCharacter(1, buffController, null);
+			EventData eventData = new EventData(character, character);
+			eventData.Add(new TickEventData(character, 205u));
+
+			ApplyBuffAction action = CreateApplyBuffAction();
+
+			action.Execute(character, eventData);
+
+			Assert.AreEqual(0, buffController.DirectApplyCalls);
+			Assert.AreEqual(1, buffController.AuthoritativeApplyCalls);
+			Assert.AreEqual(205u, buffController.LastAuthoritativeApplyTick);
+		}
+
+		/// <summary>
+		/// Events without explicit tick payloads must still stamp buffs in the target controller's current domain.
+		/// </summary>
+		[Test]
+		public void ApplyBuffAction_NoTickData_UsesTargetCurrentDomainTick()
+		{
+			TestBuffController buffController = new TestBuffController
+			{
+				CurrentDomainTick = 333u,
+			};
+			TestCharacter character = new TestCharacter(1, buffController, null);
+			EventData eventData = new EventData(character, character);
+
+			ApplyBuffAction action = CreateApplyBuffAction();
+
+			action.Execute(character, eventData);
+
+			Assert.AreEqual(0, buffController.DirectApplyCalls);
+			Assert.AreEqual(1, buffController.AuthoritativeApplyCalls);
+			Assert.AreEqual(333u, buffController.LastAuthoritativeApplyTick);
 		}
 
 		/// <summary>
@@ -124,7 +190,14 @@ namespace FishMMO.UnitTests
 			return new ApplyBuffAction
 			{
 				StacksValue = new ConstantValue { Amount = 1 },
+				BuffTemplate = ScriptableObject.CreateInstance<TestBuffTemplate>(),
 			};
+		}
+
+		private sealed class TestBuffTemplate : BaseBuffTemplate
+		{
+			public override void OnApply(Buff buff, ICharacter target) { }
+			public override void OnRemove(Buff buff, ICharacter target) { }
 		}
 
 		private sealed class TestCharacter : ICharacter
@@ -192,6 +265,7 @@ namespace FishMMO.UnitTests
 			public uint LastDirectApplyTick;
 			public int AuthoritativeApplyCalls;
 			public uint LastAuthoritativeApplyTick;
+			public uint CurrentDomainTick = 500u;
 
 			public ICharacter Character => null;
 			public bool Initialized => true;
@@ -202,6 +276,7 @@ namespace FishMMO.UnitTests
 			public void InitializeOnce(ICharacter character) { }
 			public void OnStartCharacter() { }
 			public void OnStopCharacter() { }
+			public uint GetCurrentDomainTick() => CurrentDomainTick;
 			public void Tick(uint currentTick) { }
 
 			public void Apply(BaseBuffTemplate template, PredictionTick currentTick)
