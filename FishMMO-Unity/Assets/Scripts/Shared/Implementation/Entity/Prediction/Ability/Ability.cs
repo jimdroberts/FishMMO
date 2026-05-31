@@ -696,7 +696,7 @@ namespace FishMMO.Shared
 
 				foreach (KeyValuePair<int, AbilityObject> objEntry in containerEntry.Value)
 				{
-					if (objEntry.Value != null && objEntry.Value.SpawnTick > tick)
+					if (objEntry.Value != null && IsSpawnTickAfter(objEntry.Value.SpawnTick, tick))
 					{
 						// Null the Ability back-reference so DestroyAbilityObjectInternal
 						// skips RemoveAbilityObject (we handle dict removal below).
@@ -721,6 +721,11 @@ namespace FishMMO.Shared
 			{
 				Objects.Remove(emptyContainerBuffer[i]);
 			}
+		}
+
+		private static bool IsSpawnTickAfter(PredictionTick spawnTick, uint tick)
+		{
+			return (int)(spawnTick.Value - tick) > 0;
 		}
 
 		/// <summary>

@@ -51,11 +51,34 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		/// <summary>
+		/// Verifies predicted-object rollback remains correct when the uint network tick wraps.
+		/// </summary>
+		[Test]
+		public void IsSpawnTickAfter_AcrossUintWrap_UsesSignedComparison()
+		{
+			uint reconcileTick = uint.MaxValue - 5u;
+
+			Assert.IsTrue(IsSpawnTickAfter(new PredictionTick(5u), reconcileTick),
+				"A spawn tick just after uint wrap is newer than a reconcile tick just before wrap.");
+			Assert.IsFalse(IsSpawnTickAfter(new PredictionTick(reconcileTick - 1u), reconcileTick),
+				"A spawn tick before the reconcile tick must not be treated as predicted-after-reconcile.");
+			Assert.IsFalse(IsSpawnTickAfter(new PredictionTick(reconcileTick), reconcileTick),
+				"An object spawned exactly on the reconcile tick is confirmed and must remain.");
+		}
+
 		private static bool IsSameSpawnContainer(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
 		{
 			return (bool)typeof(AbilityObject)
 				.GetMethod("IsSameSpawnContainer", PrivateStaticFlags)
 				.Invoke(null, new object[] { container, seed, spawnTick });
+		}
+
+		private static bool IsSpawnTickAfter(PredictionTick spawnTick, uint tick)
+		{
+			return (bool)typeof(Ability)
+				.GetMethod("IsSpawnTickAfter", PrivateStaticFlags)
+				.Invoke(null, new object[] { spawnTick, tick });
 		}
 	}
 }

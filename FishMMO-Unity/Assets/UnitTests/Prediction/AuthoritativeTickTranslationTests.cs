@@ -1,7 +1,9 @@
 using System;
+using System.Reflection;
 using NUnit.Framework;
 using FishMMO.Shared;
 using FishNet.Managing.Timing;
+using UnityEngine;
 using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
@@ -37,6 +39,7 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class AuthoritativeTickTranslationTests
 	{
+		private const BindingFlags PrivateInstanceFlags = BindingFlags.Instance | BindingFlags.NonPublic;
 		private const float TickDelta30 = 1.0f / 30f;
 
 		/// <summary>
@@ -117,9 +120,9 @@ namespace FishMMO.UnitTests
 		/// client compared it against <c>inputTick = 100</c>, so the buff lasted 35 input
 		/// ticks instead of 30 — a 16% over-duration error.
 		///
-		/// After the fix, <c>ApplyAuthoritative(LocalTick)</c> first maps <c>105</c> into
-		/// the replicate domain via the offset <c>lastReplicateTick - lastReplicateLocalTick</c>,
-		/// yielding <c>100</c>, then stamps <c>ExpiryTick = 100 + 30 = 130</c>. The buff
+		/// After the fix, <c>ApplyAuthoritative(LocalTick)</c> first collapses the raw
+		/// authoritative tick to the current replicate-domain tick, yielding <c>100</c>,
+		/// then stamps <c>ExpiryTick = 100 + 30 = 130</c>. The buff
 		/// now expires after exactly 30 client input ticks, matching the configured duration.
 		/// </summary>
 		[Test]
@@ -444,6 +447,74 @@ namespace FishMMO.UnitTests
 		// ─────────────────────────────────────────────────────────────────────────
 		//  End-to-end translation + Buff expiry parity
 		// ─────────────────────────────────────────────────────────────────────────
+
+		/// <summary>
+		/// Production-path proof for branchhang's reported scenario. A real
+		/// <see cref="BuffController"/> with <c>lastReplicateTick=100</c> receives a raw
+		/// authoritative <c>serverTick=105</c>. <see cref="BuffController.ApplyAuthoritative"/>
+		/// must stamp the buff in the replicate/input domain used by
+		/// <c>BuffController.Tick(input.GetTick())</c>, producing <c>ExpiryTick=130</c>
+		/// for a 30-tick buff. The historical bug stamped <c>105 + 30 = 135</c>, which
+		/// would make <see cref="Buff.HasExpired"/> false at tick 130 and extend the buff.
+		/// </summary>
+		[Test]
+		public void ApplyAuthoritative_ProductionController_StampsExpiryInReplicateDomain()
+		{
+			GameObject gameObject = new GameObject("ApplyAuthoritativeProductionTickTest");
+			ProductionBuffTemplate template = ScriptableObject.CreateInstance<ProductionBuffTemplate>();
+
+			try
+			{
+				template.name = "BranchhangAuthoritativeBuff";
+				template.Duration = 1.0f;
+				template.TickRate = 0.0f;
+				template.AddToCache(template.name);
+
+				BuffController controller = gameObject.AddComponent<BuffController>();
+				SetPrivateField(controller, "tickDelta", TickDelta30);
+				SetPrivateField(controller, "lastReplicateTick", 100u);
+				SetPrivateField(controller, "hasSeenFirstReplicate", true);
+				SetPrivateField(controller, "isReplayingTick", true);
+
+				controller.ApplyAuthoritative(template, 105u);
+
+				Assert.IsTrue(controller.Buffs.TryGetValue(template.ID, out Buff buff),
+					"ApplyAuthoritative must create the buff through the production Apply path.");
+
+				uint durationTicks = Buff.DurationToTicks(template.Duration, TickDelta30);
+				Assert.AreEqual(30u, durationTicks,
+					"The test template is intentionally one second at 30 TPS.");
+				Assert.AreEqual(130u, buff.ExpiryTick,
+					"ExpiryTick must be current replicate tick + durationTicks, not raw serverTick + durationTicks.");
+				Assert.IsFalse(buff.HasExpired(129u),
+					"The buff must still be active one input tick before expiry.");
+				Assert.IsTrue(buff.HasExpired(130u),
+					"The buff must expire exactly when Tick(input.GetTick()) reaches the replicate-domain expiry tick.");
+			}
+			finally
+			{
+				if (template != null)
+				{
+					template.RemoveFromCache();
+					UnityEngine.Object.DestroyImmediate(template);
+				}
+
+				UnityEngine.Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		private static void SetPrivateField<T>(BuffController controller, string fieldName, T value)
+		{
+			typeof(BuffController)
+				.GetField(fieldName, PrivateInstanceFlags)
+				.SetValue(controller, value);
+		}
+
+		private sealed class ProductionBuffTemplate : BaseBuffTemplate
+		{
+			public override void OnApply(Buff buff, FishMMO.Shared.Core.ICharacter target) { }
+			public override void OnRemove(Buff buff, FishMMO.Shared.Core.ICharacter target) { }
+		}
 
 		/// <summary>
 		/// Full pipeline: ApplyAuthoritative(serverTick=LocalTick) → ResolveAuthoritativeTick →
