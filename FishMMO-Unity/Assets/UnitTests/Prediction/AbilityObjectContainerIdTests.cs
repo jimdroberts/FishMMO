@@ -13,6 +13,7 @@ namespace FishMMO.UnitTests
 	public class AbilityObjectContainerIdTests
 	{
 		private const BindingFlags PrivateStaticFlags = BindingFlags.Static | BindingFlags.NonPublic;
+		private const BindingFlags PrivateInstanceFlags = BindingFlags.Instance | BindingFlags.NonPublic;
 
 		/// <summary>
 		/// Verifies empty containers are treated as occupied collision slots, not same-spawn retries.
@@ -67,6 +68,43 @@ namespace FishMMO.UnitTests
 				"An object spawned exactly on the reconcile tick is confirmed and must remain.");
 		}
 
+		/// <summary>
+		/// Child ability objects cloned from a server-side parent must also be marked as
+		/// server-side so their collision path dispatches authoritative hit effects.
+		/// </summary>
+		[Test]
+		public void InitializeSpawnedChildObject_CopiesServerFlagFromSource()
+		{
+			GameObject sourceObject = new GameObject("SourceAbilityObject");
+			GameObject childObject = new GameObject("ChildAbilityObject");
+
+			try
+			{
+				AbilityObject source = sourceObject.AddComponent<AbilityObject>();
+				AbilityObject child = childObject.AddComponent<AbilityObject>();
+				SetPrivateField(source, "isServer", true);
+				SetPrivateField(source, "tickDelta", 1.0f / 30f);
+				source.ContainerID = 42;
+				source.HitCount = 1;
+				source.RemainingLifeTime = 2.0f;
+				source.SpawnTick = new PredictionTick(100u);
+				source.SpawnSeed = 7;
+
+				var spawnedObjects = new Dictionary<int, AbilityObject>();
+				InitializeSpawnedChildObject(child, source, 1, spawnedObjects, source.SpawnSeed);
+
+				Assert.IsTrue(GetPrivateField<bool>(child, "isServer"),
+					"Child ability objects must preserve the server-side dispatch flag from their source object.");
+				Assert.AreSame(child, spawnedObjects[1],
+					"The initialized child must be registered in the shared spawned-object map.");
+			}
+			finally
+			{
+				Object.DestroyImmediate(childObject);
+				Object.DestroyImmediate(sourceObject);
+			}
+		}
+
 		private static bool IsSameSpawnContainer(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
 		{
 			return (bool)typeof(AbilityObject)
@@ -79,6 +117,27 @@ namespace FishMMO.UnitTests
 			return (bool)typeof(Ability)
 				.GetMethod("IsSpawnTickAfter", PrivateStaticFlags)
 				.Invoke(null, new object[] { spawnTick, tick });
+		}
+
+		private static void InitializeSpawnedChildObject(AbilityObject child, AbilityObject source, int childID, Dictionary<int, AbilityObject> spawnedObjects, int seed)
+		{
+			typeof(AbilityObject)
+				.GetMethod("InitializeSpawnedChildObject", PrivateStaticFlags)
+				.Invoke(null, new object[] { child, source, childID, spawnedObjects, seed });
+		}
+
+		private static void SetPrivateField<T>(AbilityObject instance, string fieldName, T value)
+		{
+			typeof(AbilityObject)
+				.GetField(fieldName, PrivateInstanceFlags)
+				.SetValue(instance, value);
+		}
+
+		private static T GetPrivateField<T>(AbilityObject instance, string fieldName)
+		{
+			return (T)typeof(AbilityObject)
+				.GetField(fieldName, PrivateInstanceFlags)
+				.GetValue(instance);
 		}
 	}
 }

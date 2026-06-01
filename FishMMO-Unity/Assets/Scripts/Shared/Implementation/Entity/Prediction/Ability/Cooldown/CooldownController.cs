@@ -67,6 +67,13 @@ namespace FishMMO.Shared
 		private bool resolveAuthoritativeWarningLogged = false;
 
 		/// <summary>
+		/// Payload reference tick for cooldowns read before this controller has a usable
+		/// local or replicate reference tick. The first valid replicate pass consumes it
+		/// so late-join payload ticks can still be translated from the writer's domain.
+		/// </summary>
+		private uint preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
+
+		/// <summary>
 		/// True while <see cref="OnReplicate"/> is executing a replayed (reconcile replay) tick.
 		/// Mutation helpers (<see cref="RemoveCooldown"/>) check this flag to suppress UI / ECA
 		/// events that would otherwise fire on every replayed tick.
@@ -145,8 +152,12 @@ namespace FishMMO.Shared
 				inputTick != TimeManager.UNSET_TICK &&
 				base.TimeManager != null)
 			{
-				TranslatePreReplicateCooldownTicks(GetSignedTickOffset(base.TimeManager.LocalTick, inputTick,
+				uint sourceReferenceTick = preReplicatePayloadReferenceTick != TimeManager.UNSET_TICK
+					? preReplicatePayloadReferenceTick
+					: base.TimeManager.LocalTick;
+				TranslatePreReplicateCooldownTicks(GetSignedTickOffset(sourceReferenceTick, inputTick,
 					nameof(TranslatePreReplicateCooldownTicks)));
+				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 			}
 			lastReplicateTick = inputTick;
 
@@ -223,6 +234,7 @@ namespace FishMMO.Shared
 			lastReplicateTick = TimeManager.UNSET_TICK;
 			hasSeenFirstReplicate = false;
 			resolveAuthoritativeWarningLogged = false;
+			preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 			cooldowns.Clear();
 			keysToRemove.Clear();
 		}
@@ -248,11 +260,15 @@ namespace FishMMO.Shared
 			keysToRemove.Clear();
 
 			uint payloadReferenceTick = reader.ReadUInt32();
-			int tickOffset = GetSignedTickOffset(payloadReferenceTick, currentTick, nameof(Read));
+			bool deferPayloadTranslation = currentTick == TimeManager.UNSET_TICK &&
+				payloadReferenceTick != TimeManager.UNSET_TICK;
+			int tickOffset = deferPayloadTranslation ? 0 :
+				GetSignedTickOffset(payloadReferenceTick, currentTick, nameof(Read));
 
 			int cooldownCount = reader.ReadInt32();
 			if (cooldownCount < 0 || cooldownCount > maxPayloadCooldowns)
 			{
+				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 				// Reader is shared with subsequent payload fields — drain the remaining
 				// cooldown bytes to keep the stream position valid. Without this,
 				// everything after this call reads corrupted data.
@@ -271,6 +287,9 @@ namespace FishMMO.Shared
 				}
 				return;
 			}
+			preReplicatePayloadReferenceTick = deferPayloadTranslation
+				? payloadReferenceTick
+				: TimeManager.UNSET_TICK;
 
 			float td = TickDelta;
 			for (int i = 0; i < cooldownCount; ++i)
@@ -317,7 +336,11 @@ namespace FishMMO.Shared
 
 		private uint GetCurrentDomainTick()
 		{
-			if (base.TimeManager == null)
+			// base.TimeManager dereferences _networkObjectCache, which is null until the
+			// NetworkObject is initialized. Guard through the null-safe NetworkObject accessor
+			// so we report "no domain yet" (lastReplicateTick) instead of throwing during
+			// pre-spawn payload writes.
+			if (base.NetworkObject == null || base.TimeManager == null)
 			{
 				return lastReplicateTick;
 			}
@@ -407,10 +430,16 @@ namespace FishMMO.Shared
 		public uint ResolveAuthoritativeTick(uint serverTick)
 		{
 			uint replicateReferenceTick = lastReplicateTick;
-			if (predictionController != null &&
-				predictionController.CurrentReplicateTickSnapshot != TimeManager.UNSET_TICK)
+			if (predictionController != null)
 			{
-				replicateReferenceTick = predictionController.CurrentReplicateTickSnapshot;
+				if (predictionController.PendingReplicateTickSnapshot != TimeManager.UNSET_TICK)
+				{
+					replicateReferenceTick = predictionController.PendingReplicateTickSnapshot;
+				}
+				else if (predictionController.CurrentReplicateTickSnapshot != TimeManager.UNSET_TICK)
+				{
+					replicateReferenceTick = predictionController.CurrentReplicateTickSnapshot;
+				}
 			}
 
 			if (replicateReferenceTick == TimeManager.UNSET_TICK)
@@ -421,7 +450,13 @@ namespace FishMMO.Shared
 						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. StartTick will be corrected by reconcile.");
 					resolveAuthoritativeWarningLogged = true;
 				}
-				return serverTick;
+				// CONSERVATIVE HARDENING: prefer the live TimeManager.LocalTick over the caller's
+				// raw serverTick so every pre-replicate cooldown is anchored in the SAME LocalTick
+				// domain that TranslatePreReplicateCooldownTicks assumes for its uniform offset. The
+				// null guard keeps this safe before the NetworkObject is initialized.
+				return (base.NetworkObject != null && base.TimeManager != null)
+					? base.TimeManager.LocalTick
+					: serverTick;
 			}
 
 			return replicateReferenceTick;
@@ -500,6 +535,7 @@ namespace FishMMO.Shared
 		public void Clear()
 		{
 			cooldowns.Clear();
+			preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 			snapshotDirty = true;
 		}
 

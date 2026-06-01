@@ -3,6 +3,7 @@ using System.Reflection;
 using NUnit.Framework;
 using FishMMO.Shared;
 using FishNet.Managing.Timing;
+using FishNet.Serializing;
 using UnityEngine;
 using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
@@ -28,12 +29,11 @@ namespace FishMMO.UnitTests
 	/// </para>
 	///
 	/// <para>
-	/// These tests intentionally do NOT instantiate <c>BuffController</c> or
-	/// <c>CooldownController</c> as Unity components. Doing so would require a live
-	/// <c>NetworkObject</c> + <c>TimeManager</c>, which is impractical in an
-	/// edit-mode test. Instead we mirror the production formula exactly so the test
-	/// breaks the moment the formula in <c>ResolveAuthoritativeTick</c> drifts from
-	/// the one asserted here.
+	/// Most tests mirror the production arithmetic directly because a live FishNet
+	/// <c>NetworkObject</c> + <c>TimeManager</c> is impractical in edit mode. The
+	/// branchhang regression also instantiates a real <c>BuffController</c> and drives
+	/// <c>ApplyAuthoritative</c> with its private replicate snapshot fields set to the
+	/// same values the prediction pipeline captures at runtime.
 	/// </para>
 	/// </summary>
 	[TestFixture]
@@ -78,6 +78,33 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// Verifies the exact late-join shape from the audit request: a long-running
+		/// server writes payload ticks at <c>1_020_404</c>, while the receiving client
+		/// has just started its local/reference domain at tick <c>1</c>. Payload
+		/// translation must preserve remaining duration, not absolute tick magnitude.
+		/// </summary>
+		[Test]
+		public void BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration()
+		{
+			uint serverReferenceTick = 1_020_404u;
+			uint clientReferenceTick = 1u;
+			uint durationTicks = 30u;
+
+			int offset = BuffController.GetSignedTickOffset(serverReferenceTick, clientReferenceTick,
+				nameof(BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration));
+			uint translatedExpiry = BuffController.AddSignedTickOffset(serverReferenceTick + durationTicks, offset);
+
+			Assert.AreEqual(-1_020_403, offset,
+				"The server/client reference gap is large but still comfortably inside the signed tick-offset range.");
+			Assert.AreEqual(clientReferenceTick + durationTicks, translatedExpiry,
+				"Initial payload sync must preserve the 30 remaining ticks in the receiver's current domain.");
+			Assert.IsFalse(new Buff(1, translatedExpiry, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(clientReferenceTick + durationTicks - 1u),
+				"The late-join translated buff must still be active one receiver tick before expiry.");
+			Assert.IsTrue(new Buff(1, translatedExpiry, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(clientReferenceTick + durationTicks),
+				"The late-join translated buff must expire exactly after the preserved remaining duration.");
+		}
+
+		/// <summary>
 		/// Verifies pre-replicate buff ticks can be translated backward when the local
 		/// authoritative tick is ahead of the first replicate input tick.
 		/// </summary>
@@ -89,6 +116,88 @@ namespace FishMMO.UnitTests
 			Assert.AreEqual(-5, offset);
 			Assert.AreEqual(130u, BuffController.AddSignedTickOffset(135u, offset),
 				"A buff stamped at LocalTick+duration must map back to inputTick+duration, not jump to a near-permanent uint value.");
+		}
+
+		/// <summary>
+		/// Verifies spawn/pre-first-replicate application when the server has been
+		/// running long before the client begins its input domain. The first valid
+		/// replicate tick translates raw LocalTick-stamped buff fields into the
+		/// replicate/input domain used by <c>Tick(input.GetTick())</c>.
+		/// </summary>
+		[Test]
+		public void BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick()
+		{
+			uint rawLocalTickAtApply = 1_020_404u;
+			uint firstInputTick = 1u;
+			uint durationTicks = 30u;
+			uint rawExpiryTick = rawLocalTickAtApply + durationTicks;
+
+			int offset = BuffController.GetSignedTickOffset(rawLocalTickAtApply, firstInputTick,
+				nameof(BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick));
+			uint translatedExpiryTick = BuffController.AddSignedTickOffset(rawExpiryTick, offset);
+
+			Assert.AreEqual(-1_020_403, offset);
+			Assert.AreEqual(31u, translatedExpiryTick,
+				"A pre-replicate buff stamped at server LocalTick+duration must become firstInputTick+duration.");
+		}
+
+		/// <summary>
+		/// Anchor-invariant proof (refutes the "double/zero translation" hazard in the
+		/// 6-bug report). Before the first replicate, ALL buff stamps — whether they came
+		/// from <c>ApplyAuthoritative</c> (raw LocalTick anchor) or from
+		/// <c>ReadPayload</c> (payload-reference anchored to the current LocalTick) — are
+		/// expressed in the SAME raw LocalTick domain. <c>TranslatePreReplicateBuffTicks</c>
+		/// then applies ONE uniform signed offset <c>(firstInputTick - localTickAtFirstReplicate)</c>
+		/// to every buff. This test proves that a single uniform offset maps buffs stamped
+		/// at DIFFERENT LocalTick anchors to their correct input-domain expiry, because each
+		/// buff's raw expiry already embeds its own apply LocalTick; the offset only shifts
+		/// the LocalTick→input domain, which is uniform across all buffs.
+		///
+		/// <para>
+		/// If a future change re-anchors one source (e.g. payload buffs to the payload
+		/// reference tick) while leaving the other on LocalTick, the two buffs would need
+		/// different offsets and this test fails — catching exactly the inconsistency the
+		/// report warns about.
+		/// </para>
+		/// </summary>
+		[Test]
+		public void PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain()
+		{
+			// Two buffs applied at DIFFERENT raw LocalTicks before the first replicate.
+			uint payloadApplyLocalTick = 1_000u;   // ReadPayload stamped remaining duration here.
+			uint payloadRemaining = 20u;
+			uint payloadExpiryRaw = payloadApplyLocalTick + payloadRemaining; // 1020
+
+			uint authApplyLocalTick = 1_003u;      // ApplyAuthoritative stamped here, 3 ticks later.
+			uint authDuration = 30u;
+			uint authExpiryRaw = authApplyLocalTick + authDuration; // 1033
+
+			// First replicate arrives: server LocalTick advanced to 1010, client input tick is 400.
+			uint localTickAtFirstReplicate = 1_010u;
+			uint firstInputTick = 400u;
+
+			int uniformOffset = BuffController.GetSignedTickOffset(
+				localTickAtFirstReplicate, firstInputTick,
+				nameof(PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain));
+			Assert.AreEqual(-610, uniformOffset, "Uniform offset is (firstInputTick - localTickAtFirstReplicate).");
+
+			uint payloadFinal = BuffController.AddSignedTickOffset(payloadExpiryRaw, uniformOffset);
+			uint authFinal = BuffController.AddSignedTickOffset(authExpiryRaw, uniformOffset);
+
+			// Correct input-domain expiry = firstInputTick + (applyLocalTick - localTickAtFirstReplicate) + remaining/duration.
+			uint payloadCorrect = firstInputTick + (payloadApplyLocalTick - localTickAtFirstReplicate) + payloadRemaining; // 410
+			uint authCorrect = firstInputTick + (authApplyLocalTick - localTickAtFirstReplicate) + authDuration;          // 423
+
+			Assert.AreEqual(payloadCorrect, payloadFinal,
+				"Payload buff (anchored at LocalTick 1000) must land at input tick 410 after the uniform offset.");
+			Assert.AreEqual(authCorrect, authFinal,
+				"Authoritative buff (anchored at LocalTick 1003) must land at input tick 423 with the SAME uniform offset — proving anchors are not mixed.");
+
+			// Expiry parity: each buff stays active until exactly its input-domain expiry tick.
+			Assert.IsFalse(new Buff(1, payloadFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(payloadCorrect - 1u));
+			Assert.IsTrue(new Buff(1, payloadFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(payloadCorrect));
+			Assert.IsFalse(new Buff(2, authFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(authCorrect - 1u));
+			Assert.IsTrue(new Buff(2, authFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(authCorrect));
 		}
 
 		/// <summary>
@@ -416,8 +525,8 @@ namespace FishMMO.UnitTests
 					"must still produce a valid replicate-domain mapping for LocalTick.")
 					.GetAwaiter().GetResult();
 
-				uint lastReplicateTick = 50u;                    // Client just started replicating.
-				uint lastReplicateLocalTick = 108_050u;          // Server ran ~60 minutes alone @ 30 tps.
+				uint lastReplicateTick = 1u;                     // Client just started replicating.
+				uint lastReplicateLocalTick = 1_020_404u;        // Server has been running for a long time.
 				uint serverTick = lastReplicateLocalTick;        // Apply-time wall-clock.
 
 				uint mapped = ResolveAuthoritativeTick(serverTick, lastReplicateTick, lastReplicateLocalTick);
@@ -503,11 +612,269 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		private static void SetPrivateField<T>(BuffController controller, string fieldName, T value)
+		/// <summary>
+		/// AbilityObject.OnTick can run before CharacterPredictionController.TimeManager_OnTick
+		/// in the same TimeManager tick. In that window CurrentReplicateTickSnapshot and
+		/// lastReplicateTick still describe the previous replicate tick. The pending snapshot
+		/// captured from OnPreTick must win so ApplyAuthoritative stamps the new tick.
+		/// </summary>
+		[Test]
+		public void BuffResolveAuthoritativeTick_PreReplicatePendingSnapshot_WinsOverStaleCurrentTick()
 		{
-			typeof(BuffController)
+			GameObject gameObject = new GameObject("BuffPendingSnapshotTickTest");
+
+			try
+			{
+				CharacterPredictionController prediction = gameObject.AddComponent<CharacterPredictionController>();
+				BuffController controller = gameObject.AddComponent<BuffController>();
+
+				SetPrivateField(controller, "predictionController", prediction);
+				SetPrivateField(controller, "lastReplicateTick", 99u);
+				SetPrivateField(controller, "hasSeenFirstReplicate", true);
+				SetAutoProperty(prediction, nameof(CharacterPredictionController.CurrentReplicateTickSnapshot), 99u);
+				SetAutoProperty(prediction, nameof(CharacterPredictionController.PendingReplicateTickSnapshot), 100u);
+
+				Assert.AreEqual(100u, controller.ResolveAuthoritativeTick(105u),
+					"Pre-replicate authoritative calls must use the pending current tick instead of the previous tick.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		/// <summary>
+		/// Cooldown queries and additions use the same authoritative tick mapper as buffs.
+		/// This pins the mirrored stale-window fix so cooldown readiness cannot drift one
+		/// tick early/late when called before the controller's OnReplicate pass.
+		/// </summary>
+		[Test]
+		public void CooldownResolveAuthoritativeTick_PreReplicatePendingSnapshot_WinsOverStaleCurrentTick()
+		{
+			GameObject gameObject = new GameObject("CooldownPendingSnapshotTickTest");
+
+			try
+			{
+				CharacterPredictionController prediction = gameObject.AddComponent<CharacterPredictionController>();
+				CooldownController controller = gameObject.AddComponent<CooldownController>();
+
+				SetPrivateField(controller, "predictionController", prediction);
+				SetPrivateField(controller, "lastReplicateTick", 199u);
+				SetPrivateField(controller, "hasSeenFirstReplicate", true);
+				SetAutoProperty(prediction, nameof(CharacterPredictionController.CurrentReplicateTickSnapshot), 199u);
+				SetAutoProperty(prediction, nameof(CharacterPredictionController.PendingReplicateTickSnapshot), 200u);
+
+				Assert.AreEqual(200u, controller.ResolveAuthoritativeTick(205u),
+					"Pre-replicate authoritative calls must use the pending current tick instead of the previous tick.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		/// <summary>
+		/// If spawn payload arrives before the receiver has a usable local or replicate
+		/// tick, <see cref="BuffController.ReadPayload"/> cannot translate immediately.
+		/// It must remember the writer's reference tick so the first valid replicate can
+		/// translate from the payload domain rather than the receiver's raw LocalTick.
+		/// </summary>
+		[Test]
+		public void BuffReadPayload_UnsetCurrentReference_DefersPayloadReferenceForFirstReplicate()
+		{
+			GameObject gameObject = new GameObject("BuffDeferredPayloadReferenceTest");
+			ProductionBuffTemplate template = ScriptableObject.CreateInstance<ProductionBuffTemplate>();
+
+			try
+			{
+				template.name = "LateJoinDeferredPayloadBuff";
+				template.Duration = 1.0f;
+				template.TickRate = 0.0f;
+				template.AddToCache(template.name);
+
+				uint serverReferenceTick = 1_020_404u;
+				uint firstInputTick = 1u;
+				uint durationTicks = 30u;
+
+				BuffController controller = gameObject.AddComponent<BuffController>();
+				SetPrivateField(controller, "tickDelta", TickDelta30);
+
+				var writer = new Writer();
+				writer.WriteUInt32(serverReferenceTick);
+				writer.WriteInt32(1);
+				writer.WriteInt32(template.ID);
+				writer.WriteUInt32(serverReferenceTick + durationTicks);
+				writer.WriteUInt32(TimeManager.UNSET_TICK);
+				writer.WriteInt32(0);
+				writer.WriteInt32(0);
+				writer.WriteInt32(0);
+
+				var reader = new Reader(writer.GetArraySegment(), null);
+				controller.ReadPayload(null, reader);
+
+				Assert.AreEqual(serverReferenceTick,
+					GetPrivateField<uint>(controller, "preReplicatePayloadReferenceTick"),
+					"ReadPayload must remember the writer reference tick when the receiver reference is unset.");
+
+				int offset = BuffController.GetSignedTickOffset(serverReferenceTick, firstInputTick,
+					nameof(BuffReadPayload_UnsetCurrentReference_DefersPayloadReferenceForFirstReplicate));
+				InvokePrivateMethod(controller, "TranslatePreReplicateBuffTicks", offset);
+
+				Assert.IsTrue(controller.Buffs.TryGetValue(template.ID, out Buff buff));
+				Assert.AreEqual(firstInputTick + durationTicks, buff.ExpiryTick,
+					"Deferred payload translation must preserve the remaining duration in the first input tick domain.");
+			}
+			finally
+			{
+				if (template != null)
+				{
+					template.RemoveFromCache();
+					UnityEngine.Object.DestroyImmediate(template);
+				}
+
+				UnityEngine.Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		/// <summary>
+		/// Even an empty buff payload carries a valid writer reference tick. Preserve it
+		/// until first replicate so any pre-replicate buff additions can be translated
+		/// from the server payload domain rather than the receiver's local domain.
+		/// </summary>
+		[Test]
+		public void BuffReadPayload_EmptyPayload_PreservesReferenceForFirstReplicate()
+		{
+			GameObject gameObject = new GameObject("BuffEmptyPayloadReferenceTest");
+
+			try
+			{
+				uint serverReferenceTick = 1_020_404u;
+				BuffController controller = gameObject.AddComponent<BuffController>();
+				SetPrivateField(controller, "tickDelta", TickDelta30);
+
+				var writer = new Writer();
+				writer.WriteUInt32(serverReferenceTick);
+				writer.WriteInt32(0);
+
+				var reader = new Reader(writer.GetArraySegment(), null);
+				controller.ReadPayload(null, reader);
+
+				Assert.AreEqual(serverReferenceTick,
+					GetPrivateField<uint>(controller, "preReplicatePayloadReferenceTick"),
+					"An empty payload must still preserve its valid writer reference tick until first replicate.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		/// <summary>
+		/// Cooldown payloads share the same late-join reference-tick hazard as buffs.
+		/// This pins the mirrored cooldown fix so ability readiness cannot drift during
+		/// initial sync when the receiver has not reached a non-zero tick yet.
+		/// </summary>
+		[Test]
+		public void CooldownRead_UnsetCurrentReference_DefersPayloadReferenceForFirstReplicate()
+		{
+			GameObject gameObject = new GameObject("CooldownDeferredPayloadReferenceTest");
+
+			try
+			{
+				uint serverReferenceTick = 1_020_404u;
+				uint firstInputTick = 1u;
+				uint durationTicks = 30u;
+				long abilityID = 771L;
+
+				CooldownController controller = gameObject.AddComponent<CooldownController>();
+				SetPrivateField(controller, "cachedTickDelta", TickDelta30);
+
+				var writer = new Writer();
+				writer.WriteUInt32(serverReferenceTick);
+				writer.WriteInt32(1);
+				writer.WriteInt64(abilityID);
+				writer.WriteUInt32(serverReferenceTick);
+				writer.WriteUInt32(durationTicks);
+
+				var reader = new Reader(writer.GetArraySegment(), null);
+				controller.Read(reader, TimeManager.UNSET_TICK);
+
+				Assert.AreEqual(serverReferenceTick,
+					GetPrivateField<uint>(controller, "preReplicatePayloadReferenceTick"),
+					"Cooldown Read must remember the writer reference tick when the receiver reference is unset.");
+
+				int offset = CooldownController.GetSignedTickOffset(serverReferenceTick, firstInputTick,
+					nameof(CooldownRead_UnsetCurrentReference_DefersPayloadReferenceForFirstReplicate));
+				InvokePrivateMethod(controller, "TranslatePreReplicateCooldownTicks", offset);
+
+				Assert.IsTrue(controller.IsOnCooldown(abilityID, firstInputTick + durationTicks - 1u),
+					"Deferred cooldown payload translation must stay active one input tick before elapse.");
+				Assert.IsFalse(controller.IsOnCooldown(abilityID, firstInputTick + durationTicks),
+					"Deferred cooldown payload translation must elapse exactly after the preserved duration.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		/// <summary>
+		/// Empty cooldown payloads also carry a valid writer reference tick. Preserve it
+		/// for symmetry with buffs and to keep initial-sync timing stable before first
+		/// replicate.
+		/// </summary>
+		[Test]
+		public void CooldownRead_EmptyPayload_PreservesReferenceForFirstReplicate()
+		{
+			GameObject gameObject = new GameObject("CooldownEmptyPayloadReferenceTest");
+
+			try
+			{
+				uint serverReferenceTick = 1_020_404u;
+				CooldownController controller = gameObject.AddComponent<CooldownController>();
+				SetPrivateField(controller, "cachedTickDelta", TickDelta30);
+
+				var writer = new Writer();
+				writer.WriteUInt32(serverReferenceTick);
+				writer.WriteInt32(0);
+
+				var reader = new Reader(writer.GetArraySegment(), null);
+				controller.Read(reader, TimeManager.UNSET_TICK);
+
+				Assert.AreEqual(serverReferenceTick,
+					GetPrivateField<uint>(controller, "preReplicatePayloadReferenceTick"),
+					"An empty cooldown payload must still preserve its valid writer reference tick until first replicate.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		private static void SetPrivateField<T>(object instance, string fieldName, T value)
+		{
+			instance.GetType()
 				.GetField(fieldName, PrivateInstanceFlags)
-				.SetValue(controller, value);
+				.SetValue(instance, value);
+		}
+
+		private static T GetPrivateField<T>(object instance, string fieldName)
+		{
+			return (T)instance.GetType()
+				.GetField(fieldName, PrivateInstanceFlags)
+				.GetValue(instance);
+		}
+
+		private static void SetAutoProperty<T>(object instance, string propertyName, T value)
+		{
+			SetPrivateField(instance, $"<{propertyName}>k__BackingField", value);
+		}
+
+		private static void InvokePrivateMethod(object instance, string methodName, int tickOffset)
+		{
+			instance.GetType()
+				.GetMethod(methodName, PrivateInstanceFlags)
+				.Invoke(instance, new object[] { tickOffset });
 		}
 
 		private sealed class ProductionBuffTemplate : BaseBuffTemplate

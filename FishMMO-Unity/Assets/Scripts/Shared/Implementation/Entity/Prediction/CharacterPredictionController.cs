@@ -42,6 +42,16 @@ namespace FishMMO.Shared
 		/// </summary>
 		public uint CurrentReplicateTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
 
+		/// <summary>
+		/// Best available replicate-domain tick for the upcoming <see cref="Replicate"/>
+		/// pass, captured during <see cref="TimeManager.OnPreTick"/> before arbitrary
+		/// <see cref="TimeManager.OnTick"/> subscribers can run. This closes the window
+		/// where ability objects or region callbacks execute before this controller's
+		/// own <see cref="TimeManager_OnTick"/> subscription and would otherwise observe
+		/// the previous tick's <see cref="CurrentReplicateTickSnapshot"/>.
+		/// </summary>
+		public uint PendingReplicateTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
+
 		private IPredictableController[] controllers = Array.Empty<IPredictableController>();
 
 		private void Awake()
@@ -68,6 +78,7 @@ namespace FishMMO.Shared
 
 			if (base.TimeManager != null)
 			{
+				base.TimeManager.OnPreTick += TimeManager_OnPreTick;
 				base.TimeManager.OnTick += TimeManager_OnTick;
 			}
 		}
@@ -76,12 +87,59 @@ namespace FishMMO.Shared
 		{
 			if (base.TimeManager != null)
 			{
+				base.TimeManager.OnPreTick -= TimeManager_OnPreTick;
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
 			CurrentLocalTickSnapshot = TimeManager.UNSET_TICK;
 			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
+			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 
 			base.OnStopNetwork();
+		}
+
+		private void TimeManager_OnPreTick()
+		{
+			if (base.TimeManager == null)
+			{
+				CurrentLocalTickSnapshot = TimeManager.UNSET_TICK;
+				CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
+				PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
+				return;
+			}
+
+			uint previousReplicateTick = CurrentReplicateTickSnapshot;
+			CurrentLocalTickSnapshot = base.TimeManager.LocalTick;
+			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
+			PendingReplicateTickSnapshot = ResolvePendingReplicateTick(previousReplicateTick);
+		}
+
+		private uint ResolvePendingReplicateTick(uint previousReplicateTick)
+		{
+			if (base.TimeManager == null)
+			{
+				return TimeManager.UNSET_TICK;
+			}
+
+			if (base.IsController)
+			{
+				return base.TimeManager.LocalTick;
+			}
+
+			if (base.Owner.IsValid && !base.Owner.ReplicateTick.IsUnset)
+			{
+				uint ownerReplicateTick = base.Owner.ReplicateTick.Value(base.TimeManager);
+				if (ownerReplicateTick != TimeManager.UNSET_TICK)
+				{
+					return ownerReplicateTick;
+				}
+			}
+
+			if (previousReplicateTick != TimeManager.UNSET_TICK)
+			{
+				return unchecked(previousReplicateTick + 1u);
+			}
+
+			return TimeManager.UNSET_TICK;
 		}
 
 		private void TimeManager_OnTick()
@@ -100,6 +158,7 @@ namespace FishMMO.Shared
 				}
 			}
 			Replicate(input);
+			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			CreateReconcile();
 		}
 
@@ -107,6 +166,7 @@ namespace FishMMO.Shared
 		private void Replicate(CharacterReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
 			CurrentReplicateTickSnapshot = input.GetTick();
+			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			for (int i = 0; i < controllers.Length; i++)
 			{
 				controllers[i].OnReplicate(ref input, state, channel);

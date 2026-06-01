@@ -803,6 +803,7 @@ namespace FishMMO.Shared
 			abilityObject.SpawnSeed = source.SpawnSeed;
 			abilityObject.Snapshot = source.Snapshot;
 			abilityObject.predictionController = source.predictionController;
+			abilityObject.isServer = source.isServer;
 			// Snapshot is lazily initialized — children share the parent's lifecycle
 			// and don't need their own eagerly-created snapshot.
 

@@ -117,10 +117,9 @@ namespace FishMMO.Shared
 		/// </para>
 		///
 		/// <para>
-		/// Region physics triggers can fire from KCCPlayer before BuffController has
-		/// set this field for the current tick. <see cref="ResolveAuthoritativeTick"/>
-		/// therefore prefers <see cref="CharacterPredictionController.CurrentReplicateTickSnapshot"/>
-		/// when the unified prediction driver has already captured it.
+		/// Region physics triggers and ability object callbacks can fire before
+		/// BuffController has set this field for the current tick. <see cref="ResolveAuthoritativeTick"/>
+		/// therefore prefers the prediction driver's pending/current snapshots when available.
 		/// </para>
 		/// </summary>
 		private uint lastReplicateTick = TimeManager.UNSET_TICK;
@@ -140,6 +139,13 @@ namespace FishMMO.Shared
 		/// Prevents repeatedly logging the same ResolveAuthoritativeTick pre-replicate warning.
 		/// </summary>
 		private bool resolveAuthoritativeWarningLogged = false;
+
+		/// <summary>
+		/// Payload reference tick for buffs read before this controller has a usable local
+		/// or replicate reference tick. The first valid replicate pass consumes this so
+		/// late-join payload ticks can still be translated from the writer's domain.
+		/// </summary>
+		private uint preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 
 		/// <summary>
 		/// True while <see cref="OnReplicate"/> is executing a replayed (reconcile replay) tick.
@@ -207,8 +213,12 @@ namespace FishMMO.Shared
 				inputTick != TimeManager.UNSET_TICK &&
 				base.TimeManager != null)
 			{
-				TranslatePreReplicateBuffTicks(GetSignedTickOffset(base.TimeManager.LocalTick, inputTick,
+				uint sourceReferenceTick = preReplicatePayloadReferenceTick != TimeManager.UNSET_TICK
+					? preReplicatePayloadReferenceTick
+					: base.TimeManager.LocalTick;
+				TranslatePreReplicateBuffTicks(GetSignedTickOffset(sourceReferenceTick, inputTick,
 					nameof(TranslatePreReplicateBuffTicks)));
+				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 			}
 			lastReplicateTick = inputTick;
 
@@ -311,11 +321,34 @@ namespace FishMMO.Shared
 
 			uint payloadReferenceTick = reader.ReadUInt32();
 			uint currentReferenceTick = GetCurrentDomainTick();
-			int tickOffset = GetSignedTickOffset(payloadReferenceTick, currentReferenceTick, nameof(ReadPayload));
+			bool deferPayloadTranslation = currentReferenceTick == TimeManager.UNSET_TICK &&
+				payloadReferenceTick != TimeManager.UNSET_TICK;
+
+			// INVARIANT: deferring payload translation is only legal when there is NO LocalTick
+			// anchor available (TimeManager not yet present). In production TimeManager is always
+			// present once the object is spawned, so GetCurrentDomainTick() resolves to a valid
+			// LocalTick and deferPayloadTranslation MUST be false. If it were ever true with a live
+			// TimeManager, payload buffs (anchored to payloadReferenceTick) and ApplyAuthoritative
+			// buffs (anchored to LocalTick) would receive DIFFERENT pre-replicate offsets, splitting
+			// the single uniform translation in TranslatePreReplicateBuffTicks and desyncing expiry
+			// between client and server. Assert the invariant so a future regression surfaces loudly.
+			if (deferPayloadTranslation && base.NetworkObject != null && base.TimeManager != null)
+			{
+				Log.Error("BuffController",
+					"ReadPayload deferred payload tick translation while TimeManager was live. " +
+					"This splits the pre-replicate anchor domain (payload vs. LocalTick) and will desync " +
+					"buff expiry. Forcing immediate LocalTick-anchored translation to preserve determinism.");
+				currentReferenceTick = base.TimeManager.LocalTick;
+				deferPayloadTranslation = false;
+			}
+
+			int tickOffset = deferPayloadTranslation ? 0 :
+				GetSignedTickOffset(payloadReferenceTick, currentReferenceTick, nameof(ReadPayload));
 
 			int buffCount = reader.ReadInt32();
 			if (buffCount < 0 || buffCount > maxPayloadBuffs)
 			{
+				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 				// Reader is shared with subsequent payload fields — drain the remaining
 				// buff bytes to keep the stream position valid. Cap iterations to
 				// maxPayloadBuffs to prevent a corrupted count from hanging the tick.
@@ -334,6 +367,9 @@ namespace FishMMO.Shared
 				}
 				return;
 			}
+			preReplicatePayloadReferenceTick = deferPayloadTranslation
+				? payloadReferenceTick
+				: TimeManager.UNSET_TICK;
 			for (int i = 0; i < buffCount; ++i)
 			{
 				int templateID = reader.ReadInt32();
@@ -388,7 +424,12 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public uint GetCurrentDomainTick()
 		{
-			if (base.TimeManager == null)
+			// base.TimeManager dereferences _networkObjectCache, which is null until the
+			// NetworkObject is initialized (e.g. while ReadPayload runs during spawn sync).
+			// Guard through the null-safe NetworkObject accessor so we report "no domain yet"
+			// (lastReplicateTick, UNSET pre-first-replicate) instead of throwing. This is the
+			// signal ReadPayload uses to defer payload translation until the first replicate.
+			if (base.NetworkObject == null || base.TimeManager == null)
 			{
 				return lastReplicateTick;
 			}
@@ -509,6 +550,26 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Apply(BaseBuffTemplate template, PredictionTick currentTick)
 		{
+			// The prediction path already holds a replicate-domain tick (it came from
+			// CharacterReplicateData.GetPredictionTick), so pass its raw value straight
+			// into the single apply core.
+			ApplyResolved(template, currentTick.Value);
+		}
+
+		/// <summary>
+		/// Single apply core. The <paramref name="replicateDomainTick"/> MUST already be in the
+		/// replicate-input domain that <see cref="Tick(uint)"/> evaluates expiry against — either
+		/// because it came from a <see cref="PredictionTick"/> (prediction path) or because it was
+		/// mapped through <see cref="ResolveAuthoritativeTick"/> (authoritative path). This is the
+		/// ONLY sanctioned place in the controller that fabricates a <see cref="PredictionTick"/>
+		/// for the buff-apply <see cref="TickEventData"/>; doing it here (rather than at each call
+		/// site) keeps the "raw uint must be replicate-domain before it becomes a PredictionTick"
+		/// contract in one auditable location.
+		/// </summary>
+		/// <param name="template">The buff template to apply.</param>
+		/// <param name="replicateDomainTick">Application tick, guaranteed to be in the replicate domain.</param>
+		private void ApplyResolved(BaseBuffTemplate template, uint replicateDomainTick)
+		{
 			if (template == null) return;
 
 			bool isNew = false;
@@ -518,7 +579,7 @@ namespace FishMMO.Shared
 				// New buff: constructor is the single source of truth for ExpiryTick.
 				// ResetDuration is NOT called here — it only runs for existing buffs below.
 				isNew = true;
-				buffInstance = new Buff(template.ID, currentTick, tickDelta);
+				buffInstance = new Buff(template.ID, replicateDomainTick, tickDelta);
 				buffInstance.Apply(Character);
 				buffs.Add(template.ID, buffInstance);
 				changed = true;
@@ -535,8 +596,10 @@ namespace FishMMO.Shared
 						IBuffController.OnAddBuff?.Invoke(buffInstance);
 					}
 					// Include tick payload so actions triggered by buff apply can use the deterministic tick.
+					// replicateDomainTick is guaranteed replicate-domain by both entry points, so this is a
+					// legitimate (and the only) PredictionTick fabrication in the apply path.
 					BuffEventData bed = new BuffEventData(Character, buffInstance);
-					bed.Add(new TickEventData(Character, currentTick));
+					bed.Add(new TickEventData(Character, new PredictionTick(replicateDomainTick)));
 					Character.Invoke(onBuffApplyTriggers, bed);
 				}
 			}
@@ -552,10 +615,10 @@ namespace FishMMO.Shared
 			// would be redundant at best, and wrong if the two code paths ever diverge.
 			if (!isNew)
 			{
-				uint expectedExpiry = Buff.GetExpiryTick(template, currentTick, tickDelta);
+				uint expectedExpiry = Buff.GetExpiryTick(template, replicateDomainTick, tickDelta);
 				if (expectedExpiry != buffInstance.ExpiryTick)
 				{
-					buffInstance.ResetDuration(currentTick, tickDelta);
+					buffInstance.ResetDuration(replicateDomainTick, tickDelta);
 					changed = true;
 				}
 			}
@@ -588,8 +651,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick)
 		{
-			uint tick = ResolveAuthoritativeTick(serverTick);
-			Apply(template, new PredictionTick(tick));
+			// Map the raw authoritative tick into the replicate domain BEFORE applying so the
+			// PredictionTick contract holds: ApplyResolved only ever receives replicate-domain ticks.
+			ApplyResolved(template, ResolveAuthoritativeTick(serverTick));
 		}
 
 		/// <summary>
@@ -600,10 +664,16 @@ namespace FishMMO.Shared
 		public uint ResolveAuthoritativeTick(uint serverTick)
 		{
 			uint replicateReferenceTick = lastReplicateTick;
-			if (predictionController != null &&
-				predictionController.CurrentReplicateTickSnapshot != TimeManager.UNSET_TICK)
+			if (predictionController != null)
 			{
-				replicateReferenceTick = predictionController.CurrentReplicateTickSnapshot;
+				if (predictionController.PendingReplicateTickSnapshot != TimeManager.UNSET_TICK)
+				{
+					replicateReferenceTick = predictionController.PendingReplicateTickSnapshot;
+				}
+				else if (predictionController.CurrentReplicateTickSnapshot != TimeManager.UNSET_TICK)
+				{
+					replicateReferenceTick = predictionController.CurrentReplicateTickSnapshot;
+				}
 			}
 
 			if (replicateReferenceTick == TimeManager.UNSET_TICK)
@@ -614,7 +684,32 @@ namespace FishMMO.Shared
 						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. ExpiryTick will be corrected by reconcile.");
 					resolveAuthoritativeWarningLogged = true;
 				}
-				return serverTick;
+				// LOAD-BEARING fallback — NOT a bug. Before the first replicate there is no
+				// replicate-domain reference yet, so we return the raw authoritative tick
+				// (TimeManager.LocalTick in production). Every pre-replicate buff is therefore
+				// anchored in the SAME raw-LocalTick domain. When the first replicate arrives,
+				// OnReplicate calls TranslatePreReplicateBuffTicks with the single uniform offset
+				// (firstInputTick - LocalTickAtFirstReplicate), which shifts ALL such buffs into
+				// the replicate domain at once. Because each buff's raw expiry already embeds its
+				// own apply-LocalTick, one uniform offset is correct for every buff regardless of
+				// when it was applied. Returning anything other than this consistent LocalTick
+				// anchor here (e.g. a fabricated replicate tick) would break that uniform-offset
+				// translation. See AuthoritativeTickTranslationTests
+				// .PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain.
+				//
+				// CONSERVATIVE HARDENING: prefer the live TimeManager.LocalTick over the caller's
+				// serverTick. GetCurrentDomainTick already passes LocalTick, but ApplyAuthoritative
+				// forwards a RAW server tick. Substituting LocalTick here guarantees every
+				// pre-replicate buff is anchored in the SAME LocalTick domain that
+				// TranslatePreReplicateBuffTicks assumes when it later applies the uniform
+				// (firstInputTick - LocalTickAtFirstReplicate) offset. We deliberately do NOT record
+				// preReplicatePayloadReferenceTick here: the existing OnReplicate translation anchors
+				// on LocalTick-at-first-replicate (W_f), which is the correct uniform source for every
+				// buff regardless of its individual apply time. The null guard keeps this safe before
+				// the NetworkObject is initialized (returns the raw serverTick as a last resort).
+				return (base.NetworkObject != null && base.TimeManager != null)
+					? base.TimeManager.LocalTick
+					: serverTick;
 			}
 
 			return replicateReferenceTick;
@@ -746,6 +841,7 @@ namespace FishMMO.Shared
 		public void RemoveAll(bool ignoreInvokeRemove = false)
 		{
 			snapshotDirty = true;
+			preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 			// Use a dedicated buffer so that a RemoveAll() triggered from within a Tick() OnTick
 			// callback does not clear the keysToRemove list that Tick() is currently iterating.
 			removeAllBuffer.Clear();
@@ -1021,6 +1117,7 @@ namespace FishMMO.Shared
 			lastReplicateTick = TimeManager.UNSET_TICK;
 			hasSeenFirstReplicate = false;
 			resolveAuthoritativeWarningLogged = false;
+			preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 
 			RemoveAll(ignoreInvokeRemove: true);
 		}
