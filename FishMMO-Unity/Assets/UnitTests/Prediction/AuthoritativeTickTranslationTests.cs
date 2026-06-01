@@ -68,13 +68,34 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BuffPayloadTickTranslation_PayloadAheadOfCurrent_UsesNegativeSignedOffset()
 		{
-			int offset = BuffController.GetSignedTickOffset(1_000u, 900u, nameof(BuffPayloadTickTranslation_PayloadAheadOfCurrent_UsesNegativeSignedOffset));
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(BuffPayloadTickTranslation_PayloadAheadOfCurrent_UsesNegativeSignedOffset),
+					"A payload written at a later reference tick than the receiver must use a signed negative offset, not an unsigned wrap to ~4 billion.")
+					.GetAwaiter().GetResult();
 
-			Assert.AreEqual(-100, offset);
-			Assert.AreEqual(930u, BuffController.AddSignedTickOffset(1_030u, offset),
-				"ExpiryTick must preserve remaining duration in the receiver domain instead of wrapping forward by uint.MaxValue.");
-			Assert.AreEqual(920u, BuffController.AddSignedTickOffset(1_020u, offset),
-				"NextTickTick must be translated with the same signed offset as ExpiryTick.");
+				int offset = BuffController.GetSignedTickOffset(1_000u, 900u, nameof(BuffPayloadTickTranslation_PayloadAheadOfCurrent_UsesNegativeSignedOffset));
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "STEP",
+					$"GetSignedTickOffset(1000, 900) = {offset}; AddSignedTickOffset(1030) = {BuffController.AddSignedTickOffset(1_030u, offset)}; AddSignedTickOffset(1020) = {BuffController.AddSignedTickOffset(1_020u, offset)}")
+					.GetAwaiter().GetResult();
+
+				LogAssert.AreEqual(-100, offset, "Offset of payload(1000) relative to current(900) must be -100.");
+				LogAssert.AreEqual(930u, BuffController.AddSignedTickOffset(1_030u, offset),
+					"ExpiryTick must preserve remaining duration in the receiver domain instead of wrapping forward by uint.MaxValue.");
+				LogAssert.AreEqual(920u, BuffController.AddSignedTickOffset(1_020u, offset),
+					"NextTickTick must be translated with the same signed offset as ExpiryTick.");
+
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS", nameof(BuffPayloadTickTranslation_PayloadAheadOfCurrent_UsesNegativeSignedOffset)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "FAILURE", $"{nameof(BuffPayloadTickTranslation_PayloadAheadOfCurrent_UsesNegativeSignedOffset)}: {ex.Message}\n{ex.StackTrace}").GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(BuffPayloadTickTranslation_PayloadAheadOfCurrent_UsesNegativeSignedOffset)).GetAwaiter().GetResult();
+			}
 		}
 
 		/// <summary>
@@ -86,22 +107,43 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration()
 		{
-			uint serverReferenceTick = 1_020_404u;
-			uint clientReferenceTick = 1u;
-			uint durationTicks = 30u;
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration),
+					"Late join: server payload ticks at 1,020,404 while the receiver starts at tick 1. Translation must preserve the 30 remaining ticks, not absolute magnitude.")
+					.GetAwaiter().GetResult();
 
-			int offset = BuffController.GetSignedTickOffset(serverReferenceTick, clientReferenceTick,
-				nameof(BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration));
-			uint translatedExpiry = BuffController.AddSignedTickOffset(serverReferenceTick + durationTicks, offset);
+				uint serverReferenceTick = 1_020_404u;
+				uint clientReferenceTick = 1u;
+				uint durationTicks = 30u;
 
-			Assert.AreEqual(-1_020_403, offset,
-				"The server/client reference gap is large but still comfortably inside the signed tick-offset range.");
-			Assert.AreEqual(clientReferenceTick + durationTicks, translatedExpiry,
-				"Initial payload sync must preserve the 30 remaining ticks in the receiver's current domain.");
-			Assert.IsFalse(new Buff(1, translatedExpiry, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(clientReferenceTick + durationTicks - 1u),
-				"The late-join translated buff must still be active one receiver tick before expiry.");
-			Assert.IsTrue(new Buff(1, translatedExpiry, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(clientReferenceTick + durationTicks),
-				"The late-join translated buff must expire exactly after the preserved remaining duration.");
+				int offset = BuffController.GetSignedTickOffset(serverReferenceTick, clientReferenceTick,
+					nameof(BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration));
+				uint translatedExpiry = BuffController.AddSignedTickOffset(serverReferenceTick + durationTicks, offset);
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "STEP",
+					$"serverRef={serverReferenceTick} clientRef={clientReferenceTick} duration={durationTicks} -> offset={offset} translatedExpiry={translatedExpiry}")
+					.GetAwaiter().GetResult();
+
+				LogAssert.AreEqual(-1_020_403, offset,
+					"The server/client reference gap is large but still comfortably inside the signed tick-offset range.");
+				LogAssert.AreEqual(clientReferenceTick + durationTicks, translatedExpiry,
+					"Initial payload sync must preserve the 30 remaining ticks in the receiver's current domain.");
+				LogAssert.IsFalse(new Buff(1, translatedExpiry, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(clientReferenceTick + durationTicks - 1u),
+					"The late-join translated buff must still be active one receiver tick before expiry.");
+				LogAssert.IsTrue(new Buff(1, translatedExpiry, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(clientReferenceTick + durationTicks),
+					"The late-join translated buff must expire exactly after the preserved remaining duration.");
+
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS", nameof(BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "FAILURE", $"{nameof(BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration)}: {ex.Message}\n{ex.StackTrace}").GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(BuffPayloadTickTranslation_LateJoinHugeServerOffset_PreservesRemainingDuration)).GetAwaiter().GetResult();
+			}
 		}
 
 		/// <summary>
@@ -111,11 +153,32 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BuffPreReplicateTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap()
 		{
-			int offset = BuffController.GetSignedTickOffset(105u, 100u, nameof(BuffPreReplicateTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap));
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(BuffPreReplicateTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap),
+					"Pre-replicate buff ticks must translate backward (signed) when local authoritative tick leads the first replicate input tick.")
+					.GetAwaiter().GetResult();
 
-			Assert.AreEqual(-5, offset);
-			Assert.AreEqual(130u, BuffController.AddSignedTickOffset(135u, offset),
-				"A buff stamped at LocalTick+duration must map back to inputTick+duration, not jump to a near-permanent uint value.");
+				int offset = BuffController.GetSignedTickOffset(105u, 100u, nameof(BuffPreReplicateTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap));
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "STEP",
+					$"GetSignedTickOffset(105, 100) = {offset}; AddSignedTickOffset(135) = {BuffController.AddSignedTickOffset(135u, offset)}")
+					.GetAwaiter().GetResult();
+
+				LogAssert.AreEqual(-5, offset, "LocalTick(105) relative to input(100) must yield offset -5.");
+				LogAssert.AreEqual(130u, BuffController.AddSignedTickOffset(135u, offset),
+					"A buff stamped at LocalTick+duration must map back to inputTick+duration, not jump to a near-permanent uint value.");
+
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS", nameof(BuffPreReplicateTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "FAILURE", $"{nameof(BuffPreReplicateTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap)}: {ex.Message}\n{ex.StackTrace}").GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(BuffPreReplicateTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap)).GetAwaiter().GetResult();
+			}
 		}
 
 		/// <summary>
@@ -127,18 +190,39 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick()
 		{
-			uint rawLocalTickAtApply = 1_020_404u;
-			uint firstInputTick = 1u;
-			uint durationTicks = 30u;
-			uint rawExpiryTick = rawLocalTickAtApply + durationTicks;
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick),
+					"Spawn before first replicate with a long-running server: a buff stamped at raw LocalTick+duration must map to firstInputTick+duration.")
+					.GetAwaiter().GetResult();
 
-			int offset = BuffController.GetSignedTickOffset(rawLocalTickAtApply, firstInputTick,
-				nameof(BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick));
-			uint translatedExpiryTick = BuffController.AddSignedTickOffset(rawExpiryTick, offset);
+				uint rawLocalTickAtApply = 1_020_404u;
+				uint firstInputTick = 1u;
+				uint durationTicks = 30u;
+				uint rawExpiryTick = rawLocalTickAtApply + durationTicks;
 
-			Assert.AreEqual(-1_020_403, offset);
-			Assert.AreEqual(31u, translatedExpiryTick,
-				"A pre-replicate buff stamped at server LocalTick+duration must become firstInputTick+duration.");
+				int offset = BuffController.GetSignedTickOffset(rawLocalTickAtApply, firstInputTick,
+					nameof(BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick));
+				uint translatedExpiryTick = BuffController.AddSignedTickOffset(rawExpiryTick, offset);
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "STEP",
+					$"rawLocalApply={rawLocalTickAtApply} firstInput={firstInputTick} rawExpiry={rawExpiryTick} -> offset={offset} translatedExpiry={translatedExpiryTick}")
+					.GetAwaiter().GetResult();
+
+				LogAssert.AreEqual(-1_020_403, offset, "Offset must be (firstInputTick - rawLocalTickAtApply).");
+				LogAssert.AreEqual(31u, translatedExpiryTick,
+					"A pre-replicate buff stamped at server LocalTick+duration must become firstInputTick+duration.");
+
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS", nameof(BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "FAILURE", $"{nameof(BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick)}: {ex.Message}\n{ex.StackTrace}").GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(BuffPreReplicateTranslation_LateJoinHugeServerOffset_MapsToFirstInputTick)).GetAwaiter().GetResult();
+			}
 		}
 
 		/// <summary>
@@ -163,41 +247,66 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain()
 		{
-			// Two buffs applied at DIFFERENT raw LocalTicks before the first replicate.
-			uint payloadApplyLocalTick = 1_000u;   // ReadPayload stamped remaining duration here.
-			uint payloadRemaining = 20u;
-			uint payloadExpiryRaw = payloadApplyLocalTick + payloadRemaining; // 1020
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain),
+					"A single uniform offset must map buffs stamped at DIFFERENT LocalTick anchors to their correct input-domain expiry, proving anchors are not mixed.")
+					.GetAwaiter().GetResult();
 
-			uint authApplyLocalTick = 1_003u;      // ApplyAuthoritative stamped here, 3 ticks later.
-			uint authDuration = 30u;
-			uint authExpiryRaw = authApplyLocalTick + authDuration; // 1033
+				// Two buffs applied at DIFFERENT raw LocalTicks before the first replicate.
+				uint payloadApplyLocalTick = 1_000u;   // ReadPayload stamped remaining duration here.
+				uint payloadRemaining = 20u;
+				uint payloadExpiryRaw = payloadApplyLocalTick + payloadRemaining; // 1020
 
-			// First replicate arrives: server LocalTick advanced to 1010, client input tick is 400.
-			uint localTickAtFirstReplicate = 1_010u;
-			uint firstInputTick = 400u;
+				uint authApplyLocalTick = 1_003u;      // ApplyAuthoritative stamped here, 3 ticks later.
+				uint authDuration = 30u;
+				uint authExpiryRaw = authApplyLocalTick + authDuration; // 1033
 
-			int uniformOffset = BuffController.GetSignedTickOffset(
-				localTickAtFirstReplicate, firstInputTick,
-				nameof(PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain));
-			Assert.AreEqual(-610, uniformOffset, "Uniform offset is (firstInputTick - localTickAtFirstReplicate).");
+				// First replicate arrives: server LocalTick advanced to 1010, client input tick is 400.
+				uint localTickAtFirstReplicate = 1_010u;
+				uint firstInputTick = 400u;
 
-			uint payloadFinal = BuffController.AddSignedTickOffset(payloadExpiryRaw, uniformOffset);
-			uint authFinal = BuffController.AddSignedTickOffset(authExpiryRaw, uniformOffset);
+				int uniformOffset = BuffController.GetSignedTickOffset(
+					localTickAtFirstReplicate, firstInputTick,
+					nameof(PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain));
+				LogAssert.AreEqual(-610, uniformOffset, "Uniform offset is (firstInputTick - localTickAtFirstReplicate).");
 
-			// Correct input-domain expiry = firstInputTick + (applyLocalTick - localTickAtFirstReplicate) + remaining/duration.
-			uint payloadCorrect = firstInputTick + (payloadApplyLocalTick - localTickAtFirstReplicate) + payloadRemaining; // 410
-			uint authCorrect = firstInputTick + (authApplyLocalTick - localTickAtFirstReplicate) + authDuration;          // 423
+				uint payloadFinal = BuffController.AddSignedTickOffset(payloadExpiryRaw, uniformOffset);
+				uint authFinal = BuffController.AddSignedTickOffset(authExpiryRaw, uniformOffset);
 
-			Assert.AreEqual(payloadCorrect, payloadFinal,
-				"Payload buff (anchored at LocalTick 1000) must land at input tick 410 after the uniform offset.");
-			Assert.AreEqual(authCorrect, authFinal,
-				"Authoritative buff (anchored at LocalTick 1003) must land at input tick 423 with the SAME uniform offset — proving anchors are not mixed.");
+				// Correct input-domain expiry = firstInputTick + (applyLocalTick - localTickAtFirstReplicate) + remaining/duration.
+				uint payloadCorrect = firstInputTick + (payloadApplyLocalTick - localTickAtFirstReplicate) + payloadRemaining; // 410
+				uint authCorrect = firstInputTick + (authApplyLocalTick - localTickAtFirstReplicate) + authDuration;          // 423
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "STEP",
+					$"uniformOffset={uniformOffset} payloadFinal={payloadFinal} (expect {payloadCorrect}) authFinal={authFinal} (expect {authCorrect})")
+					.GetAwaiter().GetResult();
 
-			// Expiry parity: each buff stays active until exactly its input-domain expiry tick.
-			Assert.IsFalse(new Buff(1, payloadFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(payloadCorrect - 1u));
-			Assert.IsTrue(new Buff(1, payloadFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(payloadCorrect));
-			Assert.IsFalse(new Buff(2, authFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(authCorrect - 1u));
-			Assert.IsTrue(new Buff(2, authFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(authCorrect));
+				LogAssert.AreEqual(payloadCorrect, payloadFinal,
+					"Payload buff (anchored at LocalTick 1000) must land at input tick 410 after the uniform offset.");
+				LogAssert.AreEqual(authCorrect, authFinal,
+					"Authoritative buff (anchored at LocalTick 1003) must land at input tick 423 with the SAME uniform offset — proving anchors are not mixed.");
+
+				// Expiry parity: each buff stays active until exactly its input-domain expiry tick.
+				LogAssert.IsFalse(new Buff(1, payloadFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(payloadCorrect - 1u),
+					"Payload buff must still be active one tick before its input-domain expiry.");
+				LogAssert.IsTrue(new Buff(1, payloadFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(payloadCorrect),
+					"Payload buff must expire exactly at its input-domain expiry tick.");
+				LogAssert.IsFalse(new Buff(2, authFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(authCorrect - 1u),
+					"Authoritative buff must still be active one tick before its input-domain expiry.");
+				LogAssert.IsTrue(new Buff(2, authFinal, TimeManager.UNSET_TICK, TickDelta30, 0, 0).HasExpired(authCorrect),
+					"Authoritative buff must expire exactly at its input-domain expiry tick.");
+
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS", nameof(PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "FAILURE", $"{nameof(PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain)}: {ex.Message}\n{ex.StackTrace}").GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(PreReplicate_MixedAnchors_UniformOffsetTranslatesEveryBuffToInputDomain)).GetAwaiter().GetResult();
+			}
 		}
 
 		/// <summary>
@@ -207,11 +316,32 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void CooldownTickTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap()
 		{
-			int offset = CooldownController.GetSignedTickOffset(105u, 100u, nameof(CooldownTickTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap));
+			try
+			{
+				AuthTestTrace.LogTestStart(nameof(CooldownTickTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap),
+					"Cooldown payload/pre-replicate translation must use the same signed offset behavior as buff timing fields.")
+					.GetAwaiter().GetResult();
 
-			Assert.AreEqual(-5, offset);
-			Assert.AreEqual(100u, CooldownController.AddSignedTickOffset(105u, offset),
-				"Cooldown StartTick must map back to the replicate input tick rather than wrapping forward by uint.MaxValue.");
+				int offset = CooldownController.GetSignedTickOffset(105u, 100u, nameof(CooldownTickTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap));
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "STEP",
+					$"GetSignedTickOffset(105, 100) = {offset}; AddSignedTickOffset(105) = {CooldownController.AddSignedTickOffset(105u, offset)}")
+					.GetAwaiter().GetResult();
+
+				LogAssert.AreEqual(-5, offset, "LocalTick(105) relative to input(100) must yield offset -5.");
+				LogAssert.AreEqual(100u, CooldownController.AddSignedTickOffset(105u, offset),
+					"Cooldown StartTick must map back to the replicate input tick rather than wrapping forward by uint.MaxValue.");
+
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "SUCCESS", nameof(CooldownTickTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap)).GetAwaiter().GetResult();
+			}
+			catch (Exception ex)
+			{
+				AuthTestTrace.Log("AuthoritativeTickTranslationTests", "FAILURE", $"{nameof(CooldownTickTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap)}: {ex.Message}\n{ex.StackTrace}").GetAwaiter().GetResult();
+				throw;
+			}
+			finally
+			{
+				AuthTestTrace.LogTestEnd(nameof(CooldownTickTranslation_LocalTickAheadOfInput_DoesNotUnsignedWrap)).GetAwaiter().GetResult();
+			}
 		}
 
 		// ─────────────────────────────────────────────────────────────────────────

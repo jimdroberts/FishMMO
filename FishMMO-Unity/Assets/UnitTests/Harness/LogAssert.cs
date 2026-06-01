@@ -26,6 +26,22 @@ namespace FishMMO.UnitTests.Harness
             Assert.AreNotEqual(notExpected, actual, message);
         }
 
+        public static void AreSame(object expected, object actual, string message = null)
+        {
+            bool result = object.ReferenceEquals(expected, actual);
+            string logMsg = $"Assert.AreSame | Expected(ref): {(expected == null ? "null" : expected.GetType().Name)} | Actual(ref): {(actual == null ? "null" : actual.GetType().Name)} | {(result ? "PASS" : "FAIL")}{(message != null ? " | " + message : "")}";
+            AuthTestTrace.Log("LogAssert", result ? "PASS" : "FAIL", logMsg);
+            Assert.AreSame(expected, actual, message);
+        }
+
+        public static void AreNotSame(object notExpected, object actual, string message = null)
+        {
+            bool result = !object.ReferenceEquals(notExpected, actual);
+            string logMsg = $"Assert.AreNotSame | NotExpected(ref): {(notExpected == null ? "null" : notExpected.GetType().Name)} | Actual(ref): {(actual == null ? "null" : actual.GetType().Name)} | {(result ? "PASS" : "FAIL")}{(message != null ? " | " + message : "")}";
+            AuthTestTrace.Log("LogAssert", result ? "PASS" : "FAIL", logMsg);
+            Assert.AreNotSame(notExpected, actual, message);
+        }
+
         public static void IsTrue(bool condition, string message = null)
         {
             string logMsg = $"Assert.IsTrue | Condition: {condition} | {(condition ? "PASS" : "FAIL")}{(message != null ? " | " + message : "")}";
