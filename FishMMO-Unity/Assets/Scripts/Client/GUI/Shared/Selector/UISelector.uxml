@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UISelector.uss" />
+    <ui:VisualElement name="selector-root" class="selector-root">
+        <ui:VisualElement name="selector-panel" class="fish-panel selector-panel">
+            <ui:ScrollView name="selector-scroll" class="selector-scroll">
+                <ui:VisualElement name="selector-list" class="selector-list" />
+            </ui:ScrollView>
+            <ui:VisualElement name="selector-buttons" class="selector-buttons">
+                <ui:Button name="selector-accept-btn" text="Accept" class="fish-button selector-action" />
+                <ui:Button name="selector-cancel-btn" text="Cancel" class="fish-button selector-action" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

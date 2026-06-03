@@ -1,0 +1,86 @@
+/*
+    UIBuffContainer.uss
+    Layout for the buff / debuff icon strips. Shared by UIBuff.uxml and UIDebuff.uxml.
+    Colours that are not buff/debuff specific come from FishMMO-Theme.uss.
+*/
+
+.buff-container {
+    flex-direction: row;
+    align-items: flex-start;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+/* Horizontal strip that holds the generated buff groups. */
+.buff-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+/* A single buff/debuff entry. */
+.buff-group {
+    width: 40px;
+    height: 40px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+    border-width: 1px;
+    border-color: rgb(46, 51, 59);
+    border-radius: 6px;
+    background-color: rgb(20, 22, 24);
+    overflow: hidden;
+}
+
+/* Depleting duration fill (drawn behind the icon, height driven from C#). */
+.buff-group__fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    background-color: rgba(255, 107, 26, 0.30);
+}
+
+/* Buff icon sprite. */
+.buff-group__icon {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    right: 2px;
+    bottom: 2px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* Small name/stack label drawn at the bottom of the icon. */
+.buff-group__label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    font-size: 8px;
+    -unity-font-style: bold;
+    -unity-text-align: lower-center;
+    color: rgb(200, 205, 214);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
+}
+
+/* Positive buffs glow ember-orange; debuffs glow danger-red. */
+.buff-container--buff .buff-group__fill {
+    background-color: rgba(255, 107, 26, 0.30);
+}
+
+.buff-container--debuff .buff-group {
+    border-color: rgba(214, 48, 49, 0.55);
+}
+
+.buff-container--debuff .buff-group__fill {
+    background-color: rgba(214, 48, 49, 0.30);
+}
+
+/* Standalone debuff modifier (used where groups are mixed in one list, e.g. target frame). */
+.buff-group--debuff {
+    border-color: rgba(214, 48, 49, 0.55);
+}
+
+.buff-group--debuff .buff-group__fill {
+    background-color: rgba(214, 48, 49, 0.30);
+}

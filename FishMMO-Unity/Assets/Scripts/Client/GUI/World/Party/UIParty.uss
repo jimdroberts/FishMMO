@@ -1,0 +1,79 @@
+/*
+    UIParty.uss
+    Layout for the party panel. Colours come from FishMMO-Theme.uss.
+*/
+
+.party-panel {
+    width: 240px;
+    height: 300px;
+}
+
+.party-header {
+    height: 28px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.party-scroll {
+    flex-grow: 1;
+    padding: 4px;
+}
+
+.party-member-list {
+    flex-direction: column;
+}
+
+.party-member {
+    flex-direction: row;
+    align-items: center;
+    height: 24px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 4px;
+}
+
+.party-member:hover {
+    background-color: rgb(28, 31, 34);
+}
+
+.party-member__name {
+    flex-grow: 1;
+    font-size: 11px;
+    -unity-text-align: middle-left;
+    color: rgb(200, 205, 214);
+}
+
+.party-member__rank {
+    width: 14px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(255, 173, 118);
+}
+
+.party-member__health {
+    width: 70px;
+    height: 8px;
+    margin-left: 6px;
+}
+
+.party-member__health-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    border-radius: 3px;
+}
+
+.party-footer {
+    flex-direction: row;
+    height: 30px;
+    padding: 4px;
+}
+
+.party-action {
+    flex-grow: 1;
+    margin-right: 3px;
+    font-size: 10px;
+}

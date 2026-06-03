@@ -1,0 +1,9 @@
+/*
+    UIDialogInputBox.uss
+    Additional layout for the input dialog (extends UIDialogBox.uss).
+*/
+
+.dialog-input-field {
+    width: 100%;
+    margin-bottom: 16px;
+}

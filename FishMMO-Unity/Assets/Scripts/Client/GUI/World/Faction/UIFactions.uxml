@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIFactions.uss" />
+    <ui:VisualElement name="faction-root" class="fish-panel faction-panel">
+        <ui:VisualElement name="faction-header" class="fish-panel__header faction-header">
+            <ui:Label text="REPUTATION" class="fish-panel__title" />
+        </ui:VisualElement>
+        <ui:ScrollView name="faction-scroll" class="fish-scroll faction-scroll">
+            <ui:VisualElement name="faction-list" class="faction-list" />
+        </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>

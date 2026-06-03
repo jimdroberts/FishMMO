@@ -1,0 +1,438 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    FishMMO-Theme.uss
+    Obsidian / Ember Orange  —  Shared Visual Theme
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    PURPOSE
+    ───────
+    Pure color, typography, border, shadow, and transition
+    rules. NO layout properties here (no flex-direction,
+    width, height, padding, margin, position, etc.).
+    Those live in each panel's own .uss file.
+
+    USAGE
+    ───────
+    Load this FIRST in every UXML, then load the panel USS:
+
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UIEquipment.uss" />
+
+    Or set it as the global Panel Settings Theme Style Sheet
+    so every UIDocument inherits it automatically.
+
+    PALETTE
+    ───────
+    Obsidian
+        ob900  #0E0F0F   deepest background
+        ob800  #141618   panel background
+        ob700  #1C1F22   elevated surface
+        ob600  #242830   card / slot surface
+        ob500  #2E333B   hover surface
+        ob400  #3C4250   border / separator
+        ob300  #5A6272   muted text
+        ob200  #8A93A2   secondary text
+        ob100  #C8CDD6   primary text
+
+    Ember Orange (accent)
+        em500  #FF6B1A   primary accent
+        em400  #FF8C45   hover accent
+        em300  #FFAD76   light accent / category labels
+        em-lo  rgba(255,107,26,0.12)   subtle tint
+        em-mid rgba(255,107,26,0.25)   divider / border tint
+
+    Semantic
+        teal   #58D6B2   percent / positive stats
+        hp     #E74C3C   health
+        mp     #3498DB   mana
+        stam   #2ECC71   stamina / energy
+        danger #D63031   locked / error
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   1. PANEL CHROME
+   Applies to any .fish-panel root element.
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-panel {
+    background-color: rgb(20, 22, 24);          /* ob800 */
+    border-color: rgb(60, 66, 80);              /* ob400 */
+    border-width: 1px;
+    border-top-color: rgb(255, 107, 26);        /* em500 accent top edge */
+    border-top-width: 2px;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.fish-panel__header {
+    background-color: rgb(14, 15, 15);          /* ob900 */
+    border-bottom-color: rgb(46, 51, 59);
+    border-bottom-width: 1px;
+}
+
+.fish-panel__icon {
+    background-color: rgb(255, 107, 26);        /* em500 */
+    border-radius: 3px;
+}
+
+.fish-panel__title {
+    color: rgb(200, 205, 214);                  /* ob100 */
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    font-size: 13px;
+    -unity-text-align: middle-left;
+}
+
+.fish-panel__footer {
+    background-color: rgb(14, 15, 15);          /* ob900 */
+    border-top-color: rgb(46, 51, 59);
+    border-top-width: 1px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   2. CLOSE BUTTON
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-close-btn {
+    background-color: rgba(0, 0, 0, 0);
+    border-color: rgb(60, 66, 80);              /* ob400 */
+    border-width: 1px;
+    border-radius: 5px;
+    color: rgb(138, 147, 162);                  /* ob200 */
+    font-size: 13px;
+    -unity-text-align: middle-center;
+    padding: 0;
+    cursor: link;
+    transition:
+        background-color 0.12s ease,
+        border-color     0.12s ease,
+        color            0.12s ease;
+}
+
+.fish-close-btn:hover {
+    background-color: rgba(255, 107, 26, 0.15);
+    border-color: rgb(255, 107, 26);
+    color: rgb(255, 107, 26);
+}
+
+.fish-close-btn:active {
+    background-color: rgba(255, 107, 26, 0.30);
+    scale: 0.94;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   3. TABS
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-tab {
+    background-color: rgba(0, 0, 0, 0);
+    border-color: rgba(0, 0, 0, 0);
+    border-width: 1px;
+    border-radius: 4px;
+    color: rgb(90, 98, 114);                    /* ob300 */
+    font-size: 10px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    -unity-text-align: middle-center;
+    cursor: link;
+    transition:
+        color            0.12s ease,
+        background-color 0.12s ease,
+        border-color     0.12s ease;
+}
+
+.fish-tab:hover {
+    color: rgb(200, 205, 214);                  /* ob100 */
+    border-color: rgb(60, 66, 80);              /* ob400 */
+}
+
+.fish-tab--active {
+    color: rgb(255, 140, 69);                   /* em400 */
+    border-color: rgba(255, 107, 26, 0.40);
+    background-color: rgba(255, 107, 26, 0.12);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   4. DIVIDER
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-divider {
+    background-color: rgb(46, 51, 59);          /* ob400-ish */
+    height: 1px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   5. ITEM / REFERENCE SLOT
+   Shared by equipment, inventory, bank, hotkey slots.
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-slot {
+    background-color: rgb(28, 31, 34);          /* ob700 */
+    border-color: rgb(46, 51, 59);
+    border-width: 1px;
+    border-radius: 7px;
+    overflow: hidden;
+    cursor: link;
+    transition:
+        background-color 0.10s ease,
+        border-color     0.10s ease;
+}
+
+.fish-slot:hover {
+    background-color: rgb(46, 51, 59);          /* ob500 */
+    border-color: rgb(255, 107, 26);            /* em500 */
+}
+
+.fish-slot:active {
+    background-color: rgba(255, 107, 26, 0.12);
+    scale: 0.95;
+}
+
+.fish-slot:disabled {
+    background-color: rgb(20, 22, 24);          /* ob800 */
+    border-color: rgb(36, 40, 48);
+    opacity: 0.45;
+    cursor: arrow;
+}
+
+/* Icon image — layout (position/inset) set in panel USS */
+.fish-slot__icon {
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* Slot name label */
+.fish-slot__label {
+    color: rgb(90, 98, 114);                    /* ob300 */
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    -unity-text-align: lower-center;
+}
+
+/* Stack count badge */
+.fish-slot__amount {
+    color: rgb(255, 173, 118);                  /* em300 */
+    background-color: rgba(14, 15, 15, 0.80);
+    border-radius: 3px;
+    font-size: 9px;
+    -unity-font-style: bold;
+    -unity-text-align: lower-right;
+}
+
+/* Cooldown overlay */
+.fish-slot__cooldown {
+    background-color: rgba(14, 15, 15, 0.60);
+    color: rgb(200, 205, 214);                  /* ob100 */
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+/* Lock overlay */
+.fish-slot__lock {
+    background-color: rgba(214, 48, 49, 0.40);  /* danger tint */
+    border-radius: 6px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   6. CHARACTER PREVIEW VIEWPORT
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-preview {
+    background-color: rgb(10, 11, 12);
+    border-color: rgb(46, 51, 59);
+    border-width: 1px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.fish-preview__label {
+    color: rgb(60, 66, 80);                     /* ob400 — very muted */
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    -unity-text-align: middle-center;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   7. SCROLLVIEW
+   Override Unity's internal scroller child IDs.
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-scroll > #unity-content-container {
+    padding-right: 4px;
+}
+
+.fish-scroll > #unity-vertical-scroller {
+    width: 5px;
+    background-color: rgb(20, 22, 24);          /* ob800 */
+}
+
+.fish-scroll > #unity-vertical-scroller > #unity-tracker {
+    background-color: rgb(60, 66, 80);          /* ob400 */
+    border-radius: 3px;
+}
+
+.fish-scroll > #unity-vertical-scroller > #unity-tracker:hover {
+    background-color: rgb(255, 107, 26);        /* em500 */
+}
+
+.fish-scroll > #unity-horizontal-scroller {
+    display: none;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   8. ATTRIBUTE LIST  (runtime-generated rows)
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-attr-category {
+    color: rgb(255, 173, 118);                  /* em300 */
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    -unity-text-align: middle-left;
+    border-bottom-color: rgba(255, 107, 26, 0.25);
+    border-bottom-width: 1px;
+}
+
+.fish-attr-row {
+    border-radius: 4px;
+    transition: background-color 0.08s ease;
+}
+
+.fish-attr-row:hover {
+    background-color: rgb(28, 31, 34);          /* ob700 */
+}
+
+.fish-attr-row__name {
+    color: rgb(138, 147, 162);                  /* ob200 */
+    font-size: 11px;
+    -unity-text-align: middle-left;
+}
+
+.fish-attr-row__value {
+    color: rgb(200, 205, 214);                  /* ob100 */
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+}
+
+/* Value colour modifiers */
+.fish-attr-row__value--resource { color: rgb(255, 140, 69); }  /* em400  */
+.fish-attr-row__value--percent  { color: rgb(88, 214, 178); }  /* teal   */
+.fish-attr-row__value--negative { color: rgb(214, 48, 49); }   /* danger */
+
+
+/* ═══════════════════════════════════════════════════════════
+   9. STATUS BAR CHIPS  (HP / MP / STM)
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-chip__dot {
+    border-radius: 50%;
+}
+
+.fish-chip__dot--hp   { background-color: rgb(231, 76, 60); }
+.fish-chip__dot--mp   { background-color: rgb(52, 152, 219); }
+.fish-chip__dot--stam { background-color: rgb(46, 204, 113); }
+
+.fish-chip__label {
+    color: rgb(138, 147, 162);                  /* ob200 */
+    font-size: 10px;
+    -unity-text-align: middle-left;
+}
+
+.fish-chip__value {
+    color: rgb(200, 205, 214);                  /* ob100 */
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+}
+
+.fish-gear-score {
+    color: rgb(255, 173, 118);                  /* em300 */
+    font-size: 10px;
+    letter-spacing: 1px;
+    -unity-text-align: middle-right;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   10. RESOURCE / STAT BARS
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-bar {
+    background-color: rgb(36, 40, 48);          /* ob600 */
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.fish-bar__fill {
+    border-radius: 3px;
+    background-color: rgb(255, 107, 26);        /* em500 default */
+    transition: width 0.25s ease;
+}
+
+.fish-bar__fill--hp   { background-color: rgb(231, 76, 60); }
+.fish-bar__fill--mp   { background-color: rgb(52, 152, 219); }
+.fish-bar__fill--stam { background-color: rgb(46, 204, 113); }
+.fish-bar__fill--xp   { background-color: rgb(255, 107, 26); }
+.fish-bar__fill--teal { background-color: rgb(88, 214, 178); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   11. TOOLTIP
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-tooltip {
+    background-color: rgb(14, 15, 15);          /* ob900 */
+    border-color: rgb(255, 107, 26);            /* em500 */
+    border-width: 1px;
+    border-radius: 6px;
+}
+
+.fish-tooltip__title {
+    color: rgb(200, 205, 214);                  /* ob100 */
+    font-size: 13px;
+    -unity-font-style: bold;
+}
+
+.fish-tooltip__body {
+    color: rgb(138, 147, 162);                  /* ob200 */
+    font-size: 11px;
+}
+
+.fish-tooltip__stat {
+    color: rgb(255, 173, 118);                  /* em300 */
+    font-size: 11px;
+}
+
+/* Rarity colours */
+.fish-rarity--common    { color: rgb(200, 205, 214); }
+.fish-rarity--uncommon  { color: rgb(88, 214, 178); }
+.fish-rarity--rare      { color: rgb(66, 153, 255); }
+.fish-rarity--epic      { color: rgb(176, 125, 255); }
+.fish-rarity--legendary { color: rgb(255, 107, 26); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   12. UTILITY
+   ═══════════════════════════════════════════════════════════ */
+
+.fish-hidden { display: none; }
+
+/* Text colour helpers */
+.fish-text--primary   { color: rgb(200, 205, 214); }
+.fish-text--secondary { color: rgb(138, 147, 162); }
+.fish-text--muted     { color: rgb(90, 98, 114); }
+.fish-text--accent    { color: rgb(255, 107, 26); }
+.fish-text--teal      { color: rgb(88, 214, 178); }
+.fish-text--danger    { color: rgb(214, 48, 49); }
+.fish-text--bold      { -unity-font-style: bold; }

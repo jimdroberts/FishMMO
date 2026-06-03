@@ -1,0 +1,26 @@
+/*
+    UIChatChannelPicker.uss
+    Floating channel toggle / tab rename overlay.
+*/
+
+.channel-picker-root {
+    flex-grow: 1;
+}
+
+.channel-picker-panel {
+    position: absolute;
+    min-width: 160px;
+    padding: 8px;
+}
+
+.channel-name-input {
+    margin-bottom: 6px;
+}
+
+.channel-list {
+    flex-direction: column;
+}
+
+.channel-toggle {
+    margin: 1px 0;
+}

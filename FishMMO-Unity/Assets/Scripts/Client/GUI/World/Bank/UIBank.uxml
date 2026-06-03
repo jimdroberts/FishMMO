@@ -1,0 +1,59 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIBank.uxml   —   FishMMO Bank Panel                         ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UIBank.uss         — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*   Visual theme class  (FishMMO-Theme.uss)          ║
+    ║    bank-*   Layout class        (UIBank.uss)                 ║
+    ║                                                              ║
+    ║  Slot elements are created at runtime by UITKBank.cs and     ║
+    ║  appended to #slot-grid.                                     ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIBank.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel bank-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header bank-header">
+
+            <ui:VisualElement name="header-left" class="bank-header__left">
+                <ui:VisualElement name="header-icon" class="fish-panel__icon bank-header__icon" />
+                <ui:Label name="header-title"
+                          class="fish-panel__title bank-header__title"
+                          text="BANK" />
+            </ui:VisualElement>
+
+            <ui:Button name="close-button" class="fish-close-btn bank-close-btn" text="✕" />
+
+        </ui:VisualElement>
+
+        <!-- ── BODY : scrollable slot grid ──────────────────── -->
+        <ui:ScrollView name="bank-scroll"
+                       class="fish-scroll bank-scroll"
+                       vertical-scroller-visibility="Auto"
+                       horizontal-scroller-visibility="Hidden"
+                       mode="Vertical">
+
+            <!-- Slots injected at runtime by UITKBank.CreateSlot():
+                     Slot root   →  fish-slot bank-slot
+                     Icon        →  fish-slot__icon bank-slot__icon
+                     Amount      →  fish-slot__amount bank-slot__amount
+                     Lock        →  fish-slot__lock bank-slot__lock
+            -->
+            <ui:VisualElement name="slot-grid" class="bank-grid" />
+
+        </ui:ScrollView>
+
+    </ui:VisualElement>
+
+</ui:UXML>

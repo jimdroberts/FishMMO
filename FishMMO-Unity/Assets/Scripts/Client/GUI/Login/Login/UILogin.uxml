@@ -1,0 +1,30 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UILogin.uss" />
+    <ui:VisualElement name="login-root" class="login-screen">
+        <ui:VisualElement name="login-panel" class="fish-panel login-panel">
+            <ui:VisualElement name="login-header" class="fish-panel__header login-header">
+                <ui:Label text="SIGN IN" class="fish-panel__title" />
+            </ui:VisualElement>
+            <ui:VisualElement name="login-body" class="login-body">
+                <ui:Label text="Username" class="login-field-label" />
+                <ui:TextField name="login-username" class="login-input" />
+                <ui:Label text="Email" class="login-field-label" />
+                <ui:TextField name="login-email" class="login-input" />
+                <ui:Label text="Password" class="login-field-label" />
+                <ui:TextField name="login-password" password="true" class="login-input" />
+                <ui:Label text="Age" class="login-field-label" />
+                <ui:DropdownField name="login-age" class="login-dropdown" />
+                <ui:Label name="login-handshake" text="" class="login-handshake" />
+                <ui:VisualElement name="login-buttons" class="login-buttons">
+                    <ui:Button name="login-signin-btn" text="Sign In" class="fish-tab login-btn login-btn--primary" />
+                    <ui:Button name="login-register-btn" text="Register" class="fish-tab login-btn" />
+                </ui:VisualElement>
+                <ui:VisualElement name="login-buttons-secondary" class="login-buttons">
+                    <ui:Button name="login-options-btn" text="Options" class="fish-tab login-btn" />
+                    <ui:Button name="login-quit-btn" text="Quit" class="fish-tab login-btn" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

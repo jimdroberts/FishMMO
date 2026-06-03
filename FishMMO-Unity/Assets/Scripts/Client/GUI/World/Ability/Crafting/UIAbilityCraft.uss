@@ -1,0 +1,83 @@
+/*
+    UIAbilityCraft.uss
+    Layout only — colours come from FishMMO-Theme.uss (.fish-panel, .fish-label, .fish-button, .fish-slot).
+*/
+
+.craft-root {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.craft-panel {
+    width: 440px;
+    padding: 10px;
+    flex-direction: column;
+}
+
+.craft-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.craft-title {
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+.craft-close-btn {
+    width: 24px;
+    height: 24px;
+}
+
+.craft-body {
+    flex-direction: row;
+}
+
+.craft-entries {
+    flex-direction: column;
+    margin-right: 10px;
+}
+
+.craft-main-entry {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 8px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.craft-event-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 150px;
+}
+
+.craft-slot {
+    width: 40px;
+    height: 40px;
+    margin: 2px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.craft-info {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.craft-description {
+    white-space: normal;
+    flex-grow: 1;
+    margin-bottom: 6px;
+}
+
+.craft-cost {
+    -unity-font-style: bold;
+    margin-bottom: 6px;
+}
+
+.craft-confirm-btn {
+    height: 32px;
+    margin-top: 8px;
+}

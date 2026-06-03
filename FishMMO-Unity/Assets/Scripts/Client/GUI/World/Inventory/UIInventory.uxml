@@ -1,0 +1,59 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIInventory.uxml   —   FishMMO Inventory Panel               ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UIInventory.uss    — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*   Visual theme class  (FishMMO-Theme.uss)          ║
+    ║    inv-*    Layout class        (UIInventory.uss)            ║
+    ║                                                              ║
+    ║  Slot elements are created at runtime by UITKInventory.cs    ║
+    ║  and appended to #slot-grid.                                 ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIInventory.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel inv-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header inv-header">
+
+            <ui:VisualElement name="header-left" class="inv-header__left">
+                <ui:VisualElement name="header-icon" class="fish-panel__icon inv-header__icon" />
+                <ui:Label name="header-title"
+                          class="fish-panel__title inv-header__title"
+                          text="INVENTORY" />
+            </ui:VisualElement>
+
+            <ui:Button name="close-button" class="fish-close-btn inv-close-btn" text="✕" />
+
+        </ui:VisualElement>
+
+        <!-- ── BODY : scrollable slot grid ──────────────────── -->
+        <ui:ScrollView name="inventory-scroll"
+                       class="fish-scroll inv-scroll"
+                       vertical-scroller-visibility="Auto"
+                       horizontal-scroller-visibility="Hidden"
+                       mode="Vertical">
+
+            <!-- Slots injected at runtime by UITKInventory.CreateSlot():
+                     Slot root   →  fish-slot inv-slot
+                     Icon        →  fish-slot__icon inv-slot__icon
+                     Amount      →  fish-slot__amount inv-slot__amount
+                     Lock        →  fish-slot__lock inv-slot__lock
+            -->
+            <ui:VisualElement name="slot-grid" class="inv-grid" />
+
+        </ui:ScrollView>
+
+    </ui:VisualElement>
+
+</ui:UXML>

@@ -1,0 +1,70 @@
+/*
+    UIChat.uss
+    Layout for the chat panel. Colours come from FishMMO-Theme.uss.
+*/
+
+.chat-panel {
+    width: 420px;
+    height: 280px;
+}
+
+.chat-tabs-bar {
+    flex-direction: row;
+    height: 24px;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+.chat-tabs {
+    flex-direction: row;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.chat-tab {
+    margin-right: 2px;
+    font-size: 11px;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.chat-add-tab {
+    width: 24px;
+    font-size: 14px;
+}
+
+.chat-scroll {
+    flex-grow: 1;
+    padding: 4px;
+}
+
+.chat-messages {
+    flex-direction: column;
+}
+
+.chat-message {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 1px;
+}
+
+.chat-message__name {
+    font-size: 12px;
+    -unity-font-style: bold;
+    margin-right: 2px;
+}
+
+.chat-message__text {
+    font-size: 12px;
+    white-space: normal;
+    flex-shrink: 1;
+}
+
+.chat-input-row {
+    height: 26px;
+    padding: 2px 4px;
+}
+
+.chat-input {
+    flex-grow: 1;
+}

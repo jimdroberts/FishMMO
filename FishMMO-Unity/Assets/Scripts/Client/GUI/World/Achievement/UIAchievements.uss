@@ -1,0 +1,90 @@
+/*
+    UIAchievements.uss
+    Layout for the achievements panel. Colours come from FishMMO-Theme.uss.
+*/
+
+.achievement-panel {
+    width: 420px;
+    height: 460px;
+}
+
+.achievement-header {
+    height: 28px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.achievement-categories {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 4px;
+}
+
+.achievement-category {
+    margin-right: 3px;
+    margin-bottom: 3px;
+    font-size: 11px;
+}
+
+.achievement-scroll {
+    flex-grow: 1;
+    padding: 6px;
+}
+
+.achievement-descriptions {
+    flex-direction: column;
+}
+
+.achievement-desc {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    background-color: rgb(20, 22, 24);
+}
+
+.achievement-desc__icon {
+    width: 40px;
+    height: 40px;
+    margin-right: 8px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.achievement-desc__column {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.achievement-desc__label {
+    white-space: normal;
+    font-size: 12px;
+    color: rgb(200, 205, 214);
+    margin-bottom: 4px;
+}
+
+.achievement-desc__bar {
+    height: 14px;
+    position: relative;
+}
+
+.achievement-desc__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-radius: 3px;
+}
+
+.achievement-desc__value {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    font-size: 9px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(255, 255, 255);
+}

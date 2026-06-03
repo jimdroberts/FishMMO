@@ -1,0 +1,17 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIParty.uss" />
+    <ui:VisualElement name="party-root" class="fish-panel party-panel">
+        <ui:VisualElement name="party-header" class="fish-panel__header party-header">
+            <ui:Label text="PARTY" class="fish-panel__title" />
+        </ui:VisualElement>
+        <ui:ScrollView name="party-scroll" class="fish-scroll party-scroll">
+            <ui:VisualElement name="party-member-list" class="party-member-list" />
+        </ui:ScrollView>
+        <ui:VisualElement name="party-footer" class="fish-panel__footer party-footer">
+            <ui:Button name="party-create" text="Create" class="fish-close-btn party-action" />
+            <ui:Button name="party-invite" text="Invite" class="fish-close-btn party-action" />
+            <ui:Button name="party-leave" text="Leave" class="fish-close-btn party-action" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

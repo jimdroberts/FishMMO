@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIHotkeyBar.uss" />
+    <ui:VisualElement name="hotkey-root" class="hotkey-bar">
+        <ui:VisualElement name="hotkey-list" class="hotkey-list" />
+    </ui:VisualElement>
+</ui:UXML>

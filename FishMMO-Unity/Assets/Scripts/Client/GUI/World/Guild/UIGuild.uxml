@@ -1,0 +1,22 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIGuild.uss" />
+    <ui:VisualElement name="guild-root" class="fish-panel guild-panel">
+        <ui:VisualElement name="guild-header" class="fish-panel__header guild-header">
+            <ui:Label name="guild-name" text="Guild" class="fish-panel__title" />
+        </ui:VisualElement>
+        <ui:VisualElement name="guild-columns" class="guild-columns">
+            <ui:Label text="NAME" class="guild-column" />
+            <ui:Label text="RANK" class="guild-column" />
+            <ui:Label text="LOCATION" class="guild-column" />
+        </ui:VisualElement>
+        <ui:ScrollView name="guild-scroll" class="fish-scroll guild-scroll">
+            <ui:VisualElement name="guild-member-list" class="guild-member-list" />
+        </ui:ScrollView>
+        <ui:VisualElement name="guild-footer" class="fish-panel__footer guild-footer">
+            <ui:Button name="guild-create" text="Create" class="fish-close-btn guild-action" />
+            <ui:Button name="guild-invite" text="Invite" class="fish-close-btn guild-action" />
+            <ui:Button name="guild-leave" text="Leave" class="fish-close-btn guild-action" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

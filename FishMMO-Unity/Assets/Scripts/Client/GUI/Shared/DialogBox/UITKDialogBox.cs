@@ -1,0 +1,119 @@
+using System;
+using UnityEngine.UIElements;
+
+namespace FishMMO.Client
+{
+	/// <summary>
+	/// UI Toolkit confirmation dialog. Shows a message with accept/cancel buttons and
+	/// invokes optional callbacks. Mirrors the legacy UGUI <c>UIDialogBox</c> API.
+	/// </summary>
+	public class UITKDialogBox : UITKControl
+	{
+		private const string DIALOG_LABEL_NAME = "dialog-label";
+		private const string ACCEPT_BUTTON_NAME = "dialog-accept-btn";
+		private const string CANCEL_BUTTON_NAME = "dialog-cancel-btn";
+
+		private Label dialogLabel;
+		private Button acceptButton;
+		private Button cancelButton;
+
+		private Action onAcceptCallback;
+		private Action onCancelCallback;
+
+		/// <summary>
+		/// Resolves cached elements and wires button callbacks.
+		/// </summary>
+		public override void OnStarting()
+		{
+			if (Root == null)
+			{
+				return;
+			}
+
+			dialogLabel = Root.Q<Label>(DIALOG_LABEL_NAME);
+			acceptButton = Root.Q<Button>(ACCEPT_BUTTON_NAME);
+			cancelButton = Root.Q<Button>(CANCEL_BUTTON_NAME);
+
+			if (acceptButton != null)
+			{
+				acceptButton.clicked += OnClick_Accept;
+			}
+			if (cancelButton != null)
+			{
+				cancelButton.clicked += OnClick_Cancel;
+			}
+		}
+
+		/// <summary>
+		/// Opens the dialog with the specified message and optional accept/cancel callbacks.
+		/// The accept button is hidden when <paramref name="onAccept"/> is null. When the accept
+		/// button is shown, the cancel button is labelled "Cancel" (and hidden when
+		/// <paramref name="onCancel"/> is null); otherwise the cancel button acts as a "Close" button.
+		/// </summary>
+		/// <param name="text">Message to display.</param>
+		/// <param name="onAccept">Optional callback invoked when accepted.</param>
+		/// <param name="onCancel">Optional callback invoked when cancelled.</param>
+		public void Open(string text, Action onAccept = null, Action onCancel = null)
+		{
+			if (dialogLabel != null)
+			{
+				dialogLabel.text = text;
+			}
+
+			onAcceptCallback = onAccept;
+			onCancelCallback = onCancel;
+
+			bool acceptVisible = onAccept != null;
+			SetButtonVisible(acceptButton, acceptVisible);
+
+			if (acceptVisible)
+			{
+				bool cancelVisible = onCancel != null;
+				SetButtonVisible(cancelButton, cancelVisible);
+				if (cancelButton != null)
+				{
+					cancelButton.text = "Cancel";
+				}
+			}
+			else
+			{
+				SetButtonVisible(cancelButton, true);
+				if (cancelButton != null)
+				{
+					cancelButton.text = "Close";
+				}
+			}
+
+			Show();
+		}
+
+		/// <summary>
+		/// Handles accept button clicks, invoking the accept callback and closing the dialog.
+		/// </summary>
+		private void OnClick_Accept()
+		{
+			onAcceptCallback?.Invoke();
+			Hide();
+		}
+
+		/// <summary>
+		/// Handles cancel button clicks, invoking the cancel callback and closing the dialog.
+		/// </summary>
+		private void OnClick_Cancel()
+		{
+			onCancelCallback?.Invoke();
+			Hide();
+		}
+
+		/// <summary>
+		/// Toggles the display of a button element.
+		/// </summary>
+		private static void SetButtonVisible(Button button, bool visible)
+		{
+			if (button != null)
+			{
+				button.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+		}
+	}
+}

@@ -1,0 +1,37 @@
+/*
+    UITarget.uss
+    Layout for the target frame. Colours come from FishMMO-Theme.uss; buff icons reuse
+    the .buff-group classes from UIBuffContainer.uss.
+*/
+
+.target-panel {
+    width: 240px;
+    padding: 8px;
+}
+
+.target-name {
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    color: rgb(200, 205, 214);
+    margin-bottom: 6px;
+}
+
+.target-health {
+    height: 14px;
+    margin-bottom: 6px;
+}
+
+.target-health-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    border-radius: 3px;
+}
+
+.target-buff-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+}

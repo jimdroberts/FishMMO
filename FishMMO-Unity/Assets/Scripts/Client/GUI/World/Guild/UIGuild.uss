@@ -1,0 +1,93 @@
+/*
+    UIGuild.uss
+    Layout for the guild panel. Colours come from FishMMO-Theme.uss.
+*/
+
+.guild-panel {
+    width: 320px;
+    height: 360px;
+}
+
+.guild-header {
+    height: 28px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.guild-columns {
+    flex-direction: row;
+    height: 18px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: rgb(14, 15, 15);
+}
+
+.guild-column {
+    flex-grow: 1;
+    width: 33%;
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    color: rgb(255, 173, 118);
+    -unity-text-align: middle-left;
+}
+
+.guild-scroll {
+    flex-grow: 1;
+    padding: 4px;
+}
+
+.guild-member-list {
+    flex-direction: column;
+}
+
+.guild-member {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 4px;
+}
+
+.guild-member:hover {
+    background-color: rgb(28, 31, 34);
+}
+
+.guild-member__name {
+    flex-grow: 1;
+    width: 33%;
+    font-size: 11px;
+    -unity-text-align: middle-left;
+    color: rgb(200, 205, 214);
+    cursor: link;
+}
+
+.guild-member__rank {
+    flex-grow: 1;
+    width: 33%;
+    font-size: 11px;
+    -unity-text-align: middle-left;
+    color: rgb(255, 173, 118);
+    cursor: link;
+}
+
+.guild-member__location {
+    flex-grow: 1;
+    width: 33%;
+    font-size: 11px;
+    -unity-text-align: middle-left;
+    color: rgb(138, 147, 162);
+}
+
+.guild-footer {
+    flex-direction: row;
+    height: 30px;
+    padding: 4px;
+}
+
+.guild-action {
+    flex-grow: 1;
+    margin-right: 3px;
+    font-size: 10px;
+}

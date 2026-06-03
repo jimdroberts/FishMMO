@@ -1,0 +1,132 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIBank.uss
+    Bank Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Sizing, spacing, flex directions and positioning for the
+    bank panel. NO colors or fonts here — those live in
+    FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UIBank.uss" />
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+.bank-panel {
+    width: 380px;
+    height: 420px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.bank-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 40px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.bank-header__left {
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+}
+
+.bank-header__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.bank-header__title {
+    flex-shrink: 0;
+}
+
+.bank-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY : scrollable wrapping slot grid
+   ═══════════════════════════════════════════════════════════ */
+
+.bank-scroll {
+    flex: 1;
+    padding: 10px;
+}
+
+.bank-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BANK SLOT
+   ═══════════════════════════════════════════════════════════ */
+
+.bank-slot {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    position: relative;
+    margin: 3px;
+    align-items: center;
+    justify-content: center;
+}
+
+.bank-slot__icon {
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    right: 4px;
+    bottom: 4px;
+}
+
+.bank-slot__amount {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+.bank-slot__lock {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════════════════════ */
+
+.bank-hidden {
+    display: none;
+}

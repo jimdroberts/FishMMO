@@ -1,0 +1,29 @@
+/*
+    UIMenu.uss
+    Centered main menu layout.
+*/
+
+.menu-root {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.menu-panel {
+    min-width: 240px;
+    padding: 16px;
+    align-items: stretch;
+}
+
+.menu-title {
+    font-size: 20px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    margin-bottom: 12px;
+}
+
+.menu-action {
+    margin: 4px 0;
+    min-height: 32px;
+}

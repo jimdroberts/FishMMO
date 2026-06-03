@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../FishMMO-Theme.uss" />
+    <Style src="UILoadingScreen.uss" />
+    <ui:VisualElement name="loading-root" class="loading-screen">
+        <ui:VisualElement name="loading-image" class="loading-image" />
+        <ui:VisualElement name="loading-progress" class="loading-progress">
+            <ui:VisualElement name="loading-progress-fill" class="loading-progress__fill fish-bar__fill" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

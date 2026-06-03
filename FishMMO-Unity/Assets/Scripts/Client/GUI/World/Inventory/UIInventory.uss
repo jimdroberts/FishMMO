@@ -1,0 +1,137 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIInventory.uss
+    Inventory Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    PURPOSE
+    ───────
+    Sizing, spacing, flex directions and positioning for the
+    inventory panel. NO colors or fonts here — those live in
+    FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UIInventory.uss" />
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+.inv-panel {
+    width: 320px;
+    height: 360px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.inv-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 40px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.inv-header__left {
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+}
+
+.inv-header__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.inv-header__title {
+    flex-shrink: 0;
+}
+
+.inv-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY : scrollable wrapping slot grid
+   ═══════════════════════════════════════════════════════════ */
+
+.inv-scroll {
+    flex: 1;
+    padding: 10px;
+}
+
+.inv-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   INVENTORY SLOT
+   ═══════════════════════════════════════════════════════════ */
+
+.inv-slot {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    position: relative;
+    margin: 3px;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Icon fills the slot */
+.inv-slot__icon {
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    right: 4px;
+    bottom: 4px;
+}
+
+/* Stack count badge — bottom-right corner */
+.inv-slot__amount {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+/* Lock: full-slot overlay */
+.inv-slot__lock {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════════════════════ */
+
+.inv-hidden {
+    display: none;
+}

@@ -134,7 +134,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			GUI.Label(new Rect(Screen.width * 0.5f - PixelOffset.x - Center.x, Screen.height * 0.5f - PixelOffset.y + Center.y, Size.x, Size.y), Text, Style);
+			UnityEngine.GUI.Label(new Rect(Screen.width * 0.5f - PixelOffset.x - Center.x, Screen.height * 0.5f - PixelOffset.y + Center.y, Size.x, Size.y), Text, Style);
 		}
 
 		/// <summary>

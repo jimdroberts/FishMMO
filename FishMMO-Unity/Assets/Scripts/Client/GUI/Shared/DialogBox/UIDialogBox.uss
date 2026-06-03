@@ -1,0 +1,35 @@
+/*
+    UIDialogBox.uss
+    Layout for the modal confirmation dialog. Colours come from FishMMO-Theme.uss.
+*/
+
+.dialog-root {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.dialog-panel {
+    min-width: 320px;
+    max-width: 480px;
+    padding: 16px;
+    align-items: center;
+}
+
+.dialog-label {
+    white-space: normal;
+    margin-bottom: 16px;
+    -unity-text-align: middle-center;
+}
+
+.dialog-buttons {
+    flex-direction: row;
+    justify-content: center;
+}
+
+.dialog-button {
+    min-width: 96px;
+    margin-left: 8px;
+    margin-right: 8px;
+}

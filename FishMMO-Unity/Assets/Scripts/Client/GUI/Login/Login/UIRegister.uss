@@ -1,0 +1,58 @@
+/*
+    UIRegister.uss
+    Layout for the registration screen. Colours come from FishMMO-Theme.uss.
+*/
+
+.register-screen {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.register-panel {
+    width: 360px;
+}
+
+.register-header {
+    height: 32px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.register-body {
+    flex-direction: column;
+    padding: 12px;
+}
+
+.register-field-label {
+    font-size: 12px;
+    margin-bottom: 2px;
+    margin-top: 6px;
+}
+
+.register-input {
+    margin-bottom: 4px;
+}
+
+.register-dropdown {
+    margin-bottom: 4px;
+}
+
+.register-status {
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    min-height: 16px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.register-buttons {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.register-btn {
+    flex-grow: 1;
+    margin-right: 4px;
+    height: 32px;
+}

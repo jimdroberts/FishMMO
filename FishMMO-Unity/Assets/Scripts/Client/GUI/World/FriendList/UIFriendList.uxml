@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIFriendList.uss" />
+    <ui:VisualElement name="friend-root" class="fish-panel friend-panel">
+        <ui:VisualElement name="friend-header" class="fish-panel__header friend-header">
+            <ui:Label text="FRIENDS" class="fish-panel__title" />
+        </ui:VisualElement>
+        <ui:ScrollView name="friend-scroll" class="fish-scroll friend-scroll">
+            <ui:VisualElement name="friend-list" class="friend-list" />
+        </ui:ScrollView>
+        <ui:VisualElement name="friend-footer" class="fish-panel__footer friend-footer">
+            <ui:Button name="friend-add" text="Add Friend" class="fish-close-btn friend-action" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

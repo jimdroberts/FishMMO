@@ -1,0 +1,53 @@
+/*
+    UIAbilities.uss
+    Layout for the abilities panel. Colours come from FishMMO-Theme.uss.
+*/
+
+.ability-panel {
+    width: 360px;
+    height: 420px;
+}
+
+.ability-header {
+    height: 28px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.ability-tabs {
+    flex-direction: row;
+    height: 28px;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+.ability-tab {
+    flex-grow: 1;
+    margin-right: 2px;
+    font-size: 11px;
+}
+
+.ability-scroll {
+    flex-grow: 1;
+    padding: 6px;
+}
+
+.ability-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.ability-slot {
+    width: 48px;
+    height: 48px;
+    margin: 3px;
+}
+
+.ability-slot__icon {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    right: 2px;
+    bottom: 2px;
+    -unity-background-scale-mode: scale-to-fit;
+}

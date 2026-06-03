@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIDungeonFinder.uss" />
+    <ui:VisualElement name="dungeonfinder-root" class="dungeonfinder-root">
+        <ui:VisualElement name="dungeonfinder-panel" class="fish-panel dungeonfinder-panel">
+            <ui:VisualElement name="dungeonfinder-header" class="dungeonfinder-header">
+                <ui:Label text="Dungeon Finder" class="fish-label dungeonfinder-title" />
+                <ui:Button name="dungeonfinder-close-btn" text="X" class="fish-button dungeonfinder-close-btn" />
+            </ui:VisualElement>
+            <ui:VisualElement name="dungeonfinder-image" class="dungeonfinder-image" />
+            <ui:Label name="dungeonfinder-description" text="" class="fish-label dungeonfinder-description" />
+            <ui:Button name="dungeonfinder-start-btn" text="Enter Dungeon" class="fish-button dungeonfinder-start-btn" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

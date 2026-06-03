@@ -1,0 +1,13 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIAchievements.uss" />
+    <ui:VisualElement name="achievement-root" class="fish-panel achievement-panel">
+        <ui:VisualElement name="achievement-header" class="fish-panel__header achievement-header">
+            <ui:Label text="ACHIEVEMENTS" class="fish-panel__title" />
+        </ui:VisualElement>
+        <ui:VisualElement name="achievement-categories" class="achievement-categories" />
+        <ui:ScrollView name="achievement-scroll" class="fish-scroll achievement-scroll">
+            <ui:VisualElement name="achievement-descriptions" class="achievement-descriptions" />
+        </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>

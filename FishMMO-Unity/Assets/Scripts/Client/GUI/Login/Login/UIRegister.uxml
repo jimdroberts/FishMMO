@@ -1,0 +1,28 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIRegister.uss" />
+    <ui:VisualElement name="register-root" class="register-screen">
+        <ui:VisualElement name="register-panel" class="fish-panel register-panel">
+            <ui:VisualElement name="register-header" class="fish-panel__header register-header">
+                <ui:Label text="CREATE ACCOUNT" class="fish-panel__title" />
+            </ui:VisualElement>
+            <ui:VisualElement name="register-body" class="register-body">
+                <ui:Label text="Username" class="register-field-label" />
+                <ui:TextField name="register-username" class="register-input" />
+                <ui:Label text="Email" class="register-field-label" />
+                <ui:TextField name="register-email" class="register-input" />
+                <ui:Label text="Password" class="register-field-label" />
+                <ui:TextField name="register-password" password="true" class="register-input" />
+                <ui:Label text="Registration Key (optional)" class="register-field-label" />
+                <ui:TextField name="register-key" class="register-input" />
+                <ui:Label text="Confirm Age" class="register-field-label" />
+                <ui:DropdownField name="register-age" class="register-dropdown" />
+                <ui:Label name="register-status" text="" class="register-status" />
+                <ui:VisualElement name="register-buttons" class="register-buttons">
+                    <ui:Button name="register-submit-btn" text="Register" class="fish-tab register-btn register-btn--primary" />
+                    <ui:Button name="register-quit-btn" text="Back" class="fish-tab register-btn" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

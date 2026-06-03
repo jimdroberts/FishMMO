@@ -1,0 +1,16 @@
+/*
+    UICrosshair.uss
+    Centers the crosshair icon in the viewport.
+*/
+
+.crosshair-root {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.crosshair-icon {
+    width: 32px;
+    height: 32px;
+    -unity-background-scale-mode: scale-to-fit;
+}

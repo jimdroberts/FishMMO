@@ -1,0 +1,72 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIColorPicker.uss" />
+    <ui:VisualElement name="colorpicker-root" class="colorpicker-root">
+        <ui:VisualElement name="colorpicker-panel" class="fish-panel colorpicker-panel">
+            <ui:VisualElement name="colorpicker-top" class="colorpicker-top">
+                <ui:VisualElement name="hsv-texture" class="colorpicker-hsv">
+                    <ui:VisualElement name="hsv-cursor" class="colorpicker-cursor" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement name="colorpicker-side" class="colorpicker-side">
+                    <ui:VisualElement name="color-current" class="colorpicker-swatch" />
+                    <ui:TextField name="hex-input" label="Hex" class="fish-input colorpicker-hex" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="colorpicker-channel">
+                <ui:Label text="H" class="fish-label colorpicker-channel-label" />
+                <ui:VisualElement name="h-background" class="colorpicker-channel-bg">
+                    <ui:Slider name="h-slider" class="colorpicker-channel-slider" />
+                </ui:VisualElement>
+                <ui:IntegerField name="h-input" class="fish-input colorpicker-channel-input" />
+            </ui:VisualElement>
+            <ui:VisualElement class="colorpicker-channel">
+                <ui:Label text="S" class="fish-label colorpicker-channel-label" />
+                <ui:VisualElement name="s-background" class="colorpicker-channel-bg">
+                    <ui:Slider name="s-slider" class="colorpicker-channel-slider" />
+                </ui:VisualElement>
+                <ui:IntegerField name="s-input" class="fish-input colorpicker-channel-input" />
+            </ui:VisualElement>
+            <ui:VisualElement class="colorpicker-channel">
+                <ui:Label text="V" class="fish-label colorpicker-channel-label" />
+                <ui:VisualElement name="v-background" class="colorpicker-channel-bg">
+                    <ui:Slider name="v-slider" class="colorpicker-channel-slider" />
+                </ui:VisualElement>
+                <ui:IntegerField name="v-input" class="fish-input colorpicker-channel-input" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="colorpicker-channel">
+                <ui:Label text="R" class="fish-label colorpicker-channel-label" />
+                <ui:VisualElement name="r-background" class="colorpicker-channel-bg">
+                    <ui:Slider name="r-slider" class="colorpicker-channel-slider" />
+                </ui:VisualElement>
+                <ui:IntegerField name="r-input" class="fish-input colorpicker-channel-input" />
+            </ui:VisualElement>
+            <ui:VisualElement class="colorpicker-channel">
+                <ui:Label text="G" class="fish-label colorpicker-channel-label" />
+                <ui:VisualElement name="g-background" class="colorpicker-channel-bg">
+                    <ui:Slider name="g-slider" class="colorpicker-channel-slider" />
+                </ui:VisualElement>
+                <ui:IntegerField name="g-input" class="fish-input colorpicker-channel-input" />
+            </ui:VisualElement>
+            <ui:VisualElement class="colorpicker-channel">
+                <ui:Label text="B" class="fish-label colorpicker-channel-label" />
+                <ui:VisualElement name="b-background" class="colorpicker-channel-bg">
+                    <ui:Slider name="b-slider" class="colorpicker-channel-slider" />
+                </ui:VisualElement>
+                <ui:IntegerField name="b-input" class="fish-input colorpicker-channel-input" />
+            </ui:VisualElement>
+            <ui:VisualElement class="colorpicker-channel">
+                <ui:Label text="A" class="fish-label colorpicker-channel-label" />
+                <ui:VisualElement name="a-background" class="colorpicker-channel-bg">
+                    <ui:Slider name="a-slider" class="colorpicker-channel-slider" />
+                </ui:VisualElement>
+                <ui:IntegerField name="a-input" class="fish-input colorpicker-channel-input" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="colorpicker-footer" class="colorpicker-footer">
+                <ui:Button name="colorpicker-close-btn" text="Close" class="fish-button colorpicker-action" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

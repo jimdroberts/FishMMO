@@ -1,0 +1,19 @@
+/*
+    UIDropdown.uss
+    Layout for the cursor-anchored context menu.
+*/
+
+.dropdown-root {
+    flex-grow: 1;
+}
+
+.dropdown-menu {
+    position: absolute;
+    min-width: 140px;
+    padding: 4px;
+}
+
+.dropdown-item {
+    margin: 2px 0;
+    width: 100%;
+}

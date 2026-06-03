@@ -1,0 +1,27 @@
+/*
+    UIReconnectDisplay.uss
+    Layout for the reconnect overlay. Colours come from FishMMO-Theme.uss.
+*/
+
+.reconnect-screen {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.reconnect-panel {
+    width: 280px;
+    padding: 16px;
+    align-items: center;
+}
+
+.reconnect-attempt-counter {
+    font-size: 14px;
+    margin-bottom: 12px;
+    -unity-text-align: middle-center;
+}
+
+.reconnect-cancel-btn {
+    width: 120px;
+    height: 32px;
+}

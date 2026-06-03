@@ -1,0 +1,34 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIOptions.uss" />
+    <ui:VisualElement name="options-root" class="options-root">
+        <ui:VisualElement name="options-panel" class="fish-panel options-panel">
+            <ui:Label text="Options" class="fish-label options-title" />
+            <ui:ScrollView name="options-scroll" class="options-scroll">
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Resolution" class="fish-label options-row-label" />
+                    <ui:DropdownField name="resolution-dropdown" class="options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Refresh Rate" class="fish-label options-row-label" />
+                    <ui:DropdownField name="refreshrate-dropdown" class="options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Fullscreen" class="fish-label options-row-label" />
+                    <ui:DropdownField name="fullscreen-dropdown" class="options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Brightness" class="fish-label options-row-label" />
+                    <ui:Slider name="brightness-slider" low-value="0" high-value="1" class="options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="VSync" class="fish-label options-row-label" />
+                    <ui:Toggle name="vsync-toggle" class="options-row-field" />
+                </ui:VisualElement>
+            </ui:ScrollView>
+            <ui:VisualElement name="options-footer" class="options-footer">
+                <ui:Button name="options-close-btn" text="Close" class="fish-button options-action" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

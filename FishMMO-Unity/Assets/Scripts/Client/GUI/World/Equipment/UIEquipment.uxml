@@ -1,0 +1,295 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIEquipment.uxml   —   FishMMO Equipment Panel             ║
+    ║                                                             ║
+    ║  Stylesheet load order (MUST be first-to-last):             ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions       ║
+    ║    2. UIEquipment.uss    — sizes, flex, spacing             ║
+    ║                                                             ║
+    ║  Class naming convention:                                   ║
+    ║    fish-*   Visual theme class  (FishMMO-Theme.uss)         ║
+    ║    eq-*     Layout class        (UIEquipment.uss)           ║
+    ║  Elements that need both carry both class names.            ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIEquipment.uss" />
+
+    <!-- ══════════════════════════════════════════════════════
+         PANEL ROOT
+         fish-panel  → background, border, radius, overflow
+         eq-panel    → width, flex-direction
+    ══════════════════════════════════════════════════════ -->
+    <ui:VisualElement name="panel-root" class="fish-panel eq-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <!-- fish-panel__header → bg color, bottom border       -->
+        <!-- eq-header          → flex-direction row, height    -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header eq-header">
+
+            <ui:VisualElement name="header-left" class="eq-header__left">
+
+                <!-- fish-panel__icon → bg color, border-radius -->
+                <!-- eq-header__icon  → width, height, margin   -->
+                <ui:VisualElement name="header-icon" class="fish-panel__icon eq-header__icon" />
+
+                <!-- fish-panel__title → color, font, tracking  -->
+                <!-- eq-header__title  → flex-shrink, margin    -->
+                <ui:Label name="header-title"
+                          class="fish-panel__title eq-header__title"
+                          text="EQUIPMENT" />
+
+                <!-- eq-tab-bar → flex-direction row, margin    -->
+                <ui:VisualElement name="tab-bar" class="eq-tab-bar">
+                    <!-- fish-tab        → colors, transitions   -->
+                    <!-- fish-tab—active → active colors         -->
+                    <!-- eq-tab          → height, padding       -->
+                    <ui:Button name="tab-gear"  class="fish-tab fish-tab--active eq-tab" text="GEAR" />
+                    <ui:Button name="tab-stats" class="fish-tab eq-tab"                  text="STATS" />
+                    <ui:Button name="tab-sets"  class="fish-tab eq-tab"                  text="SETS" />
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+
+            <!-- fish-close-btn → colors, border, transitions   -->
+            <!-- eq-close-btn   → width, height, padding        -->
+            <ui:Button name="close-button" class="fish-close-btn eq-close-btn" text="✕" />
+
+        </ui:VisualElement>
+
+        <!-- ── BODY ─────────────────────────────────────────── -->
+        <!-- eq-body → flex-direction row, height, padding      -->
+        <ui:VisualElement name="panel-body" class="eq-body">
+
+            <!-- LEFT COLUMN : Head / Chest / Legs / Feet -->
+            <!-- eq-col → flex-direction column, width, spacing -->
+            <ui:VisualElement name="column-left" class="eq-col">
+
+                <ui:VisualElement name="slot-head" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Head" />
+                    <ui:Label         name="amount-head"
+                                      class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:Label         name="cooldown-head"
+                                      class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                    <ui:VisualElement name="lock-head"
+                                      class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="slot-chest" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Chest" />
+                    <ui:Label         name="amount-chest"
+                                      class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:Label         name="cooldown-chest"
+                                      class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                    <ui:VisualElement name="lock-chest"
+                                      class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="slot-legs" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Legs" />
+                    <ui:Label         name="amount-legs"
+                                      class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:Label         name="cooldown-legs"
+                                      class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                    <ui:VisualElement name="lock-legs"
+                                      class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="slot-feet" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Feet" />
+                    <ui:Label         name="amount-feet"
+                                      class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:Label         name="cooldown-feet"
+                                      class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                    <ui:VisualElement name="lock-feet"
+                                      class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+            <!-- /column-left -->
+
+            <!-- CENTER : preview viewport + Neck / Back / Ring -->
+            <!-- eq-center → flex-direction column, flex:1      -->
+            <ui:VisualElement name="equipment-center" class="eq-center">
+
+                <!-- fish-preview → bg color, border, radius    -->
+                <!-- eq-preview   → width 100%, flex:1, position-->
+                <ui:VisualElement name="preview-viewport" class="fish-preview eq-preview">
+                    <!--
+                        Assign RenderTexture at runtime:
+                        root.Q("preview-rt").style.backgroundImage =
+                            new StyleBackground(Background.FromRenderTexture(rt));
+                    -->
+                    <ui:VisualElement name="preview-rt" class="eq-preview__rt" />
+
+                    <!-- fish-preview__label → color, font size  -->
+                    <!-- eq-preview__label   → bottom margin     -->
+                    <ui:Label name="preview-label"
+                              class="fish-preview__label eq-preview__label"
+                              text="CHARACTER PREVIEW" />
+                </ui:VisualElement>
+
+                <!-- eq-center-slots → flex-direction row, height -->
+                <ui:VisualElement name="center-slots" class="eq-center-slots">
+
+                    <ui:VisualElement name="slot-neck" class="fish-slot eq-slot">
+                        <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                        <ui:Label         class="fish-slot__label eq-slot__label" text="Neck" />
+                        <ui:Label         name="amount-neck"
+                                          class="fish-slot__amount eq-slot__amount eq-hidden" />
+                        <ui:VisualElement name="lock-neck"
+                                          class="fish-slot__lock eq-slot__lock eq-hidden" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement name="slot-back" class="fish-slot eq-slot">
+                        <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                        <ui:Label         class="fish-slot__label eq-slot__label" text="Back" />
+                        <ui:Label         name="amount-back"
+                                          class="fish-slot__amount eq-slot__amount eq-hidden" />
+                        <ui:VisualElement name="lock-back"
+                                          class="fish-slot__lock eq-slot__lock eq-hidden" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement name="slot-ring" class="fish-slot eq-slot">
+                        <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                        <ui:Label         class="fish-slot__label eq-slot__label" text="Ring" />
+                        <ui:Label         name="amount-ring"
+                                          class="fish-slot__amount eq-slot__amount eq-hidden" />
+                        <ui:VisualElement name="lock-ring"
+                                          class="fish-slot__lock eq-slot__lock eq-hidden" />
+                    </ui:VisualElement>
+
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+            <!-- /equipment-center -->
+
+            <!-- RIGHT COLUMN : Shoulders / Hands / MainHand / OffHand -->
+            <ui:VisualElement name="column-right" class="eq-col">
+
+                <ui:VisualElement name="slot-shoulders" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Shldr" />
+                    <ui:Label         name="amount-shoulders"
+                                      class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:Label         name="cooldown-shoulders"
+                                      class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                    <ui:VisualElement name="lock-shoulders"
+                                      class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="slot-hands" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Hands" />
+                    <ui:Label         name="amount-hands"
+                                      class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:Label         name="cooldown-hands"
+                                      class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                    <ui:VisualElement name="lock-hands"
+                                      class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="slot-mainhand" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Main" />
+                    <ui:Label         name="amount-mainhand"
+                                      class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:Label         name="cooldown-mainhand"
+                                      class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                    <ui:VisualElement name="lock-mainhand"
+                                      class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="slot-offhand" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Off" />
+                    <ui:Label         name="amount-offhand"
+                                      class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:Label         name="cooldown-offhand"
+                                      class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                    <ui:VisualElement name="lock-offhand"
+                                      class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+            <!-- /column-right -->
+
+        </ui:VisualElement>
+        <!-- /panel-body -->
+
+        <!-- ── FOOTER : attribute scroll list ───────────────── -->
+        <!-- eq-footer → flex-direction column, max-height       -->
+        <ui:VisualElement name="panel-footer" class="eq-footer">
+
+            <!-- fish-divider → color / height                   -->
+            <!-- eq-divider   → margin-bottom, flex-shrink       -->
+            <ui:VisualElement class="fish-divider eq-divider" />
+
+            <!--
+                Attribute rows injected at runtime by UIEquipment.BuildAttributeRows()
+
+                                Runtime class usage:
+                                    Category header  →  fish-attr-category
+                                    Row container    →  fish-attr-row
+                                    Name label       →  fish-attr-row__name
+                                    Value label      →  fish-attr-row__value
+                                                                            fish-attr-row__value—resource
+                                                                            fish-attr-row__value—percent
+                                                                            fish-attr-row__value—negative
+            -->
+            <ui:ScrollView name="attribute-list"
+                           class="fish-scroll eq-attr-scroll"
+                           vertical-scroller-visibility="Auto"
+                           horizontal-scroller-visibility="Hidden"
+                           mode="Vertical" />
+
+        </ui:VisualElement>
+
+        <!-- ── STATUS BAR ────────────────────────────────────── -->
+        <!-- fish-panel__footer → bg color, top border          -->
+        <!-- eq-status-bar      → flex-direction row, height     -->
+        <ui:VisualElement name="status-bar" class="fish-panel__footer eq-status-bar">
+
+            <!-- HP -->
+            <ui:VisualElement name="chip-hp" class="eq-chip">
+                <ui:VisualElement class="fish-chip__dot fish-chip__dot--hp eq-chip__dot" />
+                <ui:Label         class="fish-chip__label eq-chip__label" text="HP" />
+                <ui:Label         name="stat-hp" class="fish-chip__value" text="—" />
+            </ui:VisualElement>
+
+            <!-- MP -->
+            <ui:VisualElement name="chip-mp" class="eq-chip">
+                <ui:VisualElement class="fish-chip__dot fish-chip__dot--mp eq-chip__dot" />
+                <ui:Label         class="fish-chip__label eq-chip__label" text="MP" />
+                <ui:Label         name="stat-mp" class="fish-chip__value" text="—" />
+            </ui:VisualElement>
+
+            <!-- Stamina -->
+            <ui:VisualElement name="chip-stam" class="eq-chip">
+                <ui:VisualElement class="fish-chip__dot fish-chip__dot--stam eq-chip__dot" />
+                <ui:Label         class="fish-chip__label eq-chip__label" text="STM" />
+                <ui:Label         name="stat-stam" class="fish-chip__value" text="—" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="eq-spacer" />
+
+            <!-- fish-gear-score → color, font, tracking        -->
+            <!-- eq-gear-score   → flex-shrink                  -->
+            <ui:Label name="gear-score"
+                      class="fish-gear-score eq-gear-score"
+                      text="GS: —" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+    <!-- /panel-root -->
+
+</ui:UXML>

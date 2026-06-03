@@ -1,0 +1,60 @@
+/*
+    UICharacterSelect.uss
+    Layout for the character selection screen. Colours come from FishMMO-Theme.uss.
+*/
+
+.character-screen {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.character-panel {
+    width: 420px;
+    height: 360px;
+}
+
+.character-header {
+    height: 32px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.character-scroll {
+    flex-grow: 1;
+    padding: 6px;
+}
+
+.character-list {
+    flex-direction: column;
+}
+
+.character-row {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 6px 8px;
+    margin-bottom: 2px;
+}
+
+.character-row--selected {
+    background-color: rgba(88, 214, 178, 0.25);
+}
+
+.character-row__name {
+    font-size: 13px;
+}
+
+.character-row__scene {
+    font-size: 12px;
+}
+
+.character-buttons {
+    flex-direction: row;
+    padding: 4px 6px;
+}
+
+.character-btn {
+    flex-grow: 1;
+    margin-right: 4px;
+    height: 32px;
+}

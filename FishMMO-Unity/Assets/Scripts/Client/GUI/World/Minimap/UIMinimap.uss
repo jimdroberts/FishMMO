@@ -1,0 +1,24 @@
+/*
+    UIMinimap.uss
+    Anchors the minimap to the top-right corner of the screen.
+*/
+
+.minimap-root {
+    flex-grow: 1;
+    align-items: flex-end;
+    justify-content: flex-start;
+}
+
+.minimap-frame {
+    width: 200px;
+    height: 200px;
+    margin: 8px;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.minimap-view {
+    flex-grow: 1;
+    -unity-background-scale-mode: scale-and-crop;
+    background-color: rgb(0, 0, 0);
+}

@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="../Buff/UIBuffContainer.uss" />
+    <Style src="UITarget.uss" />
+    <ui:VisualElement name="target-root" class="fish-panel target-panel">
+        <ui:Label name="target-name" text="Target" class="target-name" />
+        <ui:VisualElement name="target-health" class="fish-bar target-health">
+            <ui:VisualElement name="target-health-fill" class="fish-bar__fill--hp target-health-fill" />
+        </ui:VisualElement>
+        <ui:VisualElement name="target-buff-list" class="buff-list target-buff-list" />
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,51 @@
+/*
+    UISelector.uss
+    Layout for the modal option selector.
+*/
+
+.selector-root {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.selector-panel {
+    min-width: 320px;
+    max-width: 480px;
+    max-height: 70%;
+    padding: 16px;
+}
+
+.selector-scroll {
+    flex-grow: 1;
+    margin-bottom: 12px;
+}
+
+.selector-list {
+    flex-direction: column;
+}
+
+.selector-item {
+    width: 100%;
+    margin: 2px 0;
+}
+
+.selector-item-selected {
+    border-left-width: 3px;
+    border-right-width: 3px;
+    border-top-width: 3px;
+    border-bottom-width: 3px;
+    border-color: rgb(220, 200, 120);
+}
+
+.selector-buttons {
+    flex-direction: row;
+    justify-content: center;
+}
+
+.selector-action {
+    min-width: 96px;
+    margin-left: 8px;
+    margin-right: 8px;
+}

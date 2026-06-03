@@ -1,0 +1,58 @@
+/*
+    UICharacterCreate.uss
+    Layout for the character creation screen. Colours come from FishMMO-Theme.uss.
+*/
+
+.create-screen {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.create-panel {
+    width: 380px;
+}
+
+.create-header {
+    height: 32px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.create-body {
+    flex-direction: column;
+    padding: 12px;
+}
+
+.create-field-label {
+    font-size: 12px;
+    margin-bottom: 2px;
+    margin-top: 6px;
+}
+
+.create-input {
+    margin-bottom: 4px;
+}
+
+.create-dropdown {
+    margin-bottom: 4px;
+}
+
+.create-result {
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    min-height: 16px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.create-buttons {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.create-btn {
+    flex-grow: 1;
+    margin-right: 4px;
+    height: 32px;
+}

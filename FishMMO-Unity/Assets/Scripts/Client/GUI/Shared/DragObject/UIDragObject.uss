@@ -1,0 +1,15 @@
+/*
+    UIDragObject.uss
+    Layout for the cursor-following drag icon.
+*/
+
+.drag-root {
+    flex-grow: 1;
+}
+
+.drag-icon {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    -unity-background-scale-mode: scale-to-fit;
+}

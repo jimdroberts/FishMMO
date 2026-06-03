@@ -1,0 +1,67 @@
+/*
+    UIHotkeyBar.uss
+    Layout for the hotkey bar. Colours/borders for the slot come from FishMMO-Theme.uss
+    (slots reuse the .fish-slot look where useful; cooldown/label are bar-specific).
+*/
+
+.hotkey-bar {
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+/* Horizontal strip of hotkey slots. */
+.hotkey-list {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+/* A single hotkey slot. */
+.hotkey-slot {
+    width: 48px;
+    height: 48px;
+    margin-right: 3px;
+    border-width: 1px;
+    border-color: rgb(46, 51, 59);
+    border-radius: 6px;
+    background-color: rgb(28, 31, 34);
+    overflow: hidden;
+}
+
+.hotkey-slot:hover {
+    border-color: rgb(255, 107, 26);
+}
+
+/* Assigned item / ability icon. */
+.hotkey-slot__icon {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    right: 2px;
+    bottom: 2px;
+    -unity-background-scale-mode: scale-to-fit;
+    display: none;
+}
+
+/* Cooldown sweep overlay (darkens from the top, height driven from C#). */
+.hotkey-slot__cooldown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 0;
+    background-color: rgba(14, 15, 15, 0.65);
+}
+
+/* Key-map label in the lower-right corner. */
+.hotkey-slot__label {
+    position: absolute;
+    right: 2px;
+    bottom: 1px;
+    font-size: 9px;
+    -unity-font-style: bold;
+    -unity-text-align: lower-right;
+    color: rgb(200, 205, 214);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
+}

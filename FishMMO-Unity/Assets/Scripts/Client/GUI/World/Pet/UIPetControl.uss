@@ -1,0 +1,43 @@
+/*
+    UIPetControl.uss
+    Layout for the pet control panel. Colours come from FishMMO-Theme.uss.
+*/
+
+.pet-panel {
+    width: 200px;
+    padding: 8px;
+}
+
+.pet-name {
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    color: rgb(200, 205, 214);
+    margin-bottom: 6px;
+}
+
+.pet-health {
+    height: 12px;
+    margin-bottom: 8px;
+}
+
+.pet-health-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    border-radius: 3px;
+}
+
+.pet-commands {
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.pet-cmd {
+    flex-grow: 1;
+    height: 22px;
+    margin-right: 3px;
+    font-size: 10px;
+}

@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIDragObject.uss" />
+    <ui:VisualElement name="drag-root" class="drag-root" picking-mode="Ignore">
+        <ui:VisualElement name="drag-icon" class="drag-icon" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

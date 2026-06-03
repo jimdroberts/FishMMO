@@ -1,0 +1,50 @@
+/*
+    UIDungeonFinder.uss
+    Layout only — colours come from FishMMO-Theme.uss (.fish-panel, .fish-label, .fish-button).
+*/
+
+.dungeonfinder-root {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.dungeonfinder-panel {
+    width: 320px;
+    padding: 10px;
+    flex-direction: column;
+}
+
+.dungeonfinder-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.dungeonfinder-title {
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+.dungeonfinder-close-btn {
+    width: 24px;
+    height: 24px;
+}
+
+.dungeonfinder-image {
+    height: 160px;
+    margin-bottom: 8px;
+    -unity-background-scale-mode: scale-to-fit;
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+.dungeonfinder-description {
+    white-space: normal;
+    margin-bottom: 10px;
+    -unity-text-align: upper-center;
+}
+
+.dungeonfinder-start-btn {
+    height: 32px;
+}

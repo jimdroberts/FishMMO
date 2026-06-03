@@ -1,0 +1,317 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIEquipment.uss
+    Equipment Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    PURPOSE
+    ───────
+    All sizing, spacing, flex directions, and positioning
+    for the equipment panel. NO colors or fonts here —
+    those are in FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UIEquipment.uss" />
+
+    Unity UIToolkit layout rules used throughout:
+    ─────────────────────────────────────────────
+    • flex-direction defaults to column — set row explicitly
+      on every horizontal container.
+    • flex-shrink: 0 on every fixed-size element so Unity's
+      Yoga solver never compresses it.
+    • Absolute-positioned children need all four inset
+      values (left/top/right/bottom) to fill their parent.
+    • Give every flex parent a concrete size on at least
+      one axis so children can resolve their own sizes.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+.eq-panel {
+    width: 520px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.eq-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 40px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.eq-header__left {
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+}
+
+.eq-header__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.eq-header__title {
+    flex-shrink: 0;
+    margin-right: 4px;
+}
+
+.eq-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+/* ── Tab bar ───────────────────────────────────────────── */
+
+.eq-tab-bar {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.eq-tab {
+    height: 22px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY  (three-column row)
+   ═══════════════════════════════════════════════════════════ */
+
+.eq-body {
+    flex-direction: row;
+    align-items: stretch;
+    height: 320px;
+    padding: 12px;
+    flex-shrink: 0;
+}
+
+/* ── Side columns ──────────────────────────────────────── */
+
+.eq-col {
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-around;
+    width: 68px;
+    flex-shrink: 0;
+}
+
+/* ── Center column ─────────────────────────────────────── */
+
+.eq-center {
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    margin-left: 6px;
+    margin-right: 6px;
+}
+
+/* ── Character preview ─────────────────────────────────── */
+
+.eq-preview {
+    width: 100%;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    position: relative;
+}
+
+.eq-preview__rt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.eq-preview__label {
+    margin-bottom: 6px;
+}
+
+/* ── Center sub-slots row (Neck / Back / Ring) ─────────── */
+
+.eq-center-slots {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    height: 64px;
+    margin-top: 8px;
+    flex-shrink: 0;
+}
+
+.eq-center-slots .eq-slot {
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   EQUIPMENT SLOT
+   ═══════════════════════════════════════════════════════════ */
+
+.eq-slot {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    position: relative;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Icon: fills slot, leaves room at bottom for the label */
+.eq-slot__icon {
+    position: absolute;
+    left: 5px;
+    top: 5px;
+    right: 5px;
+    bottom: 14px;
+}
+
+/* Slot name label pinned to bottom */
+.eq-slot__label {
+    position: absolute;
+    bottom: 2px;
+    left: 0;
+    right: 0;
+}
+
+/* Stack count badge — bottom-right corner */
+.eq-slot__amount {
+    position: absolute;
+    bottom: 14px;
+    right: 3px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+/* Cooldown: full-slot overlay */
+.eq-slot__cooldown {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* Lock: full-slot overlay */
+.eq-slot__lock {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER  (attribute scroll list)
+   ═══════════════════════════════════════════════════════════ */
+
+.eq-footer {
+    flex-direction: column;
+    max-height: 200px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.eq-divider {
+    margin-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.eq-attr-scroll {
+    flex: 1;
+}
+
+/* ── Attribute rows (layout for runtime-generated elements) */
+
+.fish-attr-category {
+    margin-top: 8px;
+    margin-bottom: 2px;
+    padding-bottom: 3px;
+}
+
+.fish-attr-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+.fish-attr-row__name {
+    flex: 1;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   STATUS BAR
+   ═══════════════════════════════════════════════════════════ */
+
+.eq-status-bar {
+    flex-direction: row;
+    align-items: center;
+    height: 28px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.eq-chip {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 12px;
+}
+
+.eq-chip__dot {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    margin-right: 4px;
+}
+
+.eq-chip__label {
+    margin-right: 3px;
+}
+
+.eq-spacer {
+    flex: 1;
+}
+
+.eq-gear-score {
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════════════════════ */
+
+.eq-hidden { display: none; }

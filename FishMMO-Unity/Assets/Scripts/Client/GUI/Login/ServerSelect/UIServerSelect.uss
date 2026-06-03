@@ -1,0 +1,60 @@
+/*
+    UIServerSelect.uss
+    Layout for the world server selection screen. Colours come from FishMMO-Theme.uss.
+*/
+
+.server-screen {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.server-panel {
+    width: 420px;
+    height: 360px;
+}
+
+.server-header {
+    height: 32px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.server-scroll {
+    flex-grow: 1;
+    padding: 6px;
+}
+
+.server-list {
+    flex-direction: column;
+}
+
+.server-row {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 6px 8px;
+    margin-bottom: 2px;
+}
+
+.server-row--selected {
+    background-color: rgba(88, 214, 178, 0.25);
+}
+
+.server-row__name {
+    font-size: 13px;
+}
+
+.server-row__status {
+    font-size: 12px;
+}
+
+.server-buttons {
+    flex-direction: row;
+    padding: 4px 6px;
+}
+
+.server-btn {
+    flex-grow: 1;
+    margin-right: 4px;
+    height: 32px;
+}

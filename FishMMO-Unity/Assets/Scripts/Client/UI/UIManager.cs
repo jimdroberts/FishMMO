@@ -27,6 +27,17 @@ namespace FishMMO.Client
 		/// </summary>
 		private static Client _client;
 
+		// ── UI Toolkit parallel registries ────────────────────────────────
+
+		/// <summary>
+		/// Maps GameObject names to their corresponding UITKControl instances.
+		/// </summary>
+		private static Dictionary<string, UITKControl> tkControls = new Dictionary<string, UITKControl>();
+		/// <summary>
+		/// Maps GameObject names to their corresponding UITKCharacterControl instances.
+		/// </summary>
+		private static Dictionary<string, UITKCharacterControl> tkCharacterControls = new Dictionary<string, UITKCharacterControl>();
+
 		/// <summary>
 		/// Injects the Client instance into all registered controls for network/UI interaction.
 		/// </summary>
@@ -44,6 +55,11 @@ namespace FishMMO.Client
 			{
 				control.SetClient(client);
 			}
+
+			foreach (UITKControl control in tkControls.Values)
+			{
+				control.SetClient(client);
+			}
 		}
 
 		/// <summary>
@@ -56,6 +72,11 @@ namespace FishMMO.Client
 			{
 				control.SetCharacter(character);
 			}
+
+			foreach (UITKCharacterControl control in tkCharacterControls.Values)
+			{
+				control.SetCharacter(character);
+			}
 		}
 
 		/// <summary>
@@ -64,6 +85,11 @@ namespace FishMMO.Client
 		internal static void UnsetCharacter()
 		{
 			foreach (UICharacterControl control in characterControls.Values)
+			{
+				control.UnsetCharacter();
+			}
+
+			foreach (UITKCharacterControl control in tkCharacterControls.Values)
 			{
 				control.UnsetCharacter();
 			}
@@ -113,6 +139,67 @@ namespace FishMMO.Client
 				controls.Remove(control.Name);
 				characterControls.Remove(control.Name);
 			}
+		}
+
+		/// <summary>
+		/// Registers a UITKControl instance, making it accessible by name.
+		/// </summary>
+		/// <param name="control">The UITKControl instance to register.</param>
+		internal static void RegisterTK(UITKControl control)
+		{
+			if (control == null)
+			{
+				return;
+			}
+			if (tkControls.ContainsKey(control.Name))
+			{
+				return;
+			}
+
+			UITKCharacterControl characterControl = control as UITKCharacterControl;
+			if (characterControl != null)
+			{
+				tkCharacterControls.Add(characterControl.Name, characterControl);
+			}
+
+			control.SetClient(_client);
+
+			tkControls.Add(control.Name, control);
+		}
+
+		/// <summary>
+		/// Unregisters a UITKControl instance, removing it from the manager.
+		/// </summary>
+		/// <param name="control">The UITKControl instance to unregister.</param>
+		internal static void UnregisterTK(UITKControl control)
+		{
+			if (control == null)
+			{
+				return;
+			}
+			tkControls.Remove(control.Name);
+			tkCharacterControls.Remove(control.Name);
+		}
+
+		/// <summary>
+		/// Tries to retrieve a UITKControl by name and cast it to the specified type.
+		/// </summary>
+		/// <typeparam name="T">The UITKControl subtype to cast to.</typeparam>
+		/// <param name="name">The name of the control.</param>
+		/// <param name="control">The retrieved control, if found.</param>
+		/// <returns>True if the control was found and cast successfully, false otherwise.</returns>
+		public static bool TryGetTK<T>(string name, out T control) where T : UITKControl
+		{
+			if (tkControls.TryGetValue(name, out UITKControl result))
+			{
+				control = result as T;
+				if (control != null)
+				{
+					return true;
+				}
+			}
+			control = null;
+			return false;
 		}
 
 		/// <summary>
@@ -168,22 +255,18 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Checks if a control exists by name.
+		/// Checks if a control exists by name in either the UGUI or UIToolkit registry.
 		/// </summary>
 		/// <param name="name">The name of the control.</param>
 		/// <returns>True if the control exists, false otherwise.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool Exists(string name)
 		{
-			if (controls.ContainsKey(name))
-			{
-				return true;
-			}
-			return false;
+			return controls.ContainsKey(name) || tkControls.ContainsKey(name);
 		}
 
 		/// <summary>
-		/// Toggles the visibility of a control.
+		/// Toggles the visibility of a control in either the UGUI or UIToolkit registry.
 		/// </summary>
 		/// <param name="name">The name of the control.</param>
 		public static void ToggleVisibility(string name)
@@ -192,11 +275,15 @@ namespace FishMMO.Client
 			{
 				result.ToggleVisibility();
 			}
+			else if (tkControls.TryGetValue(name, out UITKControl tkResult))
+			{
+				tkResult.ToggleVisibility();
+			}
 			PlayerInputHandler.ResetForcedMouseMode();
 		}
 
 		/// <summary>
-		/// Shows a control by name.
+		/// Shows a control by name, searching both UGUI and UIToolkit registries.
 		/// </summary>
 		/// <param name="name">The name of the control.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -206,10 +293,14 @@ namespace FishMMO.Client
 			{
 				result.Show();
 			}
+			else if (tkControls.TryGetValue(name, out UITKControl tkResult))
+			{
+				tkResult.Show();
+			}
 		}
 
 		/// <summary>
-		/// Hides a control by name.
+		/// Hides a control by name, searching both UGUI and UIToolkit registries.
 		/// </summary>
 		/// <param name="name">The name of the control.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -219,10 +310,14 @@ namespace FishMMO.Client
 			{
 				result.Hide();
 			}
+			else if (tkControls.TryGetValue(name, out UITKControl tkResult) && tkResult.Visible)
+			{
+				tkResult.Hide();
+			}
 		}
 
 		/// <summary>
-		/// Hides all registered controls.
+		/// Hides all registered controls in both UGUI and UIToolkit registries.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void HideAll()
@@ -231,15 +326,23 @@ namespace FishMMO.Client
 			{
 				p.Value.Hide();
 			}
+			foreach (KeyValuePair<string, UITKControl> p in tkControls)
+			{
+				p.Value.Hide();
+			}
 		}
 
 		/// <summary>
-		/// Shows all registered controls.
+		/// Shows all registered controls in both UGUI and UIToolkit registries.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void ShowAll()
 		{
 			foreach (KeyValuePair<string, UIControl> p in controls)
+			{
+				p.Value.Show();
+			}
+			foreach (KeyValuePair<string, UITKControl> p in tkControls)
 			{
 				p.Value.Show();
 			}

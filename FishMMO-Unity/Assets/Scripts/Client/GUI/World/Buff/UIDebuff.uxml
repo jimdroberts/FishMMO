@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIBuffContainer.uss" />
+    <ui:VisualElement name="buff-root" class="buff-container buff-container--debuff">
+        <ui:VisualElement name="buff-list" class="buff-list" />
+    </ui:VisualElement>
+</ui:UXML>

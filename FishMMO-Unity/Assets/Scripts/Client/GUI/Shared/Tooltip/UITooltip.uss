@@ -1,0 +1,19 @@
+/*
+    UITooltip.uss
+    Layout for the cursor-following tooltip. Colours come from FishMMO-Theme.uss (fish-tooltip).
+*/
+
+.tooltip-root {
+    flex-grow: 1;
+}
+
+.tooltip-box {
+    position: absolute;
+    max-width: 320px;
+    padding: 6px 8px;
+}
+
+.tooltip-text {
+    white-space: normal;
+    font-size: 12px;
+}

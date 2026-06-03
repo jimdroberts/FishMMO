@@ -1,0 +1,13 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIMenu.uss" />
+    <ui:VisualElement name="menu-root" class="menu-root">
+        <ui:VisualElement name="menu-panel" class="fish-panel menu-panel">
+            <ui:Label text="Menu" class="fish-label menu-title" />
+            <ui:Button name="menu-options-btn" text="Options" class="fish-button menu-action" />
+            <ui:Button name="menu-quit-to-login-btn" text="Quit to Login" class="fish-button menu-action" />
+            <ui:Button name="menu-quit-btn" text="Quit" class="fish-button menu-action" />
+            <ui:Button name="menu-close-btn" text="Close" class="fish-button menu-action" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

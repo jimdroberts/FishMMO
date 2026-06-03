@@ -1,0 +1,64 @@
+/*
+    UIMerchant.uss
+    Layout for the merchant panel. Colours come from FishMMO-Theme.uss.
+*/
+
+.merchant-panel {
+    width: 320px;
+    height: 400px;
+}
+
+.merchant-header {
+    height: 28px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.merchant-tabs {
+    flex-direction: row;
+    height: 28px;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+.merchant-tab {
+    flex-grow: 1;
+    margin-right: 2px;
+    font-size: 11px;
+}
+
+.merchant-scroll {
+    flex-grow: 1;
+    padding: 4px;
+}
+
+.merchant-list {
+    flex-direction: column;
+}
+
+.merchant-entry {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 4px;
+}
+
+.merchant-entry:hover {
+    background-color: rgb(28, 31, 34);
+}
+
+.merchant-entry__icon {
+    width: 32px;
+    height: 32px;
+    margin-right: 8px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.merchant-entry__name {
+    flex-grow: 1;
+    font-size: 12px;
+    -unity-text-align: middle-left;
+    color: rgb(200, 205, 214);
+}

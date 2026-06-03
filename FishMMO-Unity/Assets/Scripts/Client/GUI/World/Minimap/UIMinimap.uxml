@@ -1,0 +1,9 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIMinimap.uss" />
+    <ui:VisualElement name="minimap-root" class="minimap-root">
+        <ui:VisualElement name="minimap-frame" class="fish-panel minimap-frame">
+            <ui:VisualElement name="minimap-view" class="minimap-view" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

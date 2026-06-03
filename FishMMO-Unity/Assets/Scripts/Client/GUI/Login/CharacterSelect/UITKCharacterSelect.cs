@@ -1,0 +1,477 @@
+using FishNet.Transporting;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UIElements;
+using FishMMO.Shared;
+using FishMMO.Auth.Core;
+
+namespace FishMMO.Client
+{
+	/// <summary>
+	/// UI Toolkit implementation of the character selection control. Lists the account's
+	/// characters, allows selecting/connecting/deleting and entering character creation.
+	/// </summary>
+	public class UITKCharacterSelect : UITKControl
+	{
+		private const string CONNECT_BUTTON_NAME = "character-connect-btn";
+		private const string DELETE_BUTTON_NAME = "character-delete-btn";
+		private const string CREATE_BUTTON_NAME = "character-create-btn";
+		private const string QUIT_LOGIN_BUTTON_NAME = "character-quit-login-btn";
+		private const string QUIT_BUTTON_NAME = "character-quit-btn";
+		private const string CHARACTER_LIST_NAME = "character-list";
+
+		private const string CHARACTER_ROW_CLASS = "character-row";
+		private const string CHARACTER_ROW_SELECTED_CLASS = "character-row--selected";
+		private const string CHARACTER_ROW_NAME_CLASS = "character-row__name";
+		private const string CHARACTER_ROW_SCENE_CLASS = "character-row__scene";
+
+		/// <summary>
+		/// View model for a single character row.
+		/// </summary>
+		private class CharacterRow
+		{
+			public VisualElement Root;
+			public Label Name;
+			public Label Scene;
+			public CharacterDetails Details;
+		}
+
+		/// <summary>
+		/// Called when a Character List is received and ready to use.
+		/// </summary>
+		public Action OnCharacterListStart;
+
+		/// <summary>
+		/// Called after OnCharacterListStart finishes.
+		/// </summary>
+		public Action OnCharacterListEnd;
+
+		/// <summary>
+		/// Reference to the Cinematic Camera attached to this UI control.
+		/// </summary>
+		public CinematicCamera CinematicCamera;
+
+		private VisualElement characterListContainer;
+		private Button connectButton;
+		private Button deleteButton;
+
+		private readonly List<CharacterRow> characterList = new List<CharacterRow>();
+		private CharacterRow selectedCharacter;
+
+		/// <summary>
+		/// Resolves and caches visual elements and wires up button callbacks.
+		/// </summary>
+		public override void OnStarting()
+		{
+			if (Root == null)
+			{
+				return;
+			}
+
+			characterListContainer = Root.Q<VisualElement>(CHARACTER_LIST_NAME);
+			connectButton = Root.Q<Button>(CONNECT_BUTTON_NAME);
+			deleteButton = Root.Q<Button>(DELETE_BUTTON_NAME);
+
+			if (connectButton != null)
+			{
+				connectButton.clicked += OnClick_SelectCharacter;
+			}
+			if (deleteButton != null)
+			{
+				deleteButton.clicked += OnClick_DeleteCharacter;
+			}
+
+			Button createButton = Root.Q<Button>(CREATE_BUTTON_NAME);
+			if (createButton != null)
+			{
+				createButton.clicked += OnClick_CreateCharacter;
+			}
+
+			Button quitToLoginButton = Root.Q<Button>(QUIT_LOGIN_BUTTON_NAME);
+			if (quitToLoginButton != null)
+			{
+				quitToLoginButton.clicked += OnClick_QuitToLogin;
+			}
+
+			Button quitButton = Root.Q<Button>(QUIT_BUTTON_NAME);
+			if (quitButton != null)
+			{
+				quitButton.clicked += OnClick_Quit;
+			}
+		}
+
+		/// <summary>
+		/// Subscribes to connection, authentication, and character broadcast events when the client is injected.
+		/// </summary>
+		public override void OnClientSet()
+		{
+			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+
+			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+		}
+
+		/// <summary>
+		/// Unsubscribes from connection, authentication, and character broadcast events when the client is cleared.
+		/// </summary>
+		public override void OnClientUnset()
+		{
+			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+
+			if (Client.LoginAuthenticator != null)
+			{
+				Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+			}
+		}
+
+		/// <summary>
+		/// Cleans up the character list when the control is destroyed.
+		/// </summary>
+		public override void OnDestroying()
+		{
+			DestroyCharacterList();
+		}
+
+		/// <summary>
+		/// Handles client connection state changes. Hides the panel when disconnected.
+		/// </summary>
+		/// <param name="obj">Connection state arguments.</param>
+		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
+		{
+			if (obj.ConnectionState == LocalConnectionState.Stopped)
+			{
+				Hide();
+			}
+		}
+
+		/// <summary>
+		/// Handles authentication results and updates the UI accordingly.
+		/// </summary>
+		/// <param name="result">The result of client authentication.</param>
+		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
+		{
+			switch (result)
+			{
+				case ClientAuthenticationResult.InvalidUsernameOrPassword:
+				case ClientAuthenticationResult.AlreadyOnline:
+				case ClientAuthenticationResult.Banned:
+				case ClientAuthenticationResult.ServerFull:
+				case ClientAuthenticationResult.ServerBusy:
+				case ClientAuthenticationResult.NoCharacterSelected:
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenRevoked:
+				case ClientAuthenticationResult.TokenDecryptFailed:
+					Client.QuitToLogin();
+					break;
+				case ClientAuthenticationResult.LoginSuccess:
+					break;
+				case ClientAuthenticationResult.WorldLoginSuccess:
+					Hide();
+					break;
+				case ClientAuthenticationResult.SceneLoginSuccess:
+					Hide();
+					break;
+				// Not applicable during character select flow.
+				case ClientAuthenticationResult.AccountCreated:
+				case ClientAuthenticationResult.SrpVerify:
+				case ClientAuthenticationResult.SrpProof:
+				case ClientAuthenticationResult.AccountUnverified:
+				case ClientAuthenticationResult.AccountVerified:
+				case ClientAuthenticationResult.TwoFactorRequired:
+				case ClientAuthenticationResult.TwoFactorInvalid:
+					break;
+			}
+			SetConnectButtonLocked(false);
+		}
+
+		/// <summary>
+		/// Removes all character rows and clears the character list.
+		/// </summary>
+		public void DestroyCharacterList()
+		{
+			for (int i = 0; i < characterList.Count; ++i)
+			{
+				characterList[i].Root.RemoveFromHierarchy();
+			}
+			characterList.Clear();
+			selectedCharacter = null;
+		}
+
+		/// <summary>
+		/// Handles an incoming character list broadcast and populates the character rows.
+		/// </summary>
+		/// <param name="msg">The broadcast message containing character details.</param>
+		/// <param name="channel">The network channel used.</param>
+		private void OnClientCharacterListBroadcastReceived(CharacterListBroadcast msg, Channel channel)
+		{
+			Hide();
+
+			if (msg.Characters != null)
+			{
+				DestroyCharacterList();
+
+				// No characters were sent.
+				if (msg.Characters.Count < 1)
+				{
+					OnCharacterListReady();
+					return;
+				}
+
+				for (int i = 0; i < msg.Characters.Count; ++i)
+				{
+					CreateCharacterRow(msg.Characters[i]);
+				}
+			}
+
+			OnCharacterListReady();
+		}
+
+		/// <summary>
+		/// Invokes the start event and begins the post-processing coroutine when the list is ready.
+		/// </summary>
+		private void OnCharacterListReady()
+		{
+			OnCharacterListStart?.Invoke();
+
+			Client.StartCoroutine(OnProcessCharacterList());
+		}
+
+		/// <summary>
+		/// Coroutine for post-character-list processing, resets the camera and shows the panel.
+		/// </summary>
+		/// <returns>IEnumerator for coroutine.</returns>
+		private IEnumerator OnProcessCharacterList()
+		{
+			if (CinematicCamera != null)
+			{
+				CinematicCamera.Reset();
+				yield return CinematicCamera.MoveToNextWaypoint(() =>
+				{
+				}, true);
+			}
+
+			OnCharacterListEnd?.Invoke();
+			Show();
+		}
+
+		/// <summary>
+		/// Handles a character creation broadcast and adds a new character row.
+		/// </summary>
+		/// <param name="msg">The broadcast message for character creation.</param>
+		/// <param name="channel">The network channel used.</param>
+		private void OnClientCharacterCreateBroadcastReceived(CharacterCreateBroadcast msg, Channel channel)
+		{
+			// New characters can be constructed with basic data; they have no equipped items.
+			CharacterDetails details = new CharacterDetails()
+			{
+				CharacterName = msg.CharacterName,
+				SceneName = msg.SceneName,
+				RaceTemplateID = msg.RaceTemplateID,
+			};
+			CreateCharacterRow(details);
+		}
+
+		/// <summary>
+		/// Handles a character deletion broadcast and removes the matching character row.
+		/// </summary>
+		/// <param name="msg">The broadcast message for character deletion.</param>
+		/// <param name="channel">The network channel used.</param>
+		private void OnClientCharacterDeleteBroadcastReceived(CharacterDeleteBroadcast msg, Channel channel)
+		{
+			// Remove the character from our characters list.
+			for (int i = characterList.Count - 1; i >= 0; --i)
+			{
+				if (characterList[i].Details.CharacterName == msg.CharacterName)
+				{
+					if (selectedCharacter == characterList[i])
+					{
+						selectedCharacter = null;
+					}
+					characterList[i].Root.RemoveFromHierarchy();
+					characterList.RemoveAt(i);
+				}
+			}
+
+			SetDeleteButtonLocked(false);
+		}
+
+		/// <summary>
+		/// Builds a character row element for the supplied character details.
+		/// </summary>
+		/// <param name="details">The character details.</param>
+		private void CreateCharacterRow(CharacterDetails details)
+		{
+			if (characterListContainer == null)
+			{
+				return;
+			}
+
+			CharacterRow row = new CharacterRow()
+			{
+				Details = details,
+			};
+
+			VisualElement rowRoot = new VisualElement();
+			rowRoot.AddToClassList(CHARACTER_ROW_CLASS);
+
+			Label name = new Label(details.CharacterName);
+			name.AddToClassList(CHARACTER_ROW_NAME_CLASS);
+
+			Label scene = new Label(details.SceneName);
+			scene.AddToClassList(CHARACTER_ROW_SCENE_CLASS);
+
+			rowRoot.Add(name);
+			rowRoot.Add(scene);
+			rowRoot.RegisterCallback<PointerDownEvent>((evt) => OnCharacterSelected(row));
+
+			row.Root = rowRoot;
+			row.Name = name;
+			row.Scene = scene;
+
+			characterListContainer.Add(rowRoot);
+			characterList.Add(row);
+		}
+
+		/// <summary>
+		/// Handles character selection and updates the highlighted row.
+		/// </summary>
+		/// <param name="row">The selected character row.</param>
+		private void OnCharacterSelected(CharacterRow row)
+		{
+			if (selectedCharacter != null)
+			{
+				selectedCharacter.Root.RemoveFromClassList(CHARACTER_ROW_SELECTED_CLASS);
+			}
+
+			selectedCharacter = row;
+			if (selectedCharacter != null)
+			{
+				selectedCharacter.Root.AddToClassList(CHARACTER_ROW_SELECTED_CLASS);
+			}
+		}
+
+		/// <summary>
+		/// Initiates character selection and connection.
+		/// </summary>
+		public void OnClick_SelectCharacter()
+		{
+			if (Client.IsConnectionReady() &&
+				selectedCharacter != null &&
+				selectedCharacter.Details != null)
+			{
+				Hide();
+
+				// Tell the login server about our character selection.
+				Client.Broadcast(new CharacterSelectBroadcast()
+				{
+					CharacterName = selectedCharacter.Details.CharacterName,
+				}, Channel.Reliable);
+				SetConnectButtonLocked(true);
+			}
+		}
+
+		/// <summary>
+		/// Prompts for confirmation and deletes the selected character if confirmed.
+		/// </summary>
+		public void OnClick_DeleteCharacter()
+		{
+			if (Client.IsConnectionReady() &&
+				selectedCharacter != null &&
+				selectedCharacter.Details != null)
+			{
+				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tooltip))
+				{
+					SetDeleteButtonLocked(true);
+
+					tooltip.Open("Are you sure you would like to delete this character?", () =>
+					{
+						// Delete character.
+						Client.Broadcast(new CharacterDeleteBroadcast()
+						{
+							CharacterName = selectedCharacter.Details.CharacterName,
+						}, Channel.Reliable);
+						SetDeleteButtonLocked(false);
+					}, () =>
+					{
+						SetDeleteButtonLocked(false);
+					});
+				}
+			}
+		}
+
+		/// <summary>
+		/// Shows the character creation panel.
+		/// </summary>
+		public void OnClick_CreateCharacter()
+		{
+			if (UIManager.TryGetTK("UICharacterCreate", out UITKCharacterCreate createCharacter))
+			{
+				Hide();
+				createCharacter.Show();
+			}
+		}
+
+		/// <summary>
+		/// Stops the character list coroutine and unlocks buttons when quitting to login.
+		/// </summary>
+		public override void OnQuitToLogin()
+		{
+			base.OnQuitToLogin();
+
+			Client.StopCoroutine(OnProcessCharacterList());
+
+			SetDeleteButtonLocked(false);
+			SetConnectButtonLocked(false);
+		}
+
+		/// <summary>
+		/// Stops the character list coroutine and returns to the login screen.
+		/// </summary>
+		public void OnClick_QuitToLogin()
+		{
+			Client.StopCoroutine(OnProcessCharacterList());
+
+			Client.QuitToLogin();
+		}
+
+		/// <summary>
+		/// Quits the client application.
+		/// </summary>
+		public void OnClick_Quit()
+		{
+			Client.Quit();
+		}
+
+		/// <summary>
+		/// Sets the locked state of the connect button.
+		/// </summary>
+		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
+		private void SetConnectButtonLocked(bool locked)
+		{
+			if (connectButton != null)
+			{
+				connectButton.SetEnabled(!locked);
+			}
+		}
+
+		/// <summary>
+		/// Sets the locked state of the delete button.
+		/// </summary>
+		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
+		private void SetDeleteButtonLocked(bool locked)
+		{
+			if (deleteButton != null)
+			{
+				deleteButton.SetEnabled(!locked);
+			}
+		}
+	}
+}

@@ -1,0 +1,58 @@
+/*
+    UILogin.uss
+    Layout for the login screen. Colours come from FishMMO-Theme.uss.
+*/
+
+.login-screen {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-panel {
+    width: 360px;
+}
+
+.login-header {
+    height: 32px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.login-body {
+    flex-direction: column;
+    padding: 12px;
+}
+
+.login-field-label {
+    font-size: 12px;
+    margin-bottom: 2px;
+    margin-top: 6px;
+}
+
+.login-input {
+    margin-bottom: 4px;
+}
+
+.login-dropdown {
+    margin-bottom: 4px;
+}
+
+.login-handshake {
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    min-height: 16px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.login-buttons {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.login-btn {
+    flex-grow: 1;
+    margin-right: 4px;
+    height: 32px;
+}

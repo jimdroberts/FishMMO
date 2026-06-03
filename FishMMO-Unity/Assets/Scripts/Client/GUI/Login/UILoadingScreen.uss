@@ -1,0 +1,33 @@
+/*
+    UILoadingScreen.uss
+    Layout for the full-screen loading overlay. Colours come from FishMMO-Theme.uss.
+*/
+
+.loading-screen {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-image {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.loading-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 10px;
+    flex-direction: row;
+}
+
+.loading-progress__fill {
+    width: 0;
+    height: 100%;
+}

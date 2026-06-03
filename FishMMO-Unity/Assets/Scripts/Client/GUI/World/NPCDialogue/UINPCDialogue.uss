@@ -1,0 +1,46 @@
+/*
+    UINPCDialogue.uss
+    Layout for the NPC dialogue panel. Colours come from FishMMO-Theme.uss.
+*/
+
+.dialogue-panel {
+    width: 460px;
+    min-height: 220px;
+    max-height: 420px;
+}
+
+.dialogue-header {
+    height: 30px;
+    padding-left: 10px;
+    justify-content: center;
+}
+
+.dialogue-speaker {
+    font-size: 14px;
+}
+
+.dialogue-text-scroll {
+    flex-grow: 1;
+    padding: 10px;
+}
+
+.dialogue-text {
+    white-space: normal;
+    font-size: 13px;
+    color: rgb(200, 205, 214);
+}
+
+.dialogue-choices {
+    flex-direction: column;
+    padding: 8px;
+}
+
+.dialogue-choice {
+    height: auto;
+    min-height: 28px;
+    margin-bottom: 4px;
+    padding: 6px 10px;
+    white-space: normal;
+    font-size: 12px;
+    -unity-text-align: middle-left;
+}

@@ -1,0 +1,23 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../../FishMMO-Theme.uss" />
+    <Style src="UIAbilityCraft.uss" />
+    <ui:VisualElement name="craft-root" class="craft-root">
+        <ui:VisualElement name="craft-panel" class="fish-panel craft-panel">
+            <ui:VisualElement name="craft-header" class="craft-header">
+                <ui:Label text="Ability Crafting" class="fish-label craft-title" />
+                <ui:Button name="craft-close-btn" text="X" class="fish-button craft-close-btn" />
+            </ui:VisualElement>
+            <ui:VisualElement name="craft-body" class="craft-body">
+                <ui:VisualElement name="craft-entries" class="craft-entries">
+                    <ui:Button name="craft-main-entry" class="fish-slot craft-main-entry" />
+                    <ui:VisualElement name="craft-event-list" class="craft-event-list" />
+                </ui:VisualElement>
+                <ui:VisualElement name="craft-info" class="craft-info">
+                    <ui:Label name="craft-description" text="" class="fish-label craft-description" />
+                    <ui:Label name="craft-cost" text="Cost: " class="fish-label craft-cost" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Button name="craft-confirm-btn" text="Craft" class="fish-button craft-confirm-btn" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

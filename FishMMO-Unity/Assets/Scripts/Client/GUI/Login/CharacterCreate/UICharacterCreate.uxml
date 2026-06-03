@@ -1,0 +1,27 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UICharacterCreate.uss" />
+    <ui:VisualElement name="create-root" class="create-screen">
+        <ui:VisualElement name="create-panel" class="fish-panel create-panel">
+            <ui:VisualElement name="create-header" class="fish-panel__header create-header">
+                <ui:Label text="CREATE A CHARACTER" class="fish-panel__title" />
+            </ui:VisualElement>
+            <ui:VisualElement name="create-body" class="create-body">
+                <ui:Label text="Character Name" class="create-field-label" />
+                <ui:TextField name="create-name" class="create-input" />
+                <ui:Label text="Race" class="create-field-label" />
+                <ui:DropdownField name="create-race" class="create-dropdown" />
+                <ui:Label text="Model" class="create-field-label" />
+                <ui:DropdownField name="create-model" class="create-dropdown" />
+                <ui:Label text="Starting Location" class="create-field-label" />
+                <ui:DropdownField name="create-location" class="create-dropdown" />
+                <ui:Label name="create-result" text="" class="create-result" />
+                <ui:VisualElement name="create-buttons" class="create-buttons">
+                    <ui:Button name="create-submit-btn" text="Create" class="fish-tab create-btn create-btn--primary" />
+                    <ui:Button name="create-quit-login-btn" text="Back" class="fish-tab create-btn" />
+                    <ui:Button name="create-quit-btn" text="Quit" class="fish-tab create-btn" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

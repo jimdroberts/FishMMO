@@ -1,0 +1,84 @@
+/*
+    UIFactions.uss
+    Layout for the factions / reputation panel. Colours come from FishMMO-Theme.uss.
+    Standing colours are applied inline from C#.
+*/
+
+.faction-panel {
+    width: 360px;
+    height: 420px;
+}
+
+.faction-header {
+    height: 28px;
+    padding-left: 8px;
+    justify-content: center;
+}
+
+.faction-scroll {
+    flex-grow: 1;
+    padding: 6px;
+}
+
+.faction-list {
+    flex-direction: column;
+}
+
+.faction-row {
+    flex-direction: row;
+    align-items: flex-start;
+    padding: 6px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    background-color: rgb(20, 22, 24);
+}
+
+.faction-row__icon {
+    width: 40px;
+    height: 40px;
+    margin-right: 8px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.faction-row__column {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.faction-row__name {
+    font-size: 13px;
+    -unity-font-style: bold;
+}
+
+.faction-row__desc {
+    white-space: normal;
+    font-size: 10px;
+    color: rgb(138, 147, 162);
+    margin-bottom: 4px;
+}
+
+.faction-row__bar {
+    height: 14px;
+    position: relative;
+}
+
+.faction-row__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-radius: 3px;
+}
+
+.faction-row__value {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    font-size: 9px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(255, 255, 255);
+}

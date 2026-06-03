@@ -16,6 +16,7 @@
   <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="FishNet.Demos.csproj" />
   <Project Path="FishMMO.Client.Input.Generated.csproj" />
+  <Project Path="QuickOutline.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />

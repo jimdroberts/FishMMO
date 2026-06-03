@@ -1,0 +1,13 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UINPCDialogue.uss" />
+    <ui:VisualElement name="dialogue-root" class="fish-panel dialogue-panel">
+        <ui:VisualElement name="dialogue-header" class="fish-panel__header dialogue-header">
+            <ui:Label name="dialogue-speaker" text="Speaker" class="fish-panel__title dialogue-speaker" />
+        </ui:VisualElement>
+        <ui:ScrollView name="dialogue-text-scroll" class="fish-scroll dialogue-text-scroll">
+            <ui:Label name="dialogue-text" text="" class="dialogue-text" />
+        </ui:ScrollView>
+        <ui:VisualElement name="dialogue-choices" class="dialogue-choices" />
+    </ui:VisualElement>
+</ui:UXML>
