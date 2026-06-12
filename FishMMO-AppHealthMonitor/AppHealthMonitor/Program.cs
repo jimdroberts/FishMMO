@@ -17,33 +17,46 @@ namespace AppHealthMonitor
 		private const string LoggingConfigName = "logging.json";
 
 		/// <summary>
-		/// Attempts to register a SIGTERM handler on supported Unix platforms.
+		/// Registers POSIX signal handlers for both SIGTERM and SIGINT on supported Unix
+		/// platforms. Both are treated identically — graceful daemon shutdown.
+		/// systemd uses SIGTERM by default (KillSignal=) but operators may send SIGINT
+		/// (Ctrl+C via systemctl, or when KillSignal= is overridden). Handling both
+		/// ensures clean shutdown regardless of which signal arrives.
 		/// Returns null on unsupported platforms so daemon startup is never blocked.
 		/// </summary>
 		/// <param name="orchestrator">The orchestrator to signal for daemon shutdown.</param>
-		/// <returns>A signal registration when supported; otherwise, null.</returns>
-		private static PosixSignalRegistration? TryRegisterSigTermHandler(DaemonOrchestrator orchestrator)
+		/// <returns>A list of signal registrations when supported; otherwise, null.</returns>
+		private static List<PosixSignalRegistration>? TryRegisterPosixSignalHandlers(DaemonOrchestrator orchestrator)
 		{
 			if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
 			{
 				return null;
 			}
 
+			var registrations = new List<PosixSignalRegistration>();
 			try
 			{
-				return PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+				Action<PosixSignalContext> handler = context =>
 				{
 					if (!orchestrator.IsDaemonShutdownRequested)
 					{
-						Log.Info("Daemon", "SIGTERM received. Signalling daemon shutdown...");
+						Log.Info("Daemon", $"{context.Signal} received. Signalling daemon shutdown...");
 						orchestrator.Shutdown();
 					}
 					context.Cancel = true;
-				});
+				};
+
+				registrations.Add(PosixSignalRegistration.Create(PosixSignal.SIGTERM, handler));
+				registrations.Add(PosixSignalRegistration.Create(PosixSignal.SIGINT, handler));
+				return registrations;
 			}
 			catch (PlatformNotSupportedException)
 			{
-				Log.Warning("Daemon", "SIGTERM handler is not supported on this platform/runtime. Continuing without SIGTERM interception.");
+				foreach (var reg in registrations)
+				{
+					reg.Dispose();
+				}
+				Log.Warning("Daemon", "POSIX signal handlers are not supported on this platform/runtime. Continuing without signal interception.");
 				return null;
 			}
 		}
@@ -142,10 +155,11 @@ namespace AppHealthMonitor
 					};
 					Console.CancelKeyPress += cancelHandler;
 
-					// SIGTERM interception is registered only on supported Unix platforms.
+					// POSIX signal interception (SIGTERM + SIGINT) registered only on supported Unix platforms.
 					// On those platforms, Cancel=true suppresses Environment.Exit so await using can unwind.
-					using var sigTermRegistration = TryRegisterSigTermHandler(orchestrator);
-
+					// Both signals trigger the same graceful shutdown path — systemd uses SIGTERM by
+					// default, but SIGINT can arrive via systemctl or when KillSignal= is overridden.
+					var sigRegistrations = TryRegisterPosixSignalHandlers(orchestrator);
 					try
 					{
 						var commandHandler = new CommandHandler(orchestrator, orchestrator.Headless);
@@ -203,6 +217,13 @@ namespace AppHealthMonitor
 					finally
 					{
 						Console.CancelKeyPress -= cancelHandler;
+						if (sigRegistrations != null)
+						{
+							foreach (var reg in sigRegistrations)
+							{
+								reg.Dispose();
+							}
+						}
 					}
 				}
 			}

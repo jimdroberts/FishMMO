@@ -10,6 +10,8 @@ namespace FishMMO.Client
 	/// <summary>
 	/// Starts the standalone updater executable and polls for its exit on the main thread,
 	/// reporting completion/failure through callbacks safely usable with Unity APIs.
+	/// Includes a hard timeout to prevent the launcher from hanging indefinitely
+	/// if the updater process deadlocks or hangs on a corrupted patch file.
 	/// </summary>
 	public class SystemUpdaterLauncher : IUpdaterLauncher
 	{
@@ -17,6 +19,14 @@ namespace FishMMO.Client
 		/// Interval in seconds between process-exit polls.
 		/// </summary>
 		private const float PollIntervalSeconds = 0.5f;
+
+		/// <summary>
+		/// Maximum total time the launcher will wait for the updater process to exit.
+		/// Patches are typically small delta files; even a large patch plus rollback
+		/// should complete well within this window. If the updater hasn't exited by
+		/// this deadline, the launcher force-kills it and reports failure.
+		/// </summary>
+		private const float UpdaterTimeoutSeconds = 300f;
 
 		/// <summary>
 		/// Launches the updater executable and polls for process exit via a coroutine,
@@ -77,11 +87,34 @@ namespace FishMMO.Client
 				yield break;
 			}
 
-			// Poll for process exit on the main thread
+			// Poll for process exit on the main thread with a hard timeout.
+			// Without this timeout, a hung updater process (e.g. deadlocked on a
+			// corrupted patch or a filesystem stall) would lock the launcher UI
+			// forever with no path forward for the player.
 			WaitForSeconds wait = new WaitForSeconds(PollIntervalSeconds);
-			while (!process.HasExited)
+			float elapsed = 0f;
+			while (!process.HasExited && elapsed < UpdaterTimeoutSeconds)
 			{
 				yield return wait;
+				elapsed += PollIntervalSeconds;
+			}
+
+			if (!process.HasExited)
+			{
+				Log.Critical("Updater", $"Updater process timed out after {UpdaterTimeoutSeconds}s. Force-killing.");
+				try
+				{
+					process.Kill();
+					// Give the process a brief window to terminate.
+					process.WaitForExit(5000);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("Updater", $"Error force-killing timed-out updater: {ex.Message}");
+				}
+				process.Dispose();
+				onError?.Invoke($"Updater process timed out after {UpdaterTimeoutSeconds} seconds. The patch may be corrupted or the system is under heavy load.");
+				yield break;
 			}
 
 			int exitCode = process.ExitCode;

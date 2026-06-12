@@ -42,7 +42,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public Slider ProgressSlider;
 		/// <summary>
-		/// The progress text UI element.
+		/// The progress text UI element. Also used as a status/error message display
+		/// so the player can see what went wrong, not just the button label.
 		/// </summary>
 		public TMP_Text ProgressText;
 		/// <summary>
@@ -65,6 +66,13 @@ namespace FishMMO.Client
 		/// The handler for clickable links in the HTML text.
 		/// </summary>
 		public TMPro_TextLinkHandler HtmlTextLinkHandler;
+		/// <summary>
+		/// Optional status text element for displaying error/status messages to the user.
+		/// When assigned, the launcher writes human-readable feedback here so players
+		/// can see what went wrong without needing access to the log file.
+		/// When null, the ProgressText element is used as a fallback.
+		/// </summary>
+		public TMP_Text StatusText;
 		#endregion
 
 		#region CONFIGURATION
@@ -225,9 +233,7 @@ namespace FishMMO.Client
 				},
 				onError: (error) =>
 				{
-					Log.Error("ClientLauncher", error);
-					HtmlText.text = $"<color=red>{error}</color>";
-					SetLauncherState(LauncherState.ConnectionFailed);
+					SetLauncherState(LauncherState.ConnectionFailed, error);
 				}));
 
 			// Construct the full path to the updater executable
@@ -259,11 +265,57 @@ namespace FishMMO.Client
 
 		#region UI STATE MANAGEMENT
 		/// <summary>
+		/// Writes a human-readable status or error message to the player-facing UI.
+		/// Prefers <see cref="StatusText"/> when assigned; falls back to
+		/// <see cref="ProgressText"/> so messages are visible even without a
+		/// dedicated status element. Also logs the message.
+		/// </summary>
+		private void SetStatus(string message, LogLevel level = LogLevel.Info)
+		{
+			// Always log so operators can correlate.
+			switch (level)
+			{
+				case LogLevel.Warning:
+					Log.Warning("ClientLauncher", message);
+					break;
+				case LogLevel.Error:
+				case LogLevel.Critical:
+					Log.Error("ClientLauncher", message);
+					break;
+				default:
+					Log.Info("ClientLauncher", message);
+					break;
+			}
+
+			// Player-facing display.
+			TMP_Text target = StatusText != null ? StatusText : ProgressText;
+			if (target != null)
+			{
+				target.text = message;
+				// Only show the progress bar group for actual progress updates.
+				// Status messages use ProgressText as a convenience label.
+			}
+		}
+
+		/// <summary>
+		/// Clears the status text so stale error messages don't linger.
+		/// </summary>
+		private void ClearStatus()
+		{
+			TMP_Text target = StatusText != null ? StatusText : ProgressText;
+			if (target != null)
+			{
+				target.text = string.Empty;
+			}
+		}
+
+		/// <summary>
 		/// Sets the current launcher state and updates the UI accordingly.
 		/// Centralizes all UI updates related to the launcher's operational state.
 		/// </summary>
 		/// <param name="newState">The new state for the launcher.</param>
-		private void SetLauncherState(LauncherState newState)
+		/// <param name="errorDetail">Optional human-readable error detail displayed to the player.</param>
+		private void SetLauncherState(LauncherState newState, string errorDetail = null)
 		{
 			currentLauncherState = newState;
 			PlayButton.onClick.RemoveAllListeners(); // Always clear to ensure only one listener.
@@ -325,11 +377,18 @@ namespace FishMMO.Client
 				case LauncherState.LaunchFailed:
 					buttonText = UIText.StatusLaunchFailed;
 					isButtonInteractable = true;
-					buttonAction = PlayButton_Launch;
+					// Allow the player to go back to the version-check/connect flow
+					// instead of retrying the same failing launch path. A failing
+					// scene load is often recoverable by re-downloading the patch.
+					buttonAction = PlayButton_Connect;
 					break;
 				case LauncherState.VersionError:
 					buttonText = UIText.StatusVersionError;
-					isButtonInteractable = false; // Version error is often unrecoverable without manual intervention.
+					isButtonInteractable = true;
+					// Previously unrecoverable — now allows retry. Version parse
+					// failures can be transient (e.g. malformed version.txt after
+					// a partial patch). Let the player retry the version check.
+					buttonAction = PlayButton_Connect;
 					break;
 				default: // Fallback
 					buttonText = UIText.ButtonConnect;
@@ -342,10 +401,33 @@ namespace FishMMO.Client
 			PlayButton.interactable = isButtonInteractable;
 			ProgressBarGroup.SetActive(progressBarVisible);
 
+			// Display error/status detail to the player when available.
+			if (!string.IsNullOrEmpty(errorDetail))
+			{
+				SetStatus(errorDetail, level: IsErrorState(newState) ? LogLevel.Error : LogLevel.Info);
+			}
+			else if (!IsErrorState(newState))
+			{
+				ClearStatus();
+			}
+
 			if (buttonAction != null)
 			{
 				PlayButton.onClick.AddListener(() => buttonAction.Invoke());
 			}
+		}
+
+		/// <summary>
+		/// Returns true for launcher states that represent a failure the player needs to act on.
+		/// </summary>
+		private static bool IsErrorState(LauncherState state)
+		{
+			return state == LauncherState.ConnectionFailed ||
+			       state == LauncherState.VersionCheckFailed ||
+			       state == LauncherState.PatchDownloadFailed ||
+			       state == LauncherState.UpdaterFailed ||
+			       state == LauncherState.LaunchFailed ||
+			       state == LauncherState.VersionError;
 		}
 		#endregion
 
@@ -406,8 +488,8 @@ namespace FishMMO.Client
 			}
 			catch (UnityException ex)
 			{
-				Log.Error("ClientLauncher", $"Failed to load preload scenes: {ex.Message}");
-				SetLauncherState(LauncherState.LaunchFailed);
+				SetLauncherState(LauncherState.LaunchFailed,
+					$"Failed to load game scene: {ex.Message}. Check that Addressable bundles are built.");
 			}
 		}
 
@@ -451,7 +533,7 @@ namespace FishMMO.Client
 				expectedPatchSha256,
 				onComplete: () =>
 				{
-					SetLauncherState(LauncherState.ApplyingPatch);
+					SetLauncherState(LauncherState.ApplyingPatch, "Applying patch to game files. This may take a few minutes.");
 					// Delegate updater launch to updater launcher service
 					StartCoroutine(updaterLauncher.LaunchUpdater(
 						updaterPath,
@@ -460,14 +542,12 @@ namespace FishMMO.Client
 						onComplete: () => Quit(), // Updater completed, quit launcher
 						onError: (error) =>
 						{
-							Log.Error("ClientLauncher", error);
-							SetLauncherState(LauncherState.UpdaterFailed);
+							SetLauncherState(LauncherState.UpdaterFailed, error);
 						}));
 				},
 				onError: (error) =>
 				{
-					Log.Error("ClientLauncher", error);
-					SetLauncherState(LauncherState.PatchDownloadFailed);
+					SetLauncherState(LauncherState.PatchDownloadFailed, error);
 
 					// Attempt to clean up any partially downloaded file if an error occurs.
 					if (File.Exists(tempFilePath))
@@ -494,8 +574,7 @@ namespace FishMMO.Client
 			List<string> candidates = ApiHostResolver.GetCandidates();
 			if (candidates.Count == 0)
 			{
-				Log.Error("ClientLauncher", "No APIHost candidates configured.");
-				SetLauncherState(LauncherState.VersionCheckFailed);
+				SetLauncherState(LauncherState.VersionCheckFailed, "No API host configured. Check Constants.cs Configuration.APIHost.");
 				yield break;
 			}
 
@@ -537,8 +616,8 @@ namespace FishMMO.Client
 
 			if (!succeeded)
 			{
-				Log.Error("ClientLauncher", lastError ?? "All APIHost candidates failed.");
-				SetLauncherState(LauncherState.VersionCheckFailed);
+				SetLauncherState(LauncherState.VersionCheckFailed,
+					lastError ?? "All API hosts failed. Check your internet connection and firewall.");
 				yield break;
 			}
 
@@ -554,8 +633,8 @@ namespace FishMMO.Client
 			}
 			catch (ArgumentException ex)
 			{
-				Log.Error("ClientLauncher", string.Format(UIText.ErrorParsingVersion, MainBootstrapSystem.GameVersion) + $" Exception: {ex.Message}");
-				SetLauncherState(LauncherState.VersionError);
+				SetLauncherState(LauncherState.VersionError,
+					$"Client version '{MainBootstrapSystem.GameVersion}' is not valid. Reinstall or delete version.txt.");
 				yield break;
 			}
 
