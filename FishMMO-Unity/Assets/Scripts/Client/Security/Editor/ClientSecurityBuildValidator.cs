@@ -18,6 +18,13 @@ namespace FishMMO.Client.Security.Editor
 		/// <inheritdoc/>
 		public void OnPreprocessBuild(BuildReport report)
 		{
+			// Only validate client (player) builds. Server builds and
+			// Addressables content builds do not ship TLS client pins.
+			if (EditorUserBuildSettings.standaloneBuildSubtarget == StandaloneBuildSubtarget.Server)
+			{
+				return;
+			}
+
 			bool isDevelopmentBuild = (report.summary.options & BuildOptions.Development) != 0;
 
 			bool hasPins = ClientSecurityBootstrap.DefaultPinCount > 0 || StreamingAssetsConfigHasPins();

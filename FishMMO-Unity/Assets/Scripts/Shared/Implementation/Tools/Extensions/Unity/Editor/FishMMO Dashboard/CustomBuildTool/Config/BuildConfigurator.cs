@@ -152,6 +152,20 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 				PlayerSettings.WebGL.dataCaching = true;
 			}
 
+			// IL2CPP cross-compilation from Linux → Windows is not supported.
+			// If the current scripting backend is IL2CPP and the target platform
+			// cannot be built with IL2CPP on this editor, force Mono to keep the
+			// SBP CanBuildPlayer check happy.
+			if (buildTarget != BuildTarget.WebGL && buildSubtarget != StandaloneBuildSubtarget.Server)
+			{
+				var currentBackend = PlayerSettings.GetScriptingBackend(currentNamedBuildTargetGroup);
+				if (currentBackend == ScriptingImplementation.IL2CPP && !CanIL2CPPCrossCompile(buildTarget))
+				{
+					PlayerSettings.SetScriptingBackend(currentNamedBuildTargetGroup, ScriptingImplementation.Mono2x);
+					Log.Warning("BuildConfigurator", $"IL2CPP is not available for {buildTarget} on this editor platform. Falling back to Mono.");
+				}
+			}
+
 			// Apply the dedicated-server scripting backend selected in the FishMMO Dashboard
 			// ("Dedicated Server: Use IL2CPP", persisted as the EditorPref
 			// BuildEnvironmentOptions.PREF_SERVER_USE_IL2CPP). The Server subtarget has its
@@ -186,6 +200,25 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			PlayerSettings.WebGL.dataCaching = originalDataCaching;
 
 			Log.Debug("BuildConfigurator", "Build target restored successfully.");
+		}
+
+		/// <summary>
+		/// Returns true if IL2CPP cross-compilation from the current editor platform
+		/// to the given build target is expected to work. On Linux, IL2CPP cannot
+		/// cross-compile to Windows; on Windows, IL2CPP cannot cross-compile to Linux.
+		/// </summary>
+		private static bool CanIL2CPPCrossCompile(BuildTarget target)
+		{
+#if UNITY_EDITOR_LINUX
+			// Linux → Windows IL2CPP cross-compilation is not supported
+			if (target == BuildTarget.StandaloneWindows64)
+				return false;
+#elif UNITY_EDITOR_WIN
+			// Windows → Linux IL2CPP cross-compilation is not supported
+			if (target == BuildTarget.StandaloneLinux64)
+				return false;
+#endif
+			return true;
 		}
 	}
 }

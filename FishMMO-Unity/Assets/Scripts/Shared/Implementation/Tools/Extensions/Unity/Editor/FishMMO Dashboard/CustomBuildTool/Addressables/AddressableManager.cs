@@ -4,8 +4,10 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Build;
+using UnityEditor.Build;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.CustomBuildTool.Core;
 
@@ -89,21 +91,81 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 			// Clean previous Addressables build safely
 			try
 			{
+				Log.Info("Addressables", "Before CleanPlayerContent");
 				AddressableAssetSettings.CleanPlayerContent();
-				Log.Info("Addressables", "Cleaned previous Addressables player content.");
+				Log.Info("Addressables", "After CleanPlayerContent - cleaned previous Addressables player content.");
 			}
 			catch (Exception ex)
 			{
-				Log.Warning("Addressables", $"Error during cleanup (non-fatal): {ex.Message}");
+				Log.Warning("Addressables", $"Error during CleanPlayerContent (non-fatal): {ex.Message}");
 			}
 
 			// Clean stale remote bundles from ServerData so switched-to-local groups don't linger
+			Log.Info("Addressables", "Before CleanServerDataDirectory");
 			CleanServerDataDirectory(originalSettings);
+			Log.Info("Addressables", "After CleanServerDataDirectory");
 
 			// Start the Addressables build process
 			try
 			{
-				AddressableAssetSettings.BuildPlayerContent(out AddressablesPlayerBuildResult result);
+				Log.Info("Addressables", "Before BuildPlayerContent");
+
+				Debug.Log($"Active Target: {EditorUserBuildSettings.activeBuildTarget}");
+				Debug.Log($"Selected Build Target Group: {EditorUserBuildSettings.selectedBuildTargetGroup}");
+
+				var settings = AddressableAssetSettingsDefaultObject.Settings;
+				Debug.Log($"Active Player Data Builder Index: {settings.ActivePlayerDataBuilderIndex}");
+
+				if (settings.ActivePlayerDataBuilderIndex >= 0 &&
+					settings.ActivePlayerDataBuilderIndex < settings.DataBuilders.Count)
+				{
+					var builder = settings.DataBuilders[settings.ActivePlayerDataBuilderIndex];
+					Debug.Log($"Builder Type: {builder?.GetType().FullName}");
+					Debug.Log($"Builder Name: {builder?.name}");
+				}
+				else
+				{
+					Debug.LogWarning($"Builder index out of range! DataBuilders count: {settings.DataBuilders.Count}");
+				}
+
+				// Dump Build Settings scenes before the build
+				Debug.Log($"Scenes In Build: {EditorBuildSettings.scenes.Length}");
+
+				foreach (var scene in EditorBuildSettings.scenes)
+				{
+					Debug.Log($"Scene: {scene.path} Enabled:{scene.enabled}");
+				}
+
+				// Diagnose why CanBuildPlayer might return false
+				var targetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
+				var target = EditorUserBuildSettings.activeBuildTarget;
+				Debug.Log($"IsBuildTargetSupported({targetGroup}, {target}): {BuildPipeline.IsBuildTargetSupported(targetGroup, target)}");
+				Debug.Log($"EditorApplication.isCompiling: {EditorApplication.isCompiling}");
+				var namedTarget = NamedBuildTarget.FromBuildTargetGroup(targetGroup);
+				Debug.Log($"ScriptingBackend for {target}: {PlayerSettings.GetScriptingBackend(namedTarget)}");
+
+				AddressablesPlayerBuildResult result;
+				try
+				{
+					AddressableAssetSettings.BuildPlayerContent(out result);
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError($"EXCEPTION TYPE: {ex.GetType()}");
+					Debug.LogError($"EXCEPTION: {ex}");
+
+					Exception inner = ex.InnerException;
+					while (inner != null)
+					{
+						Debug.LogError($"INNER: {inner}");
+						inner = inner.InnerException;
+					}
+
+					throw;
+				}
+				Log.Info("Addressables", "After BuildPlayerContent");
+
+				Debug.Log($"Result Error: {result.Error}");
 
 				if (!string.IsNullOrEmpty(result.Error))
 				{
@@ -135,6 +197,13 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 			}
 			catch (Exception ex)
 			{
+				Debug.LogException(ex);
+
+				if (ex.InnerException != null)
+				{
+					Debug.LogException(ex.InnerException);
+				}
+
 				Log.Error("Addressables", $"Error during Addressables build: {ex.Message}");
 			}
 

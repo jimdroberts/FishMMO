@@ -15,11 +15,26 @@ MonoBehaviour:
   m_GroupName: Client_Dynamic
   m_GUID: e46cfb3a1a3f84c86ac0d2aeb16c01a7
   m_SerializeEntries:
+  - m_GUID: 17e4a6b403a0641c59c0268e4a5495ba
+    m_Address: UnityDefaultRuntimeTheme
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2f684d4298cafc81b81f69b8ff9d1ef6
+    m_Address: UIEquipment
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 422ac1a06602ba841bd45b8b1c616098
     m_Address: Fire
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e281eae8e9486e7f8ceca4fceac4c2c
+    m_Address: FishMMO-Theme
+    m_ReadOnly: 0
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6bed0c614c46964408373a65aba83a0e
     m_Address: TestBuffFX
@@ -33,11 +48,21 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7e1228fea737c4a8193d866b24ac727d
+    m_Address: UIEquipment
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b3763d5e92357f74c8c29b08f426493f
     m_Address: TestBuffFX 3
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b4f97f2eb547b52149cd75073347f1af
+    m_Address: PanelSettings
+    m_ReadOnly: 0
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cb25fb39d2ec2b646b6b18059ae87bce
     m_Address: Explosion
