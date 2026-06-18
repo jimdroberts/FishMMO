@@ -1,6 +1,7 @@
 # FishMMO-DB
 
-`FishMMO
+`FishMMO-DB` is the shared data-access library for the FishMMO project.
+
 This document describes the project layout, the supported platforms, and — at length — how to wire environment configuration (`appsettings.json`, `FISHMMO_ENVIRONMENT`, OS-specific environment variable persistence) for development, CI, and production deployments.
 
 ## Table of Contents
@@ -30,7 +31,8 @@ This document describes the project layout, the supported platforms, and — at 
 
 | Backing Store | Notes |
 |---|---|
-| PostgreSQL | 14+ recommended. Primary persistence (Npgsql / EF Core). Used for cross| PgBouncer | Recommended in front of PostgreSQL for transaction pooling. |
+| PostgreSQL | 14+ recommended. Primary persistence (Npgsql / EF Core). Used for cross-server data persistence. |
+| PgBouncer | Recommended in front of PostgreSQL for transaction pooling. |
 
 ## Architecture
 
@@ -48,7 +50,8 @@ FishMMO-DB/
 │   ├── EntityConfigurations/     Fluent EF Core configurations
 │   ├── Services/                 Per-domain service implementations
 │   │   └── Interfaces/             IAccountService, ICharacterService, …
-│   └── Monitoring/               Health / Metrics / Diagnostics (see Monitoring/README.cs  Unity MonoBehaviour wrapper (see Unity/README.md)
+│   └── Monitoring/               Health / Metrics / Diagnostics (see Monitoring/README.md)
+├── Unity/                          Unity MonoBehaviour wrapper (see Unity/README.md)
 ├── Database.cs                 High-level orchestrator (IDatabase implementation)
 ├── IDatabase.cs                Public contract consumed by servers / services
 ├── IDatabaseServiceRegistry.cs Per-domain service registry contract
@@ -69,7 +72,8 @@ FishMMO-DB/
 | `NpgsqlDbContext` / `NpgsqlDbContextFactory` | EF Core context + factory with connection interceptors driving `ConnectionPoolMetrics`. |
 | `NpgsqlServiceRegistry` | Wires `IAccountService`, `ICharacterService`, `IChatService`, `ILoginServerService`, etc. |
 | `NpgsqlDbConfiguration` | Builds the connection string from `IConfiguration` (`ConnectionStrings:NpgsqlConnection` or `Npgsql:*`). |
-| `AppSettings` | Strongly| `DatabaseResult<T>` / `DatabaseErrorCodes` | Uniform error envelope returned from every service. |
+| `AppSettings` | Strongly-typed `appsettings.json` binder (Npgsql). |
+| `DatabaseResult<T>` / `DatabaseErrorCodes` | Uniform error envelope returned from every service. |
 | `Monitoring/` (under Npgsql) | Health probes, pool metrics, query performance diagnostics. See [`Npgsql/Monitoring/README.md`](./Npgsql/Monitoring/README.md). |
 | `Unity/DatabaseHealthService` | MonoBehaviour that surfaces all of the above to Unity headless servers. See [`Unity/README.md`](./Unity/README.md). |
 
@@ -439,11 +443,6 @@ Protecting `appsettings.json` (and any environment-specific overrides) is essent
 
 ---
 
-## Notes
-
-- Prefer `FISHMMO_ENVIRONMENT` for environment configuration.
-- Keep secrets out of source control; use environment variables or secret stores.
-
 ## Flow Diagram
 
 ```mermaid
@@ -457,7 +456,10 @@ flowchart LR
     Factory --> Reg[NpgsqlServiceRegistry]
     Reg --> Svcs[IAccountService<br/>ICharacterService<br/>IChatService<br/>ILoginServerService<br/>...]
     Svcs -->|DatabaseResult&lt;T&gt;| Game[Game / Web logic]
-
-    Cfg     RCfg     RFact     RFact --> Game
 ```
+
+## Notes
+
+- Prefer `FISHMMO_ENVIRONMENT` for environment configuration.
+- Keep secrets out of source control; use environment variables or secret stores.
 - In production, set `enableLogging: false` to avoid sensitive data logging.
