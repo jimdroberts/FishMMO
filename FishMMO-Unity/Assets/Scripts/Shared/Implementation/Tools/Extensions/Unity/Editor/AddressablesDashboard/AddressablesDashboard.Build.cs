@@ -79,9 +79,11 @@ namespace FishMMO.Shared
 
 			SetStatus($"Building addressables ({buildTypeStr} / {osStr})…");
 
-			BuildTool.BuildAddressablesWithEnvironmentOptions();
-
-			SetStatus($"Addressables build complete ({buildTypeStr} / {osStr}).");
+			EditorApplication.delayCall += () =>
+			{
+				BuildTool.BuildAddressablesWithEnvironmentOptions();
+				SetStatus($"Addressables build complete ({buildTypeStr} / {osStr}).");
+			};
 		}
 	}
 }

@@ -7,7 +7,6 @@ using UnityEditor.AddressableAssets.Build;
 using UnityEditor.Build;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
-using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.CustomBuildTool.Core;
 
@@ -110,39 +109,39 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 			{
 				Log.Info("Addressables", "Before BuildPlayerContent");
 
-				Debug.Log($"Active Target: {EditorUserBuildSettings.activeBuildTarget}");
-				Debug.Log($"Selected Build Target Group: {EditorUserBuildSettings.selectedBuildTargetGroup}");
+				Log.Debug("Addressables", $"Active Target: {EditorUserBuildSettings.activeBuildTarget}");
+				Log.Debug("Addressables", $"Selected Build Target Group: {EditorUserBuildSettings.selectedBuildTargetGroup}");
 
 				var settings = AddressableAssetSettingsDefaultObject.Settings;
-				Debug.Log($"Active Player Data Builder Index: {settings.ActivePlayerDataBuilderIndex}");
+				Log.Debug("Addressables", $"Active Player Data Builder Index: {settings.ActivePlayerDataBuilderIndex}");
 
 				if (settings.ActivePlayerDataBuilderIndex >= 0 &&
 					settings.ActivePlayerDataBuilderIndex < settings.DataBuilders.Count)
 				{
 					var builder = settings.DataBuilders[settings.ActivePlayerDataBuilderIndex];
-					Debug.Log($"Builder Type: {builder?.GetType().FullName}");
-					Debug.Log($"Builder Name: {builder?.name}");
+					Log.Debug("Addressables", $"Builder Type: {builder?.GetType().FullName}");
+					Log.Debug("Addressables", $"Builder Name: {builder?.name}");
 				}
 				else
 				{
-					Debug.LogWarning($"Builder index out of range! DataBuilders count: {settings.DataBuilders.Count}");
+					Log.Warning("Addressables", $"Builder index out of range! DataBuilders count: {settings.DataBuilders.Count}");
 				}
 
 				// Dump Build Settings scenes before the build
-				Debug.Log($"Scenes In Build: {EditorBuildSettings.scenes.Length}");
+				Log.Debug("Addressables", $"Scenes In Build: {EditorBuildSettings.scenes.Length}");
 
 				foreach (var scene in EditorBuildSettings.scenes)
 				{
-					Debug.Log($"Scene: {scene.path} Enabled:{scene.enabled}");
+					Log.Debug("Addressables", $"Scene: {scene.path} Enabled:{scene.enabled}");
 				}
 
 				// Diagnose why CanBuildPlayer might return false
 				var targetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
 				var target = EditorUserBuildSettings.activeBuildTarget;
-				Debug.Log($"IsBuildTargetSupported({targetGroup}, {target}): {BuildPipeline.IsBuildTargetSupported(targetGroup, target)}");
-				Debug.Log($"EditorApplication.isCompiling: {EditorApplication.isCompiling}");
+				Log.Debug("Addressables", $"IsBuildTargetSupported({targetGroup}, {target}): {BuildPipeline.IsBuildTargetSupported(targetGroup, target)}");
+				Log.Debug("Addressables", $"EditorApplication.isCompiling: {EditorApplication.isCompiling}");
 				var namedTarget = NamedBuildTarget.FromBuildTargetGroup(targetGroup);
-				Debug.Log($"ScriptingBackend for {target}: {PlayerSettings.GetScriptingBackend(namedTarget)}");
+				Log.Debug("Addressables", $"ScriptingBackend for {target}: {PlayerSettings.GetScriptingBackend(namedTarget)}");
 
 				AddressablesPlayerBuildResult result;
 				try
@@ -151,13 +150,13 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 				}
 				catch (Exception ex)
 				{
-					Debug.LogError($"EXCEPTION TYPE: {ex.GetType()}");
-					Debug.LogError($"EXCEPTION: {ex}");
+					Log.Error("Addressables", $"EXCEPTION TYPE: {ex.GetType()}", ex);
+					Log.Error("Addressables", $"EXCEPTION: {ex}");
 
 					Exception inner = ex.InnerException;
 					while (inner != null)
 					{
-						Debug.LogError($"INNER: {inner}");
+						Log.Error("Addressables", $"INNER: {inner}");
 						inner = inner.InnerException;
 					}
 
@@ -165,7 +164,7 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 				}
 				Log.Info("Addressables", "After BuildPlayerContent");
 
-				Debug.Log($"Result Error: {result.Error}");
+				Log.Info("Addressables", $"Result Error: {result.Error}");
 
 				if (!string.IsNullOrEmpty(result.Error))
 				{
@@ -197,14 +196,12 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 			}
 			catch (Exception ex)
 			{
-				Debug.LogException(ex);
+				Log.Error("Addressables", $"Error during Addressables build: {ex.Message}", ex);
 
 				if (ex.InnerException != null)
 				{
-					Debug.LogException(ex.InnerException);
+					Log.Error("Addressables", $"Inner exception: {ex.InnerException.Message}", ex.InnerException);
 				}
-
-				Log.Error("Addressables", $"Error during Addressables build: {ex.Message}");
 			}
 
 			AssetDatabase.SaveAssets();

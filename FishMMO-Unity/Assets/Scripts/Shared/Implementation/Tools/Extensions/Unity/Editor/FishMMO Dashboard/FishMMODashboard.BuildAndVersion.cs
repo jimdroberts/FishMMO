@@ -176,8 +176,11 @@ namespace FishMMO.Shared
 				}
 
 				SetStatus("Building Addressables...");
-				BuildTool.BuildAddressablesWithEnvironmentOptions();
-				SetStatus("Addressables build complete.");
+				EditorApplication.delayCall += () =>
+				{
+					BuildTool.BuildAddressablesWithEnvironmentOptions();
+					SetStatus("Addressables build complete.");
+				};
 			});
 			buildAddressablesButton.text = "Build Addressables";
 			buildAddressablesButton.style.height = 28;
@@ -209,8 +212,11 @@ namespace FishMMO.Shared
 				}
 
 				SetStatus("Building Game...");
-				BuildTool.BuildGameWithEnvironmentOptions();
-				SetStatus("Game build complete.");
+				EditorApplication.delayCall += () =>
+				{
+					BuildTool.BuildGameWithEnvironmentOptions();
+					SetStatus("Game build complete.");
+				};
 			});
 			buildGameButton.text = "Build Game";
 			buildGameButton.style.height = 32;
