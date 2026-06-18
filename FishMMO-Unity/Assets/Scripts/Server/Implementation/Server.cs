@@ -187,7 +187,7 @@ namespace FishMMO.Server.Implementation
 			IConfiguration dbConfig = DatabaseConfigurationHelper.BuildDesignTimeConfiguration();
 
 			// Initialize Database with the configuration object
-			// The Database class will now pull Npgsql and Redis settings directly from dbConfig
+			// The Database class will now pull Npgsql settings directly from dbConfig
 			Log.Debug("Server", $"Initializing Database with Environment: {DatabaseConfigurationHelper.ResolveEnvironmentName()}");
 			Database = new Database.Database(dbConfig);
 

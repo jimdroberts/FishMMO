@@ -6,7 +6,7 @@ namespace FishMMO.Database
 	/// Defines a contract for database service registries.
 	/// Enables automatic service discovery, registration, and retrieval for database services.
 	/// Follows Interface Segregation Principle and Open/Closed Principle for extensibility.
-	/// Can be implemented for different database types (Npgsql, Redis, MongoDB, etc.).
+	/// Can be implemented for different database types (Npgsql, MongoDB, etc.).
 	/// </summary>
 	public interface IDatabaseServiceRegistry
 	{

@@ -103,7 +103,7 @@
 
 ## FishMMO-Database
 
-**Data-access library** shared by all servers (Login/World/Scene), web services, and Unity builds. Centralizes EF Core DbContext, per-domain services, monitoring, and Redis adapter.
+**Data-access library** shared by all servers (Login/World/Scene), web services, and Unity builds. Centralizes EF Core DbContext, per-domain services, and monitoring.
 
 ### Core Database Infrastructure
 1. **IDatabase / Database** — High-level orchestrator wrapping NpgsqlDbContextFactory + service registry. Consumed by all servers.  
@@ -112,8 +112,7 @@
 4. **NpgsqlDbContextFactory** — Factory with connection interceptors driving ConnectionPoolMetrics + QueryPerformanceTracker.  
 5. **NpgsqlDbConfiguration** — Builds connection string from `IConfiguration` (`Npgsql:*` or `ConnectionStrings:NpgsqlConnection`).  
 6. **NpgsqlServiceRegistry** — Wires all per-domain service implementations.  
-7. **AppSettings** — Strongly-typed `appsettings.json` binder (Npgsql, Redis, QueryPerformanceTracking, Logging).  
-8. **DatabaseConfigurationHelper** — Convenience helpers for IConfiguration builders.  
+7. **AppSettings** — Strongly-typed `appsettings.json` binder (Npgsql, QueryPerformanceTracking, Logging). **DatabaseConfigurationHelper** — Convenience helpers for IConfiguration builders.  
 9. **DatabaseResult\<T\>** — Uniform result envelope (`IsSuccess`, `ErrorCode`, `ErrorMessage`, `Data`).  
 10. **DatabaseErrorCodes** — Stable error code enum returned via DatabaseResult.  
 11. **Layered Configuration** — `appsettings.json` → `appsettings.{Environment}.json` → environment variables (with `__` nesting).  
@@ -153,17 +152,14 @@
 39. **DatabaseMetricsTracker** — Success/failure/latency aggregates with summary reporting.  
 40. **QueryPerformanceTracker** — Per-operation query performance with P95/P99 percentiles, slow query detection events, configurable tracking levels (None/Basic/Standard/Detailed/Full).
 
-### Redis Adapter
-41. **RedisDbContextFactory** — Optional Redis adapter for cross-server caching and pub/sub.
-
 ### Unity Integration
-42. **DatabaseHealthService** — Unity MonoBehaviour wrapping the monitoring stack. Inspector-configurable health/pool/metrics check intervals. Exposes events for external alerting (Slack/PagerDuty). Context menu commands for manual health checks.
+41. **DatabaseHealthService** — Unity MonoBehaviour wrapping the monitoring stack. Inspector-configurable health/pool/metrics check intervals. Exposes events for external alerting (Slack/PagerDuty). Context menu commands for manual health checks.
 
 ### Exceptions
-43. **DatabaseException** — Typed database exception hierarchy: `DatabaseEntityNotFoundException`, `StaleStateException`, `DuplicateReplayException`.
+42. **DatabaseException** — Typed database exception hierarchy: `DatabaseEntityNotFoundException`, `StaleStateException`, `DuplicateReplayException`.
 
 ### Database Migrator
-44. **FishMMO-DB-Migrator** — Standalone console tool for creating and applying EF Core migrations.
+43. **FishMMO-DB-Migrator** — Standalone console tool for creating and applying EF Core migrations.
 
 ---
 
@@ -172,10 +168,9 @@
 **Centralised NuGet dependency library** — single source of truth for third-party package versions across the entire solution.
 
 1. **EF Core Stack** — EF Core, Abstractions, Relational, Design, Tools, EFCore.NamingConventions (snake_case).  
-2. **Database Providers** — Npgsql, Npgsql.EntityFrameworkCore.PostgreSQL, StackExchange.Redis, StackExchange.Redis.Extensions.Core.  
-3. **Microsoft.Extensions Stack** — Configuration (Json, Abstractions), DependencyInjection, Logging, Caching, Options, Primitives, Bcl.AsyncInterfaces.  
-4. **Utility Libraries** — SRP (SRP-6a), HtmlAgilityPack, Humanizer, OpenAI, System.Collections.Immutable, ComponentModel.Annotations, DiagnosticSource, IO.Hashing (xxHash/Crc32/Crc64), Text.Json, Threading.Channels.  
-5. **Post-Build DLL Copy** — Output DLLs automatically copied to `FishMMO-Unity/Assets/Dependencies/` for Unity consumption.
+2. **Microsoft.Extensions Stack** — Configuration (Json, Abstractions), DependencyInjection, Logging, Caching, Options, Primitives, Bcl.AsyncInterfaces.  
+3. **Utility Libraries** — SRP (SRP-6a), HtmlAgilityPack, Humanizer, OpenAI, System.Collections.Immutable, ComponentModel.Annotations, DiagnosticSource, IO.Hashing (xxHash/Crc32/Crc64), Text.Json, Threading.Channels.  
+4. **Post-Build DLL Copy** — Output DLLs automatically copied to `FishMMO-Unity/Assets/Dependencies/` for Unity consumption.
 
 ---
 
@@ -213,15 +208,14 @@
 7. **Install NGINX** — Reverse proxy/SSL terminator installation and service registration.  
 8. **Install/Renew Let's Encrypt Certificate** — SSL certificate provisioning with staging mode support.  
 9. **Install PostgreSQL** — Platform-native PostgreSQL installation.  
-10. **Install Redis** — Optional Redis cache installation.  
-11. **Install FishMMO Database** — Creates PostgreSQL user, database, applies initial EF Core migration, grants permissions.  
-12. **Create New Database Migration** — Generates and applies new EF Core migrations.  
-13. **Grant User Permissions** — Grants schema privileges to the FishMMO database user.  
-14. **Delete FishMMO Database** — Database teardown (with confirmation).  
-15. **Interactive Menu** — Full interactive console menu with numbered options.  
-16. **Linux Config Hardening** — Secure file permissions, core dump disabling, ptrace hardening for production Linux deployments.  
-17. **PostgreSQL Hardening** — Secure PostgreSQL configuration (auth, logging, connection limits).  
-18. **Unity Build Automation** — Configures and executes Unity headless builds from the command line.
+10. **Install FishMMO Database** — Creates PostgreSQL user, database, applies initial EF Core migration, grants permissions.  
+11. **Create New Database Migration** — Generates and applies new EF Core migrations.  
+12. **Grant User Permissions** — Grants schema privileges to the FishMMO database user.  
+13. **Delete FishMMO Database** — Database teardown (with confirmation).  
+14. **Interactive Menu** — Full interactive console menu with numbered options.  
+15. **Linux Config Hardening** — Secure file permissions, core dump disabling, ptrace hardening for production Linux deployments.  
+16. **PostgreSQL Hardening** — Secure PostgreSQL configuration (auth, logging, connection limits).  
+17. **Unity Build Automation** — Configures and executes Unity headless builds from the command line.
 
 ---
 
@@ -268,8 +262,7 @@
 2. **LoginServer.cfg** — Server configuration template (server name, max clients, address, port, stale scene timeout).  
 3. **WorldServer.cfg** — Server configuration template.  
 4. **SceneServer.cfg** — Server configuration template.  
-5. **appsettings.json (Development)** — Development database/Redis configuration.  
-6. **appsettings.json (Release)** — Production database/Redis configuration with `0.0.0.0` binding.
+5. **appsettings.json (Release)** — Production database configuration with `0.0.0.0` binding.
 
 ---
 

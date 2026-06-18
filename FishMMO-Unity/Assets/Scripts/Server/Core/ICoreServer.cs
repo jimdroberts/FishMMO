@@ -1,5 +1,3 @@
-using FishMMO.Database.Redis;
-
 namespace FishMMO.Server.Core
 {
 	/// <summary>
@@ -8,11 +6,6 @@ namespace FishMMO.Server.Core
 	/// </summary>
 	public interface ICoreServer
 	{
-		/// <summary>
-		/// Gets the Redis database context factory for Redis operations.
-		/// </summary>
-		RedisDbContextFactory RedisDbContextFactory { get; }
-
 		/// <summary>
 		/// Gets the remote address of the server.
 		/// </summary>

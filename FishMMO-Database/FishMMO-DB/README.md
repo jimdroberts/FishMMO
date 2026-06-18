@@ -1,7 +1,6 @@
 # FishMMO-DB
 
-`FishMMO-DB` is the data-access library shared by every FishMMO server (Login / World / Scene), every backend web service (IPFetch, Patcher), and the Unity Editor / headless server builds. It centralises the EF Core `DbContext`, the Npgsql provider configuration, the per-domain service catalog (`IAccountService`, `ICharacterService`, `IChatService`, …), connection-pool monitoring, query performance tracking, and the Redis adapter. All consumers depend on `IDatabase` + `IDatabaseServiceRegistry` so domain code never sees the underlying provider.
-
+`FishMMO
 This document describes the project layout, the supported platforms, and — at length — how to wire environment configuration (`appsettings.json`, `FISHMMO_ENVIRONMENT`, OS-specific environment variable persistence) for development, CI, and production deployments.
 
 ## Table of Contents
@@ -31,9 +30,7 @@ This document describes the project layout, the supported platforms, and — at 
 
 | Backing Store | Notes |
 |---|---|
-| PostgreSQL | 14+ recommended. Primary persistence (Npgsql / EF Core). |
-| Redis | Optional. Used for cross-server caching and pub/sub via `RedisDbContextFactory`. |
-| PgBouncer | Recommended in front of PostgreSQL for transaction pooling. |
+| PostgreSQL | 14+ recommended. Primary persistence (Npgsql / EF Core). Used for cross| PgBouncer | Recommended in front of PostgreSQL for transaction pooling. |
 
 ## Architecture
 
@@ -51,11 +48,7 @@ FishMMO-DB/
 │   ├── EntityConfigurations/     Fluent EF Core configurations
 │   ├── Services/                 Per-domain service implementations
 │   │   └── Interfaces/             IAccountService, ICharacterService, …
-│   └── Monitoring/               Health / Metrics / Diagnostics (see Monitoring/README.md)
-├── Redis/
-│   └── RedisDbContextFactory.cs  Redis adapter
-├── Unity/
-│   └── DatabaseHealthService.cs  Unity MonoBehaviour wrapper (see Unity/README.md)
+│   └── Monitoring/               Health / Metrics / Diagnostics (see Monitoring/README.cs  Unity MonoBehaviour wrapper (see Unity/README.md)
 ├── Database.cs                 High-level orchestrator (IDatabase implementation)
 ├── IDatabase.cs                Public contract consumed by servers / services
 ├── IDatabaseServiceRegistry.cs Per-domain service registry contract
@@ -76,11 +69,9 @@ FishMMO-DB/
 | `NpgsqlDbContext` / `NpgsqlDbContextFactory` | EF Core context + factory with connection interceptors driving `ConnectionPoolMetrics`. |
 | `NpgsqlServiceRegistry` | Wires `IAccountService`, `ICharacterService`, `IChatService`, `ILoginServerService`, etc. |
 | `NpgsqlDbConfiguration` | Builds the connection string from `IConfiguration` (`ConnectionStrings:NpgsqlConnection` or `Npgsql:*`). |
-| `AppSettings` | Strongly-typed binder for `appsettings.json` (Npgsql, Redis, QueryPerformanceTracking, Logging). |
-| `DatabaseResult<T>` / `DatabaseErrorCodes` | Uniform error envelope returned from every service. |
+| `AppSettings` | Strongly| `DatabaseResult<T>` / `DatabaseErrorCodes` | Uniform error envelope returned from every service. |
 | `Monitoring/` (under Npgsql) | Health probes, pool metrics, query performance diagnostics. See [`Npgsql/Monitoring/README.md`](./Npgsql/Monitoring/README.md). |
 | `Unity/DatabaseHealthService` | MonoBehaviour that surfaces all of the above to Unity headless servers. See [`Unity/README.md`](./Unity/README.md). |
-| `RedisDbContextFactory` | Optional Redis adapter for caching / pub-sub. |
 
 ## Configuration
 
@@ -467,9 +458,6 @@ flowchart LR
     Reg --> Svcs[IAccountService<br/>ICharacterService<br/>IChatService<br/>ILoginServerService<br/>...]
     Svcs -->|DatabaseResult&lt;T&gt;| Game[Game / Web logic]
 
-    Cfg -. optional .-> RCfg[Redis settings]
-    RCfg --> RFact[RedisDbContextFactory]
-    RFact --> Redis[(Redis)]
-    RFact --> Game
+    Cfg     RCfg     RFact     RFact --> Game
 ```
 - In production, set `enableLogging: false` to avoid sensitive data logging.

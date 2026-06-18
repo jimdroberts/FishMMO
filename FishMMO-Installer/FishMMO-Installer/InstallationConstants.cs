@@ -226,21 +226,6 @@ namespace FishMMO.Installer
 		/// </summary>
 		public const string MigrationsOutputDirectory = "Migrations";
 
-		// ---------------------------------------------------------------------
-		// Redis
-		// ---------------------------------------------------------------------
-
-		/// <summary>Default Redis listen port.</summary>
-		public const string RedisDefaultPort = "6379";
-
-		/// <summary>Default Linux systemd service name for Redis.</summary>
-		public const string RedisLinuxServiceName = "redis";
-
-		/// <summary>Default Linux configuration file path for Redis.</summary>
-		public const string RedisLinuxConfigurationPath = "/etc/redis/redis.conf";
-
-		/// <summary>Default Windows service name used by the Memurai/Redis-on-Windows fork installed by this tool.</summary>
-		public const string RedisWindowsServiceName = "Memurai";
 
 		// ---------------------------------------------------------------------
 		// PgBouncer configuration generation

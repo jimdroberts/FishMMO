@@ -188,12 +188,11 @@ namespace FishMMO.Installer
 				Console.WriteLine();
 				Console.WriteLine("1 : Install PostgreSQL");
 				Console.WriteLine("2 : Install PgBouncer (Connection Pooler)");
-				Console.WriteLine("3 : Install Redis (In-Memory Cache)");
-				Console.WriteLine("4 : Install FishMMO Database (User/Schema/Initial Migration)");
-				Console.WriteLine("5 : Create New Database Migration");
-				Console.WriteLine("6 : Grant User Permissions on Database");
-				Console.WriteLine("7 : Delete FishMMO Database (DANGEROUS!)");
-				Console.WriteLine("8 : Configure PgBouncer (generate pgbouncer.ini + userlist.txt, Linux)");
+				Console.WriteLine("3 : Install FishMMO Database (User/Schema/Initial Migration)");
+				Console.WriteLine("4 : Create New Database Migration");
+				Console.WriteLine("5 : Grant User Permissions on Database");
+				Console.WriteLine("6 : Delete FishMMO Database (DANGEROUS!)");
+				Console.WriteLine("7 : Configure PgBouncer (generate pgbouncer.ini + userlist.txt, Linux)");
 				Console.WriteLine("0 : Back");
 
 				ConsoleKeyInfo key = Console.ReadKey(true);
@@ -211,30 +210,27 @@ namespace FishMMO.Installer
 						await PgBouncerInstaller.InstallPgBouncer(appSettings);
 						break;
 					case ConsoleKey.D3:
-						await RedisInstaller.InstallRedis(appSettings);
-						break;
-					case ConsoleKey.D4:
 						await HandleWithSuperuser(
 							s => s.Npgsql?.Database,
 							"Npgsql database",
 							PostgreSQLInstaller.InstallFishMMODatabase);
 						break;
-					case ConsoleKey.D5:
+					case ConsoleKey.D4:
 						await PostgreSQLInstaller.CreateMigration();
 						break;
-					case ConsoleKey.D6:
+					case ConsoleKey.D5:
 						await HandleWithSuperuser(
 							s => s.Npgsql?.Username,
 							"Npgsql database/username",
 							PostgreSQLInstaller.GrantUserPermissions);
 						break;
-					case ConsoleKey.D7:
+					case ConsoleKey.D6:
 						await HandleWithSuperuser(
 							s => s.Npgsql?.Database,
 							"Npgsql database",
 							PostgreSQLInstaller.DeleteFishMMODatabase);
 						break;
-					case ConsoleKey.D8:
+					case ConsoleKey.D7:
 						await PgBouncerInstaller.ConfigurePgBouncerLinuxAsync(appSettings);
 						break;
 					case ConsoleKey.D0:
@@ -320,7 +316,7 @@ namespace FishMMO.Installer
 					case ConsoleKey.D3:
 						await ProjectBuildInstaller.BuildAllProjectsInSelectedRootAsync();
 						break;
-					case ConsoleKey.D4:
+					case ConsoleKey.D3:
 						await UnityBuildInstaller.RunInteractiveBuild();
 						break;
 					case ConsoleKey.D0:

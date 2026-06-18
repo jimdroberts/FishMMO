@@ -13,11 +13,6 @@ namespace FishMMO.Database
 		/// Gets or sets PostgreSQL connection settings.
 		/// </summary>
 		public NpgsqlSettings Npgsql { get; set; } = new();
-
-		/// <summary>
-		/// Gets or sets Redis connection settings.
-		/// </summary>
-		public RedisSettings Redis { get; set; } = new();
 	}
 
 	/// <summary>
@@ -136,25 +131,4 @@ namespace FishMMO.Database
 		public int MaxJitterMs { get; set; } = 100;
 	}
 
-	/// <summary>
-	/// Redis connection settings.
-	/// </summary>
-	[Serializable]
-	public class RedisSettings
-	{
-		/// <summary>
-		/// Gets or sets the Redis host.
-		/// </summary>
-		public string Host { get; set; } = "127.0.0.1";
-
-		/// <summary>
-		/// Gets or sets the Redis port.
-		/// </summary>
-		public string Port { get; set; } = "6379";
-
-		/// <summary>
-		/// Gets or sets the Redis password.
-		/// </summary>
-		public string Password { get; set; }
-	}
 }

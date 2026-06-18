@@ -27,7 +27,7 @@ namespace FishMMO.Shared
 	/// <list type="number">
 	///   <item>
 	///     <description>A curated list of third-party dependency name prefixes that are
-	///     known to be exclusively server-side (EF Core, Npgsql, StackExchange.Redis,
+	///     known to be exclusively server-side (EF Core, Npgsql,
 	///     OTP/2FA, OpenAI, etc.). These are stripped from client builds only.</description>
 	///   </item>
 	///   <item>
@@ -63,7 +63,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Curated list of assembly file name prefixes (case-insensitive) for third-party
 		/// dependencies that are exclusively used by server-side code paths in this project
-		/// (database, Redis, EF Core tooling, server TOTP, AI integrations, etc.). Stripped
+		/// (database, EF Core tooling, server TOTP, AI integrations, etc.). Stripped
 		/// from client builds.
 		///
 		/// <para>
@@ -86,14 +86,6 @@ namespace FishMMO.Shared
 			"EFCore.NamingConventions",
 			"Npgsql",
 			"Humanizer", // EF Core design-time dependency
-
-			// Redis
-			"StackExchange.Redis",
-			"Pipelines.Sockets.Unofficial",
-			// NOTE: System.IO.Pipelines is intentionally NOT stripped. While StackExchange.Redis
-			// uses it, System.Text.Json (a client-side BCL polyfill shipped via the Dependencies
-			// folder) also references types from System.IO.Pipelines. Stripping it breaks IL2CPP
-			// managed-stripping with IL1005 / unresolved assembly errors on the client.
 
 			// Server-side dependency injection / configuration / logging plumbing
 			// (FishMMO clients use FishMMO-Logger and Unity's own infrastructure instead).

@@ -18,7 +18,6 @@ A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, an
   - [3. Run the Installer](#3-run-the-installer)
   - [4. Open the Unity Project](#4-open-the-unity-project)
 - [Database Setup](#database-setup)
-- [Redis Setup](#redis-setup)
 - [Unity Project Setup](#unity-project-setup)
   - [Build World Scene Details](#build-world-scene-details)
   - [Versioning](#versioning)
@@ -28,14 +27,12 @@ A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, an
   - [Constants.cs — Client Domains](#constantscs--client-domains)
   - [Server Configuration Files](#server-configuration-files)
   - [Logging Configuration](#logging-configuration)
-  - [appsettings.json — Database & Redis](#appsettingsjson--database--redis)
   - [FishMMO-Auth — Signing Keys & KEK](#fishmmo-auth--signing-keys--kek)
 - [Infrastructure Setup](#infrastructure-setup)
   - [Configure Unity Hub](#configure-unity-hub)
   - [Configure PostgreSQL](#configure-postgresql)
   - [Configure pgBouncer](#configure-pgbouncer)
-  - [Configure Redis](#configure-redis)
-  - [Configure NGINX](#configure-nginx)
+    - [Configure NGINX](#configure-nginx)
 - [Running the Servers](#running-the-servers)
   - [Launch Order](#launch-order)
   - [Starting Game Servers](#starting-game-servers)
@@ -100,7 +97,6 @@ All three are launched from a single `GameServer` executable with a command-line
 | Unity | 6.3 LTS |
 | .NET SDK | 8.0+ |
 | PostgreSQL | 14+ |
-| Redis | 6+ (optional, recommended for production) |
 | Scripting Backend | IL2CPP |
 
 ---
@@ -111,7 +107,6 @@ All three are launched from a single `GameServer` executable with a command-line
 - **.NET 8.0 SDK** (the installer can install this for you)
 - **Unity Hub** with **Unity 6.3 LTS** (the installer can install these for you)
 - **PostgreSQL 14+** (the installer can install this for you)
-- **Redis 6+** (optional but recommended — the installer can install this for you)
 - Administrator/root privileges for system-level installs
 - Internet connectivity
 
@@ -133,7 +128,7 @@ cd FishMMO
 
 ### 2. Build the FishMMO-Installer
 
-The **FishMMO-Installer** is the recommended way to set up all dependencies. It automates installing .NET, PostgreSQL, Redis, NGINX, PgBouncer, Unity Hub, building all C# projects, and setting up the database.
+The **FishMMO-Installer** is the recommended way to set up all dependencies. It automates installing .NET, PostgreSQL, NGINX, PgBouncer, Unity Hub, building all C# projects, and setting up the database.
 
 ```bash
 cd FishMMO-Installer
@@ -155,7 +150,7 @@ The installer presents a hierarchical menu system. Each sub-menu groups related 
 ```
 === FishMMO Installer ===
 1 : Runtime & Tooling     — .NET SDK, ASP.NET Runtime, VS Build Tools
-2 : Database              — PostgreSQL, PgBouncer, Redis, DB management
+2 : Database              — PostgreSQL, PgBouncer, DB management
 3 : Web Server            — NGINX, Let's Encrypt SSL
 4 : Unity & Build         — Unity Hub, Unity Editor, C# project builds
 5 : Configuration         — appsettings.json setup
@@ -176,12 +171,11 @@ The installer presents a hierarchical menu system. Each sub-menu groups related 
 ```
 1 : Install PostgreSQL
 2 : Install PgBouncer (Connection Pooler)
-3 : Install Redis (In-Memory Cache)
-4 : Install FishMMO Database (User/Schema/Initial Migration)
-5 : Create New Database Migration
-6 : Grant User Permissions on Database
-7 : Delete FishMMO Database (DANGEROUS!)
-8 : Configure PgBouncer (generate pgbouncer.ini + userlist.txt, Linux)
+3 : Install FishMMO Database (User/Schema/Initial Migration)
+4 : Create New Database Migration
+5 : Grant User Permissions on Database
+6 : Delete FishMMO Database (DANGEROUS!)
+7 : Configure PgBouncer (generate pgbouncer.ini + userlist.txt, Linux)
 0 : Back
 ```
 
@@ -222,7 +216,6 @@ The installer presents a hierarchical menu system. Each sub-menu groups related 
 | 5 | Unity & Build | Install Unity Hub | Yes | Yes |
 | 6 | Unity & Build | Install Unity Editor (+Modules) | Yes | Yes |
 | 7 | Database | Install PostgreSQL | Yes | Yes |
-| 8 | Database | Install Redis | Yes | Yes |
 | 9 | Database | Install FishMMO Database | Yes | Yes |
 | 10 | Database | Install PgBouncer | Yes | Yes |
 | 11 | Database | Configure PgBouncer | *(manual)* | Yes |
@@ -301,7 +294,6 @@ dotnet run
 
 ### Database Configuration
 
-Configuration is loaded from `appsettings.json` (placed alongside the server executable at runtime). See [appsettings.json — Database & Redis](#appsettingsjson--database--redis).
 
 **Environment-based overrides:** The database library supports layered configuration in this priority order:
 
@@ -321,16 +313,12 @@ Set the environment via `FISHMMO_ENVIRONMENT` (preferred), `DOTNET_ENVIRONMENT`,
 | `Npgsql__Database` | Database name |
 | `Npgsql__Username` | Database user |
 | `Npgsql__Password` | Database password |
-| `Redis__Host` | Redis host |
-| `Redis__Port` | Redis port |
-| `Redis__Password` | Redis password |
 
 Example (fish shell):
 
 ```fish
 set -Ux FISHMMO_ENVIRONMENT Production
 set -Ux Npgsql__Password super_secret
-set -Ux Redis__Password redis_secret
 ```
 
 Example (bash):
@@ -341,54 +329,6 @@ export Npgsql__Password=super_secret
 ```
 
 ---
-
-## Redis Setup
-
-Redis is used for cross-server caching and pub/sub. It is optional but recommended for production deployments with multiple scene servers.
-
-### Installation
-
-Use the Installer (Database menu, option `3`) or install manually:
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt install redis-server
-sudo systemctl enable --now redis-server
-```
-
-**Linux (Arch/CachyOS):**
-```bash
-sudo pacman -S redis
-sudo systemctl enable --now redis
-```
-
-**Windows:**
-```powershell
-# Using the installer, or manually via:
-winget install Redis
-```
-
-### Configuration
-
-Set a password for production use:
-
-**Linux:** Edit `/etc/redis/redis.conf`:
-```
-requirepass your_redis_password
-```
-
-Then restart: `sudo systemctl restart redis`
-
-**Configure in appsettings.json:**
-```json
-{
-  "Redis": {
-    "Host": "127.0.0.1",
-    "Port": "6379",
-    "Password": "your_redis_password"
-  }
-}
-```
 
 ---
 
@@ -602,7 +542,7 @@ Each server needs a `logging.json` file placed alongside the executable. There i
 
 > **Security:** Keep `logging.json` out of source control if it contains SMTP credentials. Load secrets from environment variables instead.
 
-### appsettings.json — Database & Redis
+### appsettings.json — Database
 
 Placed alongside every server executable and web service. Templates with `__REPLACE_ME__` placeholders are in `FishMMO-Setup/`. Fill in your actual credentials before deploying:
 
@@ -615,10 +555,8 @@ Placed alongside every server executable and web service. Templates with `__REPL
     "Host": "127.0.0.1",
     "Port": "5432"
   },
-  "Redis": {
     "Host": "127.0.0.1",
     "Port": "6379",
-    "Password": "your_redis_password"
   }
 }
 ```
@@ -722,7 +660,7 @@ Use the Installer (Database menu, option `2`):
 
 After installation, configure PgBouncer to pool connections to your FishMMO database.
 
-**Linux:** The installer's "Configure PgBouncer" option (Database menu, option `8`) generates `pgbouncer.ini` and `userlist.txt` for you. Otherwise, manually edit `/etc/pgbouncer/pgbouncer.ini`.
+**Linux:** The installer's "Configure PgBouncer" option (Database menu, option `7`) generates `pgbouncer.ini` and `userlist.txt` for you. Otherwise, manually edit `/etc/pgbouncer/pgbouncer.ini`.
 
 **Windows:** Edit `pgbouncer.ini` in the install directory.
 
@@ -795,141 +733,6 @@ psql -h 127.0.0.1 -p 6432 -U fishmmo -d fish_mmo_postgresql
 sc.exe query pgbouncer
 ```
 
-### Configure Redis
-
-Redis is optional but recommended for production. It handles cross-server caching and pub/sub messaging.
-
-1. **Install** via the Installer (Database menu, option `3`) or manually (see [Redis Setup](#redis-setup)).
-2. **Set a password** in `redis.conf`: `requirepass your_redis_password`
-3. **Update `appsettings.json`** with the Redis host, port, and password.
-4. **Restart Redis:** `sudo systemctl restart redis`
-
-### Configure NGINX
-
-NGINX acts as the reverse proxy and SSL terminator for all FishMMO web services and WebSocket game traffic. The reference configuration is at `FishMMO-Setup/nginx.conf`.
-
-#### Architecture
-
-```
-Internet
-   │
-   ▼ HTTPS (ports 80/443 only)
-┌──────────┐
-│  NGINX   │  ← SSL termination, rate limiting, WebSocket upgrade
-└────┬─────┘
-     │ HTTP (localhost only)
-     ├──→ play.fishmmo.com  → WebGL Server  (localhost:8000)
-     ├──→ api.fishmmo.com   → IPFetch       (localhost:8080)
-     │                      → Patcher       (localhost:8090)
-     └──→ game.fishmmo.com  → Game Servers  (localhost:7770-7899 via /ws/{port})
-```
-
-#### Subdomain Routing
-
-| Subdomain | Backend | Port | Purpose |
-|---|---|---|---|
-| `play.fishmmo.com` | WebGL Server | 8000 | Serves Unity WebGL builds |
-| `api.fishmmo.com` | IPFetch / Patcher | 8080 / 8090 | Login server discovery + patch delivery |
-| `game.fishmmo.com` | Game Servers | 7770–7899 | WebSocket proxy for Bayou/WebGL clients |
-
-#### Installation
-
-Use the Installer:
-
-1. **Web Server menu, option `1`** — Install NGINX
-2. **Web Server menu, option `3`** — Deploy FishMMO nginx.conf
-
-Or manually:
-
-**Linux:**
-```bash
-# Install
-sudo apt install nginx
-
-# Copy the reference config
-sudo cp FishMMO-Setup/nginx.conf /etc/nginx/nginx.conf
-sudo chown root:root /etc/nginx/nginx.conf
-sudo chmod 644 /etc/nginx/nginx.conf
-
-# Create certbot webroot
-sudo mkdir -p /var/www/certbot/.well-known/acme-challenge
-
-# Open firewall
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-
-# Test and start
-sudo nginx -t
-sudo systemctl enable --now nginx
-sudo systemctl reload nginx
-```
-
-**Windows:**
-```powershell
-# Copy config
-Copy-Item "FishMMO-Setup\nginx.conf" "C:\nginx\conf\nginx.conf" -Force
-
-# Open firewall
-netsh advfirewall firewall add rule name="FishMMO HTTP" dir=in action=allow protocol=TCP localport=80
-netsh advfirewall firewall add rule name="FishMMO HTTPS" dir=in action=allow protocol=TCP localport=443
-
-# Validate and restart
-& "C:\nginx\nginx.exe" -t
-sc.exe stop "FishMMO-NGINX"
-sc.exe start "FishMMO-NGINX"
-```
-
-#### SSL Certificates (Let's Encrypt)
-
-Use the Installer (Web Server menu, option `2`) to install or renew certificates:
-- Enter your domains (e.g., `fishmmo.com,play.fishmmo.com,api.fishmmo.com,game.fishmmo.com`)
-- Use staging mode first to validate the flow without hitting rate limits
-- The installer updates the `ssl_certificate` / `ssl_certificate_key` paths in `nginx.conf` automatically
-
-#### Key Security Features
-
-| Feature | Detail |
-|---|---|
-| TLS 1.2 / 1.3 only | Older protocols disabled |
-| OCSP Stapling | Faster TLS handshakes |
-| Rate limiting | Per-IP zones for API, patch downloads, and WebGL assets |
-| Connection limits | Per-IP connection caps per server block |
-| Request body limits | 1KB default (prevents oversized payloads) |
-| Slowloris mitigation | Header/body buffer and timeout limits |
-| Hidden version | `server_tokens off` |
-
-#### Game Server Port Mapping (WebSocket)
-
-For WebGL clients, NGINX routes `wss://game.fishmmo.com/ws/{port}` to the correct backend. The port-to-address map is configured in `nginx.conf`:
-
-```nginx
-map $backend_port $backend_address {
-    default       127.0.0.1;
-
-    # Login Servers
-    # 7770        192.168.1.10;       # Login Server A
-
-    # World Servers
-    # 7780        192.168.1.10;       # World Server A
-
-    # Scene Servers
-    # 7790        192.168.1.10;       # Scene Server A
-    # 7791        192.168.1.11;       # Scene Server B
-}
-```
-
-Allowed port range: **7770–7899** (130 server slots). Adjust the regex in the `game.fishmmo.com` server block if you need more.
-
-#### Important Port Notes
-
-| Port | Exposure | Purpose |
-|---|---|---|
-| 80, 443 | **Public** (forward through router) | NGINX (HTTP redirect + HTTPS) |
-| 8000, 8080, 8090 | **Private** (localhost only) | Backend web servers |
-| 7770–7899 | **Private** (behind NGINX) | Game servers (routed via WebSocket) |
-
-> **Do NOT** publicly forward ports 8000, 8080, 8090, or 7770–7899. All traffic must go through NGINX on ports 80/443.
-
 ---
 
 ## Running the Servers
@@ -939,14 +742,13 @@ Allowed port range: **7770–7899** (130 server slots). Adjust the regex in the 
 Servers must be started in this exact order:
 
 1. **PostgreSQL** — Must be running before any server starts.
-2. **Redis** (optional) — Should be running before game servers start.
-3. **PgBouncer** (optional) — If used, must be running before game servers start.
-4. **LoginServer** — Must be running and registered in the database before World servers.
-5. **WorldServer** — Must be running and registered before Scene servers.
-6. **SceneServer(s)** — Can start once WorldServer is registered.
-7. **IPFetch Server** — Should start after the LoginServer is registered.
-8. **Patcher Server** — Can start independently; needs patch files.
-9. **WebGL Server** — Can start independently; needs a WebGL build.
+2. **PgBouncer**  — If used, must be running before game servers start.
+3. **LoginServer** — Must be running and registered in the database before World servers.
+4. **WorldServer** — Must be running and registered before Scene servers.
+5. **SceneServer(s)** — Can start once WorldServer is registered.
+6. **IPFetch Server** — Should start after the LoginServer is registered.
+7. **Patcher Server** — Can start independently; needs patch files.
+8. **WebGL Server** — Can start independently; needs a WebGL build.
 
 ### Starting Game Servers
 
@@ -984,7 +786,6 @@ Start-Process GameServer.exe -ArgumentList "SCENE"
 Each server needs these files in its working directory:
 - `GameServer` (the executable)
 - `LoginServer.cfg` / `WorldServer.cfg` / `SceneServer.cfg` (matching the server type)
-- `appsettings.json` (database + Redis config)
 - `logging.json` (logging config)
 - `AddressableAssetsData/` (Addressable asset bundles from the build)
 - `StreamingAssets/` (if any)
@@ -1157,7 +958,6 @@ Create `/etc/systemd/system/apphealthmonitor.service`:
 ```ini
 [Unit]
 Description=FishMMO Application Health Monitor
-After=network.target postgresql.service redis.service pgbouncer.service
 
 [Service]
 Type=simple
@@ -1339,7 +1139,6 @@ All FishMMO server components are designed to run as systemd services. Reference
 ```ini
 [Unit]
 Description=FishMMO LoginServer
-After=network.target postgresql.service redis.service pgbouncer.service
 Requires=postgresql.service
 
 [Service]
@@ -1416,7 +1215,6 @@ sudo systemctl enable --now apphealthmonitor
 | 443 | NGINX (HTTPS + WSS) | Public |
 | 5432 | PostgreSQL | Private (localhost) |
 | 6432 | PgBouncer | Private (localhost) |
-| 6379 | Redis | Private (localhost) |
 | 7770 | LoginServer | Private (behind NGINX for WebGL) |
 | 7780 | WorldServer | Private (behind NGINX for WebGL) |
 | 7781+ | SceneServer(s) | Private (behind NGINX for WebGL) |
@@ -1457,7 +1255,6 @@ flowchart TB
     subgraph DataLayer["Data Layer"]
         PgBouncer["pgBouncer<br/>:6432<br/><i>Connection pooler</i>"]
         PostgreSQL["PostgreSQL<br/>:5432"]
-        Redis["Redis<br/>:6379<br/><i>Optional cache</i>"]
     end
 
     subgraph Monitoring["Monitoring"]
@@ -1493,10 +1290,6 @@ flowchart TB
     SceneN --> PgBouncer
     PgBouncer --> PostgreSQL
 
-    Login -.-> Redis
-    World -.-> Redis
-    Scene1 -.-> Redis
-    SceneN -.-> Redis
 
     IPFetch --> PostgreSQL
     World --> Scene1

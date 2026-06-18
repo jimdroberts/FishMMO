@@ -85,8 +85,6 @@ top-level package DLLs) into the Unity `Assets/Dependencies/` folder after build
 |---|---|
 | `Npgsql` | PostgreSQL ADO.NET driver |
 | `Npgsql.EntityFrameworkCore.PostgreSQL` | EF Core PostgreSQL provider |
-| `StackExchange.Redis` | Redis client |
-| `StackExchange.Redis.Extensions.Core` | Strongly-typed Redis helpers |
 
 ### Microsoft.Extensions stack
 

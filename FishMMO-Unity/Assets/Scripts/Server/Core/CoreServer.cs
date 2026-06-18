@@ -1,5 +1,4 @@
 using System;
-using FishMMO.Database.Redis;
 using FishMMO.Shared;
 using FishMMO.Logging;
 
@@ -10,11 +9,6 @@ namespace FishMMO.Server.Core
 	/// </summary>
 	public class CoreServer : ICoreServer
 	{
-		/// <summary>
-		/// Gets the Redis database context factory for Redis operations.
-		/// </summary>
-		public RedisDbContextFactory RedisDbContextFactory { get; private set; }
-
 		/// <summary>
 		/// Gets the remote address of the server.
 		/// </summary>
@@ -78,7 +72,6 @@ namespace FishMMO.Server.Core
 		/// </summary>
 		public void Deinitialize()
 		{
-			RedisDbContextFactory = null;
 		}
 
 		/// <summary>

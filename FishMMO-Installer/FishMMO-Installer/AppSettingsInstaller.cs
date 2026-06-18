@@ -17,7 +17,7 @@ namespace FishMMO.Installer
 	///
 	/// Supported components:
 	/// <list type="bullet">
-	///   <item>Database — FishMMO-DB (Npgsql + Redis)</item>
+	///   <item>Database — FishMMO-DB (Npgsql)</item>
 	///   <item>IPFetch Web Server — WebServer.HttpPort + ConnectionStrings.NpgsqlConnection</item>
 	///   <item>Patcher Web Server — WebServer.HttpPort + Patches.DirectoryName</item>
 	///   <item>WebGL Web Server — WebServer.HttpPort</item>
@@ -191,17 +191,11 @@ namespace FishMMO.Installer
 			if (string.IsNullOrEmpty(npgsqlPassword))
 				npgsqlPassword = defaults.Npgsql?.Password ?? string.Empty;
 
-			string redisPassword = InstallerProcessHelper.PromptForPassword(
-				$"  Redis Password (blank = none) [{MaskSecret(defaults.Redis?.Password)}]: ");
-			if (string.IsNullOrEmpty(redisPassword))
-				redisPassword = defaults.Redis?.Password ?? string.Empty;
 
 			var secrets = new Dictionary<string, string>
 			{
 				["Npgsql__Password"] = npgsqlPassword,
 			};
-			if (!string.IsNullOrWhiteSpace(redisPassword))
-				secrets["Redis__Password"] = redisPassword;
 
 			switch (key.Key)
 			{
@@ -714,11 +708,6 @@ namespace FishMMO.Installer
 			npgsql["MinPoolSize"] = JsonValue.Create(settings.Npgsql.MinPoolSize);
 			npgsql["MaxPoolSize"] = JsonValue.Create(settings.Npgsql.MaxPoolSize);
 
-			// Merge Redis section.
-			JsonObject redis = EnsureObject(root, "Redis");
-			redis["Host"] = JsonValue.Create(settings.Redis.Host);
-			redis["Port"] = JsonValue.Create(settings.Redis.Port);
-			redis["Password"] = JsonValue.Create(settings.Redis.Password);
 
 			string? dir = Path.GetDirectoryName(filePath);
 			if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
@@ -758,11 +747,6 @@ namespace FishMMO.Installer
 				      "SlowQueryThresholdMs": 1000,
 				      "SampleRate": 0.1
 				    }
-				  },
-				  "Redis": {
-				    "Host": "127.0.0.1",
-				    "Port": "6379",
-				    "Password": ""
 				  },
 				  "ConnectionPoolHealth": {
 				    "WarningThresholdPercent": 70,
@@ -828,17 +812,6 @@ namespace FishMMO.Installer
 				s.Npgsql.RetryPolicy = defaults.Npgsql.RetryPolicy;
 			if (defaults.Npgsql?.QueryPerformanceTracking != null)
 				s.Npgsql.QueryPerformanceTracking = defaults.Npgsql.QueryPerformanceTracking;
-
-			Console.WriteLine();
-			Console.WriteLine("--- Redis ---");
-			s.Redis.Host = PromptString("  Host", defaults.Redis?.Host ?? "127.0.0.1");
-			s.Redis.Port = PromptString("  Port", defaults.Redis?.Port ?? "6379");
-
-			string redisPass = InstallerProcessHelper.PromptForPassword(
-				$"  Password (blank = none) [{MaskSecret(defaults.Redis?.Password)}]: ");
-			s.Redis.Password = string.IsNullOrEmpty(redisPass)
-				? (defaults.Redis?.Password ?? string.Empty)
-				: redisPass;
 
 			Console.WriteLine();
 			return s;

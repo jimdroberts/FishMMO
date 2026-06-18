@@ -84,7 +84,6 @@ The Implementation layer sits between the abstract `Server.Core` interfaces and 
 - FishNet networking framework (imported via Plugins).
 - KinematicCharacterController package.
 - PostgreSQL database (configured via `appsettings.json`).
-- Redis (optional, for caching — configured via `appsettings.json`).
 - ZString for zero-allocation string formatting.
 - Addressable Assets for scene and template loading.
 - `FishMMO.Server.Core` and `FishMMO.Shared` assemblies.
@@ -95,7 +94,7 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 
 1. Open the FishMMO-Unity project in Unity 6.3 LTS.
 2. Ensure all dependencies (FishNet, KCC, ZString, Addressables) are imported.
-3. Configure `appsettings.json` for database and Redis connection strings.
+3. Configure `appsettings.json` for database connection strings.
 4. Build server executables via Unity Build Settings with the desired server scenes.
 5. Alternatively, enter Play Mode with the `ServerLauncher` bootstrap scene to run locally.
 
@@ -137,7 +136,6 @@ The second command-line argument selects the server type. If no argument is prov
 | `BootList` | `ServerLauncher` inspector field | Array of scene names to load at startup |
 | `updateRate` | `ServerWindowTitleUpdater` inspector field | Window title refresh interval (seconds, default 15) |
 | Database connection | `appsettings.json` | PostgreSQL connection string |
-| Redis connection | `appsettings.json` | Redis connection string |
 | Environment | `ASPNETCORE_ENVIRONMENT` or `DOTNET_ENVIRONMENT` | Selects `appsettings.{env}.json` overlay |
 | Transport settings | `IServerConfiguration` / `appsettings.json` | Bind address, port, max clients applied via `ApplyTransportConfiguration` |
 
@@ -245,7 +243,7 @@ flowchart TD
 │                                                                     │
 │  OnFinalizeSetup()                                                  │
 │   ├─ CoreServer.Initialize(remoteAddress, sceneName)                │
-│   ├─ Build Database (Npgsql + Redis from appsettings.json)          │
+│   ├─ Build Database (Npgsql from appsettings.json)                 │
 │   ├─ Create ServerAddressProvider                                   │
 │   ├─ Apply transport config + attach authenticator                  │
 │   ├─ Create AccountManager (SRP or Token based on authenticator)    │
