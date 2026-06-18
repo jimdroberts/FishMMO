@@ -435,11 +435,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called when a category item is clicked.
 		/// </summary>
+		private const string SelectedCategoryKey = "FishMMODashboard.SelectedCategory";
+
 		private void OnCategorySelected(int index)
 		{
 			if (index < 0 || index >= categories.Count) return;
 
 			selectedCategoryIndex = index;
+			SessionState.SetInt(SelectedCategoryKey, index);
 			selectedAssetIndex = -1;
 			entityFilter = string.Empty;
 

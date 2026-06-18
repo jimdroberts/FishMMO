@@ -242,6 +242,102 @@ namespace FishMMO.Shared
 			buildButtonSection.Add(updateLinkerButton);
 
 			inspectorContent.Add(buildButtonSection);
+
+			// ── Background Tasks Section ──
+			VisualElement tasksSection = CreateConstantsSection("Background Tasks");
+
+			var tasksContainer = new VisualElement();
+			tasksContainer.name = "background-tasks-container";
+			tasksSection.Add(tasksContainer);
+
+			// Poll Unity's global progress system for active background tasks
+			// (Compiling Scripts, Importing Assets, Baking, etc.)
+			tasksContainer.schedule.Execute(() =>
+			{
+				RefreshBackgroundTasks(tasksContainer);
+			}).Every(500);
+
+			inspectorContent.Add(tasksSection);
+		}
+
+		/// <summary>
+		/// Refreshes the background tasks display by querying Unity's global Progress API.
+		/// Shows active tasks with progress bars and descriptions.
+		/// </summary>
+		private static void RefreshBackgroundTasks(VisualElement container)
+		{
+			container.Clear();
+
+			bool hasActive = false;
+
+			// ── Script Compilation ──
+			if (EditorApplication.isCompiling)
+			{
+				hasActive = true;
+				AddTaskRow(container, "Compiling Scripts", -1f, "C# scripts are compiling...");
+			}
+
+			// ── Asset Import ──
+			if (EditorApplication.isUpdating)
+			{
+				hasActive = true;
+				AddTaskRow(container, "Importing Assets", -1f, "Asset database is updating...");
+			}
+
+			// ── Unity Progress API (any other registered background tasks) ──
+			try
+			{
+				int runningCount = Progress.GetRunningProgressCount();
+				if (runningCount > 0)
+				{
+					hasActive = true;
+					AddTaskRow(container, "Background Tasks", -1f, $"{runningCount} task(s) running...");
+				}
+			}
+			catch
+			{
+				// Progress API unavailable on this Unity version; isCompiling/isUpdating
+				// already cover the most important cases.
+			}
+
+			if (!hasActive)
+			{
+				Label emptyLabel = new Label("No active tasks");
+				emptyLabel.style.color = new Color(0.4f, 0.4f, 0.4f, 1f);
+				emptyLabel.style.fontSize = 11;
+				emptyLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+				emptyLabel.style.paddingTop = 4;
+				emptyLabel.style.paddingBottom = 4;
+				container.Add(emptyLabel);
+			}
+		}
+
+		private static void AddTaskRow(VisualElement container, string name, float progress, string description)
+		{
+			VisualElement row = new VisualElement();
+			row.style.flexDirection = FlexDirection.Row;
+			row.style.alignItems = Align.Center;
+			row.style.paddingTop = 2;
+			row.style.paddingBottom = 2;
+
+			// Name label
+			Label nameLabel = new Label(name);
+			nameLabel.style.width = 140;
+			nameLabel.style.color = new Color(0.65f, 0.75f, 0.9f, 1f);
+			nameLabel.style.fontSize = 11;
+			nameLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+			nameLabel.style.marginRight = 6;
+			row.Add(nameLabel);
+
+			// Progress bar
+			ProgressBar bar = new ProgressBar();
+			bar.style.flexGrow = 1;
+			bar.value = progress * 100f;
+			string descText = string.IsNullOrEmpty(description) ? "" : $" — {description}";
+			bar.title = progress > 0f ? $"{progress * 100f:F0}%{descText}" : descText.TrimStart(' ', '—', ' ');
+			row.Add(bar);
+
+			container.Add(row);
 		}
 
 		/// <summary>

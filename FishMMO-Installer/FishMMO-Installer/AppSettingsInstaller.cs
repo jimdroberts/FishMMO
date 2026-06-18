@@ -45,10 +45,8 @@ namespace FishMMO.Installer
 
 		private const string ClientGateSecretEnvVar = "FISHMMO_CLIENT_GATE_SECRET";
 
-		/// <summary>Conventional FishMMO-Dev workspace root: ~/Dev/FishMMO-Dev/</summary>
-		private static string FishMMODevRoot => Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-			"Dev", "FishMMO-Dev");
+		/// <summary>FishMMO monorepo root, auto-detected from assembly location.</summary>
+		private static string FishMMODevRoot => InstallationConstants.FishMMOMonorepoRoot;
 
 		// ──────────────────────────────────────────────────────────────────────────
 		//  Entry point — component selection

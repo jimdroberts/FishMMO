@@ -89,6 +89,14 @@ namespace FishMMO.Shared
 			SetupSearch();
 			SetupCreateButton();
 
+			// Restore the last-selected category across domain reloads
+			// (e.g., after script recompilation).
+			int savedIndex = SessionState.GetInt(SelectedCategoryKey, -1);
+			if (savedIndex >= 0 && savedIndex < categories.Count)
+			{
+				OnCategorySelected(savedIndex);
+			}
+
 			SetStatus("Ready");
 		}
 

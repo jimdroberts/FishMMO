@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace FishMMO.Installer
 {
 	/// <summary>
@@ -136,7 +138,7 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default nginx.conf path used in Linux setup automation.
 		/// </summary>
-		public static readonly string LinuxNginxConfigurationPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO-Dev", "FishMMO-Setup", "nginx.conf");
+		public static readonly string LinuxNginxConfigurationPath = Path.Combine(FishMMOSetupPath, "nginx.conf");
 
 		/// <summary>
 		/// Default web root for ACME HTTP-01 challenges in Linux deployments.
@@ -146,7 +148,7 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default FishMMO web servers directory path used for operational context prompts.
 		/// </summary>
-		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO-Dev", "FishMMO-WebServers");
+		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-WebServers");
 
 		/// <summary>
 		/// Download URL for the Visual Studio Build Tools bootstrapper.
@@ -257,11 +259,16 @@ namespace FishMMO.Installer
 		public const string PgBouncerAuthUser = "fishmmo_pgb_auth";
 
 		// ---------------------------------------------------------------------
-		// FishMMO repository layout (monorepo at ~/Dev/FishMMO-Dev)
+		// FishMMO repository layout (monorepo root detected from assembly location)
 		// ---------------------------------------------------------------------
 
-		/// <summary>Root path of the FishMMO monorepo workspace on Linux/macOS.</summary>
-		public static readonly string FishMMOMonorepoRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Dev", "FishMMO-Dev");
+		/// <summary>
+		/// Root path of the FishMMO monorepo workspace.
+		/// Walks up from the executing assembly until it finds a directory containing
+		/// both FishMMO-Unity and FishMMO-Setup subdirectories (monorepo signature).
+		/// Falls back to ~/Dev/FishMMO-Dev if the root cannot be auto-detected.
+		/// </summary>
+		public static readonly string FishMMOMonorepoRoot = FindMonorepoRoot();
 
 		/// <summary>Path to the FishMMO-Setup directory containing canonical nginx.conf, .cfg files, and environment overlays.</summary>
 		public static readonly string FishMMOSetupPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-Setup");
@@ -311,5 +318,35 @@ namespace FishMMO.Installer
 		/// <summary>Default Windows install root for Unity Hub-managed editors. Combined with version + Editor\Unity.exe.</summary>
 		public static readonly string UnityWindowsEditorRoot = Path.Combine(
 			Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Unity", "Hub", "Editor");
+
+		// ---------------------------------------------------------------------
+		//  Monorepo root auto-detection
+		// ---------------------------------------------------------------------
+
+		/// <summary>
+		/// Walks up from the executing assembly until it finds a directory containing
+		/// both FishMMO-Unity and FishMMO-Setup subdirectories (the monorepo signature).
+		/// Falls back to ~/Dev/FishMMO-Dev if the root cannot be auto-detected.
+		/// </summary>
+		private static string FindMonorepoRoot()
+		{
+			string? assemblyPath = Assembly.GetExecutingAssembly().Location;
+			string? dir = Path.GetDirectoryName(assemblyPath);
+
+			while (dir != null)
+			{
+				if (Directory.Exists(Path.Combine(dir, "FishMMO-Unity")) &&
+					Directory.Exists(Path.Combine(dir, "FishMMO-Setup")))
+				{
+					return dir;
+				}
+				dir = Path.GetDirectoryName(dir);
+			}
+
+			// Fallback when running outside the monorepo tree (e.g., published build).
+			return Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+				"Dev", "FishMMO-Dev");
+		}
 	}
 }
