@@ -104,7 +104,7 @@ All three are launched from a single `GameServer` executable with a command-line
 ## Prerequisites
 
 - **Git** for cloning the repository
-- **.NET 8.0 SDK** (the installer can install this for you)
+- **.NET 8.0 SDK**
 - **Unity Hub** with **Unity 6.3 LTS** (the installer can install these for you)
 - **PostgreSQL 14+** (the installer can install this for you)
 - Administrator/root privileges for system-level installs
