@@ -90,14 +90,19 @@ namespace FishMMO.Database.Npgsql.Services
 						.Count());
 
 		/// <summary>
-		/// Compiled query for retrieving all characters by account (hot path for character selection).
+		/// Retrieves all non-deleted characters for an account.
+		/// Uses a regular async query — EF Core 5+ caches query plans automatically,
+		/// and the EF.CompileAsyncQuery API had a known translation failure with
+		/// negated boolean conditions (!c.Deleted) on the Npgsql provider.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<List<CharacterEntity>>> fetchManyByAccountQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, string account, CancellationToken ct) =>
-				context.Characters
-					.AsNoTracking()
-					.Where(c => c.Account == account && !c.Deleted)
-					.ToList());
+		private static async Task<List<CharacterEntity>> FetchManyByAccountQueryAsync(
+			NpgsqlDbContext context, string account, CancellationToken ct)
+		{
+			return await context.Characters
+				.AsNoTracking()
+				.Where(c => c.Account == account && c.Deleted == false)
+				.ToListAsync(ct);
+		}
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterService"/> class.
@@ -533,7 +538,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await fetchManyByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false);
+				var entities = await FetchManyByAccountQueryAsync(dbContext, account, cancellationToken).ConfigureAwait(false);
 				return (IReadOnlyList<CharacterData>)entities.Select(MapEntityToData).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;

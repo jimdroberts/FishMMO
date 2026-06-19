@@ -171,13 +171,14 @@ namespace FishMMO.Installer
 			Console.WriteLine("Select output format:");
 			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
 			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
+				Console.WriteLine("3 : PowerShell / CMD snippet  (%USERPROFILE%\\fishmmo-secrets.ps1 or .cmd)");
 			Console.WriteLine("0 : Back");
 
 			ConsoleKeyInfo key = Console.ReadKey(true);
 			Console.WriteLine();
 
 			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
-			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2) return;
+			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2 && key.Key != ConsoleKey.D3) return;
 
 			AppSettings defaults = TryLoadExisting(Path.Combine(targetDir, "appsettings.json"));
 
@@ -308,12 +309,13 @@ namespace FishMMO.Installer
 			Console.WriteLine("Select output format:");
 			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
 			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
+				Console.WriteLine("3 : PowerShell / CMD snippet  (%USERPROFILE%\\fishmmo-secrets.ps1 or .cmd)");
 			Console.WriteLine("0 : Back");
 
 			ConsoleKeyInfo key = Console.ReadKey(true);
 			Console.WriteLine();
 			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
-			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2) return;
+			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2 && key.Key != ConsoleKey.D3) return;
 
 			var secrets = new Dictionary<string, string>
 			{
@@ -331,6 +333,7 @@ namespace FishMMO.Installer
 			{
 				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
 				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
+				case ConsoleKey.D3: await WriteWindowsSecretsSnippet(secrets); break;
 			}
 		}
 
@@ -460,12 +463,13 @@ namespace FishMMO.Installer
 			Console.WriteLine("Select output format:");
 			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
 			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
+				Console.WriteLine("3 : PowerShell / CMD snippet  (%USERPROFILE%\\fishmmo-secrets.ps1 or .cmd)");
 			Console.WriteLine("0 : Back");
 
 			ConsoleKeyInfo key = Console.ReadKey(true);
 			Console.WriteLine();
 			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
-			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2) return;
+			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2 && key.Key != ConsoleKey.D3) return;
 
 			Console.WriteLine("Enter Discord Bot secret values to export as environment variables.");
 			Console.WriteLine();
@@ -483,6 +487,7 @@ namespace FishMMO.Installer
 			{
 				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
 				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
+				case ConsoleKey.D3: await WriteWindowsSecretsSnippet(secrets); break;
 			}
 		}
 
@@ -543,12 +548,13 @@ namespace FishMMO.Installer
 			Console.WriteLine("Select output format:");
 			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
 			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
+				Console.WriteLine("3 : PowerShell / CMD snippet  (%USERPROFILE%\\fishmmo-secrets.ps1 or .cmd)");
 			Console.WriteLine("0 : Back");
 
 			ConsoleKeyInfo key = Console.ReadKey(true);
 			Console.WriteLine();
 			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
-			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2) return;
+			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2 && key.Key != ConsoleKey.D3) return;
 
 			Console.WriteLine("Enter the CMS database connection string secret.");
 			Console.WriteLine();
@@ -563,6 +569,7 @@ namespace FishMMO.Installer
 			{
 				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
 				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
+				case ConsoleKey.D3: await WriteWindowsSecretsSnippet(secrets); break;
 			}
 		}
 
@@ -635,6 +642,63 @@ namespace FishMMO.Installer
 			Console.WriteLine("New shells will pick it up automatically.");
 			Console.WriteLine($"To activate now, run:  source \"{filePath}\"");
 		}
+
+				private static async Task WriteWindowsSecretsSnippet(Dictionary<string, string> secrets)
+		{
+			string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+			// Write PowerShell profile snippet
+			string psDir = Path.Combine(userProfile, "Documents", "WindowsPowerShell");
+			Directory.CreateDirectory(psDir);
+			string psPath = Path.Combine(psDir, "fishmmo-secrets.ps1");
+
+			var ps = new StringBuilder();
+			ps.AppendLine("# FishMMO secrets — written by FishMMO Installer");
+			ps.AppendLine("# These environment variables override appsettings.json values.");
+			ps.AppendLine("# .NET IConfiguration maps double-underscore __ to JSON nesting:");
+			ps.AppendLine("#   Npgsql__Password  ->  appsettings.json : Npgsql.Password");
+			ps.AppendLine();
+			foreach (var kvp in secrets)
+			{
+				if (!string.IsNullOrEmpty(kvp.Value))
+					ps.AppendLine($"$env:{kvp.Key} = \"{EscapePSString(kvp.Value)}\"");
+			}
+			ps.AppendLine();
+			ps.AppendLine("# To auto-load, add this line to your PowerShell profile ($PROFILE):");
+			ps.AppendLine($"#   . \"{psPath.Replace("\\", "\\")}\"");
+			await File.WriteAllTextAsync(psPath, ps.ToString(), Encoding.UTF8);
+			await Log.Info("FishMMOInstaller", $"PowerShell secrets snippet: {psPath}");
+
+			// Write CMD batch snippet
+			string cmdPath = Path.Combine(userProfile, "fishmmo-secrets.cmd");
+			var cmd = new StringBuilder();
+			cmd.AppendLine("@echo off");
+			cmd.AppendLine("REM FishMMO secrets — written by FishMMO Installer");
+			cmd.AppendLine("REM Run this script to set environment variables for the current CMD session.");
+			cmd.AppendLine("REM For persistent settings, use: setx KEY VALUE");
+			cmd.AppendLine();
+			foreach (var kvp in secrets)
+			{
+				if (!string.IsNullOrEmpty(kvp.Value))
+					cmd.AppendLine($"set {kvp.Key}={EscapeCmdString(kvp.Value)}");
+			}
+			await File.WriteAllTextAsync(cmdPath, cmd.ToString(), Encoding.UTF8);
+			await Log.Info("FishMMOInstaller", $"CMD secrets snippet: {cmdPath}");
+
+			Console.WriteLine();
+			Console.WriteLine($"PowerShell: {psPath}");
+			Console.WriteLine($"CMD:        {cmdPath}");
+			Console.WriteLine("For persistent Windows environment variables, run from an elevated CMD:");
+			Console.WriteLine("  setx FISHMMO_CLIENT_GATE_SECRET \"your-secret-here\"");
+		}
+
+		/// <summary>Escapes a value for PowerShell double-quoted string.</summary>
+		private static string EscapePSString(string value) => value.Replace("\"", "`\"").Replace("$", "`$");
+
+		/// <summary>Escapes a value for CMD set command (caret-escape special chars).</summary>
+		private static string EscapeCmdString(string value) =>
+			value.Replace("%", "%%").Replace("^", "^^").Replace("&", "^&")
+				.Replace("<", "^<").Replace(">", "^>").Replace("|", "^|");
 
 		private static async Task WriteSystemdEnvFile(string targetDir, Dictionary<string, string> secrets)
 		{

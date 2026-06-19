@@ -539,72 +539,121 @@ StaleSceneTimeout=5
 
 ### Logging Configuration
 
-Each server needs a `logging.json` file placed alongside the executable. There is no template in `FishMMO-Setup/` — create one for your environment:
+All projects share a single canonical `logging.json` at [`FishMMO-Setup/logging.json`](FishMMO-Setup/logging.json). Each project's build copies it into the output directory automatically — operators only need to edit the one source file.
 
 ```json
 {
-  "LogLevel": "Info",
+  "LoggingManager": {
+    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"]
+  },
+  "Loggers": []
+}
+```
+
+**Log levels:** `Verbose`, `Debug`, `Info`, `Warning`, `Error`, `Critical`.
+
+**Adding file logging** (edit `FishMMO-Setup/logging.json`):
+
+```json
+{
+  "LoggingManager": {
+    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical"]
+  },
   "Loggers": [
     {
-      "Type": "File",
-      "Config": {
-        "FilePath": "logs/server.log",
-        "Append": true,
-        "MaxFileSizeMB": 10
-      }
+      "Type": "FileLoggerConfig",
+      "LoggerType": "FileLogger",
+      "Enabled": true,
+      "AllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"],
+      "LogDirectory": "logs",
+      "FileName": "server.log"
     }
   ]
 }
 ```
 
-**Log levels:** `Trace`, `Debug`, `Info`, `Warning`, `Error`, `Critical`.
-
-**Multiple sinks** can be configured:
+**Adding email alerts** (append to the `Loggers` array):
 
 ```json
 {
-  "LogLevel": "Info",
-  "Loggers": [
-    {
-      "Type": "File",
-      "Config": {
-        "FilePath": "logs/server.log",
-        "Append": true,
-        "MaxFileSizeMB": 50
-      }
-    },
-    {
-      "Type": "Email",
-      "Config": {
-        "MinimumLevel": "Error",
-        "SmtpServer": "smtp.example.com",
-        "Port": 587,
-        "EnableSsl": true,
-        "Username": "alerts@example.com",
-        "Password": "********",
-        "From": "alerts@example.com",
-        "To": "ops@example.com",
-        "Subject": "FishMMO Alert"
-      }
-    }
-  ]
+  "Type": "EmailLoggerConfig",
+  "LoggerType": "EmailLogger",
+  "Enabled": true,
+  "AllowedLevels": ["Error", "Critical"],
+  "SmtpServer": "smtp.example.com",
+  "Port": 587,
+  "EnableSsl": true,
+  "Username": "alerts@example.com",
+  "Password": "********",
+  "From": "alerts@example.com",
+  "To": "ops@example.com",
+  "Subject": "FishMMO Alert"
 }
 ```
 
-> **Security:** Keep `logging.json` out of source control if it contains SMTP credentials. Load secrets from environment variables instead.
+> **Security:** Keep SMTP credentials out of source control. Load secrets from environment variables or a separate secrets file. See [FishMMO-Logger README](FishMMO-Logger/README.md) for full configuration details.
 
-### appsettings.json — Database
+**Runtime override:** Place a modified `logging.json` in the working directory — it takes precedence over the bundled copy. The log level can also be overridden via the `FISHMMO_LOG_LEVEL` environment variable (e.g. `Debug`, `Verbose`).
 
-Placed alongside every server executable and web service. Templates with `__REPLACE_ME__` placeholders are in `FishMMO-Setup/`. Fill in your actual credentials before deploying:
+### Configuration Files — `FishMMO-Setup/`
+
+All project configuration lives in [`FishMMO-Setup/`](FishMMO-Setup/) as the single source of truth. Templates use `__REPLACE_ME__` placeholders — fill in your actual credentials before deploying.
+
+**Directory structure:**
+
+```
+FishMMO-Setup/
+├── logging.json                              # Shared logging — all projects
+├── nginx.conf                                # NGINX reverse-proxy config
+├── Development/                              # Dev / local configurations
+│   ├── appsettings.json                      # Unity server Npgsql (dev)
+│   ├── appsettings.AppHealthMonitor.json      # Process supervisor config
+│   ├── appsettings.DiscordBot.json           # Discord token + Npgsql
+│   ├── appsettings.IpFetchServer.json        # IP-fetch web server base
+│   ├── appsettings.IpFetchServer.Development.json  # Dev overrides
+│   ├── appsettings.Patcher.json              # Patch delivery web server
+│   ├── appsettings.WebGLServer.json          # Static asset web server
+│   ├── appsettings.CMS.json                  # CMS web app
+│   ├── appsettings.Database.json             # Npgsql pool / retry template
+│   ├── install-config.*.json                 # Installer templates (3)
+│   ├── LoginServer.cfg / WorldServer.cfg / SceneServer.cfg
+├── Release/                                  # Production configurations
+│   ├── appsettings.json                      # Unity server Npgsql + Redis
+│   ├── appsettings.IpFetchServer.Production.json  # Prod overrides
+│   ├── LoginServer.cfg / WorldServer.cfg / SceneServer.cfg
+```
+
+**How it works:** Each project's `.csproj` copies the appropriate file from `FishMMO-Setup/` into its build output directory, renaming it to `appsettings.json` (or `logging.json`). At runtime, applications resolve config with a **working-directory-first** pattern: if a modified file exists in the working directory, it overrides the bundled copy. Environment variables (prefixed `FISHMMO_`) provide the highest-priority overrides.
+
+**Unity Npgsql example** ([`Development/appsettings.json`](FishMMO-Setup/Development/appsettings.json)):
 
 ```json
 {
   "Npgsql": {
     "Database": "fish_mmo_postgresql",
-    "Username": "fishmmo",
-    "Password": "your_secure_password",
+    "Username": "__REPLACE_ME__",
+    "Password": "__REPLACE_ME__",
     "Host": "127.0.0.1",
     "Port": "5432"
+  }
+}
+```
+
+**Release adds Redis** ([`Release/appsettings.json`](FishMMO-Setup/Release/appsettings.json)):
+
+```json
+{
+  "Npgsql": {
+    "Database": "fish_mmo_postgresql",
+    "Username": "__REPLACE_ME__",
+    "Password": "__REPLACE_ME__",
+    "Host": "127.0.0.1",
+    "Port": "5432"
+  },
+  "Redis": {
+    "Host": "127.0.0.1",
+    "Port": "6379",
+    "Password": "__REPLACE_ME__"
   }
 }
 ```
@@ -800,20 +849,29 @@ Servers must be started in this exact order:
 
 ### Starting Game Servers
 
-All three server types use the same `GameServer` executable with different launch arguments. Build the server first from Unity (`FishMMO → Build → Build Server`), then:
+All three server types use the same `GameServer` executable with different launch arguments. Build the server first from Unity (`FishMMO → Build → Build Server`).
+
+**Recommended:** Use the [AppHealthMonitor](FishMMO-AppHealthMonitor/README.md) daemon for production deployments — it provides automatic restarts, health checks, and process supervision:
+
+```bash
+cd FishMMO-AppHealthMonitor
+dotnet build
+dotnet run --project AppHealthMonitor/AppHealthMonitor.csproj
+```
+
+Install as a systemd service (Linux) via the [FishMMO-Installer](FishMMO-Installer/README.MD):
+```bash
+FishMMO-Installer --component apphealthmonitor-service
+```
+
+**Manual startup (dev/testing):**
 
 **Linux:**
 ```bash
-# Start LoginServer
 ./GameServer LOGIN &
-# Wait for LoginServer to register (~5-10 seconds)
 sleep 10
-
-# Start WorldServer
 ./GameServer WORLD &
 sleep 5
-
-# Start SceneServer(s)
 ./GameServer SCENE &
 ```
 
@@ -834,32 +892,49 @@ Start-Process GameServer.exe -ArgumentList "SCENE"
 Each server needs these files in its working directory:
 - `GameServer` (the executable)
 - `LoginServer.cfg` / `WorldServer.cfg` / `SceneServer.cfg` (matching the server type)
-- `logging.json` (logging config)
+- `logging.json` (shared logging config, copied from `FishMMO-Setup/` at build)
+- `appsettings.json` (database config, copied from `FishMMO-Setup/` at build)
 - `AddressableAssetsData/` (Addressable asset bundles from the build)
 - `StreamingAssets/` (if any)
 
-> The Unity build process copies the correct `.cfg` and `appsettings.json` from `FishMMO-Setup/` automatically.
+> The Unity build process copies the correct `.cfg`, `appsettings.json`, and `logging.json` from `FishMMO-Setup/` automatically via `BuildExecutor.CopyConfigurationFiles()`.
 
 ### Starting Web Servers
+
+All web servers load `appsettings.json` and `logging.json` from `FishMMO-Setup/` (copied to the build output at build time). Place a modified copy in the working directory for local overrides.
+
+**For production,** install them as OS services via the [FishMMO-Installer](FishMMO-Installer/README.MD):
+
+```bash
+# Linux (systemd):
+FishMMO-Installer --component systemd-services
+
+# Windows (NSSM):
+FishMMO-Installer --component windows-services
+```
+
+This configures automatic startup, crash recovery, environment variables (`FISHMMO_ENVIRONMENT=Production`), and log file capture. See the [Installer README](FishMMO-Installer/README.MD) for details.
+
+**For development:**
 
 **IPFetch Server (Login Server Discovery):**
 ```bash
 cd FishMMO-WebServers/IPFetchASP.NET/IpFetchServer
+dotnet build   # copies configs from FishMMO-Setup/
 dotnet run
-# Or publish and run the binary:
-# dotnet publish -c Release -o publish
-# ./publish/IpFetchServer
 ```
 
 **Patcher Server (Patch Delivery):**
 ```bash
 cd FishMMO-WebServers/PatcherASP.NET/Patcher
+dotnet build
 dotnet run
 ```
 
 **WebGL Server (Static File Serving):**
 ```bash
 cd FishMMO-WebServers/WebGLServerASP.NET/WebGLServer
+dotnet build
 dotnet run
 ```
 

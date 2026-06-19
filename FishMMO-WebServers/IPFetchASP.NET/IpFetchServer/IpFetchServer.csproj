@@ -15,9 +15,22 @@
     <ProjectReference Include="..\..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Ensure appsettings.json is copied to the output directory -->
-    <None Update="appsettings.json">
+    <!-- Shared logging configuration from FishMMO-Setup (no rename needed). -->
+    <None Include="..\..\..\FishMMO-Setup\logging.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>logging.json</Link>
     </None>
   </ItemGroup>
+  <!-- Copy-and-rename config files from FishMMO-Setup/ to output. -->
+  <Target Name="CopyFishMMOConfig" AfterTargets="Build">
+    <Copy SourceFiles="..\..\..\FishMMO-Setup\Development\appsettings.IpFetchServer.json"
+          DestinationFiles="$(OutDir)appsettings.json"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\..\..\FishMMO-Setup\Development\appsettings.IpFetchServer.Development.json"
+          DestinationFiles="$(OutDir)appsettings.Development.json"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\..\..\FishMMO-Setup\Release\appsettings.IpFetchServer.Production.json"
+          DestinationFiles="$(OutDir)appsettings.Production.json"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

@@ -427,8 +427,8 @@ Protecting `appsettings.json` (and any environment-specific overrides) is essent
 - **Exclude configuration with secrets** from commits. Add this to your repository `.gitignore`:
 
 	```gitignore
-	# Local/secret config
-	FishMMO-DB/appsettings.*.json
+	# Local/secret config — use environment variables for production secrets
+	FishMMO-Setup/**/appsettings.*.json
 	**/appsettings.*.json
 	```
 

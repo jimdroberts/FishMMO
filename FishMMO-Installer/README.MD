@@ -73,10 +73,13 @@ VS Build Tools installs the **`.NET desktop development`** and **`Desktop develo
 | 2 | Install / Renew Let's Encrypt certificate for NGINX |
 | 3 | Deploy FishMMO `nginx.conf` (from `FishMMO-Setup/`) |
 | 4 | Configure Firewall Rules (open ports 80, 443) |
-| 5 | Register FishMMO Web Servers as systemd Services (Linux) |
+| 5 | Register FishMMO Web Servers as systemd Services (Linux) or Windows Services via NSSM |
+| 6 | Install AppHealthMonitor Daemon Service (process supervisor for Unity servers) |
 
 On **Windows** NGINX runs as a Windows service managed by NSSM `2.24` and TLS is automated via win-acme `2.2.9.1701`.  
 On **Linux** NGINX is managed by systemd and TLS is automated via certbot.
+
+The web server service registration (menu 3-5) is **cross-platform** — systemd on Linux, NSSM on Windows — with environment variables set automatically to `Production` (configurable via `FISHMMO_SERVICE_ENVIRONMENT`). The AppHealthMonitor daemon (menu 3-6) provides process supervision for Unity server builds with automatic restarts and health checks.
 
 ### 4 — Unity & Build
 
@@ -131,8 +134,12 @@ For each component, the wizard can generate:
 
 - `appsettings.json` — base configuration (`chmod 600` on Linux)
 - `appsettings.Development.json` / `appsettings.Production.json` — environment overrides (`chmod 600`)
-- `~/.config/fish/conf.d/fishmmo-secrets.fish` — fish shell secrets snippet (`chmod 600`)
-- `fishmmo-secrets.env` — systemd / `.env` secrets file in the target directory (`chmod 600`)
+- `~/.config/fish/conf.d/fishmmo-secrets.fish` — fish shell snippet (`chmod 600`)
+- `fishmmo-secrets.env` — systemd / Docker `.env` file in the target directory (`chmod 600`)
+- `%USERPROFILE%\Documents\WindowsPowerShell\fishmmo-secrets.ps1` — PowerShell snippet (Windows)
+- `%USERPROFILE%\fishmmo-secrets.cmd` — CMD batch snippet (Windows)
+
+All secrets files set the same environment variable format. .NET IConfiguration maps double-underscore (`__`) to JSON nesting — e.g. `Npgsql__Password` → `Npgsql:Password` in `appsettings.json`.
 
 ---
 
@@ -175,7 +182,9 @@ Usage:
 | `appsettings` | Configure appsettings.json + secrets |
 | `create-migration` | Create a new EF Core database migration |
 | `firewall` | Configure host firewall rules |
-| `systemd-services` | Register FishMMO web servers as systemd services |
+| `systemd-services` | Register FishMMO web servers as systemd services (Linux) |
+| `windows-services` | Register FishMMO web servers as Windows services via NSSM |
+| `apphealthmonitor-service` | Install AppHealthMonitor daemon service (Linux systemd) |
 | `all` | Run every component in dependency order |
 
 ### Pre-flight checks
@@ -235,7 +244,7 @@ The installer runs pre-flight checks at startup in all modes. In non-interactive
 |---|---|
 | `Components/FirewallInstaller.cs` | Host firewall rule creation (ufw / firewalld on Linux, netsh on Windows) |
 | `Components/HealthChecker.cs` | Post-install validation — .NET SDK, ASP.NET Runtime, PostgreSQL, NGINX, PgBouncer, systemd services, database connectivity, disk space |
-| `Components/SystemdServiceInstaller.cs` | Generates and installs systemd unit files for FishMMO web servers (IPFetch, Patcher, WebGL) |
+| `Components/SystemdServiceInstaller.cs` | Cross-platform service installation — systemd unit files on Linux, NSSM Windows services on Windows. Covers web servers (IPFetch, Patcher, WebGL) and the AppHealthMonitor daemon |
 
 ### Infrastructure (shared services)
 
@@ -271,7 +280,11 @@ ASPNETCORE_ENVIRONMENT
 
 The environment name is resolved via `DatabaseConfigurationHelper.ResolveEnvironmentName()` which checks (in order): `FISHMMO_ENVIRONMENT` env var → `DOTNET_ENVIRONMENT` → `ASPNETCORE_ENVIRONMENT`. Defaults to `"Development"` if none are set.
 
-Configuration is loaded via `DatabaseConfigurationHelper.BuildDesignTimeConfiguration`, merging `appsettings.json` with an optional `appsettings.{Environment}.json` overlay. The installer looks for `appsettings.json` first in the EXE directory, then falls back to `FishMMO-Database/FishMMO-DB/`.
+Configuration is loaded via `DatabaseConfigurationHelper.BuildDesignTimeConfiguration`, which:
+1. Checks the **working directory** for `appsettings.json` (operator override).
+2. Falls back to the **bundled copy** in the EXE directory (copied from [`FishMMO-Setup/Development/appsettings.Database.json`](../FishMMO-Setup/Development/appsettings.Database.json) at build time).
+3. Merges an optional `appsettings.{Environment}.json` overlay.
+4. Applies environment variables as the highest-priority source.
 
 ### Environment variables for non-interactive mode
 
@@ -284,8 +297,10 @@ When running in non-interactive mode (`--non-interactive` or `--component`), som
 | `FISHMMO_PG_SUPERUSER_PASSWORD` | `fishmmo-db` | PostgreSQL superuser password (avoids interactive prompt) |
 | `FISHMMO_PG_LISTEN_ADDRESSES` | PostgreSQL hardening | Override `listen_addresses` in postgresql.conf (default: `localhost`) |
 | `FISHMMO_UNITY_EXE` | `build-unity` | Path to Unity Editor executable (skips auto-detection) |
+| `FISHMMO_SERVICE_ENVIRONMENT` | service installers | Override the environment name set in systemd/NSSM service units (default: `Production`) |
+| `FISHMMO_CLIENT_GATE_SECRET` | web servers | Shared secret for client-gate authentication (auto-generated by AppSettings wizard) |
 
-Logging is bootstrapped from `logging.json` in the EXE directory before any other operation.
+Logging is bootstrapped from `logging.json` (copied from [`FishMMO-Setup/logging.json`](../FishMMO-Setup/logging.json) at build time). The `FISHMMO_LOG_LEVEL` environment variable overrides console verbosity at runtime without editing the file.
 
 ### Linux DotNet environment
 
@@ -383,7 +398,7 @@ Run the compiled binary directly:
 - Windows: `FishMMO-Installer/FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer.exe`
 - Linux: `./FishMMO-Installer/FishMMO-Installer/bin/Debug/net8.0/FishMMO-Installer`
 
-> **Important:** `logging.json` is shipped in the source tree and copied to the output directory automatically by the build. `appsettings.json` must be created via the Configuration wizard (menu 5) or manually before running database operations. The MSBuild targets in the `.csproj` automatically copy `FishMMO-Database` and `FishMMO-SharedUtility` source trees to the build output directory.
+> **Important:** `logging.json` and `appsettings.json` are copied from [`FishMMO-Setup/`](../FishMMO-Setup/) to the output directory automatically by the build. Edit the templates in `FishMMO-Setup/Development/` with your credentials before building, or use the Configuration wizard (menu 5) to apply overrides. Place a modified copy in the working directory to override the bundled defaults at runtime.
 
 > **Note:** `checksums.json` is also copied to the output directory. Populate it with SHA256 hashes of your downloaded artifacts to enable integrity verification. See [checksums.json](#download-integrity-verification) below.
 
@@ -528,13 +543,25 @@ dotnet tool list --global
 
 Confirm `dotnet-ef` appears in the global tools list.
 
-### FishMMO systemd services (Linux)
+### FishMMO web server services
 
+**Linux (systemd):**
 ```bash
 systemctl status fishmmo-ipfetch
 systemctl status fishmmo-patcher
 systemctl status fishmmo-webgl
+systemctl status fishmmo-apphealthmonitor
 ```
+
+**Windows (NSSM / PowerShell):**
+```powershell
+sc.exe query FishMMO-IpFetch
+sc.exe query FishMMO-Patcher
+sc.exe query FishMMO-WebGL
+sc.exe query FishMMO-AppHealthMonitor
+```
+
+Services are configured with `ASPNETCORE_ENVIRONMENT`, `DOTNET_ENVIRONMENT`, and `FISHMMO_ENVIRONMENT` set to `Production` (overridable via `FISHMMO_SERVICE_ENVIRONMENT` env var). On Windows, NSSM passes these via `AppEnvironmentExtra`; on Linux, systemd uses `Environment=` directives and an optional `EnvironmentFile=`.
 
 ### Health check (built-in)
 
@@ -690,12 +717,27 @@ netsh advfirewall firewall show rule name="FishMMO NGINX HTTPS"
 
 #### 3) Validate and restart NGINX service
 
+The installer manages the NGINX Windows service via NSSM. Service operations (install, start, stop, restart) require **Administrator privileges** — the installer checks this before any service operation.
+
 ```powershell
+# Validate configuration
 & "C:\nginx\nginx-1.29.5\nginx.exe" -t
-sc.exe stop "FishMMO-NGINX"
-sc.exe start "FishMMO-NGINX"
+
+# Restart via NSSM (preferred — handles service state correctly)
+& ".\nssm\nssm.exe" stop "FishMMO-NGINX"
+Start-Sleep 1.5
+& ".\nssm\nssm.exe" start "FishMMO-NGINX"
+
+# Check service status
+& ".\nssm\nssm.exe" status "FishMMO-NGINX"
 sc.exe query "FishMMO-NGINX"
 ```
+
+**Troubleshooting:**
+- Service won't start → check `C:\nginx\nginx-1.29.5\logs\service-err.log` (NSSM captures stderr)
+- Port 80/443 in use → `netstat -ano | findstr :80`
+- Run installer as Administrator for all service operations
+- If NSSM download fails, install manually from https://nssm.cc/release/nssm-2.24.zip
 
 #### 4) Router/NAT forwarding
 

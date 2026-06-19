@@ -16,7 +16,8 @@ namespace FishMMO.WebServer
 	{
 		public static async Task Main(string[] args)
 		{
-			await Log.Initialize("logging.json");
+			string loggingConfigPath = Path.Combine(AppContext.BaseDirectory, "logging.json");
+			await Log.Initialize(loggingConfigPath);
 			await Log.Info("Program", "Starting WebServer application...");
 
 			try
@@ -36,12 +37,19 @@ namespace FishMMO.WebServer
 
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
+				.ConfigureAppConfiguration((hostingContext, config) =>
+				{
+					string env = hostingContext.HostingEnvironment.EnvironmentName;
+					config.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json"), optional: true, reloadOnChange: true);
+					config.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), $"appsettings.{env}.json"), optional: true, reloadOnChange: true);
+				})
 				.ConfigureLogging((context, logging) =>
 				{
 					logging.ClearProviders();
 				})
 				.ConfigureWebHostDefaults(webBuilder =>
 				{
+					webBuilder.UseContentRoot(AppContext.BaseDirectory);
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
 						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8000";

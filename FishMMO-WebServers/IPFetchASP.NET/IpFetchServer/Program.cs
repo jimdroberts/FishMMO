@@ -23,7 +23,8 @@ namespace FishMMO.WebServer
 				Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", fishEnv);
 			}
 
-			await Log.Initialize("logging.json");
+			string loggingConfigPath = Path.Combine(AppContext.BaseDirectory, "logging.json");
+			await Log.Initialize(loggingConfigPath);
 			await Log.Info("Program", "Starting WebServer application...");
 
 			try
@@ -42,12 +43,21 @@ namespace FishMMO.WebServer
 
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
+				.ConfigureAppConfiguration((hostingContext, config) =>
+				{
+					// Working-directory overrides take precedence over bundled defaults.
+					string env = hostingContext.HostingEnvironment.EnvironmentName;
+					config.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json"), optional: true, reloadOnChange: true);
+					config.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), $"appsettings.{env}.json"), optional: true, reloadOnChange: true);
+				})
 				.ConfigureLogging((context, logging) =>
 				{
 					logging.ClearProviders();
 				})
 				.ConfigureWebHostDefaults(webBuilder =>
 				{
+					// Bundled defaults from FishMMO-Setup (copied to output directory).
+					webBuilder.UseContentRoot(AppContext.BaseDirectory);
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
 						int port = context.Configuration.GetValue<int>("WebServer:HttpPort", 8080);

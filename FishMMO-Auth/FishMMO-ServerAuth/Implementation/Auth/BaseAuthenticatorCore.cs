@@ -426,8 +426,13 @@ namespace FishMMO.Auth.Implementation
 			if (conn == null) return false;
 			if (authStartTimeByClientId.Count >= MaxPendingAuthConnections)
 				return false;
-			DateTime now = DateTime.UtcNow;
 			int clientId = GetConnectionClientId(conn);
+			if (clientId <= 0)
+			{
+				_ = Log.Warning(LogPrefix, $"TrackAuthStart: refusing to track invalid clientId {clientId}.");
+				return false;
+			}
+			DateTime now = DateTime.UtcNow;
 			authStartTimeByClientId.TryAdd(clientId, now);
 			authOriginalStartByClientId.TryAdd(clientId, now);
 			authConnectionByClientId[clientId] = conn;
@@ -444,6 +449,7 @@ namespace FishMMO.Auth.Implementation
 		{
 			if (conn == null) return;
 			int clientId = GetConnectionClientId(conn);
+			if (clientId <= 0) return;
 			if (authOriginalStartByClientId.TryGetValue(clientId, out DateTime originalStart))
 			{
 				if ((DateTime.UtcNow - originalStart).TotalSeconds >= AuthHardDeadlineSeconds)

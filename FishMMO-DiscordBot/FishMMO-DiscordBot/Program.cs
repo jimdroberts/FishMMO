@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
@@ -66,7 +68,13 @@ namespace FishMMO.DiscordBot
 			Host.CreateDefaultBuilder(args)
 				.ConfigureAppConfiguration((hostingContext, config) =>
 				{
-					config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+					string env = hostingContext.HostingEnvironment.EnvironmentName;
+					// Bundled defaults from FishMMO-Setup (copied to output directory).
+					config.AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: false, reloadOnChange: false);
+					config.AddJsonFile(Path.Combine(AppContext.BaseDirectory, $"appsettings.{env}.json"), optional: true, reloadOnChange: false);
+					// Working-directory overrides take precedence.
+					config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+					config.AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: true);
 					config.AddEnvironmentVariables();
 				})
 				.ConfigureServices((hostContext, services) =>

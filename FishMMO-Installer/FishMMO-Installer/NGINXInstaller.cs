@@ -253,10 +253,19 @@ namespace FishMMO.Installer
 			}
 
 			string serviceName = InstallationConstants.NGINXWindowsServiceName;
-			string nssmExecutablePath = await EnsureNssmInstalledAsync();
-			if (string.IsNullOrWhiteSpace(nssmExecutablePath) || !File.Exists(nssmExecutablePath))
+			string nssmExe = await EnsureNssmInstalledAsync();
+			if (string.IsNullOrWhiteSpace(nssmExe) || !File.Exists(nssmExe))
 			{
 				await Log.Error("FishMMOInstaller", "Failed to locate NSSM. Cannot configure Windows NGINX service reliably.");
+				return;
+			}
+
+			if (!IsRunningAsAdministrator())
+			{
+				await Log.Error("FishMMOInstaller",
+					"NGINX Windows service configuration requires Administrator privileges.\n" +
+					"  -> Right-click the terminal and select 'Run as administrator', or\n" +
+					"  -> Run from an elevated PowerShell: Start-Process -Verb RunAs FishMMO-Installer.exe");
 				return;
 			}
 
@@ -267,31 +276,42 @@ namespace FishMMO.Installer
 			{
 				await Log.Info("FishMMOInstaller", $"Creating Windows service '{serviceName}' for NGINX...");
 				bool created = await InstallerProcessHelper.RunProcessAsync(
-					nssmExecutablePath,
+					nssmExe,
 					$"install \"{serviceName}\" \"{nginxExecutablePath}\"",
 					(exitCode, output, error) => exitCode == 0);
 
 				if (!created)
 				{
-					await Log.Error("FishMMOInstaller", "Failed to create NGINX Windows service. Run installer as administrator.");
+					await Log.Error("FishMMOInstaller", "Failed to create NGINX Windows service.\n" +
+				"  -> Ensure you are running as Administrator.\n" +
+				"  -> Check that NSSM is not blocked by antivirus.");
 					return;
 				}
 			}
 
-			await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"set \"{serviceName}\" AppDirectory \"{nginxHomeDirectory}\"");
-			await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"set \"{serviceName}\" AppParameters \"-p \\\"{nginxHomeDirectory}\\\" -c conf\\nginx.conf\"");
-			await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"set \"{serviceName}\" Start SERVICE_AUTO_START");
+			// Configure service logging and rotation.
+			await SetNssmParamAsync(nssmExe, serviceName, "AppStdout",
+				Path.Combine(nginxHomeDirectory, "logs", "service-out.log"));
+			await SetNssmParamAsync(nssmExe, serviceName, "AppStderr",
+				Path.Combine(nginxHomeDirectory, "logs", "service-err.log"));
+			await SetNssmParamAsync(nssmExe, serviceName, "AppRotateFiles", "1");
+			await InstallerProcessHelper.RunProcessAsync(nssmExe, $"set \"{serviceName}\" AppDirectory \"{nginxHomeDirectory}\"");
+			await InstallerProcessHelper.RunProcessAsync(nssmExe, $"set \"{serviceName}\" AppParameters \"-p \\\"{nginxHomeDirectory}\\\" -c conf\\nginx.conf\"");
+			await InstallerProcessHelper.RunProcessAsync(nssmExe, $"set \"{serviceName}\" Start SERVICE_AUTO_START");
 			await InstallerProcessHelper.RunProcessAsync("sc.exe", $"description \"{serviceName}\" \"FishMMO NGINX reverse proxy service\"");
 
 			await Log.Info("FishMMOInstaller", "Starting Windows NGINX service...");
-			bool serviceStarted = await InstallerProcessHelper.RunProcessAsync(nssmExecutablePath, $"start \"{serviceName}\"", (exitCode, output, error) =>
+			bool serviceStarted = await InstallerProcessHelper.RunProcessAsync(nssmExe, $"start \"{serviceName}\"", (exitCode, output, error) =>
 				exitCode == 0 ||
 				output.Contains("SERVICE_ALREADY_RUNNING", StringComparison.OrdinalIgnoreCase) ||
 				error.Contains("SERVICE_ALREADY_RUNNING", StringComparison.OrdinalIgnoreCase));
 
 			if (!serviceStarted)
 			{
-				await Log.Error("FishMMOInstaller", "Failed to start NGINX Windows service. Verify service account permissions and run as administrator.");
+				await Log.Error("FishMMOInstaller", "Failed to start NGINX Windows service.\n" +
+				"  -> Check Windows Event Viewer for service errors.\n" +
+				$"  -> Run: {nssmExe} status \"{serviceName}\"\n" +
+				"  -> Verify ports 80/443 are free: netstat -ano | findstr :80");
 				return;
 			}
 
@@ -302,14 +322,14 @@ namespace FishMMO.Installer
 		/// Ensures NSSM is available locally for reliable Windows service management.
 		/// </summary>
 		/// <returns>Absolute path to nssm.exe when available; otherwise an empty string.</returns>
-		private static async Task<string> EnsureNssmInstalledAsync()
+		public static async Task<string> EnsureNssmInstalledAsync()
 		{
 			string nssmDirectory = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), "nssm");
-			string nssmExecutablePath = Path.Combine(nssmDirectory, "nssm.exe");
+			string nssmExe = Path.Combine(nssmDirectory, "nssm.exe");
 
-			if (File.Exists(nssmExecutablePath))
+			if (File.Exists(nssmExe))
 			{
-				return nssmExecutablePath;
+				return nssmExe;
 			}
 
 			try
@@ -336,8 +356,8 @@ namespace FishMMO.Installer
 				string extractedExecutablePath = Path.Combine(nssmDirectory, "nssm-2.24", "win64", "nssm.exe");
 				if (File.Exists(extractedExecutablePath))
 				{
-					File.Copy(extractedExecutablePath, nssmExecutablePath, true);
-					return nssmExecutablePath;
+					File.Copy(extractedExecutablePath, nssmExe, true);
+					return nssmExe;
 				}
 			}
 			catch (Exception ex)
@@ -460,5 +480,100 @@ namespace FishMMO.Installer
 				await Log.Warning("FishMMOInstaller", "Unsupported operating system for NGINX config deployment.");
 			}
 		}
+
+		// ──────────────────────────────────────────────────────────────────────────
+		//  NSSM Windows Service Helpers (shared across all Windows service setup)
+		// ──────────────────────────────────────────────────────────────────────────
+
+		/// <summary>
+		/// Checks whether the current process is running with Administrator privileges.
+		/// Returns true on non-Windows (Linux uses sudo for individual commands).
+		/// </summary>
+		public static bool IsRunningAsAdministrator()
+		{
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+				return true;
+
+			try
+			{
+				using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+				var principal = new System.Security.Principal.WindowsPrincipal(identity);
+				return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		/// <summary>Sets an NSSM parameter for a service (best-effort).</summary>
+		public static async Task SetNssmParamAsync(string nssmExe, string serviceName,
+			string parameter, string value)
+		{
+			await InstallerProcessHelper.RunProcessAsync(nssmExe,
+				$"set \"{serviceName}\" {parameter} \"{value}\"",
+				(exitCode, _, _) => exitCode == 0);
+		}
+
+		/// <summary>Starts an NSSM-managed service.</summary>
+		public static async Task<bool> NssmStartServiceAsync(string nssmExe, string serviceName)
+		{
+			return await InstallerProcessHelper.RunProcessAsync(nssmExe,
+				$"start \"{serviceName}\"",
+				(exitCode, output, error) =>
+					exitCode == 0 ||
+					output.Contains("SERVICE_ALREADY_RUNNING") ||
+					error.Contains("SERVICE_ALREADY_RUNNING"));
+		}
+
+		/// <summary>Stops an NSSM-managed service.</summary>
+		/// <summary>Checks if an NSSM-managed service exists.</summary>
+		public static async Task<bool> NssmServiceExistsAsync(string nssmExe, string serviceName)
+		{
+			return await InstallerProcessHelper.RunProcessAsync(nssmExe,
+				$"status \"{serviceName}\"",
+				(exitCode, output, _) => exitCode == 0 && !output.Contains("Can't open service"));
+		}
+
+		/// <summary>NSSM install with AppDirectory and Start set automatically.</summary>
+		public static async Task<bool> NssmInstallAsync(string nssmExe, string serviceName,
+			string exePath, string appDirectory, string appParameters)
+		{
+			bool created = await InstallerProcessHelper.RunProcessAsync(nssmExe,
+				$"install \"{serviceName}\" \"{exePath}\"",
+				(exitCode, _, _) => exitCode == 0);
+			if (!created) return false;
+			await SetNssmParamAsync(nssmExe, serviceName, "AppDirectory", appDirectory);
+			await SetNssmParamAsync(nssmExe, serviceName, "AppParameters", appParameters);
+			await SetNssmParamAsync(nssmExe, serviceName, "Start", "SERVICE_AUTO_START");
+			return true;
+		}
+
+		/// <summary>
+		/// Sets NSSM AppEnvironmentExtra entries for a service.
+		/// Each string should be in KEY=VALUE format.
+		/// </summary>
+		public static async Task NssmSetEnvironmentAsync(string nssmExe, string serviceName,
+			IReadOnlyList<string> environmentVariables)
+		{
+			foreach (string env in environmentVariables)
+			{
+				if (!string.IsNullOrWhiteSpace(env))
+					await SetNssmParamAsync(nssmExe, serviceName, "AppEnvironmentExtra", env);
+			}
+		}
+
+
+		public static async Task<bool> NssmStopServiceAsync(string nssmExe, string serviceName)
+		{
+			return await InstallerProcessHelper.RunProcessAsync(nssmExe,
+				$"stop \"{serviceName}\"",
+				(exitCode, output, error) =>
+					exitCode == 0 ||
+					output.Contains("SERVICE_NOT_RUNNING") ||
+					error.Contains("SERVICE_NOT_RUNNING"));
+		}
+
 	}
 }
+

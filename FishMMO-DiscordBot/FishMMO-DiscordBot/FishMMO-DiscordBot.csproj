@@ -22,11 +22,11 @@
     <ProjectReference Include="..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Ensure appsettings.json is copied to the output directory -->
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+  <!-- Copy-and-rename config from FishMMO-Setup/Development/ to output. -->
+  <Target Name="CopyFishMMOConfig" AfterTargets="Build">
+    <Copy SourceFiles="..\..\FishMMO-Setup\Development\appsettings.DiscordBot.json"
+          DestinationFiles="$(OutDir)appsettings.json"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

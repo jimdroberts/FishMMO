@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Microsoft.Extensions.Configuration;
 
 namespace FishMMO.Database
@@ -43,11 +44,18 @@ namespace FishMMO.Database
 		public static IConfiguration BuildDesignTimeConfiguration(string basePath = null)
 		{
 			string env = ResolveEnvironmentName();
+			string bundledDir = !string.IsNullOrWhiteSpace(basePath) ? basePath : AppDomain.CurrentDomain.BaseDirectory;
+
+			// Working-directory-first: operator override takes precedence over the bundled default.
+			string Resolve(string fileName)
+			{
+				string local = Path.Combine(Directory.GetCurrentDirectory(), fileName);
+				return File.Exists(local) ? local : Path.Combine(bundledDir, fileName);
+			}
 
 			return new ConfigurationBuilder()
-				.SetBasePath(!string.IsNullOrWhiteSpace(basePath) ? basePath : AppDomain.CurrentDomain.BaseDirectory)
-				.AddJsonFile("appsettings.json", optional: false)
-				.AddJsonFile($"appsettings.{env}.json", optional: true)
+				.AddJsonFile(Resolve("appsettings.json"), optional: false)
+				.AddJsonFile(Resolve($"appsettings.{env}.json"), optional: true)
 				.AddEnvironmentVariables()
 				.Build();
 		}

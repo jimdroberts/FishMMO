@@ -233,7 +233,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			// --- Dispatch DTO construction + DB work to async (all template data is immutable) ---
+			// --- Extract all template data on the main thread ---
+			// ScriptableObject property accessors can trigger Unity's GetName()
+			// main-thread assertion in certain Unity versions.  Extract everything
+			// into plain C# objects now so the async worker never touches Unity types.
+			var preparedAttributes = BuildStartingAttributeEntries(raceTemplate);
+			var preparedFactions   = BuildStartingFactionEntries(raceTemplate);
+			var preparedAbilities  = new List<PreparedAbilityEntry>();
+			BuildStartingAbilityEntries(startingAbilityIDs, preparedAbilities);
+			BuildStartingAbilityEntries(raceTemplate.StartingAbilities, preparedAbilities);
+			var preparedInventory  = new List<PreparedInventoryEntry>();
+			BuildStartingInventoryEntries(startingInventoryItemIDs, preparedInventory);
+			BuildStartingInventoryEntries(raceTemplate.StartingInventoryItems, preparedInventory);
+			var preparedEquipment  = new List<PreparedEquipmentEntry>();
+			BuildStartingEquipmentEntries(startingEquipmentIDs, preparedEquipment);
+			BuildStartingEquipmentEntries(raceTemplate.StartingEquipment, preparedEquipment);
+
+			// --- Dispatch DTO construction + DB work to async ---
 			if (!TryBeginCreateRequest(conn))
 			{
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
@@ -244,7 +260,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			if (!TryEnqueueAsyncWork(() => ProcessCharacterCreateAsync(
-				conn, msg, accountName, raceTemplate,
+				conn, msg, accountName,
+				preparedAttributes, preparedFactions, preparedAbilities,
+				preparedInventory, preparedEquipment,
 				characterService, factionService, abilityService,
 				inventoryService, equipmentService, attributeService,
 				unitOfWorkService), conn.ClientId))
@@ -279,7 +297,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			NetworkConnection conn,
 			CharacterCreateBroadcast msg,
 			string accountName,
-			RaceTemplate raceTemplate,
+			List<PreparedAttributeEntry> preparedAttributes,
+			List<PreparedFactionEntry> preparedFactions,
+			List<PreparedAbilityEntry> preparedAbilities,
+			List<PreparedInventoryEntry> preparedInventory,
+			List<PreparedEquipmentEntry> preparedEquipment,
 			ICharacterService characterService,
 			ICharacterFactionService factionService,
 			ICharacterAbilityService abilityService,
@@ -421,22 +443,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					lastSaved: DateTime.UtcNow
 				);
 
-				// --- Precompute CPU-only payloads before opening DB transaction ---
-
-				List<PreparedAttributeEntry> preparedAttributes = BuildStartingAttributeEntries(raceTemplate);
-				List<PreparedFactionEntry> preparedFactions = BuildStartingFactionEntries(raceTemplate);
-
-				List<PreparedAbilityEntry> preparedAbilities = new List<PreparedAbilityEntry>();
-				BuildStartingAbilityEntries(startingAbilityIDs, preparedAbilities);
-				BuildStartingAbilityEntries(raceTemplate.StartingAbilities, preparedAbilities);
-
-				List<PreparedInventoryEntry> preparedInventoryItems = new List<PreparedInventoryEntry>();
-				BuildStartingInventoryEntries(startingInventoryItemIDs, preparedInventoryItems);
-				BuildStartingInventoryEntries(raceTemplate.StartingInventoryItems, preparedInventoryItems);
-
-				List<PreparedEquipmentEntry> preparedEquipment = new List<PreparedEquipmentEntry>();
-				BuildStartingEquipmentEntries(startingEquipmentIDs, preparedEquipment);
-				BuildStartingEquipmentEntries(raceTemplate.StartingEquipment, preparedEquipment);
+				// Precomputed payloads were extracted on the main thread before dispatch.
 
 				// --- Begin Unit of Work for atomic character creation ---
 
@@ -488,7 +495,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					Dictionary<int, CharacterAttributeData> initialAttributes = BuildStartingAttributes(characterID, preparedAttributes);
 					List<CharacterFactionData> factions = BuildStartingFactions(characterID, preparedFactions);
 					List<CharacterAbilityData> abilities = BuildStartingAbilities(characterID, preparedAbilities);
-					List<CharacterInventoryData> inventoryItems = BuildStartingItems(characterID, preparedInventoryItems);
+					List<CharacterInventoryData> inventoryItems = BuildStartingItems(characterID, preparedInventory);
 					List<CharacterEquipmentData> equipment = BuildStartingEquipment(characterID, preparedEquipment);
 
 					// --- Persist all sub-entities within the same transaction ---

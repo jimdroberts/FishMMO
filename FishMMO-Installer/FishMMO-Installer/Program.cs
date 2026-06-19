@@ -354,31 +354,27 @@ namespace FishMMO.Installer
 
         /// <summary>
         /// Loads application settings using ConfigurationBuilder.
-        /// Looks first in the EXE directory for appsettings.json, then falls back to
-        /// FishMMO-Database/FishMMO-DB/ where the canonical settings live after a build copy.
+        /// Reads the bundled <c>appsettings.json</c> from the EXE directory
+        /// (copied from <c>FishMMO-Setup/Development/appsettings.Database.json</c> at build time).
+        /// Operators can override by placing a modified <c>appsettings.json</c> in the
+        /// working directory — see <see cref="DatabaseConfigurationHelper.BuildDesignTimeConfiguration"/>.
         /// </summary>
         private static void LoadAppSettings(string environmentName)
         {
             string exeDir = InstallerProcessHelper.GetWorkingDirectory();
-            string dbSubDir = Path.Combine(exeDir, "FishMMO-Database", "FishMMO-DB");
 
-            // Prefer the EXE dir; fall back to the database sub-directory.
-            string basePath = File.Exists(Path.Combine(exeDir, "appsettings.json"))
-                ? exeDir
-                : dbSubDir;
-
-            _ = Log.Debug("FishMMOInstaller", $"Loading configuration from: {basePath}");
+            _ = Log.Debug("FishMMOInstaller", $"Loading configuration from: {exeDir}");
 
             try
             {
-                IConfiguration configuration = DatabaseConfigurationHelper.BuildDesignTimeConfiguration(basePath);
+                IConfiguration configuration = DatabaseConfigurationHelper.BuildDesignTimeConfiguration(exeDir);
                 appSettings = configuration.Get<AppSettings>() ?? new AppSettings();
                 _ = Log.Info("FishMMOInstaller", $"Configuration successfully loaded for Environment: {environmentName}");
             }
             catch (Exception ex)
             {
                 _ = Log.Error("FishMMOInstaller", "Critical error loading configuration", ex);
-                _ = Log.Warning("FishMMOInstaller", $"Ensure appsettings.json exists in '{exeDir}' or '{dbSubDir}'.");
+                _ = Log.Warning("FishMMOInstaller", $"Ensure appsettings.json exists in '{exeDir}' (copied from FishMMO-Setup/Development/appsettings.Database.json at build).");
                 appSettings = new AppSettings();
             }
         }

@@ -164,5 +164,208 @@ namespace FishMMO.Installer
                 return null;
             }
         }
+
+		/// <summary>
+		/// Registers FishMMO web servers as Windows services via NSSM.
+		/// Only runs on Windows; Linux uses systemd via <see cref="InstallAllAsync"/>.
+		/// </summary>
+		public static async Task<InstallResult> InstallWindowsServicesAsync(string fishmmoRoot, IReadOnlyList<string>? onlyServers = null)
+		{
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+				return InstallResult.Ok("windows-services");
+
+			if (!NGINXInstaller.IsRunningAsAdministrator())
+			{
+				await Log.Error("FishMMOInstaller",
+					"Windows service registration requires Administrator privileges.\n" +
+					"  -> Right-click the terminal and select 'Run as administrator'.");
+				return InstallResult.Fail("windows-services", "Administrator privileges required.");
+			}
+
+			string nssmExe = await NGINXInstaller.EnsureNssmInstalledAsync();
+			if (string.IsNullOrWhiteSpace(nssmExe))
+			{
+				await Log.Error("FishMMOInstaller", "NSSM is required for Windows service registration.");
+				return InstallResult.Fail("windows-services", "NSSM not found.");
+			}
+
+			bool anyFailed = false;
+			foreach (var (serviceName, projectDir, description) in WebServers)
+			{
+				string windowsServiceName = projectDir switch
+				{
+					"IPFetchASP.NET/IpFetchServer" => InstallationConstants.IpFetchWindowsServiceName,
+					"PatcherASP.NET/Patcher" => InstallationConstants.PatcherWindowsServiceName,
+					"WebGLServerASP.NET/WebGLServer" => InstallationConstants.WebGLWindowsServiceName,
+					_ => $"FishMMO-{serviceName}"
+				};
+
+				if (onlyServers != null && onlyServers.Count > 0 &&
+					!onlyServers.Contains(serviceName, StringComparer.OrdinalIgnoreCase) &&
+					!onlyServers.Contains(serviceName.Replace("fishmmo-", ""), StringComparer.OrdinalIgnoreCase))
+					continue;
+
+				string? publishDir = FindPublishDirectory(fishmmoRoot, projectDir);
+				if (publishDir == null)
+				{
+					await Log.Warning("FishMMOInstaller",
+						$"Skipping {windowsServiceName}: publish directory not found. Build the project first.");
+					continue;
+				}
+
+				string? dllPath = FindEntryPointDll(publishDir);
+				if (dllPath == null)
+				{
+					await Log.Warning("FishMMOInstaller",
+						$"Skipping {windowsServiceName}: no server DLL found in {publishDir}.");
+					continue;
+				}
+
+				bool exists = await NGINXInstaller.NssmServiceExistsAsync(nssmExe, windowsServiceName);
+				if (!exists)
+				{
+					await InstallerProcessHelper.RunProcessAsync("sc.exe",
+						$"delete \"{windowsServiceName}\"", (_, __, ___) => true);
+
+					string fullDllPath = Path.Combine(publishDir, Path.GetFileName(dllPath));
+					bool created = await NGINXInstaller.NssmInstallAsync(nssmExe, windowsServiceName,
+						fullDllPath, publishDir, $"\"{fullDllPath}\"");
+					if (!created)
+					{
+						await Log.Error("FishMMOInstaller", $"Failed to create Windows service: {windowsServiceName}");
+						anyFailed = true;
+						continue;
+					}
+
+					string envName = ResolveServiceEnvironmentName();
+					await NGINXInstaller.NssmSetEnvironmentAsync(nssmExe, windowsServiceName,
+						new[] {
+							$"ASPNETCORE_ENVIRONMENT={envName}",
+							$"DOTNET_ENVIRONMENT={envName}",
+							$"FISHMMO_ENVIRONMENT={envName}"
+						});
+
+					await NGINXInstaller.SetNssmParamAsync(nssmExe, windowsServiceName, "AppStdout",
+						Path.Combine(publishDir, "logs", "service-out.log"));
+					await NGINXInstaller.SetNssmParamAsync(nssmExe, windowsServiceName, "AppStderr",
+						Path.Combine(publishDir, "logs", "service-err.log"));
+					await NGINXInstaller.SetNssmParamAsync(nssmExe, windowsServiceName, "AppRotateFiles", "1");
+
+					await InstallerProcessHelper.RunProcessAsync("sc.exe",
+						$"description \"{windowsServiceName}\" \"{description}\"",
+						(_, __, ___) => true);
+				}
+
+				bool started = await NGINXInstaller.NssmStartServiceAsync(nssmExe, windowsServiceName);
+				if (!started)
+				{
+					await Log.Error("FishMMOInstaller", $"Failed to start {windowsServiceName}.");
+					anyFailed = true;
+					continue;
+				}
+
+				await Log.Info("FishMMOInstaller", $"Windows service '{windowsServiceName}' installed and running.");
+			}
+
+			return anyFailed
+				? InstallResult.Fail("windows-services", "Some services failed. Check log output above.")
+				: InstallResult.Ok("windows-services");
+		}
+
+		/// <summary>
+		/// Installs the AppHealthMonitor daemon as a systemd service (Linux only).
+		/// </summary>
+		public static async Task<InstallResult> InstallAppHealthMonitorServiceAsync(string fishmmoRoot)
+		{
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				await Log.Info("FishMMOInstaller",
+					"AppHealthMonitor service is Linux-only. On Windows, use NSSM via InstallWindowsServicesAsync.");
+				return InstallResult.Ok("apphealthmonitor-service");
+			}
+
+			string candidate = Path.Combine(fishmmoRoot, "FishMMO-AppHealthMonitor", "AppHealthMonitor",
+				"bin", "Release", "net8.0", "publish");
+			if (!Directory.Exists(candidate))
+				candidate = Path.Combine(fishmmoRoot, "FishMMO-AppHealthMonitor", "AppHealthMonitor",
+					"bin", "Debug", "net8.0");
+
+			if (!Directory.Exists(candidate))
+			{
+				await Log.Warning("FishMMOInstaller",
+					"AppHealthMonitor publish directory not found. Build the project first (dotnet publish -c Release).");
+				return InstallResult.Fail("apphealthmonitor-service", "Publish directory not found.");
+			}
+
+			string dllPath = Path.Combine(candidate, "AppHealthMonitor.dll");
+			if (!File.Exists(dllPath))
+			{
+				await Log.Warning("FishMMOInstaller", $"AppHealthMonitor.dll not found in {candidate}.");
+				return InstallResult.Fail("apphealthmonitor-service", "DLL not found.");
+			}
+
+			string workingDir = Path.GetDirectoryName(dllPath) ?? candidate;
+			string envFilePath = Path.Combine(workingDir, "fishmmo-secrets.env");
+			string serviceName = InstallationConstants.AppHealthMonitorSystemdServiceName;
+			string unitPath = Path.Combine(InstallationConstants.LinuxSystemdUnitDirectory, $"{serviceName}.service");
+			string envName = ResolveServiceEnvironmentName();
+			string user = Environment.UserName;
+
+			string unitContent =
+				$"[Unit]\n" +
+				$"Description=FishMMO Application Health Monitor Daemon\n" +
+				$"After=network.target postgresql.service\n" +
+				$"\n" +
+				$"[Service]\n" +
+				$"WorkingDirectory={workingDir}\n" +
+				$"ExecStart=/usr/bin/dotnet \"{dllPath}\"\n" +
+				$"Restart=always\n" +
+				$"RestartSec=10\n" +
+				$"User={user}\n" +
+				$"Environment=ASPNETCORE_ENVIRONMENT={envName}\n" +
+				$"Environment=DOTNET_ENVIRONMENT={envName}\n" +
+				$"Environment=FISHMMO_ENVIRONMENT={envName}\n" +
+				$"EnvironmentFile=-{envFilePath}\n" +
+				$"\n" +
+				$"[Install]\n" +
+				$"WantedBy=multi-user.target\n";
+
+			await LinuxConfigHardeningHelper.EnsureBackupAsync(unitPath);
+			bool written = await LinuxConfigHardeningHelper.SudoInstallAsync(
+				unitContent, unitPath, "root", "root", "0644");
+
+			if (!written)
+			{
+				await Log.Error("FishMMOInstaller", $"Failed to write systemd unit: {unitPath}");
+				return InstallResult.Fail("apphealthmonitor-service", "Failed to write unit file.");
+			}
+
+			IPlatform platform = PlatformFactory.Current;
+			(string shell, string argPrefix) = platform.GetShellCommand();
+
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
+				$"sudo systemctl daemon-reload && sudo systemctl enable --now {serviceName}.service",
+				$"Failed to enable and start {serviceName}."))
+			{
+				return InstallResult.Fail("apphealthmonitor-service", "Failed to enable/start service.");
+			}
+
+			await Log.Info("FishMMOInstaller", $"AppHealthMonitor systemd service installed: {serviceName}");
+			return InstallResult.Ok("apphealthmonitor-service");
+		}
+
+
+		/// <summary>
+		/// Resolves the environment name for service units.
+		/// Checks FISHMMO_SERVICE_ENVIRONMENT, then FISHMMO_ENVIRONMENT, then DOTNET_ENVIRONMENT.
+		/// Defaults to "Production" for service units.
+		/// </summary>
+		private static string ResolveServiceEnvironmentName()
+		{
+			string? env = Environment.GetEnvironmentVariable("FISHMMO_SERVICE_ENVIRONMENT")
+				?? Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT")
+				?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+			return !string.IsNullOrWhiteSpace(env) ? env : "Production";
+		}
     }
 }

@@ -166,6 +166,8 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "LoginServer.cfg"), Path.Combine(buildPath, "LoginServer.cfg"));
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "WorldServer.cfg"), Path.Combine(buildPath, "WorldServer.cfg"));
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "SceneServer.cfg"), Path.Combine(buildPath, "SceneServer.cfg"));
+					// Shared logging configuration from FishMMO-Setup.
+					FileUtil.ReplaceFile(Path.Combine(configurationPath, "logging.json"), Path.Combine(buildPath, "logging.json"));
 					break;
 				case CustomBuildType.Client:
 					if (buildTarget == BuildTarget.WebGL)

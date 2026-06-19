@@ -108,8 +108,9 @@ FishMMO-AppHealthMonitor/AppHealthMonitor/
 
 ## Configuration
 
-The daemon loads `appsettings.json` from its working directory. The file has
-two top-level fields:
+The canonical `appsettings.json` lives in [`FishMMO-Setup/Development/appsettings.AppHealthMonitor.json`](../FishMMO-Setup/Development/appsettings.AppHealthMonitor.json). At build time, it is copied to the output directory as `appsettings.json`. At runtime, the daemon checks the **working directory first** (operator override), then falls back to the bundled copy in the application directory.
+
+The file has two top-level fields:
 
 | Field | Description |
 |---|---|
@@ -211,8 +212,9 @@ dotnet build FishMMO-AppHealthMonitor.sln -c Release
 dotnet run   --project AppHealthMonitor/AppHealthMonitor.csproj
 ```
 
-Place `appsettings.json` in the working directory the supervisor is launched
-from (it is copied to the build output for convenience).
+At build time, `appsettings.json` and `logging.json` are copied from
+[`FishMMO-Setup/`](../FishMMO-Setup/) into the build output. Place a modified
+copy in the working directory to override the bundled defaults at runtime.
 
 ---
 
@@ -226,6 +228,47 @@ Set `"Headless": true` to disable the stdin command reader. In this mode:
   path as the `shutdown` command.
 
 This mode is appropriate for `systemd`, Windows Services, and Docker.
+
+### Running as a systemd service (Linux)
+
+The [FishMMO-Installer](../FishMMO-Installer/README.MD) can install the daemon as a systemd service:
+
+```bash
+# Publish the project first:
+dotnet publish AppHealthMonitor/AppHealthMonitor.csproj -c Release -o publish
+# Install the service:
+FishMMO-Installer --component apphealthmonitor-service
+```
+
+This creates `fishmmo-apphealthmonitor.service` with:
+- `Restart=always`, `RestartSec=10`
+- `Environment=FISHMMO_ENVIRONMENT=Production` (configurable via `FISHMMO_SERVICE_ENVIRONMENT`)
+- Optional `EnvironmentFile=` for secrets
+
+Manual installation without the Installer:
+
+```bash
+sudo cat > /etc/systemd/system/fishmmo-apphealthmonitor.service << 'EOF'
+[Unit]
+Description=FishMMO Application Health Monitor Daemon
+After=network.target postgresql.service
+
+[Service]
+WorkingDirectory=/opt/fishmmo/FishMMO-AppHealthMonitor/AppHealthMonitor/bin/Release/net8.0/publish
+ExecStart=/usr/bin/dotnet "AppHealthMonitor.dll"
+Restart=always
+RestartSec=10
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_ENVIRONMENT=Production
+Environment=FISHMMO_ENVIRONMENT=Production
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now fishmmo-apphealthmonitor
+```
 
 ---
 

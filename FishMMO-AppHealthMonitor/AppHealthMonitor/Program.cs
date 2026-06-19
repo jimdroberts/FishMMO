@@ -62,6 +62,23 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
+		/// Resolves a configuration file path by preferring the working directory first
+		/// (operator override), then falling back to the bundled application directory.
+		/// </summary>
+		/// <param name="fileName">The file name to resolve (e.g., "appsettings.json").</param>
+		/// <param name="bundledDirectory">The directory containing the bundled default.</param>
+		/// <returns>The resolved absolute file path.</returns>
+		private static string ResolveConfigPath(string fileName, string bundledDirectory)
+		{
+			string localPath = Path.Combine(Directory.GetCurrentDirectory(), fileName);
+			if (File.Exists(localPath))
+			{
+				return localPath;
+			}
+			return Path.Combine(bundledDirectory, fileName);
+		}
+
+		/// <summary>
 		/// Main entry point for the Application Health Monitor daemon.
 		/// Initializes configuration, logging, and starts the orchestration loop.
 		/// </summary>
@@ -70,24 +87,24 @@ namespace AppHealthMonitor
 		{
 			string applicationBaseDirectory = AppContext.BaseDirectory;
 
+			// Resolve config path: working-directory override first, then bundled default.
+			string appSettingsPath = ResolveConfigPath("appsettings.json", applicationBaseDirectory);
 			IConfigurationRoot configuration;
 			try
 			{
-				var builder = new ConfigurationBuilder()
-					.SetBasePath(applicationBaseDirectory)
-					.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
-
-				configuration = builder.Build();
+				configuration = new ConfigurationBuilder()
+					.AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
+					.Build();
 			}
 			catch (Exception ex)
 			{
 				Console.Error.WriteLine($"Failed to load appsettings.json: {ex.Message}");
-				Console.Error.WriteLine($"Ensure appsettings.json exists in '{applicationBaseDirectory}' and contains valid JSON.");
+				Console.Error.WriteLine($"Ensure appsettings.json exists in '{Path.GetDirectoryName(appSettingsPath)}' and contains valid JSON.");
 				Environment.ExitCode = 1;
 				return;
 			}
 
-			string configFilePath = Path.Combine(applicationBaseDirectory, LoggingConfigName);
+			string configFilePath = ResolveConfigPath(LoggingConfigName, applicationBaseDirectory);
 			try
 			{
 				Log.Initialize(configFilePath, new ConsoleFormatter());

@@ -105,6 +105,18 @@ namespace FishMMO.Installer
 		/// Windows service name used for the NGINX service instance managed by this installer.
 		/// </summary>
 		public const string NGINXWindowsServiceName = "FishMMO-NGINX";
+		/// <summary>
+		/// Windows service names for FishMMO web servers managed by NSSM.
+		/// </summary>
+		public const string IpFetchWindowsServiceName = "FishMMO-IpFetch";
+		public const string PatcherWindowsServiceName = "FishMMO-Patcher";
+		public const string WebGLWindowsServiceName = "FishMMO-WebGL";
+		public const string AppHealthMonitorWindowsServiceName = "FishMMO-AppHealthMonitor";
+
+		/// <summary>
+		/// Systemd service name for the AppHealthMonitor process supervisor daemon.
+		/// </summary>
+		public const string AppHealthMonitorSystemdServiceName = "fishmmo-apphealthmonitor";
 
 		/// <summary>
 		/// Download URL for the win-acme client (Windows Let's Encrypt automation).

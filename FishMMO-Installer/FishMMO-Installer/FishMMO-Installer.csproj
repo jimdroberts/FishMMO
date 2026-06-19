@@ -33,11 +33,10 @@
     <None Update="checksums.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="logging.json">
+    <!-- Shared logging configuration from FishMMO-Setup -->
+    <None Include="..\..\FishMMO-Setup\logging.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="templates\*.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>logging.json</Link>
     </None>
   </ItemGroup>
 
@@ -96,6 +95,25 @@
       SkipUnchangedFiles="true" />
 
     <Message Text="Copied FishMMO-Database to $(FishMMODatabaseDest)" Importance="high" />
+  </Target>
+
+  <!-- Copy-and-rename config files from FishMMO-Setup/Development/ to output. -->
+  <Target Name="CopyFishMMOConfig" AfterTargets="Build">
+    <!-- Installer's own appsettings.json (Npgsql database config). -->
+    <Copy SourceFiles="..\..\FishMMO-Setup\Development\appsettings.Database.json"
+          DestinationFiles="$(OutDir)appsettings.json"
+          SkipUnchangedFiles="true" />
+    <!-- Installer templates. -->
+    <MakeDir Directories="$(OutDir)templates" />
+    <Copy SourceFiles="..\..\FishMMO-Setup\Development\install-config.quickstart.json"
+          DestinationFiles="$(OutDir)templates\install-config.quickstart.json"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\..\FishMMO-Setup\Development\install-config.full.json"
+          DestinationFiles="$(OutDir)templates\install-config.full.json"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\..\FishMMO-Setup\Development\install-config.web.json"
+          DestinationFiles="$(OutDir)templates\install-config.web.json"
+          SkipUnchangedFiles="true" />
   </Target>
 
   <!-- Copy FishMMO-SharedUtility -->
