@@ -261,6 +261,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!TryEnqueueAsyncWork(() => ProcessCharacterCreateAsync(
 				conn, msg, accountName,
+				raceTemplate,
 				preparedAttributes, preparedFactions, preparedAbilities,
 				preparedInventory, preparedEquipment,
 				characterService, factionService, abilityService,
@@ -297,6 +298,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			NetworkConnection conn,
 			CharacterCreateBroadcast msg,
 			string accountName,
+			RaceTemplate raceTemplate,
 			List<PreparedAttributeEntry> preparedAttributes,
 			List<PreparedFactionEntry> preparedFactions,
 			List<PreparedAbilityEntry> preparedAbilities,
