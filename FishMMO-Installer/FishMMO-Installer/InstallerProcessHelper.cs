@@ -4,13 +4,19 @@ using System.Runtime.InteropServices;
 namespace FishMMO.Installer
 {
 	/// <summary>
-	/// Provides shared process execution, console prompting, file download,
-	/// and logging utilities used by installer classes.
+	/// Provides shared process execution, console prompting, and Linux DotNet
+	/// environment bootstrapping used by installer classes.
 	/// </summary>
 	public static class InstallerProcessHelper
 	{
 		private static bool dotNetEnvironmentPrepared = false;
 		private static readonly object dotNetEnvironmentLock = new object();
+
+		/// <summary>
+		/// When true, <see cref="PromptForYesNo"/> returns the default answer without
+		/// displaying a prompt. Set via <c>--accept-defaults</c> / <c>-y</c>.
+		/// </summary>
+		public static bool AcceptDefaults = false;
 
 		/// <summary>
 		/// Gets the working directory for the current application domain.
@@ -49,12 +55,6 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Shared HttpClient instance for all download operations.
-		/// Reusing a single instance avoids socket exhaustion and improves performance.
-		/// </summary>
-		public static readonly HttpClient SharedHttpClient = new HttpClient();
-
-		/// <summary>
 		/// Runs a shell command using the OS-appropriate shell and logs errors on failure.
 		/// </summary>
 		/// <param name="shell">Shell executable.</param>
@@ -74,43 +74,6 @@ namespace FishMMO.Installer
 				}
 				return true;
 			});
-		}
-
-		/// <summary>
-		/// Detects the Linux package manager and returns the appropriate update and install command templates.
-		/// </summary>
-		/// <param name="packageNames">Dictionary mapping package manager name to install package list.</param>
-		/// <returns>Tuple of (updateCommand, installCommand, packageManagerName), or null if none found.</returns>
-		public static async Task<(string updateCommand, string installCommand, string managerName)?> DetectLinuxPackageManagerAsync(
-			Dictionary<string, string> packageNames)
-		{
-			(string shell, string argPrefix) = GetShellCommand();
-
-			if (packageNames.ContainsKey("pacman") &&
-				await RunProcessAsync(shell, $"{argPrefix} \"command -v pacman\"", (e, o, err) => e == 0))
-			{
-				// -Sy syncs the package database without upgrading the whole system (-Syu would be a full upgrade).
-				return ("sudo pacman -Sy --noconfirm", $"sudo pacman -S --noconfirm --needed {packageNames["pacman"]}", "pacman (Arch/CachyOS)");
-			}
-			if (packageNames.ContainsKey("apt-get") &&
-				await RunProcessAsync(shell, $"{argPrefix} \"command -v apt-get\"", (e, o, err) => e == 0))
-			{
-				return ("sudo apt-get update -qq", $"sudo apt-get install -y {packageNames["apt-get"]}", "apt-get (Debian/Ubuntu)");
-			}
-			if (packageNames.ContainsKey("dnf") &&
-				await RunProcessAsync(shell, $"{argPrefix} \"command -v dnf\"", (e, o, err) => e == 0))
-			{
-				// dnf check-update exits 100 when updates are available (not an error); use makecache instead.
-				return ("sudo dnf makecache", $"sudo dnf install -y {packageNames["dnf"]}", "dnf");
-			}
-			if (packageNames.ContainsKey("yum") &&
-				await RunProcessAsync(shell, $"{argPrefix} \"command -v yum\"", (e, o, err) => e == 0))
-			{
-				// yum check-update exits 100 when updates are available (not an error); use makecache instead.
-				return ("sudo yum makecache", $"sudo yum install -y {packageNames["yum"]}", "yum");
-			}
-
-			return null;
 		}
 
 		/// <summary>
@@ -343,6 +306,12 @@ namespace FishMMO.Installer
 		/// <returns>True for yes, false for no.</returns>
 		public static bool PromptForYesNo(string prompt)
 		{
+			if (AcceptDefaults)
+			{
+				Console.WriteLine($"{prompt} (Y/N): Y [auto-accepted]");
+				return true;
+			}
+
 			while (true)
 			{
 				Console.Write($"{prompt} (Y/N): ");
@@ -396,55 +365,5 @@ namespace FishMMO.Installer
 			return new string(chars.ToArray());
 		}
 
-		/// <summary>
-		/// Downloads a file asynchronously from the specified URL to the working directory.
-		/// If the file already exists locally, the download is skipped.
-		/// </summary>
-		/// <param name="url">File URL.</param>
-		/// <param name="fileName">Desired local filename.</param>
-		/// <returns>Full path to the downloaded file.</returns>
-		public static async Task<string> DownloadFileAsync(string url, string fileName)
-		{
-			try
-			{
-				string tempDir = GetWorkingDirectory();
-				string outputPath = Path.Combine(tempDir, fileName);
-
-					if (File.Exists(outputPath))
-				{
-					await FishMMO.Logging.Log.Info("FishMMOInstaller", outputPath + " already exists... Skipping download.");
-					return outputPath;
-				}
-
-				await FishMMO.Logging.Log.Info("FishMMOInstaller", $"Downloading file from {url}");
-				await FishMMO.Logging.Log.Info("FishMMOInstaller", "Please wait...");
-				using (HttpResponseMessage response = await SharedHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
-				{
-					response.EnsureSuccessStatusCode();
-
-					if (response.Content.Headers.ContentDisposition != null)
-					{
-						fileName = response.Content.Headers.ContentDisposition.FileNameStar
-								   ?? response.Content.Headers.ContentDisposition.FileName
-								   ?? fileName;
-						outputPath = Path.Combine(tempDir, fileName);
-					}
-
-					using (Stream streamToReadFrom = await response.Content.ReadAsStreamAsync())
-					{
-						using (Stream streamToWriteTo = File.Open(outputPath, FileMode.Create))
-						{
-							await streamToReadFrom.CopyToAsync(streamToWriteTo);
-						}
-					}
-						await FishMMO.Logging.Log.Info("FishMMOInstaller", $"File successfully downloaded to {outputPath}");
-					return outputPath;
-				}
-			}
-			catch (Exception ex)
-			{
-				throw new Exception($"Error downloading file: {ex.Message}", ex);
-			}
-		}
-	}
+}
 }

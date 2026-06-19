@@ -93,22 +93,21 @@ namespace FishMMO.Installer
 				["yum"] = "certbot python3-certbot-nginx"
 			};
 
-			var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
+			var detected = await LinuxPackageManagerHelper.DetectAsync(packageNames);
 			if (detected == null)
 			{
 				await Log.Warning("FishMMOInstaller", "No supported package manager found for certbot installation.");
 				return;
 			}
 
-			var (updateCommand, installCommand, managerName) = detected.Value;
-			await Log.Info("FishMMOInstaller", $"Using {managerName} to install certbot dependencies.");
+			await Log.Info("FishMMOInstaller", $"Using {detected.ManagerName} to install certbot dependencies.");
 
-			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCommand, "Failed to update package metadata for certbot."))
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.UpdateCommand, "Failed to update package metadata for certbot."))
 			{
 				return;
 			}
 
-			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, installCommand, "Failed to install certbot packages."))
+			if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.InstallCommand, "Failed to install certbot packages."))
 			{
 				return;
 			}
@@ -165,7 +164,16 @@ namespace FishMMO.Installer
 		{
 			await Log.Info("FishMMOInstaller", "Configuring Let's Encrypt on Windows using win-acme...");
 
-			string downloadPath = await InstallerProcessHelper.DownloadFileAsync(InstallationConstants.WinAcmeDownloadUrl, InstallationConstants.WinAcmeFileName);
+			string? downloadPath = await DownloadHelper.DownloadFileWithProgressAsync(
+				InstallationConstants.WinAcmeDownloadUrl,
+				InstallationConstants.WinAcmeFileName,
+				new DownloadHelper.ConsoleProgress());
+
+			if (downloadPath == null)
+			{
+				await Log.Error("FishMMOInstaller", "Failed to download win-acme.");
+				return;
+			}
 			string winAcmeExtractDirectory = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), "win-acme");
 			string winAcmeExecutablePath = Path.Combine(winAcmeExtractDirectory, "wacs.exe");
 			string certificateOutputDirectory = Path.Combine(NGINXInstaller.GetExpectedWindowsNginxHomePath(), "certificates", domains[0]);

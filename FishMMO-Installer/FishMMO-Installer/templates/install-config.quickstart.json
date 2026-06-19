@@ -1,0 +1,5 @@
+{
+  "components": ["postgresql", "fishmmo-db", "nginx", "firewall"],
+  "configureFirewall": true,
+  "validateAfterInstall": true
+}

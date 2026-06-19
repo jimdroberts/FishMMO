@@ -168,7 +168,8 @@ namespace FishMMO.Installer
 			sb.AppendLine();
 			sb.AppendLine(LinuxConfigHardeningHelper.ManagedMarker + " block applied by FishMMO-Installer.");
 			sb.AppendLine("password_encryption = scram-sha-256");
-			sb.AppendLine("listen_addresses = 'localhost'");
+			string listenAddr = Environment.GetEnvironmentVariable("FISHMMO_PG_LISTEN_ADDRESSES") ?? "localhost";
+			sb.AppendLine($"listen_addresses = '{EscapeSqlLiteral(listenAddr)}'");
 			return sb.ToString();
 		}
 

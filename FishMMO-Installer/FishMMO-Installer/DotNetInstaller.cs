@@ -6,61 +6,47 @@ using System.Text.RegularExpressions;
 namespace FishMMO.Installer
 {
 	/// <summary>
-	/// Handles installation and verification of the DotNet SDK and DotNet-EF global tool.
-	/// Supports Windows and Linux (Arch/CachyOS, Ubuntu).
+	/// Handles ASP.NET Core Runtime installation, dotnet-ef global tool installation,
+	/// and EF Core migration/database-update commands. Supports Windows and Linux.
 	/// </summary>
 	public static class DotNetInstaller
 	{
 		/// <summary>
-		/// Installs DotNet SDK and DotNet-EF tool if not already installed.
+		/// Installs the dotnet-ef global tool if not already present.
+		/// The .NET SDK itself is a prerequisite for running this installer,
+		/// so SDK installation is not offered here.
 		/// </summary>
-		/// <returns>True if installation succeeded or already installed.</returns>
-		public static async Task<bool> InstallDotNet()
+		/// <returns>True if dotnet-ef is installed or was already present.</returns>
+		public static async Task<bool> InstallDotNetEF()
 		{
-			bool sdkJustInstalled = false;
-
-			if (!await IsDotNetInstalledAsync())
-			{
-				if (InstallerProcessHelper.PromptForYesNo($"DotNet {InstallationConstants.DotNetSDKMajorVersion} or later is not installed, would you like to install it?"))
-				{
-					await Log.Info("FishMMOInstaller", "Installing DotNet...");
-					await DownloadAndInstallDotNetAsync();
-					await Log.Info("FishMMOInstaller", "DotNet has been installed.");
-					sdkJustInstalled = true;
-				}
-				else
-				{
-					return false;
-				}
-			}
-			else
-			{
-				await Log.Info("FishMMOInstaller", "DotNet is already installed.");
-			}
-
-			if (!await IsDotNetEFInstalledAsync())
-			{
-				if (InstallerProcessHelper.PromptForYesNo("DotNet-EF is not installed, would you like to install it?"))
-				{
-					await Log.Info("FishMMOInstaller", $"Installing DotNet-EF v{InstallationConstants.DotNetEFVersion}...");
-					bool efInstalled = await RunDotNetCommandAsync($"tool install --global dotnet-ef --version {InstallationConstants.DotNetEFVersion}");
-					if (!efInstalled)
-					{
-						await Log.Error("FishMMOInstaller", "DotNet-EF installation failed.");
-						return false;
-					}
-
-					await Log.Info("FishMMOInstaller", "DotNet-EF has been installed.");
-					return true;
-				}
-
-				return sdkJustInstalled;
-			}
-			else
+			if (await IsDotNetEFInstalledAsync())
 			{
 				await Log.Info("FishMMOInstaller", "DotNet-EF is already installed.");
 				return true;
 			}
+
+			if (!InstallerProcessHelper.PromptForYesNo("DotNet-EF is not installed, would you like to install it?"))
+				return false;
+
+			await Log.Info("FishMMOInstaller", $"Installing DotNet-EF v{InstallationConstants.DotNetEFVersion}...");
+			bool efInstalled = await RunDotNetCommandAsync($"tool install --global dotnet-ef --version {InstallationConstants.DotNetEFVersion}");
+			if (!efInstalled)
+			{
+				await Log.Error("FishMMOInstaller", "DotNet-EF installation failed.");
+				return false;
+			}
+
+			// Verify the tool is functional
+			bool verified = await RunDotNetCommandAsync("ef --version", (exitCode, output, error) =>
+				output.Contains("Entity Framework Core", StringComparison.OrdinalIgnoreCase));
+
+			if (!verified)
+				await Log.Warning("FishMMOInstaller", "dotnet-ef was installed but 'dotnet ef --version' failed. Ensure ~/.dotnet/tools is in your PATH.");
+			else
+				await Log.Info("FishMMOInstaller", "dotnet-ef verified successfully.");
+
+			await Log.Info("FishMMOInstaller", "DotNet-EF has been installed.");
+			return true;
 		}
 
 		/// <summary>
@@ -91,81 +77,6 @@ namespace FishMMO.Installer
 				}
 				return false;
 			});
-		}
-
-		/// <summary>
-		/// Downloads and installs DotNet SDK for the current OS.
-		/// On Windows, downloads and runs the official EXE installer.
-		/// On Linux, downloads and runs the dotnet-install.sh script.
-		/// </summary>
-		private static async Task DownloadAndInstallDotNetAsync()
-		{
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-			{
-				string installerPath = await InstallerProcessHelper.DownloadFileAsync(
-					InstallationConstants.DotNetSDKUrl,
-					InstallationConstants.DotNetSDKFileName);
-
-				try
-				{
-					InstallerProcessHelper.LogElevatedProcessEnvironmentWarning("DotNet SDK installer");
-
-					ProcessStartInfo startInfo = new ProcessStartInfo
-					{
-						FileName = installerPath,
-						Arguments = "/install /quiet /norestart",
-						WorkingDirectory = Path.GetDirectoryName(installerPath) ?? InstallerProcessHelper.GetWorkingDirectory(),
-						UseShellExecute = true,
-						Verb = "runas"
-					};
-
-					Process? process = Process.Start(startInfo);
-					if (process == null)
-					{
-						await Log.Error("FishMMOInstaller", "Failed to start DotNet installer process.");
-						return;
-					}
-					await process.WaitForExitAsync();
-
-					int exitCode = process.ExitCode;
-					if (exitCode == 0)
-					{
-						await Log.Info("FishMMOInstaller", "DotNet installation successful.");
-					}
-					else
-					{
-						await Log.Error("FishMMOInstaller", $"DotNet installation failed with exit code {exitCode}.");
-					}
-				}
-				catch (Exception ex)
-				{
-					await Log.Error("FishMMOInstaller", "Error installing DotNet", ex);
-				}
-			}
-			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-			{
-				string shScriptFile = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), InstallationConstants.DotNetInstallScriptFileName);
-
-				var scriptContent = await InstallerProcessHelper.SharedHttpClient.GetStringAsync(InstallationConstants.DotNetInstallScriptUrl);
-				await File.WriteAllTextAsync(shScriptFile, scriptContent);
-
-				await InstallerProcessHelper.RunProcessAsync("chmod", $"+x \"{shScriptFile}\"");
-
-				await InstallerProcessHelper.RunProcessAsync("/bin/bash",
-					$"\"{shScriptFile}\" --version {InstallationConstants.DotNetSDKVersion}",
-					(e, o, err) =>
-					{
-						if (e != 0)
-						{
-							throw new Exception($"Shell script failed with exit code {e}: {err}");
-						}
-						return true;
-					});
-			}
-			else
-			{
-				throw new PlatformNotSupportedException("Unsupported operating system. Only Windows and Linux are supported.");
-			}
 		}
 
 		/// <summary>
@@ -241,8 +152,12 @@ namespace FishMMO.Installer
 				return false;
 			}
 
+			string baseDir = AppContext.BaseDirectory;
+			string projectPath = Path.GetFullPath(Path.Combine(baseDir, InstallationConstants.ProjectPath));
+			string startupProject = Path.GetFullPath(Path.Combine(baseDir, InstallationConstants.StartupProject));
+
 			return await RunDotNetCommandAsync(
-				$"ef migrations add {migrationName} -p \"{InstallationConstants.ProjectPath}\" -s \"{InstallationConstants.StartupProject}\" --output-dir \"{InstallationConstants.MigrationsOutputDirectory}\"");
+				$"ef migrations add {migrationName} -p \"{projectPath}\" -s \"{startupProject}\" --output-dir \"{InstallationConstants.MigrationsOutputDirectory}\"");
 		}
 
 		/// <summary>
@@ -251,8 +166,12 @@ namespace FishMMO.Installer
 		/// <returns>True if the command succeeded, otherwise false.</returns>
 		public static async Task<bool> RunEFDatabaseUpdateAsync()
 		{
+			string baseDir = AppContext.BaseDirectory;
+			string projectPath = Path.GetFullPath(Path.Combine(baseDir, InstallationConstants.ProjectPath));
+			string startupProject = Path.GetFullPath(Path.Combine(baseDir, InstallationConstants.StartupProject));
+
 			return await RunDotNetCommandAsync(
-				$"ef database update -p \"{InstallationConstants.ProjectPath}\" -s \"{InstallationConstants.StartupProject}\"");
+				$"ef database update -p \"{projectPath}\" -s \"{startupProject}\"");
 		}
 
 		/// <summary>
@@ -327,12 +246,67 @@ namespace FishMMO.Installer
 		/// </summary>
 		private static async Task<bool> InstallAspNetRuntimeWindows()
 		{
-			string installerPath;
+			string? installerPath = null;
+			string? expectedSha512 = null;
 			try
 			{
-				installerPath = await InstallerProcessHelper.DownloadFileAsync(
-					InstallationConstants.AspNetRuntimeWindowsUrl,
-					InstallationConstants.AspNetRuntimeWindowsFileName);
+				// Try dynamic URL + hash resolution first; fall back to hardcoded constant
+				string? resolvedUrl = null;
+				try
+				{
+					(resolvedUrl, expectedSha512) = await DotNetReleaseHelper.ResolveAspNetRuntimeInstallerUrlAsync(
+						InstallationConstants.DotNetRuntimeChannel);
+					if (!string.IsNullOrWhiteSpace(resolvedUrl))
+					{
+						await Log.Info("FishMMOInstaller",
+							$"Resolved latest ASP.NET Core Hosting Bundle URL for channel {InstallationConstants.DotNetRuntimeChannel}");
+						if (!string.IsNullOrWhiteSpace(expectedSha512))
+							await Log.Debug("FishMMOInstaller", "SHA512 hash obtained from release metadata for integrity verification.");
+					}
+				}
+				catch
+				{
+					await Log.Warning("FishMMOInstaller",
+						"Could not resolve ASP.NET Core runtime URL dynamically; using hardcoded fallback.");
+				}
+
+				// Try resolved URL first, then fall back to hardcoded URL if download fails
+				foreach (string? url in new[] { resolvedUrl, InstallationConstants.AspNetRuntimeWindowsUrl })
+				{
+					if (string.IsNullOrWhiteSpace(url)) continue;
+
+					installerPath = await DownloadHelper.DownloadFileWithProgressAsync(
+						url,
+						InstallationConstants.AspNetRuntimeWindowsFileName,
+						new DownloadHelper.ConsoleProgress());
+
+					if (installerPath != null) break;
+
+					await Log.Warning("FishMMOInstaller",
+						$"Download failed from {url}; trying fallback URL.");
+				}
+
+				// Verify SHA512 against Microsoft's published hash (when available)
+				if (installerPath != null && !string.IsNullOrWhiteSpace(expectedSha512))
+				{
+					using var stream = File.OpenRead(installerPath);
+					byte[] actualHash = System.Security.Cryptography.SHA512.HashData(stream);
+					string actualHex = Convert.ToHexString(actualHash).ToLowerInvariant();
+					if (!string.Equals(actualHex, expectedSha512, StringComparison.OrdinalIgnoreCase))
+					{
+						await Log.Error("FishMMOInstaller",
+							$"SHA512 mismatch for ASP.NET Core Hosting Bundle! The download may be corrupted or tampered. Expected: {expectedSha512[..16]}..., Actual: {actualHex[..16]}...");
+						try { File.Delete(installerPath); } catch { /* best-effort */ }
+						return false;
+					}
+					await Log.Info("FishMMOInstaller", "SHA512 verification passed (verified against Microsoft release metadata).");
+				}
+
+				if (installerPath == null)
+				{
+					await Log.Error("FishMMOInstaller", "Failed to download ASP.NET Core Hosting Bundle from all sources.");
+					return false;
+				}
 			}
 			catch (Exception ex)
 			{
@@ -381,8 +355,8 @@ namespace FishMMO.Installer
 
 		/// <summary>
 		/// Installs the ASP.NET Core runtime on Linux.
-		/// Tries the system package manager first; falls back to dotnet-install.sh
-		/// with --runtime aspnetcore when no supported package manager is found.
+		/// Tries the system package manager first; falls back to a direct tarball
+		/// download with SHA512 verification against Microsoft's release metadata.
 		/// </summary>
 		private static async Task<bool> InstallAspNetRuntimeLinux()
 		{
@@ -394,66 +368,111 @@ namespace FishMMO.Installer
 				["yum"] = $"aspnetcore-runtime-{InstallationConstants.AspNetRuntimeMajorVersion}",
 			};
 
-			var pm = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packages);
-			if (pm.HasValue)
+			var pm = await LinuxPackageManagerHelper.DetectAsync(packages);
+			if (pm != null)
 			{
-				(string updateCmd, string installCmd, string managerName) = pm.Value;
-				await Log.Info("FishMMOInstaller", $"Using package manager: {managerName}");
+				await Log.Info("FishMMOInstaller", $"Using package manager: {pm.ManagerName}");
 
 				(string shell, string argPrefix) = InstallerProcessHelper.GetShellCommand();
 
-				bool updated = await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCmd,
-					$"Package database update failed ({managerName}).");
+				bool updated = await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, pm.UpdateCommand,
+					$"Package database update failed ({pm.ManagerName}).");
 				if (!updated)
 				{
 					await Log.Warning("FishMMOInstaller", "Package database update failed; attempting install anyway.");
 				}
 
-				bool installed = await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, installCmd,
-					$"ASP.NET Core runtime installation failed via {managerName}.");
+				bool installed = await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, pm.InstallCommand,
+					$"ASP.NET Core runtime installation failed via {pm.ManagerName}.");
 				if (installed)
 				{
 					await Log.Info("FishMMOInstaller", "ASP.NET Core runtime installed successfully.");
 					return true;
 				}
-				await Log.Warning("FishMMOInstaller", "Package manager install failed. Falling back to dotnet-install.sh.");
+				await Log.Warning("FishMMOInstaller", "Package manager install failed. Falling back to direct download with SHA512 verification.");
 			}
 			else
 			{
-				await Log.Warning("FishMMOInstaller", "No supported package manager found. Falling back to dotnet-install.sh.");
+				await Log.Warning("FishMMOInstaller", "No supported package manager found. Using direct download with SHA512 verification.");
 			}
 
-			// Fallback: dotnet-install.sh --runtime aspnetcore
-			string shScriptFile = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), InstallationConstants.DotNetInstallScriptFileName);
-
-			if (!File.Exists(shScriptFile))
+			// Fallback: resolve Linux tarball URL + SHA512 from Microsoft metadata, download, verify, extract
+			try
 			{
-				string scriptContent = await InstallerProcessHelper.SharedHttpClient.GetStringAsync(InstallationConstants.DotNetInstallScriptUrl);
-				await File.WriteAllTextAsync(shScriptFile, scriptContent);
-				await InstallerProcessHelper.RunProcessAsync("chmod", $"+x \"{shScriptFile}\"");
-			}
+				(string? tarballUrl, string? expectedSha512) = await DotNetReleaseHelper.ResolveLinuxRuntimeUrlAsync(
+					InstallationConstants.DotNetRuntimeChannel);
 
-			bool fallbackResult = await InstallerProcessHelper.RunProcessAsync("/bin/bash",
-				$"\"{shScriptFile}\" --runtime aspnetcore --version {InstallationConstants.AspNetRuntimeLinuxVersion}",
-				(e, o, err) =>
+				string? fallbackUrl = null;
+				if (string.IsNullOrWhiteSpace(tarballUrl))
 				{
-					if (e != 0)
-					{
-						_ = Log.Warning("FishMMOInstaller", $"dotnet-install.sh fallback failed: {err}");
-						return false;
-					}
-					return true;
-				});
+					await Log.Warning("FishMMOInstaller", "Could not resolve Linux runtime URL dynamically. Falling back to dotnet-install.sh.");
+				}
+				else
+				{
+					string tarballFile = $"aspnetcore-runtime-{InstallationConstants.AspNetRuntimeLinuxVersion}-linux-x64.tar.gz";
+					string? downloaded = await DownloadHelper.DownloadFileWithProgressAsync(
+						tarballUrl, tarballFile, new DownloadHelper.ConsoleProgress());
 
-			if (fallbackResult)
-			{
-				await Log.Info("FishMMOInstaller", "ASP.NET Core runtime installed via dotnet-install.sh.");
+					if (downloaded != null && !string.IsNullOrWhiteSpace(expectedSha512))
+					{
+						using var stream = File.OpenRead(downloaded);
+						byte[] actualHash = System.Security.Cryptography.SHA512.HashData(stream);
+						string actualHex = Convert.ToHexString(actualHash).ToLowerInvariant();
+						if (!string.Equals(actualHex, expectedSha512, StringComparison.OrdinalIgnoreCase))
+						{
+							await Log.Error("FishMMOInstaller",
+								$"SHA512 mismatch for Linux ASP.NET Core Runtime! Download may be corrupted. Expected: {expectedSha512[..16]}..., Actual: {actualHex[..16]}...");
+							try { File.Delete(downloaded); } catch { }
+							fallbackUrl = downloaded; // signal fallback needed
+						}
+						else
+						{
+							await Log.Info("FishMMOInstaller", "SHA512 verification passed for Linux runtime tarball.");
+							// Extract to ~/.dotnet/
+							string dotnetRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet");
+							Directory.CreateDirectory(dotnetRoot);
+							await InstallerProcessHelper.RunProcessAsync("tar", $"-xzf \"{downloaded}\" -C \"{dotnetRoot}\"",
+								(exitCode, _, err) => exitCode == 0);
+							await Log.Info("FishMMOInstaller", $"ASP.NET Core runtime extracted to {dotnetRoot}.");
+							try { File.Delete(downloaded); } catch { }
+							return true;
+						}
+					}
+				}
+
+				// Absolute last resort: dotnet-install.sh (no hash verification available)
+				await Log.Warning("FishMMOInstaller", "Using dotnet-install.sh as final fallback (no hash verification).");
+				string shScriptFile = Path.Combine(InstallerProcessHelper.GetWorkingDirectory(), InstallationConstants.DotNetInstallScriptFileName);
+				if (!File.Exists(shScriptFile))
+				{
+					string scriptContent = await DownloadHelper.Client.GetStringAsync(InstallationConstants.DotNetInstallScriptUrl);
+					await File.WriteAllTextAsync(shScriptFile, scriptContent);
+					await InstallerProcessHelper.RunProcessAsync("chmod", $"+x \"{shScriptFile}\"");
+				}
+
+				bool fallbackResult = await InstallerProcessHelper.RunProcessAsync("/bin/bash",
+					$"\"{shScriptFile}\" --runtime aspnetcore --version {InstallationConstants.AspNetRuntimeLinuxVersion}",
+					(e, o, err) =>
+					{
+						if (e != 0)
+						{
+							_ = Log.Warning("FishMMOInstaller", $"dotnet-install.sh fallback failed: {err}");
+							return false;
+						}
+						return true;
+					});
+
+				if (fallbackResult)
+					await Log.Info("FishMMOInstaller", "ASP.NET Core runtime installed via dotnet-install.sh.");
+				else
+					await Log.Error("FishMMOInstaller", "ASP.NET Core runtime installation failed.");
+				return fallbackResult;
 			}
-			else
+			catch (Exception ex)
 			{
-				await Log.Error("FishMMOInstaller", "ASP.NET Core runtime installation failed.");
+				await Log.Error("FishMMOInstaller", "Error installing ASP.NET Core runtime on Linux", ex);
+				return false;
 			}
-			return fallbackResult;
 		}
 	}
 }

@@ -97,7 +97,7 @@ namespace FishMMO.Installer
 		/// </summary>
 		/// <param name="value">Raw value.</param>
 		/// <returns>Escaped SQL literal content.</returns>
-		private static string EscapeSqlLiteral(string value)
+		internal static string EscapeSqlLiteral(string value)
 		{
 			return value.Replace("'", "''");
 		}
@@ -119,16 +119,23 @@ namespace FishMMO.Installer
 
 			await Log.Info("FishMMOInstaller", "Installing PostgreSQL...");
 
-			string installerPath;
+			string? installerPath;
 			try
 			{
-				installerPath = await InstallerProcessHelper.DownloadFileAsync(
+				installerPath = await DownloadHelper.DownloadFileWithProgressAsync(
 					InstallationConstants.PostgreSQLWindowsInstallerUrl,
-					InstallationConstants.PostgreSQLWindowsInstallerFileName);
+					InstallationConstants.PostgreSQLWindowsInstallerFileName,
+					new DownloadHelper.ConsoleProgress());
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("FishMMOInstaller", "Failed to download PostgreSQL installer", ex);
+				return false;
+			}
+
+			if (installerPath == null)
+			{
+				await Log.Error("FishMMOInstaller", "Failed to download PostgreSQL installer.");
 				return false;
 			}
 
@@ -285,23 +292,22 @@ namespace FishMMO.Installer
 					["yum"] = "postgresql-server postgresql-contrib"
 				};
 
-				var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
+				var detected = await LinuxPackageManagerHelper.DetectAsync(packageNames);
 				if (detected == null)
 				{
 					await Log.Warning("FishMMOInstaller", "No supported package manager (pacman, apt-get, dnf, yum) found. Please install PostgreSQL manually.");
 					return false;
 				}
 
-				var (updateCommand, installCommand, managerName) = detected.Value;
-				await Log.Info("FishMMOInstaller", $"Using {managerName} for PostgreSQL installation.");
+				await Log.Info("FishMMOInstaller", $"Using {detected.ManagerName} for PostgreSQL installation.");
 
-				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCommand, "Failed to update package lists."))
+				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.UpdateCommand, "Failed to update package lists."))
 					return false;
 
-				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, installCommand, "Failed to install PostgreSQL."))
+				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.InstallCommand, "Failed to install PostgreSQL."))
 					return false;
 
-				bool isArch = managerName.Contains("pacman");
+				bool isArch = detected.ManagerName.Contains("pacman");
 
 				if (isArch)
 				{
@@ -458,7 +464,7 @@ namespace FishMMO.Installer
 			}
 			catch (NpgsqlException npgEx)
 			{
-				await Log.Error("FishMMOInstaller", "PostgreSQL connection or database operation error: . Check your appsettings.json and PostgreSQL server status", npgEx);
+				await Log.Error("FishMMOInstaller", $"PostgreSQL connection or database operation error: {npgEx.Message}. Check your appsettings.json and PostgreSQL server status.");
 			}
 			catch (Exception ex)
 			{
@@ -569,7 +575,7 @@ namespace FishMMO.Installer
 			}
 			catch (NpgsqlException npgEx)
 			{
-				await Log.Error("FishMMOInstaller", "PostgreSQL error during database deletion: . Ensure correct superuser password and permissions", npgEx);
+				await Log.Error("FishMMOInstaller", $"PostgreSQL error during database deletion: {npgEx.Message}. Ensure correct superuser password and permissions.");
 			}
 			catch (Exception ex)
 			{
@@ -642,7 +648,7 @@ namespace FishMMO.Installer
 			}
 			catch (NpgsqlException npgEx)
 			{
-				await Log.Error("FishMMOInstaller", "PostgreSQL error granting permissions: . Ensure database '{dbName}' exists and superuser credentials are correct", npgEx);
+				await Log.Error("FishMMOInstaller", $"PostgreSQL error granting permissions: {npgEx.Message}. Ensure database '{dbName}' exists and superuser credentials are correct.");
 			}
 			catch (Exception ex)
 			{

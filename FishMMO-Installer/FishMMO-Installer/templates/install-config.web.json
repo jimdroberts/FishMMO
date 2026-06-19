@@ -1,0 +1,7 @@
+{
+  "components": ["postgresql", "fishmmo-db", "nginx", "letsencrypt", "firewall", "systemd-services"],
+  "configureFirewall": true,
+  "firewallPorts": [80, 443],
+  "registerSystemdServices": true,
+  "validateAfterInstall": true
+}

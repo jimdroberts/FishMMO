@@ -1,0 +1,6 @@
+{
+  "LoggingManager": {
+    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"]
+  },
+  "Loggers": []
+}

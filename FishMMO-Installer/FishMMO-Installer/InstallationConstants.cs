@@ -9,17 +9,8 @@ namespace FishMMO.Installer
 	public static class InstallationConstants
 	{
 		/// <summary>
-		/// Download URL for the DotNet SDK Windows installer.
-		/// </summary>
-		public const string DotNetSDKUrl = "https://download.visualstudio.microsoft.com/download/pr/b6f19ef3-52ca-40b1-b78b-0712d3c8bf4d/426bd0d376479d551ce4d5ac0ecf63a5/dotnet-sdk-8.0.302-win-x64.exe";
-
-		/// <summary>
-		/// Filename for the downloaded DotNet SDK Windows installer.
-		/// </summary>
-		public const string DotNetSDKFileName = "dotnet-sdk-8.0.302-win-x64.exe";
-
-		/// <summary>
-		/// URL for the DotNet install shell script (Linux).
+		/// URL for the DotNet install shell script, used to install the ASP.NET
+		/// Core runtime on Linux via the --runtime aspnetcore flag.
 		/// </summary>
 		public const string DotNetInstallScriptUrl = "https://dot.net/v1/dotnet-install.sh";
 
@@ -27,11 +18,6 @@ namespace FishMMO.Installer
 		/// Filename for the downloaded DotNet install shell script.
 		/// </summary>
 		public const string DotNetInstallScriptFileName = "dotnet-install.sh";
-
-		/// <summary>
-		/// Full DotNet SDK version string to install.
-		/// </summary>
-		public const string DotNetSDKVersion = "8.0.302";
 
 		/// <summary>
 		/// DotNet SDK major version for compatibility checks.
@@ -60,8 +46,13 @@ namespace FishMMO.Installer
 		public const string AspNetRuntimeWindowsFileName = "dotnet-hosting-8.0.16-win.exe";
 
 		/// <summary>
-		/// Download URL for the DotNet install shell script, also used to install the
-		/// ASP.NET Core runtime on Linux via the --runtime aspnetcore flag.
+		/// .NET release metadata channel for dynamic runtime URL resolution (e.g. "8.0").
+		/// </summary>
+		public const string DotNetRuntimeChannel = "8.0";
+
+		/// <summary>
+		/// ASP.NET Core runtime version string used for Linux installation via
+		/// dotnet-install.sh --runtime aspnetcore --version {version}.
 		/// </summary>
 		public const string AspNetRuntimeLinuxVersion = "8.0.16";
 
@@ -138,7 +129,7 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default nginx.conf path used in Linux setup automation.
 		/// </summary>
-		public static readonly string LinuxNginxConfigurationPath = Path.Combine(FishMMOSetupPath, "nginx.conf");
+		public static readonly string LinuxNginxConfigurationPath = Path.Combine(FishMMOSetupPath!, "nginx.conf");
 
 		/// <summary>
 		/// Default web root for ACME HTTP-01 challenges in Linux deployments.
@@ -148,7 +139,7 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default FishMMO web servers directory path used for operational context prompts.
 		/// </summary>
-		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-WebServers");
+		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(FishMMOMonorepoRoot!, "FishMMO-WebServers");
 
 		/// <summary>
 		/// Download URL for the Visual Studio Build Tools bootstrapper.
@@ -210,11 +201,15 @@ namespace FishMMO.Installer
 
 		/// <summary>
 		/// Relative path to the FishMMO-DB EF Core project file for migrations.
+		/// Resolved against <see cref="AppContext.BaseDirectory"/> at runtime
+		/// by <see cref="DotNetInstaller.RunEFMigrationAsync"/>.
 		/// </summary>
 		public static readonly string ProjectPath = Path.Combine(".", "FishMMO-Database", "FishMMO-DB", "FishMMO-DB.csproj");
 
 		/// <summary>
 		/// Relative path to the FishMMO-DB-Migrator startup project for EF Core commands.
+		/// Resolved against <see cref="AppContext.BaseDirectory"/> at runtime
+		/// by <see cref="DotNetInstaller.RunEFDatabaseUpdateAsync"/>.
 		/// </summary>
 		public static readonly string StartupProject = Path.Combine(".", "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj");
 
@@ -240,7 +235,10 @@ namespace FishMMO.Installer
 		/// <summary>Linux userlist.txt path.</summary>
 		public const string PgBouncerLinuxUserlistPath = "/etc/pgbouncer/userlist.txt";
 
-		/// <summary>Dedicated auth lookup role used by PgBouncer to call the auth_query function.</summary>
+		/// <summary>
+		/// Dedicated auth lookup role for PgBouncer's auth_query function.
+		/// Not yet wired into config generation; reserved for future use.
+		/// </summary>
 		public const string PgBouncerAuthUser = "fishmmo_pgb_auth";
 
 		// ---------------------------------------------------------------------
@@ -315,6 +313,29 @@ namespace FishMMO.Installer
 		/// </summary>
 		private static string FindMonorepoRoot()
 		{
+			// Allow explicit override via environment variable (useful for published/binary distributions)
+			string? envOverride = Environment.GetEnvironmentVariable("FISHMMO_INSTALL_ROOT");
+			if (!string.IsNullOrWhiteSpace(envOverride))
+			{
+				if (!Directory.Exists(envOverride))
+				{
+					// Log a warning through the static logger if available; fall back to stderr
+					try { _ = FishMMO.Logging.Log.Warning("FishMMOInstaller", $"FISHMMO_INSTALL_ROOT is set to '{envOverride}' but the directory does not exist. Falling back to auto-detection."); }
+					catch { Console.Error.WriteLine($"[WARNING] FISHMMO_INSTALL_ROOT='{envOverride}' does not exist. Falling back to auto-detection."); }
+				}
+				else if (!Directory.Exists(Path.Combine(envOverride, "FishMMO-Unity")) ||
+					     !Directory.Exists(Path.Combine(envOverride, "FishMMO-Setup")))
+				{
+					try { _ = FishMMO.Logging.Log.Warning("FishMMOInstaller", $"FISHMMO_INSTALL_ROOT='{envOverride}' does not contain expected FishMMO-Unity and/or FishMMO-Setup subdirectories. Continuing anyway."); }
+					catch { Console.Error.WriteLine($"[WARNING] FISHMMO_INSTALL_ROOT='{envOverride}' missing FishMMO-Unity or FishMMO-Setup."); }
+					return envOverride;
+				}
+				else
+				{
+					return envOverride;
+				}
+			}
+
 			string? assemblyPath = Assembly.GetExecutingAssembly().Location;
 			string? dir = Path.GetDirectoryName(assemblyPath);
 

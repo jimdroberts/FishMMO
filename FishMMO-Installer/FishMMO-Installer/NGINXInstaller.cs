@@ -113,9 +113,16 @@ namespace FishMMO.Installer
 			await Log.Info("FishMMOInstaller", "Installing NGINX on Windows...");
 			try
 			{
-				string downloadPath = await InstallerProcessHelper.DownloadFileAsync(
+				string? downloadPath = await DownloadHelper.DownloadFileWithProgressAsync(
 					InstallationConstants.NGINXWindowsDownloadUrl,
-					InstallationConstants.NGINXWindowsFileName);
+					InstallationConstants.NGINXWindowsFileName,
+					new DownloadHelper.ConsoleProgress());
+
+				if (downloadPath == null)
+				{
+					await Log.Error("FishMMOInstaller", "Failed to download NGINX.");
+					return;
+				}
 				string extractDirectory = InstallationConstants.NGINXWindowsExtractPath;
 				string nginxHomeDirectory = GetExpectedWindowsNginxHomePath();
 
@@ -163,26 +170,25 @@ namespace FishMMO.Installer
 				["yum"] = "nginx"
 			};
 
-			var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
+			var detected = await LinuxPackageManagerHelper.DetectAsync(packageNames);
 			if (detected == null)
 			{
 				await Log.Warning("FishMMOInstaller", "No supported package manager (pacman, apt-get, yum, dnf) found. Please install NGINX manually.");
 				return;
 			}
 
-			var (updateCommand, installCommand, managerName) = detected.Value;
-			await Log.Info("FishMMOInstaller", $"Using {managerName} for NGINX installation.");
+			await Log.Info("FishMMOInstaller", $"Using {detected.ManagerName} for NGINX installation.");
 
 			try
 			{
 				await Log.Info("FishMMOInstaller", "Updating package lists...");
-				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, updateCommand, "Failed to update package lists."))
+				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.UpdateCommand, "Failed to update package lists."))
 				{
 					await Log.Warning("FishMMOInstaller", "Continuing anyway, but installation might fail.");
 				}
 
 				await Log.Info("FishMMOInstaller", "Installing NGINX...");
-				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, installCommand, "Failed to install NGINX."))
+				if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix, detected.InstallCommand, "Failed to install NGINX."))
 				{
 					await Log.Warning("FishMMOInstaller", "Check for errors above.");
 					return;
@@ -308,7 +314,16 @@ namespace FishMMO.Installer
 
 			try
 			{
-				string nssmArchivePath = await InstallerProcessHelper.DownloadFileAsync(InstallationConstants.NssmDownloadUrl, InstallationConstants.NssmFileName);
+				string? nssmArchivePath = await DownloadHelper.DownloadFileWithProgressAsync(
+					InstallationConstants.NssmDownloadUrl,
+					InstallationConstants.NssmFileName,
+					new DownloadHelper.ConsoleProgress());
+
+				if (nssmArchivePath == null)
+				{
+					await Log.Error("FishMMOInstaller", "Failed to download NSSM.");
+					return string.Empty;
+				}
 
 				if (Directory.Exists(nssmDirectory))
 				{

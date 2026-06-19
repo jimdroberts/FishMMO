@@ -1,0 +1,19 @@
+{
+  "_comment": "SHA256 checksums for downloaded artifacts. Empty values skip verification. Use --generate-checksums to populate.",
+  "_sizes": {
+    "dotnet-hosting-8.0.16-win.exe": "~75 MB",
+    "vs_buildtools.exe": "~3 MB (bootstrapper, actual payload ~3 GB)",
+    "UnityHubSetup.exe": "~150 MB (installs ~5 GB)",
+    "nssm-2.24.zip": "~300 KB",
+    "win-acme.v2.2.9.1701.x64.trimmed.zip": "~14 MB",
+    "nginx-1.29.5.zip": "~3 MB",
+    "PostgreSQLInstaller.exe": "~350 MB"
+  },
+  "dotnet-hosting-8.0.16-win.exe": "",
+  "vs_buildtools.exe": "",
+  "UnityHubSetup.exe": "",
+  "nssm-2.24.zip": "",
+  "win-acme.v2.2.9.1701.x64.trimmed.zip": "",
+  "nginx-1.29.5.zip": "",
+  "PostgreSQLInstaller.exe": ""
+}

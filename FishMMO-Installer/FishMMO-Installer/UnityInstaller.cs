@@ -183,11 +183,19 @@ namespace FishMMO.Installer
 		private static async Task InstallUnityHubWindows()
 		{
 			await Log.Info("FishMMOInstaller", "Installing Unity Hub on Windows...");
+			DownloadHelper.CheckDiskSpace(5L * 1024 * 1024 * 1024); // ~5 GB
 			try
 			{
-				string installerPath = await InstallerProcessHelper.DownloadFileAsync(
+				string? installerPath = await DownloadHelper.DownloadFileWithProgressAsync(
 					InstallationConstants.UnityHubWindowsDownloadUrl,
-					InstallationConstants.UnityHubWindowsFileName);
+					InstallationConstants.UnityHubWindowsFileName,
+					new DownloadHelper.ConsoleProgress());
+
+				if (installerPath == null)
+				{
+					await Log.Error("FishMMOInstaller", "Failed to download Unity Hub installer.");
+					return;
+				}
 
 				InstallerProcessHelper.LogElevatedProcessEnvironmentWarning("Unity Hub installer");
 
@@ -240,28 +248,26 @@ namespace FishMMO.Installer
 				["apt-get"] = ""
 			};
 
-			var detected = await InstallerProcessHelper.DetectLinuxPackageManagerAsync(packageNames);
+			var detected = await LinuxPackageManagerHelper.DetectAsync(packageNames);
 			if (detected == null)
 			{
 				await Log.Warning("FishMMOInstaller", "No supported package manager found. Please install Unity Hub manually from https://unity.com/download.");
 				return;
 			}
 
-			var (_, _, managerName) = detected.Value;
-
 			try
 			{
-				if (managerName.Contains("apt-get", StringComparison.OrdinalIgnoreCase))
+				if (detected.ManagerName.Contains("apt-get", StringComparison.OrdinalIgnoreCase))
 				{
 					await InstallUnityHubDebian(shell, argPrefix);
 				}
-				else if (managerName.Contains("pacman", StringComparison.OrdinalIgnoreCase))
+				else if (detected.ManagerName.Contains("pacman", StringComparison.OrdinalIgnoreCase))
 				{
 					await InstallUnityHubArch(shell, argPrefix);
 				}
 				else
 				{
-					await Log.Info("FishMMOInstaller", $"Automatic Unity Hub installation is not supported for {managerName}. Please install manually from https://unity.com/download.");
+					await Log.Info("FishMMOInstaller", $"Automatic Unity Hub installation is not supported for {detected.ManagerName}. Please install manually from https://unity.com/download.");
 				}
 			}
 			catch (Exception ex)

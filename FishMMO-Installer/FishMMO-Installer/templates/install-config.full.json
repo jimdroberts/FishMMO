@@ -1,0 +1,8 @@
+{
+  "components": ["dotnet-ef", "aspnet-runtime", "postgresql", "pgbouncer", "fishmmo-db", "nginx", "letsencrypt", "firewall", "systemd-services", "appsettings"],
+  "configureFirewall": true,
+  "firewallPorts": [80, 443],
+  "registerSystemdServices": true,
+  "webServers": ["ipfetch", "patcher", "webgl"],
+  "validateAfterInstall": true
+}

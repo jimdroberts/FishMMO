@@ -32,11 +32,19 @@ namespace FishMMO.Installer
 				return;
 			}
 
+			DownloadHelper.CheckDiskSpace(3L * 1024 * 1024 * 1024); // ~3 GB
 			try
 			{
-				string installerPath = await InstallerProcessHelper.DownloadFileAsync(
+				string? installerPath = await DownloadHelper.DownloadFileWithProgressAsync(
 					InstallationConstants.VSBuildToolsUrl,
-					InstallationConstants.VSBuildToolsFileName);
+					InstallationConstants.VSBuildToolsFileName,
+					new DownloadHelper.ConsoleProgress());
+
+				if (installerPath == null)
+				{
+					await Log.Error("FishMMOInstaller", "Failed to download Visual Studio Build Tools installer.");
+					return;
+				}
 
 				await Log.Info("FishMMOInstaller", "Automated installation of Visual Studio Build Tools will begin.");
 				await Log.Info("FishMMOInstaller", "The following workloads and components will be installed:");
