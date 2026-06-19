@@ -145,13 +145,17 @@ Or run the compiled binary directly:
 
 ### 3. Run the Installer
 
-The installer presents a hierarchical menu system. Each sub-menu groups related tasks:
+The installer supports two modes: **interactive menu** (default) and **CLI-driven** (for headless/automated deployment).
+
+#### Interactive Menu Mode (default)
+
+Run with no arguments to enter the menu:
 
 ```
 === FishMMO Installer ===
-1 : Runtime & Tooling     — .NET SDK, ASP.NET Runtime, VS Build Tools
+1 : Runtime & Tooling     — .NET EF Tool, ASP.NET Runtime, VS Build Tools
 2 : Database              — PostgreSQL, PgBouncer, DB management
-3 : Web Server            — NGINX, Let's Encrypt SSL
+3 : Web Server            — NGINX, Let's Encrypt SSL, Firewall, Services
 4 : Unity & Build         — Unity Hub, Unity Editor, C# project builds
 5 : Configuration         — appsettings.json setup
 0 : Quit
@@ -160,7 +164,7 @@ The installer presents a hierarchical menu system. Each sub-menu groups related 
 #### Sub-Menu: Runtime & Tooling
 
 ```
-1 : Install DotNet SDK
+1 : Install DotNet EF Tool (dotnet-ef)
 2 : Install ASP.NET Runtime
 3 : Install Visual Studio Build Tools (Windows Only)
 0 : Back
@@ -185,6 +189,8 @@ The installer presents a hierarchical menu system. Each sub-menu groups related 
 1 : Install NGINX (Web Server/Reverse Proxy)
 2 : Install/Renew Let's Encrypt Certificate (NGINX)
 3 : Deploy FishMMO nginx.conf (from FishMMO-Setup/)
+4 : Configure Firewall Rules (open ports 80, 443)
+5 : Register FishMMO Web Servers as Services (systemd / NSSM)
 0 : Back
 ```
 
@@ -205,24 +211,69 @@ The installer presents a hierarchical menu system. Each sub-menu groups related 
 0 : Back
 ```
 
+#### CLI / Non-Interactive Mode
+
+For headless servers and CI/CD pipelines, use CLI arguments:
+
+```bash
+# Show help
+FishMMO-Installer --help
+
+# Show version
+FishMMO-Installer --version
+
+# Install a single component
+FishMMO-Installer --component postgresql
+
+# Run health checks on all installed components
+FishMMO-Installer --validate
+
+# Simulate without making changes
+FishMMO-Installer --dry-run --component nginx
+
+# Unattended installation from a config file
+FishMMO-Installer --non-interactive -f install-config.json
+```
+
+**`install-config.json` format:**
+
+```json
+{
+  "components": ["dotnet-sdk", "postgresql", "nginx", "firewall", "systemd-services"],
+  "configureFirewall": true,
+  "firewallPorts": [80, 443],
+  "registerSystemdServices": true,
+  "validateAfterInstall": true
+}
+```
+
+**Available component names for CLI use:**
+`dotnet-sdk`, `aspnet-runtime`, `vs-build-tools`, `postgresql`, `pgbouncer`, `fishmmo-db`, `nginx`, `letsencrypt`, `unity-hub`, `unity-editor`, `build-projects`, `build-unity`, `appsettings`, `firewall`, `systemd-services`
+
+> **Pre-flight checks** automatically run before any CLI-mode installation, verifying internet connectivity, disk space, memory, admin/sudo access, and port conflicts.
+
+> **Download integrity:** Downloaded files are verified against SHA256 checksums in `checksums.json`. Corrupt or tampered downloads are rejected.
+
 #### Recommended Installation Order (Fresh Setup)
 
 | Step | Menu | Action | Windows | Linux |
 |---|---|---|---|---|
-| 1 | Runtime & Tooling | Install DotNet SDK | Yes | Yes |
+| 1 | Runtime & Tooling | Install DotNet EF Tool | Yes | Yes |
 | 2 | Runtime & Tooling | Install ASP.NET Runtime | Yes | Yes |
 | 3 | Runtime & Tooling | Install VS Build Tools | Yes | *(skip)* |
 | 4 | Unity & Build | Build all C# Projects | Yes | Yes |
 | 5 | Unity & Build | Install Unity Hub | Yes | Yes |
 | 6 | Unity & Build | Install Unity Editor (+Modules) | Yes | Yes |
 | 7 | Database | Install PostgreSQL | Yes | Yes |
-| 9 | Database | Install FishMMO Database | Yes | Yes |
-| 10 | Database | Install PgBouncer | Yes | Yes |
-| 11 | Database | Configure PgBouncer | *(manual)* | Yes |
-| 12 | Web Server | Install NGINX | Yes | Yes |
-| 13 | Web Server | Deploy FishMMO nginx.conf | Yes | Yes |
+| 8 | Database | Install FishMMO Database | Yes | Yes |
+| 9 | Database | Install PgBouncer | Yes | Yes |
+| 10 | Database | Configure PgBouncer | *(manual)* | Yes |
+| 11 | Web Server | Install NGINX | Yes | Yes |
+| 12 | Web Server | Deploy FishMMO nginx.conf | Yes | Yes |
+| 13 | Web Server | Configure Firewall Rules | Yes | Yes |
 | 14 | Web Server | Install/Renew Let's Encrypt Certificate | Optional | Optional |
-| 15 | Configuration | Configure appsettings.json | Yes | Yes |
+| 15 | Web Server | Register FishMMO Web Services | Optional | Yes |
+| 16 | Configuration | Configure appsettings.json | Yes | Yes |
 
 > **"Build all C# Projects"** discovers and builds all `.csproj` files under the repository root, including:
 > - `FishMMO-Dependencies` — copies dependency DLLs into `FishMMO-Unity/Assets/Dependencies/`
@@ -251,12 +302,12 @@ After building all C# projects, open the Unity project to compile Unity-side scr
 
 ## Database Setup
 
-The FishMMO-Installer automates database creation (Database menu, option `4`), but here is what happens under the hood:
+The FishMMO-Installer automates database creation (Database menu, option `3`), but here is what happens under the hood:
 
-1. **PostgreSQL Installation** — The installer installs PostgreSQL via your platform's package manager.
-2. **Database + User Creation** — Creates the `fish_mmo_postgresql` database and a dedicated `fishmmo` user role.
-3. **EF Core Migration** — Creates and applies an initial Entity Framework Core migration.
-4. **Permissions** — Grants the user full privileges on the `public` schema.
+1. **PostgreSQL Installation** — The installer installs PostgreSQL via your platform's package manager (option `1`).
+2. **Database + User Creation** — Creates the `fish_mmo_postgresql` database and a dedicated `fishmmo` user role (option `3`).
+3. **EF Core Migration** — Creates and applies an initial Entity Framework Core migration (option `3`).
+4. **Permissions** — Grants the user full privileges on the `public` schema (options `3` and `5`).
 
 ### Manual Database Setup (Without the Installer)
 
@@ -284,7 +335,7 @@ dotnet run
 
 ### Creating New Migrations
 
-When your data model changes, create a new migration via the Installer (Database menu, option `5`) or manually:
+When your data model changes, create a new migration via the Installer (Database menu, option `4`) or manually:
 
 ```bash
 cd FishMMO-Database/FishMMO-DB-Migrator
@@ -554,9 +605,6 @@ Placed alongside every server executable and web service. Templates with `__REPL
     "Password": "your_secure_password",
     "Host": "127.0.0.1",
     "Port": "5432"
-  },
-    "Host": "127.0.0.1",
-    "Port": "6379",
   }
 }
 ```
@@ -1130,6 +1178,16 @@ The installer applies several hardening measures for production Linux deployment
 - **File permissions** — `appsettings.json` set to `600` or `640`, owned by the service user.
 - **PostgreSQL hardening** — Password auth only, restricted listen addresses, connection limits.
 
+### Firewall Configuration
+
+The installer can automate host firewall rules for the ports NGINX requires:
+
+- **Linux:** Uses `ufw` (preferred) or `firewalld` — adds rules for ports 80/tcp and 443/tcp.
+- **Windows:** Uses `netsh advfirewall` — adds inbound rules for the same ports.
+- **Menu:** Web Server → `4` | **CLI:** `--component firewall` or `install-config.json` `"configureFirewall": true`
+
+> Backend server ports (`8000`, `8080`, `8090`, `7770-7899`) are **not** opened to the public — only NGINX ports 80/443 are exposed.
+
 ### Systemd Services
 
 All FishMMO server components are designed to run as systemd services. Reference units:
@@ -1205,6 +1263,22 @@ sudo systemctl enable --now fishmmo-login
 sudo systemctl enable --now fishmmo-world
 sudo systemctl enable --now fishmmo-scene
 sudo systemctl enable --now apphealthmonitor
+```
+
+#### Web Server Systemd Services (Installer-Generated)
+
+The installer can automatically generate and register systemd units for the ASP.NET web servers (Web Server menu, option `5`, or CLI `--component systemd-services`). It finds each server's publish directory, generates a `.service` file with the correct working directory, `ExecStart`, `User`, and `EnvironmentFile`, and runs `systemctl enable --now`.
+
+Generated services:
+- **`fishmmo-ipfetch.service`** — IPFetch Web Server on port 8080
+- **`fishmmo-patcher.service`** — Patcher Web Server on port 8090
+- **`fishmmo-webgl.service`** — WebGL Web Server on port 8000
+
+Each service unit includes `EnvironmentFile=-/path/to/fishmmo-secrets.env` so database passwords and signing keys are never baked into the unit file. Generate the env file via the Configuration menu, option `1` → choose a component → `3` (Generate secrets environment-variable file).
+
+```bash
+# Verify after installer-generated registration:
+systemctl status fishmmo-ipfetch fishmmo-patcher fishmmo-webgl
 ```
 
 ### Port Reference

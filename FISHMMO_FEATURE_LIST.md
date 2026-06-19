@@ -1,6 +1,6 @@
 # FishMMO — Complete Feature List
 
-> Generated 2026-06-12 from the FishMMO-Dev monorepo.  
+> Generated 2026-06-19 from the FishMMO-Dev monorepo.  
 > Built on Unity 6.3 LTS, FishNet, PostgreSQL, .NET 8.0.
 
 ---
@@ -197,25 +197,68 @@
 
 ## FishMMO-Installer
 
-**Cross-platform .NET 8 console tool** that automates the entire dependency and database installation pipeline.
+**Cross-platform .NET 8 console tool** that automates the entire dependency and database installation pipeline. Supports interactive menu mode and CLI-driven non-interactive mode for headless/automated deployment.
 
-1. **Install DotNet** — Installs the .NET SDK.  
-2. **Install Visual Studio Build Tools** — Windows-only C++ build tools for Unity IL2CPP compilation.  
-3. **Install PgBouncer** — PostgreSQL connection pooler installation and configuration.  
-4. **Build All C# Projects** — Discovers and builds all `.csproj` files under the repo root, copies DLLs to Unity Dependencies.  
-5. **Install Unity Hub** — Downloads and installs Unity Hub.  
-6. **Install Unity Editor + Modules** — Installs Unity 6.3 LTS with required build support modules.  
-7. **Install NGINX** — Reverse proxy/SSL terminator installation and service registration.  
-8. **Install/Renew Let's Encrypt Certificate** — SSL certificate provisioning with staging mode support.  
-9. **Install PostgreSQL** — Platform-native PostgreSQL installation.  
-10. **Install FishMMO Database** — Creates PostgreSQL user, database, applies initial EF Core migration, grants permissions.  
-11. **Create New Database Migration** — Generates and applies new EF Core migrations.  
-12. **Grant User Permissions** — Grants schema privileges to the FishMMO database user.  
-13. **Delete FishMMO Database** — Database teardown (with confirmation).  
-14. **Interactive Menu** — Full interactive console menu with numbered options.  
-15. **Linux Config Hardening** — Secure file permissions, core dump disabling, ptrace hardening for production Linux deployments.  
-16. **PostgreSQL Hardening** — Secure PostgreSQL configuration (auth, logging, connection limits).  
-17. **Unity Build Automation** — Configures and executes Unity headless builds from the command line.
+### Installation Targets
+1. **Install DotNet EF Tool** — Installs the `dotnet-ef` global tool for Entity Framework Core migrations.  
+2. **Install ASP.NET Core Runtime** — Installs the ASP.NET Core 8.0 runtime via package manager (Linux) or Hosting Bundle EXE (Windows). Dynamic URL resolution from .NET release metadata with hardcoded fallback.  
+3. **Install Visual Studio Build Tools** — Windows-only C++ build tools for Unity IL2CPP compilation.  
+4. **Install PostgreSQL** — Platform-native PostgreSQL installation (pacman, apt-get, dnf, yum, EnterpriseDB EXE).  
+5. **Install PgBouncer** — PostgreSQL connection pooler installation and configuration (Linux systemd, Windows winget/choco).  
+6. **Install FishMMO Database** — Creates PostgreSQL user, database, applies initial EF Core migration, grants permissions.  
+7. **Create New Database Migration** — Generates and applies new EF Core migrations interactively.  
+8. **Grant User Permissions** — Grants schema privileges to the FishMMO database user.  
+9. **Delete FishMMO Database** — Destructive database teardown with typed confirmation (requires "DELETE").  
+10. **Install NGINX** — Reverse proxy/SSL terminator installation and service registration (Linux systemd, Windows NSSM service).  
+11. **Deploy FishMMO nginx.conf** — Atomically deploys the canonical nginx.conf with backup preservation and `nginx -t` validation.  
+12. **Install/Renew Let's Encrypt Certificate** — SSL certificate provisioning via certbot (Linux) or win-acme (Windows), with staging mode support and automatic nginx.conf certificate path updates.
+
+### Interactive Menu
+13. **Full Interactive Menu** — Hierarchical menu system with numbered options, sub-menus per component group, and confirmation prompts.
+
+### CLI / Non-Interactive Mode
+14. **CLI Argument Parser** — `--help`, `--version`, `--component <name>`, `--non-interactive`, `--dry-run`, `--validate`, `--config <path>`. Zero-arg invocation enters interactive menu (backward compatible).  
+15. **Unattended Installation** — `--non-interactive -f install-config.json` runs a full dependency-ordered installation from a JSON manifest with no user prompts.  
+16. **Single-Component Mode** — `--component postgresql` jumps directly to one component without navigating menus.  
+17. **Dry-Run Mode** — `--dry-run` simulates installation and prints what would happen without making changes.  
+18. **Quickstart Template** — `--quickstart` shortcut for a recommended default installation profile.
+
+### Pre-Flight Checks
+19. **Internet Connectivity Check** — Probes dot.net in 10s before any download-dependent operation.  
+20. **Disk Space Check** — Warns if less than 5 GB free on the target drive (Unity Editor + builds can consume 20+ GB).  
+21. **Memory Check** — Reads `/proc/meminfo` on Linux, warns if less than 2 GB RAM.  
+22. **Admin/Sudo Access Check** — Verifies passwordless sudo (Linux) or Administrator integrity level (Windows) before system-level installs.  
+23. **Port Conflict Detection** — Checks ports 80, 443, 5432, 6432, 8000, 8080, 8090 for existing listeners before installing services.
+
+### Download Integrity & Progress
+24. **SHA256 Checksum Verification** — Every downloaded file verified against `checksums.json`; corrupt/tampered files rejected. Already-downloaded files with valid checksums skip re-download.  
+25. **Download Progress Bar** — Console progress indicator with percentage and visual bar during large downloads.  
+26. **Dynamic .NET URL Resolution** — Resolves the latest .NET SDK and ASP.NET runtime installer URLs from the .NET release metadata API; hardcoded constants as fallback.
+
+### Post-Install Validation
+27. **Health Check Mode** — `--validate` runs checks against .NET SDK, ASP.NET runtime, PostgreSQL, NGINX, PgBouncer, systemd services, database connectivity, and disk space; prints a pass/fail report.
+
+### New Infrastructure Components
+28. **Firewall Automation** — Opens ports 80/tcp and 443/tcp via ufw or firewalld (Linux) or netsh (Windows). Menu option or `--component firewall`.  
+29. **Systemd Service Generation** — Generates and registers systemd units for FishMMO ASP.NET web servers (fishmmo-ipfetch, fishmmo-patcher, fishmmo-webgl). Finds publish directories, generates `.service` files, runs `systemctl enable --now`. Menu option or `--component systemd-services`.  
+30. **Dependency-Graph Orchestrator** — Topological component ordering so dotnet-sdk installs before postgresql, postgresql before fishmmo-db, etc. Used by both non-interactive pipeline and single-component dispatch.
+
+### Security & Hardening
+31. **Linux Config Hardening** — Secure file permissions (`chmod 600`), core dump disabling, ptrace hardening for production Linux deployments.  
+32. **PostgreSQL Hardening** — Rewrites `pg_hba.conf` to require `scram-sha-256` on all TCP connections, sets `password_encryption` and `listen_addresses` in `postgresql.conf`, reloads via `pg_reload_conf()`. Idempotent via managed markers.  
+33. **PgBouncer Configuration Generation** — Generates `pgbouncer.ini` (transaction pooling, scram-sha-256) and `userlist.txt` (with SCRAM hash from `pg_shadow`) with secure file permissions.  
+34. **Secrets Environment Files** — Generates `fishmmo-secrets.env` (systemd/docker `EnvironmentFile`) and `~/.config/fish/conf.d/fishmmo-secrets.fish` (fish shell snippet) so passwords never live in plain-text JSON.  
+35. **AppSettings Secure Wizard** — Interactive configuration wizard for all FishMMO components (Database, IPFetch, Patcher, WebGL, Discord Bot, CMS). Preserves unmanaged JSON keys across writes. Applies `chmod 600` on all output files.
+
+### Build Automation
+36. **Build All C# Projects** — Discovers and builds all `.csproj` files under the repo root with dependency-prioritized ordering (synchronous for low-priority projects, parallel for independent builds). Copies DLLs to Unity Dependencies.  
+37. **Unity Build Automation** — Headless Unity builds via `-batchmode -nographics -executeMethod` for Client/Server/Addressables. Resolves Unity executable path from environment variable, Unity Hub CLI, or filesystem probing.  
+38. **Unity Hub + Editor Installation** — Installs Unity Hub (Linux: apt/AUR, Windows: official installer) and Unity Editor versions with selectable build support modules via Unity Hub CLI.
+
+### Platform Support
+39. **Cross-Platform** — Windows 10/11 and Linux (Arch/CachyOS, Ubuntu/Debian, Fedora/RHEL).  
+40. **Package Manager Auto-Detection** — pacman, apt-get, dnf, and yum auto-detected with appropriate update/install command templates.  
+41. **Platform Abstraction** — `IPlatform` interface with `WindowsPlatform` / `LinuxPlatform` implementations for shell command dispatch, privilege elevation, and command availability checks.
 
 ---
 
