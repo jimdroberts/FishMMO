@@ -405,16 +405,16 @@ Run the compiled binary directly:
 ---
 
 ## appsettings.json Example
-
-Database operations require `appsettings.json` in the working directory:
+Database operations require `appsettings.json` in the working directory. Non-sensitive settings (host, port, database name, pool sizes) are stored in JSON. Secrets (password) are set via environment variables — see the `_comment` field in each template for the env var name to set.
 
 ```json
 {
+  "_comment": "Non-sensitive defaults only. Override secrets via env vars: Npgsql__Password, Npgsql__Username",
   "Npgsql": {
     "Database": "fish_mmo_postgresql",
     "Schema": "public",
-    "Username": "fishmmo",
-    "Password": "your_password",
+    "Username": "",
+    "Password": "",
     "Host": "127.0.0.1",
     "Port": "5432",
     "CommandTimeout": 10,
@@ -440,13 +440,14 @@ Database operations require `appsettings.json` in the working directory:
   }
 }
 ```
+```
 
 ### Npgsql connection string format (for web servers, Discord bot, CMS)
 
 Components that use `ConnectionStrings` format use semicolon-delimited Npgsql DSNs:
 
 ```
-Host=127.0.0.1;Port=5432;Database=fish_mmo_postgresql;Username=fishmmo;Password=your_password;Ssl Mode=Prefer;
+Host=127.0.0.1;Port=5432;Database=fish_mmo_postgresql;Username=;Password=;Ssl Mode=Prefer;
 ```
 
 ---
