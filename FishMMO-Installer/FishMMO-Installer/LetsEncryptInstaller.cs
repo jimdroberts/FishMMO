@@ -208,10 +208,21 @@ namespace FishMMO.Installer
 				$"--emailaddress \"{email}\" " +
 				"--usedefaulttaskuser";
 
-			bool certificateInstalled = await InstallerProcessHelper.RunProcessAsync(
+			bool certificateInstalled = await InstallerProcessHelper.RunProcessWithLiveOutputAsync(
 				winAcmeExecutablePath,
 				arguments,
-				(exitCode, output, error) => exitCode == 0);
+				(exitCode, output, error) =>
+				{
+					if (exitCode != 0)
+					{
+						if (!string.IsNullOrWhiteSpace(error))
+						{
+							Console.Error.WriteLine(error);
+						}
+						return false;
+					}
+					return true;
+				});
 
 			if (!certificateInstalled)
 			{

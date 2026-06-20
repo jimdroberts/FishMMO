@@ -79,7 +79,8 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 
 					string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 					string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
-					CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath);
+					string setupRoot = Path.Combine(root, Constants.Configuration.SetupDirectory);
+					CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath, setupRoot);
 					CopyRemoteAddressablesToBuild(buildPath, executableName, buildTarget, customBuildType);
 
 					if (buildTarget == BuildTarget.WebGL)
@@ -158,7 +159,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 		/// <summary>
 		/// Copies configuration files to the build output directory based on build type and target.
 		/// </summary>
-		private void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath)
+		private void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath, string setupRoot)
 		{
 			switch (customBuildType)
 			{
@@ -167,7 +168,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "WorldServer.cfg"), Path.Combine(buildPath, "WorldServer.cfg"));
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "SceneServer.cfg"), Path.Combine(buildPath, "SceneServer.cfg"));
 					// Shared logging configuration from FishMMO-Setup.
-					FileUtil.ReplaceFile(Path.Combine(configurationPath, "logging.json"), Path.Combine(buildPath, "logging.json"));
+					FileUtil.ReplaceFile(Path.Combine(setupRoot, "logging.json"), Path.Combine(buildPath, "logging.json"));
 					break;
 				case CustomBuildType.Client:
 					if (buildTarget == BuildTarget.WebGL)

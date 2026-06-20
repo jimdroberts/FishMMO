@@ -235,6 +235,66 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
+		/// Runs a process asynchronously, streaming stdout and stderr to the console
+		/// in real-time while also capturing the full output. Use this for long-running
+		/// processes where the user needs to see progress (e.g., win-acme, certbot).
+		/// </summary>
+		/// <param name="command">Process executable.</param>
+		/// <param name="arguments">Arguments for the process.</param>
+		/// <param name="processResult">Optional callback receiving (exitCode, stdout, stderr) to determine success.</param>
+		/// <returns>True if process succeeded, otherwise false.</returns>
+		public static async Task<bool> RunProcessWithLiveOutputAsync(string command, string arguments, Func<int, string, string, bool>? processResult = null)
+		{
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = command;
+				process.StartInfo.Arguments = arguments;
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.CreateNoWindow = true;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
+
+				process.Start();
+
+				var outputBuilder = new System.Text.StringBuilder();
+				var errorBuilder = new System.Text.StringBuilder();
+
+				// Read stdout and stderr line-by-line, writing to console and collecting
+				var outputTask = ReadAndStreamLinesAsync(process.StandardOutput, outputBuilder, Console.Out);
+				var errorTask = ReadAndStreamLinesAsync(process.StandardError, errorBuilder, Console.Error);
+
+				await Task.WhenAll(outputTask, errorTask);
+				await process.WaitForExitAsync();
+
+				string output = outputBuilder.ToString();
+				string error = errorBuilder.ToString();
+
+				if (processResult != null)
+				{
+					return processResult.Invoke(process.ExitCode, output, error);
+				}
+				else
+				{
+					return process.ExitCode == 0;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Reads lines from a StreamReader, appends each to a StringBuilder, and
+		/// writes each line to a TextWriter for live console feedback.
+		/// </summary>
+		private static async Task ReadAndStreamLinesAsync(StreamReader reader, System.Text.StringBuilder builder, TextWriter liveWriter)
+		{
+			string? line;
+			while ((line = await reader.ReadLineAsync()) != null)
+			{
+				builder.AppendLine(line);
+				liveWriter.WriteLine(line);
+			}
+		}
+
+		/// <summary>
 		/// Runs a process asynchronously, writing the supplied text to the
 		/// process's standard input before closing it. Used to deliver
 		/// secrets (e.g. passwords for <c>psql</c> meta-commands) without
