@@ -197,7 +197,7 @@ namespace FishMMO.Installer
 			string stagingFlag = useStaging ? "--test " : string.Empty;
 			string arguments =
 				$"{stagingFlag}" +
-				"--target manual " +
+				"--source manual " +
 				$"--host \"{domainList}\" " +
 				"--validation filesystem " +
 				$"--webroot \"{webRootPath}\" " +
@@ -205,8 +205,7 @@ namespace FishMMO.Installer
 				$"--pemfilespath \"{certificateOutputDirectory}\" " +
 				"--installation none " +
 				"--accepttos " +
-				$"--emailaddress \"{email}\" " +
-				"--usedefaulttaskuser";
+				$"--emailaddress \"{email}\"";
 
 			bool certificateInstalled = await InstallerProcessHelper.RunProcessWithLiveOutputAsync(
 				winAcmeExecutablePath,
@@ -215,9 +214,13 @@ namespace FishMMO.Installer
 				{
 					if (exitCode != 0)
 					{
+						if (!string.IsNullOrWhiteSpace(output))
+						{
+							Console.Error.WriteLine($"win-acme output:\n{output}");
+						}
 						if (!string.IsNullOrWhiteSpace(error))
 						{
-							Console.Error.WriteLine(error);
+							Console.Error.WriteLine($"win-acme errors:\n{error}");
 						}
 						return false;
 					}
