@@ -41,7 +41,7 @@
 
 		<!-- Define the source directory based on the build configuration -->
 		<ItemGroup>
-			<SourceDir Include="..\FishMMO-DB\appsettings.json" />
+			<SourceDir Include="..\..\FishMMO-Setup\Development\appsettings.Database.json" />
 		</ItemGroup>
 
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />

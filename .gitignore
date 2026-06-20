@@ -19,7 +19,9 @@ Thumbs.db
 *.pfx
 *.cert
 *.secret
-appsettings.*.json
+# Local environment overrides (may contain secrets)
+appsettings.Development.json
+appsettings.Production.json
 
 # --- Build & Output (General) ---
 [Dd]ebug/
