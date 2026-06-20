@@ -1,6 +1,7 @@
 using FishMMO.Logging;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace FishMMO.Installer
 {
@@ -43,8 +44,22 @@ namespace FishMMO.Installer
             try
             {
                 string json = await File.ReadAllTextAsync(path);
-                _checksums = JsonSerializer.Deserialize<Dictionary<string, string>>(json)
-                             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                _checksums = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                JsonNode? root = JsonNode.Parse(json);
+                if (root is JsonObject obj)
+                {
+                    foreach (var kvp in obj)
+                    {
+                        // Skip metadata keys (starting with '_') and non-string values
+                        if (kvp.Key.StartsWith('_')) continue;
+                        if (kvp.Value is JsonValue jsonValue
+                            && jsonValue.TryGetValue(out string? value))
+                        {
+                            _checksums[kvp.Key] = value ?? "";
+                        }
+                    }
+                }
 
                 int populated = _checksums.Count(kv => !string.IsNullOrWhiteSpace(kv.Value));
                 await Log.Info("FishMMOInstaller",
@@ -200,14 +215,24 @@ namespace FishMMO.Installer
             }
 
             string json = await File.ReadAllTextAsync(checksumsPath);
-            var checksums = JsonSerializer.Deserialize<Dictionary<string, string>>(json)
-                            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            JsonNode? root = JsonNode.Parse(json);
+            if (root is not JsonObject obj)
+            {
+                await Log.Warning("FishMMOInstaller", "checksums.json root is not a JSON object. Aborting checksum generation.");
+                return;
+            }
 
             int updated = 0;
             int missing = 0;
-            foreach (string fileName in checksums.Keys.ToList())
+            foreach (var kvp in obj.ToList())
             {
-                string filePath = Path.Combine(AppContext.BaseDirectory, fileName);
+                // Preserve metadata keys and non-string values unchanged
+                if (kvp.Key.StartsWith('_')) continue;
+                if (kvp.Value is not JsonValue)
+                    continue;
+
+                string filePath = Path.Combine(AppContext.BaseDirectory, kvp.Key);
                 if (!File.Exists(filePath))
                 {
                     missing++;
@@ -219,17 +244,17 @@ namespace FishMMO.Installer
                     using var stream = File.OpenRead(filePath);
                     byte[] hash = SHA256.HashData(stream);
                     string hexHash = Convert.ToHexString(hash).ToLowerInvariant();
-                    checksums[fileName] = hexHash;
-                    await Log.Info("FishMMOInstaller", $"  {fileName} → {hexHash}");
+                    obj[kvp.Key] = hexHash;
+                    await Log.Info("FishMMOInstaller", $"  {kvp.Key} → {hexHash}");
                     updated++;
                 }
                 catch (Exception ex)
                 {
-                    await Log.Warning("FishMMOInstaller", $"Failed to hash {fileName}: {ex.Message}");
+                    await Log.Warning("FishMMOInstaller", $"Failed to hash {kvp.Key}: {ex.Message}");
                 }
             }
 
-            string updatedJson = JsonSerializer.Serialize(checksums, new JsonSerializerOptions { WriteIndented = true });
+            string updatedJson = obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(checksumsPath, updatedJson);
 
             await Log.Info("FishMMOInstaller",

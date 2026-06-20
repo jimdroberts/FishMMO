@@ -139,19 +139,9 @@ namespace FishMMO.Installer
 		public const string NssmFileName = "nssm-2.24.zip";
 
 		/// <summary>
-		/// Default nginx.conf path used in Linux setup automation.
-		/// </summary>
-		public static readonly string LinuxNginxConfigurationPath = Path.Combine(FishMMOSetupPath!, "nginx.conf");
-
-		/// <summary>
 		/// Default web root for ACME HTTP-01 challenges in Linux deployments.
 		/// </summary>
 		public const string LinuxCertbotWebRoot = "/var/www/certbot";
-
-		/// <summary>
-		/// Default FishMMO web servers directory path used for operational context prompts.
-		/// </summary>
-		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(FishMMOMonorepoRoot!, "FishMMO-WebServers");
 
 		/// <summary>
 		/// Download URL for the Visual Studio Build Tools bootstrapper.
@@ -267,6 +257,14 @@ namespace FishMMO.Installer
 
 		/// <summary>Path to the FishMMO-Setup directory containing canonical nginx.conf, .cfg files, and environment overlays.</summary>
 		public static readonly string FishMMOSetupPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-Setup");
+
+		/// <summary>Default nginx.conf path used in Linux setup automation.</summary>
+		/// <remarks>MUST come after <see cref="FishMMOSetupPath"/> — static init order matters.</remarks>
+		public static readonly string LinuxNginxConfigurationPath = Path.Combine(FishMMOSetupPath, "nginx.conf");
+
+		/// <summary>Default FishMMO web servers directory path used for operational context prompts.</summary>
+		/// <remarks>MUST come after <see cref="FishMMOMonorepoRoot"/> — static init order matters.</remarks>
+		public static readonly string LinuxFishMMOWebServersPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-WebServers");
 
 		/// <summary>FishMMO-Setup/Development directory (Development environment overlay assets).</summary>
 		public static readonly string FishMMOSetupDevelopmentPath = Path.Combine(FishMMOSetupPath, "Development");
