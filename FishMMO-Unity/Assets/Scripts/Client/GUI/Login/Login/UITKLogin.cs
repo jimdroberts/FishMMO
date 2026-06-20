@@ -425,12 +425,43 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				// Provide user-facing feedback so the player knows why the button did nothing.
+				if (!string.IsNullOrWhiteSpace(emailText) || !string.IsNullOrWhiteSpace(usernameText))
+				{
+					if (handshakeMessage != null)
+					{
+						handshakeMessage.text = "Invalid username or email format. Use 3-32 characters (letters, numbers, underscores).";
+					}
+				}
+				else
+				{
+					if (handshakeMessage != null)
+					{
+						handshakeMessage.text = "Please enter a username or email address.";
+					}
+				}
+				Log.Warning("UITKLogin", "Login validation failed: invalid identifier.");
 				return;
 			}
 
 			string passwordText = password != null ? password.value : null;
 			if (!Authentication.IsAllowedPassword(passwordText))
 			{
+				if (string.IsNullOrWhiteSpace(passwordText))
+				{
+					if (handshakeMessage != null)
+					{
+						handshakeMessage.text = "Please enter a password.";
+					}
+				}
+				else
+				{
+					if (handshakeMessage != null)
+					{
+						handshakeMessage.text = "Invalid password. Must be 8-32 characters with allowed symbols.";
+					}
+				}
+				Log.Warning("UITKLogin", "Login validation failed: invalid password.");
 				return;
 			}
 
@@ -461,23 +492,69 @@ namespace FishMMO.Client
 		/// <param name="port">Optional server port.</param>
 		private void Connect(string handshakeMsg, string identifier, string passwordText, string address = null, ushort port = 0)
 		{
-			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				(Authentication.IsAllowedUsername(identifier) || Authentication.IsAllowedEmailUsername(identifier)) &&
-				Authentication.IsAllowedPassword(passwordText) &&
-				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress) &&
-				Authentication.IsAddressValid(serverAddress.Address))
+			// Validate preconditions individually so the player gets a specific error
+			// message instead of the button silently unlocking with no feedback.
+			if (!Client.IsConnectionReady(LocalConnectionState.Stopped))
 			{
 				if (handshakeMessage != null)
 				{
-					handshakeMessage.text = handshakeMsg;
+					handshakeMessage.text = "Connection already in progress. Please wait.";
 				}
-				Client.LoginAuthenticator.SetLoginCredentials(identifier, passwordText);
-				Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
-			}
-			else
-			{
+				Log.Warning("UITKLogin", "Connect failed: connection is not in Stopped state.");
 				SetSignInLocked(false);
+				return;
 			}
+
+			if (!Authentication.IsAllowedUsername(identifier) && !Authentication.IsAllowedEmailUsername(identifier))
+			{
+				if (handshakeMessage != null)
+				{
+					handshakeMessage.text = "Invalid username or email format.";
+				}
+				Log.Warning("UITKLogin", "Connect failed: identifier validation failed.");
+				SetSignInLocked(false);
+				return;
+			}
+
+			if (!Authentication.IsAllowedPassword(passwordText))
+			{
+				if (handshakeMessage != null)
+				{
+					handshakeMessage.text = "Invalid password format.";
+				}
+				Log.Warning("UITKLogin", "Connect failed: password validation failed.");
+				SetSignInLocked(false);
+				return;
+			}
+
+			if (!Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+			{
+				if (handshakeMessage != null)
+				{
+					handshakeMessage.text = "No login servers available. Check your internet connection.";
+				}
+				Log.Warning("UITKLogin", "Connect failed: no login server addresses available.");
+				SetSignInLocked(false);
+				return;
+			}
+
+			if (!Authentication.IsAddressValid(serverAddress.Address))
+			{
+				if (handshakeMessage != null)
+				{
+					handshakeMessage.text = "Invalid server address. Please try again.";
+				}
+				Log.Warning("UITKLogin", $"Connect failed: invalid server address '{serverAddress.Address}'.");
+				SetSignInLocked(false);
+				return;
+			}
+
+			if (handshakeMessage != null)
+			{
+				handshakeMessage.text = handshakeMsg;
+			}
+			Client.LoginAuthenticator.SetLoginCredentials(identifier, passwordText);
+			Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
 		}
 
 		/// <summary>

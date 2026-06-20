@@ -94,6 +94,7 @@ namespace AppHealthMonitor
 			{
 				configuration = new ConfigurationBuilder()
 					.AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
+					.AddEnvironmentVariables()
 					.Build();
 			}
 			catch (Exception ex)

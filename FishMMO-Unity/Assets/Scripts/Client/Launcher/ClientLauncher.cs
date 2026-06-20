@@ -490,7 +490,26 @@ namespace FishMMO.Client
 			{
 				SetLauncherState(LauncherState.LaunchFailed,
 					$"Failed to load game scene: {ex.Message}. Check that Addressable bundles are built.");
+				return;
 			}
+
+			// Start a watchdog — BeginProcessQueue() starts async work and returns immediately.
+			// If the Addressable scene load fails asynchronously (no synchronous throw),
+			// OnPostbootSceneLoaded never fires and the button stays permanently disabled.
+			// The watchdog re-enables the button after a generous timeout so the player can retry.
+			StartCoroutine(LaunchWatchdog());
+		}
+
+		/// <summary>
+		/// Watchdog coroutine that re-enables the Play button if the scene load takes too long.
+		/// On success, OnPostbootSceneLoaded unloads the launcher scene, destroying this
+		/// MonoBehaviour and stopping the coroutine automatically.
+		/// </summary>
+		private System.Collections.IEnumerator LaunchWatchdog()
+		{
+			yield return new WaitForSeconds(30f);
+			SetLauncherState(LauncherState.LaunchFailed,
+				"Scene load timed out. Check that Addressable bundles are built and up to date.");
 		}
 
 		/// <summary>

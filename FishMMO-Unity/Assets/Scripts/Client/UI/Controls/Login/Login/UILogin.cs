@@ -383,11 +383,30 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				// Provide user-facing feedback so the player knows why the button did nothing.
+				if (!string.IsNullOrWhiteSpace(emailText) || !string.IsNullOrWhiteSpace(usernameText))
+				{
+					HandshakeMSG.text = "Invalid username or email format. Use 3-32 characters (letters, numbers, underscores).";
+				}
+				else
+				{
+					HandshakeMSG.text = "Please enter a username or email address.";
+				}
+				Log.Warning("UILogin", "Login validation failed: invalid identifier.");
 				return;
 			}
 
 			if (!Authentication.IsAllowedPassword(Password.text))
 			{
+				if (string.IsNullOrWhiteSpace(Password.text))
+				{
+					HandshakeMSG.text = "Please enter a password.";
+				}
+				else
+				{
+					HandshakeMSG.text = "Invalid password. Must be 8-32 characters with allowed symbols.";
+				}
+				Log.Warning("UILogin", "Login validation failed: invalid password.");
 				return;
 			}
 
@@ -420,20 +439,51 @@ namespace FishMMO.Client
 		/// <param name="port">Optional server port.</param>
 		private void Connect(string handshakeMessage, string identifier, string password, string address = null, ushort port = 0)
 		{
-			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				(Authentication.IsAllowedUsername(identifier) || Authentication.IsAllowedEmailUsername(identifier)) &&
-				Authentication.IsAllowedPassword(password) &&
-				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress) &&
-				Authentication.IsAddressValid(serverAddress.Address))
+			// Validate preconditions individually so the player gets a specific error
+			// message instead of the button silently unlocking with no feedback.
+			if (!Client.IsConnectionReady(LocalConnectionState.Stopped))
 			{
-				HandshakeMSG.text = handshakeMessage;
-				Client.LoginAuthenticator.SetLoginCredentials(identifier, password);
-				Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
-			}
-			else
-			{
+				HandshakeMSG.text = "Connection already in progress. Please wait.";
+				Log.Warning("UILogin", "Connect failed: connection is not in Stopped state.");
 				SetSignInLocked(false);
+				return;
 			}
+
+			if (!Authentication.IsAllowedUsername(identifier) && !Authentication.IsAllowedEmailUsername(identifier))
+			{
+				HandshakeMSG.text = "Invalid username or email format.";
+				Log.Warning("UILogin", "Connect failed: identifier validation failed.");
+				SetSignInLocked(false);
+				return;
+			}
+
+			if (!Authentication.IsAllowedPassword(password))
+			{
+				HandshakeMSG.text = "Invalid password format.";
+				Log.Warning("UILogin", "Connect failed: password validation failed.");
+				SetSignInLocked(false);
+				return;
+			}
+
+			if (!Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+			{
+				HandshakeMSG.text = "No login servers available. Check your internet connection.";
+				Log.Warning("UILogin", "Connect failed: no login server addresses available.");
+				SetSignInLocked(false);
+				return;
+			}
+
+			if (!Authentication.IsAddressValid(serverAddress.Address))
+			{
+				HandshakeMSG.text = "Invalid server address. Please try again.";
+				Log.Warning("UILogin", $"Connect failed: invalid server address '{serverAddress.Address}'.");
+				SetSignInLocked(false);
+				return;
+			}
+
+			HandshakeMSG.text = handshakeMessage;
+			Client.LoginAuthenticator.SetLoginCredentials(identifier, password);
+			Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
 		}
 
 		/// <summary>
