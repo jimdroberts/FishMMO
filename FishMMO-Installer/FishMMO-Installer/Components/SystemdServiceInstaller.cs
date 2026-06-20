@@ -238,12 +238,48 @@ namespace FishMMO.Installer
 					}
 
 					string envName = ResolveServiceEnvironmentName();
-					await NGINXInstaller.NssmSetEnvironmentAsync(nssmExe, windowsServiceName,
-						new[] {
-							$"ASPNETCORE_ENVIRONMENT={envName}",
-							$"DOTNET_ENVIRONMENT={envName}",
-							$"FISHMMO_ENVIRONMENT={envName}"
-						});
+					var envVars = new List<string>
+					{
+						$"ASPNETCORE_ENVIRONMENT={envName}",
+						$"DOTNET_ENVIRONMENT={envName}",
+						$"FISHMMO_ENVIRONMENT={envName}"
+					};
+
+					// Load secrets from fishmmo-secrets.env if present in the publish directory.
+					string secretsEnvPath = Path.Combine(publishDir, "fishmmo-secrets.env");
+					if (File.Exists(secretsEnvPath))
+					{
+						try
+						{
+							foreach (string line in await File.ReadAllLinesAsync(secretsEnvPath))
+							{
+								string trimmed = line.Trim();
+								if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#'))
+									continue;
+								int eq = trimmed.IndexOf('=');
+								if (eq > 0)
+								{
+									envVars.Add(trimmed);
+								}
+							}
+							await Log.Info("FishMMOInstaller",
+								$"Loaded secrets from {secretsEnvPath} for {windowsServiceName}.");
+						}
+						catch (Exception ex)
+						{
+							await Log.Warning("FishMMOInstaller",
+								$"Failed to read {secretsEnvPath}: {ex.Message}");
+						}
+					}
+					else
+					{
+						await Log.Warning("FishMMOInstaller",
+							$"No fishmmo-secrets.env found in {publishDir}. " +
+							$"Run 'Configure AppSettings → Generate secrets file' to create one, " +
+							$"or set environment variables manually on the {windowsServiceName} service.");
+					}
+
+					await NGINXInstaller.NssmSetEnvironmentAsync(nssmExe, windowsServiceName, envVars);
 
 					await NGINXInstaller.SetNssmParamAsync(nssmExe, windowsServiceName, "AppStdout",
 						Path.Combine(publishDir, "logs", "service-out.log"));
