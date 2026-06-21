@@ -24,7 +24,12 @@ namespace FishMMO.Installer
 			public bool succeeded;
 
 			/// <summary>
-			/// Build error output captured from the DotNet process.
+			/// Full stdout captured from the DotNet process (printed to console live).
+			/// </summary>
+			public string buildOutput = string.Empty;
+
+			/// <summary>
+			/// Build error output captured from the DotNet process stderr.
 			/// </summary>
 			public string errorOutput = string.Empty;
 		}
@@ -109,10 +114,12 @@ namespace FishMMO.Installer
 				foreach (ProjectBuildResult failedResult in failedResults)
 				{
 					await Log.Info("FishMMOInstaller", $" - {failedResult.projectPath}");
-					if (!string.IsNullOrWhiteSpace(failedResult.errorOutput))
-					{
-						await Log.Info("FishMMOInstaller", failedResult.errorOutput.Trim());
-					}
+					string detail = !string.IsNullOrWhiteSpace(failedResult.errorOutput)
+						? failedResult.errorOutput.Trim()
+						: !string.IsNullOrWhiteSpace(failedResult.buildOutput)
+							? failedResult.buildOutput.Trim()
+							: "(no output captured — check console above for build errors)";
+					await Log.Info("FishMMOInstaller", detail);
 				}
 			}
 
@@ -143,6 +150,7 @@ namespace FishMMO.Installer
 					if (!string.IsNullOrWhiteSpace(output))
 					{
 						Console.WriteLine(output);
+						result.buildOutput = output;
 					}
 
 					if (!string.IsNullOrWhiteSpace(error))
@@ -175,6 +183,7 @@ namespace FishMMO.Installer
 					}
 
 					if (!string.IsNullOrWhiteSpace(error))
+						result.buildOutput = output;
 					{
 						result.errorOutput = error;
 					}
