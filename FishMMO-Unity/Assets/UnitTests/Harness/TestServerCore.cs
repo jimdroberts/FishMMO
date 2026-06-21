@@ -163,18 +163,12 @@ namespace FishMMO.UnitTests.Harness
 			Totp totp = new Totp(secretBytes, mode: OtpHashMode.Sha1, step: 30, totpSize: 6);
 			bool ok = totp.VerifyTotp(totpCode, out _, new VerificationWindow(previous: 1, future: 1));
 			return Task.FromResult(ok);
-		}
 
-		/// <summary>
-		/// Returns <see cref="ClientAuthenticationResult.Banned"/> when the account has
-		/// <see cref="AccessLevel.Banned"/>, allowing tests that seed banned accounts to
-		/// verify rejection without a real database.
-		/// </summary>
-		protected override Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult defaultResult, string username)
+		}
+		protected override Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc)
 		{
-			if (store.TryGet(username, out InMemoryAccountStore.Lookup lookup) && lookup.AccessLevel == AccessLevel.Banned)
-				return Task.FromResult(ClientAuthenticationResult.Banned);
-			return Task.FromResult(defaultResult);
+			// Test harness: no email infrastructure.
+			return Task.FromResult(false);
 		}
 
 		#endregion

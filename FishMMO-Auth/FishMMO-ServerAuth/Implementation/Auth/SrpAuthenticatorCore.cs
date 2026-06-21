@@ -884,6 +884,15 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
+				// Reject banned accounts after SRP proof succeeds so that wrong-password
+				// attempts on banned accounts still return InvalidUsernameOrPassword
+				// (same as non-existent accounts), preventing username enumeration.
+				if (accessLevel == AccessLevel.Banned)
+				{
+					RejectAndPurge(conn, ClientAuthenticationResult.Banned);
+					return;
+				}
+
 			RefreshAuthTtl(conn);
 
 			try

@@ -185,12 +185,12 @@ namespace FishMMO.Server.Implementation
 			var d = result.Data;
 			return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult
 			{
-				IsSuccess  = true,
+				IsSuccess = true,
 				// Grace period: unverified accounts can log in until the verification
 				// email is actually sent. Once sent, login is blocked until verified.
 				IsVerified = d.Verified || d.VerificationEmailSentAt == null,
-				Salt       = d.Salt,
-				Verifier   = d.Verifier,
+				Salt = d.Salt,
+				Verifier = d.Verifier,
 				AccessLevel = (AccessLevel)d.AccessLevel,
 				TotpEnabled = d.TotpEnabled,
 			};
@@ -423,14 +423,60 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey) =>
 				_outer.VerifyTotpCodeCoreAsync(username, totpCode, totpMasterKey);
+
+			/// <inheritdoc/>
+			protected override async Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc)
+			{
+				if (verifyCodeExpiresUtc == null || verifyCodeExpiresUtc.Value > DateTime.UtcNow)
+					return false;
+
+				int newCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
+				DateTime newExpires = DateTime.UtcNow.AddHours(24);
+
+				if (_outer.Server?.Database?.ServiceRegistry == null) return false;
+				if (!_outer.Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService)) return false;
+
+				var persistResult = await accountService.PersistVerifyCodeAsync(username, newCode, newExpires);
+				if (!persistResult.IsSuccess) return false;
+
+				if (_outer.Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+				{
+					var dupCheck = await emailQueueService.HasPendingForUserAsync(username);
+					if (!dupCheck.IsSuccess || !dupCheck.Data)
+					{
+						var accountResult = await accountService.FetchForLoginAsync(username, false);
+						string recipientEmail = accountResult.IsSuccess ? (accountResult.Data.Email ?? username) : username;
+						string subject = "FishMMO - Verify Your Account";
+						string body = _outer.BuildLoginVerificationEmailBody(username, newCode);
+						await emailQueueService.EnqueueAsync(recipientEmail, username, subject, body);
+					}
+				}
+
+				await _outer.PersistVerificationEmailSentCoreAsync(username);
+				return true;
+			}
 		}
 
 		#endregion
-	
+
 		/// <summary>
 		/// Builds the HTML body for a login-triggered verification email resend.
 		/// </summary>
-		private static string BuildLoginVerificationEmailBody(string username, int verifyCode)
+
+		/// <summary>
+		/// Sets VerificationEmailSentAt after resending a verification email during login.
+		/// </summary>
+		private async Task PersistVerificationEmailSentCoreAsync(string username)
+		{
+			if (Server?.Database?.ServiceRegistry != null &&
+				Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
+			{
+				var r = await accountService.PersistVerificationEmailSentAsync(username);
+				if (!r.IsSuccess)
+					await Log.Warning(LogPrefix, $"PersistVerificationEmailSentAsync DB error for '{username}': {r.ErrorCode} - {r.ErrorMessage}");
+			}
+		}
+		private string BuildLoginVerificationEmailBody(string username, int verifyCode)
 		{
 			return $@"<html><body style='font-family: Arial, sans-serif; color: #333;'>
 				<h2>FishMMO — Verification Code</h2>
@@ -443,5 +489,5 @@ namespace FishMMO.Server.Implementation
 			</body></html>";
 		}
 
-}
+	}
 }
