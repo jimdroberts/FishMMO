@@ -169,10 +169,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			characterSystem.OnAfterLoadCharacter += CharacterSystem_OnAfterLoadCharacter;
 
 			// Register scene server in database (Task.Run avoids deadlock from
-			// Unity's SynchronizationContext when blocking on async during init)
+			// Unity's SynchronizationContext when blocking on async during init).
+			// Capture Unity API values on the main thread before dispatching.
+			string serverName = name;
+			string serverAddress = server.Address;
+			ushort serverPort = server.Port;
 			int characterCount = characterMappingData.ConnectionCharacters.Count;
 			DatabaseResult<(long ServerId, SceneServerData ServerData)> persistResult = Task.Run(() =>
-				sceneServerService.PersistAsync(name, server.Address, server.Port, characterCount, runtimeData.IsLocked))
+				sceneServerService.PersistAsync(serverName, serverAddress, serverPort, characterCount, runtimeData.IsLocked))
 				.GetAwaiter().GetResult();
 
 			if (!persistResult.IsSuccess)
