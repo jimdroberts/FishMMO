@@ -113,6 +113,7 @@ namespace FishMMO.Auth.Implementation
 
 		/// <summary>Tracks whether TOTP is enabled for each active connection (by client ID), populated during SRP verify.</summary>
 		private readonly ConcurrentDictionary<int, bool> totpEnabledByClientId = new ConcurrentDictionary<int, bool>();
+		private readonly ConcurrentDictionary<int, DateTime?> verifyCodeExpiryByClientId = new ConcurrentDictionary<int, DateTime?>();
 
 		/// <summary>Tracks per-username TOTP failure counts and first-failure timestamps for lockout enforcement.</summary>
 		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> totpUsernameFailures
@@ -289,6 +290,7 @@ namespace FishMMO.Auth.Implementation
 
 			totpPendingStates.Clear();
 			totpEnabledByClientId.Clear();
+			verifyCodeExpiryByClientId.Clear();
 			totpUsernameFailures.Clear();
 			totpSemaphore?.Dispose();
 			totpSemaphore = null;
@@ -362,6 +364,8 @@ namespace FishMMO.Auth.Implementation
 			int clientId = GetConnectionClientId(conn);
 			totpPendingStates.TryRemove(clientId, out _);
 			totpEnabledByClientId.TryRemove(clientId, out _);
+			verifyCodeExpiryByClientId.TryRemove(clientId, out _);
+			verifyCodeExpiryByClientId.TryRemove(clientId, out _);
 			connectionIpCache.Remove(clientId);
 		}
 
@@ -747,6 +751,8 @@ namespace FishMMO.Auth.Implementation
 						verifier = lookupResult.Verifier;
 						accessLevel = lookupResult.AccessLevel;
 						totpEnabledByClientId[GetConnectionClientId(conn)] = lookupResult.TotpEnabled;
+						verifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.VerifyCodeExpiresUtc;
+					verifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.VerifyCodeExpiresUtc;
 					}
 				}
 
@@ -868,6 +874,12 @@ namespace FishMMO.Auth.Implementation
 			// meaningful "verify your email" response.
 			if (isUnverified)
 			{
+				// If the verification code has expired, auto-generate a fresh one.
+				// Only triggers when the user actively attempts login after expiry.
+				if (verifyCodeExpiryByClientId.TryGetValue(GetConnectionClientId(conn), out var expiry))
+				{
+					_ = TryResendVerificationEmailIfExpiredAsync(username!, expiry);
+				}
 				RejectAndPurge(conn, ClientAuthenticationResult.AccountUnverified);
 				return;
 			}
@@ -1316,6 +1328,17 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>True if the code is valid; false otherwise.</returns>
 		protected abstract Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey);
 
+		/// <summary>
+		/// Called when an unverified account attempts login. The implementation should
+		/// check whether the verification code has expired and, if so, generate a new
+		/// code and enqueue a fresh verification email. No-op when the code is still
+		/// valid or when the email has not yet been sent (VerificationEmailSentAt is null).
+		/// </summary>
+		/// <param name="username">The account username.</param>
+		/// <param name="verifyCodeExpiresUtc">UTC expiry of the current code, or null.</param>
+		/// <returns>True if a new code was generated and the email was enqueued.</returns>
+		protected abstract Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc);
+
 		#endregion
 
 		#region Nested Types
@@ -1337,6 +1360,8 @@ namespace FishMMO.Auth.Implementation
 			public AccessLevel AccessLevel;
 			/// <summary>Whether TOTP is enabled for this account.</summary>
 			public bool TotpEnabled;
+			/// <summary>UTC expiry for the verification code (null if not applicable).</summary>
+			public DateTime? VerifyCodeExpiresUtc;
 		}
 
 		/// <summary>Holds transient state for a connection that has passed SRP proof and is awaiting TOTP confirmation.</summary>

@@ -73,6 +73,11 @@ namespace FishMMO.Database.Data
 		public readonly int VerifyCode;
 
 		/// <summary>
+		/// UTC expiry for the verification code. Null when no verification is pending.
+		/// </summary>
+		public readonly DateTime? VerifyCodeExpiresUtc;
+
+		/// <summary>
 		/// Account creation timestamp (UTC).
 		/// </summary>
 		/// <summary>

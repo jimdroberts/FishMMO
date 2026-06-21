@@ -426,5 +426,22 @@ namespace FishMMO.Server.Implementation
 		}
 
 		#endregion
-	}
+	
+		/// <summary>
+		/// Builds the HTML body for a login-triggered verification email resend.
+		/// </summary>
+		private static string BuildLoginVerificationEmailBody(string username, int verifyCode)
+		{
+			return $@"<html><body style='font-family: Arial, sans-serif; color: #333;'>
+				<h2>FishMMO — Verification Code</h2>
+				<p>You recently attempted to log in to your FishMMO account <b>{username}</b>.</p>
+				<p>Your verification code is:</p>
+				<h1 style='font-size: 32px; letter-spacing: 4px; color: #2563eb;'>{verifyCode:D6}</h1>
+				<p>This code is valid for 24 hours. If you did not request this, you can safely ignore this email.</p>
+				<hr/>
+				<p style='font-size: 12px; color: #999;'>— The FishMMO Team</p>
+			</body></html>";
+		}
+
+}
 }
