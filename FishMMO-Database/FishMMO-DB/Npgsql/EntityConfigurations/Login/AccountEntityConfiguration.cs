@@ -80,6 +80,8 @@ namespace FishMMO.Database.Npgsql.Entities
 			// abandoned code cannot remain a guess-target indefinitely.
 			builder.Property(e => e.VerifyCodeExpiresUtc);
 
+			builder.Property(e => e.VerificationEmailSentAt);
+
 			builder.Property(e => e.LastLogin)
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");

@@ -275,5 +275,16 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			int verifyCode,
 			DateTime expiresUtc,
 			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Records that the verification email has been successfully sent via SMTP.
+		/// Once set, login is blocked for unverified accounts until the user provides the correct verify code.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistVerificationEmailSentAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
 	}
 }

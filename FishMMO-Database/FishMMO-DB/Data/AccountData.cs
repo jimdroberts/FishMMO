@@ -75,6 +75,11 @@ namespace FishMMO.Database.Data
 		/// <summary>
 		/// Account creation timestamp (UTC).
 		/// </summary>
+		/// <summary>
+		/// UTC timestamp when the verification email was sent. Null if not yet sent.
+		/// </summary>
+		public readonly DateTime? VerificationEmailSentAt;
+
 		public readonly DateTime Created;
 
 		/// <summary>
@@ -99,6 +104,7 @@ namespace FishMMO.Database.Data
 			string? discordLinkCode,
 			bool verified,
 			int verifyCode,
+			DateTime? verificationEmailSentAt,
 			DateTime created,
 			DateTime lastLogin)
 		{
@@ -115,6 +121,7 @@ namespace FishMMO.Database.Data
 			DiscordLinkCode = discordLinkCode;
 			Verified = verified;
 			VerifyCode = verifyCode;
+			VerificationEmailSentAt = verificationEmailSentAt;
 			Created = created;
 			LastLogin = lastLogin;
 		}

@@ -67,6 +67,9 @@ The request pipeline follows four stages:
 - **Engine-agnostic core** — interface/implementation split with generic `TConnection` parameter
 - **Account verification** — encrypted verification code flow via `AccountVerifyBroadcast`; validates codes against database before marking accounts as verified
 - **Per-username verification brute-force protection** — failed verification attempts tracked per username (lowercased). After 10 failures within 30 minutes, further attempts are rejected until the lockout expires. Bounded sweep (64 max scan) evicts stale entries. Hard cap of 50,000 tracked entries prevents memory exhaustion.
+- **Email verification queue** — verification codes are enqueued to the `email_queue` table and delivered asynchronously via SMTP; a background processor sends one email per sweep (configurable interval)
+- **Grace-period login** — unverified accounts can log in and play immediately; login is only blocked after the verification email has been sent (`VerificationEmailSentAt`), giving the SMTP system time to process new accounts without blocking players
+- **Dev/Release mode gating** — `#if UNITY_EDITOR || DEVELOPMENT_BUILD` skips 2FA setup and email verification entirely in development builds; release builds run the full pipeline
 - **Mandatory 2FA setup** — account creation generates a TOTP secret (encrypted at rest with the server-side master key), recovery codes (PBKDF2-SHA256 hashed), and delivers the otpauth URI and plaintext recovery codes to the client via AES-encrypted transport
 
 ## Prerequisites
@@ -74,7 +77,10 @@ The request pipeline follows four stages:
 - FishNet networking framework (provides `NetworkConnection`, `IBroadcast`, `ServerManager`)
 - `AsyncWorkerData` runtime data container registered in the `DataContainerRegistry`
 - `AccountManager` providing per-connection AES key/IV via `GetConnectionEncryptionData()`
-- Database layer with `IAccountService` registered in the `Database.ServiceRegistry` (Npgsql-backed)
+- Database layer with `IAccountService`, `IEmailQueueService`, and `ITwoFactorRecoveryCodeService` registered in the `Database.ServiceRegistry` (Npgsql-backed)
+- `email_queue` table — outbound email queue for SMTP delivery of verification codes
+- SMTP configuration (`Smtp:Host`, `Smtp:Port`, `Smtp:Username`, `Smtp:Password`, `Smtp:FromAddress`, `Smtp:FromName`, `Smtp:UseSsl`) for production email delivery
+- `ISmtpService` — lazily constructed from server configuration; not in the DB service registry in the `Database.ServiceRegistry` (Npgsql-backed)
 - `CryptoHelper` shared utility for AES decrypt, strict UTF-8 encoding, and AAD construction
 - `Authentication` shared utility providing `IsAllowedUsername()` validation
 
@@ -128,6 +134,7 @@ Query the public behaviour properties to monitor system health:
 | `cleanupMaxScanPerMap` | `int` | `256` | Cleanup Bounds | Maximum entries scanned per map during one maintenance sweep |
 | `cleanupMaxRemovalsPerMap` | `int` | `128` | Cleanup Bounds | Maximum entries removed per map during one maintenance sweep |
 | `useConnectionIdForRateLimit` | `bool` | `false` | Proxy Compatibility | Use connection ID instead of IP for rate limiting; enable when behind a proxy/NAT/load balancer where all clients share one IP |
+| `emailSendIntervalSeconds` | `float` | `10.0` | Email Queue | Seconds between email queue processing sweeps; set to 0 to disable |
 
 All tunables are clamped to safe minimums during `InitializeOnce()`:
 
@@ -145,8 +152,8 @@ All tunables are clamped to safe minimums during `InitializeOnce()`:
 | `MaxEncryptedFieldSize` | `2048` bytes | Rejects oversized encrypted payloads on the network thread before any decryption or allocation |
 | `MaxSaltLength` | `256` chars | Maximum allowed length for the decrypted SRP salt string |
 | `MaxVerifierLength` | `1024` chars | Maximum allowed length for the decrypted SRP verifier string |
-| `MaxVerifyFailuresPerUsername` | `10` | Maximum failed verification attempts per username before lockout |
-| `VerifyUsernameLockoutDuration` | `30` min | Lockout window for per-username verification failures |
+| `MaxVerifyFailuresPerUsername` | `5` | Maximum failed verification attempts per username before lockout |
+| `VerifyUsernameLockoutDuration` | `60` min | Lockout window for per-username verification failures |
 | `MaxVerifyUsernameFailureEntries` | `50,000` | Hard cap on tracked username entries to prevent memory exhaustion |
 | `VerifyUsernameFailureSweepMaxScan` | `64` | Maximum entries scanned per sweep for expired verification failures |
 
@@ -202,7 +209,8 @@ ClientManager.Broadcast(broadcast);
 | Check | Method | Expected Result |
 |-------|--------|-----------------|
 | System initializes | Assign asset to Login Server behaviour list and start server | Log: `"Initialized (RateLimit=5s, MaxFailures=5, BlockDuration=300s)"` |
-| Normal account creation | Client sends valid `CreateAccountBroadcast` | `ClientAuthResultBroadcast` with `AccountCreated`; `TotalProcessed` increments |
+| Normal account creation (dev) | Client sends valid `CreateAccountBroadcast` under `DEVELOPMENT_BUILD` | `ClientAuthResultBroadcast` with `AccountVerified` immediately; no 2FA or email |
+| Normal account creation (release) | Client sends valid `CreateAccountBroadcast` in release build | 2FA setup + verification email enqueued; `AccountCreated` result; SMTP processor delivers email in background |
 | Rate-limited request | Same IP sends two requests within `ipRateLimitSeconds` | `ClientAuthResultBroadcast` with `ServerBusy` (unreliable channel); `TotalRejected` increments |
 | Blocked IP | IP exceeds `maxFailedAttempts` failures | Connection disconnected immediately; `TotalRejected` increments |
 | Queue full | `AsyncWorkerData` bounded channel is at capacity | `ClientAuthResultBroadcast` with `ServerBusy`; `TotalRejected` increments |
@@ -258,6 +266,10 @@ flowchart LR
                                           │  5. IsAllowedUsername() check   │
                                           │  6. Validate salt/verifier len │
                                           │  7. IAccountService.PersistAsync│
+│  8. Generate TOTP + recovery codes│
+│  9. Enqueue verification email   │
+│ 10. Update metrics & IP track    │
+│ 11. Enqueue response action      │
                                           │  8. Update metrics & IP track  │
                                           │  9. Enqueue response action    │
                                           └──────────┬─────────────────────┘
@@ -363,6 +375,8 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 | **FishNet** | Receives `CreateAccountBroadcast`, sends `ClientAuthResultBroadcast` |
 | **AccountManager** | Provides per-connection AES key/IV needed to decrypt payloads |
 | **Database Service Registry** | Resolves `IAccountService` for persistence via `PersistAsync(username, salt, verifier)` |
+| **IEmailQueueService** | Enqueues verification emails for asynchronous SMTP delivery via `EnqueueAsync` |
+| **ISmtpService** | Sends emails via SMTP using server-configured credentials (lazily constructed from `IServerConfiguration`) |
 | **ITwoFactorRecoveryCodeService** | Stores PBKDF2-SHA256 hashed recovery codes via `PersistManyAsync` during account creation |
 | **DataContainerRegistry** | Supplies queue, runtime, mapping, and main-thread queue containers |
 | **CryptoHelper** | AES decrypt, strict UTF-8 encoding, AAD construction, `AuthMessageType.CreateAccount` |

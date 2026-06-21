@@ -38,8 +38,10 @@ namespace FishMMO.Client
 		public TMP_InputField Password;
 
 		/// <summary>
-		/// Dropdown for age selection. The user must confirm they meet the minimum age requirement.
+		/// Dropdown for age selection. Options must map: index 0 = "Select your age",
+		/// index 1 = "13", index 2 = "14", ..., index 108 = "120".
 		/// </summary>
+		[Tooltip("Dropdown options: 0=Select Age, 1=13, 2=14, ..., 108=120. Index is mapped to actual age (index + 12).")]
 		public TMP_Dropdown AgeSelect;
 
 		/// <summary>
@@ -69,6 +71,13 @@ namespace FishMMO.Client
 		private const int MinAgeSelectIndex = 1;
 
 		/// <summary>
+		/// True when this panel has an active registration/verification flow.
+		/// Used to gate auth-result handling and prevent cross-talk with UILogin,
+		/// which shares the same <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event.
+		/// </summary>
+		private bool _isAuthFlowActive;
+
+		/// <summary>
 		/// Temporarily stores the username after account creation for verification code submission.
 		/// Cleared after verification completes or the connection is lost.
 		/// </summary>
@@ -79,7 +88,7 @@ namespace FishMMO.Client
 		/// codes) written during the registration flow. Tracked here so every terminal exit
 		/// from the flow (success, cancel, disconnect, server error) can scrub the file. The
 		/// payload is recoverable from server-side state until first-login is complete, so
-		/// keeping it on disk past the registration session is pure liability.
+		/// keeping it on disk is intentional — the user keeps it as a persistent backup.
 		/// </summary>
 		private string savedTwoFactorSetupPath;
 
@@ -147,6 +156,12 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			// Only process auth results when this panel owns the active flow.
+			// Without this guard, hidden panels would still react to auth results
+			// intended for the other panel (e.g., UIRegister force-disconnecting
+			// on InvalidUsernameOrPassword during UILogin's login attempt).
+			if (!_isAuthFlowActive) return;
+
 			switch (result)
 			{
 				case ClientAuthenticationResult.AccountCreated:
@@ -186,7 +201,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Handles successful account creation: hides the form and waits for the 2FA setup broadcast.
-		/// The verify code dialog is opened later by <see cref="OnTwoFactorSetupReceived"/>.
+		/// The 2FA setup data is displayed by <see cref="OnTwoFactorSetupReceived"/>.
 		/// </summary>
 		private void OnAccountCreated()
 		{
@@ -197,7 +212,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Handles the 2FA setup data received from the server after account creation.
-		/// Displays the otpauth URI and recovery codes, then opens the verify code dialog.
+		/// Displays the otpauth URI and recovery codes. The verification code is delivered via email (SMTP).
 		/// </summary>
 		private void OnTwoFactorSetupReceived(string otpauthUri, string[] recoveryCodes)
 		{
@@ -210,9 +225,8 @@ namespace FishMMO.Client
 			// has a persistent copy even if they close the dialog or lose the codes.
 			// The file is best-effort: any failure here is non-fatal because the
 			// codes are also shown in the dialog. The path is tracked in
-			// savedTwoFactorSetupPath so every terminal exit from this flow can
-			// delete it — leaving the file behind would expose recovery codes to
-			// any local process that can read the persistent data folder.
+			// savedTwoFactorSetupPath. Successful registration keeps the file so the
+			// user has a persistent backup; error/cancel/disconnect paths still scrub it.
 			string savePath = Path.Combine(Application.persistentDataPath, $"2fa_setup_{pendingVerifyUsername}.txt");
 			try
 			{
@@ -236,9 +250,9 @@ namespace FishMMO.Client
 				"Recovery Codes (save these somewhere safe!):\n\n" +
 				codesDisplay + "\n\n" +
 				(savePath != null
-					? $"A temporary copy was written to:\n{savePath}\n(It will be deleted once registration completes.)\n\n"
+					? $"A temporary copy was written to:\n{savePath}\n(Keep this file as a backup — you can delete it manually when ready.)\n\n"
 					: "") +
-				"Press Confirm to continue to email verification.";
+				"Press Confirm to finish registration. A verification email will be sent to your inbox.";
 
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
 			{
@@ -246,36 +260,20 @@ namespace FishMMO.Client
 					message,
 					() =>
 					{
-						OpenVerifyCodeDialog();
-					},
-					() =>
-					{
-						pendingVerifyUsername = null;
-						DeleteSavedTwoFactorSetupFile();
+						// Disconnect and prompt user to check email for verification code.
 						Client.ForceDisconnect();
 						SetFormLocked(false);
+						pendingVerifyUsername = null;
+						// Keep the 2FA setup file — user may want it as safe storage.
+						if (UIManager.TryGet("UIDialogBox", out UIDialogBox verifySentDialog))
+						{
+							verifySentDialog.Open("Your account has been created! A verification email has been sent to your inbox. Please check your email and enter the verification code when you log in.\n\nThe 2FA setup file has been kept for your records. Please delete it manually when you no longer need it.");
+						}
+						Hide();
 						if (UIManager.TryGet("UILogin", out UILogin uiLogin))
 						{
+							uiLogin.HandshakeMSG.text = "Account created! Check your email for the verification code.";
 							uiLogin.Show();
-						}
-					});
-			}
-		}
-
-		/// <summary>
-		/// Opens the verification code input dialog for email verification.
-		/// </summary>
-		private void OpenVerifyCodeDialog()
-		{
-			if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox uiDialogInputBox))
-			{
-				uiDialogInputBox.Open(
-					"Please enter the verification code sent to your email.",
-					(code) =>
-					{
-						if (!string.IsNullOrWhiteSpace(pendingVerifyUsername) && !string.IsNullOrWhiteSpace(code))
-						{
-							Client.LoginAuthenticator.SendVerifyCode(pendingVerifyUsername, code.Trim());
 						}
 					},
 					() =>
@@ -298,17 +296,19 @@ namespace FishMMO.Client
 		private void OnAccountVerified()
 		{
 			pendingVerifyUsername = null;
-			DeleteSavedTwoFactorSetupFile();
+			// Keep the 2FA setup file — user may want it as safe storage.
+			// They are prompted in the dialog to delete it manually when ready.
 			Client.ForceDisconnect();
 			SetFormLocked(false);
 
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
 			{
-				uiDialogBox.Open("Your account has been verified! You may now log in.");
+				uiDialogBox.Open("Your account has been verified! You may now log in.\n\nThe 2FA setup file has been kept for your records. Please delete it manually when you no longer need it.");
 			}
 			if (UIManager.TryGet("UILogin", out UILogin uiLogin))
 			{
 				Hide();
+				uiLogin.HandshakeMSG.text = "Account verified! You may now log in.";
 				uiLogin.Show();
 			}
 		}
@@ -330,12 +330,11 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Deletes the on-disk copy of the 2FA setup payload, if any. The file contains
-		/// recovery codes and the TOTP seed (otpauth URI) for the account just created;
-		/// it must not survive past the registration session. Called from every terminal
-		/// exit of the flow: verification success, user-cancel from either dialog, server-
-		/// reported failure, connection loss, and explicit quit-to-login. Failures are
-		/// swallowed because the file may not exist or may already have been cleaned.
+		/// Deletes the on-disk copy of the 2FA setup payload, if any. Called from error,
+		/// cancel, disconnect, and quit-to-login paths to scrub sensitive data. Success
+		/// paths intentionally keep the file so the user has a persistent backup; the
+		/// user is prompted to delete it manually when ready. Failures are swallowed
+		/// because the file may not exist or may already have been cleaned.
 		/// </summary>
 		private void DeleteSavedTwoFactorSetupFile()
 		{
@@ -359,7 +358,7 @@ namespace FishMMO.Client
 		/// Best-effort tightening of the 2FA setup file permissions so other local users
 		/// cannot read it. On Unix-style platforms we shell out to <c>chmod 600</c>; on
 		/// Windows we rely on the default per-user persistentDataPath ACL. All failures
-		/// are non-fatal — the file will still be deleted at the end of the flow.
+		/// are non-fatal — the file is intentionally kept on success paths as a user backup.
 		/// </summary>
 		private static void TryRestrictTwoFactorSetupFilePermissions(string path)
 		{
@@ -389,8 +388,12 @@ namespace FishMMO.Client
 			string username = Username.text;
 			string email = Email.text;
 			string password = Password.text;
-			string key = Key.text;
+			// Reserved for future invite-key feature. Captured here so the field
+			// can be cleared immediately (see ClearAllFields). Not yet wired to backend.
+			string key = Key != null ? Key.text : string.Empty;
+			// Map dropdown index to actual age: index 0 = not selected, index 1 = age 13, etc.
 			int ageIndex = AgeSelect.value;
+			int age = ageIndex > 0 ? ageIndex + 12 : 0;
 
 			ClearAllFields();
 
@@ -432,7 +435,7 @@ namespace FishMMO.Client
 			(servers) =>
 			{
 				pendingVerifyUsername = username;
-				Connect(username, password, email, ageIndex);
+				Connect(username, password, email, age);
 			}));
 		}
 
@@ -512,17 +515,23 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets the locked state of all form controls (enables/disables interactivity).
+		/// Also manages the <see cref="_isAuthFlowActive"/> flag: locking marks
+		/// the start of a registration flow; unlocking marks its termination.
 		/// </summary>
 		/// <param name="locked">True to lock (disable) controls, false to unlock.</param>
 		public void SetFormLocked(bool locked)
 		{
-			RegisterButton.interactable = !locked;
-			QuitToLoginButton.interactable = !locked;
-			Username.enabled = !locked;
-			Email.enabled = !locked;
-			Password.enabled = !locked;
-			Key.enabled = !locked;
-			AgeSelect.interactable = !locked;
+			// Track auth-flow ownership: locking = start of flow, unlocking = end.
+			if (locked) _isAuthFlowActive = true;
+			else _isAuthFlowActive = false;
+
+			if (RegisterButton != null) RegisterButton.interactable = !locked;
+			if (QuitToLoginButton != null) QuitToLoginButton.interactable = !locked;
+			if (Username != null) Username.enabled = !locked;
+			if (Email != null) Email.enabled = !locked;
+			if (Password != null) Password.enabled = !locked;
+			if (Key != null) Key.enabled = !locked;
+			if (AgeSelect != null) AgeSelect.interactable = !locked;
 		}
 	}
 }

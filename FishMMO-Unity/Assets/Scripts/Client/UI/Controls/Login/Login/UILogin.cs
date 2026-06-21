@@ -140,13 +140,23 @@ namespace FishMMO.Client
 		/// Handles authentication results and displays appropriate dialogs or proceeds with login success.
 		/// </summary>
 		/// <param name="result">The result of client authentication.</param>
+		/// <summary>
+		/// True when this panel has an active authentication flow (login, verification,
+		/// or TOTP). Used to gate auth-result handling and prevent cross-talk with
+		/// UIRegister, which shares the same <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event.
+		/// </summary>
+		private bool _isAuthFlowActive;
+
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			// Only process auth results when this panel owns the active flow.
+			// Without this guard, hidden panels would still react to auth results
+			// intended for the other panel (e.g., UILogin receiving AccountCreated
+			// during UIRegister's registration and force-disconnecting).
+			if (!_isAuthFlowActive) return;
+
 			switch (result)
 			{
-				case ClientAuthenticationResult.AccountCreated:
-					OnLoginAuthenticationDialog("Your account has been created!");
-					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					OnLoginAuthenticationDialog("Invalid Username or Password.");
 					break;
@@ -368,8 +378,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Login()
 		{
-			string usernameText = Username.text;
-			string emailText = Email.text;
+			string usernameText = Username != null ? Username.text : string.Empty;
+			string emailText = Email != null ? Email.text : string.Empty;
 
 			// Determine which identifier to use: prefer email if filled, otherwise username.
 			string identifier;
@@ -396,9 +406,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (!Authentication.IsAllowedPassword(Password.text))
+			if (Password == null || !Authentication.IsAllowedPassword(Password.text))
 			{
-				if (string.IsNullOrWhiteSpace(Password.text))
+				if (Password == null || string.IsNullOrWhiteSpace(Password.text))
 				{
 					HandshakeMSG.text = "Please enter a password.";
 				}
@@ -496,16 +506,27 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets locked state for signing in (enables/disables controls).
+		/// Also manages the <see cref="_isAuthFlowActive"/> flag: locking marks
+		/// the start of an auth flow; unlocking marks its termination. This flag
+		/// gates <see cref="Authenticator_OnClientAuthenticationResult"/> to prevent
+		/// cross-talk with UIRegister.
 		/// </summary>
 		/// <param name="locked">True to lock (disable) controls, false to unlock.</param>
 		public void SetSignInLocked(bool locked)
 		{
-			RegisterButton.interactable = !locked;
-			SignInButton.interactable = !locked;
-			Username.enabled = !locked;
-			Email.enabled = !locked;
-			Password.enabled = !locked;
-			AgeSelect.interactable = !locked;
+			// Track auth-flow ownership: locking = start, unlocking = end.
+			// This prevents hidden panels from reacting to auth results intended
+			// for the other panel (e.g., UILogin receiving AccountCreated during
+			// UIRegister's registration and force-disconnecting).
+			if (locked) _isAuthFlowActive = true;
+			else _isAuthFlowActive = false;
+
+			if (RegisterButton != null) RegisterButton.interactable = !locked;
+			if (SignInButton != null) SignInButton.interactable = !locked;
+			if (Username != null) Username.enabled = !locked;
+			if (Email != null) Email.enabled = !locked;
+			if (Password != null) Password.enabled = !locked;
+			if (AgeSelect != null) AgeSelect.interactable = !locked;
 		}
 	}
 }

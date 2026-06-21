@@ -99,6 +99,13 @@ namespace FishMMO.Database.Npgsql.Entities
 		public DateTime? VerifyCodeExpiresUtc { get; set; }
 
 		/// <summary>
+		/// UTC timestamp when the verification email was successfully sent via SMTP.
+		/// Null while the email is still pending in the outbound queue.
+		/// When non-null and <see cref="Verified"/> is false, login is blocked until the user verifies.
+		/// </summary>
+		public DateTime? VerificationEmailSentAt { get; set; }
+
+		/// <summary>
 		/// Account creation timestamp (UTC).
 		/// </summary>
 		public DateTime TimeCreated { get; set; }

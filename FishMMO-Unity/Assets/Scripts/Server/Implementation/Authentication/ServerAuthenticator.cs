@@ -186,7 +186,9 @@ namespace FishMMO.Server.Implementation
 			return new SrpAuthenticatorCore<NetworkConnection>.SrpAccountLookupResult
 			{
 				IsSuccess  = true,
-				IsVerified = d.Verified,
+				// Grace period: unverified accounts can log in until the verification
+				// email is actually sent. Once sent, login is blocked until verified.
+				IsVerified = d.Verified || d.VerificationEmailSentAt == null,
 				Salt       = d.Salt,
 				Verifier   = d.Verifier,
 				AccessLevel = (AccessLevel)d.AccessLevel,

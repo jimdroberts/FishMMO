@@ -49,7 +49,7 @@ FishMMO-DB/
 │   ├── Entities/                 EF Core entity types
 │   ├── EntityConfigurations/     Fluent EF Core configurations
 │   ├── Services/                 Per-domain service implementations
-│   │   └── Interfaces/             IAccountService, ICharacterService, …
+│   │   └── Interfaces/             IAccountService, ICharacterService, IEmailQueueService, …
 │   └── Monitoring/               Health / Metrics / Diagnostics (see Monitoring/README.md)
 ├── Unity/                          Unity MonoBehaviour wrapper (see Unity/README.md)
 ├── Database.cs                 High-level orchestrator (IDatabase implementation)
@@ -70,7 +70,7 @@ FishMMO-DB/
 | `IDatabase` | Public contract: `ServiceRegistry`, `ContextFactory`, async lifecycle. |
 | `IDatabaseServiceRegistry` | Per-domain service lookup (`TryGet<TService>(out var svc)`). |
 | `NpgsqlDbContext` / `NpgsqlDbContextFactory` | EF Core context + factory with connection interceptors driving `ConnectionPoolMetrics`. |
-| `NpgsqlServiceRegistry` | Wires `IAccountService`, `ICharacterService`, `IChatService`, `ILoginServerService`, etc. |
+| `NpgsqlServiceRegistry` | Wires `IAccountService`, `ICharacterService`, `IChatService`, `IEmailQueueService`, `ILoginServerService`, etc. |
 | `NpgsqlDbConfiguration` | Builds the connection string from `IConfiguration` (`ConnectionStrings:NpgsqlConnection` or `Npgsql:*`). |
 | `AppSettings` | Strongly-typed `appsettings.json` binder (Npgsql). |
 | `DatabaseResult<T>` / `DatabaseErrorCodes` | Uniform error envelope returned from every service. |

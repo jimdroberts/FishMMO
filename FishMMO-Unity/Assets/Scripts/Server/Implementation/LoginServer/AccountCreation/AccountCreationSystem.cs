@@ -14,6 +14,7 @@ using FishMMO.Auth.Implementation;
 using FishMMO.Server.Core.LoginServer;
 using FishMMO.Shared;
 using FishMMO.Logging;
+using FishMMO.Server.Core.Smtp;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.LoginServer
@@ -81,6 +82,33 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private int _globalCreationsCurrentHourCount = 0;
 		private readonly object _globalCreationsCounterLock = new object();
 
+
+		/// <summary>
+		/// Minimum seconds between email queue processing sweeps.
+		/// </summary>
+		[Header("Email Queue")]
+		[Tooltip("Seconds between email queue processing sweeps. Set to 0 to disable.")]
+		[SerializeField] private float emailSendIntervalSeconds = 10.0f;
+
+		/// <summary>
+		/// Accumulator for the email send interval timer.
+		/// </summary>
+		private float _emailSendTimer;
+		/// <summary>
+		/// Lazily-constructed SMTP sender. Null until first email queue sweep.
+		/// </summary>
+		private ISmtpService _smtpService;
+
+		/// <summary>
+		/// Injectable SMTP service. When set externally (e.g. by LoginServerSystem during
+		/// initialization), this instance is used instead of lazy-constructing from config.
+		/// Set to null to revert to lazy construction.
+		/// </summary>
+		public ISmtpService SmtpService
+		{
+			get => _smtpService;
+			set => _smtpService = value;
+		}
 		/// <summary>
 		/// Maximum number of queued main-thread response actions processed per frame.
 		/// This time-slices response dispatch to avoid frame spikes during heavy login waves.
@@ -792,15 +820,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 							// Clear failure tracker on success
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
 
-							// Generate and store a verification code for email verification.
-							// 6-digit numerical code (100000–999999): 900,000 possible values.
-							// Brute-force is mitigated by the per-IP IpFailureTracker which blocks
-							// after maxFailedAttempts (default 5). The code is single-use and expires
-							// via DB-level TTL, so the effective attack window is narrow.
+							// Development mode: skip 2FA and email verification.
+							// Account is created, immediately verified, and has no TOTP requirement.
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+							result = ClientAuthenticationResult.AccountVerified;
+#else
+							// Release mode: full 2FA setup + verification code delivered in-band.
+							// Generate and store a verification code.
 							int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
-							// 24 hour TTL: long enough for users to act on the verification email
-							// across timezones / spam-folder triage, short enough that an exposed
-							// code cannot be re-used indefinitely.
+							// 24 hour TTL: long enough for users to act, short enough that an
+							// exposed code cannot be re-used indefinitely.
 							DateTime verifyExpiresUtc = DateTime.UtcNow.AddHours(24);
 							DatabaseResult verifyResult = await accountService.PersistVerifyCodeAsync(username, verifyCode, verifyExpiresUtc);
 							if (!verifyResult.IsSuccess)
@@ -808,13 +837,34 @@ namespace FishMMO.Server.Implementation.LoginServer
 								await Log.Warning("AccountCreationSystem", $"PersistVerifyCodeAsync DB error for user '{username}': {verifyResult.ErrorCode} - {verifyResult.ErrorMessage}");
 							}
 
+
+							// Enqueue verification email for SMTP delivery.
+							// The background processor will pick this up and send via the configured SMTP server.
+							if (Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+							{
+								// Prevent duplicate emails: skip if a pending email already exists for this user.
+								var dupCheck = await emailQueueService.HasPendingForUserAsync(username);
+								if (dupCheck.IsSuccess && dupCheck.Data)
+								{
+									await Log.Debug("AccountCreationSystem", $"Skipping duplicate verification email for '{username}' — a pending email already exists.");
+								}
+								else
+								{
+									string emailSubject = "FishMMO - Verify Your Account";
+									string emailBody = BuildVerificationEmailBody(username, verifyCode);
+									DatabaseResult emailResult = await emailQueueService.EnqueueAsync(email, username, emailSubject, emailBody);
+									if (!emailResult.IsSuccess)
+									{
+										await Log.Warning("AccountCreationSystem", $"Failed to enqueue verification email for '{username}': {emailResult.ErrorCode} - {emailResult.ErrorMessage}");
+									}
+								}
+							}
+							else
+							{
+								await Log.Warning("AccountCreationSystem", $"IEmailQueueService not registered — verification email for '{username}' not enqueued.");
+							}
 							// Generate and store mandatory 2FA setup.
-							// Snapshot TotpMasterKey to prevent a TOCTOU race:
-							// the field could be zeroed or rotated between the null/length
-							// check and the EncryptTotpSecret call. Capturing a local
-							// reference ensures the same array is used for both checks and
-							// the encrypt call. This is safe even without a lock because the
-							// field is only written at startup/shutdown (single-writer).
+							// Snapshot TotpMasterKey to prevent a TOCTOU race.
 							byte[] totpMasterKeySnapshot = TotpMasterKey;
 							if (totpMasterKeySnapshot != null && totpMasterKeySnapshot.Length == 32)
 							{
@@ -834,7 +884,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 										{
 											await Log.Warning("AccountCreationSystem", $"PersistTotpEnabledAsync DB error for user '{username}': {totpEnabledResult.ErrorCode} - {totpEnabledResult.ErrorMessage}");
 										}
-									// Generate and hash recovery codes.
+									// Generate and hash recovery codes (best-effort).
+									// TOTP setup proceeds even if recovery code persistence fails —
+									// the user can still use their authenticator app without recovery.
 									string[] recoveryCodes = CryptoHelper.TwoFactor.GenerateRecoveryCodes();
 									var codeHashes = new List<string>(recoveryCodes.Length);
 									foreach (string code in recoveryCodes)
@@ -848,49 +900,55 @@ namespace FishMMO.Server.Implementation.LoginServer
 											{
 												await Log.Warning("AccountCreationSystem", $"PersistManyAsync recovery codes DB error for user '{username}': {recoveryResult.ErrorCode} - {recoveryResult.ErrorMessage}");
 											}
-											// Build otpauth URI for the client's authenticator app.
-											string otpauthUri = CryptoHelper.TwoFactor.BuildOtpauthUri(totpSecret, username);
-
-											// Encrypt setup data with the session key for secure transport to client.
-											byte[] otpauthUriBytes = Encoding.UTF8.GetBytes(otpauthUri);
-											byte[] recoveryCodesBytes = Encoding.UTF8.GetBytes(string.Join("\n", recoveryCodes));
-
-											uint seq1 = request.EncryptionData.NextSendSequence();
-											byte[] nonce1 = request.EncryptionData.BuildSendNonce(seq1);
-											byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq1);
-											byte[] encOtpauthUri = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce1, otpauthUriBytes, aad1);
-
-											uint seq2 = request.EncryptionData.NextSendSequence();
-											byte[] nonce2 = request.EncryptionData.BuildSendNonce(seq2);
-											byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq2);
-											byte[] encRecoveryCodes = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce2, recoveryCodesBytes, aad2);
-
-											// Zeroize plaintext secrets.
-											CryptographicOperations.ZeroMemory(totpSecret);
-											CryptographicOperations.ZeroMemory(otpauthUriBytes);
-											CryptographicOperations.ZeroMemory(recoveryCodesBytes);
-
-											// Capture for main-thread dispatch.
-											byte[] capturedEncUri = encOtpauthUri;
-											byte[] capturedEncCodes = encRecoveryCodes;
-											uint capturedSetupSeq = seq2;
-											string capturedUsername = username;
-											NetworkConnection setupConn = request.Connection;
-
-											TryEnqueueMainThread(() =>
-											{
-												if (setupConn != null && setupConn.IsActive)
-												{
-													Server.NetworkWrapper.Broadcast(setupConn,
-														new TwoFactorSetupBroadcast()
-														{
-															OtpauthUri = capturedEncUri,
-															RecoveryCodes = capturedEncCodes,
-															Seq = capturedSetupSeq,
-														}, false, Channel.Reliable);
-												}
-											});
 									}
+									else
+									{
+										await Log.Warning("AccountCreationSystem", $"ITwoFactorRecoveryCodeService not registered — recovery codes for '{username}' not persisted.");
+									}
+									// Build otpauth URI for the client's authenticator app.
+									// The TwoFactorSetupBroadcast is ALWAYS sent when TOTP is
+									// configured, regardless of recovery code persistence.
+									string otpauthUri = CryptoHelper.TwoFactor.BuildOtpauthUri(totpSecret, username);
+
+									// Encrypt setup data with the session key for secure transport to client.
+									byte[] otpauthUriBytes = Encoding.UTF8.GetBytes(otpauthUri);
+									byte[] recoveryCodesBytes = Encoding.UTF8.GetBytes(string.Join("\n", recoveryCodes));
+
+									uint seq1 = request.EncryptionData.NextSendSequence();
+									byte[] nonce1 = request.EncryptionData.BuildSendNonce(seq1);
+									byte[] aad1 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq1);
+									byte[] encOtpauthUri = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce1, otpauthUriBytes, aad1);
+
+									uint seq2 = request.EncryptionData.NextSendSequence();
+									byte[] nonce2 = request.EncryptionData.BuildSendNonce(seq2);
+									byte[] aad2 = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TwoFactorSetup, request.EncryptionData.AgreedVersion, seq2);
+									byte[] encRecoveryCodes = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce2, recoveryCodesBytes, aad2);
+
+									// Zeroize plaintext secrets.
+									CryptographicOperations.ZeroMemory(totpSecret);
+									CryptographicOperations.ZeroMemory(otpauthUriBytes);
+									CryptographicOperations.ZeroMemory(recoveryCodesBytes);
+
+									// Capture for main-thread dispatch.
+									byte[] capturedEncUri = encOtpauthUri;
+									byte[] capturedEncCodes = encRecoveryCodes;
+									uint capturedSetupSeq = seq2;
+									string capturedUsername = username;
+									NetworkConnection setupConn = request.Connection;
+
+									TryEnqueueMainThread(() =>
+									{
+										if (setupConn != null && setupConn.IsActive)
+										{
+											Server.NetworkWrapper.Broadcast(setupConn,
+												new TwoFactorSetupBroadcast()
+												{
+													OtpauthUri = capturedEncUri,
+													RecoveryCodes = capturedEncCodes,
+													Seq = capturedSetupSeq,
+												}, false, Channel.Reliable);
+										}
+									});
 								}
 								catch (Exception tfaEx)
 								{
@@ -900,6 +958,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 									await Log.Error("AccountCreationSystem", $"2FA setup failed for {username} (account created without 2FA): {tfaEx}");
 								}
 							}
+#endif
 						}
 						else
 						{
@@ -979,6 +1038,79 @@ namespace FishMMO.Server.Implementation.LoginServer
 			CleanUpMappingData(deltaTime);
 		}
 
+
+		/// <summary>
+		/// Processes pending emails from the outbound queue via the configured SMTP service.
+		/// Called every frame; gated by <see cref="emailSendIntervalSeconds"/>.
+		/// </summary>
+		private void ProcessEmailQueue(float deltaTime)
+		{
+			if (emailSendIntervalSeconds <= 0f) return;
+			_emailSendTimer += deltaTime;
+			if (_emailSendTimer < emailSendIntervalSeconds) return;
+			_emailSendTimer = 0f;
+
+			if (Server?.Database?.ServiceRegistry == null) return;
+			if (!Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService)) return;
+
+			// Lazily construct the SMTP service from server configuration.
+			// It is not a DB service, so it is not in the Npgsql service registry.
+			if (_smtpService == null && Server.Configuration != null)
+			{
+				_smtpService = new FishMMO.Server.Implementation.Smtp.SmtpService(Server.Configuration);
+			}
+			if (_smtpService == null) return;
+
+			// Resolve server identity for claim tracking so multiple LoginServers
+			// can safely share the email queue via FOR UPDATE SKIP LOCKED.
+			string serverName = Server.Configuration?.GetString("ServerName", "unknown") ?? "unknown";
+
+			// Fire-and-forget: process one email per sweep to avoid blocking the main thread.
+			_ = ProcessNextEmailAsync(emailQueueService, serverName);
+		}
+
+		/// <summary>
+		/// Dequeues and sends the next pending email from the queue.
+		/// </summary>
+		private async Task ProcessNextEmailAsync(IEmailQueueService emailQueueService, string claimedBy)
+		{
+			try
+			{
+				var result = await emailQueueService.DequeueNextAsync(claimedBy);
+				if (!result.IsSuccess) return;
+
+				var email = result.Data;
+				bool sent = await _smtpService.SendEmailAsync(email.RecipientEmail, email.Subject, email.Body);
+				if (sent)
+				{
+					await emailQueueService.MarkSentAsync(email.ID);
+
+					// Mark the account so login is blocked until the user verifies.
+					// Before this point (VerificationEmailSentAt is null), unverified
+					// accounts enjoy a grace period and can log in freely.
+					if (Server?.Database?.ServiceRegistry != null &&
+						Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
+					{
+						var persistResult = await accountService.PersistVerificationEmailSentAsync(email.RecipientUsername);
+						if (!persistResult.IsSuccess)
+						{
+							await Log.Warning("AccountCreationSystem", $"Failed to mark verification email sent for '{email.RecipientUsername}': {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+						}
+					}
+
+					await Log.Debug("AccountCreationSystem", $"Verification email sent to {email.RecipientEmail} for '{email.RecipientUsername}'.");
+				}
+				else
+				{
+					await emailQueueService.MarkFailedAsync(email.ID, "SMTP send returned false.");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Warning("AccountCreationSystem", $"Email queue processing error: {ex.Message}");
+			}
+		}
+
 		/// <summary>
 		/// Periodically cleans up stale IP rate-limit and failure-tracking entries
 		/// to prevent unbounded memory growth from one-time visitors.
@@ -986,6 +1118,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private void CleanUpMappingData(float deltaTime)
 		{
+			ProcessEmailQueue(deltaTime);
 			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
 				return;
@@ -1447,7 +1580,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 							: ClientAuthenticationResult.InvalidUsernameOrPassword;
 					}
 
-					trackFailure:
+				trackFailure:
 					// Track failures for rate limiting.
 					if (result != ClientAuthenticationResult.AccountVerified)
 					{
@@ -1566,9 +1699,26 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (now - kvp.Value.FirstFailure > VerifyUsernameLockoutDuration)
 				{
 					verifyUsernameFailures.TryRemove(kvp.Key, out _);
+
 				}
 			}
 		}
 
+		/// <summary>
+		/// Builds the HTML body for the account verification email.
+		/// </summary>
+		private static string BuildVerificationEmailBody(string username, int verifyCode)
+		{
+			return $@"<html><body style='font-family: Arial, sans-serif; color: #333;'>
+				<h2>Welcome to FishMMO, {username}!</h2>
+				<p>Thank you for creating an account. To complete your registration,
+				please use the following verification code:</p>
+				<h1 style='font-size: 32px; letter-spacing: 4px; color: #2563eb;'>{verifyCode:D6}</h1>
+				<p>This code is valid for 24 hours. If you did not create this account,
+				you can safely ignore this email.</p>
+				<hr/>
+				<p style='font-size: 12px; color: #999;'>— The FishMMO Team</p>
+			</body></html>";
+		}
 	}
 }

@@ -310,6 +310,7 @@ namespace FishMMO.Database.Npgsql.Services
 				discordLinkCode: entity.DiscordLinkCode,
 				verified: entity.Verified,
 				verifyCode: entity.VerifyCode,
+				verificationEmailSentAt: entity.VerificationEmailSentAt,
 				created: entity.TimeCreated,
 				lastLogin: entity.LastLogin
 			);
@@ -648,6 +649,22 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					throw new DatabaseEntityNotFoundException("Account", accountName);
 				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistVerificationEmailSentAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (string.IsNullOrWhiteSpace(accountName) || accountName.Length < 3 || accountName.Length > 32)
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Account name must be 3-32 characters.");
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $"UPDATE {TableName} SET verification_email_sent_at = CURRENT_TIMESTAMP WHERE name = {{0}}";
+				var affected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken).ConfigureAwait(false);
+				if (affected == 0)
+					throw new DatabaseEntityNotFoundException("Account", accountName);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
