@@ -459,18 +459,29 @@ namespace FishMMO.Client
 		/// <param name="age">The selected age value.</param>
 		private void Connect(string username, string password, string email, int age)
 		{
-			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress) &&
-				Authentication.IsAddressValid(serverAddress.Address))
+			SetFormLocked(true);
+
+			if (!Client.IsConnectionReady(LocalConnectionState.Stopped))
 			{
-				StatusMessage.text = "Creating account...";
-				Client.LoginAuthenticator.SetLoginCredentials(username, password, true, email, age);
-				Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
+				ShowValidationError("Connection already in progress. Please wait.");
+				return;
 			}
-			else
+
+			if (!Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
 			{
-				SetFormLocked(false);
+				ShowValidationError("No login servers available. The LoginServer may not be registered yet — ensure it is running and connected to the database.");
+				return;
 			}
+
+			if (!Authentication.IsAddressValid(serverAddress.Address))
+			{
+				ShowValidationError("Invalid server address. Please try again.");
+				return;
+			}
+
+			StatusMessage.text = "Creating account...";
+			Client.LoginAuthenticator.SetLoginCredentials(username, password, true, email, age);
+			Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
 		}
 
 		/// <summary>
