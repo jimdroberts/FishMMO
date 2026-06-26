@@ -37,8 +37,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			
 			if (character == null ||
-				!character.TryGet(out IAbilityController abilityController))
+				!character.TryGet(out IAbilityController abilityController) ||
+				!CharacterStateValidation.CanAct(character))
 			{
 				return;
 			}

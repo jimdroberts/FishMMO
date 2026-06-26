@@ -230,7 +230,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			try
 			{
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (playerCharacter == null || msg.HotkeyData == null)
+
+			if (playerCharacter == null || msg.HotkeyData == null || !CharacterStateValidation.CanAct(playerCharacter))
 			{
 				return;
 			}
@@ -265,7 +266,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			try
 			{
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (playerCharacter == null || msg.Hotkeys == null || msg.Hotkeys.Count < 1)
+
+			if (playerCharacter == null || msg.Hotkeys == null || msg.Hotkeys.Count < 1 || !CharacterStateValidation.CanAct(playerCharacter))
 			{
 				return;
 			}

@@ -880,7 +880,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (GuildCreateAchievementTemplate != null)
 					{
 						IPlayerCharacter pc = conn.FirstObject.GetComponent<IPlayerCharacter>();
-						if (pc != null && pc.TryGet(out IAchievementController achievementController))
+
+						if (pc != null && pc.TryGet(out IAchievementController achievementController) && CharacterStateValidation.CanAct(pc))
 						{
 							achievementController.Increment(GuildCreateAchievementTemplate, 1);
 						}
@@ -1149,7 +1150,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (GuildJoinAchievementTemplate != null)
 					{
 						IPlayerCharacter pc = conn.FirstObject.GetComponent<IPlayerCharacter>();
-						if (pc != null && pc.TryGet(out IAchievementController achievementController))
+
+						if (pc != null && pc.TryGet(out IAchievementController achievementController) && CharacterStateValidation.CanAct(pc))
 						{
 							achievementController.Increment(GuildJoinAchievementTemplate, 1);
 						}
@@ -1183,7 +1185,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			try
 			{
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-				if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+
+				if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData) && CharacterStateValidation.CanAct(pc))
 				{
 					runtimeData.RemovePendingInvitation(character.ID);
 				}

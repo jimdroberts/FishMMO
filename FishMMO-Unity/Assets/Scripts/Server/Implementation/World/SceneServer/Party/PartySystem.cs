@@ -858,6 +858,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
+					if (!CharacterStateValidation.CanAct(pc))
+						return;
+
 					pc.ID = newPartyID;
 					pc.Rank = PartyRank.Leader;
 
@@ -874,6 +877,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (PartyCreateAchievementTemplate != null)
 					{
 						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+						
 						if (character != null && character.TryGet(out IAchievementController achievementController))
 						{
 							achievementController.Increment(PartyCreateAchievementTemplate, 1);
@@ -1155,6 +1159,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (PartyJoinAchievementTemplate != null)
 					{
 						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+						
 						if (character != null && character.TryGet(out IAchievementController achievementController))
 						{
 							achievementController.Increment(PartyJoinAchievementTemplate, 1);
@@ -1189,7 +1194,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			try
 			{
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-				if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+
+				if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData) && CharacterStateValidation.CanAct(character))
 				{
 					runtimeData.RemovePendingInvitation(character.ID);
 				}

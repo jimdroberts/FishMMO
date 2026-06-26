@@ -232,38 +232,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
+				IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 
-			// Validate character
-			if (friendController == null ||
-				friendController.Friends.Count >= maxFriends)
-			{
-				return;
-			}
+				// Validate character
+				if (friendController == null ||
+					friendController.Friends.Count >= maxFriends)
+				{
+					return;
+				}
 
-			// Validate database availability
-			if (Server == null || Server.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
+				// Validate database availability
+				if (Server == null || Server.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
 
-			// Are we trying to become our own friend again...
-			long characterID = friendController.Character.ID;
-			if (characterID == msg.CharacterID)
-			{
-				return;
-			}
+				// Are we trying to become our own friend again...
+				long characterID = friendController.Character.ID;
+				if (characterID == msg.CharacterID)
+				{
+					return;
+				}
 
-			// Capture immutable data for the async path
-			long friendCharacterID = msg.CharacterID;
+				// Capture immutable data for the async path
+				long friendCharacterID = msg.CharacterID;
 
-			deferGuardRelease = TryEnqueueIngressWork(() => AddFriendAsync(conn, characterID, friendCharacterID), guardKey, characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => AddFriendAsync(conn, characterID, friendCharacterID), guardKey, characterID);
 			}
 			finally
 			{
 				if (!deferGuardRelease)
 				{
-					EndIngressGuard(guardKey);					SendServerBusy(conn);					SendServerBusy(conn);
+					EndIngressGuard(guardKey); SendServerBusy(conn); SendServerBusy(conn);
 				}
 			}
 		}
@@ -344,7 +344,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (FriendAddAchievementTemplate != null)
 					{
 						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-						if (character != null && character.TryGet(out IAchievementController achievementController))
+
+						if (character != null && character.TryGet(out IAchievementController achievementController) && CharacterStateValidation.CanAct(character))
 						{
 							achievementController.Increment(FriendAddAchievementTemplate, 1);
 						}
@@ -380,22 +381,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool deferGuardRelease = false;
 			try
 			{
-			IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
+				IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 
-			// Validate character
-			if (friendController == null)
-			{
-				return;
-			}
+				// Validate character
+				if (friendController == null)
+				{
+					return;
+				}
 
-			// Remove the friend if it exists in-memory
-			if (friendController.Friends.Contains(msg.CharacterID))
-			{
-				long characterID = friendController.Character.ID;
-				long friendCharacterID = msg.CharacterID;
+				// Remove the friend if it exists in-memory
+				if (friendController.Friends.Contains(msg.CharacterID))
+				{
+					long characterID = friendController.Character.ID;
+					long friendCharacterID = msg.CharacterID;
 
-				deferGuardRelease = TryEnqueueIngressWork(() => RemoveFriendAsync(conn, characterID, friendCharacterID), guardKey, characterID);
-			}
+					deferGuardRelease = TryEnqueueIngressWork(() => RemoveFriendAsync(conn, characterID, friendCharacterID), guardKey, characterID);
+				}
 			}
 			finally
 			{
