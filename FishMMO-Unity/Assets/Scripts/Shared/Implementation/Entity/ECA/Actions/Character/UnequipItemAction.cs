@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 		public ItemSlot SourceSlotToUnequip = ItemSlot.Head;
 
 		/// <summary>
-		/// Unequips the item from the specified slot on the initiator's <see cref="EquipmentController"/>.
+		/// Unequips the item from the specified slot on the initiator's <see cref="IEquipmentController"/>.
 		/// </summary>
 		/// <param name="initiator">The character performing the unequip.</param>
 		/// <param name="eventData">Optional event data containing <see cref="ItemEventData"/> to override slot and target container.</param>
@@ -30,9 +30,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!initiator.TryGet(out EquipmentController equipmentController))
+			if (!initiator.TryGet(out IEquipmentController equipmentController))
 			{
-				Log.Warning("UnequipItemAction", "Initiator does not have an EquipmentController.");
+				Log.Warning("UnequipItemAction", "Initiator does not have an IEquipmentController.");
 				return;
 			}
 

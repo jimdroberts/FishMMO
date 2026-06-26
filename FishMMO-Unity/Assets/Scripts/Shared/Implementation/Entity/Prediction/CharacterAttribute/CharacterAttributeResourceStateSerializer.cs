@@ -104,16 +104,17 @@ namespace FishMMO.Shared
 		/// MaxHealth, MaxMana, MaxStamina) use <c>WriteDeltaInt32</c> which benefits
 		/// from varint delta encoding.
 		///
-		/// <c>WriteDeltaInt32</c> returns <c>false</c> and writes nothing when
-		/// <c>prev == next</c> and <c>option == Unset</c>, so no bytes are wasted
-		/// for unchanged int fields. The <c>forceWrite</c> flag (option != Unset)
-		/// forces all fields to be written regardless — the bottom guard
-		/// (<c>flags != 0 || forceWrite</c>) ensures the bitmask byte is patched
-		/// and <c>true</c> is returned even when all values are equal but forced.
+		/// Float comparisons use a small epsilon (<see cref="FLOAT_EPSILON"/>) to avoid
+		/// false-positive deltas from cross-platform floating-point representation drift.
+		/// Values differing by less than 0.001 are treated as equal.
 		///
 		/// If FishNet adds a public float-delta API in the future, the float fields
 		/// should be migrated for better compression on small regen increments.
 		/// </remarks>
+
+		/// <summary>Epsilon for float comparisons to avoid false-positive deltas from cross-platform drift.</summary>
+		private const float FLOAT_EPSILON = 0.001f;
+
 		private static bool WriteDelta(
 			Writer writer,
 			CharacterAttributeResourceState prev,
@@ -130,7 +131,7 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32((int)prev.NextRegenTick, (int)next.NextRegenTick, option))
 				flags |= NEXT_REGEN_TICK_BIT;
 
-			if (forceWrite || prev.Health != next.Health)
+			if (forceWrite || Mathf.Abs(prev.Health - next.Health) > FLOAT_EPSILON)
 			{
 				writer.WriteSingle(next.Health);
 				flags |= HEALTH_BIT;
@@ -139,7 +140,7 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32(prev.MaxHealth, next.MaxHealth, option))
 				flags |= MAX_HEALTH_BIT;
 
-			if (forceWrite || prev.Mana != next.Mana)
+			if (forceWrite || Mathf.Abs(prev.Mana - next.Mana) > FLOAT_EPSILON)
 			{
 				writer.WriteSingle(next.Mana);
 				flags |= MANA_BIT;
@@ -148,7 +149,7 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32(prev.MaxMana, next.MaxMana, option))
 				flags |= MAX_MANA_BIT;
 
-			if (forceWrite || prev.Stamina != next.Stamina)
+			if (forceWrite || Mathf.Abs(prev.Stamina - next.Stamina) > FLOAT_EPSILON)
 			{
 				writer.WriteSingle(next.Stamina);
 				flags |= STAMINA_BIT;

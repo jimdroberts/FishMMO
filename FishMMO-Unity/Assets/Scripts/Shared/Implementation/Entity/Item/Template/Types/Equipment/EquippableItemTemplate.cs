@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
 
 namespace FishMMO.Shared
 {
@@ -35,5 +37,27 @@ namespace FishMMO.Shared
 		/// Used to select different visual models for the item.
 		/// </summary>
 		public int[] ModelPools;
+
+		/// <summary>
+		/// Addressable references to equipment mesh variations for this item.
+		/// The specific mesh is selected from this list using ModelSeed and ModelPools.
+		/// These meshes must be skinned to the master skeleton.
+		/// </summary>
+		[Tooltip("Mesh variations for this equipment item. Selected via ModelSeed/ModelPools.")]
+		public List<AssetReference> EquipmentMeshes = new List<AssetReference>();
+
+		/// <summary>
+		/// Body regions hidden when this item is equipped.
+		/// For example, a chest plate hides the Torso and Arms regions.
+		/// </summary>
+		[Tooltip("Body regions to hide when this item is equipped.")]
+		public BodyRegion[] HiddenRegions;
+
+		/// <summary>
+		/// Optional blend shapes on the equipment mesh that sync with body blend shapes.
+		/// When the body's blend shape values change, matching entries here are applied to the equipment renderer.
+		/// </summary>
+		[Tooltip("Optional blend shape profile for this equipment mesh.")]
+		public BlendShapeProfile BlendShapes;
 	}
 }

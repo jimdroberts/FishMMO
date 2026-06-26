@@ -204,6 +204,11 @@ namespace FishMMO.Shared
 			if (isDelta)
 			{
 				int changedCount = count;
+				// Edge case: zero changed entries in a delta. Should not occur during normal
+				// operation (WriteArrayDelta returns early on changedCount==0), but guard
+				// against a corrupted or unexpected header to avoid unnecessary allocation.
+				if (changedCount == 0)
+					return prev;
 				if (changedCount > MaxEntries)
 				{
 					Log.Warning("BuffReconcileEntry", $"Index-delta count {changedCount} exceeds limit {MaxEntries}. Draining entries and preserving previous state.");

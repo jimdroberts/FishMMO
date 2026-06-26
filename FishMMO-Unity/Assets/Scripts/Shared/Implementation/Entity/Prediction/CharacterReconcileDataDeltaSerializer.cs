@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Custom delta serializers for <see cref="CharacterReconcileData"/>.
 	/// <para>
-	/// <b>Delta serializer</b>: Writes a 2-byte bitmask (10 bits for 10 fields)
+	/// <b>Delta serializer</b>: Writes a 2-byte bitmask (11 bits for 11 fields)
 	/// followed by delta-encoded values for only the changed fields.
 	/// The nested <see cref="KinematicCharacterController.KinematicCharacterMotorState"/> and
 	/// <see cref="CharacterAttributeResourceState"/> use their own delta serializers,
@@ -27,8 +27,9 @@ namespace FishMMO.Shared
 		private const ushort BUFF_BIT = 1 << 7;
 		private const ushort RNG_STATE_BIT = 1 << 8;
 		private const ushort ATTRIBUTE_BIT = 1 << 9;
-		// Bits 10..15 are reserved for future fields. The flag mask is a ushort (16 bits);
-		// 10 are currently in use. When adding new fields, take the next bit and update
+		private const ushort EQUIPMENT_BIT = 1 << 10;
+		// Bits 11..15 are reserved for future fields. The flag mask is a ushort (16 bits);
+		// 11 are currently in use. When adding new fields, take the next bit and update
 		// both WriteDelta and ReadDelta in lock-step.
 
 		/// <summary>
@@ -43,7 +44,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Delta writer for <see cref="CharacterReconcileData"/>.
-		/// Writes a 2-byte bitmask indicating which of the 10 fields changed,
+		/// Writes a 2-byte bitmask indicating which of the 11 fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
 		private static bool WriteDelta(
@@ -87,6 +88,9 @@ namespace FishMMO.Shared
 
 			if (AttributeReconcileEntry.WriteArrayDelta(writer, prev.Attributes, next.Attributes, option))
 				flags |= ATTRIBUTE_BIT;
+
+			if (EquipmentReconcileEntry.WriteArrayDelta(writer, prev.Equipment, next.Equipment, option))
+				flags |= EQUIPMENT_BIT;
 
 			if (flags != 0 || forceWrite)
 			{
@@ -179,6 +183,9 @@ namespace FishMMO.Shared
 
 			if ((flags & ATTRIBUTE_BIT) != 0)
 				result.Attributes = AttributeReconcileEntry.ReadArrayDelta(reader, prev.Attributes);
+
+			if ((flags & EQUIPMENT_BIT) != 0)
+				result.Equipment = EquipmentReconcileEntry.ReadArrayDelta(reader, prev.Equipment);
 
 			return result;
 		}

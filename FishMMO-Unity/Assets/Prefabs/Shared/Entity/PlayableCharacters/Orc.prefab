@@ -46,7 +46,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab822550643fb454788ff0e4beacb4e0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  PivotYAxis: 0
 --- !u!1 &995763922733204262
 GameObject:
   m_ObjectHideFlags: 0
@@ -199,7 +198,6 @@ GameObject:
   - component: {fileID: 1966501389576177422}
   - component: {fileID: 218304821033608884}
   - component: {fileID: 4374908933606738023}
-  - component: {fileID: 5933418412604522111}
   - component: {fileID: 1974367592072420653}
   - component: {fileID: 7975244870159263472}
   - component: {fileID: 3124264775330692708}
@@ -211,6 +209,11 @@ GameObject:
   - component: {fileID: 7810264000710710752}
   - component: {fileID: 34196052825852577}
   - component: {fileID: -4700021757340413314}
+  - component: {fileID: 1440832647282045557}
+  - component: {fileID: 2604960689789808382}
+  - component: {fileID: 7334820797300942041}
+  - component: {fileID: 3444804090579496595}
+  - component: {fileID: 8478061901066445689}
   m_Layer: 0
   m_Name: Orc
   m_TagString: Untagged
@@ -285,7 +288,7 @@ MonoBehaviour:
   - {fileID: 1966501389576177422}
   - {fileID: 218304821033608884}
   - {fileID: 4374908933606738023}
-  - {fileID: 5933418412604522111}
+  - {fileID: 0}
   - {fileID: 1974367592072420653}
   - {fileID: 7975244870159263472}
   - {fileID: 3124264775330692708}
@@ -461,6 +464,8 @@ MonoBehaviour:
   _componentIndexCache: 3
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  onBuffApplyTriggers: []
+  onBuffRemoveTriggers: []
 --- !u!114 &6508789489405674567
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -517,6 +522,8 @@ MonoBehaviour:
   BloodResourceConversionTemplate: {fileID: 0}
   ChargedTemplate: {fileID: 0}
   ChanneledTemplate: {fileID: 0}
+  onAbilityActivateTriggers: []
+  onAbilityCompleteTriggers: []
 --- !u!114 &4374908933606738023
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -535,21 +542,8 @@ MonoBehaviour:
   LayerMask:
     serializedVersion: 2
     m_Bits: 193
---- !u!114 &5933418412604522111
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4573496687782621821}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1a402312deeba5e4a9372615e445f44f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 8
-  _addedNetworkObject: {fileID: 4964627840297570917}
-  _networkObjectCache: {fileID: 4964627840297570917}
+  onTargetChangeTriggers: []
+  onTargetClearTriggers: []
 --- !u!114 &1974367592072420653
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -565,6 +559,8 @@ MonoBehaviour:
   _componentIndexCache: 9
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  onGuildJoinTriggers: []
+  onGuildLeaveTriggers: []
 --- !u!114 &7975244870159263472
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -580,6 +576,8 @@ MonoBehaviour:
   _componentIndexCache: 10
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  onPartyJoinTriggers: []
+  onPartyLeaveTriggers: []
 --- !u!114 &3124264775330692708
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -610,14 +608,14 @@ MonoBehaviour:
   _componentIndexCache: 12
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  DamageAchievementTemplateID: -1869629340
-  DamagedAchievementTemplateID: 904099543
-  KillAchievementTemplateID: -320818156
-  KilledAchievementTemplateID: 504720138
-  HealAchievementTemplateID: -484704940
-  HealedAchievementTemplateID: 381718814
-  ResurrectAchievementTemplateID: 0
-  ResurrectedAchievementTemplateID: 0
+  onDamageTriggers: []
+  onDamagedTriggers: []
+  onHealTriggers: []
+  onHealedTriggers: []
+  onKillTriggers: []
+  onKilledTriggers: []
+  onResurrectTriggers: []
+  onResurrectedTriggers: []
   immortal: 0
 --- !u!114 &6038023079570568745
 MonoBehaviour:
@@ -634,10 +632,6 @@ MonoBehaviour:
   _componentIndexCache: 13
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  meshRoot: {fileID: 2976285799004961102}
-  characterNameLabel: {fileID: 2817084262407755495}
-  characterGuildLabel: {fileID: 3362407936794280637}
-  equipmentViewCamera: {fileID: 6274733150604385851}
 --- !u!136 &4989737185595066850
 CapsuleCollider:
   m_ObjectHideFlags: 8
@@ -704,6 +698,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   isAggressive: 0
+  onFactionChangeTriggers: []
   raceTemplateID: 752653923
 --- !u!114 &7810264000710710752
 MonoBehaviour:
@@ -747,6 +742,85 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6eb382409511904448ab4b46057e9150, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+  onPetSummonTriggers: []
+  onPetDismissTriggers: []
+--- !u!114 &1440832647282045557
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d6e28c24136385cda2e72cbc080989d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.EquipmentController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+  onEquipTriggers: []
+  onUnequipTriggers: []
+--- !u!114 &2604960689789808382
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6c32020816b90a4693f218b72353287, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.BodyVisibilityManager
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &7334820797300942041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 22bafa4cd1edd40d2ae2d25c5fcb8f47, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterAppearanceManager
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &3444804090579496595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fff7bdce6d64b37483064fdd4318ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.EquipmentVisualController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &8478061901066445689
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1546cc7a45eb8fb2b12984901c73d94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterAnimationController
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
@@ -974,18 +1048,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: dc8cc64088072ae47872cf54e7cf6b6f, type: 3}
---- !u!114 &3362407936794280637 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
-    type: 3}
-  m_PrefabInstance: {fileID: 1499871529757219294}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9541d86e2fd84c1d9990edf0852d74ab, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!224 &3362407936794280639 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 4213452809119816545, guid: dc8cc64088072ae47872cf54e7cf6b6f,
@@ -1126,15 +1188,3 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 2117107678736878980}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &2817084262407755495 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
-    type: 3}
-  m_PrefabInstance: {fileID: 2117107678736878980}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9541d86e2fd84c1d9990edf0852d74ab, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 

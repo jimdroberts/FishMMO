@@ -198,7 +198,6 @@ GameObject:
   - component: {fileID: 1966501389576177422}
   - component: {fileID: 218304821033608884}
   - component: {fileID: 4374908933606738023}
-  - component: {fileID: 5933418412604522111}
   - component: {fileID: 1974367592072420653}
   - component: {fileID: 7975244870159263472}
   - component: {fileID: 3124264775330692708}
@@ -210,6 +209,11 @@ GameObject:
   - component: {fileID: 7810264000710710752}
   - component: {fileID: 34196052825852577}
   - component: {fileID: -4700021757340413314}
+  - component: {fileID: 1440832647282045557}
+  - component: {fileID: 2604960689789808382}
+  - component: {fileID: 7334820797300942041}
+  - component: {fileID: 3444804090579496595}
+  - component: {fileID: 8478061901066445689}
   m_Layer: 0
   m_Name: Elf
   m_TagString: Untagged
@@ -284,7 +288,7 @@ MonoBehaviour:
   - {fileID: 1966501389576177422}
   - {fileID: 218304821033608884}
   - {fileID: 4374908933606738023}
-  - {fileID: 5933418412604522111}
+  - {fileID: 0}
   - {fileID: 1974367592072420653}
   - {fileID: 7975244870159263472}
   - {fileID: 3124264775330692708}
@@ -540,23 +544,6 @@ MonoBehaviour:
     m_Bits: 193
   onTargetChangeTriggers: []
   onTargetClearTriggers: []
---- !u!114 &5933418412604522111
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4573496687782621821}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1a402312deeba5e4a9372615e445f44f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 8
-  _addedNetworkObject: {fileID: 4964627840297570917}
-  _networkObjectCache: {fileID: 4964627840297570917}
-  onEquipTriggers: []
-  onUnequipTriggers: []
 --- !u!114 &1974367592072420653
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -760,6 +747,83 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 0}
   onPetSummonTriggers: []
   onPetDismissTriggers: []
+--- !u!114 &1440832647282045557
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d6e28c24136385cda2e72cbc080989d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.EquipmentController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+  onEquipTriggers: []
+  onUnequipTriggers: []
+--- !u!114 &2604960689789808382
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6c32020816b90a4693f218b72353287, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.BodyVisibilityManager
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &7334820797300942041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 22bafa4cd1edd40d2ae2d25c5fcb8f47, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterAppearanceManager
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &3444804090579496595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fff7bdce6d64b37483064fdd4318ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.EquipmentVisualController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &8478061901066445689
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1546cc7a45eb8fb2b12984901c73d94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterAnimationController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0

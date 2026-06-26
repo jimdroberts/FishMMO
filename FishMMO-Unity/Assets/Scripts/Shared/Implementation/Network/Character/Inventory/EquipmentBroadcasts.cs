@@ -1,38 +1,10 @@
 using FishNet.Broadcast;
-using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Broadcast for setting a single item in the equipment inventory.
-	/// Contains all data needed to place or update an item in an equipment slot.
-	/// </summary>
-	public struct EquipmentSetItemBroadcast : IBroadcast
-	{
-		/// <summary>Unique instance ID of the item.</summary>
-		public long InstanceID;
-		/// <summary>Template ID of the item type.</summary>
-		public int TemplateID;
-		/// <summary>Slot index in the equipment inventory.</summary>
-		public int Slot;
-		/// <summary>Seed value for item randomization or uniqueness.</summary>
-		public int Seed;
-		/// <summary>Stack size of the item.</summary>
-		public uint StackSize;
-	}
-
-	/// <summary>
-	/// Broadcast for setting multiple items in the equipment inventory at once.
-	/// Used for bulk updates or synchronization.
-	/// </summary>
-	public struct EquipmentSetMultipleItemsBroadcast : IBroadcast
-	{
-		/// <summary>List of items to set in the equipment inventory.</summary>
-		public List<EquipmentSetItemBroadcast> Items;
-	}
-
-	/// <summary>
 	/// Broadcast for equipping an item from an inventory slot to an equipment slot.
+	/// Sent client→server to request an equip, echoed server→client as acknowledgement.
 	/// </summary>
 	public struct EquipmentEquipItemBroadcast : IBroadcast
 	{
@@ -46,6 +18,7 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// Broadcast for unequipping an item from an equipment slot to an inventory slot.
+	/// Sent client→server to request an unequip, echoed server→client as acknowledgement.
 	/// </summary>
 	public struct EquipmentUnequipItemBroadcast : IBroadcast
 	{

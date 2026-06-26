@@ -607,6 +607,28 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// Fire OnRemoveCooldown for cooldowns being removed by this reconcile.
+			// Build a set of ability IDs that exist in the reconcile snapshot;
+			// any current cooldown NOT in this set is being removed.
+			HashSet<long> reconcileIDs = null;
+			if (entries != null && entries.Length > 0)
+			{
+				reconcileIDs = new HashSet<long>();
+				for (int i = 0; i < entries.Length; i++)
+				{
+					reconcileIDs.Add(entries[i].AbilityID);
+				}
+			}
+
+			// Fire removal events for entries being removed (before clearing)
+			foreach (long existingID in cooldowns.Keys)
+			{
+				if (reconcileIDs == null || !reconcileIDs.Contains(existingID))
+				{
+					ICooldownController.OnRemoveCooldown?.Invoke(existingID);
+				}
+			}
+
 			cooldowns.Clear();
 			snapshotDirty = true;
 			if (entries == null)

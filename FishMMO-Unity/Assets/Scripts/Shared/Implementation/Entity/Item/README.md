@@ -37,7 +37,7 @@ The Item system is a component-based, template-driven framework for items, inven
 - Template-driven item definitions via ScriptableObjects (`BaseItemTemplate`, `EquippableItemTemplate`, `ConsumableTemplate`)
 - Composition-based runtime item instances with optional `ItemStackable`, `ItemEquippable`, and `ItemGenerator` sub-components
 - Seed-based deterministic attribute generation for weapons, armor, and random attribute pools
-- Slot-based abstract `ItemContainer` with concrete `InventoryController` (32 slots), `EquipmentController` (7 slots), and `BankController` (100 slots)
+- Slot-based abstract `ItemContainer` with concrete `InventoryController` (32 slots), `EquipmentController` (10 slots), and `BankController` (100 slots)
 - Full stacking logic with same-template/same-seed matching, stack merging, and unstacking
 - Equip/unequip flow with live character attribute modifier application and removal
 - Cross-container slot swaps between inventory, equipment, and bank
@@ -99,7 +99,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 | Container | Default Slots | Notes |
 |-----------|---------------|-------|
 | `InventoryController` | 32 | Main character inventory |
-| `EquipmentController` | `ItemSlot` enum count (7) | One slot per equipment type |
+| `EquipmentController` | `ItemSlot` enum count (10) | One slot per equipment type |
 | `BankController` | 100 | Persistent bank storage with currency |
 
 ## Usage Examples
@@ -248,12 +248,12 @@ The `EquipmentController` implements `ReadPayload` / `WritePayload` for initial 
 
 #### Broadcast Types — Equipment
 
+Equipment state is synchronized via the prediction pipeline (`EquipmentController` at Order 93 in `CharacterReconcileData`). Only client→server request broadcasts remain:
+
 | Broadcast | Direction | Purpose |
 |-----------|-----------|---------|
-| `EquipmentSetItemBroadcast` | Server → Client | Set a single equipment slot |
-| `EquipmentSetMultipleItemsBroadcast` | Server → Client | Batch set multiple slots |
-| `EquipmentEquipItemBroadcast` | Server → Client | Equip from inventory/bank |
-| `EquipmentUnequipItemBroadcast` | Server → Client | Unequip to inventory/bank |
+| `EquipmentEquipItemBroadcast` | Client ↔ Server | Equip from inventory/bank (echoed back as acknowledgement) |
+| `EquipmentUnequipItemBroadcast` | Client ↔ Server | Unequip to inventory/bank (echoed back as acknowledgement) |
 
 #### Broadcast Types — Bank
 
@@ -359,7 +359,7 @@ Item/
 ├── ItemAttribute.cs                           # Runtime attribute instance on an item
 ├── ItemEquippable.cs                          # Equip/unequip component (IEquippable<ICharacter>)
 ├── ItemGenerator.cs                           # Seed-based attribute generation and application
-├── ItemSlot.cs                                # Enum: Head, Chest, Legs, Hands, Feet, Primary, Secondary
+├── ItemSlot.cs                                # Enum: Head, Chest, Shoulders, Hands, Legs, Feet, Back, Primary, Secondary, Accessory
 ├── ItemStackable.cs                           # Stack management component (IStackable<Item>)
 ├── Container/
 │   ├── IItemContainer.cs                      # Container interface (slot CRUD, events)
@@ -368,8 +368,8 @@ Item/
 │   │   ├── IBankController.cs                 # Bank interface (currency, swap validation)
 │   │   └── BankController.cs                  # Bank container (100 slots, currency)
 │   ├── Equipment/
-│   │   ├── IEquipmentController.cs            # Equipment interface (equip, unequip, activate)
-│   │   └── EquipmentController.cs             # Equipment container (slot-per-ItemSlot enum)
+│   │   └── IEquipmentController.cs            # Equipment interface (equip, unequip, activate)
+│   │   # EquipmentController.cs moved to Prediction/Equipment/
 │   └── Inventory/
 │       ├── IInventoryController.cs            # Inventory interface (activate, swap validation)
 │       ├── InventoryController.cs             # Main inventory container (32 slots)
@@ -432,9 +432,11 @@ CachedScriptableObject<ItemAttributeTemplate>
 CharacterBehaviour
 └── ItemContainer (abstract) : IItemContainer
     ├── InventoryController : IInventoryController
-    ├── EquipmentController : IEquipmentController
+    ├── EquipmentController : IEquipmentController, IPredictableController (Order 93)
     └── BankController      : IBankController
 ```
+
+> **Note:** `EquipmentController.cs` was moved to `Prediction/Equipment/` and now implements `IPredictableController` at Order 93. Equipment state is reconciled alongside other predicted state. The broadcast path (`EquipmentEquipItemBroadcast`/`EquipmentUnequipItemBroadcast`) handles client→server requests; attribute application is deferred to the reconcile path.
 
 ## License
 

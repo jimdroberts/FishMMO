@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 #if !UNITY_SERVER
 using TMPro;
+using FishNet.Component.Animating;
 #endif
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -18,6 +19,13 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(NetworkObject))]
 	public abstract class BaseCharacter : NetworkBehaviour, ICharacter
 	{
+#if !UNITY_SERVER
+		/// <summary>
+		/// NetworkAnimator component for synchronizing animation parameters across the network.
+		/// Configured at runtime after the character model is instantiated.
+		/// </summary>
+		public NetworkAnimator NetworkAnimator { get; private set; }
+#endif
 #if !UNITY_SERVER
 		/// <summary>
 		/// Client-side dictionary mapping character IDs to their instances for quick lookup.
@@ -169,6 +177,26 @@ namespace FishMMO.Shared
 				GameObject modelInstance = Instantiate(go);
 				modelInstance.transform.SetParent(MeshRoot);
 				modelInstance.transform.SetLocalPositionRotationAndScale(Vector3.zero, Quaternion.identity, Vector3.one);
+
+				// Wire the model's Animator to NetworkAnimator for network sync
+				if (NetworkAnimator != null)
+				{
+					Animator modelAnimator = modelInstance.GetComponentInChildren<Animator>();
+					if (modelAnimator != null)
+					{
+						NetworkAnimator.Animator = modelAnimator;
+					}
+				}
+
+				// Notify visual behaviours that the model is ready (skeleton, body regions, animator)
+				foreach (ICharacterBehaviour behaviour in Behaviours.Values)
+				{
+					if (behaviour is IModelReadyHandler handler)
+					{
+						handler.OnModelReady();
+					}
+				}
+
 				Log.Debug("BaseCharacter", $"Setting Child model to identity. {modelInstance.transform.position}");
 			});
 		}
@@ -207,7 +235,17 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called after all CharacterBehaviours have called InitializeOnce. Override for custom initialization logic.
 		/// </summary>
-		public virtual void OnAwake() { }
+		public virtual void OnAwake()
+		{
+#if !UNITY_SERVER
+			// Ensure NetworkAnimator exists for animation sync
+			NetworkAnimator = gameObject.GetComponent<NetworkAnimator>();
+			if (NetworkAnimator == null)
+			{
+				NetworkAnimator = gameObject.AddComponent<NetworkAnimator>();
+			}
+#endif
+		}
 
 		/// <inheritdoc />
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

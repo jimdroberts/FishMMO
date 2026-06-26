@@ -70,8 +70,6 @@ namespace FishMMO.Shared
 
 		private Collider[] probedColliders = new Collider[8];
 
-		private Animator animator = null;
-
 		/// <summary>
 		/// Cached ability controller reference to avoid per-tick dictionary lookups.
 		/// Lazily resolved when <see cref="Character"/> is first set.
@@ -83,6 +81,12 @@ namespace FishMMO.Shared
 		/// Lazily resolved when <see cref="Character"/> is first set.
 		/// </summary>
 		private ICharacterAttributeController cachedAttributeController;
+
+		/// <summary>
+		/// Cached animation controller reference to avoid per-tick dictionary lookups.
+		/// Lazily resolved when <see cref="Character"/> is first set.
+		/// </summary>
+		private ICharacterAnimationController cachedAnimationController;
 
 		/// <summary>
 		/// Tracks which <see cref="Character"/> reference the cached components belong to.
@@ -110,8 +114,6 @@ namespace FishMMO.Shared
 		{
 			// Handle initial state
 			TransitionToState(KCCCharacterState.Default);
-
-			animator = GetComponentInChildren<Animator>();
 		}
 
 		private void OnEnable()
@@ -129,6 +131,7 @@ namespace FishMMO.Shared
 		{
 			cachedAbilityController = null;
 			cachedAttributeController = null;
+			cachedAnimationController = null;
 			lastCachedCharacter = null;
 		}
 
@@ -144,11 +147,13 @@ namespace FishMMO.Shared
 			{
 				Character.TryGet(out cachedAbilityController);
 				Character.TryGet(out cachedAttributeController);
+				Character.TryGet(out cachedAnimationController);
 			}
 			else
 			{
 				cachedAbilityController = null;
 				cachedAttributeController = null;
+				cachedAnimationController = null;
 			}
 		}
 
@@ -635,10 +640,33 @@ namespace FishMMO.Shared
 							}
 						}
 
-						if (animator != null)
+						EnsureCached();
+						if (cachedAnimationController != null)
 						{
-							animator.SetBool("Crouching", isCrouching);
-							animator.SetBool("OnGround", Motor.GroundingStatus.FoundAnyGround);
+							cachedAnimationController.SetCrouching(isCrouching);
+							cachedAnimationController.SetGrounded(Motor.GroundingStatus.FoundAnyGround);
+
+							// Set speed parameter for locomotion blend tree
+							float speed = 0f;
+							if (Motor.GroundingStatus.IsStableOnGround)
+							{
+								float vel = Motor.Velocity.magnitude;
+								if (vel > 0.1f)
+								{
+									float sprintThreshold = Constants.Character.SprintSpeed * 0.8f;
+									float runThreshold = Constants.Character.RunSpeed * 0.5f;
+
+									if (isCrouching)
+										speed = 0.3f; // Crouch walk
+									else if (vel >= sprintThreshold)
+										speed = 1.5f; // Sprint
+									else if (vel >= runThreshold)
+										speed = 1.0f; // Run
+									else
+										speed = 0.5f; // Walk
+								}
+							}
+							cachedAnimationController.SetSpeed(speed);
 						}
 						break;
 					}

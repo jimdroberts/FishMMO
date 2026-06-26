@@ -23,6 +23,52 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// Default body proportions for a race. These values are applied as bone scaling on character spawn.
+	/// 1.0 = default human proportion. Values are multipliers on individual bone localScale.
+	/// </summary>
+	[System.Serializable]
+	public struct RaceProportions
+	{
+		/// <summary>Overall height multiplier (affects spine and leg bones).</summary>
+		[Range(0.5f, 1.5f)]
+		[Tooltip("Overall height multiplier. Stacks with LegLength/TorsoLength for intentional compounding (e.g., Dwarf: Height=0.75, LegLength=0.70 → legs = 0.525x).")]
+		public float Height;
+
+		/// <summary>Arm length multiplier (affects upper/lower arm bones).</summary>
+		[Range(0.7f, 1.3f)]
+		public float ArmLength;
+
+		/// <summary>Leg length multiplier (affects upper/lower leg bones). Stacks with Height.</summary>
+		[Range(0.7f, 1.3f)]
+		public float LegLength;
+
+		/// <summary>Torso length multiplier (affects spine and chest bones). Stacks with Height.</summary>
+		[Range(0.7f, 1.3f)]
+		public float TorsoLength;
+
+		/// <summary>Shoulder width multiplier (affects clavicle/shoulder bone offsets).</summary>
+		[Range(0.7f, 1.3f)]
+		public float ShoulderWidth;
+
+		/// <summary>Head scale multiplier (affects head and neck bones).</summary>
+		[Range(0.7f, 1.3f)]
+		public float HeadScale;
+
+		/// <summary>
+		/// Returns the default human proportions (all 1.0).
+		/// </summary>
+		public static RaceProportions Default => new RaceProportions
+		{
+			Height = 1.0f,
+			ArmLength = 1.0f,
+			LegLength = 1.0f,
+			TorsoLength = 1.0f,
+			ShoulderWidth = 1.0f,
+			HeadScale = 1.0f,
+		};
+	}
+
+	/// <summary>
 	/// ScriptableObject template for defining a playable race, including models, attributes, starting abilities, inventory, and equipment.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New Race", menuName = "FishMMO/Character/Race/Race", order = 1)]
@@ -47,6 +93,13 @@ namespace FishMMO.Shared
 		/// Description of the race.
 		/// </summary>
 		public string Description;
+
+		/// <summary>
+		/// Default body proportions for this race. Applied via bone scaling on character spawn.
+		/// Examples: Human (all 1.0), Dwarf (Height 0.75, LegLength 0.70, ArmLength 0.85),
+		/// Elf (Height 1.05, LegLength 1.15, ArmLength 1.10).
+		/// </summary>
+		public RaceProportions DefaultProportions = RaceProportions.Default;
 
 		/// <summary>
 		/// Initial attribute database for the race.

@@ -560,16 +560,27 @@ namespace FishMMO.Shared
 			bool denied = rd.UnpackFlags.IsFlagged(AbilityActivationFlags.Denied);
 
 			// Detect prediction mismatch: if the server's seed differs from the client's,
-			// the client mispredicted an ability activation. Destroy any ability objects
-			// spawned after the reconcile tick since they will be replayed.
+			// the client mispredicted an ability activation. Destroy ability objects
+			// spawned after the reconcile tick from the mismatched ability.
+			// If a specific ability was being activated, restrict destruction to that ability.
+			// If no ability was active (rare, indicates deeper desync), fall back to full cleanup.
 			if (rd.Seed != currentSeed)
 			{
 				uint reconcileTick = rd.GetTick();
 				OnPredictionMismatch?.Invoke(reconcileTick);
 
-				foreach (Ability ability in KnownAbilities.Values)
+				if (currentAbilityID != NO_ABILITY && KnownAbilities.TryGetValue(currentAbilityID, out Ability mismatchedAbility))
 				{
-					ability.DestroyAbilityObjectsAfterTick(reconcileTick);
+					// Only destroy objects from the ability whose activation caused the seed divergence
+					mismatchedAbility.DestroyAbilityObjectsAfterTick(reconcileTick);
+				}
+				else
+				{
+					// No active ability to attribute the mismatch to — full cleanup as safety net
+					foreach (Ability ability in KnownAbilities.Values)
+					{
+						ability.DestroyAbilityObjectsAfterTick(reconcileTick);
+					}
 				}
 			}
 

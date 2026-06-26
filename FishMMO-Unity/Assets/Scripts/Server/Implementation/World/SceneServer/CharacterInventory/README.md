@@ -21,6 +21,8 @@
 
 The Character Inventory system is the SceneServer authority for item movement across player inventory, equipment, and bank containers. It validates incoming client broadcasts, applies runtime container mutations, persists resulting state through database services, and echoes successful operations back to the originating client.
 
+> **Note:** `EquipmentController` is now part of the prediction pipeline (`IPredictableController` at Order 93). Equipment state is reconciled via `CharacterReconcileData`. The broadcast path (`EquipmentEquipItemBroadcast`/`EquipmentUnequipItemBroadcast`) handles client→server requests and echoes; attribute application is handled by the reconcile path. The legacy `EquipmentSetItemBroadcast` and `EquipmentSetMultipleItemsBroadcast` have been removed.
+
 The system is designed to keep item state deterministic by:
 - Executing container mutations on the main thread.
 - Building DTO snapshots immediately after mutation.

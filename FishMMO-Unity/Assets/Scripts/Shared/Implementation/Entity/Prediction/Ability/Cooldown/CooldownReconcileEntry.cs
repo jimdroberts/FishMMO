@@ -179,6 +179,8 @@ namespace FishMMO.Shared
 			if (isDelta)
 			{
 				int changedCount = count;
+				if (changedCount == 0)
+					return prev;
 				if (changedCount > MaxEntries)
 				{
 					Log.Warning("CooldownReconcileEntry", $"Index-delta count {changedCount} exceeds limit {MaxEntries}. Draining entries and preserving previous state.");

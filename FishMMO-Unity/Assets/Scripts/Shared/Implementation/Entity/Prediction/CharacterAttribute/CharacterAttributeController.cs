@@ -1628,6 +1628,11 @@ namespace FishMMO.Shared
 			}
 			finally
 			{
+				// Re-enable dirty tracking BEFORE draining notifications so that
+				// listener-triggered attribute mutations during EndPropagation
+				// correctly mark the snapshot as needing a rebuild.
+				suppressAttributeDirty = false;
+
 				// Isolate EndPropagation exceptions: same pattern as OnReplicate replay
 				// block — an escaped listener exception must not leave propagationDepth
 				// or isDrainingNotifications permanently corrupted.
@@ -1648,12 +1653,11 @@ namespace FishMMO.Shared
 				// catastrophic exception path that EndPropagation's own drain-cap guard
 				// may not cover (e.g. a StackOverflowException in a listener mid-drain).
 				pendingNotifications.Clear();
-				suppressAttributeDirty = false;
 				if (snapshotChanged || !completed)
 				{
-					// Explicit snapshot invalidation: suppressAttributeDirty blocked
+					// Explicit snapshot invalidation: if suppressAttributeDirty blocked
 					// CharacterAttribute_OnAttributeUpdated from marking dirty during the write
-					// pass, so cachedAttributeSnapshot may still contain pre-reconcile values.
+					// pass, cachedAttributeSnapshot may still contain pre-reconcile values.
 					// Invalidating here guarantees CreateAttributeSnapshot rebuilds on the next
 					// call and the outgoing snapshot always reflects post-reconcile state.
 					attributeSnapshotDirty = true;

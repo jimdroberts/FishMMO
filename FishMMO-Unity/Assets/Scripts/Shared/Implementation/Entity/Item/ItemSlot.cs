@@ -17,9 +17,9 @@
 		Chest,
 
 		/// <summary>
-		/// Legs slot (e.g., pants, leggings).
+		/// Shoulders slot (e.g., pauldrons, shoulder pads).
 		/// </summary>
-		Legs,
+		Shoulders,
 
 		/// <summary>
 		/// Hands slot (e.g., gloves, gauntlets).
@@ -27,18 +27,33 @@
 		Hands,
 
 		/// <summary>
+		/// Legs slot (e.g., pants, leggings).
+		/// </summary>
+		Legs,
+
+		/// <summary>
 		/// Feet slot (e.g., boots, shoes).
 		/// </summary>
 		Feet,
 
 		/// <summary>
-		/// Primary weapon slot (e.g., sword, staff).
+		/// Back slot (e.g., capes, cloaks).
+		/// </summary>
+		Back,
+
+		/// <summary>
+		/// Primary hand slot (e.g., sword, staff, wand).
 		/// </summary>
 		Primary,
 
 		/// <summary>
-		/// Secondary weapon slot (e.g., shield, offhand).
+		/// Secondary hand slot (e.g., shield, offhand, tome).
 		/// </summary>
 		Secondary,
+
+		/// <summary>
+		/// Accessory slot (e.g., rings, amulets, trinkets).
+		/// </summary>
+		Accessory,
 	}
 }

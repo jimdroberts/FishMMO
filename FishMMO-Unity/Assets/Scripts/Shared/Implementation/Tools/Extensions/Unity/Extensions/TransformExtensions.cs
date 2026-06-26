@@ -9,33 +9,27 @@ namespace FishMMO.Shared
 	public static class TransformExtensions
 	{
 		/// <summary>
-		/// The number of components expected for a bone (should only contain a Transform).
-		/// </summary>
-		private const int BONE_COMPONENT_COUNT = 1; // bones should only contain a transform component...
-
-		/// <summary>
 		/// Searches the GameObject's hierarchy and looks for a root bone.
-		/// A root bone is assumed to be a GameObject with only a Transform component.
-		/// Returns null if no root is found.
+		/// Returns the first child Transform (typically the skeleton root).
+		/// Returns null if no children exist.
 		/// </summary>
 		/// <param name="gameObject">The transform to search for a root bone.</param>
 		/// <returns>The root bone Transform, or null if not found.</returns>
 		public static Transform GetRootBone(this Transform gameObject)
 		{
-			foreach (Transform child in gameObject.transform)
+			if (gameObject.childCount > 0)
 			{
-				Component[] components = child.GetComponents<Component>();
-				if (components.Length == BONE_COMPONENT_COUNT && components[0] is Transform)
-				{
-					return child;
-				}
+				return gameObject.GetChild(0);
 			}
 			return null;
 		}
 
 		/// <summary>
 		/// Recursively collects all bones in the hierarchy starting from the root bone.
-		/// Only includes transforms with exactly one component (Transform).
+		/// All child Transforms are included regardless of additional components.
+		/// Previously restricted to Transforms with exactly one component — this caused
+		/// equipment binding failures when artists added scripts, colliders, or other
+		/// components to bone GameObjects.
 		/// </summary>
 		/// <param name="transform">The transform to search for bones.</param>
 		/// <returns>Dictionary mapping bone names to their Transform objects.</returns>
@@ -49,18 +43,15 @@ namespace FishMMO.Shared
 			{
 				stack.Push(root);
 
-				// Iterate children using a stack for depth-first traversal
+				// Iterate children using a stack for depth-first traversal.
+				// Include ALL child Transforms — artists may add components to bones.
 				while (stack.Count > 0)
 				{
 					Transform current = stack.Pop();
 					bones.Add(current.name, current);
 					foreach (Transform child in current)
 					{
-						Component[] components = child.GetComponents<Component>();
-						if (components.Length == BONE_COMPONENT_COUNT && components[0] is Transform)
-						{
-							stack.Push(child);
-						}
+						stack.Push(child);
 					}
 				}
 			}

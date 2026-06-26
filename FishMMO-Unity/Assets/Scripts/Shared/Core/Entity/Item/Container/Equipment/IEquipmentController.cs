@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
 {
@@ -8,6 +9,16 @@ namespace FishMMO.Shared.Core
 	/// </summary>
 	public interface IEquipmentController : ICharacterBehaviour, IItemContainer
 	{
+		/// <summary>
+		/// Fired after an item is successfully equipped. Subscribers receive the item and the slot.
+		/// </summary>
+		event Action<Item, ItemSlot> OnItemEquipped;
+
+		/// <summary>
+		/// Fired after an item is successfully unequipped. Subscribers receive the item and the slot.
+		/// </summary>
+		event Action<Item, ItemSlot> OnItemUnequipped;
+
 		/// <summary>
 		/// Triggers invoked when this character equips an item. EventData: EquipItemEventData.
 		/// </summary>

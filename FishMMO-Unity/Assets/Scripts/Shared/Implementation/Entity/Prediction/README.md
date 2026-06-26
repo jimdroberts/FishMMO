@@ -23,7 +23,7 @@
 
 FishNet's Prediction V2 allows only one `[Replicate]`/`[Reconcile]` pair per `NetworkObject` to work correctly. `CharacterPredictionController` solves this by acting as the single `NetworkBehaviour` entry point for the entire prediction pipeline. On `Awake()` it discovers all `IPredictableController` components on the same `GameObject`, sorts them by `Order`, and drives them through a unified tick cycle: `PopulateInput` → `Replicate` → `CreateReconcile` → `Reconcile`.
 
-Subsystems (movement, buffs, cooldowns, attributes, abilities) implement `IPredictableController` and declare an `Order` value to control execution sequence. They never carry `[Replicate]`/`[Reconcile]` attributes themselves — all prediction traffic flows through the shared `CharacterReplicateData` and `CharacterReconcileData` structs, which are delta-serialized to minimize bandwidth.
+Subsystems (movement, buffs, cooldowns, equipment, attributes, abilities) implement `IPredictableController` and declare an `Order` value to control execution sequence. They never carry `[Replicate]`/`[Reconcile]` attributes themselves — all prediction traffic flows through the shared `CharacterReplicateData` and `CharacterReconcileData` structs, which are delta-serialized to minimize bandwidth.
 
 ## Supported Platforms
 
@@ -53,6 +53,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 | `KCCPlayer`                      | 80    | Movement input, motor simulation, camera state       |
 | `BuffController`                 | 85    | Buff tick/expiry, reconcile buff snapshots           |
 | `CooldownController`             | 90    | Cooldown expiry, reconcile cooldown snapshots        |
+| `EquipmentController`            | 93    | Equipment state, attribute modifiers, reconcile equip|
 | `CharacterAttributeController`   | 95    | Resource regeneration, reconcile resource state      |
 | `AbilityController`              | 100   | Ability activation, spawning, RNG seed reconcile     |
 
@@ -165,6 +166,7 @@ Unified per-tick authoritative state struct.
 | `ResourceState`     | `CharacterAttributeResourceState` | Attribute  | Health/Mana/Stamina current + max values          |
 | `Cooldowns`         | `CooldownReconcileEntry[]`        | Cooldown   | Active cooldown snapshots (index-delta, ref-eq shortcut)  |
 | `Buffs`             | `BuffReconcileEntry[]`            | Buff       | Active buff snapshots (index-delta, ref-eq shortcut)      |
+| `Equipment`         | `EquipmentReconcileEntry[]`       | Equipment  | Equipped item snapshots (TemplateID, Slot, Seed, InstanceID) — field 11 (bit 10) |
 | `Attributes`        | `AttributeReconcileEntry[]`       | Attribute  | Non-resource attribute snapshots (Value + ExternalModifier), sorted by `TemplateID` |
 | `RngS0`–`RngS3`     | `uint` × 4                        | Ability    | Full xoshiro128** RNG internal state                      |
 
@@ -218,7 +220,7 @@ AbilityController (Order=100)  → Activates abilities, checks cooldowns + resou
 | `IsSpawned` gate | Break in `CreateReconcile` | Guarded by `IsServerStarted && IsSpawned`; reconciles are dropped before the `NetworkObject` is fully spawned to avoid NREs through partially-wired subsystems |
 | Delta serialization | Monitor network traffic | Unchanged ticks transmit minimal bytes (bitmask-only for structs, skipped for reference-equal arrays) |
 | Replay determinism | Cause a reconcile | All controllers replay from the reconcile tick with identical results |
-| Order enforcement | Log `Order` values in `Awake()` | Sorted ascending: 80, 85, 90, 95, 100 |
+| Order enforcement | Log `Order` values in `Awake()` | Sorted ascending: 80, 85, 90, 93, 95, 100 |
 
 ## System Architecture (Mermaid)
 
@@ -441,6 +443,7 @@ TimeManager.OnTick()
 │  ┌─ KCCPlayer.PopulateInput          (Order=80)  │
 │  ├─ BuffController.PopulateInput     (Order=85)  │ ← no-op
 │  ├─ CooldownController.PopulateInput (Order=90)  │ ← no-op
+│  ├─ EquipmentController.PopulateInput(Order=93)  │ ← no-op
 │  ├─ CharacterAttributeController     (Order=95)  │ ← no-op
 │  └─ AbilityController.PopulateInput  (Order=100) │
 │                                                  │
@@ -519,6 +522,7 @@ Prediction/
 │   ├── Snapshot/                               # SnapshotCharacter / SnapshotAttributeController
 │   └── Template/                               # AbilityTemplate, AbilityType, AbilitySpawnTarget, Pet*, Events/
 ├── Buff/                                       # Buff system (see Buff/README.md)
+├── Equipment/                                  # Equipment state reconcile (EquipmentController, EquipmentReconcileEntry)
 │   ├── Buff.cs                                 # Per-buff state holder
 │   ├── BuffController.cs                       # IPredictableController (Order=85)
 │   ├── BuffReconcileEntry.cs                   # (TemplateID, ExpiryTick, NextTickTick, Stacks) + array-delta
@@ -563,6 +567,7 @@ IPredictableController                  # Implemented by all subsystem controlle
 ├── KCCPlayer              (Order=80)
 ├── BuffController         (Order=85)
 ├── CooldownController     (Order=90)
+├── EquipmentController    (Order=93)
 ├── CharacterAttributeController (Order=95)
 └── AbilityController      (Order=100)
 ```

@@ -37,11 +37,14 @@ namespace FishMMO.Client
 		{
 			"slot-head",      // ItemSlot.Head      = 0
 			"slot-chest",     // ItemSlot.Chest     = 1
-			"slot-legs",      // ItemSlot.Legs      = 2
+			"slot-shoulders", // ItemSlot.Shoulders = 2
 			"slot-hands",     // ItemSlot.Hands     = 3
-			"slot-feet",      // ItemSlot.Feet      = 4
-			"slot-mainhand",  // ItemSlot.Primary   = 5
-			"slot-offhand",   // ItemSlot.Secondary = 6
+			"slot-legs",      // ItemSlot.Legs      = 4
+			"slot-feet",      // ItemSlot.Feet      = 5
+			"slot-back",      // ItemSlot.Back      = 6
+			"slot-mainhand",  // ItemSlot.Primary   = 7
+			"slot-offhand",   // ItemSlot.Secondary = 8
+			"slot-accessory", // ItemSlot.Accessory = 9
 		};
 
 		// ── USS class names ───────────────────────────────────────────────────

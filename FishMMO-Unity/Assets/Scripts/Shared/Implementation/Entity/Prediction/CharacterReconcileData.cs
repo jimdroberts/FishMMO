@@ -91,6 +91,13 @@ namespace FishMMO.Shared
 		public BuffReconcileEntry[] Buffs;
 
 		/// <summary>
+		/// Snapshot of equipped items at the reconcile tick.
+		/// Only filled slots are included — empty slots are omitted.
+		/// Null when no items are equipped.
+		/// </summary>
+		public EquipmentReconcileEntry[] Equipment;
+
+		/// <summary>
 		/// Snapshot of all non-resource character attributes (base value + external modifier) at the reconcile tick.
 		/// Null when the controller is uninitialized or has no attributes.
 		/// <para>

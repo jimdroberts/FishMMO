@@ -1059,31 +1059,9 @@ namespace FishMMO.Shared
 				snapshotDirty = true;
 			}
 
-			// Fire add/remove events ONCE per reconcile (not per resimulated tick) so the UI
-			// duration bar, sound system, and ECA buff triggers see authoritative
-			// add/removes that were not locally predicted. Without this, a buff created
-			// purely by the server's authoritative state silently appears in the
-			// dictionary but no listener ever learns about it.
-			for (int i = 0; i < reconcileAddedEvents.Count; i++)
-			{
-				Buff added = reconcileAddedEvents[i];
-				if (added.Template.IsDebuff)
-				{
-					IBuffController.OnAddDebuff?.Invoke(added);
-				}
-				else
-				{
-					IBuffController.OnAddBuff?.Invoke(added);
-				}
-				BuffEventData eventData = new BuffEventData(Character, added);
-				if (reconcileTick != TimeManager.UNSET_TICK)
-				{
-					eventData.Add(new TickEventData(Character, new PredictionTick(reconcileTick)));
-				}
-				Character.Invoke(onBuffApplyTriggers, eventData);
-			}
-			reconcileAddedEvents.Clear();
-
+			// Fire remove events BEFORE add events so that subscribers iterating the
+			// active buff collection during an "add" handler see the post-remove state.
+			// This matches the natural order: old buffs are removed, then new buffs are added.
 			for (int i = 0; i < reconcileRemovedEvents.Count; i++)
 			{
 				Buff removed = reconcileRemovedEvents[i];
@@ -1103,6 +1081,26 @@ namespace FishMMO.Shared
 				Character.Invoke(onBuffRemoveTriggers, eventData);
 			}
 			reconcileRemovedEvents.Clear();
+
+			for (int i = 0; i < reconcileAddedEvents.Count; i++)
+			{
+				Buff added = reconcileAddedEvents[i];
+				if (added.Template.IsDebuff)
+				{
+					IBuffController.OnAddDebuff?.Invoke(added);
+				}
+				else
+				{
+					IBuffController.OnAddBuff?.Invoke(added);
+				}
+				BuffEventData eventData = new BuffEventData(Character, added);
+				if (reconcileTick != TimeManager.UNSET_TICK)
+				{
+					eventData.Add(new TickEventData(Character, new PredictionTick(reconcileTick)));
+				}
+				Character.Invoke(onBuffApplyTriggers, eventData);
+			}
+			reconcileAddedEvents.Clear();
 		}
 
 		/// <summary>

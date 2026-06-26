@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 	public class EquipItemAction : BaseAction
 	{
 		/// <summary>
-		/// Equips the item specified in the <see cref="ItemEventData"/> onto the initiator's <see cref="EquipmentController"/>.
+		/// Equips the item specified in the <see cref="ItemEventData"/> onto the initiator's <see cref="IEquipmentController"/>.
 		/// </summary>
 		/// <param name="initiator">The character performing the equip.</param>
 		/// <param name="eventData">Event data containing the <see cref="ItemEventData"/> with item and slot information.</param>
@@ -41,9 +41,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!initiator.TryGet(out EquipmentController equipmentController))
+			if (!initiator.TryGet(out IEquipmentController equipmentController))
 			{
-				Log.Warning("EquipItemAction", "Initiator does not have an EquipmentController.");
+				Log.Warning("EquipItemAction", "Initiator does not have an IEquipmentController.");
 				return;
 			}
 
