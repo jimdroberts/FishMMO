@@ -858,7 +858,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					if (!CharacterStateValidation.CanAct(pc))
+					IPlayerCharacter player = conn.FirstObject?.GetComponent<IPlayerCharacter>();
+					if (!CharacterStateValidation.CanAct(player))
 						return;
 
 					pc.ID = newPartyID;
@@ -1133,7 +1134,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 					
-					if (!CharacterStateValidation.CanAct(pc))
+					IPlayerCharacter player = conn.FirstObject?.GetComponent<IPlayerCharacter>();
+					if (!CharacterStateValidation.CanAct(player))
 						return;
 
 					pc.ID = partyID;

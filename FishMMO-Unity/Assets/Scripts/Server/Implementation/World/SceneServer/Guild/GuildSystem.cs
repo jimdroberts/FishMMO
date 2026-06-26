@@ -1186,7 +1186,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
-				if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData) && CharacterStateValidation.CanAct(pc))
+				if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData) && CharacterStateValidation.CanAct(character))
 				{
 					runtimeData.RemovePendingInvitation(character.ID);
 				}
