@@ -878,8 +878,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (PartyCreateAchievementTemplate != null)
 					{
 						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-						
-						if (character != null && character.TryGet(out IAchievementController achievementController))
+			
+						if (character != null && character.TryGet(out IAchievementController achievementController) && CharacterStateValidation.CanAct(character))
 						{
 							achievementController.Increment(PartyCreateAchievementTemplate, 1);
 						}
@@ -1161,8 +1161,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (PartyJoinAchievementTemplate != null)
 					{
 						IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-						
-						if (character != null && character.TryGet(out IAchievementController achievementController))
+			
+						if (character != null && character.TryGet(out IAchievementController achievementController) && CharacterStateValidation.CanAct(character))
 						{
 							achievementController.Increment(PartyJoinAchievementTemplate, 1);
 						}

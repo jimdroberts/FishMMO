@@ -36,7 +36,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Gets the list of items contained in this container.
 		/// </summary>
-		public List<Item> Items { get { return items; } }
+		public List<Item> Items { get { return items; } } // Note: returns mutable list reference. Only server broadcast handlers should modify.
 
 		/// <summary>
 		/// Called when the container is being destroyed. Clears event handlers and locks.

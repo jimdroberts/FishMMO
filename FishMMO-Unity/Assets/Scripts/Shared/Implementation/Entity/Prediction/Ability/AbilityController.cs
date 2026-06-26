@@ -76,6 +76,12 @@ namespace FishMMO.Shared
 		private uint remainingTicks;
 
 		/// <summary>
+		/// Number of ticks the charged ability has been held beyond completion.
+		/// Reset on cancel or release. Enforces max hold duration.
+		/// </summary>
+		private uint chargedHoldTicks;
+
+		/// <summary>
 		/// The inventory slot of the consumable being activated, or -1 if none.
 		/// Used to lock the slot during activation and for reconciliation.
 		/// </summary>

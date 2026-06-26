@@ -244,12 +244,18 @@ namespace FishMMO.Shared
 				activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 			{
 				// Enforce a maximum hold duration (2x normal activation time) to prevent
-				// clients from holding charged abilities indefinitely with no resource cost.
-				if (remainingTicks < validatedAbility.ActivationTime * 2f / (float)base.TimeManager.TickDelta)
-					return;
-				Cancel(ReplicateState.Invalid, true);
+				// clients from holding charged abilities indefinitely. Track hold ticks
+				// separately since remainingTicks is already 0 when the ability finished charging.
+				chargedHoldTicks++;
+				uint maxHoldTicks = (uint)(validatedAbility.ActivationTime * 2f / (float)base.TimeManager.TickDelta);
+				if (chargedHoldTicks >= maxHoldTicks)
+				{
+					chargedHoldTicks = 0;
+					Cancel(ReplicateState.Invalid, true);
+				}
 				return;
 			}
+			chargedHoldTicks = 0;
 
 			// Activation complete — spawn the ability and finish
 			FinishAbility(validatedAbility, activationData, state);
@@ -802,6 +808,7 @@ namespace FishMMO.Shared
 
 			currentAbilityID = NO_ABILITY;
 			remainingTicks = 0;
+			chargedHoldTicks = 0;
 
 			// Clear persistent activation flags from replicated state.
 			replicatedFlags.DisableBit(AbilityActivationFlags.IsHeld);
