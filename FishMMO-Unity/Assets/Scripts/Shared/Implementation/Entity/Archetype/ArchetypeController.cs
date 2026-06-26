@@ -108,6 +108,21 @@ namespace FishMMO.Shared
 				return;
 			}
 
+#if UNITY_SERVER
+			// Server-authoritative requirements validation.
+			// The client can send any template ID in ReadPayload — the server must
+			// independently verify the character qualifies for the archetype before
+			// granting its rewards (abilities, items, buffs, titles, attributes).
+			if (base.IsServerStarted)
+			{
+				if (!template.MeetsRequirements(PlayerCharacter))
+				{
+					Log.Warning("ArchetypeController", $"Character {Character?.ID} does not meet requirements for archetype {template.Name} ({template.ID}).");
+					return;
+				}
+			}
+#endif
+
 			ArchetypeTemplate oldTemplate = Template;
 			Template = template;
 

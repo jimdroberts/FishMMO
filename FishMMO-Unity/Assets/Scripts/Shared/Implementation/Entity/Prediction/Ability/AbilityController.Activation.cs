@@ -721,6 +721,24 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
+
+			// Server-authoritative range validation: verify the target is within
+			// the ability's effective range before allowing activation. The server
+			// enforces range again during ResolveTargetAndSpawn via raycast, but
+			// this check prevents the cast bar and resource prediction from
+			// starting when the target is clearly out of range.
+			float abilityRange = validatedAbility.Range;
+			if (abilityRange > 0f &&
+				cachedTargetController != null &&
+				cachedTargetController.Current.Target != null)
+			{
+				Vector3 targetPos = cachedTargetController.Current.Target.position;
+				float distSqr = (Character.Transform.position - targetPos).sqrMagnitude;
+				if (distSqr > abilityRange * abilityRange)
+				{
+					return false;
+				}
+			}
 			return true;
 		}
 

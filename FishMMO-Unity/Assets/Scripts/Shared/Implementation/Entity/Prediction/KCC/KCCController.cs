@@ -366,6 +366,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void SetInputs(ref KCCInputReplicateData inputs)
 		{
+			// Validate camera rotation to prevent clients from sending arbitrary
+			// rotations to manipulate movement direction. A hacked client could
+			// otherwise move in any direction regardless of camera orientation.
+			float qDot = Quaternion.Dot(inputs.CameraRotation, inputs.CameraRotation);
+			if (qDot < 0.99f || qDot > 1.01f ||
+				float.IsNaN(inputs.CameraRotation.w) || float.IsInfinity(inputs.CameraRotation.w) ||
+				float.IsNaN(inputs.CameraRotation.x) || float.IsInfinity(inputs.CameraRotation.x) ||
+				float.IsNaN(inputs.CameraRotation.y) || float.IsInfinity(inputs.CameraRotation.y) ||
+				float.IsNaN(inputs.CameraRotation.z) || float.IsInfinity(inputs.CameraRotation.z))
+			{
+				inputs.CameraRotation = Quaternion.identity;
+			}
+
 			VirtualCameraPosition = inputs.CameraPosition;
 			VirtualCameraRotation = inputs.CameraRotation;
 
@@ -605,6 +618,13 @@ namespace FishMMO.Shared
 					targetSpeed = Constants.Character.SprintSpeed;
 				}
 			}
+
+
+			// Server-authoritative speed cap — prevents super-speed exploits from
+			// stacking movement buffs or attribute calculation bugs producing
+			// unbounded target velocities.
+			const float MaxAllowedSpeed = Constants.Character.SprintSpeed * 3.0f;
+			targetSpeed = Mathf.Min(targetSpeed, MaxAllowedSpeed);
 
 			Vector3 targetMovementVelocity = reorientedInput * targetSpeed;
 

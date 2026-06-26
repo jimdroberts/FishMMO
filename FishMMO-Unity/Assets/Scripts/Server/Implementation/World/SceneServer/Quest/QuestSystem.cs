@@ -275,6 +275,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Cap increment amount to prevent overflow or single-call completion
+			// exploits. No legitimate gameplay scenario should require incrementing
+			// more than the total required value in a single event.
+			long requiredValue = objective.Template != null ? objective.Template.RequiredValue : long.MaxValue;
+			if (amount > requiredValue)
+			{
+				amount = requiredValue;
+			}
+
 			objective.Increment(amount);
 
 			SendQuestUpdate(playerCharacter, quest);

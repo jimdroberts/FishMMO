@@ -6,6 +6,7 @@ using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 using FishMMO.Database;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System.Collections.Generic;
 using System.Linq;
@@ -111,7 +112,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						}
 						if (!character.TryGet(out ICharacterAttributeController attributeController) ||
 							!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-							currency.FinalValue < itemTemplate.Price)
+							currency.FinalValue < itemTemplate.Price ||
+							itemTemplate.Price <= 0)
 						{
 							return;
 						}
@@ -121,6 +123,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						if (SendNewItemBroadcast(conn, character, inventoryController, newItem))
 						{
 							currency.AddValue(-itemTemplate.Price);
+
+							// Persist the currency deduction to the database.
+							// Without this, server restart would restore the full currency
+							// while the purchased item remains — an infinite money exploit.
+							PersistMerchantAttributesAsync(character);
 						}
 						break;
 					case MerchantTabType.Ability:
@@ -286,6 +293,78 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				t => t.Price,
 				t => new KnownAbilityEventAddBroadcast { TemplateID = t.ID }
 			);
+		}
+
+		/// <summary>
+		/// Persists character attribute data (including currency) to the database after a merchant purchase.
+		/// Prevents currency rollback on server restart.
+		/// </summary>
+		private void PersistMerchantAttributesAsync(IPlayerCharacter character)
+		{
+			if (character == null ||
+				!character.TryGet(out ICharacterAttributeController attributeController))
+			{
+				return;
+			}
+
+			long charID = character.ID;
+
+			var dtos = new List<CharacterAttributeData>();
+			foreach (var kvp in attributeController.Attributes)
+			{
+				kvp.Value.Version++;
+				dtos.Add(new CharacterAttributeData(
+					id: 0,
+					version: kvp.Value.Version,
+					characterID: charID,
+					templateID: kvp.Key,
+					value: kvp.Value.Value,
+					currentValue: 0.0f
+				));
+			}
+			foreach (var kvp in attributeController.ResourceAttributes)
+			{
+				kvp.Value.Version++;
+				dtos.Add(new CharacterAttributeData(
+					id: 0,
+					version: kvp.Value.Version,
+					characterID: charID,
+					templateID: kvp.Key,
+					value: kvp.Value.Value,
+					currentValue: kvp.Value.CurrentValue
+				));
+			}
+
+			if (dtos.Count > 0)
+			{
+				TryEnqueueAsyncWork(() => PersistMerchantAttributesToDbAsync(dtos, charID), charID);
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously persists attribute changes from merchant purchases to the database.
+		/// </summary>
+		private async System.Threading.Tasks.Task PersistMerchantAttributesToDbAsync(List<CharacterAttributeData> dtos, long charID)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterAttributeService>(out var service))
+				{
+					await Log.Error("InteractableSystem", "PersistMerchantAttributesToDbAsync: Failed to resolve ICharacterAttributeService");
+					return;
+				}
+
+				DatabaseResult result = await service.PersistAsync(dtos);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"PersistMerchantAttributesToDbAsync DB error (CharID={charID}, {dtos.Count} attrs): {result.ErrorCode} - {result.ErrorMessage}");
+				}
+			}
+			catch (System.Exception ex)
+			{
+				await Log.Error("InteractableSystem", $"PersistMerchantAttributesToDbAsync failed (CharID={charID}): {ex}");
+			}
 		}
 	}
 }

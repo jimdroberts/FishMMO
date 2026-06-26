@@ -40,11 +40,42 @@ namespace FishMMO.Shared
 			}
 
 			int remaining = Amount;
+			int targetTemplateID = ItemTemplate.ID;
 			List<Item> items = inventoryController.Items;
 			for (int i = 0; i < items.Count && remaining > 0; i++)
 			{
 				Item item = items[i];
-				if (item != null && item.Template == ItemTemplate)
+				if (item == null || item.Template == null)
+				{
+					continue;
+				}
+
+				// Compare by template ID, not reference equality.
+				// Templates loaded from different Addressable paths may not be
+				// reference-equal even when they represent the same template.
+				if (item.Template.ID != targetTemplateID)
+				{
+					continue;
+				}
+
+				if (item.IsStackable && item.Stackable != null)
+				{
+					// For stackable items, reduce the stack amount rather than
+					// destroying the entire item. Removing the whole stack when
+					// only a portion is needed causes massive item loss.
+					uint stackAmount = item.Stackable.Amount;
+					if (stackAmount <= (uint)remaining)
+					{
+						inventoryController.RemoveItem(i);
+						remaining -= (int)stackAmount;
+					}
+					else
+					{
+						item.Stackable.Amount -= (uint)remaining;
+						remaining = 0;
+					}
+				}
+				else
 				{
 					inventoryController.RemoveItem(i);
 					remaining--;

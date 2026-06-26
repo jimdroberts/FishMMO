@@ -111,6 +111,45 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
+			// Server-authoritative ownership validation: verify the player actually
+			// owns the item, equipment, or ability they are attempting to bind.
+			// Without this check, a client can bind any ID regardless of ownership.
+			switch ((ReferenceButtonType)incomingData.Type)
+			{
+				case ReferenceButtonType.Inventory:
+					if (incomingData.ReferenceID >= 0)
+					{
+						if (!playerCharacter.TryGet(out IInventoryController inventoryController) ||
+							!inventoryController.IsValidSlot(incomingData.ReferenceID) ||
+							!inventoryController.TryGetItem(incomingData.ReferenceID, out _))
+						{
+							return false;
+						}
+					}
+					break;
+				case ReferenceButtonType.Equipment:
+					if (incomingData.ReferenceID >= 0)
+					{
+						if (!playerCharacter.TryGet(out IEquipmentController equipmentController) ||
+							!equipmentController.IsValidSlot((ItemSlot)incomingData.ReferenceID) ||
+							!equipmentController.TryGetItem((ItemSlot)incomingData.ReferenceID, out _))
+						{
+							return false;
+						}
+					}
+					break;
+				case ReferenceButtonType.Ability:
+					if (incomingData.ReferenceID >= 0)
+					{
+						if (!playerCharacter.TryGet(out IAbilityController abilityController) ||
+							!abilityController.KnowsAbility(incomingData.ReferenceID))
+						{
+							return false;
+						}
+					}
+					break;
+			}
+
 			playerCharacter.Hotkeys[slot] = new HotkeyData()
 			{
 				Type = incomingData.Type,

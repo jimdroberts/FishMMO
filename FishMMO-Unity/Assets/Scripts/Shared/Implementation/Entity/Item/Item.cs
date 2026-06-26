@@ -79,6 +79,12 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Constructs an item from a template and amount, initializing stackable logic if needed.
+		/// <para>
+		/// IMPORTANT: This constructor creates items with ID=0. It must only be used for
+		/// temporary or display-only items. For gameplay items that will be persisted, use
+		/// <see cref="Item(long, int, BaseItemTemplate, uint)"/> instead to ensure a unique
+		/// database-safe ID is assigned.
+		/// </para>
 		/// </summary>
 		/// <param name="template">The item template.</param>
 		/// <param name="amount">The stack amount.</param>
@@ -86,19 +92,9 @@ namespace FishMMO.Shared
 		{
 			Slot = -1;
 			Template = template;
-			if (amount > 0)
+			if (template != null && template.MaxStackSize > 1 && amount > 0)
 			{
-				if (Stackable == null)
-				{
-					if (Template.MaxStackSize > 1)
-					{
-						Stackable = new ItemStackable(this, amount.Clamp(1, Template.MaxStackSize));
-					}
-				}
-				else
-				{
-					Stackable.Amount = amount;
-				}
+				Stackable = new ItemStackable(this, amount.Clamp(1, template.MaxStackSize));
 			}
 		}
 
