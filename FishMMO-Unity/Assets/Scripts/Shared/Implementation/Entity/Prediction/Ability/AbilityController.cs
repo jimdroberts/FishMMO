@@ -113,6 +113,7 @@ namespace FishMMO.Shared
 		private ICharacterAttributeController cachedAttributeController;
 		private IInventoryController cachedInventoryController;
 		private ITargetController cachedTargetController;
+		private ICharacterAnimationController cachedAnimationController;
 
 		/// <summary>
 		/// Transform used as the spawn point for ability objects (e.g., projectiles).
@@ -257,6 +258,7 @@ namespace FishMMO.Shared
 			Character.TryGet(out cachedAttributeController);
 			Character.TryGet(out cachedInventoryController);
 			Character.TryGet(out cachedTargetController);
+			Character.TryGet(out cachedAnimationController);
 
 			// Eagerly initialize the deterministic RNG so the first WritePayload,
 			// OnCreateReconcile, and ResetState paths all observe the same seed.
@@ -275,6 +277,7 @@ namespace FishMMO.Shared
 			cachedAttributeController = null;
 			cachedInventoryController = null;
 			cachedTargetController = null;
+			cachedAnimationController = null;
 
 			OnUpdate = null;
 			OnInterrupt = null;
@@ -284,6 +287,38 @@ namespace FishMMO.Shared
 			OnAbilityDenied = null;
 			OnConsumableUsed = null;
 			canManipulateHandlers.Clear();
+		}
+
+		/// <summary>
+		/// Maps an <see cref="AbilityType"/> to the appropriate animation trigger on
+		/// <see cref="ICharacterAnimationController"/>.
+		/// Called from TryStartAbility on the first authoritative tick.
+		/// </summary>
+		private void TriggerAbilityAnimation(AbilityType abilityType)
+		{
+			if (cachedAnimationController == null) return;
+
+			switch (abilityType)
+			{
+				case AbilityType.Physical:
+				case AbilityType.GroundedPhysical:
+				case AbilityType.AerialPhysical:
+					cachedAnimationController.TriggerAttack();
+					break;
+				case AbilityType.Magic:
+				case AbilityType.GroundedMagic:
+				case AbilityType.AerialMagic:
+					cachedAnimationController.TriggerCast();
+					break;
+				case AbilityType.Block:
+					cachedAnimationController.SetBlocking(true);
+					break;
+				case AbilityType.Roll:
+					cachedAnimationController.TriggerRoll();
+					break;
+				default:
+					break;
+			}
 		}
 
 		public override void ResetState(bool asServer)

@@ -168,12 +168,50 @@ namespace FishMMO.Shared
 		}
 
 		/// <inheritdoc />
+		/// <remarks>
+		/// Also resets all locomotion and combat animation state so death
+		/// takes priority. Speed is zeroed, root motion is disabled, blocking
+		/// is cleared, and crouching is reset. This prevents stale parameter
+		/// values from competing with the death animation.
+		/// </remarks>
 		public void TriggerDeath()
 		{
 #if !UNITY_SERVER
 			if (animator != null)
 			{
+				// Suppress all other animation state.
+				animator.SetFloat(ParamSpeed, 0f);
+				animator.SetBool(ParamIsGrounded, true);
+				animator.SetBool(ParamIsCrouching, false);
+				animator.SetBool(ParamBlock, false);
+				animator.ResetTrigger(ParamJump);
+				animator.ResetTrigger(ParamAttack);
+				animator.ResetTrigger(ParamRoll);
+				animator.ResetTrigger(ParamCast);
+				animator.applyRootMotion = false;
+
+				// Fire death trigger last.
 				animator.SetTrigger(ParamDeath);
+			}
+#endif
+		}
+
+		/// <inheritdoc />
+		public void ResetDeath()
+		{
+#if !UNITY_SERVER
+			if (animator != null)
+			{
+				animator.ResetTrigger(ParamDeath);
+				animator.SetFloat(ParamSpeed, 0f);
+				animator.SetBool(ParamIsGrounded, true);
+				animator.SetBool(ParamIsCrouching, false);
+				animator.SetBool(ParamBlock, false);
+				animator.ResetTrigger(ParamJump);
+				animator.ResetTrigger(ParamAttack);
+				animator.ResetTrigger(ParamRoll);
+				animator.ResetTrigger(ParamCast);
+				animator.applyRootMotion = false;
 			}
 #endif
 		}

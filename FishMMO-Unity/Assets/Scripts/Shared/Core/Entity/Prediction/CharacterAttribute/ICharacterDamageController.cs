@@ -20,6 +20,11 @@ namespace FishMMO.Shared.Core
 		static Action<ICharacter, ICharacter> OnKilled;
 
 		/// <summary>
+		/// Event invoked when a character is resurrected. Params: resurrector, resurrected.
+		/// </summary>
+		static Action<ICharacter, ICharacter> OnResurrected;
+
+		/// <summary>
 		/// Event invoked when a character is healed. Parameters: healer, healed, amount.
 		/// </summary>
 		static Action<ICharacter, ICharacter, int> OnHealed;
@@ -68,5 +73,13 @@ namespace FishMMO.Shared.Core
 		/// Fully heals the character to maximum resource value.
 		/// </summary>
 		void CompleteHeal();
+
+		/// <summary>
+		/// Revives (resurrects) a dead character, setting health to the given amount.
+		/// Unlike Heal(), this works when CurrentValue is 0. Resets death animation.
+		/// </summary>
+		/// <param name="resurrector">The character performing the resurrection, or null.</param>
+		/// <param name="amount">The amount of health to restore.</param>
+		void Revive(ICharacter resurrector, int amount);
 	}
 }

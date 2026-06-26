@@ -55,6 +55,20 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool IsCharmable;
 
+		[Header("Corpse Decay")]
+		[Tooltip("Seconds the corpse remains visible after death before returning to the object pool.")]
+		public float CorpseDecayDuration = 30f;
+
+		/// <summary>
+		/// Whether the NPC is currently in corpse state (dead but still visible).
+		/// </summary>
+		private bool isCorpse;
+
+		/// <summary>
+		/// Remaining seconds before the corpse returns to the object pool.
+		/// </summary>
+		private float corpseDecayTimer;
+
 		/// <summary>
 		/// Database of attribute bonuses for this NPC.
 		/// </summary>
@@ -119,28 +133,37 @@ namespace FishMMO.Shared
 			}
 		}
 #else
-			// Ensure the NPC is initialized on the server.
-
 			// Register this NPC in the scene object registry on the server.
+			// SceneObject registration only needs to happen once per object lifetime.
 			SceneObject.Register(this);
-
-			// If the RNG hasn't been instantiated, create it and generate a seed on the server.
-			if (npcRNG == null)
-			{
-				npcSeed = npcSeedGenerator.Next();
-				npcRNG = new DeterministicRNG(npcSeed);
-			}
 		}
 
 		/// <summary>
-		/// Called when the server starts for this NPC. Applies attribute bonuses after any spawner overrides have been injected.
+		/// Called when the server starts for this NPC. Runs on every spawn including pool reuse.
+		/// Re-rolls the seed, RNG, gender, and name. Then applies attribute bonuses and learns abilities.
+		/// Spawner overrides (AttributeBonuses, CorpseDecayDuration) are injected before this runs.
 		/// </summary>
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
 
+			// Re-roll seed and RNG on every spawn (pool reuse).
+			// ResetState clears these when the object returns to the pool.
+			npcSeed = npcSeedGenerator.Next();
+			npcRNG = new DeterministicRNG(npcSeed);
+
+			// Regenerate gender and name for model selection and display.
+			SceneObjectNamer sceneObjectNamer = GetComponent<SceneObjectNamer>();
+			if (sceneObjectNamer != null)
+			{
+				npcGender = sceneObjectNamer.EnsureGeneratedGender();
+			}
+
 			AddNPCAttributes(true);
 			LearnNPCAbilities();
+
+			// Subscribe to the server tick for corpse decay timer.
+			base.TimeManager.OnTick += CorpseDecayTick;
 		}
 #endif
 
@@ -158,6 +181,12 @@ namespace FishMMO.Shared
 		/// <param name="asServer">Whether the reset is performed on the server.</param>
 		public override void ResetState(bool asServer)
 		{
+			// Unsubscribe from tick to prevent stale timer during pool idle.
+			if (base.TimeManager != null)
+				base.TimeManager.OnTick -= CorpseDecayTick;
+			isCorpse = false;
+			corpseDecayTimer = 0f;
+
 			base.ResetState(asServer);
 
 #if !UNITY_SERVER
@@ -232,14 +261,52 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Despawns this NPC using the assigned ObjectSpawner.
+		/// Enters corpse state or returns to pool. On first call after death, the NPC
+		/// becomes a corpse (visible, immobile, immortal) for CorpseDecayDuration seconds.
+		/// After the timer expires, the object is returned to FishNet's pool for reuse.
 		/// </summary>
 		public void Despawn()
 		{
+			if (isCorpse) return;
+
 			DisableFlags(CharacterFlags.IsLoaded);
 
+			// Enter corpse state -- stay spawned so clients see the death animation.
+			isCorpse = true;
+			corpseDecayTimer = CorpseDecayDuration;
+
+			// Disable AI so the corpse does not move or fight.
+			AIController ai = GetComponent<AIController>();
+			if (ai != null) ai.enabled = false;
+
+			// Prevent the corpse from being killed again.
+			if (TryGet(out ICharacterDamageController dc))
+				dc.Immortal = true;
+		}
+
+		/// <summary>
+		/// Returns the NPC to the object pool immediately. Called when the corpse
+		/// decay timer expires or on server shutdown.
+		/// </summary>
+		public void ReturnToPool()
+		{
+			isCorpse = false;
+			corpseDecayTimer = 0f;
 			ObjectSpawner?.Despawn(this);
 		}
+
+#if UNITY_SERVER
+		/// <summary>
+		/// Called each server tick to advance the corpse decay timer.
+		/// </summary>
+		private void CorpseDecayTick()
+		{
+			if (!isCorpse) return;
+			corpseDecayTimer -= (float)base.TimeManager.TickDelta;
+			if (corpseDecayTimer <= 0f)
+				ReturnToPool();
+		}
+#endif
 
 #if UNITY_SERVER
 		/// <summary>

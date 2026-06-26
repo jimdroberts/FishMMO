@@ -257,30 +257,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				//Log.Debug("CharacterSystem", $"PlayerCharacter: {playerCharacter.GameObject.name} Died");
 
-				if (playerCharacter.TryGet(out ICharacterDamageController damageController))
-				{
-					// Full heal the character
-					damageController.Heal(null, 999999, true);
-				}
+				// Mark the player as dead and show the death dialog.
+				// Do NOT revive or teleport here - the player chooses Respawn or Resurrect.
+				playerCharacter.EnableFlags(CharacterFlags.IsDead);
 
-				if ((playerCharacter.IsInInstance() && playerCharacter.InstanceSceneName != playerCharacter.BindScene) ||
-					(!playerCharacter.IsInInstance() && playerCharacter.SceneName != playerCharacter.BindScene))
-				{
-					// Update scene and position to bind point before saving
-					playerCharacter.SceneName = playerCharacter.BindScene;
-					playerCharacter.Motor.SetPositionAndRotationAndVelocity(playerCharacter.BindPosition, playerCharacter.Motor.Transform.rotation, Vector3.zero);
-
-					// Remove instance flag before disconnect so the save captures the correct state
-					playerCharacter.DisableFlags(CharacterFlags.IsInInstance);
-					playerCharacter.DisableFlags(CharacterFlags.IsLoaded);
-
-					// Disconnect to world server — reconnects to bind scene via World Server
-					playerCharacter.NetworkObject.Owner.Disconnect(false);
-				}
-				else
-				{
-					playerCharacter.Motor.SetPositionAndRotationAndVelocity(playerCharacter.BindPosition, Quaternion.identity, Vector3.zero);
-				}
+				// Send the death broadcast to the owning client so the death dialog appears.
+				Server.NetworkWrapper.Broadcast(playerCharacter.Owner,
+					new DeathBroadcast(), true, FishNet.Transporting.Channel.Reliable);
 			}
 			else
 			{
@@ -297,6 +280,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						if (petOwner != null)
 						{
 							OnPetKilled?.Invoke(petOwner.NetworkObject.Owner, petOwner);
+							pet.Despawn();
 						}
 					}
 					else
@@ -307,5 +291,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 		}
+	}
+
+	/// <summary>
+	/// Handles a dead player requesting respawn at their bind point.
+	/// Revives the character at full health and teleports to bind.
+	/// </summary>
+	private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
+	{
+		if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+			return;
+
+		player.DisableFlags(CharacterFlags.IsDead);
+		if (player.TryGet(out ICharacterDamageController damageController))
+			damageController.Revive(null, 999999);
+
+		if ((player.IsInInstance() && player.InstanceSceneName != player.BindScene) ||
+			(!player.IsInInstance() && player.SceneName != player.BindScene))
+		{
+			player.SceneName = player.BindScene;
+			player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);
+			player.DisableFlags(CharacterFlags.IsInInstance);
+			player.DisableFlags(CharacterFlags.IsLoaded);
+			player.NetworkObject.Owner.Disconnect(false);
+		}
+		else
+		{
+			player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, Quaternion.identity, Vector3.zero);
+		}
+	}
+
+	/// <summary>
+	/// Handles a dead player accepting a resurrect from another player.
+	/// Revives at the current position (corpse location), no teleport.
+	/// </summary>
+	private void OnClientResurrectAcceptBroadcastReceived(NetworkConnection conn, ResurrectAcceptBroadcast msg, FishNet.Transporting.Channel channel)
+	{
+		if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+			return;
+
+		player.DisableFlags(CharacterFlags.IsDead);
+		if (player.TryGet(out ICharacterDamageController damageController))
+			damageController.Revive(null, 999999);
 	}
 }

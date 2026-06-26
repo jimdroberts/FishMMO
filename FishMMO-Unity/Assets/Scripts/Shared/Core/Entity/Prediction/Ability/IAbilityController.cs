@@ -55,6 +55,11 @@ namespace FishMMO.Shared.Core
 		bool AbilityQueued { get; }
 
 		/// <summary>
+		/// Cancels the current ability immediately, clearing all activation state.
+		/// Safe to call from any context; uses default internal parameters.
+		/// </summary>
+		void Cancel();
+		/// <summary>
 		/// Interrupts the current ability, optionally specifying the attacker.
 		/// </summary>
 		/// <param name="attacker">The character causing the interruption.</param>

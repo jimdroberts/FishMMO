@@ -167,6 +167,14 @@ namespace FishMMO.Shared
 					aed.Add(new TickEventData(Character, activationData.GetPredictionTick()));
 					Character.Invoke(onAbilityActivateTriggers, aed);
 				}
+
+				// Trigger animation for this ability type on the first authoritative tick.
+				// Avoids replay flicker; observers see animation via NetworkAnimator sync.
+				if (!state.ContainsReplayed())
+				{
+					TriggerAbilityAnimation(newAbility.EffectiveType);
+				}
+
 				return true;
 			}
 			return false;
@@ -768,6 +776,12 @@ namespace FishMMO.Shared
 		/// <see cref="ProcessInterrupt"/> which fires <see cref="OnInterrupt"/> instead,
 		/// preventing double UI events on the interrupt path.
 		/// </param>
+		/// <summary>
+		/// Public parameterless Cancel required by <see cref="IAbilityController"/>.
+		/// Delegates to the internal implementation with default parameters.
+		/// </summary>
+		public void Cancel() => Cancel(ReplicateState.Invalid, false);
+
 		internal void Cancel(ReplicateState state = ReplicateState.Invalid, bool suppressCancelEvent = false)
 		{
 			//Log.Debug("Cancel");
@@ -807,6 +821,13 @@ namespace FishMMO.Shared
 			if (!suppressCancelEvent && (state == ReplicateState.Invalid || state.IsTickedCreated()))
 			{
 				OnCancel?.Invoke();
+			}
+
+			// Reset persistent animation state when any ability ends.
+			// Safe to call unconditionally on non-replay ticks.
+			if (!state.ContainsReplayed())
+			{
+				cachedAnimationController?.SetBlocking(false);
 			}
 		}
 

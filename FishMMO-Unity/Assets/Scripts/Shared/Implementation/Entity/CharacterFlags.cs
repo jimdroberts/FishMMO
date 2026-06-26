@@ -50,5 +50,10 @@
 		/// Character is currently loaded in the scene and active.
 		/// </summary>
 		IsLoaded,
+		/// <summary>
+		/// Character is dead. Prevents movement, abilities, and interaction.
+		/// Enables death dialog UI on client. Cleared on respawn or resurrect.
+		/// </summary>
+		IsDead,
 	}
 }

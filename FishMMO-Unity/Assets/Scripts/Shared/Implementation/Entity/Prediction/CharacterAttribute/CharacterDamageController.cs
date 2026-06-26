@@ -245,6 +245,13 @@ namespace FishMMO.Shared
 				buffController.RemoveAll();
 			}
 
+			// Cancel any active ability on death. Only the server cancels to avoid
+			// interfering with prediction replay. Client learns via reconcile.
+			if (base.IsServerStarted && Character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.Cancel();
+			}
+
 			// Kill the players pet
 			if (Character.TryGet(out IPetController petController) &&
 				petController.Pet != null)
@@ -253,6 +260,13 @@ namespace FishMMO.Shared
 				{
 					petCharacterDamageController.Kill(null);
 				}
+			}
+
+			// Trigger death animation BEFORE OnKilled so observers see it immediately.
+			// Also resets speed, blocking, crouching, and other animation triggers.
+			if (Character.TryGet(out ICharacterAnimationController animController))
+			{
+				animController.TriggerDeath();
 			}
 
 			ICharacterDamageController.OnKilled?.Invoke(killer, Character);
@@ -311,6 +325,30 @@ namespace FishMMO.Shared
 				float toHeal = ResourceInstance.FinalValue - ResourceInstance.CurrentValue;
 				ResourceInstance.Gain(toHeal);
 			}
+		}
+
+		/// <inheritdoc />
+		public void Revive(ICharacter resurrector, int amount)
+		{
+			if (ResourceInstance == null || amount <= 0) return;
+
+			// Gain bypasses Heal() dead-character guard -- works on CurrentValue == 0.
+			ResourceInstance.Gain(amount);
+
+			// Reset death animation on the client.
+			if (Character.TryGet(out ICharacterAnimationController animController))
+			{
+				animController.ResetDeath();
+			}
+
+			// Fire ECA resurrect triggers.
+			if (resurrector != null)
+			{
+				resurrector.Invoke(onResurrectTriggers, new EventData(resurrector, Character));
+			}
+			Character.Invoke(onResurrectedTriggers, new EventData(Character, resurrector));
+
+			ICharacterDamageController.OnResurrected?.Invoke(resurrector, Character);
 		}
 
 		/// <summary>

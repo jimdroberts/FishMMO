@@ -1,5 +1,6 @@
 using FishNet.Object;
 using System;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -17,23 +18,31 @@ namespace FishMMO.Shared
 		public NPCAttributeDatabase AttributeBonusOverride;
 
 		/// <summary>
-		/// Injects the attribute database override into the spawned NPC.
-		/// Attribute initialization is deferred to <see cref="NPC.OnStartServer"/>,
-		/// which runs after this override has been applied.
+		/// Optional corpse decay duration override. When greater than zero, overrides
+		/// the NPC prefab default. Set to 0 to use the prefab default.
+		/// </summary>
+		[Tooltip("Corpse decay duration in seconds. 0 = use prefab default.")]
+		public float CorpseDecayDurationOverride;
+
+		/// <summary>
+		/// Injects spawner-specific overrides into the spawned NPC before
+		/// <see cref="NPC.OnStartServer"/> runs.
 		/// </summary>
 		/// <param name="nob">The instantiated network object to configure.</param>
 		/// <param name="spawner">The spawner that created this object.</param>
 		public override void OnSpawned(NetworkObject nob, ObjectSpawner spawner)
 		{
-			if (AttributeBonusOverride == null)
-			{
-				return;
-			}
-
 			NPC npc = nob.GetComponent<NPC>();
-			if (npc != null)
+			if (npc == null) return;
+
+			if (AttributeBonusOverride != null)
 			{
 				npc.AttributeBonuses = AttributeBonusOverride;
+			}
+
+			if (CorpseDecayDurationOverride > 0f)
+			{
+				npc.CorpseDecayDuration = CorpseDecayDurationOverride;
 			}
 		}
 	}

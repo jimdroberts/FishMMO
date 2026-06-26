@@ -231,6 +231,8 @@ namespace FishMMO.Client
 
 			ICharacterDamageController.OnDamaged += CharacterDamageController_OnDamaged;
 			ICharacterDamageController.OnHealed += CharacterDamageController_OnHealed;
+			ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
+			ICharacterDamageController.OnResurrected += CharacterDamageController_OnResurrected;
 
 			IAchievementController.OnCompleteAchievement += AchievementController_OnCompleteAchievement;
 
@@ -460,6 +462,8 @@ namespace FishMMO.Client
 
 			ICharacterDamageController.OnDamaged -= CharacterDamageController_OnDamaged;
 			ICharacterDamageController.OnHealed -= CharacterDamageController_OnHealed;
+			ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
+			ICharacterDamageController.OnResurrected -= CharacterDamageController_OnResurrected;
 
 			IAchievementController.OnCompleteAchievement -= AchievementController_OnCompleteAchievement;
 
@@ -1396,6 +1400,28 @@ namespace FishMMO.Client
 			healEffects.EnableBit(LabelEffect.FloatUp);
 			healEffects.EnableBit(LabelEffect.FadeOut);
 			LabelMaker.Display3D(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false, healEffects);
+		}
+
+		/// <summary>
+		/// Handles local player death. Shows the death dialog.
+		/// </summary>
+		public void CharacterDamageController_OnKilled(ICharacter killer, ICharacter victim)
+		{
+			if (victim == null) return;
+			if (!victim.NetworkObject.IsOwner) return;
+			if (UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog deathDialog))
+				deathDialog.ShowDeathDialog();
+		}
+
+		/// <summary>
+		/// Handles local player resurrection. Hides the death dialog.
+		/// </summary>
+		public void CharacterDamageController_OnResurrected(ICharacter resurrector, ICharacter resurrected)
+		{
+			if (resurrected == null) return;
+			if (!resurrected.NetworkObject.IsOwner) return;
+			if (UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog deathDialog))
+				deathDialog.Hide();
 		}
 
 		/// <summary>

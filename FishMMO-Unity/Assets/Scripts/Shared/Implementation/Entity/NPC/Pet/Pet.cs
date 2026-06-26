@@ -85,6 +85,15 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Overrides NPC.Despawn to skip the corpse decay timer. Pets despawn
+		/// immediately since they are tied to their owner's lifecycle.
+		/// </summary>
+		public new void Despawn()
+		{
+			ReturnToPool();
+		}
+
+		/// <summary>
 		/// Copies the given ability IDs into this pet's <see cref="PetAbilityIDs"/>.
 		/// </summary>
 		/// <param name="abilities">List of ability template IDs to learn.</param>

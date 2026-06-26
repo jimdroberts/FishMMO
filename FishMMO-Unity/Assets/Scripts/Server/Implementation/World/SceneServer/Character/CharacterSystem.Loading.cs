@@ -416,6 +416,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Initialize motor at the spawn position to match the teleport path.
+			// Without this, the motor's internal velocity/tick/grounding state is uninitialized
+			// and the first tick may miss ground detection with the 0.005f minimum probe.
+			character.Motor.SetPositionAndRotationAndVelocity(position, rotation, Vector3.zero);
+
 			// Populate character fields from CharacterData
 			character.ID = charData.ID;
 			character.CharacterName = charData.Name;
@@ -807,6 +812,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Ensure the character is marked as loaded so that controllers can check this flag to prevent actions before the character is fully in the world
 				character.EnableFlags(CharacterFlags.IsLoaded);
+
+				// If the player was dead when they loaded into the scene,
+				// re-send the death broadcast so the death dialog reappears.
+				// Handles reconnect-while-dead and scene transitions.
+				if (character.IsFlagged(CharacterFlags.IsDead))
+				{
+					Server.NetworkWrapper.Broadcast(conn,
+						new DeathBroadcast(), true, FishNet.Transporting.Channel.Reliable);
+				}
 
 				// Spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn, scene);

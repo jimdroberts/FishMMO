@@ -49,9 +49,17 @@ namespace FishMMO.Shared
 		void TriggerCast();
 
 		/// <summary>
-		/// Triggers the death animation.
+		/// Triggers the death animation and suppresses all other animation state.
 		/// </summary>
 		void TriggerDeath();
+
+		/// <summary>
+		/// Resets the death animation state and restores default locomotion params.
+		/// Called on resurrection or when death was mispredicted (reconcile correction).
+		/// Resets Death trigger, clears Speed to 0, restores Grounded/Crouching defaults,
+		/// and clears any lingering Attack/Cast/Roll/Jump/Block state.
+		/// </summary>
+		void ResetDeath();
 
 		/// <summary>
 		/// Enables or disables root motion on the Animator.

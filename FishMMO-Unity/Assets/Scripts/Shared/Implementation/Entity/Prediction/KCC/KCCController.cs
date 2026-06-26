@@ -110,6 +110,15 @@ namespace FishMMO.Shared
 		public Quaternion VirtualCameraRotation { get; private set; }
 		public bool IsJumping { get; private set; }
 
+		/// <summary>
+		/// Tracks whether the motor has completed its first ground probe. On the very first tick
+		/// after spawn or teleport, the motor's ground probe distance is forced to the minimum
+		/// (0.005f) because LastMovementIterationFoundAnyGround is false. Seeding this flag
+		/// forces a full-radius probe on the first tick, preventing the character from appearing
+		/// airborne/jumping for 1-3 frames.
+		/// </summary>
+		private bool hasDoneInitialGroundProbe = false;
+
 		private void Awake()
 		{
 			// Handle initial state
@@ -198,6 +207,9 @@ namespace FishMMO.Shared
 
 		public void ApplyState(KinematicCharacterMotorState state)
 		{
+			// Reset initial ground probe on state restore (teleport / reconcile).
+			hasDoneInitialGroundProbe = false;
+
 			// Take any state needed for the controller here
 			isCrouching = state.IsCrouching;
 			jumpRequested = state.JumpRequested;
@@ -289,6 +301,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void BeforeCharacterUpdate(float deltaTime)
 		{
+			// On the first tick after spawn or teleport, seed the motor ground-probe
+			// history so it uses a full capsule-radius probe instead of the 0.005f
+			// minimum. Without this, characters appear airborne for 1-3 frames.
+			if (!hasDoneInitialGroundProbe)
+			{
+				Motor.LastMovementIterationFoundAnyGround = true;
+				hasDoneInitialGroundProbe = true;
+			}
 		}
 
 		/// <summary>
