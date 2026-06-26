@@ -22,6 +22,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		private static bool isBuildInProgress = false;
 		private static readonly object buildLock = new object();
 
+		/// <summary>CustomBuildTool method.</summary>
+		/// <returns>The result of the operation.</returns>
 		public CustomBuildTool(
 			IBuildConfigurator configurator,
 			IBuildExecutor executor,
@@ -114,6 +116,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 		}
 
+		/// <summary>Updates the linker XML file by scanning project assemblies.</summary>
 		public static void UpdateLinker()
 		{
 			try

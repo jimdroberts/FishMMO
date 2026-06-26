@@ -6,10 +6,15 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	[CustomPropertyDrawer(typeof(TemplateReferenceAttribute))]
+	/// <summary>TemplateReferenceDrawer class definition.</summary>
 	public class TemplateReferenceDrawer : PropertyDrawer
 	{
 		private static readonly Dictionary<Type, Dictionary<int, ScriptableObject>> idToAssetCache = new Dictionary<Type, Dictionary<int, ScriptableObject>>();
 
+		/// <summary>Draws the custom property drawer GUI with an object picker for template references.</summary>
+		/// <param name="position">The position parameter.</param>
+		/// <param name="property">The property parameter.</param>
+		/// <param name="label">The label parameter.</param>
 		public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
 		{
 			if (property.propertyType != SerializedPropertyType.Integer)

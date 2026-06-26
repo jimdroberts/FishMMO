@@ -18,6 +18,7 @@ namespace FishMMO.Shared
 		/// If loading fails, creates a new asset and adds it to Addressables.
 		/// </summary>
 		//[MenuItem("FishMMO/Rebuild World Scene Details", priority = -10)]
+		/// <summary>Rebuilds the WorldSceneDetailsCache asset, loading or creating it as needed.</summary>
 		public static void Rebuild()
 		{
 			// Try loading the addressable asset asynchronously

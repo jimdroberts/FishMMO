@@ -43,12 +43,16 @@ namespace FishMMO.Shared
 
 		private struct ConnectionState
 		{
+			/// <summary>The isconnecting value.</summary>
 			public bool IsConnecting;
+			/// <summary>The fromnodeindex value.</summary>
 			public int FromNodeIndex;
+			/// <summary>The fromchoiceindex value.</summary>
 			public int FromChoiceIndex;
 		}
 
 		[MenuItem("FishMMO/Dialogue Tree Editor")]
+		/// <summary>Opens the Dialogue Tree Editor window from the menu.</summary>
 		public static void ShowWindow()
 		{
 			var window = GetWindow<DialogueTreeEditorWindow>("Dialogue Tree Editor");
@@ -962,6 +966,7 @@ namespace FishMMO.Shared
 	[CustomEditor(typeof(DialogueTemplate))]
 	public class DialogueTemplateEditor : Editor
 	{
+		/// <summary>Draws the custom inspector GUI with a button to open the visual editor.</summary>
 		public override void OnInspectorGUI()
 		{
 			if (GUILayout.Button("Open Dialogue Tree Editor", GUILayout.Height(30)))

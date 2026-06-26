@@ -17,6 +17,7 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
+	/// <summary>AddressableLoadProcessor class definition.</summary>
 	public static class AddressableLoadProcessor
 	{
 		private static AddressableLoadHelper helper;
@@ -30,6 +31,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>AddressableLoadHelper class definition.</summary>
 		public class AddressableLoadHelper : MonoBehaviour
 		{
 			void Awake()

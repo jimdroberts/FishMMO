@@ -44,65 +44,113 @@ namespace FishMMO.Shared
 	public class TinyColor
 	{
 		// Predefined common colors.
+		/// <summary>The transparent predefined color constant.</summary>
 		public static readonly TinyColor transparent = new TinyColor(0, 0, 0, 0);
+		/// <summary>The white predefined color constant.</summary>
 		public static readonly TinyColor white = new TinyColor(255, 255, 255, 255);
+		/// <summary>The black predefined color constant.</summary>
 		public static readonly TinyColor black = new TinyColor(0, 0, 0, 255);
+		/// <summary>The red predefined color constant.</summary>
 		public static readonly TinyColor red = new TinyColor(255, 0, 0, 255);
+		/// <summary>The orange predefined color constant.</summary>
 		public static readonly TinyColor orange = new TinyColor(255, 165, 0, 255);
+		/// <summary>The yellow predefined color constant.</summary>
 		public static readonly TinyColor yellow = new TinyColor(255, 255, 0, 255);
+		/// <summary>The green predefined color constant.</summary>
 		public static readonly TinyColor green = new TinyColor(0, 255, 0, 255);
+		/// <summary>The blue predefined color constant.</summary>
 		public static readonly TinyColor blue = new TinyColor(0, 0, 255, 255);
+		/// <summary>The indigo predefined color constant.</summary>
 		public static readonly TinyColor indigo = new TinyColor(75, 0, 130, 255);
+		/// <summary>The violet predefined color constant.</summary>
 		public static readonly TinyColor violet = new TinyColor(148, 0, 211, 255);
+		/// <summary>The skyBlue predefined color constant.</summary>
 		public static readonly TinyColor skyBlue = new TinyColor(135, 206, 250, 255);
+		/// <summary>The limeGreen predefined color constant.</summary>
 		public static readonly TinyColor limeGreen = new TinyColor(50, 205, 50, 255);
+		/// <summary>The magenta predefined color constant.</summary>
 		public static readonly TinyColor magenta = new TinyColor(255, 0, 255, 255);
+		/// <summary>The turquoise predefined color constant.</summary>
 		public static readonly TinyColor turquoise = new TinyColor(64, 224, 208, 255);
+		/// <summary>The goldenrod predefined color constant.</summary>
 		public static readonly TinyColor goldenrod = new TinyColor(218, 165, 32, 255);
+		/// <summary>The lavender predefined color constant.</summary>
 		public static readonly TinyColor lavender = new TinyColor(230, 230, 250, 255);
+		/// <summary>The chocolate predefined color constant.</summary>
 		public static readonly TinyColor chocolate = new TinyColor(210, 105, 30, 255);
+		/// <summary>The plum predefined color constant.</summary>
 		public static readonly TinyColor plum = new TinyColor(221, 160, 221, 255);
+		/// <summary>The forestGreen predefined color constant.</summary>
 		public static readonly TinyColor forestGreen = new TinyColor(34, 139, 34, 255);
 
 		// --- Metallics & Earth Tones ---
+		/// <summary>The gold predefined color constant.</summary>
 		public static readonly TinyColor gold = new TinyColor(255, 215, 0, 255);
+		/// <summary>The bronze predefined color constant.</summary>
 		public static readonly TinyColor bronze = new TinyColor(205, 127, 50, 255);
+		/// <summary>The sienna predefined color constant.</summary>
 		public static readonly TinyColor sienna = new TinyColor(160, 82, 45, 255);
+		/// <summary>The saddleBrown predefined color constant.</summary>
 		public static readonly TinyColor saddleBrown = new TinyColor(139, 69, 19, 255);
+		/// <summary>The wheat predefined color constant.</summary>
 		public static readonly TinyColor wheat = new TinyColor(245, 222, 179, 255);
 
 		// --- Extended UI Neutrals (The "Grays") ---
 		// Filling the gaps between Black, Charcoal, and White
+		/// <summary>The offWhite predefined color constant.</summary>
 		public static readonly TinyColor offWhite = new TinyColor(245, 245, 245, 255);
+		/// <summary>The gainsboro predefined color constant.</summary>
 		public static readonly TinyColor gainsboro = new TinyColor(220, 220, 220, 255);
+		/// <summary>The dimGrey predefined color constant.</summary>
 		public static readonly TinyColor dimGrey = new TinyColor(105, 105, 105, 255);
+		/// <summary>The slateGrey predefined color constant.</summary>
 		public static readonly TinyColor slateGrey = new TinyColor(112, 128, 144, 255);
+		/// <summary>The midnightBlue predefined color constant.</summary>
 		public static readonly TinyColor midnightBlue = new TinyColor(25, 25, 112, 255);
 
 		// --- Muted & Professional Tones ---
 		// Better for backgrounds or less "neon" looking elements
+		/// <summary>The royalBlue predefined color constant.</summary>
 		public static readonly TinyColor royalBlue = new TinyColor(65, 105, 225, 255);
+		/// <summary>The crimson predefined color constant.</summary>
 		public static readonly TinyColor crimson = new TinyColor(220, 20, 60, 255);
+		/// <summary>The darkSlateGreen predefined color constant.</summary>
 		public static readonly TinyColor darkSlateGreen = new TinyColor(47, 79, 79, 255);
+		/// <summary>The seaGreen predefined color constant.</summary>
 		public static readonly TinyColor seaGreen = new TinyColor(46, 139, 87, 255);
+		/// <summary>The steelBlue predefined color constant.</summary>
 		public static readonly TinyColor steelBlue = new TinyColor(70, 130, 180, 255);
 
 		// --- Vibrant Accents ---
+		/// <summary>The coral predefined color constant.</summary>
 		public static readonly TinyColor coral = new TinyColor(255, 127, 80, 255);
+		/// <summary>The hotPink predefined color constant.</summary>
 		public static readonly TinyColor hotPink = new TinyColor(255, 105, 180, 255);
+		/// <summary>The orchid predefined color constant.</summary>
 		public static readonly TinyColor orchid = new TinyColor(218, 112, 214, 255);
+		/// <summary>The cyan predefined color constant.</summary>
 		public static readonly TinyColor cyan = new TinyColor(0, 255, 255, 255);
+		/// <summary>The chartreuse predefined color constant.</summary>
 		public static readonly TinyColor chartreuse = new TinyColor(127, 255, 0, 255);
 
 		// UI Colors - these are also predefined colors but categorized for UI purposes.
+		/// <summary>The darkGrey predefined color constant.</summary>
 		public static readonly TinyColor darkGrey = new TinyColor(64, 64, 64, 255);    // Primary
+		/// <summary>The lightGrey predefined color constant.</summary>
 		public static readonly TinyColor lightGrey = new TinyColor(192, 192, 192, 255);  // Text
+		/// <summary>The charcoal predefined color constant.</summary>
 		public static readonly TinyColor charcoal = new TinyColor(34, 34, 34, 255);    // Secondary
+		/// <summary>The bloodRed predefined color constant.</summary>
 		public static readonly TinyColor bloodRed = new TinyColor(128, 0, 0, 255);    // Highlights
+		/// <summary>The maroon predefined color constant.</summary>
 		public static readonly TinyColor maroon = new TinyColor(128, 0, 0, 255);    // Complementary to Blood Red
+		/// <summary>The olive predefined color constant.</summary>
 		public static readonly TinyColor olive = new TinyColor(128, 128, 0, 255);  // Complementary to Blood Red
+		/// <summary>The teal predefined color constant.</summary>
 		public static readonly TinyColor teal = new TinyColor(0, 128, 128, 255);    // Complementary to Blood Red
+		/// <summary>The silver predefined color constant.</summary>
 		public static readonly TinyColor silver = new TinyColor(192, 192, 192, 255);  // Complementary to Charcoal
+		/// <summary>The navy predefined color constant.</summary>
 		public static readonly TinyColor navy = new TinyColor(0, 0, 128, 255);    // Complementary to Charcoal
 
 		/// <summary>

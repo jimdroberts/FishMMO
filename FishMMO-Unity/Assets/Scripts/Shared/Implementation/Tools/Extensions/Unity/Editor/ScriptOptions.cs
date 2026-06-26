@@ -5,6 +5,7 @@ using UnityEditor;
 // Since Unity can't work properly on a recompile...
 namespace FishMMO.Shared
 {
+	/// <summary>Provides menu options and utilities for managing script compilation settings.</summary>
 	[InitializeOnLoad]
 	public class ScriptOptions
 	{

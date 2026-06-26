@@ -48,6 +48,7 @@ namespace FishMMO.Shared
 		private GUIStyle labelStyle;
 
 		[MenuItem("FishMMO/Behavior Tree Editor")]
+		/// <summary>Opens the Behavior Tree Editor window from the menu.</summary>
 		public static void ShowWindow()
 		{
 			var window = GetWindow<BehaviorTreeEditorWindow>("Behavior Tree Editor");
@@ -1156,6 +1157,7 @@ namespace FishMMO.Shared
 	[CustomEditor(typeof(AIBehaviorTree))]
 	public class AIBehaviorTreeEditor : Editor
 	{
+		/// <summary>Draws the custom inspector GUI with a button to open the visual editor.</summary>
 		public override void OnInspectorGUI()
 		{
 			if (GUILayout.Button("Open Behavior Tree Editor", GUILayout.Height(30)))

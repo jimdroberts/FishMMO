@@ -8,10 +8,12 @@ namespace FishMMO.Shared
 {
 	[CustomPropertyDrawer(typeof(SerializableDictionaryBase), true)]
 	[CustomPropertyDrawer(typeof(SerializableHashSetBase), true)]
+	/// <summary>SerializableDictionaryPropertyDrawer class definition.</summary>
 	public class SerializableDictionaryPropertyDrawer : PropertyDrawer
 	{
 		const string KeysFieldName = "m_keys";
 		const string ValuesFieldName = "m_values";
+		/// <summary>The indentwidth value.</summary>
 		protected const float IndentWidth = 15f;
 
 		static GUIContent s_iconPlus = IconContent("Toolbar Plus", "Add entry");
@@ -24,24 +26,36 @@ namespace FishMMO.Shared
 
 		class ConflictState
 		{
+			/// <summary>The conflictkey value.</summary>
 			public object conflictKey = null;
+			/// <summary>The conflictvalue value.</summary>
 			public object conflictValue = null;
+			/// <summary>The conflictindex value.</summary>
 			public int conflictIndex = -1;
+			/// <summary>The conflictotherindex value.</summary>
 			public int conflictOtherIndex = -1;
+			/// <summary>The conflictkeypropertyexpanded value.</summary>
 			public bool conflictKeyPropertyExpanded = false;
+			/// <summary>The conflictvaluepropertyexpanded value.</summary>
 			public bool conflictValuePropertyExpanded = false;
+			/// <summary>The conflictlineheight value.</summary>
 			public float conflictLineHeight = 0f;
 		}
 
 		struct PropertyIdentity
 		{
+			/// <summary>PropertyIdentity method.</summary>
+			/// <param name="property">The property parameter.</param>
+			/// <returns>The result of the operation.</returns>
 			public PropertyIdentity(SerializedProperty property)
 			{
 				this.instance = property.serializedObject.targetObject;
 				this.propertyPath = property.propertyPath;
 			}
 
+			/// <summary>The instance value.</summary>
 			public UnityEngine.Object instance;
+			/// <summary>The propertypath value.</summary>
 			public string propertyPath;
 		}
 
@@ -54,6 +68,10 @@ namespace FishMMO.Shared
 			Remove
 		}
 
+		/// <summary>Draws the custom property GUI.</summary>
+		/// <param name="position">The position parameter.</param>
+		/// <param name="property">The property parameter.</param>
+		/// <param name="label">The label parameter.</param>
 		public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
 		{
 			label = EditorGUI.BeginProperty(position, label, property);
@@ -331,6 +349,10 @@ namespace FishMMO.Shared
 			conflictState.conflictValuePropertyExpanded = valueProperty != null ? valueProperty.isExpanded : false;
 		}
 
+		/// <summary>Gets the height of the property in the inspector.</summary>
+		/// <param name="property">The property parameter.</param>
+		/// <param name="label">The label parameter.</param>
+		/// <returns>The result of the operation.</returns>
 		public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
 		{
 			float propertyHeight = EditorGUIUtility.singleLineHeight;
@@ -432,6 +454,9 @@ namespace FishMMO.Shared
 			arrayProperty.DeleteArrayElementAtIndex(index);
 		}
 
+		/// <summary>Gets the propertyvalue value.</summary>
+		/// <param name="p">The p parameter.</param>
+		/// <returns>The result of the operation.</returns>
 		public static object GetPropertyValue(SerializedProperty p)
 		{
 			PropertyInfo propertyInfo;
@@ -555,10 +580,18 @@ namespace FishMMO.Shared
 
 		struct EnumerationEntry
 		{
+			/// <summary>The keyproperty value.</summary>
 			public SerializedProperty keyProperty;
+			/// <summary>The valueproperty value.</summary>
 			public SerializedProperty valueProperty;
+			/// <summary>The index value.</summary>
 			public int index;
 
+			/// <summary>EnumerationEntry method.</summary>
+			/// <param name="keyProperty">The keyProperty parameter.</param>
+			/// <param name="valueProperty">The valueProperty parameter.</param>
+			/// <param name="index">The index parameter.</param>
+			/// <returns>An integer result.</returns>
 			public EnumerationEntry(SerializedProperty keyProperty, SerializedProperty valueProperty, int index)
 			{
 				this.keyProperty = keyProperty;
@@ -588,14 +621,23 @@ namespace FishMMO.Shared
 	}
 
 	[CustomPropertyDrawer(typeof(SerializableDictionaryBase.Storage), true)]
+	/// <summary>SerializableDictionaryStoragePropertyDrawer class definition.</summary>
 	public class SerializableDictionaryStoragePropertyDrawer : PropertyDrawer
 	{
+		/// <summary>Draws the custom property GUI.</summary>
+		/// <param name="position">The position parameter.</param>
+		/// <param name="property">The property parameter.</param>
+		/// <param name="label">The label parameter.</param>
 		public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
 		{
 			property.Next(true);
 			EditorGUI.PropertyField(position, property, label, true);
 		}
 
+		/// <summary>Gets the height of the property in the inspector.</summary>
+		/// <param name="property">The property parameter.</param>
+		/// <param name="label">The label parameter.</param>
+		/// <returns>The result of the operation.</returns>
 		public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
 		{
 			property.Next(true);

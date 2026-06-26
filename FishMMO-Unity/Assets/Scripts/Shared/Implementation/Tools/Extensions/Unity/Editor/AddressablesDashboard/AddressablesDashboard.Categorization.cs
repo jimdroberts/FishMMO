@@ -20,14 +20,23 @@ namespace FishMMO.Shared
 		/// </summary>
 		private static class SmartGroups
 		{
+			/// <summary>The ClientStaticPermanent value.</summary>
 			public const string ClientStaticPermanent = "Client_Static_Permanent";
+			/// <summary>The ServerStaticPermanent value.</summary>
 			public const string ServerStaticPermanent = "Server_Static_Permanent";
+			/// <summary>The SharedStaticPermanent value.</summary>
 			public const string SharedStaticPermanent = "Shared_Static_Permanent";
+			/// <summary>The ClientDynamic value.</summary>
 			public const string ClientDynamic = "Client_Dynamic";
+			/// <summary>The ServerDynamic value.</summary>
 			public const string ServerDynamic = "Server_Dynamic";
+			/// <summary>The SharedDynamic value.</summary>
 			public const string SharedDynamic = "Shared_Dynamic";
+			/// <summary>The SceneShared value.</summary>
 			public const string SceneShared = "Scene_Shared";
+			/// <summary>The SceneClient value.</summary>
 			public const string SceneClient = "Scene_Client";
+			/// <summary>The SceneServer value.</summary>
 			public const string SceneServer = "Scene_Server";
 
 			/// <summary>
@@ -52,8 +61,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		private struct AssetCategory
 		{
+			/// <summary>The target Addressable group name for this category.</summary>
 			public string GroupName;
+			/// <summary>A human-readable explanation of why this category was assigned.</summary>
 			public string Reason;
+			/// <summary>Indicates whether this asset is a plugin reference that cannot be auto-fixed.</summary>
 			public bool IsPluginWarning;
 		}
 

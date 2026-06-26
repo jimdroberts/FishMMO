@@ -14,6 +14,7 @@ using System.IO.Hashing;
 
 namespace FishMMO.Shared.Patcher
 {
+	/// <summary>PatchGeneratorWindow class definition.</summary>
 	public class PatchGeneratorWindow : EditorWindow
 	{
 		/// <summary>
