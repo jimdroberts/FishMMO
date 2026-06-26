@@ -94,7 +94,7 @@ Formulas are ScriptableObjects assigned per-child in `CharacterAttributeTemplate
 
 | Formula | Calculation |
 |---------|-------------|
-| `FlatBonusFormulaTemplate` | `bonusAttribute.FinalValue * 2` |
+| `FlatBonusFormulaTemplate` | `bonusAttribute.FinalValue` |
 | `PercentageBonusFormulaTemplate` | `bonusAttribute.FinalValue * Percentage` |
 
 ### Relationship Model
@@ -206,6 +206,7 @@ Delta serialization uses a 7-bit byte bitmask — only changed fields are transm
 |-----------------------------------------|-----------|
 | `OnDamaged` | `Action<ICharacter, ICharacter, int, DamageAttributeTemplate>` |
 | `OnKilled` | `Action<ICharacter, ICharacter>` |
+| `OnResurrected` | `Action<ICharacter, ICharacter>` |
 | `OnHealed` | `Action<ICharacter, ICharacter, int>` |
 
 ### External Integration Points
@@ -324,9 +325,10 @@ flowchart LR
 
 The `CharacterDamageController` handles:
 - **Damage**: Applies resistance modifiers, consumes health, fires `OnDamaged`, tracks achievements, triggers `Kill` if health reaches zero.
-- **Kill**: Adjusts faction, awards achievements, removes all buffs, kills pet, fires `OnKilled`.
-- **Heal**: Gains health, fires `OnHealed`, tracks achievements.
-- **CompleteHeal**: Restores health to `FinalValue`.
+- **Kill**: Adjusts faction, fires ECA kill triggers, cancels active ability, triggers death animation, fires `OnKilled`. Buff removal and pet despawning are handled by the server-side `OnKilled` subscriber.
+- **Revive**: Resurrects a dead character via `ResourceInstance.Gain()`, fires `OnResurrected`, resets death animation, fires ECA resurrect triggers.
+- **Heal**: Gains health, fires `OnHealed`, tracks achievements. No-op on dead characters.
+- **CompleteHeal**: Restores health to `FinalValue`. No-op on dead characters.
 - **Immortal**: Flag that prevents all damage and kill processing.
 
 ### Regeneration Flow
@@ -359,7 +361,7 @@ CharacterAttribute/
     ├── DamageAttributeTemplate.cs             # Damage type with linked resistance
     ├── ResistanceAttributeTemplate.cs         # Resistance type marker
     └── Formulas/
-        ├── FlatBonusFormulaTemplate.cs            # Flat bonus formula (bonusAttribute.FinalValue * 2)
+        ├── FlatBonusFormulaTemplate.cs            # Flat bonus formula (bonusAttribute.FinalValue)
         └── PercentageBonusFormulaTemplate.cs      # Percentage bonus formula (bonusAttribute.FinalValue * Percentage)
 ```
 

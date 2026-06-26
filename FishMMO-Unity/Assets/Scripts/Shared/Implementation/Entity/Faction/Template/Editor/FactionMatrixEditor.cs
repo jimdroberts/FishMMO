@@ -22,7 +22,7 @@ namespace FishMMO.Shared
 			// Ensure all required data is present before drawing the matrix
 			if (script.Factions != null &&
 				script.Matrix != null &&
-				script.Matrix.Factions != null)
+				script.Matrix.AllianceLevels != null)
 			{
 				GUILayout.BeginVertical();
 
@@ -54,15 +54,15 @@ namespace FishMMO.Shared
 						// Diagonal: always Ally to self
 						if (x == y)
 						{
-							script.Matrix.Factions[index] = (FactionAllianceLevel)EditorGUILayout.EnumPopup(FactionAllianceLevel.Ally, GUILayout.Height(18), GUILayout.Width(96));
+							script.Matrix.AllianceLevels[index] = (FactionAllianceLevel)EditorGUILayout.EnumPopup(FactionAllianceLevel.Ally, GUILayout.Height(18), GUILayout.Width(96));
 						}
 						else
 						{
 							// Edit alliance level for this pair
-							script.Matrix.Factions[index] = (FactionAllianceLevel)EditorGUILayout.EnumPopup(script.Matrix.Factions[index], GUILayout.Height(18), GUILayout.Width(96));
+							script.Matrix.AllianceLevels[index] = (FactionAllianceLevel)EditorGUILayout.EnumPopup(script.Matrix.AllianceLevels[index], GUILayout.Height(18), GUILayout.Width(96));
 
 							// Mirror alliance level to the inverted index (ensures symmetry)
-							script.Matrix.Factions[invert] = script.Matrix.Factions[index];
+							script.Matrix.AllianceLevels[invert] = script.Matrix.AllianceLevels[index];
 						}
 					}
 					GUILayout.EndHorizontal();

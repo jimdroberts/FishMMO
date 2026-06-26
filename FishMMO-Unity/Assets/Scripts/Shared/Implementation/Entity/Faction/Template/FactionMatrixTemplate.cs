@@ -72,8 +72,8 @@ namespace FishMMO.Shared
 				return;
 			}
 			if (Matrix == null ||
-				Matrix.Factions == null ||
-				Matrix.Factions.Length < 1)
+				Matrix.AllianceLevels == null ||
+				Matrix.AllianceLevels.Length < 1)
 			{
 				return;
 			}
@@ -101,7 +101,7 @@ namespace FishMMO.Shared
 					}
 					else
 					{
-						FactionAllianceLevel allianceLevel = Matrix.Factions[index];
+						FactionAllianceLevel allianceLevel = Matrix.AllianceLevels[index];
 						switch (allianceLevel)
 						{
 							case FactionAllianceLevel.Ally:

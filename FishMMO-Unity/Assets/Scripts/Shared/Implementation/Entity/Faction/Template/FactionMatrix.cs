@@ -14,20 +14,20 @@ namespace FishMMO.Shared
 		/// Flat array representing the alliance level between each pair of factions.
 		/// Indexed as [x + y * count], where x and y are faction indices.
 		/// </summary>
-		public FactionAllianceLevel[] Factions;
+		public FactionAllianceLevel[] AllianceLevels;
 
 		/// <summary>
 		/// Constructs a new FactionMatrix for the given list of factions, initializing all relationships to Neutral.
 		/// </summary>
 		/// <param name="Factions">List of all faction templates to include in the matrix.</param>
-		public FactionMatrix(List<FactionTemplate> Factions)
+		public FactionMatrix(List<FactionTemplate> factions)
 		{
-			int size = Factions.Count * Factions.Count;
+			int size = factions.Count * factions.Count;
 
-			this.Factions = new FactionAllianceLevel[size];
-			for (int i = 0; i < this.Factions.Length; ++i)
+			AllianceLevels = new FactionAllianceLevel[size];
+			for (int i = 0; i < AllianceLevels.Length; ++i)
 			{
-				this.Factions[i] = FactionAllianceLevel.Neutral;
+				AllianceLevels[i] = FactionAllianceLevel.Neutral;
 			}
 		}
 	}

@@ -13,9 +13,6 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class AbilityObject : MonoBehaviour
 	{
-		private const int ContainerIDTickMultiplier = 1000003;
-		private const int ContainerIDProbeStep = 1;
-		private const int ContainerIDProbeSearchSlack = 1;
 
 		/// <summary>
 		/// Event invoked when a pet ability is summoned.
@@ -87,78 +84,6 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Static cache of prefab colliders keyed by template ID.
 		/// Avoids calling GetComponent on the prefab every spawn.
-		/// </summary>
-		private static readonly Dictionary<int, Collider> prefabColliderCache = new Dictionary<int, Collider>();
-
-		/// <summary>
-		/// Clears the static prefab collider cache. Call this when addressable bundles
-		/// are reloaded (e.g., from an OnCatalogUpdated handler) to prevent stale
-		/// collider references from persisting across asset reloads.
-		/// </summary>
-		public static void ClearPrefabColliderCache()
-		{
-			prefabColliderCache.Clear();
-		}
-
-		/// <summary>
-		/// Automatically clears the prefab collider cache when the Unity domain reloads
-		/// (e.g., entering/exiting Play Mode in the Editor). Without this, static fields
-		/// retain stale collider references from a previous Play session.
-		/// </summary>
-		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-		private static void ClearCacheOnDomainReload()
-		{
-			prefabColliderCache.Clear();
-		}
-
-		/// <summary>
-		/// Returns the cached <see cref="Collider"/> from the ability's prefab, or null if none exists.
-		/// Caches on first access to avoid repeated GetComponent calls on the prefab.
-		/// Re-queries if the cached collider has been destroyed (e.g., after addressable unload).
-		/// </summary>
-		private static Collider GetPrefabCollider(AbilityTemplate template)
-		{
-			if (template.AbilityObjectPrefab == null) return null;
-
-			if (prefabColliderCache.TryGetValue(template.ID, out Collider collider))
-			{
-				// Unity's == operator returns true for destroyed-but-non-null managed refs.
-				if (collider != null)
-				{
-					// Catch data errors where two different templates share the same numeric ID.
-					// Also fires after an addressable hot-reload: the OLD prefab's collider is
-					// still alive (not destroyed) but now belongs to a stale asset instance
-					// while template.AbilityObjectPrefab points to the newly loaded prefab.
-					// In that scenario, self-heal by removing the stale entry and re-querying.
-					if (collider.gameObject != template.AbilityObjectPrefab)
-					{
-						Debug.LogWarning(
-							$"[AbilityObject] prefabColliderCache ID {template.ID} maps to a collider from a different prefab. "
-							+ "Self-healing. Call prefabColliderCache.Clear() after addressable catalogue updates to avoid this.");
-						prefabColliderCache.Remove(template.ID);
-						// Fall through to re-query below.
-					}
-					else
-					{
-						return collider;
-					}
-				}
-				else
-				{
-					// Stale entry — the old prefab was fully destroyed (addressable unload).
-					// Remove and re-query from the current template prefab below.
-					prefabColliderCache.Remove(template.ID);
-				}
-			}
-
-			collider = template.AbilityObjectPrefab.GetComponent<Collider>();
-			prefabColliderCache[template.ID] = collider;
-			return collider;
-		}
-
-		/// <summary>
-		/// Effective speed for this ability object's movement effects.
-		/// Prefers the live Ability, falls back to the Snapshot.
 		/// </summary>
 		public float Speed => Ability != null ? Ability.Speed : (Snapshot != null ? Snapshot.Speed : 0f);
 
@@ -531,7 +456,7 @@ namespace FishMMO.Shared
 				ability.Objects = new Dictionary<int, Dictionary<int, AbilityObject>>();
 			}
 
-			TryAllocateContainerID(ability, seed, spawnTick, out int containerID, out Dictionary<int, AbilityObject> spawnedAbilityObjects);
+			AbilityContainerAllocator.Allocate(ability, seed, spawnTick, out int containerID, out Dictionary<int, AbilityObject> spawnedAbilityObjects);
 
 			ability.Objects.Add(containerID, spawnedAbilityObjects);
 			abilityObject.ContainerID = containerID;
@@ -600,110 +525,6 @@ namespace FishMMO.Shared
 		/// the slot is occupied by a different active spawn. A same seed+tick entry is a
 		/// duplicate retry and is destroyed/replaced; a different seed+tick entry is a real
 		/// hash collision and must remain alive.
-		/// </summary>
-		private static void TryAllocateContainerID(
-			Ability ability,
-			int seed,
-			PredictionTick spawnTick,
-			out int containerID,
-			out Dictionary<int, AbilityObject> spawnedAbilityObjects)
-		{
-			spawnedAbilityObjects = new Dictionary<int, AbilityObject>();
-			// spawnTick.Value is used explicitly: PredictionTick has implicit operator uint but
-			// C# does not allow (int)PredictionTick directly (uint is not implicitly convertible
-			// to int), so .Value gives the raw uint for the unchecked int cast.
-			int baseContainerID = unchecked(seed ^ ((int)spawnTick.Value * ContainerIDTickMultiplier));
-			containerID = baseContainerID;
-
-			// Probe one slot beyond the current container count: among N occupied keys,
-			// N+1 deterministic candidates must include at least one free slot.
-			int probeLimit = ability.Objects.Count + ContainerIDProbeSearchSlack;
-			for (int probe = 0; probe < probeLimit; probe++)
-			{
-				if (!ability.Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> existingContainer))
-				{
-					if (probe > 0)
-					{
-						Log.Warning("AbilityObject",
-							$"TryAllocateContainerID: resolved hash collision for ability {ability.ID} from {baseContainerID} to {containerID} after {probe} probes.");
-					}
-					return;
-				}
-
-				if (IsSameSpawnContainer(existingContainer, seed, spawnTick))
-				{
-					DestroyAbilityContainer(existingContainer);
-					ability.Objects.Remove(containerID);
-					return;
-				}
-
-				// If the container exists but contains only null/stale entries, remove it
-				// and use this slot. This prevents permanent accumulation of all-null
-				// containers caused by external Destroy without proper removal.
-				if (IsContainerEffectivelyEmpty(existingContainer))
-				{
-					Log.Warning("AbilityObject",
-						$"TryAllocateContainerID: found all-null stale container at {containerID} for ability {ability.ID}. Cleaning up.");
-					ability.Objects.Remove(containerID);
-					return;
-				}
-
-				containerID = unchecked(containerID + ContainerIDProbeStep);
-			}
-
-			throw new InvalidOperationException(
-				$"TryAllocateContainerID: failed to find a free container ID for ability {ability.ID} after {probeLimit} probes.");
-		}
-
-		private static bool IsSameSpawnContainer(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
-		{
-			if (container == null || container.Count == 0)
-			{
-				return false;
-			}
-
-			bool sawSpawnObject = false;
-			foreach (AbilityObject abilityObject in container.Values)
-			{
-				if (abilityObject == null)
-				{
-					continue;
-				}
-
-				sawSpawnObject = true;
-				if (abilityObject.SpawnSeed != seed || abilityObject.SpawnTick.Value != spawnTick.Value)
-				{
-					return false;
-				}
-			}
-
-			return sawSpawnObject;
-		}
-
-		private static void DestroyAbilityContainer(Dictionary<int, AbilityObject> container)
-		{
-			foreach (AbilityObject staleObj in container.Values)
-			{
-				if (staleObj != null)
-				{
-					staleObj.Ability = null;
-					staleObj.DestroyAbilityObjectInternal();
-				}
-			}
-		}
-
-		private static bool IsContainerEffectivelyEmpty(Dictionary<int, AbilityObject> container)
-		{
-			if (container == null || container.Count == 0) return true;
-			foreach (AbilityObject obj in container.Values)
-			{
-				if (obj != null) return false;
-			}
-			return true;
-		}
-
-		/// <summary>
-		/// Dispatches pre-spawn and spawn events if the ability has any registered.
 		/// </summary>
 		private static void DispatchSpawnEvents(
 			Ability ability,
@@ -947,7 +768,7 @@ namespace FishMMO.Shared
 					{
 						float distance = 0.0f;
 						float height = 0.0f;
-						Collider collider = GetPrefabCollider(ability.Template);
+						Collider collider = AbilityPrefabColliderCache.GetPrefabCollider(ability.Template);
 						if (collider != null)
 						{
 							if (caster.Collider != null)

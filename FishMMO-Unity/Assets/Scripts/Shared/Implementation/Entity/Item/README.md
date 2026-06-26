@@ -145,7 +145,7 @@ Each `Item` holds references to its optional sub-components and template:
 | Field | Type | Description |
 |-------|------|-------------|
 | `Template` | `ItemAttributeTemplate` | The attribute type definition (min/max, linked CharacterAttribute) |
-| `value` | `int` | Current attribute value |
+| `Value` | `int` | Current attribute value |
 
 ### Container API
 

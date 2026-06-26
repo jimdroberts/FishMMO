@@ -179,14 +179,7 @@ namespace FishMMO.Shared
 				modelInstance.transform.SetLocalPositionRotationAndScale(Vector3.zero, Quaternion.identity, Vector3.one);
 
 				// Wire the model's Animator to NetworkAnimator for network sync
-				if (NetworkAnimator != null)
-				{
-					Animator modelAnimator = modelInstance.GetComponentInChildren<Animator>();
-					if (modelAnimator != null)
-					{
-						NetworkAnimator.Animator = modelAnimator;
-					}
-				}
+				// NetworkAnimator auto-discovers the Animator on child GameObjects.
 
 				// Notify visual behaviours that the model is ready (skeleton, body regions, animator)
 				foreach (ICharacterBehaviour behaviour in Behaviours.Values)

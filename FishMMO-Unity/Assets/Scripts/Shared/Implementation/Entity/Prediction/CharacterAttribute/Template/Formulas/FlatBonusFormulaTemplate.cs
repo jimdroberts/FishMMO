@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	{
 		public override int CalculateBonus(ICharacterAttributeController controller, CharacterAttribute self, CharacterAttribute bonusAttribute)
 		{
-			return bonusAttribute.FinalValue + bonusAttribute.FinalValue;
+			return bonusAttribute.FinalValue;
 		}
 	}
 }

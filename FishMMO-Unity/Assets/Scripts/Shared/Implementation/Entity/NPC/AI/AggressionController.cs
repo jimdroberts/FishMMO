@@ -5,80 +5,72 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Manages an aggression (threat) table for a single NPC. Tracks how much threat each
-	/// nearby character has generated through damage, healing allies, or other actions.
-	/// The table decays over time so stale threats fade and combat feels dynamic.
+	/// Manages an aggression (threat) table for a single NPC. Tracks threat from damage,
+	/// healing, resource expenditure, and arbitrary point adjustments. Threat decays over
+	/// time. Target selection uses both raw threat points and a vulnerability multiplier
+	/// based on the target's current health and mana percentages.
 	/// <para>
-	/// This is a plain C# class owned by <see cref="AIController"/> — one instance per NPC.
-	/// It does NOT derive from MonoBehaviour or ScriptableObject to avoid the shared-instance
-	/// problem inherent in ScriptableObject AI states.
+	/// Plain C# class — one instance per NPC, owned by <see cref="AggressionState"/>.
 	/// </para>
 	/// </summary>
 	public class AggressionController
 	{
-		/// <summary>
-		/// Points awarded per 1 point of damage dealt to the NPC.
-		/// </summary>
+		/// <summary>Points per 1 damage dealt to the NPC.</summary>
 		public float DamageWeight = 1.0f;
 
-		/// <summary>
-		/// Points awarded per 1 point of healing an enemy of the NPC witnesses.
-		/// Healing in combat draws attention toward the healer.
-		/// </summary>
+		/// <summary>Points per 1 healing witnessed on an enemy of the NPC.</summary>
 		public float HealingWeight = 0.6f;
 
-		/// <summary>
-		/// Flat aggression points added per hit, regardless of damage amount.
-		/// Keeps fast, low-damage attackers on the radar.
-		/// </summary>
+		/// <summary>Points per 1 resource point (mana/stamina) spent casting near the NPC.</summary>
+		public float ResourceWeight = 0.4f;
+
+		/// <summary>Flat points added per hit regardless of damage amount.</summary>
 		public float HitBonusPoints = 5.0f;
 
-		/// <summary>
-		/// Points per second that each entry decays while out of combat (no new events).
-		/// Prevents permanently sticky threat after combat ends.
-		/// </summary>
+		/// <summary>Points per second each entry decays while no new events arrive.</summary>
 		public float DecayRate = 3.0f;
 
-		/// <summary>
-		/// Time in seconds after the last event before an entry is removed entirely.
-		/// Keeps the table clean of stale references.
-		/// </summary>
+		/// <summary>Seconds after last event before a zero-point entry is removed.</summary>
 		public float StaleEntryTimeout = 30.0f;
 
-		/// <summary>
-		/// Chance (0-1) that the NPC ignores the top-threat target and picks a secondary
-		/// one during target selection. Keeps combat from being perfectly deterministic.
-		/// </summary>
+		/// <summary>Chance (0-1) to pick a secondary target for variety.</summary>
 		public float TargetVarietyChance = 0.15f;
 
 		/// <summary>
-		/// The internal aggression table keyed by character ID.
+		/// Multiplier applied to threat points for targets below 30% health.
+		/// Makes the AI prefer to finish off wounded enemies.
 		/// </summary>
+		public float LowHealthThreatMultiplier = 1.5f;
+
+		/// <summary>
+		/// Multiplier applied to threat points for targets below 20% mana.
+		/// Makes the AI pressure casters who are running out of resources.
+		/// </summary>
+		public float LowResourceThreatMultiplier = 1.3f;
+
+		/// <summary>Health threshold (0-1) below which LowHealthThreatMultiplier activates.</summary>
+		public float LowHealthThreshold = 0.3f;
+
+		/// <summary>Resource threshold (0-1) below which LowResourceThreatMultiplier activates.</summary>
+		public float LowResourceThreshold = 0.2f;
+
 		private readonly Dictionary<long, AggressionEntry> table = new Dictionary<long, AggressionEntry>();
-
-		/// <summary>
-		/// Pool of reusable <see cref="AggressionEntry"/> instances to avoid allocations.
-		/// </summary>
 		private readonly Stack<AggressionEntry> entryPool = new Stack<AggressionEntry>();
-
-		/// <summary>
-		/// Temporary list used during cleanup to avoid allocating during iteration.
-		/// </summary>
 		private readonly List<long> staleKeys = new List<long>();
 
-		/// <summary>
-		/// The aggression table — read-only access for external queries.
-		/// </summary>
-		public IReadOnlyDictionary<long, AggressionEntry> Table => table;
+		/// <summary>The raw aggression table keyed by character ID. Read-only.</summary>
+	public IReadOnlyDictionary<long, AggressionEntry> Table => table;
+		/// <summary>Number of entries currently tracked in the aggression table.</summary>
+	public int Count => table.Count;
+		/// <summary>Returns true if any characters are tracked in the table.</summary>
+	public bool HasAggression => table.Count > 0;
 
 		/// <summary>
-		/// Records a damage event against the NPC from the specified attacker.
+		/// Records damage dealt to this NPC.
 		/// </summary>
-		/// <param name="attackerID">The unique ID of the character that dealt damage.</param>
-		/// <param name="amount">The amount of damage dealt (after mitigation).</param>
-		public void RecordDamage(long attackerID, int amount)
+		public void RecordDamage(long attackerId, int amount)
 		{
-			AggressionEntry entry = GetOrCreate(attackerID);
+			AggressionEntry entry = GetOrCreate(attackerId);
 			entry.HitCount++;
 			entry.TotalDamage += amount;
 			entry.Points += amount * DamageWeight + HitBonusPoints;
@@ -86,28 +78,34 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Records a healing event that the NPC witnessed — a character healed an enemy of
-		/// this NPC. Healing in combat draws threat toward the healer.
+		/// Records healing witnessed by this NPC on one of its enemies.
 		/// </summary>
-		/// <param name="healerID">The unique ID of the character that performed the heal.</param>
-		/// <param name="amount">The amount healed.</param>
-		public void RecordHealing(long healerID, int amount)
+		public void RecordHealing(long healerId, int amount)
 		{
-			AggressionEntry entry = GetOrCreate(healerID);
+			AggressionEntry entry = GetOrCreate(healerId);
 			entry.TotalHealing += amount;
 			entry.Points += amount * HealingWeight;
 			entry.LastEventTime = Time.time;
 		}
 
 		/// <summary>
-		/// Adds arbitrary aggression points for a character (e.g., taunt abilities,
-		/// proximity aggro, or any custom threat source).
+		/// Records resource expenditure (mana/stamina) from a character casting near this NPC.
+		/// Casters who spend heavily to damage or heal draw additional threat.
 		/// </summary>
-		/// <param name="characterID">The unique ID of the character.</param>
-		/// <param name="points">Points to add (can be negative to reduce threat).</param>
-		public void AddPoints(long characterID, float points)
+		public void RecordResourceSpent(long characterId, int amount)
 		{
-			AggressionEntry entry = GetOrCreate(characterID);
+			AggressionEntry entry = GetOrCreate(characterId);
+			entry.TotalResourceSpent += amount;
+			entry.Points += amount * ResourceWeight;
+			entry.LastEventTime = Time.time;
+		}
+
+		/// <summary>
+		/// Adds arbitrary points (positive for taunt, negative for de-aggro).
+		/// </summary>
+		public void AddPoints(long characterId, float points)
+		{
+			AggressionEntry entry = GetOrCreate(characterId);
 			entry.Points += points;
 			if (entry.Points < 0f) entry.Points = 0f;
 			entry.LastEventTime = Time.time;
@@ -116,52 +114,71 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the aggression entry for a character, or null if not tracked.
 		/// </summary>
-		public AggressionEntry GetEntry(long characterID)
+		public AggressionEntry GetEntry(long characterId)
 		{
-			table.TryGetValue(characterID, out AggressionEntry entry);
+			table.TryGetValue(characterId, out AggressionEntry entry);
 			return entry;
 		}
 
 		/// <summary>
-		/// Returns the aggression points for a character, or 0 if not tracked.
+		/// Returns raw threat points for a character, or 0 if not tracked.
 		/// </summary>
-		public float GetPoints(long characterID)
+		public float GetPoints(long characterId)
 		{
-			if (table.TryGetValue(characterID, out AggressionEntry entry))
-			{
+			if (table.TryGetValue(characterId, out AggressionEntry entry))
 				return entry.Points;
-			}
 			return 0f;
 		}
 
 		/// <summary>
-		/// Decays all entries by <see cref="DecayRate"/> * deltaTime, removes stale entries,
-		/// and returns entries with zero points to the pool. Call once per frame or per tick.
+		/// Computes a threat score for a character, factoring in vulnerability.
+		/// Low health and low mana targets get a multiplier so the AI finishes weak enemies
+		/// and pressures casters running out of resources.
 		/// </summary>
-		/// <param name="deltaTime">Time since last update.</param>
+		public float GetThreatScore(long characterId, ICharacter character)
+		{
+			float points = GetPoints(characterId);
+			if (points <= 0f || character == null) return points;
+
+			// Apply vulnerability multipliers.
+			if (character.TryGet(out ICharacterAttributeController attrs))
+			{
+				if (attrs.TryGetHealthAttribute(out CharacterResourceAttribute health) && health.FinalValue > 0)
+				{
+					float healthPct = health.CurrentValue / health.FinalValue;
+					if (healthPct < LowHealthThreshold)
+						points *= LowHealthThreatMultiplier;
+				}
+
+				if (attrs.TryGetManaAttribute(out CharacterResourceAttribute mana) && mana.FinalValue > 0)
+				{
+					float manaPct = mana.CurrentValue / mana.FinalValue;
+					if (manaPct < LowResourceThreshold)
+						points *= LowResourceThreatMultiplier;
+				}
+			}
+
+			return points;
+		}
+
+		/// <summary>
+		/// Decays all entries and removes stale ones.
+		/// </summary>
 		public void Tick(float deltaTime)
 		{
 			float now = Time.time;
 			float decay = DecayRate * deltaTime;
-
 			staleKeys.Clear();
 
 			foreach (var kvp in table)
 			{
 				AggressionEntry entry = kvp.Value;
-
-				// Decay points over time.
 				entry.Points -= decay;
 				if (entry.Points < 0f) entry.Points = 0f;
-
-				// Mark entries that have gone stale for removal.
 				if (entry.Points <= 0f && (now - entry.LastEventTime) > StaleEntryTimeout)
-				{
 					staleKeys.Add(kvp.Key);
-				}
 			}
 
-			// Remove stale entries and return them to the pool.
 			for (int i = 0; i < staleKeys.Count; i++)
 			{
 				if (table.TryGetValue(staleKeys[i], out AggressionEntry staleEntry))
@@ -174,79 +191,56 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Selects the best target from a list of candidates using aggression weighting.
-		/// The highest-threat target is usually chosen, but there is a configurable chance
-		/// (<see cref="TargetVarietyChance"/>) to pick a secondary target for variety.
-		/// Candidates must be alive and have an active GameObject.
+		/// Selects the best target from candidates using threat scoring with vulnerability.
 		/// </summary>
-		/// <param name="candidates">List of potential target characters.</param>
-		/// <returns>The chosen target, or null if no valid candidates exist.</returns>
 		public ICharacter PickTarget(List<ICharacter> candidates, DeterministicRNG rng = null)
 		{
 			if (candidates == null || candidates.Count == 0) return null;
 
 			ICharacter bestTarget = null;
-			float bestPoints = -1f;
-
+			float bestScore = -1f;
 			ICharacter secondTarget = null;
-			float secondPoints = -1f;
+			float secondScore = -1f;
 
 			for (int i = 0; i < candidates.Count; i++)
 			{
-				ICharacter candidate = candidates[i];
-				if (candidate == null || !candidate.GameObject.activeSelf)
-					continue;
-				if (!candidate.TryGet(out ICharacterDamageController dmg) || !dmg.IsAlive)
-					continue;
+				ICharacter c = candidates[i];
+				if (c == null || !c.GameObject.activeSelf) continue;
+				if (!c.TryGet(out ICharacterDamageController dmg) || !dmg.IsAlive) continue;
 
-				float points = GetPoints(candidate.ID);
+				float score = GetThreatScore(c.ID, c);
 
-				if (points > bestPoints)
+				if (score > bestScore)
 				{
-					// Demote current best to second.
 					secondTarget = bestTarget;
-					secondPoints = bestPoints;
-
-					bestTarget = candidate;
-					bestPoints = points;
+					secondScore = bestScore;
+					bestTarget = c;
+					bestScore = score;
 				}
-				else if (points > secondPoints)
+				else if (score > secondScore)
 				{
-					secondTarget = candidate;
-					secondPoints = points;
+					secondTarget = c;
+					secondScore = score;
 				}
 			}
 
-			// Occasionally pick the second-highest threat for variety.
 			float roll = (rng ?? DeterministicRNG.Shared).NextFloat();
 			if (secondTarget != null && roll < TargetVarietyChance)
-			{
 				return secondTarget;
-			}
 
 			return bestTarget;
 		}
 
 		/// <summary>
-		/// Returns true if the given character has more aggression than the current target.
-		/// Useful for mid-combat target re-evaluation.
+		/// Returns true if candidate should replace current target based on threat delta.
 		/// </summary>
-		/// <param name="currentTargetID">The current target's character ID.</param>
-		/// <param name="candidateID">The candidate character's ID.</param>
-		/// <param name="threshold">
-		/// The candidate must exceed the current target's points by at least this much
-		/// to trigger a switch, preventing constant flip-flopping.
-		/// </param>
-		public bool ShouldSwitchTarget(long currentTargetID, long candidateID, float threshold = 50f)
+		public bool ShouldSwitchTarget(long currentId, long candidateId, float threshold = 50f)
 		{
-			float currentPoints = GetPoints(currentTargetID);
-			float candidatePoints = GetPoints(candidateID);
-			return candidatePoints > currentPoints + threshold;
+			return GetPoints(candidateId) > GetPoints(currentId) + threshold;
 		}
 
 		/// <summary>
-		/// Clears all aggression data and returns entries to the pool.
-		/// Call when the NPC resets, leashes, or despawns.
+		/// Clears all entries and returns them to the pool.
 		/// </summary>
 		public void Clear()
 		{
@@ -258,26 +252,13 @@ namespace FishMMO.Shared
 			table.Clear();
 		}
 
-		/// <summary>
-		/// Returns the total number of tracked characters.
-		/// </summary>
-		public int Count => table.Count;
-
-		/// <summary>
-		/// Returns true if any character has aggression toward this NPC.
-		/// </summary>
-		public bool HasAggression => table.Count > 0;
-
-		/// <summary>
-		/// Gets or creates an aggression entry for the given character ID, using the pool when available.
-		/// </summary>
-		private AggressionEntry GetOrCreate(long characterID)
+		private AggressionEntry GetOrCreate(long characterId)
 		{
-			if (!table.TryGetValue(characterID, out AggressionEntry entry))
+			if (!table.TryGetValue(characterId, out AggressionEntry entry))
 			{
 				entry = entryPool.Count > 0 ? entryPool.Pop() : new AggressionEntry();
 				entry.Reset();
-				table[characterID] = entry;
+				table[characterId] = entry;
 			}
 			return entry;
 		}

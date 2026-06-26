@@ -291,7 +291,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 		}
-	}
 
 	/// <summary>
 	/// Handles a dead player requesting respawn at their bind point.
@@ -299,6 +298,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
 	{
+		if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+			return;
 		if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
 			return;
 
@@ -327,11 +328,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	private void OnClientResurrectAcceptBroadcastReceived(NetworkConnection conn, ResurrectAcceptBroadcast msg, FishNet.Transporting.Channel channel)
 	{
+		if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+			return;
 		if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
 			return;
 
 		player.DisableFlags(CharacterFlags.IsDead);
 		if (player.TryGet(out ICharacterDamageController damageController))
 			damageController.Revive(null, 999999);
+	}
 	}
 }

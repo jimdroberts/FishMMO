@@ -1,4 +1,5 @@
 using FishNet.Transporting;
+using FishMMO.Shared;
 using UnityEngine.UIElements;
 
 namespace FishMMO.Client
@@ -23,6 +24,7 @@ namespace FishMMO.Client
 
 		private long currentResurrectorID;
 
+		/// <summary>Queries UXML elements and wires button click handlers.</summary>
 		public override void OnStarting()
 		{
 			if (Root == null) return;
@@ -40,6 +42,7 @@ namespace FishMMO.Client
 				closeButton.clicked += Hide;
 		}
 
+		/// <summary>Shows the dialog and registers for ResurrectOfferBroadcast. Resets resurrector state.</summary>
 		public override void Show()
 		{
 			base.Show();
@@ -47,7 +50,7 @@ namespace FishMMO.Client
 			// Register for resurrect offers while the dialog is visible
 			if (Client != null)
 			{
-				Client.NetworkWrapper.RegisterBroadcast<ResurrectOfferBroadcast>(OnResurrectOfferReceived);
+				Client.NetworkManager.ClientManager.RegisterBroadcast<ResurrectOfferBroadcast>(OnResurrectOfferReceived);
 			}
 
 			// Reset state
@@ -55,12 +58,13 @@ namespace FishMMO.Client
 			SetResurrectVisible(false);
 		}
 
+		/// <summary>Hides the dialog and unregisters from ResurrectOfferBroadcast.</summary>
 		public override void Hide()
 		{
 			// Unregister broadcast handlers
 			if (Client != null)
 			{
-				Client.NetworkWrapper.UnregisterBroadcast<ResurrectOfferBroadcast>(OnResurrectOfferReceived);
+				Client.NetworkManager.ClientManager.UnregisterBroadcast<ResurrectOfferBroadcast>(OnResurrectOfferReceived);
 			}
 
 			base.Hide();

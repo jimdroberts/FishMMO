@@ -8,55 +8,41 @@ namespace FishMMO.Shared
 	/// events, and tracks the per-NPC target re-evaluation timer.
 	/// <para>
 	/// Extracted from <see cref="AIController"/> to keep the controller focused on
-	/// navigation and state management. One instance per NPC — plain C# class, not a
-	/// MonoBehaviour or ScriptableObject.
+	/// navigation and state management. One instance per NPC — plain C# class.
 	/// </para>
 	/// <para>
 	/// <b>Event-driven combat entry:</b> When the threat table transitions from empty
 	/// to non-empty (first damage received), the <see cref="OnCombatInitiated"/> callback
-	/// is invoked. <see cref="AIController"/> wires this to
-	/// <see cref="AIController.OnThreatReceived"/> so the NPC enters combat immediately
-	/// instead of waiting for the next physics sweep.
+	/// is invoked for immediate combat entry without waiting for the next physics sweep.
+	/// </para>
+	/// <para>
+	/// <b>Replay safety:</b> Event handlers are guarded to ignore damage/heal/kill events
+	/// fired during prediction replay. Global combat events are not replay-suppressed
+	/// by the damage controller, so we suppress them here.
 	/// </para>
 	/// </summary>
 	public class AggressionState
 	{
-		/// <summary>
-		/// The owning character whose aggression this state manages.
-		/// </summary>
 		private readonly ICharacter character;
 
-		/// <summary>
-		/// The underlying threat table.
-		/// </summary>
-		public AggressionController Controller { get; private set; }
+		/// <summary>The aggression controller that tracks per-character threat scores and handles target selection.</summary>
+	public AggressionController Controller { get; private set; }
 
 		/// <summary>
 		/// Per-NPC timer for mid-combat target re-evaluation. Decremented by the
-		/// attacking state; reset when re-evaluation fires. Stored here rather than
-		/// on the ScriptableObject state to avoid the shared-instance mutable state problem.
+		/// attacking state; reset when re-evaluation fires.
 		/// </summary>
 		public float TargetReevaluationTimer;
 
 		/// <summary>
 		/// Callback invoked when the threat table transitions from empty to non-empty.
-		/// Set by <see cref="AIController"/> during initialization to enable event-driven
-		/// combat entry. The parameter is the attacker who generated the first threat event.
-		/// This replaces the need for constant physics sweep polling to detect combat.
 		/// </summary>
 		public System.Action<ICharacter> OnCombatInitiated;
 
 		/// <summary>
 		/// Creates a new aggression state, initialises the threat table, and subscribes
-		/// to the global damage/heal/kill events.
+		/// to global damage/heal/kill events.
 		/// </summary>
-		/// <param name="character">The owning NPC character.</param>
-		/// <param name="damageWeight">Points per 1 damage taken.</param>
-		/// <param name="healingWeight">Points per 1 healing witnessed.</param>
-		/// <param name="hitBonus">Flat points per hit.</param>
-		/// <param name="decayRate">Point decay per second.</param>
-		/// <param name="staleTimeout">Seconds before stale entries are pruned.</param>
-		/// <param name="varietyChance">Chance to pick a non-top-threat target.</param>
 		public AggressionState(
 			ICharacter character,
 			float damageWeight,
@@ -78,6 +64,8 @@ namespace FishMMO.Shared
 				TargetVarietyChance = varietyChance,
 			};
 
+			// These global events are NOT replay-suppressed by CharacterDamageController.
+			// We guard against duplicate processing during prediction replay below.
 			ICharacterDamageController.OnDamaged += OnCharacterDamaged;
 			ICharacterDamageController.OnHealed += OnCharacterHealed;
 			ICharacterDamageController.OnKilled += OnCharacterKilled;
@@ -85,7 +73,6 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Unsubscribes from global events and clears the threat table.
-		/// Call from <see cref="AIController.OnDestroying"/>.
 		/// </summary>
 		public void Destroy()
 		{
@@ -97,15 +84,12 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Decays threat entries and prunes stale ones. Call once per frame or per tick.
+		/// Decays threat entries. Call once per tick or frame.
 		/// </summary>
-		public void Tick(float deltaTime)
-		{
-			Controller?.Tick(deltaTime);
-		}
+		public void Tick(float deltaTime) => Controller?.Tick(deltaTime);
 
 		/// <summary>
-		/// Clears all aggression data. Call when the NPC resets, leashes, or despawns.
+		/// Clears all aggression data.
 		/// </summary>
 		public void Clear()
 		{
@@ -114,63 +98,60 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called by the global OnDamaged event. If this NPC is the defender, record aggression
-		/// from the attacker so threat-based targeting can prioritize them.
-		/// When the threat table was previously empty (first hit), invokes
-		/// <see cref="OnCombatInitiated"/> for event-driven combat entry.
+		/// Records resource expenditure threat against a specific character.
+		/// Called externally (e.g., from AbilityController when a caster spends mana).
 		/// </summary>
-		private void OnCharacterDamaged(ICharacter attacker, ICharacter defender, int amount, DamageAttributeTemplate damageAttribute)
+		public void RecordResourceSpent(long characterId, int amount)
 		{
-			// Only care when *this* NPC is the one being damaged.
-			if (defender != character || attacker == null || attacker == character)
-				return;
-
-			// Check if the threat table is empty BEFORE recording — first hit triggers combat.
-			bool wasEmpty = Controller == null || !Controller.HasAggression;
-
-			Controller?.RecordDamage(attacker.ID, amount);
-
-			// First threat event → notify the controller to enter combat immediately.
-			if (wasEmpty)
-			{
-				OnCombatInitiated?.Invoke(attacker);
-			}
+			if (Controller == null || !Controller.HasAggression) return;
+			Controller.RecordResourceSpent(characterId, amount);
 		}
 
-		/// <summary>
-		/// Called by the global OnHealed event. If a character heals someone we are in combat with
-		/// (or heals themselves while fighting us), record aggression against the healer.
-		/// </summary>
+		private void OnCharacterDamaged(ICharacter attacker, ICharacter defender, int amount, DamageAttributeTemplate damageAttribute)
+		{
+			if (defender != character || attacker == null || attacker == character)
+				return;
+			if (!IsSpawnedAndAuthoritative()) return;
+
+			bool wasEmpty = Controller == null || !Controller.HasAggression;
+			Controller?.RecordDamage(attacker.ID, amount);
+
+			if (wasEmpty)
+				OnCombatInitiated?.Invoke(attacker);
+		}
+
 		private void OnCharacterHealed(ICharacter healer, ICharacter healed, int amount)
 		{
-			if (healer == null || healer == character)
-				return;
-
-			// Only generate healing aggression if we are currently tracking anyone
-			// and the healed character or healer is already on our threat table.
-			if (Controller == null || !Controller.HasAggression)
-				return;
+			if (healer == null || healer == character) return;
+			if (!IsSpawnedAndAuthoritative()) return;
+			if (Controller == null || !Controller.HasAggression) return;
 
 			bool healedIsTracked = healed != null && Controller.GetPoints(healed.ID) > 0f;
 			bool healerIsTracked = Controller.GetPoints(healer.ID) > 0f;
 
 			if (healedIsTracked || healerIsTracked)
-			{
 				Controller.RecordHealing(healer.ID, amount);
-			}
+		}
+
+		private void OnCharacterKilled(ICharacter killer, ICharacter victim)
+		{
+			if (victim == null || Controller == null) return;
+			if (!IsSpawnedAndAuthoritative()) return;
+
+			Controller.AddPoints(victim.ID, -99999f);
 		}
 
 		/// <summary>
-		/// Called by the global OnKilled event. If a character on our threat table dies,
-		/// remove their entry so we don't keep targeting a corpse.
+		/// Returns true if this NPC's character is spawned and server-authoritative.
+		/// Guards against processing global combat events during client-side prediction
+		/// replay, which would double-count threat.
 		/// </summary>
-		private void OnCharacterKilled(ICharacter killer, ICharacter victim)
+		private bool IsSpawnedAndAuthoritative()
 		{
-			if (victim == null || Controller == null)
-				return;
-
-			// Zero out — will be pruned next tick.
-			Controller.AddPoints(victim.ID, -99999f);
+			return character != null
+				&& character.IsSpawned
+				&& character.NetworkObject != null
+				&& character.NetworkObject.IsServerStarted;
 		}
 	}
 }

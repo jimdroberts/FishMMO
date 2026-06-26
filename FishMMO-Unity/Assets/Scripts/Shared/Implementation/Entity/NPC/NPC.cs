@@ -181,9 +181,11 @@ namespace FishMMO.Shared
 		/// <param name="asServer">Whether the reset is performed on the server.</param>
 		public override void ResetState(bool asServer)
 		{
+#if UNITY_SERVER
 			// Unsubscribe from tick to prevent stale timer during pool idle.
 			if (base.TimeManager != null)
 				base.TimeManager.OnTick -= CorpseDecayTick;
+#endif
 			isCorpse = false;
 			corpseDecayTimer = 0f;
 

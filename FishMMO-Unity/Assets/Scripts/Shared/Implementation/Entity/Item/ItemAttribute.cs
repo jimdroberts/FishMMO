@@ -14,7 +14,7 @@
 		/// <summary>
 		/// The current value of this attribute instance.
 		/// </summary>
-		public int value;
+		public int Value;
 
 		/// <summary>
 		/// Constructs an ItemAttribute from a template ID and value.
@@ -26,7 +26,7 @@
 		{
 			// Lookup the attribute template by ID. This allows dynamic assignment of attribute types.
 			Template = ItemAttributeTemplate.Get<ItemAttributeTemplate>(templateID);
-			this.value = value;
+			Value = value;
 		}
 	}
 }

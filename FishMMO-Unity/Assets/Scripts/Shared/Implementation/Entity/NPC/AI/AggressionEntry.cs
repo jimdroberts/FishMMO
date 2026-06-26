@@ -1,40 +1,28 @@
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Tracks accumulated aggression (threat) from a single character toward this NPC.
-	/// Points are gained when the character damages the NPC, heals an enemy of the NPC,
+	/// Tracks accumulated aggression (threat) from a single character toward an NPC.
+	/// Points are gained when the character damages the NPC, heals an enemy, spends resources,
 	/// or takes other aggressive actions. Points decay over time so stale threats fade.
 	/// </summary>
 	public class AggressionEntry
 	{
-		/// <summary>
-		/// Total accumulated aggression points from this character.
-		/// Higher values mean this character is a higher-priority target.
-		/// </summary>
+		/// <summary>Total accumulated aggression points. Higher = higher-priority target.</summary>
 		public float Points;
 
-		/// <summary>
-		/// Number of times this character has damaged the NPC.
-		/// Used as a tiebreaker and for AI awareness of persistent attackers.
-		/// </summary>
+		/// <summary>Number of times this character has damaged the NPC.</summary>
 		public int HitCount;
 
-		/// <summary>
-		/// Total damage dealt to the NPC by this character.
-		/// Contributes to aggression points and helps identify burst threats.
-		/// </summary>
+		/// <summary>Total damage dealt to the NPC by this character.</summary>
 		public int TotalDamage;
 
-		/// <summary>
-		/// Total healing performed by this character on enemies of the NPC.
-		/// Healing others in combat draws NPC attention toward the healer.
-		/// </summary>
+		/// <summary>Total healing performed on enemies of the NPC.</summary>
 		public int TotalHealing;
 
-		/// <summary>
-		/// Timestamp (Time.time) of the last aggression event from this character.
-		/// Used for decay calculations and staleness checks.
-		/// </summary>
+		/// <summary>Total resource (mana/stamina) spent casting abilities against the NPC.</summary>
+		public int TotalResourceSpent;
+
+		/// <summary>Timestamp (Time.time) of the last aggression event.</summary>
 		public float LastEventTime;
 
 		/// <summary>
@@ -46,6 +34,7 @@ namespace FishMMO.Shared
 			HitCount = 0;
 			TotalDamage = 0;
 			TotalHealing = 0;
+			TotalResourceSpent = 0;
 			LastEventTime = 0f;
 		}
 	}

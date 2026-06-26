@@ -491,7 +491,9 @@ Ability/
 ├── AbilityController.Knowledge.cs      # Knowledge partial (Learn/Knows methods, event dictionaries)
 ├── AbilityController.Networking.cs     # Network partial (broadcast handlers, ReadPayload/WritePayload)
 ├── AbilityObject.cs                    # Spawned ability object (MonoBehaviour, lifetime/collision/tick management)
-├── AbilityObjectSnapshot.cs            # Immutable snapshot for detached ability objects
+├── AbilityObjectSnapshot.cs
+- AbilityPrefabColliderCache.cs
+- AbilityContainerAllocator.cs            # Immutable snapshot for detached ability objects
 ├── Activation/
 │   └── AbilityActivationReplicateData.cs    # IReplicateData: ActivationFlags (int), QueuedAbilityID (long)
 ├── Cooldown/

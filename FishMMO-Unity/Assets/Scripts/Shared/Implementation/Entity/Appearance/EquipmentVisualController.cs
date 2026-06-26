@@ -41,6 +41,7 @@ namespace FishMMO.Shared
 
 		// ── Overrides from CharacterBehaviour (must exist unconditionally) ──
 
+		/// <summary>Initializes the equipment system: creates EquipmentRoot, pre-allocates renderers, subscribes to equip events.</summary>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -78,6 +79,7 @@ namespace FishMMO.Shared
 #endif
 		}
 
+		/// <summary>Unsubscribes from equipment events and releases all slot renderers.</summary>
 		public override void OnStopCharacter()
 		{
 #if !UNITY_SERVER
@@ -98,6 +100,7 @@ namespace FishMMO.Shared
 			base.OnStopCharacter();
 		}
 
+		/// <summary>Destroys the equipment root GameObject and clears the skeleton bone cache.</summary>
 		public override void OnDestroying()
 		{
 #if !UNITY_SERVER
@@ -114,6 +117,7 @@ namespace FishMMO.Shared
 
 		// ── IModelReadyHandler (must exist unconditionally) ──
 
+		/// <summary>Called when the character model finishes loading. Re-discovers skeleton and refreshes equipment.</summary>
 		public void OnModelReady()
 		{
 #if !UNITY_SERVER
@@ -124,6 +128,7 @@ namespace FishMMO.Shared
 
 		// ── IEquipmentVisualController (must exist unconditionally) ──
 
+		/// <summary>Re-equips all items from the current equipment state. Used after model load or spawn.</summary>
 		public void RefreshAllEquipment()
 		{
 #if !UNITY_SERVER
@@ -192,7 +197,8 @@ namespace FishMMO.Shared
 			int equipGen = ++renderer.EquipGeneration;
 
 			BodyRegion[] hiddenRegions = template.HiddenRegions;
-			bool isWeapon = template is WeaponTemplate weaponTemplate;
+			WeaponTemplate weaponTemplate = template as WeaponTemplate;
+			bool isWeapon = weaponTemplate != null;
 			string boneName = isWeapon ? weaponTemplate.AttachBoneName : null;
 
 			assetRef.LoadAssetAsync<GameObject>().Completed += (handle) =>

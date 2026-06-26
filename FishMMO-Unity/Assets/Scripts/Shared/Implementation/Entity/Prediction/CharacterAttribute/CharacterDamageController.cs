@@ -5,6 +5,10 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Controls damage, healing, kill, and resurrection logic. Handles resistance
+	/// calculation, ECA trigger dispatch, immortal state, and combat state transitions.
+	/// </summary>
 	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController
 	{
 		// ───── ECA Trigger Lists ─────────────────────────────────────────────
@@ -209,65 +213,32 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Kills this character, distributing kill rewards, invoking ECA triggers, removing
-		/// all buffs, and killing any owned pet. Does nothing if the character is immortal.
+		/// Kills this character. Handles faction rewards, ECA triggers, ability cancellation,
+		/// death animation, and the OnKilled event. Buff removal and pet despawning are handled
+		/// by the server-side OnKilled subscriber (CharacterSystem.Connection.cs).
 		/// </summary>
 		/// <param name="killer">The character responsible for the kill, or null for non-player kills.</param>
 		public void Kill(ICharacter killer)
 		{
-			if (Immortal)
-			{
-				return;
-			}
+			if (Immortal) return;
 
 			if (killer != null)
 			{
-				// Reward the killer with faction.
-				if (killer.TryGet(out IFactionController factionController) &&
-					Character.TryGet(out IFactionController defenderFactionController))
-				{
-					factionController.AdjustFaction(defenderFactionController, 0.01f, 0.01f);
-				}
+				if (killer.TryGet(out IFactionController fc) &&
+					Character.TryGet(out IFactionController dfc))
+					fc.AdjustFaction(dfc, 0.01f, 0.01f);
 
-				// Invoke killer's OnKill triggers (e.g. achievements, quest objectives)
-				if (killer.TryGet(out ICharacterDamageController killerDamage))
-				{
-					killer.Invoke(killerDamage.OnKillTriggers, new EventData(killer, Character));
-				}
+				if (killer.TryGet(out ICharacterDamageController kdc))
+					killer.Invoke(kdc.OnKillTriggers, new EventData(killer, Character));
 			}
 
-			// Invoke victim's OnKilled triggers (e.g. death achievements)
 			Character.Invoke(OnKilledTriggers, new EventData(Character, killer));
 
-			// Remove all buffs
-			if (Character.TryGet(out IBuffController buffController))
-			{
-				buffController.RemoveAll();
-			}
+			if (base.IsServerStarted && Character.TryGet(out IAbilityController ac))
+				ac.Cancel();
 
-			// Cancel any active ability on death. Only the server cancels to avoid
-			// interfering with prediction replay. Client learns via reconcile.
-			if (base.IsServerStarted && Character.TryGet(out IAbilityController abilityController))
-			{
-				abilityController.Cancel();
-			}
-
-			// Kill the players pet
-			if (Character.TryGet(out IPetController petController) &&
-				petController.Pet != null)
-			{
-				if (petController.Pet.TryGet(out ICharacterDamageController petCharacterDamageController))
-				{
-					petCharacterDamageController.Kill(null);
-				}
-			}
-
-			// Trigger death animation BEFORE OnKilled so observers see it immediately.
-			// Also resets speed, blocking, crouching, and other animation triggers.
-			if (Character.TryGet(out ICharacterAnimationController animController))
-			{
-				animController.TriggerDeath();
-			}
+			if (Character.TryGet(out ICharacterAnimationController anim))
+				anim.TriggerDeath();
 
 			ICharacterDamageController.OnKilled?.Invoke(killer, Character);
 		}

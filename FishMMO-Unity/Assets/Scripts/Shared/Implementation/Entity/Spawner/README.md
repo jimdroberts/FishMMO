@@ -46,6 +46,8 @@ The Spawner system is a server-authoritative, condition-driven framework for spa
 - Scene-aware spawning via `SceneManager.MoveGameObjectToScene()`
 - Editor gizmo visualization of bounding box and spawn area
 - Extensible respawn condition system (e.g., `DeadNPCRespawnCondition` for boss encounters)
+- NPC corpse decay: dead NPCs remain visible for `NPC.CorpseDecayDuration` seconds (default 30s) before returning to the object pool. AI is disabled during corpse state and the NPC is immortal. `NPCSpawnableSettings.CorpseDecayDurationOverride` allows per-spawner override. Pets bypass the corpse timer and despawn immediately.
+- Re-rolled attributes on each spawn: NPC seed, RNG, gender, and name are regenerated in `OnStartServer` so pooled NPCs get fresh randomized attributes each time.
 
 ## Prerequisites
 

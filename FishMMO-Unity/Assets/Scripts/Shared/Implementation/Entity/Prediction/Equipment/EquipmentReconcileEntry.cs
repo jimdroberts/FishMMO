@@ -23,6 +23,9 @@ namespace FishMMO.Shared
 		/// <summary>Item instance ID.</summary>
 		public long InstanceID;
 
+		/// <summary>Returns true if this entry matches the other entry on all fields.</summary>
+		/// <param name="other">The other entry to compare.</param>
+		/// <returns>True if all fields match.</returns>
 		public bool Equals(EquipmentReconcileEntry other)
 		{
 			return TemplateID == other.TemplateID
@@ -31,11 +34,16 @@ namespace FishMMO.Shared
 				&& InstanceID == other.InstanceID;
 		}
 
+		/// <summary>Returns true if obj is an EquipmentReconcileEntry with matching fields.</summary>
+		/// <param name="obj">The object to compare.</param>
+		/// <returns>True if obj is an identical EquipmentReconcileEntry.</returns>
 		public override bool Equals(object obj)
 		{
 			return obj is EquipmentReconcileEntry other && Equals(other);
 		}
 
+		/// <summary>Returns a hash code combining all fields for use in dictionaries and sets.</summary>
+		/// <returns>Hash code for this entry.</returns>
 		public override int GetHashCode()
 		{
 			unchecked
@@ -49,6 +57,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>Writes a single entry to a FishNet Writer.</summary>
+		/// <param name="writer">The Writer to write to.</param>
+		/// <param name="entry">The entry to serialize.</param>
 		public static void WriteTo(Writer writer, EquipmentReconcileEntry entry)
 		{
 			writer.WriteInt32(entry.TemplateID);
@@ -57,6 +68,9 @@ namespace FishMMO.Shared
 			writer.WriteInt64(entry.InstanceID);
 		}
 
+		/// <summary>Reads a single entry from a FishNet Reader.</summary>
+		/// <param name="reader">The Reader to read from.</param>
+		/// <returns>The deserialized EquipmentReconcileEntry.</returns>
 		public static EquipmentReconcileEntry ReadFrom(Reader reader)
 		{
 			return new EquipmentReconcileEntry
@@ -77,7 +91,7 @@ namespace FishMMO.Shared
 
 		private static ushort BuildHeader(int count, bool isDelta)
 		{
-			return (ushort)((count & COUNT_MASK) | (isDelta ? DELTA_FLAG : 0u));
+			return (ushort)((count & COUNT_MASK) | (isDelta ? DELTA_FLAG : (ushort)0));
 		}
 
 		public static bool WriteArrayDelta(

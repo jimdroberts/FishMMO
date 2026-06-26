@@ -80,7 +80,7 @@ namespace FishMMO.Shared
 				int i = 0;
 				foreach (ItemAttribute attribute in attributes.Values)
 				{
-					builder.AddLine($"{attribute.Template.Name}: <color={TooltipColors.Value}>{attribute.value}</color>", 51 + i, null, false, "110%");
+					builder.AddLine($"{attribute.Template.Name}: <color={TooltipColors.Value}>{attribute.Value}</color>", 51 + i, null, false, "110%");
 					i++;
 				}
 			}
@@ -182,7 +182,7 @@ namespace FishMMO.Shared
 			{
 				if (attributes.TryGetValue(additionalAttribute.Name, out ItemAttribute itemAttribute))
 				{
-					itemAttribute.value += additionalAttribute.MinValue;
+					itemAttribute.Value += additionalAttribute.MinValue;
 				}
 				else
 				{
@@ -211,10 +211,10 @@ namespace FishMMO.Shared
 		{
 			if (attributes.TryGetValue(name, out ItemAttribute attribute))
 			{
-				if (attribute.value == newValue) return;
+				if (attribute.Value == newValue) return;
 
-				int oldValue = attribute.value;
-				attribute.value = newValue;
+				int oldValue = attribute.Value;
+				attribute.Value = newValue;
 
 				// If the item is equipped, update the character's attribute modifiers
 				if (item != null && item.IsEquippable && item.Equippable?.Character != null)
@@ -252,11 +252,11 @@ namespace FishMMO.Shared
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(pair.Value.value);
+					characterAttribute.AddModifier(pair.Value.Value);
 				}
 				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(pair.Value.value);
+					characterResourceAttribute.AddModifier(pair.Value.Value);
 				}
 			}
 		}
@@ -275,11 +275,11 @@ namespace FishMMO.Shared
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(-pair.Value.value);
+					characterAttribute.AddModifier(-pair.Value.Value);
 				}
 				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(-pair.Value.value);
+					characterResourceAttribute.AddModifier(-pair.Value.Value);
 				}
 			}
 		}

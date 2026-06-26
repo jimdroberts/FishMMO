@@ -1,6 +1,6 @@
 # FishMMO — Complete Feature List
 
-> Generated 2026-06-19 from the FishMMO-Dev monorepo.  
+> Generated 2026-06-26 from the FishMMO-Dev monorepo.  
 > Built on Unity 6.3 LTS, FishNet, PostgreSQL, .NET 8.0.
 
 ---
@@ -346,11 +346,12 @@
 **The player-facing Unity client** (FishMMO.Client assembly, 169 .cs files).
 
 ### Networking & Connectivity
-1. **Multi-Server Connection Management** — LoginServer → WorldServer → SceneServer transitions with state tracking.  
+1. **Multi-Server Connection Management** — LoginServer → WorldServer → SceneServer transitions with state tracking.
 2. **Reconnection with Exponential Backoff** — Automatic reconnect attempts with configurable backoff.  
 3. **Login-Server Discovery** — Happy-Eyeballs multi-mirror probing via configurable API hosts.  
 4. **ServerConnectionType State** — Tracks connection state: None, Login, ConnectingToWorld, World, Scene.  
-5. **Broadcast Sending** — Centralized FishNet broadcast dispatch from the Client MonoBehaviour.
+5. **Broadcast Sending** — Centralized FishNet broadcast dispatch from the Client MonoBehaviour.  
+6. **Death Dialog** — `UITKDeathDialog` with Respawn/Resurrect buttons. Handles `ResurrectOfferBroadcast` for dynamic button visibility.
 
 ### Authentication
 6. **SRP-6a Client Login Flow** — Full SRP-6a protocol: cookie challenge echo, key agreement, verify/proof, token-based reauth.  
@@ -434,11 +435,19 @@
 70. **UI Manager** — Static registry for all UI controls with Show/Hide/Toggle/GetByName, close-on-escape stack, character injection.
 
 ### 3D World-Space Effects
-71. **3D Label System** — Object-pooled TextMeshPro labels for damage numbers, heal numbers, achievement popups.  
+71. **3D Label System** — Object-pooled TextMeshPro labels for damage numbers, heal numbers, achievement popups.
 72. **Visual Effects** — 10 configurable effects: FadeIn, FadeOut, FloatUp, FloatRandom, Bounce, Pulse, ScaleUp, ScaleDown, Wave, Shake.  
 73. **Billboard Component** — Makes GameObjects always face the camera (nameplates, health bars).  
 74. **Cinematic Camera** — Camera movement along Unity Spline paths with LookAt target and user skip.  
 75. **Floating Labels** — Damage, heal, achievement, and region name labels in world space.
+
+### Scene Management
+76. **Addressable-Based Scene Loading** — Scene preloading/postloading with progress tracking.  
+77. **Template Cache Population** — Static permanent addressable loading.  
+78. **Fog Transitions** — Scene fog changes during world transitions. `ClientFogManager` extracted for SRP compliance.  
+79. **World Scene Tracking / Unloading** — Client-side world scene lifecycle management.  
+80. **Postload Scene Lifecycle** — Reloads on quit-to-login, unloads on entering game world.  
+81. **Death Broadcast Handler** — `DeathBroadcast` registered on client for reconnect-while-dead death dialog re-display.
 
 ### Naming & Resolution
 76. **ClientNamingSystem** — ID-to-name and name-to-ID resolution for characters, guilds, pets with server queries and disk persistence (GZip binary).
@@ -529,7 +538,7 @@
 2. **BaseCharacter** — Abstract NetworkBehaviour implementing ICharacter: behaviour registry, bitwise flag management, ECA trigger invocation, race model instantiation (Addressable), client character dictionary.  
 3. **PlayerCharacter** — Concrete player class requiring 13+ behaviour components (attribute, target, cooldown, inventory, equipment, bank, ability, achievement, buff, quest, damage, guild, party, friend, faction controllers). KCC movement, chat anti-spam token bucket.  
 4. **CharacterBehaviour** — Abstract base for modular behaviour components: InitializeOnce, OnStartCharacter, OnStopCharacter lifecycle.  
-5. **CharacterFlags** — Bitwise state flags: Idle, IsMoving, IsRunning, IsCrouching, IsSwimming, IsTeleporting, IsFrozen, IsStunned, IsMesmerized, IsInInstance, IsLoaded.
+5. **CharacterFlags** — Bitwise state flags: Idle, IsMoving, IsRunning, IsCrouching, IsSwimming, IsTeleporting, IsFrozen, IsStunned, IsMesmerized, IsInInstance, IsLoaded, IsDead.
 
 ### ECA Trigger System (Entity-Component-Action)
 *The data-driven trigger/action pipeline powering abilities, quests, dialogue, interactables, and game events.*
@@ -570,7 +579,7 @@
 29. **Item Generation** — `ItemGenerator` using `DeterministicRNG` for seed-based stat rolls (AttackPower, AttackSpeed, ArmorBonus + random attributes from databases).  
 30. **Item Attributes** — Template-driven attribute system with min/max values linked to CharacterAttributeTemplates.  
 31. **Item Containers** — `IItemContainer` with slot locking, stacking, swapping. `InventoryController`, `EquipmentController`, `BankController` implementations.  
-32. **Item Slots** — Head, Chest, Legs, Hands, Feet, Primary, Secondary.
+32. **Item Slots** — Head, Chest, Shoulders, Hands, Legs, Feet, Back, Primary, Secondary, Accessory (10 slots).
 
 ### Ability System
 33. **Ability Templates** — `BaseAbilityTemplate` → `AbilityTemplate` / `PetAbilityTemplate` with ActivationTime, LifeTime, Speed, Cooldown, Price, RequiresTarget, HitCount.  
@@ -592,11 +601,13 @@
 45. **Propagation Batching** — Deferred notifications with suppression for replay performance.  
 46. **Tick-Driven Regeneration** — Monotonic guard against double-advance.  
 47. **Damage System** — `CharacterDamageController`: damage, healing, kill, resurrection with full ECA trigger invocation.  
-48. **Damage Types & Resistances** — `DamageAttributeTemplate` (physical, fire, frost, etc.) and `ResistanceAttributeTemplate` pairing.
+48. **Damage Types & Resistances** — `DamageAttributeTemplate` (physical, fire, frost, etc.) and `ResistanceAttributeTemplate` pairing.  
+49. **Death System** — Player death shows dialog with Respawn/Resurrect options. NPC corpse decay timer (configurable per spawner). `ResurrectOfferBroadcast`/`ResurrectAcceptBroadcast`/`RespawnAtBindPointBroadcast`/`DeathBroadcast`. Reconnect-while-dead re-shows death dialog.  
+50. **Revive** — `Revive(ICharacter, int)` works on dead characters (unlike Heal). Fires `OnResurrected` static event, resets death animation, fires ECA resurrect triggers.
 
 ### Client-Side Prediction Pipeline
 49. **Unified Prediction Controller** — `CharacterPredictionController` discovers all `IPredictableController` components, sorts by Order, drives a single FishNet Prediction V2 pipeline.  
-50. **Participating Subsystems** — KCC movement, AbilityController, BuffController, CharacterAttributeController, CooldownController.  
+50. **Participating Subsystems** — KCC movement (Order 80), BuffController (85), CooldownController (90), EquipmentController (93), CharacterAttributeController (95), AbilityController (100).  
 51. **Type-Safe Ticks** — `PredictionTick` struct prevents accidental raw tick usage.  
 52. **Delta Compression** — `CharacterReconcileDataDeltaSerializer`, `CharacterAttributeResourceStateSerializer` for bandwidth-efficient sync.
 
@@ -636,10 +647,27 @@
 ### World System
 76. **World Scene Details** — Per-scene configuration: max clients, spawn/respawn positions, teleporters, boundaries.  
 77. **Day/Night Cycle** — Configurable cycle durations, skybox transitions, object activation/deactivation, material alpha fading, ECA triggers for day/night transitions.  
-78. **Spawner System** — Linear/Random/Weighted spawning with respawn conditions (OR/AND), initial/max counts, pooling (`ObjectSpawner`).  
+78. **Spawner System** — Linear/Random/Weighted spawning with respawn conditions (OR/AND), initial/max counts, pooling (`ObjectSpawner`). NPC corpse decay with per-spawner override. Re-rolled attributes on each spawn.  
 79. **Teleporter System** — Cross-scene and same-scene teleportation with cached destinations.  
 80. **Region System** — Zone definitions for area effects (fog, skybox, audio, buffs, attributes, region name display).  
 81. **Scene Boundaries** — Terrain and custom boundary definitions.
+
+### Character Appearance & Visual Equipment
+82. **Modular Character System** — One shared humanoid skeleton, one Animator, one animation library for all races and equipment.  
+83. **Body Region System** — Body mesh split into 6 hideable regions (Head, Torso, Arms, Hands, Legs, Feet). `BodyVisibilityManager` with per-slot reference counting for overlapping equipment hides.  
+84. **Character Customization** — Bone scaling for Height, ArmLength, LegLength, TorsoLength, ShoulderWidth, HeadScale. Race presets (Human/Dwarf/Elf). Blend shapes for Weight, MuscleMass, ChestSize, WaistSize.  
+85. **Equipment Visuals** — `EquipmentVisualController` with persistent renderer pool (no Instantiate/Destroy spam). Loads prefabs via Addressables, extracts mesh + materials, binds to skeleton via `SkeletonBinder.BindMeshKeepParent`.  
+86. **Weapon Attachment** — Weapons as `MeshRenderer` children of bone transforms (RightHand, LeftHand). Follow animations automatically. Scale-independent from body proportions.  
+87. **Equipment Mesh Variations** — `EquippableItemTemplate.EquipmentMeshes` list with seed-based selection via `ModelPools`/`ModelSeed`.  
+88. **SkeletonBinder** — Bone name matching with caching. Generation-based cache invalidation for instance ID recycling safety.  
+89. **Animation System** — `CharacterAnimationController` with Speed, IsGrounded, IsCrouching, Jump, Attack, Block, Roll, Cast, Death, RootMotion. FishNet `NetworkAnimator` integration.  
+90. **Ability Animation** — `TriggerAbilityAnimation` maps `AbilityType` to animation: Physical→Attack, Magic→Cast, Block→SetBlocking, Roll→TriggerRoll. Death animation suppresses all other state.
+
+### AI Threat System
+91. **Threat Table** — `AggressionController` with damage, healing, resource expenditure threat. Configurable weights per category.  
+92. **Vulnerability Scoring** — Low-health targets (<30%) get 1.5x threat multiplier. Low-mana targets (<20%) get 1.3x multiplier. AI intelligently pressures weakened enemies.  
+93. **Replay-Safe Events** — `AggressionState.IsSpawnedAndAuthoritative()` guard prevents threat double-counting during client-side prediction replay.  
+94. **Object-Pooled Aggression Entries** — Stack-based pool for `AggressionEntry` to avoid per-event allocations.
 
 ### Network Broadcasts (30+ types)
 82. **Auth** — Authentication request/response, token sync.  

@@ -494,6 +494,8 @@ CharacterReconcileData: ushort bitmask → per-field delta encoding
 ├── CharacterAttributeResourceState: 7-bit byte bitmask
 ├── CooldownReconcileEntry[]: index-delta compression (reference-equality shortcut)
 ├── BuffReconcileEntry[]: index-delta compression (reference-equality shortcut)
+├── EquipmentReconcileEntry[]: index-delta compression (reference-equality shortcut)
+├── AttributeReconcileEntry[]: index-delta compression (reference-equality shortcut)
 └── RNG state (RngS0–S3): 4 × uint, only when changed
 ```
 
@@ -516,17 +518,19 @@ Prediction/
 │   ├── AbilityController.Networking.cs         # Knowledge broadcasts (NOT state replication)
 │   ├── AbilityObject.cs                        # Spawned ability instance (projectile / hit volume)
 │   ├── AbilityObjectSnapshot.cs                # Detached object snapshot (outlives caster)
+│   ├── AbilityPrefabColliderCache.cs           # Caches colliders per ability prefab to avoid GetComponent per spawn
+│   ├── AbilityContainerAllocator.cs            # Allocates deterministic container IDs for spawned objects
 │   ├── AbilityActivationFlags.cs               # 16-bit flags packed into CharacterReconcileData.PackedFlagsAndSlot
 │   ├── Activation/                             # AbilityActivationReplicateData (per-ability input shape)
 │   ├── Cooldown/                               # Cooldown system (see Ability/Cooldown/README.md)
 │   ├── Snapshot/                               # SnapshotCharacter / SnapshotAttributeController
 │   └── Template/                               # AbilityTemplate, AbilityType, AbilitySpawnTarget, Pet*, Events/
 ├── Buff/                                       # Buff system (see Buff/README.md)
-├── Equipment/                                  # Equipment state reconcile (EquipmentController, EquipmentReconcileEntry)
 │   ├── Buff.cs                                 # Per-buff state holder
 │   ├── BuffController.cs                       # IPredictableController (Order=85)
 │   ├── BuffReconcileEntry.cs                   # (TemplateID, ExpiryTick, NextTickTick, Stacks) + array-delta
 │   └── Template/                               # AttributeBuffTemplate, CompositeBuffTemplate, etc.
+├── Equipment/                                  # Equipment state reconcile (EquipmentController, EquipmentReconcileEntry)
 ├── CharacterAttribute/                         # Attribute system (see CharacterAttribute/README.md)
 │   ├── CharacterAttributeController.cs         # IPredictableController (Order=95)
 │   ├── CharacterAttribute.cs                   # Non-resource attribute runtime

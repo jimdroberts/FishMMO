@@ -35,6 +35,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns a snapshot of the character's current appearance.
 		/// </summary>
+		/// <returns>A snapshot with all proportions, blend shapes, and equipped item IDs.</returns>
 		CharacterAppearanceData GetAppearanceData();
 
 		/// <summary>
@@ -42,5 +43,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="data">The appearance data to apply.</param>
 		void ApplyAppearanceData(CharacterAppearanceData data);
+
+		/// <summary>
+		/// Registers an equipment renderer for blend shape syncing.
+		/// Called by EquipmentVisualController when an item is equipped.
+		/// </summary>
+		/// <param name="renderer">The equipment SkinnedMeshRenderer to register.</param>
+		void RegisterEquipmentRenderer(SkinnedMeshRenderer renderer);
+
+		/// <summary>
+		/// Unregisters an equipment renderer from blend shape syncing.
+		/// Called by EquipmentVisualController when an item is unequipped.
+		/// </summary>
+		/// <param name="renderer">The equipment SkinnedMeshRenderer to unregister.</param>
+		void UnregisterEquipmentRenderer(SkinnedMeshRenderer renderer);
 	}
 }

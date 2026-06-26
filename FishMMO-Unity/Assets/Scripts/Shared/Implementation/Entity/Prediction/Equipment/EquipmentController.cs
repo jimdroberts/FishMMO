@@ -180,7 +180,8 @@ namespace FishMMO.Shared
 				{
 					EquipmentReconcileEntry entry = entries[i];
 					int slot = entry.Slot;
-					Item currentItem = slot < slotCount ? Items[slot] : null;
+					if (slot < 0 || slot >= slotCount) continue;
+					Item currentItem = Items[slot];
 
 					// Check if the slot already has the correct item
 					if (currentItem != null &&
@@ -202,7 +203,7 @@ namespace FishMMO.Shared
 					}
 
 					// Create and equip new item
-					Item newItem = new Item(entry.InstanceID, entry.Seed, entry.TemplateID, 1);
+					Item newItem = new Item(entry.InstanceID, entry.Seed, entry.TemplateID, 1); // Equipment items are never stackable
 					SetItemSlot(newItem, slot);
 					if (newItem.IsEquippable)
 					{

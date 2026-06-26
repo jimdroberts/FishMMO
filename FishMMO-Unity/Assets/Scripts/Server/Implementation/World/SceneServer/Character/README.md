@@ -58,7 +58,7 @@ Character sessions are explicitly claimed and released to prevent dual-server ow
 - Periodic save with configurable interval, main-thread DTO snapshot, async persistence, session lease refresh even on save failure, and atomic processing guard to prevent overlapping save cycles
 - Periodic out-of-bounds check with respawn point teleportation for characters outside scene boundaries
 - Teleport flow: teleporter validation, scene unload, immortality, position/scene update, instance flag removal, save-then-release with reconnect through world routing
-- Death/respawn: player full heal + respawn at bind position (same scene) or save + disconnect for cross-scene bind (reconnect via world server); NPC despawn; pet killed event
+- Death/respawn: player marked `IsDead`, death dialog shown on client. Player chooses Respawn (teleport to bind + revive) or waits for Resurrect (revive at corpse location). Reconnect-while-dead re-shows the death dialog. NPC despawn with corpse decay timer; pet killed event with immediate despawn
 - Connection disconnect cleanup: waiting-scene-load character pool return with session release, spawned character mapping removal with save-then-despawn
 - Graceful deinitialize: main-thread DTO snapshot of all characters, async persist all, release all sessions (spawned + waiting-to-load)
 - Optimistic concurrency via `character.Version++` on every save
@@ -91,7 +91,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 4. Verify that `SceneServerAuthenticator` exists in the scene for authentication event subscription.
 5. Verify that `ICharacterService` and all sub-entity services are registered in `Database.ServiceRegistry`.
 6. Adjust inspector parameters (`saveRate`, `outOfBoundsCheckRate`, `maxMainThreadActionsPerFrame`) as needed.
-7. On initialize, `CharacterSystem` registers the authenticator callback, broadcast handlers (`ClientValidatedSceneBroadcast`, `ClientScenesUnloadedBroadcast`), scene manager events, connection state events, character events (`IPlayerCharacter.OnTeleport`, `ICharacterDamageController.OnKilled`), and periodic callbacks for save and out-of-bounds checks.
+7. On initialize, `CharacterSystem` registers the authenticator callback, broadcast handlers (`ClientValidatedSceneBroadcast`, `ClientScenesUnloadedBroadcast`, `RespawnAtBindPointBroadcast`, `ResurrectAcceptBroadcast`), scene manager events, connection state events, character events (`IPlayerCharacter.OnTeleport`, `ICharacterDamageController.OnKilled`), and periodic callbacks for save and out-of-bounds checks.
 8. On deinitialize, it unregisters all event handlers, snapshots and persists all character data, and releases all claimed sessions.
 
 ## Configuration
@@ -158,6 +158,8 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `SceneManager` | `OnClientLoadedStartScenes` | `SceneManager_OnClientLoadedStartScenes` | Validates character scene and sends `ClientValidatedSceneBroadcast` |
 | `IPlayerCharacter` | `OnTeleport` | `IPlayerCharacter_OnTeleport` | Handles teleportation between scenes |
 | `ICharacterDamageController` | `OnKilled` | `CharacterDamageController_OnKilled` | Handles player death, NPC despawn, pet death |
+| `RespawnAtBindPointBroadcast` | Client broadcast | `OnClientRespawnAtBindPointBroadcastReceived` | Handles dead player respawn at bind point |
+| `ResurrectAcceptBroadcast` | Client broadcast | `OnClientResurrectAcceptBroadcastReceived` | Handles dead player accepting a resurrect |
 | Connection state | Remote connection stopped | `OnRemoteConnectionStopped` | Cleans up auth rate-limit tracking and character mappings |
 
 ### Exposed Lifecycle Events
@@ -284,11 +286,15 @@ All release paths follow **save-then-release** ordering via `SaveAndReleaseChara
 
 1. Removes all buffs from the defender.
 2. **Player character:**
-   - Full heal via `damageController.Heal`.
-   - If bind scene differs from current scene: update scene/position to bind point, remove instance/loaded flags, disconnect (reconnects via world server).
-   - If bind scene matches: teleport to bind position in place.
-3. **NPC:** calls `npc.Despawn()`.
-4. **Pet:** fires `OnPetKilled` for the pet owner.
+   - Sets `IsDead` flag, sends `DeathBroadcast` to client to show death dialog.
+   - Player chooses: "Respawn at Bind Point" (teleports to bind + revives) or waits for "Resurrect" from another player (revives at corpse location).
+   - Reconnect-while-dead: `IsDead` flag is persisted; `DeathBroadcast` re-sent after scene load so dialog reappears.
+3. **NPC:** calls `npc.Despawn()` which enters corpse state for `CorpseDecayDuration` seconds before returning to the object pool.
+4. **Pet:** calls `pet.Despawn()` which returns to pool immediately (no corpse timer).
+
+Client-side death handlers:
+- `RespawnAtBindPointBroadcast` → `OnClientRespawnAtBindPointBroadcastReceived`: revives character, teleports to bind.
+- `ResurrectAcceptBroadcast` → `OnClientResurrectAcceptBroadcastReceived`: revives character at current position (no teleport).
 
 ### Targeted Broadcasts
 

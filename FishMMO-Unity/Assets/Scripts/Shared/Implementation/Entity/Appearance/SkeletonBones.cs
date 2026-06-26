@@ -135,6 +135,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Maps a BodyRegion to its renderer GameObject name.
 		/// </summary>
+		/// <param name="region">The body region to map.</param>
+		/// <returns>The renderer GameObject name for the given region, or null if unknown.</returns>
 		public static string GetRegionRendererName(BodyRegion region)
 		{
 			return region switch

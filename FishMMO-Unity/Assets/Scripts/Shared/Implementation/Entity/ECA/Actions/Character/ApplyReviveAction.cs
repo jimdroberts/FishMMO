@@ -45,7 +45,9 @@ namespace FishMMO.Shared
 
 				// Send resurrect offer broadcast to the dead player so their
 				// death dialog shows the "Accept Resurrect" button.
-				if (target is IPlayerCharacter playerCharacter &&
+				if (initiator.NetworkObject != null &&
+					initiator.NetworkObject.IsServerStarted &&
+					target is IPlayerCharacter playerCharacter &&
 					playerCharacter.Owner != null &&
 					playerCharacter.Owner.IsValid)
 				{

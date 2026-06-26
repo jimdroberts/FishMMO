@@ -82,6 +82,10 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the default appearance for a given race.
 		/// </summary>
+		/// <param name="raceId">The race template ID to build defaults for.</param>
+		/// <param name="gender">The character gender.</param>
+		/// <param name="modelIndex">The model index within the race/gender set.</param>
+		/// <returns>A CharacterAppearanceData with default proportions and empty equipment.</returns>
 		public static CharacterAppearanceData Default(int raceId, CharacterGender gender, int modelIndex)
 		{
 			int slotCount = System.Enum.GetNames(typeof(ItemSlot)).Length;
