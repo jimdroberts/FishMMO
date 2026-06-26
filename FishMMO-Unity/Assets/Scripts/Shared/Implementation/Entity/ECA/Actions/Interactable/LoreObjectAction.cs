@@ -14,6 +14,13 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class LoreObjectAction : BaseAction
 	{
+		/// <summary>
+		/// Executes the lore object interaction: sends the lore broadcast, grants abilities and
+		/// ability events, grants items, and increments the achievement counter.
+		/// Server-only.
+		/// </summary>
+		/// <param name="initiator">The character interacting with the lore object.</param>
+		/// <param name="eventData">The event data containing the interaction context.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
 #if UNITY_SERVER

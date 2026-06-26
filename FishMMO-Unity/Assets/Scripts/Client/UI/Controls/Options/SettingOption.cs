@@ -2,6 +2,11 @@ using UnityEngine;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Abstract base class for configurable setting options in the Options UI.
+	/// Each subclass represents a single user-configurable setting with
+	/// initialize, load, and save lifecycle methods.
+	/// </summary>
 	public abstract class SettingOption : MonoBehaviour
 	{
 		/// <summary>

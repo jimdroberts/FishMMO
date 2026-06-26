@@ -79,6 +79,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called when entering the healer attacking state.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
 		public override void Enter(AIController controller)
 		{
 			base.Enter(controller);
@@ -96,6 +97,8 @@ namespace FishMMO.Shared
 		/// ability is available, targets and heals the most injured. Otherwise falls back to
 		/// normal damage behaviour via base <see cref="BaseAttackingState.TryAttack"/>.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="targetCharacter">The current target character being attacked.</param>
 		protected override void TryAttack(AIController controller, ICharacter targetCharacter)
 		{
 			if (!controller.Character.TryGet(out IAbilityController abilityController))
@@ -192,6 +195,8 @@ namespace FishMMO.Shared
 		/// Scans for nearby allies and returns the most injured one whose health is below
 		/// <see cref="HealThreshold"/>. Returns null if no ally needs healing.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <returns>The most injured ally needing healing, or null.</returns>
 		private ICharacter FindMostInjuredAlly(AIController controller)
 		{
 			if (!controller.Character.TryGet(out IFactionController ourFaction))
@@ -246,6 +251,10 @@ namespace FishMMO.Shared
 		/// Prefers abilities whose range covers the distance to the ally. Among those,
 		/// picks the one with the longest cooldown (typically stronger).
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="abilityController">The ability controller for the NPC.</param>
+		/// <param name="ally">The ally to heal.</param>
+		/// <returns>The best heal ability, or null if none available.</returns>
 		private Ability PickBestHealAbility(AIController controller, IAbilityController abilityController, ICharacter ally)
 		{
 			if (!controller.Character.TryGet(out ICooldownController cooldownController))
@@ -294,6 +303,10 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Picks the best damage (non-heal) ability for attacking enemies.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="abilityController">The ability controller for the NPC.</param>
+		/// <param name="preferredMaxRange">Maximum preferred range for ability selection.</param>
+		/// <returns>The best damage ability, or null if none available.</returns>
 		private Ability PickBestDamageAbility(AIController controller, IAbilityController abilityController, float preferredMaxRange)
 		{
 			if (!controller.Character.TryGet(out ICooldownController cooldownController))
@@ -342,6 +355,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns true if the ability's template ID is in the configured heal ability set.
 		/// </summary>
+		/// <param name="ability">The ability to check.</param>
+		/// <returns>True if the ability is a heal ability.</returns>
 		private bool IsHealAbility(Ability ability)
 		{
 			if (healTemplateSet == null)
@@ -354,6 +369,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Moves the NPC toward an ally, stopping at the specified range.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="ally">The ally to move toward.</param>
+		/// <param name="stopRange">Distance from the ally at which to stop.</param>
 		private void MoveTowardAlly(AIController controller, ICharacter ally, float stopRange)
 		{
 			if (ally == null || controller.Agent.pathStatus == NavMeshPathStatus.PathInvalid)
@@ -381,6 +399,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Healers stay at preferred distance from the enemy, retreating if too close.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="distance">Current distance to the target.</param>
 		protected override void ManagePositioning(AIController controller, float distance)
 		{
 			if (controller.Target == null) return;

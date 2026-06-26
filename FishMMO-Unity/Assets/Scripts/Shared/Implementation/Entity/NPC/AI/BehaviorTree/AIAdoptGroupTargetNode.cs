@@ -13,6 +13,12 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI Adopt Group Target Node", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/Adopt Group Target Node")]
 	public class AIAdoptGroupTargetNode : AIBehaviorNode
 	{
+		/// <summary>
+		/// Adopts the group's target as this NPC's target. Returns Success if the group
+		/// has a target and it was adopted, Failure otherwise.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Success if the group target was adopted, Failure if no group or no group target.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			if (controller.Group == null)

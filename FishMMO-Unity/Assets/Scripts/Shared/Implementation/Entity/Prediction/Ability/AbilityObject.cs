@@ -167,6 +167,10 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Unity Awake callback. Caches references and sets Rigidbody to kinematic if present.
 		/// </summary>
+		/// <summary>
+		/// Unity Awake callback. Caches GameObject, Transform, and Rigidbody references.
+		/// Sets the Rigidbody to kinematic if present.
+		/// </summary>
 		private void Awake()
 		{
 			GameObject = gameObject;
@@ -398,6 +402,11 @@ namespace FishMMO.Shared
 			Destroy(GameObject);
 		}
 
+		/// <summary>
+		/// Returns the current authoritative tick. Prefers the <see cref="CharacterPredictionController"/>
+		/// snapshot tick when it matches the live <see cref="TimeManager.LocalTick"/>, falling back
+		/// to the live tick otherwise.
+		/// </summary>
 		private uint GetCurrentAuthoritativeTick()
 		{
 			uint liveTick = timeManager != null ? timeManager.LocalTick : 0u;

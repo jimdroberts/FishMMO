@@ -9,6 +9,9 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for merchant interactions, displaying purchasable abilities, ability events, and items across tabbed categories.
+	/// </summary>
 	public class UIMerchant : UICharacterControl
 	{
 		/// <summary>

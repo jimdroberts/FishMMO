@@ -258,6 +258,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Unity OnDestroy callback. Calls OnDestroying for cleanup and removes the character from the client-side dictionary.
+		/// </summary>
 		void OnDestroy()
 		{
 			OnDestroying();

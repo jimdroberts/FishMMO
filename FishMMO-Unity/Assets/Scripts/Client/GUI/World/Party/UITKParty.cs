@@ -62,7 +62,9 @@ namespace FishMMO.Client
 			public string RankName = string.Empty;
 		}
 
+		/// <summary>All created party member rows keyed by character ID.</summary>
 		private readonly Dictionary<long, MemberRow> members = new Dictionary<long, MemberRow>();
+		/// <summary>The container element that holds the generated member rows.</summary>
 		private VisualElement memberList;
 
 		/// <summary>

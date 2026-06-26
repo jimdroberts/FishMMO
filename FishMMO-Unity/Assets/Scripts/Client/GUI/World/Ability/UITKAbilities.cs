@@ -63,17 +63,27 @@ namespace FishMMO.Client
 			public string Tooltip;
 		}
 
+		/// <summary>Usable ability slots currently rendered.</summary>
 		private readonly List<AbilitySlot> abilities = new List<AbilitySlot>();
+		/// <summary>Known ability template slots currently rendered.</summary>
 		private readonly List<AbilitySlot> knownAbilities = new List<AbilitySlot>();
+		/// <summary>Known ability event slots currently rendered.</summary>
 		private readonly List<AbilitySlot> knownAbilityEvents = new List<AbilitySlot>();
 
+		/// <summary>Abilities tab button.</summary>
 		private Button abilityTab;
+		/// <summary>Known abilities tab button.</summary>
 		private Button knownTab;
+		/// <summary>Known ability events tab button.</summary>
 		private Button eventsTab;
+		/// <summary>Abilities entry container.</summary>
 		private VisualElement abilityList;
+		/// <summary>Known abilities entry container.</summary>
 		private VisualElement knownList;
+		/// <summary>Known ability events entry container.</summary>
 		private VisualElement eventsList;
 
+		/// <summary>The currently active ability tab type.</summary>
 		private AbilityTabType currentTab = AbilityTabType.Ability;
 
 		/// <summary>

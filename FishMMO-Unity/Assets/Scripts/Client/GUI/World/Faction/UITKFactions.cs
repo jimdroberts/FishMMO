@@ -65,7 +65,9 @@ namespace FishMMO.Client
 			public Label Value;
 		}
 
+		/// <summary>All created faction rows keyed by faction template ID.</summary>
 		private readonly Dictionary<int, FactionRow> factions = new Dictionary<int, FactionRow>();
+		/// <summary>The container element that holds the generated faction rows.</summary>
 		private VisualElement list;
 
 		/// <summary>

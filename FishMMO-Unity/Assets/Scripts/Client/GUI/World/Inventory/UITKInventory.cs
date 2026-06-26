@@ -18,28 +18,42 @@ namespace FishMMO.Client
 	{
 		// ── UXML element names ────────────────────────────────────────────────
 
+		/// <summary>Name of the slot grid element in the UXML.</summary>
 		private const string SLOT_GRID_NAME = "slot-grid";
+		/// <summary>Name of the close button element in the UXML.</summary>
 		private const string CLOSE_BTN_NAME = "close-button";
 
 		// ── Shared UI overlay names (legacy UGUI controls reused via UIManager) ──
 
+		/// <summary>Name of the shared drag object overlay.</summary>
 		private const string DRAG_OBJECT_NAME = "UIDragObject";
+		/// <summary>Name of the shared tooltip overlay.</summary>
 		private const string TOOLTIP_NAME = "UITooltip";
 
 		// ── USS class names ───────────────────────────────────────────────────
 
+		/// <summary>USS class applied to any slot container.</summary>
 		private const string CSS_SLOT = "fish-slot";
+		/// <summary>USS class applied to inventory slot containers.</summary>
 		private const string CSS_SLOT_GRID = "inv-slot";
+		/// <summary>USS class applied to a slot's icon element.</summary>
 		private const string CSS_SLOT_ICON = "fish-slot__icon";
+		/// <summary>USS layout class applied to inventory slot icons.</summary>
 		private const string CSS_SLOT_ICON_LAYOUT = "inv-slot__icon";
+		/// <summary>USS class applied to a slot's stack-count label.</summary>
 		private const string CSS_SLOT_AMOUNT = "fish-slot__amount";
+		/// <summary>USS layout class applied to inventory slot stack-count labels.</summary>
 		private const string CSS_SLOT_AMOUNT_LAYOUT = "inv-slot__amount";
+		/// <summary>USS class applied to a slot's lock overlay.</summary>
 		private const string CSS_SLOT_LOCK = "fish-slot__lock";
+		/// <summary>USS layout class applied to inventory slot lock overlays.</summary>
 		private const string CSS_SLOT_LOCK_LAYOUT = "inv-slot__lock";
+		/// <summary>USS class for hiding inventory elements.</summary>
 		private const string CSS_HIDDEN = "inv-hidden";
 
 		// ── Per-slot view data ────────────────────────────────────────────────
 
+		/// <summary>Runtime view data for a single inventory slot element.</summary>
 		private struct SlotView
 		{
 			/// <summary>Root VisualElement of the slot.</summary>
@@ -60,6 +74,7 @@ namespace FishMMO.Client
 		/// <summary>Cached item sprite per slot, used to seed the drag object.</summary>
 		private readonly List<Sprite> slotSprites = new List<Sprite>();
 
+		/// <summary>The container element that holds the inventory slot elements.</summary>
 		private VisualElement slotGrid;
 
 		// ── UITKControl lifecycle ─────────────────────────────────────────────

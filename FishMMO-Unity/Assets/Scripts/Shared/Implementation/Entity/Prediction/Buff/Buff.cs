@@ -252,6 +252,15 @@ namespace FishMMO.Shared
 			NextTickTick = GetNextTickTick(Template, currentTick, tickDelta);
 		}
 
+		/// <summary>
+		/// Computes the absolute network tick at which this buff expires based on the template's duration.
+		/// Returns <see cref="TimeManager.UNSET_TICK"/> for permanent buffs, or
+		/// <c>currentTick + ceil(duration / tickDelta)</c> for timed buffs.
+		/// </summary>
+		/// <param name="template">The buff template providing duration and permanent flag.</param>
+		/// <param name="currentTick">The application tick.</param>
+		/// <param name="tickDelta">Fixed seconds-per-tick for the active session.</param>
+		/// <returns>The expiry tick, or <see cref="TimeManager.UNSET_TICK"/> for permanent buffs.</returns>
 		internal static uint GetExpiryTick(BaseBuffTemplate template, uint currentTick, float tickDelta)
 		{
 			if (template == null)
@@ -265,6 +274,15 @@ namespace FishMMO.Shared
 			return currentTick + DurationToTicks(template.Duration, tickDelta);
 		}
 
+		/// <summary>
+		/// Computes the absolute network tick at which the next <see cref="BaseBuffTemplate.OnTick"/>
+		/// should fire, based on the template's tick rate.
+		/// Returns <see cref="TimeManager.UNSET_TICK"/> when the template or tick rate yields zero ticks.
+		/// </summary>
+		/// <param name="template">The buff template providing the tick rate.</param>
+		/// <param name="currentTick">The application tick.</param>
+		/// <param name="tickDelta">Fixed seconds-per-tick for the active session.</param>
+		/// <returns>The next tick tick, or <see cref="TimeManager.UNSET_TICK"/> if no tick is scheduled.</returns>
 		internal static uint GetNextTickTick(BaseBuffTemplate template, uint currentTick, float tickDelta)
 		{
 			if (template == null)

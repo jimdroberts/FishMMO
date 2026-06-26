@@ -50,6 +50,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called when entering the ranged attacking state.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
 		public override void Enter(AIController controller)
 		{
 			base.Enter(controller);
@@ -61,6 +62,8 @@ namespace FishMMO.Shared
 		/// Core ranged attack logic. Maintains preferred distance, kites when target gets close,
 		/// and uses ranged abilities when in range.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="targetCharacter">The current target character being attacked.</param>
 		protected override void TryAttack(AIController controller, ICharacter targetCharacter)
 		{
 			if (!controller.Character.TryGet(out IAbilityController abilityController))
@@ -141,6 +144,8 @@ namespace FishMMO.Shared
 		/// Ranged NPCs prefer to stay at their preferred distance.
 		/// If too close, back away. If too far, close in but never closer than preferred distance.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="distance">Current distance to the target.</param>
 		protected override void ManagePositioning(AIController controller, float distance)
 		{
 			if (controller.Target == null) return;

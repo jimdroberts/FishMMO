@@ -44,10 +44,15 @@ namespace FishMMO.Client
 		/// </summary>
 		protected abstract string FillModifierClass { get; }
 
+		/// <summary>Cached reference to the bar fill element.</summary>
 		private VisualElement fill;
+		/// <summary>Cached reference to the bar value label.</summary>
 		private Label label;
+		/// <summary>The target fraction (0-1) the fill should animate toward.</summary>
 		private float targetValue;
+		/// <summary>The currently displayed fraction (0-1) used for smooth interpolation.</summary>
 		private float displayedValue;
+		/// <summary>True once the bar has been initialised with its first value.</summary>
 		private bool initialized;
 
 		/// <summary>
@@ -131,6 +136,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Smoothly interpolates the fill width toward the target value each frame.
+		/// </summary>
 		private void Update()
 		{
 			if (fill == null || !initialized)

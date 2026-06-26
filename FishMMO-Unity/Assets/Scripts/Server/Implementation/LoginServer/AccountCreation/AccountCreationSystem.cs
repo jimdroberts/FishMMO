@@ -31,12 +31,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 	[RequiresDataContainer(typeof(AccountCreationSystemMainThreadQueueData))]
 	public class AccountCreationSystem : ServerBehaviour, IAccountCreationSystem<NetworkConnection>
 	{
+		/// <summary>
+		/// Result of attempting to enqueue an account creation request.
+		/// </summary>
 		private enum EnqueueResult : byte
 		{
+			/// <summary>Request was accepted and queued for processing.</summary>
 			Accepted = 0,
+			/// <summary>Request was rate-limited; the client should back off.</summary>
 			RateLimited = 1,
+			/// <summary>IP address is blocked due to excessive failed attempts.</summary>
 			Blocked = 2,
+			/// <summary>Async worker queue is full; the client should retry later.</summary>
 			QueueFull = 3,
+			/// <summary>Data containers or services are unavailable.</summary>
 			Unavailable = 4,
 		}
 

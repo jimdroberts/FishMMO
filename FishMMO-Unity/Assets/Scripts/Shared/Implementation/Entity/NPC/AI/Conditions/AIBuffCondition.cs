@@ -37,6 +37,10 @@ namespace FishMMO.Shared
 		/// Evaluates whether the subject has (or lacks) the specified buff.
 		/// If the subject has no <see cref="IBuffController"/>, it is treated as having no buffs.
 		/// </summary>
+		/// <param name="controller">The AI controller of the NPC.</param>
+		/// <param name="self">The NPC's character.</param>
+		/// <param name="target">The NPC's current target (may be null).</param>
+		/// <returns>True if the buff condition is met based on <see cref="RequirePresent"/>.</returns>
 		public override bool Evaluate(AIController controller, ICharacter self, ICharacter target)
 		{
 			ICharacter subject = Subject == ConditionSubject.Self ? self : target;

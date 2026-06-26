@@ -4,6 +4,9 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI button for a bank slot, supporting drag-and-drop and item swapping between bank, inventory, and equipment.
+	/// </summary>
 	public class UIBankButton : UIReferenceButton
 	{
 		/// <summary>

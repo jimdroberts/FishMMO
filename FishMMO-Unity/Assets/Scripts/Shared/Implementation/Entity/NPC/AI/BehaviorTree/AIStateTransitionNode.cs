@@ -14,9 +14,17 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI State Transition", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/State Transition")]
 	public class AIStateTransitionNode : AIBehaviorNode
 	{
+		/// <summary>
+		/// The AI state to transition to when this node executes.
+		/// </summary>
 		[Tooltip("The AI state to transition to when this node executes.")]
 		public BaseAIState TargetState;
 
+		/// <summary>
+		/// Transitions the NPC to the target state.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Success after transitioning, Failure if no target state is assigned.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			if (TargetState == null)

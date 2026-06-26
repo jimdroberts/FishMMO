@@ -6,6 +6,10 @@ using UnityEngine;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Setting option for selecting the screen resolution. Populates a dropdown
+	/// with all available resolutions and persists the width and height to configuration.
+	/// </summary>
 	public class ResolutionSettingOption : SettingOption
 	{
 		/// <summary>

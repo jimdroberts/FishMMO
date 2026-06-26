@@ -30,16 +30,26 @@ namespace FishMMO.Client
 		/// </summary>
 		private const int MAX_TABS = 12;
 
+		/// <summary>Name of the chat root element.</summary>
 		private const string CHAT_ROOT_NAME = "chat-root";
+		/// <summary>Name of the chat tabs container.</summary>
 		private const string CHAT_TABS_NAME = "chat-tabs";
+		/// <summary>Name of the add-tab button.</summary>
 		private const string CHAT_ADD_TAB_NAME = "chat-add-tab";
+		/// <summary>Name of the chat messages container.</summary>
 		private const string CHAT_MESSAGES_NAME = "chat-messages";
+		/// <summary>Name of the chat input field.</summary>
 		private const string CHAT_INPUT_NAME = "chat-input";
 
+		/// <summary>USS class applied to each chat tab button.</summary>
 		private const string TAB_CLASS = "chat-tab";
+		/// <summary>USS class applied to the active chat tab button.</summary>
 		private const string TAB_ACTIVE_CLASS = "chat-tab--active";
+		/// <summary>USS class applied to each chat message row.</summary>
 		private const string MESSAGE_ROW_CLASS = "chat-message";
+		/// <summary>USS class applied to a message row's sender name label.</summary>
 		private const string MESSAGE_NAME_CLASS = "chat-message__name";
+		/// <summary>USS class applied to a message row's text label.</summary>
 		private const string MESSAGE_TEXT_CLASS = "chat-message__text";
 
 		/// <summary>
@@ -90,9 +100,13 @@ namespace FishMMO.Client
 		/// </summary>
 		private class ChatMessageView
 		{
+			/// <summary>Root visual element for the message row.</summary>
 			public VisualElement Root;
+			/// <summary>Label displaying the sender name and channel tag.</summary>
 			public Label NameLabel;
+			/// <summary>Label displaying the message text.</summary>
 			public Label TextLabel;
+			/// <summary>The chat channel this message belongs to.</summary>
 			public ChatChannel Channel;
 		}
 
@@ -101,8 +115,11 @@ namespace FishMMO.Client
 		/// </summary>
 		private class ChatTabView
 		{
+			/// <summary>Button element for the tab.</summary>
 			public Button Button;
+			/// <summary>Display name of the tab.</summary>
 			public string Label;
+			/// <summary>Set of chat channels active for this tab.</summary>
 			public HashSet<ChatChannel> ActiveChannels = new HashSet<ChatChannel>()
 			{
 				ChatChannel.Say,
@@ -116,11 +133,16 @@ namespace FishMMO.Client
 			};
 		}
 
+		/// <summary>Container for chat tab buttons.</summary>
 		private VisualElement tabsContainer;
+		/// <summary>Container for chat message rows.</summary>
 		private VisualElement messagesContainer;
+		/// <summary>Chat text input field.</summary>
 		private TextField inputField;
 
+		/// <summary>Chat tabs keyed by display name.</summary>
 		private readonly Dictionary<string, ChatTabView> tabs = new Dictionary<string, ChatTabView>();
+		/// <summary>Rendered chat messages in display order.</summary>
 		private readonly List<ChatMessageView> messages = new List<ChatMessageView>();
 
 		/// <summary>
@@ -128,6 +150,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public string CurrentTab = "";
 
+		/// <summary>
+		/// Stores the previous chat channel for message grouping logic.
+		/// </summary>
 		/// <summary>
 		/// Stores the previous chat channel for message grouping logic.
 		/// </summary>
@@ -209,6 +234,9 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called every frame. Checks for chat input activation.
+		/// </summary>
 		void Update()
 		{
 			EnableChatInput();

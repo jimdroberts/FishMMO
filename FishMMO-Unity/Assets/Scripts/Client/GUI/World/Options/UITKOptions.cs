@@ -15,25 +15,43 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKOptions : UITKControl
 	{
+		/// <summary>Name of the VSync toggle element in the UXML.</summary>
 		private const string VSYNC_TOGGLE_NAME = "vsync-toggle";
+		/// <summary>Name of the brightness slider element in the UXML.</summary>
 		private const string BRIGHTNESS_SLIDER_NAME = "brightness-slider";
+		/// <summary>Name of the resolution dropdown element in the UXML.</summary>
 		private const string RESOLUTION_DROPDOWN_NAME = "resolution-dropdown";
+		/// <summary>Name of the refresh rate dropdown element in the UXML.</summary>
 		private const string REFRESHRATE_DROPDOWN_NAME = "refreshrate-dropdown";
+		/// <summary>Name of the fullscreen dropdown element in the UXML.</summary>
 		private const string FULLSCREEN_DROPDOWN_NAME = "fullscreen-dropdown";
+		/// <summary>Name of the close button element in the UXML.</summary>
 		private const string CLOSE_BUTTON_NAME = "options-close-btn";
 
+		/// <summary>Configuration key for the VSync setting.</summary>
 		private const string VSyncKey = "VSync";
+		/// <summary>Configuration key for the brightness setting.</summary>
 		private const string BrightnessKey = "Brightness";
+		/// <summary>Configuration key for the resolution width setting.</summary>
 		private const string ResolutionWidthKey = "Resolution Width";
+		/// <summary>Configuration key for the resolution height setting.</summary>
 		private const string ResolutionHeightKey = "Resolution Height";
+		/// <summary>Configuration key for the refresh rate setting.</summary>
 		private const string RefreshRateKey = "Refresh Rate";
+		/// <summary>Configuration key for the fullscreen mode setting.</summary>
 		private const string FullscreenKey = "Fullscreen";
 
+		/// <summary>The VSync toggle control.</summary>
 		private Toggle vsyncToggle;
+		/// <summary>The brightness slider control.</summary>
 		private Slider brightnessSlider;
+		/// <summary>The resolution dropdown control.</summary>
 		private DropdownField resolutionDropdown;
+		/// <summary>The refresh rate dropdown control.</summary>
 		private DropdownField refreshRateDropdown;
+		/// <summary>The fullscreen mode dropdown control.</summary>
 		private DropdownField fullscreenDropdown;
+		/// <summary>The close button control.</summary>
 		private Button closeButton;
 
 		/// <summary>

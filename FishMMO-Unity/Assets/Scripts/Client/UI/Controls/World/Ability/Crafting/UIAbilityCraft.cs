@@ -8,6 +8,9 @@ using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for crafting abilities through a crafter NPC. Manages ability selection, event slots, and crafting costs.
+	/// </summary>
 	public class UIAbilityCraft : UICharacterControl
 	{
 		/// <summary>

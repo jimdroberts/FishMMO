@@ -89,11 +89,28 @@ namespace FishMMO.Shared
 		/// <summary>Remaining bits = count or changedCount.</summary>
 		private const ushort COUNT_MASK = 0x7FFF;
 
+		/// <summary>
+		/// Builds the header ushort from a count and a delta flag.
+		/// The high bit indicates index-delta mode; remaining bits store the count.
+		/// </summary>
+		/// <param name="count">Number of entries or changed entries.</param>
+		/// <param name="isDelta">True if using index-delta encoding.</param>
+		/// <returns>Packed header ushort.</returns>
 		private static ushort BuildHeader(int count, bool isDelta)
 		{
 			return (ushort)((count & COUNT_MASK) | (isDelta ? DELTA_FLAG : (ushort)0));
 		}
 
+		/// <summary>
+		/// Delta-encodes an array of reconcile entries by comparing against a previous snapshot.
+		/// Writes a full array when lengths differ or force-write is requested; writes index-delta
+		/// when lengths match. Returns true if any data was written.
+		/// </summary>
+		/// <param name="writer">Writer to serialize to.</param>
+		/// <param name="prev">Previous reconcile snapshot, or null.</param>
+		/// <param name="next">Current reconcile snapshot, or null.</param>
+		/// <param name="option">Delta serializer option (Unset = auto, otherwise force).</param>
+		/// <returns>True if data was written; false if unchanged.</returns>
 		public static bool WriteArrayDelta(
 			Writer writer,
 			EquipmentReconcileEntry[] prev,
@@ -157,6 +174,13 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>
+		/// Reads a delta-encoded array of reconcile entries previously written by <see cref="WriteArrayDelta"/>.
+		/// Handles both full-array and index-delta formats based on the header flag.
+		/// </summary>
+		/// <param name="reader">Reader to deserialize from.</param>
+		/// <param name="prev">Previous reconcile snapshot to base deltas on, or null.</param>
+		/// <returns>Reconstructed reconcile array, or null if empty.</returns>
 		public static EquipmentReconcileEntry[] ReadArrayDelta(Reader reader, EquipmentReconcileEntry[] prev)
 		{
 			ushort header = reader.ReadUInt16();
@@ -204,6 +228,12 @@ namespace FishMMO.Shared
 			return result;
 		}
 
+		/// <summary>
+		/// Drains (reads and discards) index-delta entries from the reader when the count exceeds <see cref="MaxEntries"/>.
+		/// Prevents stream desynchronization while rejecting the payload.
+		/// </summary>
+		/// <param name="reader">Reader to drain from.</param>
+		/// <param name="changedCount">Number of changed entries to skip.</param>
 		private static void DrainIndexDeltaEntries(Reader reader, int changedCount)
 		{
 			for (int i = 0; i < changedCount; i++)
@@ -213,6 +243,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Drains (reads and discards) full-array entries from the reader when the count exceeds <see cref="MaxEntries"/>.
+		/// Prevents stream desynchronization while rejecting the payload.
+		/// </summary>
+		/// <param name="reader">Reader to drain from.</param>
+		/// <param name="count">Number of entries to skip.</param>
 		private static void DrainFullArrayEntries(Reader reader, int count)
 		{
 			for (int i = 0; i < count; i++)

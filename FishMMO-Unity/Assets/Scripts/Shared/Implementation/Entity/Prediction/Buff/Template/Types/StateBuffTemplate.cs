@@ -50,6 +50,15 @@ namespace FishMMO.Shared
 			target.DisableFlags(Flag);
 		}
 
+		/// <summary>
+		/// Checks whether the specified <see cref="CharacterFlags"/> is currently provided by another
+		/// active buff on the target, excluding the buff being removed.
+		/// Used before disabling a flag on remove to avoid clearing a flag that another buff still depends on.
+		/// </summary>
+		/// <param name="target">The character to check.</param>
+		/// <param name="removedBuff">The buff being removed (excluded from the search).</param>
+		/// <param name="flag">The character flag to look for.</param>
+		/// <returns>True if another active buff on the target provides the same flag.</returns>
 		private static bool IsFlagProvidedByAnotherBuff(ICharacter target, Buff removedBuff, CharacterFlags flag)
 		{
 			if (!target.TryGet(out IBuffController buffController)) return false;

@@ -16,17 +16,29 @@ namespace FishMMO.Client
 	{
 		// ── UXML element names ────────────────────────────────────────────────
 
+		/// <summary>Name of the attribute list ScrollView element in the UXML.</summary>
 		private const string ATTR_LIST_NAME     = "attribute-list";
+		/// <summary>Name of the preview render texture element in the UXML.</summary>
 		private const string PREVIEW_RT_NAME    = "preview-rt";
+		/// <summary>Name of the close button element in the UXML.</summary>
 		private const string CLOSE_BTN_NAME     = "close-button";
+		/// <summary>Name of the gear tab button element in the UXML.</summary>
 		private const string TAB_GEAR_NAME      = "tab-gear";
+		/// <summary>Name of the stats tab button element in the UXML.</summary>
 		private const string TAB_STATS_NAME     = "tab-stats";
+		/// <summary>Name of the sets tab button element in the UXML.</summary>
 		private const string TAB_SETS_NAME      = "tab-sets";
+		/// <summary>Name of the panel body element in the UXML.</summary>
 		private const string PANEL_BODY_NAME    = "panel-body";
+		/// <summary>Name of the panel footer element in the UXML.</summary>
 		private const string PANEL_FOOTER_NAME  = "panel-footer";
+		/// <summary>Name of the gear score label element in the UXML.</summary>
 		private const string GEAR_SCORE_NAME    = "gear-score";
+		/// <summary>Name of the HP stat label element in the UXML.</summary>
 		private const string STAT_HP_NAME       = "stat-hp";
+		/// <summary>Name of the MP stat label element in the UXML.</summary>
 		private const string STAT_MP_NAME       = "stat-mp";
+		/// <summary>Name of the stamina stat label element in the UXML.</summary>
 		private const string STAT_STAM_NAME     = "stat-stam";
 
 		/// <summary>
@@ -49,17 +61,26 @@ namespace FishMMO.Client
 
 		// ── USS class names ───────────────────────────────────────────────────
 
+		/// <summary>USS class for hiding equipment elements.</summary>
 		private const string CSS_HIDDEN         = "eq-hidden";
+		/// <summary>USS class for an active tab button.</summary>
 		private const string CSS_TAB_ACTIVE     = "fish-tab--active";
+		/// <summary>USS class for an attribute category header.</summary>
 		private const string CSS_ATTR_CATEGORY  = "fish-attr-category";
+		/// <summary>USS class for an attribute row.</summary>
 		private const string CSS_ATTR_ROW       = "fish-attr-row";
+		/// <summary>USS class for an attribute row name label.</summary>
 		private const string CSS_ATTR_NAME      = "fish-attr-row__name";
+		/// <summary>USS class for an attribute row value label.</summary>
 		private const string CSS_ATTR_VALUE     = "fish-attr-row__value";
+		/// <summary>USS class for a resource attribute value label.</summary>
 		private const string CSS_ATTR_RESOURCE  = "fish-attr-row__value--resource";
+		/// <summary>USS class for a percentage attribute value label.</summary>
 		private const string CSS_ATTR_PERCENT   = "fish-attr-row__value--percent";
 
 		// ── Per-slot view data ────────────────────────────────────────────────
 
+		/// <summary>Runtime view data for a single equipment slot element.</summary>
 		private struct SlotView
 		{
 			/// <summary>Root VisualElement of the slot (e.g. "slot-head").</summary>
@@ -86,15 +107,24 @@ namespace FishMMO.Client
 		/// <summary>Attribute row elements created at runtime.</summary>
 		private readonly List<VisualElement> attributeRowElements = new List<VisualElement>();
 
+		/// <summary>The ScrollView that contains the attribute rows.</summary>
 		private ScrollView attributeList;
+		/// <summary>Root element of the gear tab panel body.</summary>
 		private VisualElement panelBody;
+		/// <summary>Root element of the stats tab panel footer.</summary>
 		private VisualElement panelFooter;
+		/// <summary>Character preview render texture element.</summary>
 		private VisualElement previewRt;
+		/// <summary>Label displaying the gear score.</summary>
 		private Label gearScoreLabel;
+		/// <summary>Label displaying the HP stat value.</summary>
 		private Label statHpLabel;
+		/// <summary>Label displaying the MP stat value.</summary>
 		private Label statMpLabel;
+		/// <summary>Label displaying the stamina stat value.</summary>
 		private Label statStamLabel;
 
+		/// <summary>Camera used for the 3D character preview viewport.</summary>
 		private Camera equipmentViewCamera;
 
 		/// <summary>Currently selected tab name; defaults to GEAR.</summary>
@@ -421,6 +451,9 @@ namespace FishMMO.Client
 			SetElementVisible(panelFooter, showFooter);
 		}
 
+		/// <summary>Adds or removes the active styling class on a tab button.</summary>
+		/// <param name="button">The tab button to style.</param>
+		/// <param name="active">Whether the tab is the active tab.</param>
 		private static void SetTabActive(Button button, bool active)
 		{
 			if (button == null)

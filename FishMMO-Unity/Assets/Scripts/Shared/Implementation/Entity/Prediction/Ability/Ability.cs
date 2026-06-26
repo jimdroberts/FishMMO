@@ -723,6 +723,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Returns true when the spawn tick is strictly after the given tick.
+		/// Used during reconcile rollback to determine which objects to destroy.
+		/// </summary>
 		private static bool IsSpawnTickAfter(PredictionTick spawnTick, uint tick)
 		{
 			return (int)(spawnTick.Value - tick) > 0;

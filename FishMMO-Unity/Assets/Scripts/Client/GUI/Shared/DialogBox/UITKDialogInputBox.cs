@@ -9,17 +9,47 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKDialogInputBox : UITKControl
 	{
+		/// <summary>
+		/// Name of the dialog message label element.
+		/// </summary>
 		private const string DIALOG_LABEL_NAME = "dialog-input-label";
+		/// <summary>
+		/// Name of the text input field element.
+		/// </summary>
 		private const string INPUT_FIELD_NAME = "dialog-input-field";
+		/// <summary>
+		/// Name of the accept button element.
+		/// </summary>
 		private const string ACCEPT_BUTTON_NAME = "dialog-input-accept-btn";
+		/// <summary>
+		/// Name of the cancel button element.
+		/// </summary>
 		private const string CANCEL_BUTTON_NAME = "dialog-input-cancel-btn";
 
+		/// <summary>
+		/// The dialog message label.
+		/// </summary>
 		private Label dialogLabel;
+		/// <summary>
+		/// The text input field.
+		/// </summary>
 		private TextField inputField;
+		/// <summary>
+		/// The accept button.
+		/// </summary>
 		private Button acceptButton;
+		/// <summary>
+		/// The cancel button.
+		/// </summary>
 		private Button cancelButton;
 
+		/// <summary>
+		/// Callback invoked with the entered text when the accept button is clicked.
+		/// </summary>
 		private Action<string> onAcceptCallback;
+		/// <summary>
+		/// Callback invoked when the cancel button is clicked.
+		/// </summary>
 		private Action onCancelCallback;
 
 		/// <summary>

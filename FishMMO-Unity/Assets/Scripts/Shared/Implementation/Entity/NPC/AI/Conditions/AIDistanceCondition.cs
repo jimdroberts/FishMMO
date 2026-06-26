@@ -30,6 +30,10 @@ namespace FishMMO.Shared
 		/// Evaluates whether the current distance to the target satisfies the comparison.
 		/// Returns false if there is no target.
 		/// </summary>
+		/// <param name="controller">The AI controller of the NPC.</param>
+		/// <param name="self">The NPC's character.</param>
+		/// <param name="target">The NPC's current target (may be null).</param>
+		/// <returns>True if the distance comparison holds, false if there is no target.</returns>
 		public override bool Evaluate(AIController controller, ICharacter self, ICharacter target)
 		{
 			if (controller.Target == null)

@@ -18,6 +18,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// </summary>
 	public partial class InteractableSystem
 	{
+		/// <summary>
+		/// Handles a <see cref="MerchantPurchaseBroadcast"/> from a client. Validates the merchant interactable,
+		/// checks sufficient currency, and processes the purchase (item, ability, or ability event) based on the tab type.
+		/// </summary>
 		private void OnServerMerchantPurchaseBroadcastReceived(NetworkConnection conn, MerchantPurchaseBroadcast msg, Channel channel)
 		{
 			if (conn == null)
@@ -149,6 +153,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
+		/// <summary>
+		/// Generic helper that validates a character can learn an ability or event, checks currency, persists
+		/// the known ability asynchronously, applies the learned state, deducts currency, and notifies the client.
+		/// </summary>
+		/// <typeparam name="TTemplate">The ability or event template type.</typeparam>
+		/// <typeparam name="TBroadcast">The broadcast type for notifying the client.</typeparam>
+		/// <param name="conn">Client connection to notify.</param>
+		/// <param name="character">Character purchasing the ability or event.</param>
+		/// <param name="template">The template to learn.</param>
+		/// <param name="knowsFunc">Function to check if the character already knows the template.</param>
+		/// <param name="learnFunc">Function to apply the learned template to the ability controller.</param>
+		/// <param name="idSelector">Function to extract the template ID.</param>
+		/// <param name="priceSelector">Function to extract the template price.</param>
+		/// <param name="broadcastFactory">Function to create the broadcast for the client.</param>
 		private void LearnAbilityGeneric<TTemplate, TBroadcast>(
 			NetworkConnection conn,
 			IPlayerCharacter character,

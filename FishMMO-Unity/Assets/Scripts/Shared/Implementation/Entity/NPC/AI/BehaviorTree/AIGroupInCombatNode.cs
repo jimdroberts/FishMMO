@@ -13,6 +13,11 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI Group In Combat Node", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/Group In Combat Node")]
 	public class AIGroupInCombatNode : AIBehaviorNode
 	{
+		/// <summary>
+		/// Checks if the NPC's group is currently in combat.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Success if the group is in combat, Failure otherwise.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			if (controller.Group == null)

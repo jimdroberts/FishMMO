@@ -15,12 +15,19 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class CharacterReplicateDataDeltaSerializer
 	{
+			/// <summary>Bit flag for forward axis changes.</summary>
 		private const byte FORWARD_BIT = 1 << 0;
+			/// <summary>Bit flag for right axis changes.</summary>
 		private const byte RIGHT_BIT = 1 << 1;
+			/// <summary>Bit flag for move flags changes.</summary>
 		private const byte MOVE_FLAGS_BIT = 1 << 2;
+			/// <summary>Bit flag for camera position changes.</summary>
 		private const byte POSITION_BIT = 1 << 3;
+			/// <summary>Bit flag for camera rotation changes.</summary>
 		private const byte ROTATION_BIT = 1 << 4;
+			/// <summary>Bit flag for activation flags changes.</summary>
 		private const byte ACTIVATION_FLAGS_BIT = 1 << 5;
+			/// <summary>Bit flag for queued ability ID changes.</summary>
 		private const byte QUEUED_ABILITY_BIT = 1 << 6;
 
 		/// <summary>
@@ -33,6 +40,15 @@ namespace FishMMO.Shared
 			GenericDeltaReader<CharacterReplicateData>.SetRead(ReadDelta);
 		}
 
+		/// <summary>
+		/// Delta writer for <see cref="CharacterReplicateData"/>. Writes a 1-byte bitmask
+		/// followed by delta-encoded values for only the changed fields.
+		/// </summary>
+		/// <param name="writer">Writer to serialize to.</param>
+		/// <param name="prev">Previous replicate data.</param>
+		/// <param name="next">Current replicate data.</param>
+		/// <param name="option">Delta serializer option (Unset = auto).</param>
+		/// <returns>True if any data was written.</returns>
 		private static bool WriteDelta(
 			Writer writer,
 			CharacterReplicateData prev,
@@ -85,6 +101,13 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		/// <summary>
+		/// Delta reader for <see cref="CharacterReplicateData"/>. Reads the bitmask and
+		/// reconstructs only the changed fields from their deltas.
+		/// </summary>
+		/// <param name="reader">Reader to deserialize from.</param>
+		/// <param name="prev">Previous replicate data.</param>
+		/// <returns>Reconstructed replicate data.</returns>
 		private static CharacterReplicateData ReadDelta(
 			Reader reader,
 			CharacterReplicateData prev)
@@ -127,11 +150,17 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class CharacterTransientGroundingReportDeltaSerializer
 	{
+			/// <summary>Bit flag for FoundAnyGround changes.</summary>
 		private const byte FOUND_GROUND_BIT = 1 << 0;
+			/// <summary>Bit flag for IsStableOnGround changes.</summary>
 		private const byte STABLE_BIT = 1 << 1;
+			/// <summary>Bit flag for SnappingPrevented changes.</summary>
 		private const byte SNAPPING_BIT = 1 << 2;
+			/// <summary>Bit flag for GroundNormal changes.</summary>
 		private const byte GROUND_NORMAL_BIT = 1 << 3;
+			/// <summary>Bit flag for InnerGroundNormal changes.</summary>
 		private const byte INNER_NORMAL_BIT = 1 << 4;
+			/// <summary>Bit flag for OuterGroundNormal changes.</summary>
 		private const byte OUTER_NORMAL_BIT = 1 << 5;
 
 		/// <summary>
@@ -241,19 +270,33 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class KinematicCharacterMotorStateDeltaSerializer
 	{
+			/// <summary>Bit flag for Position changes.</summary>
 		private const ushort POSITION_BIT = 1 << 0;
+			/// <summary>Bit flag for Rotation changes.</summary>
 		private const ushort ROTATION_BIT = 1 << 1;
+			/// <summary>Bit flag for BaseVelocity changes.</summary>
 		private const ushort VELOCITY_BIT = 1 << 2;
+			/// <summary>Bit flag for CurrentPlatformID changes.</summary>
 		private const ushort PLATFORM_ID_BIT = 1 << 3;
+			/// <summary>Bit flag for LastPlatformPosition changes.</summary>
 		private const ushort LAST_PLATFORM_POS_BIT = 1 << 4;
+			/// <summary>Bit flag for MustUnground changes.</summary>
 		private const ushort MUST_UNGROUND_BIT = 1 << 5;
+			/// <summary>Bit flag for MustUngroundTime changes.</summary>
 		private const ushort MUST_UNGROUND_TIME_BIT = 1 << 6;
+			/// <summary>Bit flag for LastMovementIterationFoundAnyGround changes.</summary>
 		private const ushort LAST_FOUND_GROUND_BIT = 1 << 7;
+			/// <summary>Bit flag for GroundingStatus changes.</summary>
 		private const ushort GROUNDING_BIT = 1 << 8;
+			/// <summary>Bit flag for AttachedRigidbodyVelocity changes.</summary>
 		private const ushort ATTACHED_RB_VEL_BIT = 1 << 9;
+			/// <summary>Bit flag for IsCrouching changes.</summary>
 		private const ushort IS_CROUCHING_BIT = 1 << 10;
+			/// <summary>Bit flag for JumpRequested changes.</summary>
 		private const ushort JUMP_REQUESTED_BIT = 1 << 11;
+			/// <summary>Bit flag for TimeSinceLastAbleToJump changes.</summary>
 		private const ushort TIME_SINCE_JUMP_BIT = 1 << 12;
+			/// <summary>Bit flag for TimeSinceJumpRequested changes.</summary>
 		private const ushort TIME_SINCE_JUMP_REQ_BIT = 1 << 13;
 
 		/// <summary>
@@ -271,6 +314,15 @@ namespace FishMMO.Shared
 		/// Writes a 2-byte bitmask indicating which of the 14 fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
+		/// <summary>
+		/// Delta writer for <see cref="CharacterReplicateData"/>. Writes a 1-byte bitmask
+		/// followed by delta-encoded values for only the changed fields.
+		/// </summary>
+		/// <param name="writer">Writer to serialize to.</param>
+		/// <param name="prev">Previous replicate data.</param>
+		/// <param name="next">Current replicate data.</param>
+		/// <param name="option">Delta serializer option (Unset = auto).</param>
+		/// <returns>True if any data was written.</returns>
 		private static bool WriteDelta(
 			Writer writer,
 			KinematicCharacterMotorState prev,
@@ -352,6 +404,13 @@ namespace FishMMO.Shared
 		/// Reads the bitmask and reconstructs only the changed fields from their deltas,
 		/// carrying forward unchanged fields from the previous value.
 		/// </summary>
+		/// <summary>
+		/// Delta reader for <see cref="KinematicCharacterMotorState"/>. Reads the bitmask and
+		/// reconstructs only the changed fields from their deltas.
+		/// </summary>
+		/// <param name="reader">Reader to deserialize from.</param>
+		/// <param name="prev">Previous motor state.</param>
+		/// <returns>Reconstructed motor state.</returns>
 		private static KinematicCharacterMotorState ReadDelta(
 			Reader reader,
 			KinematicCharacterMotorState prev)

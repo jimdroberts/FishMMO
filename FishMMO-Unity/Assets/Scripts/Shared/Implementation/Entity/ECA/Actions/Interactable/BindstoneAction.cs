@@ -16,6 +16,8 @@ namespace FishMMO.Shared
 		/// Sets the player's <see cref="IPlayerCharacter.BindPosition"/> and <see cref="IPlayerCharacter.BindScene"/>
 		/// to their current motor position and scene name.
 		/// </summary>
+		/// <param name="initiator">The character binding to the bindstone.</param>
+		/// <param name="eventData">The event data containing the interaction context.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
 #if UNITY_SERVER

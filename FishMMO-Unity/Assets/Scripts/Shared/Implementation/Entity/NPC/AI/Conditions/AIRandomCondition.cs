@@ -20,7 +20,12 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Returns true with probability <see cref="Chance"/>.
+		/// Uses the NPC's seeded RNG for deterministic behaviour.
 		/// </summary>
+		/// <param name="controller">The AI controller of the NPC.</param>
+		/// <param name="self">The NPC's character.</param>
+		/// <param name="target">The NPC's current target (may be null).</param>
+		/// <returns>True with probability Chance, false otherwise.</returns>
 		public override bool Evaluate(AIController controller, ICharacter self, ICharacter target)
 		{
 			DeterministicRNG rng = controller.NpcRNG;

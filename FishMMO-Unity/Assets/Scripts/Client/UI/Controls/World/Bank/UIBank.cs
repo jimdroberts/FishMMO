@@ -6,6 +6,9 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for managing and displaying the player bank inventory and slot interactions.
+	/// </summary>
 	public class UIBank : UICharacterControl
 	{
 		/// <summary>
@@ -144,12 +147,6 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Event handler for when a bank slot is updated. Updates the corresponding button display.
-		/// </summary>
-		/// <param name="container">The item container (bank).</param>
-		/// <param name="item">The item in the slot.</param>
-		/// <param name="bankIndex">The index of the bank slot.</param>
-		/// <summary>
 		/// Callback for when a bank slot's lock state changes. Updates the corresponding button's interactability.
 		/// </summary>
 		public void OnBankSlotLockChanged(IItemContainer container, int slot, bool isLocked)
@@ -160,6 +157,12 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Event handler for when a bank slot is updated. Updates the corresponding button display.
+		/// </summary>
+		/// <param name="container">The item container (bank).</param>
+		/// <param name="item">The item in the slot.</param>
+		/// <param name="bankIndex">The index of the bank slot.</param>
 		public void OnBankSlotUpdated(IItemContainer container, Item item, int bankIndex)
 		{
 			// If there are no bank slots, nothing to update.

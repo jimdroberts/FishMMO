@@ -66,6 +66,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		[Header("Achievements")]
+		/// <summary>
+		/// Achievement template awarded when a character summons a pet.
+		/// </summary>
 		public AchievementTemplate PetSummonAchievementTemplate;
 
 		/// <summary>

@@ -12,6 +12,13 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class GatheringNodeAction : BaseAction
 	{
+		/// <summary>
+		/// Executes the gathering node interaction: broadcasts the progress bar, rolls the drop table,
+		/// grants the item to the player, and manages node state.
+		/// Server-only.
+		/// </summary>
+		/// <param name="initiator">The character performing the gathering.</param>
+		/// <param name="eventData">The event data containing the interaction context.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
 #if UNITY_SERVER

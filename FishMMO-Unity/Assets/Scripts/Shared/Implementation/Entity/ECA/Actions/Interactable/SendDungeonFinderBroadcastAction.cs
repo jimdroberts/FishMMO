@@ -10,6 +10,12 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class SendDungeonFinderBroadcastAction : BaseAction
 	{
+		/// <summary>
+		/// Sends the dungeon finder broadcast to the player, opening the dungeon finder interface on the client.
+		/// Server-only.
+		/// </summary>
+		/// <param name="initiator">The character opening the dungeon finder.</param>
+		/// <param name="eventData">The event data containing the interaction context.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
 #if UNITY_SERVER

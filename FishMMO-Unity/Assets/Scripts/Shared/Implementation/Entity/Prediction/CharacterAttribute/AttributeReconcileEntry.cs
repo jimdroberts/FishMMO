@@ -215,6 +215,7 @@ namespace FishMMO.Shared
 			return result;
 		}
 
+		/// <summary>Drains (reads and discards) index-delta entries from the reader to advance the stream position past a rejected overflow.</summary>
 		private static void DrainIndexDeltaEntries(Reader reader, int changedCount)
 		{
 			for (int i = 0; i < changedCount; i++)
@@ -224,6 +225,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>Drains (reads and discards) full-array entries from the reader to advance the stream position past a rejected overflow.</summary>
 		private static void DrainFullArrayEntries(Reader reader, int count)
 		{
 			for (int i = 0; i < count; i++)
@@ -232,6 +234,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>Packs a count and delta-mode flag into a 16-bit header. High bit (0x8000) indicates delta mode; low 15 bits hold the count.</summary>
 		private static ushort BuildHeader(int count, bool isDelta)
 		{
 			return (ushort)((isDelta ? 0x8000 : 0) | (count & 0x7FFF));

@@ -80,6 +80,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		[SerializeField] private CharacterAttributeTemplate currencyTemplate;
 
+		/// <summary>
+		/// Initializes the InteractableSystem: validates dependencies, registers all network broadcast handlers,
+		/// subscribes to dialogue events, and clamps configuration values.
+		/// </summary>
+		/// <returns>Initialization status indicating success or failure.</returns>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			if (Server == null)
@@ -130,6 +135,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
+		/// <summary>
+		/// Deinitializes the InteractableSystem: drains queued actions, clears ingress guards, unregisters network
+		/// broadcast handlers, unsubscribes from dialogue events, and clears dialogue session state.
+		/// </summary>
 		public override void OnDeinitialize()
 		{
 			if (Server == null)
@@ -164,6 +173,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			characterDialogueChoices.Clear();
 		}
 
+		/// <summary>
+		/// Called every frame. Drains a bounded number of queued main-thread actions and sweeps stale debounce entries.
+		/// </summary>
+		/// <param name="deltaTime">Time elapsed since the last frame.</param>
 		protected override void OnUpdate(float deltaTime)
 		{
 			DrainMainThreadQueue(drainAll: false);
@@ -181,16 +194,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
+		/// <summary>
+		/// Drains the main-thread action queue, processing up to <see cref="maxMainThreadActionsPerFrame"/> items
+		/// (or all items if <paramref name="drainAll"/> is true).
+		/// </summary>
+		/// <param name="drainAll">If true, drains all queued items; otherwise drains up to the per-frame limit.</param>
 		private void DrainMainThreadQueue(bool drainAll)
 		{
 			DrainMainThreadQueue<IInteractableSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
+		/// <summary>
+		/// Attempts to enqueue an <see cref="Action"/> for execution on the main thread.
+		/// </summary>
+		/// <param name="action">The action to enqueue.</param>
+		/// <returns>True if the action was enqueued; otherwise false.</returns>
 		private bool TryEnqueueMainThread(Action action)
 		{
 			return TryEnqueueMainThread<IInteractableSystemMainThreadQueueData>(action);
 		}
 
+		/// <summary>
+		/// Attempts to acquire the ingress guard for the specified connection, enforcing the global
+		/// interaction debounce cooldown.
+		/// </summary>
+		/// <param name="connectionId">The client connection ID.</param>
+		/// <param name="guardKey">When successful, the guard key to pass to <see cref="EndIngressGuard"/>.</param>
+		/// <returns>True if the guard was acquired; false if the cooldown is active.</returns>
 		private bool TryBeginIngressGuard(int connectionId, out long guardKey)
 		{
 			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
@@ -201,6 +231,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			return runtimeData.IngressGuard.TryBegin(connectionId, 0, interactionDebounceMilliseconds, out guardKey);
 		}
 
+		/// <summary>
+		/// Releases the ingress guard identified by the specified key.
+		/// </summary>
+		/// <param name="guardKey">The guard key returned by <see cref="TryBeginIngressGuard"/>.</param>
 		private void EndIngressGuard(long guardKey)
 		{
 			if (Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
@@ -402,6 +436,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			aiController.TransitionToIdleState();
 		}
 
+		/// <summary>
+		/// Validates that a scene object exists and belongs to the expected scene.
+		/// </summary>
+		/// <param name="sceneObjectID">The ID of the scene object to validate.</param>
+		/// <param name="characterSceneHandle">The scene handle of the character for scene matching.</param>
+		/// <param name="sceneObject">When successful, the resolved scene object.</param>
+		/// <returns>True if the scene object exists and matches the character scene; otherwise false.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool ValidateSceneObject(long sceneObjectID, int characterSceneHandle, out ISceneObject sceneObject)
 		{

@@ -4,6 +4,9 @@ using TMPro;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI group for a buff or debuff, containing the icon, tooltip button, duration slider, and label.
+	/// </summary>
 	public class UIBuffGroup : MonoBehaviour
 	{
 		/// <summary>

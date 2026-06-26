@@ -7,6 +7,11 @@ using FishMMO.Auth.Core;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for selecting a world server from the available server list.
+	/// Manages server list display, selection highlighting, refresh timing,
+	/// and connection to the chosen world server.
+	/// </summary>
 	public class UIServerSelect : UIControl
 	{
 		/// <summary>

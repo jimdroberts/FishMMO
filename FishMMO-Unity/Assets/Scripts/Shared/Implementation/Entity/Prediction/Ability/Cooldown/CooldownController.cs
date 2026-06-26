@@ -88,6 +88,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private float cachedTickDelta;
 
+		/// <summary>
+		/// Cached <see cref="CharacterPredictionController"/> for resolving the replicate-domain
+		/// tick snapshot when computing authoritative cooldown ticks.
+		/// </summary>
 		private CharacterPredictionController predictionController;
 
 		/// <summary>
@@ -334,6 +338,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Returns the current domain tick for payload serialization. Prefers the
+		/// authoritative resolve from <see cref="ResolveAuthoritativeTick"/> when the
+		/// NetworkObject is initialised, falling back to <see cref="lastReplicateTick"/>.
+		/// </summary>
 		private uint GetCurrentDomainTick()
 		{
 			// base.TimeManager dereferences _networkObjectCache, which is null until the
@@ -348,6 +357,11 @@ namespace FishMMO.Shared
 			return ResolveAuthoritativeTick(base.TimeManager.LocalTick);
 		}
 
+		/// <summary>
+		/// Computes the signed tick offset from a source reference tick to a target reference tick.
+		/// Returns 0 if either tick is <see cref="TimeManager.UNSET_TICK"/> or the delta exceeds
+		/// the supported signed range.
+		/// </summary>
 		internal static int GetSignedTickOffset(uint sourceReferenceTick, uint targetReferenceTick, string context)
 		{
 			if (sourceReferenceTick == TimeManager.UNSET_TICK || targetReferenceTick == TimeManager.UNSET_TICK)
@@ -367,6 +381,9 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		/// <summary>
+		/// Adds a signed tick offset to an unsigned tick value, wrapping on overflow.
+		/// </summary>
 		internal static uint AddSignedTickOffset(uint tick, int tickOffset)
 		{
 			return unchecked((uint)((long)tick + tickOffset));

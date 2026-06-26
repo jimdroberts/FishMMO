@@ -20,6 +20,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		private static readonly ConcurrentDictionary<long, byte> processingItems = new ConcurrentDictionary<long, byte>();
 
+		/// <summary>
+		/// Handles picking up a world item: validates the item, applies a concurrency guard to prevent
+		/// duplicate pickups, grants the item to the player's inventory, and manages world-item state.
+		/// Server-only.
+		/// </summary>
+		/// <param name="initiator">The character picking up the world item.</param>
+		/// <param name="eventData">The event data containing the interaction context.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
 #if UNITY_SERVER

@@ -495,6 +495,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Sets the faction to value.
 		/// </summary>
+		/// <param name="templateID">The faction template ID to modify.</param>
+		/// <param name="value">The new reputation or standing value.</param>
+		/// <param name="skipEvent">If true, faction change events will not be invoked.</param>
 		public void SetFaction(int templateID, int value, bool skipEvent = false)
 		{
 			// NPCs don't get faction adjustments. This would make them eventually attack each other.
@@ -531,6 +534,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Adds amount to the faction value.
 		/// </summary>
+		/// <param name="template">The faction template to adjust.</param>
+		/// <param name="amount">The amount to add to the faction standing (can be negative).</param>
 		public void Add(FactionTemplate template, int amount = 1)
 		{
 			// NPCs don't get faction adjustments. This would make them eventually attack each other.
@@ -589,6 +594,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Adds a percentage of the defenders hostile faction and removes a percentage of the defenders allied faction.
 		/// </summary>
+		/// <param name="defenderFactionController">The defender's faction controller to reference.</param>
+		/// <param name="alliedPercentToSubtract">Percentage of allied faction standing to subtract.</param>
+		/// <param name="hostilePercentToAdd">Percentage of hostile faction standing to add.</param>
 		public void AdjustFaction(IFactionController defenderFactionController, float alliedPercentToSubtract, float hostilePercentToAdd)
 		{
 			// NPCs don't get faction adjustments. This would make them eventually attack each other.

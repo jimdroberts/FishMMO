@@ -5,6 +5,11 @@ using System.Collections.Generic;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for the options/settings panel. Manages a collection of
+	/// SettingOption components found in child objects, providing a unified
+	/// interface for initializing, loading, and saving all settings.
+	/// </summary>
 	public class UIOptions : UIControl
 	{
 		/// <summary>

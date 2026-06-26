@@ -39,32 +39,61 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		[Tooltip("Max world-scene actions drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
 
+		/// <summary>
+		/// Minimum seconds between instance DB routing lookups for the same account.
+		/// </summary>
 		[Header("Connection Routing Hardening")]
 		[Tooltip("Minimum seconds between instance DB routing lookups for the same account")]
 		[SerializeField] private float instanceLookupDebounceSeconds = 3.0f;
 
+		/// <summary>
+		/// Maximum seconds a connection may remain in waiting queues before being purged.
+		/// </summary>
 		[Tooltip("Maximum seconds a connection may remain in waiting queues before being purged")]
 		[SerializeField] private float waitingQueueTtlSeconds = 45.0f;
 
+		/// <summary>
+		/// Seconds between stale waiting-queue purge sweeps.
+		/// </summary>
 		[Tooltip("Seconds between stale waiting-queue purge sweeps")]
 		[SerializeField] private float waitingQueueSweepIntervalSeconds = 5.0f;
 
+		/// <summary>
+		/// Seconds between stale debounce-entry cleanup sweeps.
+		/// </summary>
 		[Tooltip("Seconds between stale debounce-entry cleanup sweeps")]
 		[SerializeField] private float debounceCleanupIntervalSeconds = 60.0f;
 
+		/// <summary>
+		/// Max account debounce entries scanned per cleanup sweep.
+		/// </summary>
 		[Tooltip("Max account debounce entries scanned per cleanup sweep")]
 		[SerializeField] private int debounceCleanupMaxScanPerSweep = 256;
 
+		/// <summary>
+		/// Max account debounce entries removed per cleanup sweep.
+		/// </summary>
 		[Tooltip("Max account debounce entries removed per cleanup sweep")]
 		[SerializeField] private int debounceCleanupMaxRemovalsPerSweep = 128;
 
+		/// <summary>
+		/// Max stale queued connections purged per waiting-queue sweep.
+		/// </summary>
 		[Tooltip("Max stale queued connections purged per waiting-queue sweep")]
 		[SerializeField] private int waitingQueuePurgeMaxPerSweep = 128;
 
+		/// <summary>
+		/// Seconds before cached scene-instance query results expire and are re-fetched from the database.
+		/// Set to 0 to disable caching.
+		/// </summary>
 		[Header("Scene Instance Cache")]
 		[Tooltip("Seconds before cached scene-instance query results expire and are re-fetched from the database. Set to 0 to disable caching.")]
 		[SerializeField] private float sceneInstanceCacheTtlSeconds = 5.0f;
 
+		/// <summary>
+		/// Seconds before cached scene-server address results expire and are re-fetched from the database.
+		/// Set to 0 to disable caching.
+		/// </summary>
 		[Tooltip("Seconds before cached scene-server address results expire and are re-fetched from the database. Set to 0 to disable caching.")]
 		[SerializeField] private float sceneServerCacheTtlSeconds = 10.0f;
 

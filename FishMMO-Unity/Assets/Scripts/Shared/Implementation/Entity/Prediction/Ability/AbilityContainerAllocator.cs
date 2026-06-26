@@ -10,8 +10,18 @@ namespace FishMMO.Shared
 	/// </summary>
 	internal static class AbilityContainerAllocator
 	{
+		/// <summary>
+		/// Prime multiplier used to derive the base container ID from seed and spawn tick.
+		/// </summary>
 		private const int TickMultiplier = 1000003;
+		/// <summary>
+		/// Linear probe step for hash collision resolution.
+		/// </summary>
 		private const int ProbeStep = 1;
+		/// <summary>
+		/// Extra probe iterations beyond the current dictionary count to handle slots
+		/// freed by in-progress collision resolution.
+		/// </summary>
 		private const int ProbeSearchSlack = 1;
 
 		/// <summary>
@@ -58,6 +68,10 @@ namespace FishMMO.Shared
 				$"AbilityContainerAllocator: failed to find free container for ability {ability.ID} after {probeLimit} probes.");
 		}
 
+		/// <summary>
+		/// Checks whether an existing container represents the same spawn (same seed and tick).
+		/// Used to detect and replace duplicate spawns.
+		/// </summary>
 		private static bool IsSameSpawn(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
 		{
 			if (container == null || container.Count == 0) return false;
@@ -70,6 +84,9 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		/// <summary>
+		/// Destroys all ability objects in a container and removes their ability references.
+		/// </summary>
 		private static void DestroyContainer(Dictionary<int, AbilityObject> container)
 		{
 			foreach (AbilityObject obj in container.Values)
@@ -82,6 +99,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Returns true when the container is null, empty, or contains only null entries.
+		/// </summary>
 		private static bool IsEffectivelyEmpty(Dictionary<int, AbilityObject> container)
 		{
 			if (container == null || container.Count == 0) return true;

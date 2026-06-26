@@ -63,11 +63,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private enum IngressOperation : byte
 		{
+			/// <summary>
+			/// Remove an item from the inventory.
+			/// </summary>
 			InventoryRemove = 1,
+			/// <summary>
+			/// Swap two item slots within the inventory.
+			/// </summary>
 			InventorySwap = 2,
+			/// <summary>
+			/// Equip an item from a container.
+			/// </summary>
 			EquipmentEquip = 3,
+			/// <summary>
+			/// Unequip an item to a container.
+			/// </summary>
 			EquipmentUnequip = 4,
+			/// <summary>
+			/// Remove an item from the bank.
+			/// </summary>
 			BankRemove = 5,
+			/// <summary>
+			/// Swap two item slots within the bank.
+			/// </summary>
 			BankSwap = 6,
 		}
 

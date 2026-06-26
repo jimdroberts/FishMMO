@@ -459,9 +459,6 @@ namespace FishMMO.Server.Implementation
 
 		#endregion
 
-		/// <summary>
-		/// Builds the HTML body for a login-triggered verification email resend.
-		/// </summary>
 
 		/// <summary>
 		/// Sets VerificationEmailSentAt after resending a verification email during login.
@@ -476,6 +473,12 @@ namespace FishMMO.Server.Implementation
 					await Log.Warning(LogPrefix, $"PersistVerificationEmailSentAsync DB error for '{username}': {r.ErrorCode} - {r.ErrorMessage}");
 			}
 		}
+		/// <summary>
+		/// Builds the HTML body for a login-triggered verification email resend.
+		/// </summary>
+		/// <param name="username">The account username.</param>
+		/// <param name="verifyCode">The 6-digit verification code.</param>
+		/// <returns>The HTML email body string.</returns>
 		private string BuildLoginVerificationEmailBody(string username, int verifyCode)
 		{
 			return $@"<html><body style='font-family: Arial, sans-serif; color: #333;'>

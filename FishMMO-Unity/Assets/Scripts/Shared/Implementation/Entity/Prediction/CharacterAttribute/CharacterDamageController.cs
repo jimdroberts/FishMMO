@@ -15,33 +15,41 @@ namespace FishMMO.Shared
 
 		[Header("ECA - Damage")]
 		[Tooltip("Triggers invoked when this character deals damage to another.")]
+		/// <summary>Triggers invoked when this character deals damage to another.</summary>
 		[SerializeField]
 		private List<Trigger> onDamageTriggers = new List<Trigger>();
 		[Tooltip("Triggers invoked when this character receives damage from another.")]
+		/// <summary>Triggers invoked when this character receives damage from another.</summary>
 		[SerializeField]
 		private List<Trigger> onDamagedTriggers = new List<Trigger>();
 
 		[Header("ECA - Healing")]
 		[Tooltip("Triggers invoked when this character heals another.")]
+		/// <summary>Triggers invoked when this character heals another.</summary>
 		[SerializeField]
 		private List<Trigger> onHealTriggers = new List<Trigger>();
 		[Tooltip("Triggers invoked when this character is healed by another.")]
+		/// <summary>Triggers invoked when this character is healed by another.</summary>
 		[SerializeField]
 		private List<Trigger> onHealedTriggers = new List<Trigger>();
 
 		[Header("ECA - Kill")]
 		[Tooltip("Triggers invoked when this character kills another.")]
+		/// <summary>Triggers invoked when this character kills another.</summary>
 		[SerializeField]
 		private List<Trigger> onKillTriggers = new List<Trigger>();
 		[Tooltip("Triggers invoked when this character is killed by another.")]
+		/// <summary>Triggers invoked when this character is killed by another.</summary>
 		[SerializeField]
 		private List<Trigger> onKilledTriggers = new List<Trigger>();
 
 		[Header("ECA - Resurrect")]
 		[Tooltip("Triggers invoked when this character resurrects another.")]
+		/// <summary>Triggers invoked when this character resurrects another.</summary>
 		[SerializeField]
 		private List<Trigger> onResurrectTriggers = new List<Trigger>();
 		[Tooltip("Triggers invoked when this character is resurrected by another.")]
+		/// <summary>Triggers invoked when this character is resurrected by another.</summary>
 		[SerializeField]
 		private List<Trigger> onResurrectedTriggers = new List<Trigger>();
 

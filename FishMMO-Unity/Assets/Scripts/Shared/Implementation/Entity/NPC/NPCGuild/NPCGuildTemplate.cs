@@ -88,6 +88,7 @@ namespace FishMMO.Shared
 
 			base.OnUnload(typeName, resourceName, resourceID);
 		}
+		/// <summary>
 		/// Returns true if requirements are met or if no requirements are set.
 		/// </summary>
 		/// <param name="playerCharacter">The player character to evaluate.</param>

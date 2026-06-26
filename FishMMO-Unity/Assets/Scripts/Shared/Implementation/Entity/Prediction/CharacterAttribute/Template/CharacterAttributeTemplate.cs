@@ -4,6 +4,10 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	[CreateAssetMenu(fileName = "New Character Attribute", menuName = "FishMMO/Character/Attribute/Character Attribute", order = 1)]
+	/// <summary>
+	/// Template that defines a character attribute's configuration, including base values, clamping rules,
+	/// parent/child/dependency relationships, and formula mappings for derived calculations.
+	/// </summary>
 	public class CharacterAttributeTemplate : CachedScriptableObject<CharacterAttributeTemplate>, ICachedObject
 	{
 		/// <summary>

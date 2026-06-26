@@ -9,6 +9,10 @@ using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for creating a new character. Manages race, model, and spawn location dropdowns,
+	/// validates input, and sends the creation request to the server.
+	/// </summary>
 	public class UICharacterCreate : UIControl
 	{
 		/// <summary>

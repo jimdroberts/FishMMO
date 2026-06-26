@@ -54,6 +54,7 @@ namespace FishMMO.Shared
 		/// Called when entering the caster attacking state.
 		/// Casters run to maintain distance.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
 		public override void Enter(AIController controller)
 		{
 			base.Enter(controller);
@@ -65,6 +66,8 @@ namespace FishMMO.Shared
 		/// picks the longest-range ability available, retreats aggressively
 		/// when the target closes in, and repositions during cooldowns.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="targetCharacter">The current target character being attacked.</param>
 		protected override void TryAttack(AIController controller, ICharacter targetCharacter)
 		{
 			if (!controller.Character.TryGet(out IAbilityController abilityController))
@@ -146,6 +149,8 @@ namespace FishMMO.Shared
 		/// Casters always try to stay at their preferred (maximum) distance.
 		/// They back away if the target gets closer than comfort range.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="distance">Current distance to the target.</param>
 		protected override void ManagePositioning(AIController controller, float distance)
 		{
 			if (controller.Target == null) return;

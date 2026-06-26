@@ -13,6 +13,11 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI Has Target Node", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/Has Target Node")]
 	public class AIHasTargetNode : AIBehaviorNode
 	{
+		/// <summary>
+		/// Checks if the NPC currently has a combat target.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Success if the NPC has a target, Failure otherwise.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			return controller.Target != null ? AINodeResult.Success : AINodeResult.Failure;

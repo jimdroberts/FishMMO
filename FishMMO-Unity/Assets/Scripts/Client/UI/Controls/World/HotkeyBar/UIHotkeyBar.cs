@@ -7,6 +7,9 @@ using FishNet.Transporting;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for managing hotkey bars, including hotkey assignments, input handling, and validation.
+	/// </summary>
 	public class UIHotkeyBar : UICharacterControl
 	{
 		/// <summary>
@@ -116,9 +119,6 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Get our hotkey virtual key code. Offset by 1.
-		/// </summary>
-		/// <summary>
 		/// Gets the key mapping string for a hotkey index.
 		/// </summary>
 		/// <param name="hotkeyIndex">The hotkey index.</param>
@@ -156,9 +156,6 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Validates all the hotkeys. If an item in your inventory/equipment moves while it's on a hotkey slot it will remove the hotkey.
-		/// </summary>
 		/// <summary>
 		/// Validates all the hotkeys. If an item in your inventory/equipment moves while it's on a hotkey slot it will remove the hotkey.
 		/// </summary>

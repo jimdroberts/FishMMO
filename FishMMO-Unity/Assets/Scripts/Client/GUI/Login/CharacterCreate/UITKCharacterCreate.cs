@@ -15,13 +15,37 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKCharacterCreate : UITKControl
 	{
+		/// <summary>
+		/// The name of the create-submit button in the UI.
+		/// </summary>
 		private const string CREATE_BUTTON_NAME = "create-submit-btn";
+		/// <summary>
+		/// The name of the quit-to-login button in the UI.
+		/// </summary>
 		private const string QUIT_LOGIN_BUTTON_NAME = "create-quit-login-btn";
+		/// <summary>
+		/// The name of the quit button in the UI.
+		/// </summary>
 		private const string QUIT_BUTTON_NAME = "create-quit-btn";
+		/// <summary>
+		/// The name of the character name TextField in the UI.
+		/// </summary>
 		private const string NAME_FIELD_NAME = "create-name";
+		/// <summary>
+		/// The name of the race DropdownField in the UI.
+		/// </summary>
 		private const string RACE_DROPDOWN_NAME = "create-race";
+		/// <summary>
+		/// The name of the model DropdownField in the UI.
+		/// </summary>
 		private const string MODEL_DROPDOWN_NAME = "create-model";
+		/// <summary>
+		/// The name of the location DropdownField in the UI.
+		/// </summary>
 		private const string LOCATION_DROPDOWN_NAME = "create-location";
+		/// <summary>
+		/// The name of the result Label in the UI.
+		/// </summary>
 		private const string RESULT_NAME = "create-result";
 
 		/// <summary>

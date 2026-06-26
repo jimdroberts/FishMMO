@@ -46,7 +46,9 @@ namespace FishMMO.Client
 			public long FriendID;
 		}
 
+		/// <summary>All created friend rows keyed by character ID.</summary>
 		private readonly Dictionary<long, FriendRow> friends = new Dictionary<long, FriendRow>();
+		/// <summary>The container element that holds the generated friend rows.</summary>
 		private VisualElement friendList;
 
 		/// <summary>

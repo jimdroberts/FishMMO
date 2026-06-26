@@ -9,6 +9,11 @@ using FishMMO.Auth.Core;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for selecting, creating, or deleting characters after login.
+	/// Displays a list of available characters, handles character selection highlighting,
+	/// and manages connection to the world server with the chosen character.
+	/// </summary>
 	public class UICharacterSelect : UIControl
 	{
 		/// <summary>

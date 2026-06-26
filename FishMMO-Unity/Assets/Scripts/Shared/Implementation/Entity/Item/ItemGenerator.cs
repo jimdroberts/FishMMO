@@ -16,6 +16,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		protected int seed;
 
+
 		/// <summary>
 		/// Gets or sets the seed for generation. Changing the seed triggers attribute regeneration.
 		/// </summary>

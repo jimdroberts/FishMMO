@@ -184,6 +184,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Checks whether this composite buff template applies the specified character flag.
+		/// </summary>
+		/// <param name="flag">The character flag to check.</param>
+		/// <returns>True if this template's <see cref="Flags"/> list contains the flag.</returns>
 		internal bool AppliesFlag(CharacterFlags flag)
 		{
 			if (Flags == null) return false;
@@ -197,6 +202,14 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		/// <summary>
+		/// Checks whether the specified <see cref="CharacterFlags"/> is currently provided by another
+		/// active buff on the target. Used before disabling a flag to avoid clearing a flag that
+		/// another buff still depends on.
+		/// </summary>
+		/// <param name="target">The character to check.</param>
+		/// <param name="flag">The character flag to look for.</param>
+		/// <returns>True if another active buff on the target provides the same flag.</returns>
 		private bool IsFlagProvidedByAnotherBuff(ICharacter target, CharacterFlags flag)
 		{
 			if (!target.TryGet(out IBuffController buffController)) return false;

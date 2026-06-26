@@ -12,6 +12,9 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKDropdown : UITKControl
 	{
+		/// <summary>
+		/// Name of the dropdown menu container element.
+		/// </summary>
 		private const string DROPDOWN_MENU_NAME = "dropdown-menu";
 
 		/// <summary>
@@ -24,6 +27,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public Dictionary<string, Toggle> Toggles = new Dictionary<string, Toggle>();
 
+		/// <summary>
+		/// The dropdown menu container element.
+		/// </summary>
 		private VisualElement dropdownMenu;
 
 		/// <summary>

@@ -8,7 +8,9 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class ColliderExtensions
 	{
+		/// <summary>Size of the center marker gizmo cube.</summary>
 		private const float CenterMarkerSize = 0.2f;
+		/// <summary>Brightness multiplier applied to the base gizmo color for the center marker.</summary>
 		private const float CenterMarkerBrightnessMultiplier = 1.35f;
 
 		/// <summary>

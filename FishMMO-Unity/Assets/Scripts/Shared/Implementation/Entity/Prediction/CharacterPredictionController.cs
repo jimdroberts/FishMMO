@@ -52,8 +52,16 @@ namespace FishMMO.Shared
 		/// </summary>
 		public uint PendingReplicateTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
 
+		/// <summary>
+		/// Cached array of <see cref="IPredictableController"/> components, sorted by <see cref="IPredictableController.Order"/>.
+		/// Built once in Awake; dynamic additions after Awake will not participate.
+		/// </summary>
 		private IPredictableController[] controllers = Array.Empty<IPredictableController>();
 
+		/// <summary>
+		/// Discovers all <see cref="IPredictableController"/> components on this GameObject,
+		/// sorts them by <see cref="IPredictableController.Order"/>, and caches the sorted array.
+		/// </summary>
 		private void Awake()
 		{
 			List<IPredictableController> list = new List<IPredictableController>();
@@ -62,6 +70,10 @@ namespace FishMMO.Shared
 			controllers = list.ToArray();
 		}
 
+		/// <summary>
+		/// Subscribes to <see cref="TimeManager.OnPreTick"/> and <see cref="TimeManager.OnTick"/> events
+		/// and validates that state forwarding is enabled for observer prediction.
+		/// </summary>
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
@@ -83,6 +95,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Unsubscribes from <see cref="TimeManager"/> tick events and resets all tick snapshots to unset.
+		/// </summary>
 		public override void OnStopNetwork()
 		{
 			if (base.TimeManager != null)
@@ -97,6 +112,10 @@ namespace FishMMO.Shared
 			base.OnStopNetwork();
 		}
 
+		/// <summary>
+		/// Called before each tick. Captures the current local tick and computes the pending
+		/// replicate-domain tick for the upcoming <see cref="Replicate"/> pass.
+		/// </summary>
 		private void TimeManager_OnPreTick()
 		{
 			if (base.TimeManager == null)
@@ -113,6 +132,13 @@ namespace FishMMO.Shared
 			PendingReplicateTickSnapshot = ResolvePendingReplicateTick(previousReplicateTick);
 		}
 
+		/// <summary>
+		/// Resolves the best available replicate-domain tick for the upcoming replicate pass.
+		/// For the owning client, returns <see cref="TimeManager.LocalTick"/>.
+		/// For non-owners, uses the owner's replicate tick or extrapolates from the previous tick.
+		/// </summary>
+		/// <param name="previousReplicateTick">The replicate tick from the previous pass.</param>
+		/// <returns>The resolved replicate tick, or <see cref="TimeManager.UNSET_TICK"/> if unavailable.</returns>
 		private uint ResolvePendingReplicateTick(uint previousReplicateTick)
 		{
 			if (base.TimeManager == null)
@@ -142,6 +168,10 @@ namespace FishMMO.Shared
 			return TimeManager.UNSET_TICK;
 		}
 
+		/// <summary>
+		/// Called on each tick. Populates input for the owning client, runs <see cref="Replicate"/>,
+		/// and creates reconcile data on the server.
+		/// </summary>
 		private void TimeManager_OnTick()
 		{
 			// Snapshot the local authoritative tick (TimeManager.LocalTick) before any controller runs.
@@ -162,6 +192,13 @@ namespace FishMMO.Shared
 			CreateReconcile();
 		}
 
+		/// <summary>
+		/// Replicate method: runs all <see cref="IPredictableController.OnReplicate"/> calls in order.
+		/// Updates <see cref="CurrentReplicateTickSnapshot"/> from the input tick.
+		/// </summary>
+		/// <param name="input">The unified replicate input data.</param>
+		/// <param name="state">The current replicate state.</param>
+		/// <param name="channel">The network channel.</param>
 		[Replicate]
 		private void Replicate(CharacterReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
@@ -173,6 +210,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Creates reconcile data by running all <see cref="IPredictableController.OnCreateReconcile"/>
+		/// calls and dispatches via <see cref="Reconcile"/>.
+		/// Gated on <see cref="NetworkBehaviour.IsServerStarted"/> and <see cref="NetworkBehaviour.IsSpawned"/>
+		/// to prevent NRE during network startup.
+		/// </summary>
 		public override void CreateReconcile()
 		{
 			// Also gate on IsSpawned. CreateReconcile can be invoked by FishNet
@@ -190,6 +233,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Reconcile method: runs all <see cref="IPredictableController.OnReconcile"/> calls in order
+		/// to restore state from the server's authoritative reconcile data.
+		/// </summary>
+		/// <param name="rd">The reconcile data from the server.</param>
+		/// <param name="channel">The network channel.</param>
 		[Reconcile]
 		private void Reconcile(CharacterReconcileData rd, Channel channel = Channel.Unreliable)
 		{

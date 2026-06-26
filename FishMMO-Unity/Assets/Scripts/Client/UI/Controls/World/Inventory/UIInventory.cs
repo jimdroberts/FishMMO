@@ -5,6 +5,9 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for managing and displaying the player inventory slots, including item icons, amounts, and lock states.
+	/// </summary>
 	public class UIInventory : UICharacterControl
 	{
 		/// <summary>
@@ -108,12 +111,6 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Callback for when an inventory slot is updated. Refreshes the corresponding button display.
-		/// </summary>
-		/// <param name="container">The item container holding the inventory.</param>
-		/// <param name="item">The item in the updated slot.</param>
-		/// <param name="inventoryIndex">The index of the updated inventory slot.</param>
-		/// <summary>
 		/// Callback for when an inventory slot's lock state changes. Updates the corresponding button's interactability.
 		/// </summary>
 		public void OnInventorySlotLockChanged(IItemContainer container, int slot, bool isLocked)
@@ -124,6 +121,12 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Callback for when an inventory slot is updated. Refreshes the corresponding button display.
+		/// </summary>
+		/// <param name="container">The item container holding the inventory.</param>
+		/// <param name="item">The item in the updated slot.</param>
+		/// <param name="inventoryIndex">The index of the updated inventory slot.</param>
 		public void OnInventorySlotUpdated(IItemContainer container, Item item, int inventoryIndex)
 		{
 			if (inventorySlots == null)

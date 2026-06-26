@@ -12,16 +12,25 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKDeathDialog : UITKControl
 	{
+		/// <summary>Name of the death message label.</summary>
 		private const string MESSAGE_LABEL_NAME = "death-message";
+		/// <summary>Name of the respawn button.</summary>
 		private const string RESPAWN_BTN_NAME = "death-respawn-btn";
+		/// <summary>Name of the resurrect button.</summary>
 		private const string RESURRECT_BTN_NAME = "death-resurrect-btn";
+		/// <summary>Name of the close button.</summary>
 		private const string CLOSE_BTN_NAME = "death-close-btn";
 
+		/// <summary>Label displaying the death message.</summary>
 		private Label messageLabel;
+		/// <summary>Button to respawn at the bind point.</summary>
 		private Button respawnButton;
+		/// <summary>Button to accept a resurrect offer.</summary>
 		private Button resurrectButton;
+		/// <summary>Button to close the dialog.</summary>
 		private Button closeButton;
 
+		/// <summary>The ID of the player attempting to resurrect, or 0 if none.</summary>
 		private long currentResurrectorID;
 
 		/// <summary>Queries UXML elements and wires button click handlers.</summary>
@@ -83,6 +92,11 @@ namespace FishMMO.Client
 			Show();
 		}
 
+		/// <summary>
+		/// Handles a resurrect offer broadcast from another player.
+		/// </summary>
+		/// <param name="msg">The resurrect offer broadcast message.</param>
+		/// <param name="channel">The network channel.</param>
 		private void OnResurrectOfferReceived(ResurrectOfferBroadcast msg, Channel channel)
 		{
 			currentResurrectorID = msg.ResurrectorID;
@@ -93,6 +107,9 @@ namespace FishMMO.Client
 			SetResurrectVisible(true);
 		}
 
+		/// <summary>
+		/// Sends a respawn-at-bind-point request to the server and hides the dialog.
+		/// </summary>
 		private void OnClickRespawn()
 		{
 			if (Client != null)
@@ -102,6 +119,9 @@ namespace FishMMO.Client
 			Hide();
 		}
 
+		/// <summary>
+		/// Sends an accept resurrect request to the server and hides the dialog.
+		/// </summary>
 		private void OnClickAcceptResurrect()
 		{
 			if (Client != null && currentResurrectorID != 0)
@@ -111,6 +131,10 @@ namespace FishMMO.Client
 			Hide();
 		}
 
+		/// <summary>
+		/// Shows or hides the resurrect button.
+		/// </summary>
+		/// <param name="visible">True to show the resurrect button, false to hide it.</param>
 		private void SetResurrectVisible(bool visible)
 		{
 			if (resurrectButton != null)

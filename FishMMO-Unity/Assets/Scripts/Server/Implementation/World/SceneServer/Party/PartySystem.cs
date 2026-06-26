@@ -111,7 +111,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
 		[Header("Achievements")]
+		/// <summary>
+		/// Achievement template awarded when a character creates a party.
+		/// </summary>
 		public AchievementTemplate PartyCreateAchievementTemplate;
+		/// <summary>
+		/// Achievement template awarded when a character joins a party.
+		/// </summary>
 		public AchievementTemplate PartyJoinAchievementTemplate;
 
 		/// <summary>
@@ -390,6 +396,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Asynchronously fetches party updates from the database and marshals the processing back to the main thread.
 		/// </summary>
 		/// <returns>Asynchronous fetch-and-process task.</returns>
+		/// <param name="partyIds">List of party IDs to fetch updates for.</param>
+		/// <param name="lastFetch">Timestamp of the last successful database fetch.</param>
 		private async Task FetchAndProcessPartyUpdatesAsync(List<long> partyIds, DateTime lastFetch)
 		{
 			try

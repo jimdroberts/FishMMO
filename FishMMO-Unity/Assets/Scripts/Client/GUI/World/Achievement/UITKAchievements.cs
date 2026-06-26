@@ -59,12 +59,17 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The currently selected achievement category.</summary>
+		/// <summary>The currently selected achievement category.</summary>
 		private AchievementCategory currentCategory;
 
+		/// <summary>Category buttons keyed by achievement category.</summary>
 		private readonly Dictionary<AchievementCategory, Button> categoryButtons = new Dictionary<AchievementCategory, Button>();
+		/// <summary>Achievement description rows keyed by category and template ID.</summary>
 		private readonly Dictionary<AchievementCategory, Dictionary<int, DescriptionRow>> categories = new Dictionary<AchievementCategory, Dictionary<int, DescriptionRow>>();
 
+		/// <summary>Container for category button elements.</summary>
 		private VisualElement categoryList;
+		/// <summary>Container for achievement description rows.</summary>
 		private VisualElement descriptionList;
 
 		/// <summary>

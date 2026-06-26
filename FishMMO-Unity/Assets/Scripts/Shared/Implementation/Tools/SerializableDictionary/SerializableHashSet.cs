@@ -185,6 +185,8 @@ namespace FishMMO.Shared
 			((ISet<T>)m_hashSet).UnionWith(other);
 		}
 
+		/// <summary>Adds an item to the collection.</summary>
+		/// <param name="item">The item parameter.</param>
 		void ICollection<T>.Add(T item)
 		{
 			((ISet<T>)m_hashSet).Add(item);

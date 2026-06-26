@@ -46,6 +46,10 @@ namespace FishMMO.Client
 			ICooldownController.OnRemoveCooldown -= CooldownController_OnRemoveCooldown;
 		}
 
+		/// <summary>
+		/// Gets the current authoritative cooldown tick by resolving the local tick through the cooldown controller.
+		/// </summary>
+		/// <returns>The current authoritative tick for cooldown calculations.</returns>
 		private uint GetCurrentCooldownTick()
 		{
 			uint localTick = InstanceFinder.TimeManager != null ? InstanceFinder.TimeManager.LocalTick : 0u;

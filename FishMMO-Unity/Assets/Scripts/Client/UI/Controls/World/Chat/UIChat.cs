@@ -8,6 +8,9 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Main chat UI control handling message display, tab management, channel commands, input validation, and server communication.
+	/// </summary>
 	public class UIChat : UICharacterControl, IChatHelper
 	{
 		/// <summary>

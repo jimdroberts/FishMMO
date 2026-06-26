@@ -13,9 +13,17 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI Inverter", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/Inverter")]
 	public class AIInverter : AIBehaviorNode
 	{
+		/// <summary>
+		/// The child node whose result will be inverted.
+		/// </summary>
 		[Tooltip("The child node whose result will be inverted.")]
 		public AIBehaviorNode Child;
 
+		/// <summary>
+		/// Evaluates the child node and inverts its result.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Failure if the child succeeded, Success if the child failed, Running if the child is running.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			if (Child == null) return AINodeResult.Failure;

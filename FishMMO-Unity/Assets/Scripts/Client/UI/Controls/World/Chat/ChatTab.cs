@@ -6,6 +6,9 @@ using System;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Represents a single chat tab with its active channels, supporting rename, removal, and channel toggling.
+	/// </summary>
 	public class ChatTab : MonoBehaviour
 	{
 		/// <summary>

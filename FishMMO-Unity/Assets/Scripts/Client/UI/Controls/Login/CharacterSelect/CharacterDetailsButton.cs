@@ -5,6 +5,11 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// A UI button representing a character in the character selection list.
+	/// Displays the character's name and scene, and triggers an event when selected.
+	/// Supports visual highlighting via label color changes.
+	/// </summary>
 	public class CharacterDetailsButton : MonoBehaviour
 	{
 		/// <summary>

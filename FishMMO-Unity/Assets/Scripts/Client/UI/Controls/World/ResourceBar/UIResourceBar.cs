@@ -111,6 +111,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Smoothly interpolates the slider value toward the target value each frame for a fluid resource bar animation.
+		/// </summary>
 		private void Update()
 		{
 			if (slider == null || !initialized)

@@ -10,7 +10,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class AbilityPrefabColliderCache
 	{
-		private static readonly Dictionary<int, Collider> Cache = new Dictionary<int, Collider>();
+		/// <summary>
+	/// Internal cache mapping ability template IDs to their prefab Collider components.
+	/// </summary>
+	private static readonly Dictionary<int, Collider> Cache = new Dictionary<int, Collider>();
 
 		/// <summary>
 		/// Clears the cache. Call after addressable bundle reloads to prevent stale collider references.
@@ -54,6 +57,9 @@ namespace FishMMO.Shared
 			return collider;
 		}
 
+		/// <summary>
+		/// Clears the cache on domain reload (e.g., after entering Play Mode in the Editor).
+		/// </summary>
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
 		private static void ClearOnDomainReload() => Cache.Clear();
 	}

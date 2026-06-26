@@ -22,14 +22,41 @@ namespace FishMMO.Client
 	/// </remarks>
 	public class UITKLogin : UITKControl
 	{
+		/// <summary>
+		/// The name of the username TextField in the UI.
+		/// </summary>
 		private const string USERNAME_NAME = "login-username";
+		/// <summary>
+		/// The name of the email TextField in the UI.
+		/// </summary>
 		private const string EMAIL_NAME = "login-email";
+		/// <summary>
+		/// The name of the password TextField in the UI.
+		/// </summary>
 		private const string PASSWORD_NAME = "login-password";
+		/// <summary>
+		/// The name of the age DropdownField in the UI.
+		/// </summary>
 		private const string AGE_SELECT_NAME = "login-age";
+		/// <summary>
+		/// The name of the register button in the UI.
+		/// </summary>
 		private const string REGISTER_BUTTON_NAME = "login-register-btn";
+		/// <summary>
+		/// The name of the sign-in button in the UI.
+		/// </summary>
 		private const string SIGN_IN_BUTTON_NAME = "login-signin-btn";
+		/// <summary>
+		/// The name of the options button in the UI.
+		/// </summary>
 		private const string OPTIONS_BUTTON_NAME = "login-options-btn";
+		/// <summary>
+		/// The name of the quit button in the UI.
+		/// </summary>
 		private const string QUIT_BUTTON_NAME = "login-quit-btn";
+		/// <summary>
+		/// The name of the handshake message Label in the UI.
+		/// </summary>
 		private const string HANDSHAKE_NAME = "login-handshake";
 
 		private TextField username;

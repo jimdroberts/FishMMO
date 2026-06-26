@@ -4,6 +4,10 @@ using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Setting option for a generic toggle-based setting.
+	/// Persists the toggle state to configuration using a configurable key.
+	/// </summary>
 	public class ToggleSettingOption : SettingOption
 	{
 		/// <summary>

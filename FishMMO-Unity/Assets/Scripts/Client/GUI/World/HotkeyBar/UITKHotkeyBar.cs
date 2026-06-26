@@ -61,7 +61,9 @@ namespace FishMMO.Client
 			public long ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
 		}
 
+		/// <summary>All created hotkey slots in index order.</summary>
 		private readonly List<HotkeySlot> slots = new List<HotkeySlot>();
+		/// <summary>The container element that holds the generated hotkey slot roots.</summary>
 		private VisualElement list;
 
 		/// <summary>
@@ -210,6 +212,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called every frame. Validates hotkey assignments and polls the Input System for activation.
+		/// </summary>
 		private void Update()
 		{
 			ValidateHotkeys();

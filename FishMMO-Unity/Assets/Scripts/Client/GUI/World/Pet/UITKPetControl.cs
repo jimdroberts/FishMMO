@@ -30,7 +30,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the release command button.</summary>
 		private const string RELEASE_BUTTON_NAME = "pet-release";
 
+		/// <summary>Cached reference to the pet name label element.</summary>
 		private Label nameLabel;
+		/// <summary>Cached reference to the pet health fill element.</summary>
 		private VisualElement healthFill;
 
 		/// <summary>

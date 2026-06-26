@@ -19,6 +19,10 @@ namespace FishMMO.Shared
 		/// All FishNet callbacks (WritePayload, ResetState, Replicate, etc.)
 		/// run on Unity's main thread, so no lock is needed.
 		/// </summary>
+		/// <summary>
+		/// Static RNG for generating per-character ability seeds (server-side).
+		/// Called from <see cref="EnsureAbilitySeedGenerator"/> on the authoritative server.
+		/// </summary>
 		private static DeterministicRNG playerSeedGenerator = new DeterministicRNG();
 
 		/// <summary>
@@ -105,14 +109,34 @@ namespace FishMMO.Shared
 		/// </summary>
 		private EventData cachedCheckEventData;
 
-		// Cached component references resolved once in OnStartNetwork.
-		// Avoids Dictionary<Type, ICharacterBehaviour> lookups per tick per character.
+		/// <summary>
+		/// Cached <see cref="IBuffController"/> resolved once in <see cref="OnStartNetwork"/>.
+		/// Avoids per-tick <see cref="ICharacter.TryGet{T}"/> lookups.
+		/// </summary>
 		private IBuffController cachedBuffController;
+		/// <summary>
+		/// Cached <see cref="ICooldownController"/> resolved once in <see cref="OnStartNetwork"/>.
+		/// </summary>
 		private ICooldownController cachedCooldownController;
+		/// <summary>
+		/// Cached <see cref="ICharacterDamageController"/> resolved once in <see cref="OnStartNetwork"/>.
+		/// </summary>
 		private ICharacterDamageController cachedDamageController;
+		/// <summary>
+		/// Cached <see cref="ICharacterAttributeController"/> resolved once in <see cref="OnStartNetwork"/>.
+		/// </summary>
 		private ICharacterAttributeController cachedAttributeController;
+		/// <summary>
+		/// Cached <see cref="IInventoryController"/> resolved once in <see cref="OnStartNetwork"/>.
+		/// </summary>
 		private IInventoryController cachedInventoryController;
+		/// <summary>
+		/// Cached <see cref="ITargetController"/> resolved once in <see cref="OnStartNetwork"/>.
+		/// </summary>
 		private ITargetController cachedTargetController;
+		/// <summary>
+		/// Cached <see cref="ICharacterAnimationController"/> resolved once in <see cref="OnStartNetwork"/>.
+		/// </summary>
 		private ICharacterAnimationController cachedAnimationController;
 
 		/// <summary>
@@ -232,6 +256,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float RemainingActivationTime => remainingTicks * (float)(base.TimeManager?.TickDelta ?? 0.0);
 
+		/// <summary>
+		/// Unity Awake callback. Initialises all known-ability and event collections.
+		/// </summary>
 		public override void OnAwake()
 		{
 			base.OnAwake();
@@ -247,6 +274,10 @@ namespace FishMMO.Shared
 			templateToAbilityID = new Dictionary<int, long>();
 		}
 
+		/// <summary>
+		/// FishNet OnStartNetwork callback. Resolves component caches and initialises the
+		/// ability seed generator.
+		/// </summary>
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
@@ -266,6 +297,9 @@ namespace FishMMO.Shared
 			EnsureAbilitySeedGenerator();
 		}
 
+		/// <summary>
+		/// FishNet OnStopNetwork callback. Releases component caches and clears events.
+		/// </summary>
 		public override void OnStopNetwork()
 		{
 			base.OnStopNetwork();
@@ -427,6 +461,10 @@ namespace FishMMO.Shared
 			return activationEventData;
 		}
 
+		/// <summary>
+		/// The last created replicate data from a Ticked replicate state on an observer.
+		/// Used to predict held-state continuity for non-owner clients.
+		/// </summary>
 		private AbilityActivationReplicateData lastCreatedData;
 
 		/// <summary>

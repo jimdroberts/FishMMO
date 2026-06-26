@@ -61,6 +61,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Tooltip("Maximum stale ingress guard entries removed per sweep")]
 		[SerializeField] private int ingressSweepMaxRemovals = 128;
 
+		/// <summary>
+		/// Achievement to increment when a player adds a friend.
+		/// </summary>
 		[Header("Achievements")]
 		public AchievementTemplate FriendAddAchievementTemplate;
 

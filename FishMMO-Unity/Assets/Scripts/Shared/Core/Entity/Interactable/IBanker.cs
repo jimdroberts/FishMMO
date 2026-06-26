@@ -6,6 +6,9 @@ namespace FishMMO.Shared.Core
 	/// </summary>
 	public interface IBanker : IInteractable
 	{
+		/// <summary>
+		/// Achievement template to increment when a player uses this banker.
+		/// </summary>
 		AchievementTemplate AchievementTemplate { get; }
 	}
 }

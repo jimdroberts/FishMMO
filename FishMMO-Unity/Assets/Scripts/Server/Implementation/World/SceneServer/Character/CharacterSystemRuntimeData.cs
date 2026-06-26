@@ -23,17 +23,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Character
 			Interlocked.Exchange(ref saveInFlight, 0);
 		}
 
+		/// <summary>
+		/// Resets the save gate to idle on initialization.
+		/// </summary>
+		/// <returns>Always returns Initialized.</returns>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			Interlocked.Exchange(ref saveInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
+		/// <summary>
+		/// Resets the save gate to idle.
+		/// </summary>
 		public override void Clear()
 		{
 			Interlocked.Exchange(ref saveInFlight, 0);
 		}
 
+		/// <summary>
+		/// Clears runtime state during deinitialization.
+		/// </summary>
 		protected override void OnDeinitialize()
 		{
 			Clear();

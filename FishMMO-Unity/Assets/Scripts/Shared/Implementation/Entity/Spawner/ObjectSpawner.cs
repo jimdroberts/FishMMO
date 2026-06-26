@@ -59,6 +59,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// If true, a random respawn time is selected within the minimum and maximum range. Otherwise, the initial respawn time is used.
 		/// </summary>
+		/// <summary>
+		/// If true, a random respawn time is selected within the minimum and maximum range. Otherwise, the initial respawn time is used.
+		/// </summary>
 		[Tooltip("If true a random number will be selected within the minimum and maximum range provided. Otherwise the maximum respawn time will be used.")]
 		public bool RandomRespawnTime = true;
 
@@ -68,6 +71,9 @@ namespace FishMMO.Shared
 		[Tooltip("If true a random spawn position will be picked inside of the bounding box using the current position as the center.")]
 		public bool RandomSpawnPosition = true;
 
+		/// <summary>
+		/// SphereCast radius used for spawning objects in the world.
+		/// </summary>
 		/// <summary>
 		/// SphereCast radius used for spawning objects in the world.
 		/// </summary>

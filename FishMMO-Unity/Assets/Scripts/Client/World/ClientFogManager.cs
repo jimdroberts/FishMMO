@@ -11,8 +11,15 @@ namespace FishMMO.Client
 	{
 		private class FogLerpState
 		{
+			/// <summary>Current fog color before the transition.</summary>
 			public Color Color = Color.white;
-			public float Density, StartDist, EndDist;
+			/// <summary>Current fog density before the transition.</summary>
+			public float Density;
+			/// <summary>Current fog start distance before the transition.</summary>
+			public float StartDist;
+			/// <summary>Current fog end distance before the transition.</summary>
+			public float EndDist;
+			/// <summary>Captures the current RenderSettings fog values into this state snapshot.</summary>
 			public void Capture() { Color = RenderSettings.fogColor; Density = RenderSettings.fogDensity; StartDist = RenderSettings.fogStartDistance; EndDist = RenderSettings.fogEndDistance; }
 		}
 

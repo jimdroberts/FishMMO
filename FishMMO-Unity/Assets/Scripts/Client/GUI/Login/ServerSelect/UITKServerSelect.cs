@@ -13,15 +13,42 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKServerSelect : UITKControl
 	{
+		/// <summary>
+		/// The name of the connect button in the UI.
+		/// </summary>
 		private const string CONNECT_BUTTON_NAME = "server-connect-btn";
+		/// <summary>
+		/// The name of the refresh button in the UI.
+		/// </summary>
 		private const string REFRESH_BUTTON_NAME = "server-refresh-btn";
+		/// <summary>
+		/// The name of the quit-to-login button in the UI.
+		/// </summary>
 		private const string QUIT_LOGIN_BUTTON_NAME = "server-quit-login-btn";
+		/// <summary>
+		/// The name of the quit button in the UI.
+		/// </summary>
 		private const string QUIT_BUTTON_NAME = "server-quit-btn";
+		/// <summary>
+		/// The name of the server list container in the UI.
+		/// </summary>
 		private const string SERVER_LIST_NAME = "server-list";
 
+		/// <summary>
+		/// The USS class applied to each server row.
+		/// </summary>
 		private const string SERVER_ROW_CLASS = "server-row";
+		/// <summary>
+		/// The USS class applied to the selected server row.
+		/// </summary>
 		private const string SERVER_ROW_SELECTED_CLASS = "server-row--selected";
+		/// <summary>
+		/// The USS class applied to the server name label within a row.
+		/// </summary>
 		private const string SERVER_ROW_NAME_CLASS = "server-row__name";
+		/// <summary>
+		/// The USS class applied to the server status label within a row.
+		/// </summary>
 		private const string SERVER_ROW_STATUS_CLASS = "server-row__status";
 
 		/// <summary>
@@ -29,16 +56,34 @@ namespace FishMMO.Client
 		/// </summary>
 		private class ServerRow
 		{
+			/// <summary>
+			/// The root VisualElement for this server row.
+			/// </summary>
 			public VisualElement Root;
+			/// <summary>
+			/// The Label displaying the server name.
+			/// </summary>
 			public Label Name;
+			/// <summary>
+			/// The Label displaying the server status.
+			/// </summary>
 			public Label Status;
+			/// <summary>
+			/// The world server details associated with this row.
+			/// </summary>
 			public WorldServerDetails Details;
 		}
 
 		private VisualElement serverListContainer;
 		private Button connectButton;
 
+		/// <summary>
+		/// The list of all server row view models currently displayed.
+		/// </summary>
 		private readonly List<ServerRow> serverList = new List<ServerRow>();
+		/// <summary>
+		/// The currently selected server row, or null if none is selected.
+		/// </summary>
 		private ServerRow selectedServer;
 
 		/// <summary>
@@ -118,6 +163,9 @@ namespace FishMMO.Client
 			DestroyServerList();
 		}
 
+		/// <summary>
+		/// Unity Update callback. Decrements the refresh cooldown timer each frame.
+		/// </summary>
 		void Update()
 		{
 			if (nextRefresh > 0.0f)

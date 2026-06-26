@@ -17,23 +17,56 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class CharacterReconcileDataDeltaSerializer
 	{
+		/// <summary>
+		/// Bit flag for the motor state field in the delta bitmask.
+		/// </summary>
 		private const ushort MOTOR_STATE_BIT = 1 << 0;
+		/// <summary>
+		/// Bit flag for the ability ID field in the delta bitmask.
+		/// </summary>
 		private const ushort ABILITY_ID_BIT = 1 << 1;
+		/// <summary>
+		/// Bit flag for the remaining ticks field in the delta bitmask.
+		/// </summary>
 		private const ushort REMAINING_TICKS_BIT = 1 << 2;
+		/// <summary>
+		/// Bit flag for the seed field in the delta bitmask.
+		/// </summary>
 		private const ushort SEED_BIT = 1 << 3;
+		/// <summary>
+		/// Bit flag for the resource state field in the delta bitmask.
+		/// </summary>
 		private const ushort RESOURCE_BIT = 1 << 4;
+		/// <summary>
+		/// Bit flag for the packed flags and slot field in the delta bitmask.
+		/// </summary>
 		private const ushort PACKED_FLAGS_BIT = 1 << 5;
+		/// <summary>
+		/// Bit flag for the cooldown array field in the delta bitmask.
+		/// </summary>
 		private const ushort COOLDOWN_BIT = 1 << 6;
+		/// <summary>
+		/// Bit flag for the buff array field in the delta bitmask.
+		/// </summary>
 		private const ushort BUFF_BIT = 1 << 7;
+		/// <summary>
+		/// Bit flag for the xoshiro128** RNG state fields in the delta bitmask.
+		/// </summary>
 		private const ushort RNG_STATE_BIT = 1 << 8;
+		/// <summary>
+		/// Bit flag for the attribute array field in the delta bitmask.
+		/// </summary>
 		private const ushort ATTRIBUTE_BIT = 1 << 9;
+		/// <summary>
+		/// Bit flag for the equipment array field in the delta bitmask.
+		/// </summary>
 		private const ushort EQUIPMENT_BIT = 1 << 10;
 		// Bits 11..15 are reserved for future fields. The flag mask is a ushort (16 bits);
 		// 11 are currently in use. When adding new fields, take the next bit and update
 		// both WriteDelta and ReadDelta in lock-step.
 
 		/// <summary>
-		/// Registers the custom delta serializers at runtime.
+		/// Registers the custom delta serializers at runtime via <see cref="GenericDeltaWriter{T}"/> and <see cref="GenericDeltaReader{T}"/>.
 		/// </summary>
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
 		private static void RegisterDeltaSerializers()
@@ -44,9 +77,13 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Delta writer for <see cref="CharacterReconcileData"/>.
-		/// Writes a 2-byte bitmask indicating which of the 11 fields changed,
-		/// followed by delta-encoded values for only those fields.
+		/// Writes a 2-byte bitmask indicating which fields changed, followed by delta-encoded values.
 		/// </summary>
+		/// <param name="writer">The network writer.</param>
+		/// <param name="prev">Previous reconcile data snapshot.</param>
+		/// <param name="next">Next reconcile data snapshot.</param>
+		/// <param name="option">Delta serializer options.</param>
+		/// <returns>True if any data was written.</returns>
 		private static bool WriteDelta(
 			Writer writer,
 			CharacterReconcileData prev,
@@ -106,12 +143,14 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Compares and writes the 4 xoshiro128** state words. All 4 change together,
-		/// so a single bit controls whether the full 16 bytes are written.
-		/// Delta encoding is intentionally skipped: the state words are pseudo-random
-		/// with high entropy, so XOR/delta encoding saves nothing. Writing raw uint32s
-		/// is simpler and equally compact.
+		/// Compares and writes the 4 xoshiro128** state words. All 4 change together so a single bit controls writing.
+		/// Delta encoding is intentionally skipped since pseudo-random state has high entropy.
 		/// </summary>
+		/// <param name="writer">The network writer.</param>
+		/// <param name="prev">Previous reconcile data snapshot.</param>
+		/// <param name="next">Next reconcile data snapshot.</param>
+		/// <param name="option">Delta serializer options.</param>
+		/// <returns>True if RNG state was written.</returns>
 		private static bool WriteRngStateDelta(
 			Writer writer,
 			CharacterReconcileData prev,
@@ -139,9 +178,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Delta reader for <see cref="CharacterReconcileData"/>.
 		/// Reads the bitmask and reconstructs only the changed fields.
-		/// Bits 10–15 of the flags are reserved for future fields.
 		/// Unknown bits are silently ignored for forward compatibility.
 		/// </summary>
+		/// <param name="reader">The network reader.</param>
+		/// <param name="prev">Previous reconcile data snapshot.</param>
+		/// <returns>The reconstructed reconcile data with delta-applied changes.</returns>
 		private static CharacterReconcileData ReadDelta(
 			Reader reader,
 			CharacterReconcileData prev)

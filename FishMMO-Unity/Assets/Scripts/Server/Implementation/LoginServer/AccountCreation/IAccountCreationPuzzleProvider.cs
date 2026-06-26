@@ -35,9 +35,16 @@ namespace FishMMO.Server
 	/// <summary>Opaque puzzle payload exchanged with the client.</summary>
 	public sealed class AccountCreationPuzzle
 	{
+		/// <summary>The challenge bytes sent to the client.</summary>
 		public byte[] Challenge { get; }
+		/// <summary>The number of leading zero bits required in the solution hash.</summary>
 		public int Difficulty { get; }
 
+		/// <summary>
+		/// Initializes a new puzzle with the given challenge and difficulty.
+		/// </summary>
+		/// <param name="challenge">The challenge bytes for the client to solve.</param>
+		/// <param name="difficulty">The number of leading zero bits required.</param>
 		public AccountCreationPuzzle(byte[] challenge, int difficulty)
 		{
 			Challenge = challenge;
@@ -52,11 +59,13 @@ namespace FishMMO.Server
 	/// </summary>
 	public sealed class NullAccountCreationPuzzleProvider : IAccountCreationPuzzleProvider
 	{
+		/// <inheritdoc/>
 		public Task<AccountCreationPuzzle> IssueAsync(string connectionContext, CancellationToken cancellationToken)
 		{
 			return Task.FromResult(new AccountCreationPuzzle(System.Array.Empty<byte>(), 0));
 		}
 
+		/// <inheritdoc/>
 		public bool VerifySolution(AccountCreationPuzzle puzzle, byte[] solutionNonce) => true;
 	}
 }

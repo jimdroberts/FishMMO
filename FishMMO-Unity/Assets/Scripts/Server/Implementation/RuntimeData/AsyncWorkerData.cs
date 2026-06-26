@@ -45,11 +45,17 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private const int DEFAULT_CHANNEL_CAPACITY = 1024;
 
+		/// <summary>Number of active worker loops.</summary>
 		private int workerCount;
+		/// <summary>Array of worker channels, one per worker loop.</summary>
 		private Channel<AsyncWorkItem>[] channels;
+		/// <summary>Array of running worker tasks.</summary>
 		private Task[] workerTasks;
+		/// <summary>CancellationTokenSource for signalling worker shutdown.</summary>
 		private CancellationTokenSource cts;
+		/// <summary>Total count of completed work items across all workers.</summary>
 		private long completedCount;
+		/// <summary>Round-robin counter for distributing work across workers.</summary>
 		private long roundRobinCounter;
 
 		/// <inheritdoc/>
@@ -121,7 +127,10 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Long-lived worker loop that processes work items from its assigned channel.
+		/// Drains remaining items after cancellation before exiting.
 		/// </summary>
+		/// <param name="workerId">The index of this worker (for channel lookup and logging).</param>
+		/// <param name="ct">CancellationToken that signals graceful shutdown.</param>
 		private async Task WorkerLoopAsync(int workerId, CancellationToken ct)
 		{
 			var channel = channels[workerId];
@@ -221,13 +230,20 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Represents a single unit of async work.
+		/// Represents a single unit of async work queued to a worker channel.
 		/// </summary>
 		private readonly struct AsyncWorkItem
 		{
+			/// <summary>The async delegate to execute.</summary>
 			public readonly Func<Task> Work;
+			/// <summary>Name of the caller for diagnostics and error logging.</summary>
 			public readonly string CallerName;
 
+			/// <summary>
+			/// Initializes a new async work item.
+			/// </summary>
+			/// <param name="work">The async delegate to execute.</param>
+			/// <param name="callerName">Name of the caller for diagnostics.</param>
 			public AsyncWorkItem(Func<Task> work, string callerName)
 			{
 				Work = work;

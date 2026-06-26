@@ -16,6 +16,8 @@ namespace FishMMO.Shared
 		/// Rotates the NPC toward the interacting player and transitions its AI to idle.
 		/// No-op on the client (server-only AI state).
 		/// </summary>
+		/// <param name="initiator">The character interacting with the NPC.</param>
+		/// <param name="eventData">The event data containing the interaction context.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
 #if UNITY_SERVER

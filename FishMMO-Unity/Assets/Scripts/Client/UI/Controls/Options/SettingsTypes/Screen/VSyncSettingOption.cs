@@ -5,6 +5,11 @@ using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Setting option for toggling vertical sync (VSync).
+	/// Uses a toggle to enable or disable VSync, persisted to configuration
+	/// and applied via Unity's QualitySettings.vSyncCount.
+	/// </summary>
 	public class VSyncSettingOption : SettingOption
 	{
 		/// <summary>

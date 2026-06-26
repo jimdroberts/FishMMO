@@ -16,6 +16,9 @@ namespace FishMMO.Server.Core
 		private readonly ConcurrentDictionary<long, byte> inFlightByKey = new ConcurrentDictionary<long, byte>();
 		private DateTime nextSweepUtc;
 
+		/// <summary>
+		/// Initializes a new instance of the <see cref="IngressGuard"/> class.
+		/// </summary>
 		public IngressGuard()
 		{
 			nextSweepUtc = DateTime.UtcNow;

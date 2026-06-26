@@ -59,8 +59,11 @@ namespace FishMMO.Client
 			public long CharacterID;
 		}
 
+		/// <summary>All created guild member rows keyed by character ID.</summary>
 		private readonly Dictionary<long, MemberRow> members = new Dictionary<long, MemberRow>();
+		/// <summary>Label displaying the guild name.</summary>
 		private Label guildLabel;
+		/// <summary>The container element that holds the generated member rows.</summary>
 		private VisualElement memberList;
 
 		/// <summary>

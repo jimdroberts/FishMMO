@@ -14,6 +14,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	/// </summary>
 	public class WorldSceneSystemRuntimeData : RuntimeDataContainer, IWorldSceneSystemRuntimeData
 	{
+		/// <summary>
+		/// Atomic flag indicating whether queue processing is active.
+		/// Used with Interlocked operations to prevent concurrent queue processing.
+		/// </summary>
 		private int isProcessingQueue;
 
 		/// <summary>
@@ -32,8 +36,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			Interlocked.Exchange(ref isProcessingQueue, 0);
 		}
+		/// <summary>
+		/// Rate in seconds at which the wait queue is processed.
+		/// </summary>
 		public float WaitQueueRateSeconds { get; set; }
+		/// <summary>
+		/// Time remaining until the next waiting queue sweep.
+		/// </summary>
 		public float NextWaitingQueueSweep { get; set; }
+		/// <summary>
+		/// Time remaining until the next debounce entry cleanup sweep.
+		/// </summary>
 		public float NextDebounceCleanup { get; set; }
 
 		/// <summary>

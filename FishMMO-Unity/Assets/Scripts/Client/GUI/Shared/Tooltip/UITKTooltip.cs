@@ -10,10 +10,22 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKTooltip : UITKControl
 	{
+		/// <summary>
+		/// Name of the tooltip box container element.
+		/// </summary>
 		private const string TOOLTIP_BOX_NAME = "tooltip-box";
+		/// <summary>
+		/// Name of the tooltip text label element.
+		/// </summary>
 		private const string TOOLTIP_TEXT_NAME = "tooltip-text";
 
+		/// <summary>
+		/// The tooltip box container element.
+		/// </summary>
 		private VisualElement tooltipBox;
+		/// <summary>
+		/// The tooltip text label.
+		/// </summary>
 		private Label tooltipText;
 
 		/// <summary>

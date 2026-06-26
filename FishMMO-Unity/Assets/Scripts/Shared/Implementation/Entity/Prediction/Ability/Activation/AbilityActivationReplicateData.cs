@@ -33,6 +33,9 @@ namespace FishMMO.Shared
 			tick = 0;
 		}
 
+		/// <summary>
+		/// The network tick at which this replicate data was produced.
+		/// </summary>
 		private uint tick;
 
 		/// <summary>

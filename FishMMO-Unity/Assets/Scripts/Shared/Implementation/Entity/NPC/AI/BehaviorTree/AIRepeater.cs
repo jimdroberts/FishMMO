@@ -13,12 +13,23 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI Repeater", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/Repeater")]
 	public class AIRepeater : AIBehaviorNode
 	{
+		/// <summary>
+		/// The child node to repeat.
+		/// </summary>
 		[Tooltip("The child node to repeat.")]
 		public AIBehaviorNode Child;
 
+		/// <summary>
+		/// Number of times to repeat. 0 = infinite (always Running).
+		/// </summary>
 		[Tooltip("Number of times to repeat. 0 = infinite (always Running).")]
 		public int RepeatCount = 1;
 
+		/// <summary>
+		/// Evaluates the child the configured number of times.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Success after all repetitions succeed, Failure if any repetition fails, Running for infinite repeat.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			if (Child == null) return AINodeResult.Failure;

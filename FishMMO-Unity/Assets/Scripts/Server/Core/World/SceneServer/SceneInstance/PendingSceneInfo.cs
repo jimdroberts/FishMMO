@@ -21,6 +21,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// </summary>
 		public readonly DateTime EnqueuedUtc;
 
+		/// <summary>
+		/// Initializes a new pending scene info with the given scene data and enqueue timestamp.
+		/// </summary>
+		/// <param name="sceneData">The database scene data for this pending load request.</param>
+		/// <param name="enqueuedUtc">UTC timestamp when this request was enqueued.</param>
 		public PendingSceneInfo(SceneData sceneData, DateTime enqueuedUtc)
 		{
 			SceneData = sceneData;

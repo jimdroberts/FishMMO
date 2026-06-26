@@ -18,9 +18,17 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI Condition Node", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/Condition Node")]
 	public class AIConditionNode : AIBehaviorNode
 	{
+		/// <summary>
+		/// The condition to evaluate. Uses the same condition assets as ability rotations.
+		/// </summary>
 		[Tooltip("The condition to evaluate. Uses the same condition assets as ability rotations.")]
 		public AIAbilityCondition Condition;
 
+		/// <summary>
+		/// Evaluates the condition and returns Success or Failure.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Success if the condition evaluates to true, Failure otherwise.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			if (Condition == null)

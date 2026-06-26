@@ -4,6 +4,9 @@ using TMPro;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI component for displaying a single achievement icon, description, progress, and value.
+	/// </summary>
 	public class UIAchievementDescription : MonoBehaviour
 	{
 		/// <summary>

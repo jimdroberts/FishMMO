@@ -11,7 +11,13 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKLoadingScreen : UITKControl
 	{
+		/// <summary>
+		/// The name of the loading image VisualElement in the UI.
+		/// </summary>
 		private const string LOADING_IMAGE_NAME = "loading-image";
+		/// <summary>
+		/// The name of the loading progress fill VisualElement in the UI.
+		/// </summary>
 		private const string LOADING_PROGRESS_FILL_NAME = "loading-progress-fill";
 
 		/// <summary>
@@ -26,6 +32,9 @@ namespace FishMMO.Client
 
 		private VisualElement loadingImage;
 		private VisualElement loadingProgressFill;
+		/// <summary>
+		/// The currently displayed loading screen sprite, or null if none is set.
+		/// </summary>
 		private Sprite currentSprite;
 
 		/// <summary>

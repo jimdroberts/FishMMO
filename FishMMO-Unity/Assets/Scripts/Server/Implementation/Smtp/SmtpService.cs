@@ -15,14 +15,26 @@ namespace FishMMO.Server.Implementation.Smtp
 	/// </summary>
 	public class SmtpService : ISmtpService
 	{
+		/// <summary>SMTP server hostname.</summary>
 		private readonly string _host;
+		/// <summary>SMTP server port.</summary>
 		private readonly int _port;
+		/// <summary>SMTP authentication username.</summary>
 		private readonly string _username;
+		/// <summary>SMTP authentication password.</summary>
 		private readonly string _password;
+		/// <summary>Email From address.</summary>
 		private readonly string _fromAddress;
+		/// <summary>Display name for the From address.</summary>
 		private readonly string _fromName;
+		/// <summary>Whether to use SSL/TLS for the SMTP connection.</summary>
 		private readonly bool _useSsl;
 
+		/// <summary>
+		/// Initializes a new instance of the <see cref="SmtpService"/> class.
+		/// Reads SMTP settings from server configuration with environment variable overrides.
+		/// </summary>
+		/// <param name="configuration">The server configuration instance.</param>
 		public SmtpService(IServerConfiguration configuration)
 		{
 			// Environment variables take precedence over config files so operators
@@ -38,6 +50,14 @@ namespace FishMMO.Server.Implementation.Smtp
 				.Equals("true", StringComparison.OrdinalIgnoreCase);
 		}
 
+		/// <summary>
+		/// Resolves a configuration value from an environment variable (first priority) or config file.
+		/// </summary>
+		/// <param name="envKey">The environment variable name.</param>
+		/// <param name="configKey">The config file key.</param>
+		/// <param name="defaultValue">The default value if neither source provides a value.</param>
+		/// <param name="config">The server configuration instance.</param>
+		/// <returns>The resolved value.</returns>
 		private static string EnvOrConfig(string envKey, string configKey, string defaultValue, IServerConfiguration config)
 		{
 			var env = Environment.GetEnvironmentVariable(envKey);

@@ -76,6 +76,7 @@ namespace FishMMO.Client.Security.Editor
 		[Serializable]
 		private sealed class PinConfigPayload
 		{
+			/// <summary>Array of SPKI pin strings loaded from the StreamingAssets config file.</summary>
 			public string[] pins;
 		}
 	}

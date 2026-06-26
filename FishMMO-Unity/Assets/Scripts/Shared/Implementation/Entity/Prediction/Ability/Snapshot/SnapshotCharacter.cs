@@ -24,6 +24,9 @@ namespace FishMMO.Shared
 	/// </summary>
 	public sealed class SnapshotCharacter : ICharacter
 	{
+		/// <summary>
+		/// Frozen attribute controller snapshot, or null if the live caster had none.
+		/// </summary>
 		private ICharacterAttributeController attributeController;
 
 		/// <inheritdoc/>

@@ -8,7 +8,13 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKReconnectDisplay : UITKControl
 	{
+		/// <summary>
+		/// The name of the cancel button in the UI.
+		/// </summary>
 		private const string CANCEL_BUTTON_NAME = "reconnect-cancel-btn";
+		/// <summary>
+		/// The name of the attempt counter Label in the UI.
+		/// </summary>
 		private const string ATTEMPT_COUNTER_NAME = "reconnect-attempt-counter";
 
 		private Button cancelButton;

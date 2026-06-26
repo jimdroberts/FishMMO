@@ -296,6 +296,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Handles a dead player requesting respawn at their bind point.
 	/// Revives the character at full health and teleports to bind.
 	/// </summary>
+	/// <param name="conn">The network connection of the dead player.</param>
+	/// <param name="msg">The respawn-at-bind-point broadcast message.</param>
+	/// <param name="channel">The channel on which the broadcast was received.</param>
 	private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
 	{
 		if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
@@ -326,6 +329,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Handles a dead player accepting a resurrect from another player.
 	/// Revives at the current position (corpse location), no teleport.
 	/// </summary>
+	/// <param name="conn">The network connection of the dead player.</param>
+	/// <param name="msg">The resurrect-accept broadcast message.</param>
+	/// <param name="channel">The channel on which the broadcast was received.</param>
 	private void OnClientResurrectAcceptBroadcastReceived(NetworkConnection conn, ResurrectAcceptBroadcast msg, FishNet.Transporting.Channel channel)
 	{
 		if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))

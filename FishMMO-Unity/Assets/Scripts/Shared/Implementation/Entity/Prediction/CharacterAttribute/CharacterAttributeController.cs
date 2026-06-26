@@ -362,6 +362,8 @@ namespace FishMMO.Shared
 			EndNotificationSuppression(nameof(EndNotificationSuppression));
 		}
 
+		/// <summary>Internal implementation that decrements the suppression depth and drains pending notifications. Named overloads provide the caller context for error logging.</summary>
+		/// <param name="context">The caller name for diagnostic messages if the suppression depth is already zero.</param>
 		private void EndNotificationSuppression(string context)
 		{
 			if (notificationSuppressionDepth <= 0)

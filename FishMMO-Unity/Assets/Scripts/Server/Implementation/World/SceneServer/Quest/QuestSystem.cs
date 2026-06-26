@@ -68,11 +68,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private enum IngressOperation : byte
 		{
+			/// <summary>Quest accepted operation.</summary>
 			QuestAccepted = 1,
+			/// <summary>Quest objective updated operation.</summary>
 			QuestObjectiveUpdated = 2,
+			/// <summary>Quest completed operation.</summary>
 			QuestComplete = 3,
+			/// <summary>Quest turned in operation.</summary>
 			QuestTurnedIn = 4,
+			/// <summary>Quest failed operation.</summary>
 			QuestFailed = 5,
+			/// <summary>Quest abandoned operation.</summary>
 			QuestAbandoned = 6,
 		}
 

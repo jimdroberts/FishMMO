@@ -19,14 +19,23 @@ namespace FishMMO.Shared
 	{
 		private class SlotRenderer
 		{
+			/// <summary>The root GameObject for this slot's equipment visuals.</summary>
 			public GameObject GameObject;
+			/// <summary>The SkinnedMeshRenderer for armor-type equipment items.</summary>
 			public SkinnedMeshRenderer SkinnedRenderer;
+			/// <summary>The MeshRenderer for weapon-type equipment items.</summary>
 			public MeshRenderer MeshRenderer;
+			/// <summary>The MeshFilter for weapon-type equipment items.</summary>
 			public MeshFilter MeshFilter;
+			/// <summary>The equipment slot this renderer is assigned to.</summary>
 			public ItemSlot Slot;
+			/// <summary>True if this slot has an active equipment visual.</summary>
 			public bool IsActive;
+			/// <summary>The Addressables async operation handle for the loaded equipment prefab.</summary>
 			public AsyncOperationHandle<GameObject> PrefabHandle;
+			/// <summary>The instantiated weapon GameObject, if this slot holds a weapon.</summary>
 			public GameObject WeaponInstance;
+			/// <summary>Incrementing generation counter to reject stale async load completions.</summary>
 			public int EquipGeneration;
 		}
 

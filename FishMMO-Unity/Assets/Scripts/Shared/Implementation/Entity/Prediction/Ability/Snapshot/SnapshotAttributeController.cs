@@ -15,6 +15,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	public sealed class SnapshotAttributeController : ICharacterAttributeController
 	{
+		/// <summary>
+		/// Shared empty dictionary returned for resource attribute lookups, which are not
+		/// supported by the snapshot controller.
+		/// </summary>
 		private static readonly Dictionary<int, CharacterResourceAttribute> emptyResourceAttributes = new Dictionary<int, CharacterResourceAttribute>(0);
 
 		/// <inheritdoc/>

@@ -22,6 +22,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public DateTime LastFetchTime { get; set; }
 
+		/// <summary>
+		/// Tracks whether a guild update pump operation is currently in flight.
+		/// Used with Interlocked to ensure only one pump runs at a time.
+		/// </summary>
 		private int updatePumpInFlight;
 
 		/// <inheritdoc/>

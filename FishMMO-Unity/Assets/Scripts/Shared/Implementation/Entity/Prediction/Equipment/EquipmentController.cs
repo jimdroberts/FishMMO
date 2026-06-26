@@ -313,6 +313,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Handles an equip broadcast from the server, equipping the item from the specified inventory.
+		/// Called on the client when the server authorizes an equip operation.
+		/// </summary>
+		/// <param name="msg">The equip broadcast message.</param>
+		/// <param name="channel">Channel the broadcast was received on.</param>
 		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg, Channel channel)
 		{
 			switch (msg.FromInventory)
@@ -338,6 +344,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Handles an unequip broadcast from the server, moving the item to the specified inventory.
+		/// Called on the client when the server authorizes an unequip operation.
+		/// </summary>
+		/// <param name="msg">The unequip broadcast message.</param>
+		/// <param name="channel">Channel the broadcast was received on.</param>
 		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg, Channel channel)
 		{
 			switch (msg.ToInventory)

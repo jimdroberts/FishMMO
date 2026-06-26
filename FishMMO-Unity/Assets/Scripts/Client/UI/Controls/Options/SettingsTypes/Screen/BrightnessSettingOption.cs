@@ -5,6 +5,11 @@ using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Setting option for adjusting screen brightness (ambient light).
+	/// Uses a slider to control the brightness value, which is persisted
+	/// to configuration and applied to Unity's RenderSettings.ambientLight.
+	/// </summary>
 	public class BrightnessSettingOption : SettingOption
 	{
 		/// <summary>

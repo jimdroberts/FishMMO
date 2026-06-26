@@ -6,6 +6,9 @@ namespace FishMMO.Shared.Core
 	/// </summary>
 	public interface IAbilityCrafter : IInteractable
 	{
+		/// <summary>
+		/// Achievement template to increment when a player crafts an ability at this crafter.
+		/// </summary>
 		AchievementTemplate AchievementTemplate { get; }
 	}
 }

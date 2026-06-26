@@ -9,6 +9,12 @@ using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Abstract base class for all UGUI-based UI controls in the FishMMO client.
+	/// Provides core functionality including visibility management, drag support,
+	/// focus events, input field tab cycling, screen clamping, client dependency injection,
+	/// and automatic registration with the UIManager.
+	/// </summary>
 	public abstract class UIControl : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler, IDragHandler
 	{
 		/// <summary>

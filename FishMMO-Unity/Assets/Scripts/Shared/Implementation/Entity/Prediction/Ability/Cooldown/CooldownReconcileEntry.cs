@@ -232,6 +232,10 @@ namespace FishMMO.Shared
 		/// Drains index-delta entries from the reader to keep the stream position valid.
 		/// Each entry consists of a uint16 index + the entry fields.
 		/// </summary>
+		/// <summary>
+		/// Reads and discards index-delta entries from the reader to keep the stream
+		/// position valid after an out-of-bounds count is detected.
+		/// </summary>
 		private static void DrainIndexDeltaEntries(Reader reader, int changedCount)
 		{
 			for (int i = 0; i < changedCount; i++)
@@ -244,6 +248,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Packs the delta/full mode flag and count into a 16-bit header.
 		/// </summary>
+		/// <summary>
+		/// Packs the delta/full mode flag and entry count into a 16-bit header value.
+		/// </summary>
 		private static ushort BuildHeader(int count, bool isDelta)
 		{
 			return (ushort)((isDelta ? 0x8000 : 0) | (count & 0x7FFF));
@@ -251,6 +258,10 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Drains full-array entries from the reader to keep the stream position valid.
+		/// </summary>
+		/// <summary>
+		/// Reads and discards full-array entries from the reader to keep the stream
+		/// position valid after an out-of-bounds count is detected.
 		/// </summary>
 		private static void DrainFullArrayEntries(Reader reader, int count)
 		{

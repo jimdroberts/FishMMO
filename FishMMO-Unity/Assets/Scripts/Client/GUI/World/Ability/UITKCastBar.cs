@@ -23,6 +23,7 @@ namespace FishMMO.Client
 		private VisualElement fill;
 
 		/// <summary>The label element displaying the current cast name.</summary>
+		/// <summary>The label element displaying the current cast name.</summary>
 		private Label castLabel;
 
 		/// <summary>

@@ -5,6 +5,11 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// A UI button representing a world server in the server selection list.
+	/// Displays the server name, lock status, and character count, and triggers
+	/// an event when selected. Supports visual highlighting via label color changes.
+	/// </summary>
 	public class ServerDetailsButton : MonoBehaviour
 	{
 		/// <summary>

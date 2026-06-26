@@ -39,6 +39,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <inheritdoc/>
 		public ConcurrentQueue<(NetworkConnection Connection, ChatBroadcast Message)> IncomingChatQueue { get; private set; }
 
+		/// <summary>
+		/// Backing counter for <see cref="IncomingQueueSize"/>, atomically incremented/decremented.
+		/// </summary>
 		private int incomingQueueSize;
 
 		/// <inheritdoc/>
@@ -65,6 +68,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <inheritdoc/>
 		public List<long> OutboundWorldFlushKeyBuffer { get; private set; }
 
+		/// <summary>
+		/// Non-zero while a message pump fetch is in flight, preventing concurrent pump operations.
+		/// </summary>
 		private int messagePumpInFlight;
 
 		/// <inheritdoc/>

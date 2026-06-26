@@ -57,7 +57,9 @@ namespace FishMMO.Client
 		/// <summary>Unsubscribes the concrete container from its specific add/remove events.</summary>
 		protected abstract void UnsubscribeAddRemove();
 
+		/// <summary>Rendered buff groups keyed by template ID.</summary>
 		private readonly Dictionary<int, GroupView> groups = new Dictionary<int, GroupView>();
+		/// <summary>The container element that holds the buff/debuff icons.</summary>
 		private VisualElement list;
 
 		/// <summary>
@@ -98,6 +100,10 @@ namespace FishMMO.Client
 			ClearAll();
 		}
 
+		/// <summary>
+		/// Clears all rendered groups when the local client stops.
+		/// </summary>
+		/// <param name="character">The local player character.</param>
 		private void PlayerCharacter_OnStopLocalClient(IPlayerCharacter character)
 		{
 			ClearAll();

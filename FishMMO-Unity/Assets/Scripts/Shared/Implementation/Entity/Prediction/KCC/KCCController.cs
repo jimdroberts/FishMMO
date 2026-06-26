@@ -1,27 +1,45 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using KinematicCharacterController;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Character movement states for the KCC controller state machine.
+	/// </summary>
 	public enum KCCCharacterState
 	{
 		Default,
 	}
 
+	/// <summary>
+	/// Determines how the character faces based on input or camera direction.
+	/// </summary>
 	public enum OrientationMethod
 	{
 		TowardsCamera,
 		TowardsMovement,
 	}
 
+	/// <summary>
+	/// Input data supplied by an AI controller for character movement and facing.
+	/// </summary>
 	public struct AICharacterInputs
 	{
+		/// <summary>
+		/// Movement direction vector for AI-controlled characters.
+		/// </summary>
 		public Vector3 MoveVector;
+		/// <summary>
+		/// Look/facing direction vector for AI-controlled characters.
+		/// </summary>
 		public Vector3 LookVector;
 	}
 
+	/// <summary>
+	/// Additional orientation modes that adjust the character up vector.
+	/// </summary>
 	public enum BonusOrientationMethod
 	{
 		None,
@@ -29,43 +47,128 @@ namespace FishMMO.Shared
 		TowardsGroundSlopeAndGravity,
 	}
 
+	/// <summary>
+	/// Kinematic Character Controller wrapper that implements <see cref="ICharacterController"/>.
+	/// Handles movement, jumping, crouching, sprinting, and state transitions.
+	/// </summary>
 	public class KCCController : MonoBehaviour, ICharacterController
 	{
+		/// <summary>
+		/// The player character this controller belongs to.
+		/// </summary>
 		public IPlayerCharacter Character;
+		/// <summary>
+		/// The kinematic character motor driving movement and collision.
+		/// </summary>
 		public KinematicCharacterMotor Motor;
 
 		[Header("Stable Movement")]
+		/// <summary>
+		/// Sharpness for stable ground movement acceleration (higher = snappier).
+		/// </summary>
 		public float StableMovementSharpness = 20f;
+		/// <summary>
+		/// Sharpness for character rotation smoothing.
+		/// </summary>
 		public float OrientationSharpness = 10f;
+		/// <summary>
+		/// Method used to determine character facing direction.
+		/// </summary>
 		public OrientationMethod OrientationMethod = OrientationMethod.TowardsCamera;
 
 		[Header("Air Movement")]
+		/// <summary>
+		/// Maximum horizontal speed while airborne.
+		/// </summary>
 		public float MaxAirMoveSpeed = 6f;
+		/// <summary>
+		/// Acceleration applied to air movement.
+		/// </summary>
 		public float AirAccelerationSpeed = 0f;
+		/// <summary>
+		/// Air drag coefficient applied to velocity.
+		/// </summary>
 		public float Drag = 0.1f;
 
 		[Header("Jumping")]
+		/// <summary>
+		/// If true, jumping is allowed while sliding on unstable ground.
+		/// </summary>
 		public bool AllowJumpingWhenSliding = false;
+		/// <summary>
+		/// Forward speed added to velocity when jumping.
+		/// </summary>
 		public float JumpScalableForwardSpeed = 0f;
+		/// <summary>
+		/// Grace period before landing during which a jump request is still accepted.
+		/// </summary>
 		public float JumpPreGroundingGraceTime = 0f;
+		/// <summary>
+		/// Grace period after leaving ground during which a jump is still allowed.
+		/// </summary>
 		public float JumpPostGroundingGraceTime = 0f;
 
 		[Header("Misc")]
+		/// <summary>
+		/// Colliders to ignore for character collisions.
+		/// </summary>
 		public List<Collider> IgnoredColliders = new List<Collider>();
+		/// <summary>
+		/// Additional orientation method for adjusting the character up vector.
+		/// </summary>
 		public BonusOrientationMethod BonusOrientationMethod = BonusOrientationMethod.None;
+		/// <summary>
+		/// Sharpness for bonus orientation smoothing.
+		/// </summary>
 		public float BonusOrientationSharpness = 10f;
+		/// <summary>
+		/// Root transform of the character mesh for visual scaling (e.g., crouch).
+		/// </summary>
 		public Transform MeshRoot;
+		/// <summary>
+		/// Transform that the camera follows and orbits around.
+		/// </summary>
 		public Transform CameraFollowPoint;
+		/// <summary>
+		/// Capsule height when crouching.
+		/// </summary>
 		public float CrouchedCapsuleHeight = 0.5f;
+		/// <summary>
+		/// Capsule height when standing.
+		/// </summary>
 		public float FullCapsuleHeight = 2f;
+		/// <summary>
+		/// Base offset of the capsule from the character pivot.
+		/// </summary>
 		public float CapsuleBaseOffset = 1f;
+		/// <summary>
+		/// Template for the character attribute that modifies movement speed.
+		/// </summary>
 		public CharacterAttributeTemplate MoveSpeedTemplate;
+		/// <summary>
+		/// Template for the character attribute that modifies sprint speed.
+		/// </summary>
 		public CharacterAttributeTemplate SprintSpeedTemplate;
+		/// <summary>
+		/// Template for the character attribute that modifies jump speed.
+		/// </summary>
 		public CharacterAttributeTemplate JumpSpeedTemplate;
+		/// <summary>
+		/// Template for the character attribute that modifies swim speed.
+		/// </summary>
 		public CharacterAttributeTemplate SwimSpeedTemplate;
+		/// <summary>
+		/// Template for the character attribute that modifies fast fall speed.
+		/// </summary>
 		public CharacterAttributeTemplate FastFallSpeedTemplate;
+		/// <summary>
+		/// Template for the character attribute that modifies gravity.
+		/// </summary>
 		public CharacterAttributeTemplate GravityTemplate;
 
+		/// <summary>
+		/// The current state of the character state machine.
+		/// </summary>
 		public KCCCharacterState CurrentCharacterState { get; private set; }
 
 		private Collider[] probedColliders = new Collider[8];
@@ -106,8 +209,17 @@ namespace FishMMO.Shared
 		private float timeSinceLastAbleToJump = 0f;
 		private bool isCrouching = false;
 
+		/// <summary>
+		/// Position of the virtual camera used for input-relative movement calculations.
+		/// </summary>
 		public Vector3 VirtualCameraPosition { get; private set; }
+		/// <summary>
+		/// Rotation of the virtual camera used for input-relative movement calculations.
+		/// </summary>
 		public Quaternion VirtualCameraRotation { get; private set; }
+		/// <summary>
+		/// True while the character is in the jumping state.
+		/// </summary>
 		public bool IsJumping { get; private set; }
 
 		/// <summary>
@@ -119,18 +231,27 @@ namespace FishMMO.Shared
 		/// </summary>
 		private bool hasDoneInitialGroundProbe = false;
 
+		/// <summary>
+		/// Initializes the character state to default.
+		/// </summary>
 		private void Awake()
 		{
 			// Handle initial state
 			TransitionToState(KCCCharacterState.Default);
 		}
 
+		/// <summary>
+		/// Resets input vectors when the component is enabled.
+		/// </summary>
 		private void OnEnable()
 		{
 			moveInputVector = Vector3.zero;
 			lookInputVector = Vector3.zero;
 		}
 
+		/// <summary>
+		/// Clears cached character references when disabled.
+		/// </summary>
 		private void OnDisable()
 		{
 			ClearCachedCharacterReferences();
@@ -205,6 +326,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Applies a saved motor state to restore the character pose (used during reconcile).
+		/// </summary>
+		/// <param name="state">The motor state to apply.</param>
 		public void ApplyState(KinematicCharacterMotorState state)
 		{
 			// Reset initial ground probe on state restore (teleport / reconcile).
@@ -219,6 +344,10 @@ namespace FishMMO.Shared
 			Motor.ApplyState(state);
 		}
 
+		/// <summary>
+		/// Captures the current motor and controller state for reconciliation.
+		/// </summary>
+		/// <returns>A snapshot of the current kinematic state.</returns>
 		public KinematicCharacterMotorState GetState()
 		{
 			KinematicCharacterMotorState baseState = Motor.GetState();

@@ -8,6 +8,9 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI component representing a single party member with controls for messaging, friend requests, and rank management.
+	/// </summary>
 	public class UIPartyMember : MonoBehaviour
 	{
 		/// <summary>

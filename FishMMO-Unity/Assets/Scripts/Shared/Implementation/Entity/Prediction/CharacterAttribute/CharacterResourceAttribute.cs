@@ -120,6 +120,7 @@ namespace FishMMO.Shared
 		/// <param name="clampFinalValue">If true, clamps the value to FinalValue. If false, only clamps to zero.</param>
 		/// <returns>The clamped resource value.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		/// <summary>Clamps a resource value to [0, FinalValue] once the character is fully loaded. Before load the upper bound is left open so temporary final-value overrides (buffs, loading) are not lost.</summary>
 		private float ClampCurrentValue(float value)
 		{
 			if (value <= 0.001f)

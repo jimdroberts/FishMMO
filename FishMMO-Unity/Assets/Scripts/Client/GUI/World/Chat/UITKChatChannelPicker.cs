@@ -16,8 +16,11 @@ namespace FishMMO.Client
 		private const string CHANNEL_LIST_NAME = "channel-list";
 		private const string NAME_INPUT_NAME = "channel-name-input";
 
+		/// <summary>The root panel element of the channel picker.</summary>
 		private VisualElement panel;
+		/// <summary>The container holding the channel toggle elements.</summary>
 		private VisualElement channelList;
+		/// <summary>The text field for renaming the current tab.</summary>
 		private TextField nameInput;
 
 		/// <summary>
@@ -98,6 +101,12 @@ namespace FishMMO.Client
 			Hide();
 		}
 
+		/// <summary>
+		/// Checks whether a visual element is a descendant of the specified ancestor.
+		/// </summary>
+		/// <param name="element">The element to check.</param>
+		/// <param name="ancestor">The potential ancestor.</param>
+		/// <returns>True if the element is a descendant of the ancestor.</returns>
 		private bool IsDescendantOf(VisualElement element, VisualElement ancestor)
 		{
 			VisualElement parent = element.parent;

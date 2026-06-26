@@ -12,8 +12,17 @@ namespace FishMMO.Shared
 	/// </summary>
 	public sealed class AbilityObjectSnapshot
 	{
+		/// <summary>
+		/// Shared empty dictionary returned when no OnTick events exist, avoiding per-instance allocation.
+		/// </summary>
 		private static readonly IReadOnlyDictionary<int, AbilityOnTickEvent> emptyOnTickEvents = new Dictionary<int, AbilityOnTickEvent>(0);
+		/// <summary>
+		/// Shared empty dictionary returned when no OnHit events exist.
+		/// </summary>
 		private static readonly IReadOnlyDictionary<int, AbilityOnHitEvent> emptyOnHitEvents = new Dictionary<int, AbilityOnHitEvent>(0);
+		/// <summary>
+		/// Shared empty dictionary returned when no OnDestroy events exist.
+		/// </summary>
 		private static readonly IReadOnlyDictionary<int, AbilityOnDestroyEvent> emptyOnDestroyEvents = new Dictionary<int, AbilityOnDestroyEvent>(0);
 
 		/// <summary>

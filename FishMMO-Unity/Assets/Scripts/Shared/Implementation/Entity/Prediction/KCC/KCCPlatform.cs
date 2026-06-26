@@ -132,6 +132,9 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public GameObject GameObject { get; private set; }
 
+		/// <summary>
+		/// Initializes world-space goals from local offsets, subscribes to platform collider events, and registers with SceneObject.
+		/// </summary>
 		private void Awake()
 		{
 			GameObject = gameObject;
@@ -158,6 +161,9 @@ namespace FishMMO.Shared
 #endif
 		}
 
+		/// <summary>
+		/// Unsubscribes from platform collider events and unregisters from SceneObject.
+		/// </summary>
 		private void OnDestroy()
 		{
 			if (platformCollider != null)

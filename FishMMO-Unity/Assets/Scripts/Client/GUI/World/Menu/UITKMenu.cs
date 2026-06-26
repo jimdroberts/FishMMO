@@ -8,9 +8,13 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKMenu : UITKControl
 	{
+		/// <summary>Name of the options button element in the UXML.</summary>
 		private const string OPTIONS_BUTTON_NAME = "menu-options-btn";
+		/// <summary>Name of the quit-to-login button element in the UXML.</summary>
 		private const string QUIT_TO_LOGIN_BUTTON_NAME = "menu-quit-to-login-btn";
+		/// <summary>Name of the quit button element in the UXML.</summary>
 		private const string QUIT_BUTTON_NAME = "menu-quit-btn";
+		/// <summary>Name of the close button element in the UXML.</summary>
 		private const string CLOSE_BUTTON_NAME = "menu-close-btn";
 
 		/// <summary>

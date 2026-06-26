@@ -13,6 +13,11 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI Sequence", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/Sequence")]
 	public class AISequence : AICompositeNode
 	{
+		/// <summary>
+		/// Runs each child left-to-right and succeeds only if all children succeed.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Success if all children succeed, Failure on the first failing child, Running if any child is running.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			if (Children == null) return AINodeResult.Failure;

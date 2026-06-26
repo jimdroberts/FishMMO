@@ -54,6 +54,10 @@ namespace FishMMO.Client
 		/// </summary>
 		protected VisualElement Root => Document != null ? Document.rootVisualElement : null;
 
+		/// <summary>
+		/// Registers this control with the <see cref="UIManager"/>, calls <see cref="OnStarting"/>,
+		/// and hides the panel if <see cref="StartOpen"/> is false.
+		/// </summary>
 		private void Awake()
 		{
 			UIManager.RegisterTK(this);
@@ -188,6 +192,10 @@ namespace FishMMO.Client
 			Visible = false;
 		}
 
+		/// <summary>
+		/// Calls <see cref="OnDestroying"/>, unsubscribes from the client, and unregisters
+		/// from the <see cref="UIManager"/>.
+		/// </summary>
 		private void OnDestroy()
 		{
 			OnDestroying();

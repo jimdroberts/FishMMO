@@ -8,6 +8,9 @@ namespace FishMMO.Server.Core
 	/// </summary>
 	public interface IKickRequestSystemQueueData : IRuntimeDataContainer
 	{
+		/// <summary>
+		/// Indicates whether a kick request fetch is currently in progress.
+		/// </summary>
 		bool IsProcessing { get; set; }
 		/// <summary>
 		/// Timestamp of the last successful database fetch for kick requests.

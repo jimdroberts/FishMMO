@@ -36,10 +36,14 @@ namespace FishMMO.Server.Core.World.SceneServer
 		List<NetworkConnection> ConnectionBroadcastBuffer { get; }
 
 		/// <summary>
-		/// Atomic in-flight flag for the periodic message pump.
-		/// 0 = idle, 1 = running.
+		/// Atomically transitions the message pump from idle to in-flight.
+		/// Returns true if this call won the race; false if a pump is already in flight.
 		/// </summary>
 		bool TryBeginMessagePump();
+
+		/// <summary>
+		/// Atomically transitions the message pump from in-flight back to idle.
+		/// </summary>
 		void EndMessagePump();
 
 		/// <summary>
@@ -115,14 +119,51 @@ namespace FishMMO.Server.Core.World.SceneServer
 	/// </summary>
 	public readonly struct PendingChatPersist
 	{
+		/// <summary>
+		/// The character identifier associated with this chat message.
+		/// </summary>
 		public readonly long CharacterId;
+
+		/// <summary>
+		/// The character name associated with this chat message.
+		/// </summary>
 		public readonly string CharacterName;
+
+		/// <summary>
+		/// The account name associated with this chat message.
+		/// </summary>
 		public readonly string AccountName;
+
+		/// <summary>
+		/// The world server identifier that received this chat message.
+		/// </summary>
 		public readonly long WorldServerId;
+
+		/// <summary>
+		/// The chat channel this message was sent to.
+		/// </summary>
 		public readonly ChatChannel Channel;
+
+		/// <summary>
+		/// The chat message content.
+		/// </summary>
 		public readonly string Message;
+
+		/// <summary>
+		/// UTC timestamp in ticks when the message was received by the server.
+		/// </summary>
 		public readonly long ReceivedTicks;
 
+		/// <summary>
+		/// Initializes a new pending chat persist entry for batch DB persistence.
+		/// </summary>
+		/// <param name="characterId">The character identifier.</param>
+		/// <param name="characterName">The character name.</param>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="worldServerId">The world server identifier.</param>
+		/// <param name="channel">The chat channel.</param>
+		/// <param name="message">The chat message content.</param>
+		/// <param name="receivedTicks">UTC timestamp in ticks when the message was received.</param>
 		public PendingChatPersist(long characterId, string characterName, string accountName,
 			long worldServerId, ChatChannel channel, string message, long receivedTicks)
 		{

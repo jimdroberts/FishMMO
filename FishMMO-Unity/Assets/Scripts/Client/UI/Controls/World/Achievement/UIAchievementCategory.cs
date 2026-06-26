@@ -4,6 +4,9 @@ using TMPro;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI component for displaying an achievement category button with its name label.
+	/// </summary>
 	public class UIAchievementCategory : MonoBehaviour
 	{
 		/// <summary>

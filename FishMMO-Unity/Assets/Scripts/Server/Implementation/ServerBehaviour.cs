@@ -284,6 +284,10 @@ namespace FishMMO.Server.Implementation
 			}
 		}
 
+		/// <summary>
+		/// Handles remote connection state changes from FishNet and dispatches disconnect
+		/// events to <see cref="OnRemoteConnectionStopped"/>.
+		/// </summary>
 		private void HandleRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped && conn != null)

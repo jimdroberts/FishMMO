@@ -890,10 +890,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Bundles all data needed to instantiate and load a character on the main thread.
-		/// Created on the async worker after the DB fetch, consumed by InstantiateAndLoadCharacter.
-		/// </summary>
-		/// <summary>
 		/// Parses a comma-separated objective values string into a long array.
 		/// </summary>
 		private static long[] ParseObjectiveValues(string objectiveValues)
@@ -912,27 +908,69 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			return values;
 		}
 
+		/// <summary>
+		/// Bundles all pre-fetched character data from the async DB load for main-thread instantiation.
+		/// </summary>
 		private sealed class CharacterLoadContext
 		{
+			/// <summary>Network connection of the owning client.</summary>
 			public readonly NetworkConnection Connection;
+			/// <summary>Core character data (name, position, scene, etc.).</summary>
 			public readonly CharacterData CharacterData;
+			/// <summary>Session ownership token for the claimed character.</summary>
 			public readonly Guid SessionToken;
+			/// <summary>ID of the server claiming this character session.</summary>
 			public readonly long ServerID;
+			/// <summary>Pre-fetched inventory item data.</summary>
 			public readonly IReadOnlyList<CharacterInventoryData> InventoryData;
+			/// <summary>Pre-fetched bank item data.</summary>
 			public readonly IReadOnlyList<CharacterBankData> BankData;
+			/// <summary>Pre-fetched equipment item data.</summary>
 			public readonly IReadOnlyList<CharacterEquipmentData> EquipmentData;
+			/// <summary>Pre-fetched attribute and resource data.</summary>
 			public readonly IReadOnlyList<CharacterAttributeData> AttributeData;
+			/// <summary>Pre-fetched crafted ability data.</summary>
 			public readonly IReadOnlyList<CharacterAbilityData> AbilityData;
+			/// <summary>Pre-fetched known base ability data.</summary>
 			public readonly IReadOnlyList<CharacterKnownAbilityData> KnownAbilityData;
+			/// <summary>Pre-fetched achievement data.</summary>
 			public readonly IReadOnlyList<CharacterAchievementData> AchievementData;
+			/// <summary>Pre-fetched friend data.</summary>
 			public readonly IReadOnlyList<CharacterFriendData> FriendData;
+			/// <summary>Pre-fetched guild membership data, if any.</summary>
 			public readonly CharacterGuildData? GuildData;
+			/// <summary>Pre-fetched party membership data, if any.</summary>
 			public readonly CharacterPartyData? PartyData;
+			/// <summary>Pre-fetched hotkey bar data.</summary>
 			public readonly IReadOnlyList<CharacterHotkeyData> HotkeyData;
+			/// <summary>Pre-fetched active buff data.</summary>
 			public readonly IReadOnlyList<CharacterBuffData> BuffData;
+			/// <summary>Pre-fetched faction standing data.</summary>
 			public readonly IReadOnlyList<CharacterFactionData> FactionData;
+			/// <summary>Pre-fetched quest state data.</summary>
 			public readonly IReadOnlyList<CharacterQuestData> QuestData;
 
+			/// <summary>
+			/// Initializes a new CharacterLoadContext with all pre-fetched character data.
+			/// </summary>
+			/// <param name="connection">Network connection of the owning client.</param>
+			/// <param name="characterData">Core character data.</param>
+			/// <param name="sessionToken">Session ownership token.</param>
+			/// <param name="serverID">Server ID that claimed the session.</param>
+			/// <param name="inventoryData">Pre-fetched inventory items.</param>
+			/// <param name="bankData">Pre-fetched bank items.</param>
+			/// <param name="equipmentData">Pre-fetched equipment items.</param>
+			/// <param name="attributeData">Pre-fetched attribute data.</param>
+			/// <param name="abilityData">Pre-fetched crafted ability data.</param>
+			/// <param name="knownAbilityData">Pre-fetched known base ability data.</param>
+			/// <param name="achievementData">Pre-fetched achievement data.</param>
+			/// <param name="friendData">Pre-fetched friend data.</param>
+			/// <param name="guildData">Pre-fetched guild membership data.</param>
+			/// <param name="partyData">Pre-fetched party membership data.</param>
+			/// <param name="hotkeyData">Pre-fetched hotkey bar data.</param>
+			/// <param name="buffData">Pre-fetched active buff data.</param>
+			/// <param name="factionData">Pre-fetched faction standing data.</param>
+			/// <param name="questData">Pre-fetched quest state data.</param>
 			public CharacterLoadContext(
 				NetworkConnection connection, CharacterData characterData,
 				Guid sessionToken, long serverID,

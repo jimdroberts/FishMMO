@@ -49,12 +49,18 @@ namespace FishMMO.Client
 			public VisualElement Fill;
 		}
 
+		/// <summary>Cached reference to the target name label element.</summary>
 		private Label nameLabel;
+		/// <summary>Cached reference to the target health fill element.</summary>
 		private VisualElement healthFill;
+		/// <summary>Cached reference to the target buff list container element.</summary>
 		private VisualElement buffList;
 
+		/// <summary>Overhead 3D label displayed above the target.</summary>
 		private Cached3DLabel targetLabel;
+		/// <summary>Maps buff template IDs to their associated visual elements.</summary>
 		private readonly Dictionary<int, TargetBuffView> targetBuffs = new Dictionary<int, TargetBuffView>();
+		/// <summary>Scratch set used to track stale buff keys during refresh.</summary>
 		private readonly HashSet<int> staleBuffKeys = new HashSet<int>();
 
 		/// <summary>

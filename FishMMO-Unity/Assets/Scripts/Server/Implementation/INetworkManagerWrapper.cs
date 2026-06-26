@@ -76,7 +76,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Unsubscribes from server connection state changes.
 		/// </summary>
-		/// <param name="handler"></param>
+		/// <param name="handler">The handler to remove from connection state changes.</param>
 		void UnregisterServerConnectionStateEventHandler(Action<ServerConnectionStateArgs> handler);
 
 		/// <summary>

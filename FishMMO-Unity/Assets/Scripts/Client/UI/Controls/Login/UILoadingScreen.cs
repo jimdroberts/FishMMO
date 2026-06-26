@@ -5,6 +5,11 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for displaying loading progress during scene transitions.
+	/// Manages a progress bar, scene transition images, and subscribes to
+	/// scene load/unload events and reconnect attempt events.
+	/// </summary>
 	public class UILoadingScreen : UIControl
 	{
 		[Header("Loading Screen Parameters")]

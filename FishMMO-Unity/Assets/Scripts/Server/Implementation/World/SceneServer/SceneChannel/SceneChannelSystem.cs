@@ -94,7 +94,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Ingress operations for the IngressGuard per-operation gating.</summary>
 		private enum IngressOperation : byte
 		{
+			/// <summary>Channel list request operation.</summary>
 			RequestList = 1,
+			/// <summary>Channel selection operation.</summary>
 			SelectChannel = 2,
 		}
 

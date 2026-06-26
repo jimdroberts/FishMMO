@@ -6,6 +6,11 @@ using UnityEngine;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Setting option for selecting the screen refresh rate. Populates a dropdown
+	/// with all available refresh rates for the current resolution and persists
+	/// the selection to configuration.
+	/// </summary>
 	public class RefreshRateSettingOption : SettingOption
 	{
 		/// <summary>

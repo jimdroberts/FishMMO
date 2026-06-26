@@ -10,13 +10,27 @@ namespace FishMMO.Shared
 	/// </summary>
 	public readonly struct PredictionTick
 	{
+		/// <summary>
+		/// The underlying tick value.
+		/// </summary>
 		public uint Value { get; }
 
-		// Internal: only CharacterReplicateData (same assembly) can construct this.
+		/// <summary>
+		/// Creates a <see cref="PredictionTick"/> from a raw tick value.
+		/// Internal: only <see cref="CharacterReplicateData"/> can construct this.
+		/// </summary>
+		/// <param name="value">The raw network tick value.</param>
 		internal PredictionTick(uint value) => Value = value;
 
+		/// <summary>
+		/// Implicitly converts a <see cref="PredictionTick"/> to its underlying <see cref="uint"/> value.
+		/// </summary>
+		/// <param name="t">The tick to convert.</param>
 		public static implicit operator uint(PredictionTick t) => t.Value;
 
+		/// <summary>
+		/// Returns the tick value as a string.
+		/// </summary>
 		public override string ToString() => Value.ToString();
 	}
 }

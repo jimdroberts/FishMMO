@@ -12,6 +12,7 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKMinimap : UITKCharacterControl
 	{
+		/// <summary>Name of the minimap view element in the UXML.</summary>
 		private const string MINIMAP_VIEW_NAME = "minimap-view";
 
 		/// <summary>

@@ -10,6 +10,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// </summary>
 	public partial class InteractableSystem
 	{
+		/// <summary>
+		/// Handles a <see cref="ContainerTakeItemBroadcast"/> request from a client.
+		/// Validates the container interactable, removes the item from the container slot,
+		/// and transfers it into the player's inventory. Despawns the container if it is
+		/// configured to despawn when empty.
+		/// </summary>
 		private void OnServerContainerTakeItemBroadcastReceived(NetworkConnection conn, ContainerTakeItemBroadcast msg, Channel channel)
 		{
 			if (conn == null || conn.FirstObject == null)

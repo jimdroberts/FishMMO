@@ -121,6 +121,9 @@ namespace FishMMO.Shared
 		/// <summary>Gets a value indicating whether the readonly condition is met.</summary>
 		public bool IsReadOnly { get { return ((IDictionary<TKey, TValue>)m_dict).IsReadOnly; } }
 
+		/// <summary>Gets or sets the value associated with the specified key.</summary>
+		/// <param name="key">The key of the value to get or set.</param>
+		/// <returns>The value associated with the specified key.</returns>
 		public TValue this[TKey key]
 		{
 			get { return ((IDictionary<TKey, TValue>)m_dict)[key]; }
@@ -214,13 +217,18 @@ namespace FishMMO.Shared
 
 		/// <summary>Gets a value indicating whether the fixedsize condition is met.</summary>
 		public bool IsFixedSize { get { return ((IDictionary)m_dict).IsFixedSize; } }
+		/// <summary>Gets an <see cref="ICollection"/> containing the keys of the dictionary.</summary>
 		ICollection IDictionary.Keys { get { return ((IDictionary)m_dict).Keys; } }
+		/// <summary>Gets an <see cref="ICollection"/> containing the values of the dictionary.</summary>
 		ICollection IDictionary.Values { get { return ((IDictionary)m_dict).Values; } }
 		/// <summary>Gets a value indicating whether the synchronized condition is met.</summary>
 		public bool IsSynchronized { get { return ((IDictionary)m_dict).IsSynchronized; } }
 		/// <summary>Gets or sets the SyncRoot value.</summary>
 		public object SyncRoot { get { return ((IDictionary)m_dict).SyncRoot; } }
 
+		/// <summary>Gets or sets the value associated with the specified key.</summary>
+		/// <param name="key">The key of the value to get or set.</param>
+		/// <returns>The value associated with the specified key.</returns>
 		public object this[object key]
 		{
 			get { return ((IDictionary)m_dict)[key]; }
@@ -243,6 +251,8 @@ namespace FishMMO.Shared
 			return ((IDictionary)m_dict).Contains(key);
 		}
 
+		/// <summary>Returns an <see cref="IDictionaryEnumerator"/> for the dictionary.</summary>
+		/// <returns>An <see cref="IDictionaryEnumerator"/> object.</returns>
 		IDictionaryEnumerator IDictionary.GetEnumerator()
 		{
 			return ((IDictionary)m_dict).GetEnumerator();

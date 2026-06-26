@@ -60,6 +60,7 @@ namespace FishMMO.Client
 		/// <summary>Cached item sprite per slot, used to seed the drag object.</summary>
 		private readonly List<Sprite> slotSprites = new List<Sprite>();
 
+		/// <summary>The slot grid container element.</summary>
 		private VisualElement slotGrid;
 
 		// ── UITKControl lifecycle ─────────────────────────────────────────────

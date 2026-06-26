@@ -4,6 +4,11 @@ using UnityEngine.UI;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for displaying reconnect attempt progress when the client
+	/// loses connection. Shows an attempt counter, cancel button, and manages
+	/// mouse mode for user interaction during reconnection.
+	/// </summary>
 	public class UIReconnectDisplay : UIControl
 	{
 		[Header("Reconnect Screen Parameters")]

@@ -48,6 +48,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called when entering the melee attacking state. Ensures the NPC runs.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
 		public override void Enter(AIController controller)
 		{
 			base.Enter(controller);
@@ -59,6 +60,8 @@ namespace FishMMO.Shared
 		/// Core melee attack logic. Closes to melee range, picks short-range abilities,
 		/// and occasionally transitions to orbit or flanking states for variety.
 		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="targetCharacter">The current target character being attacked.</param>
 		protected override void TryAttack(AIController controller, ICharacter targetCharacter)
 		{
 			if (!controller.Character.TryGet(out IAbilityController abilityController))
@@ -121,6 +124,8 @@ namespace FishMMO.Shared
 		/// Picks a random variety state (orbit or get-behind) to break up melee attack patterns.
 		/// Returns null if no variety states are configured.
 		/// </summary>
+		/// <param name="rng">The seeded random number generator.</param>
+		/// <returns>A randomly chosen variety state, or null.</returns>
 		private BaseAIState PickVarietyState(DeterministicRNG rng)
 		{
 			bool hasOrbit = OrbitState != null;

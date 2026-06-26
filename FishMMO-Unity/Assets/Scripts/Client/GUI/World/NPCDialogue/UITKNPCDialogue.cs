@@ -40,8 +40,11 @@ namespace FishMMO.Client
 		/// <summary>Bitmask of choices the character has made, received from the server.</summary>
 		private short cachedChoices;
 
+		/// <summary>Label displaying the speaker name.</summary>
 		private Label speakerLabel;
+		/// <summary>Label displaying the dialogue body text.</summary>
 		private Label dialogueText;
+		/// <summary>The container element that holds the generated choice buttons.</summary>
 		private VisualElement choicesContainer;
 
 		/// <summary>

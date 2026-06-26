@@ -22,6 +22,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public DateTime LastFetchTime { get; set; }
 
+		/// <summary>
+		/// Atomic state flag indicating whether an update pump is currently in flight (0 = idle, 1 = in-progress).
+		/// </summary>
 		private int updatePumpInFlight;
 
 		/// <inheritdoc/>

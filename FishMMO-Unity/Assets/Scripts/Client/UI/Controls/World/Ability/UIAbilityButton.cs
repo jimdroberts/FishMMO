@@ -4,6 +4,9 @@ using TMPro;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI button for an ability entry, supporting drag-and-drop and tooltip display.
+	/// </summary>
 	public class UIAbilityButton : UIReferenceButton
 	{
 		/// <summary>

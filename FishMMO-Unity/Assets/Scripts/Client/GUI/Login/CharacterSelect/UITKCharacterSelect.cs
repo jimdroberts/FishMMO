@@ -15,16 +15,46 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKCharacterSelect : UITKControl
 	{
+		/// <summary>
+		/// The name of the connect button in the UI.
+		/// </summary>
 		private const string CONNECT_BUTTON_NAME = "character-connect-btn";
+		/// <summary>
+		/// The name of the delete button in the UI.
+		/// </summary>
 		private const string DELETE_BUTTON_NAME = "character-delete-btn";
+		/// <summary>
+		/// The name of the create button in the UI.
+		/// </summary>
 		private const string CREATE_BUTTON_NAME = "character-create-btn";
+		/// <summary>
+		/// The name of the quit-to-login button in the UI.
+		/// </summary>
 		private const string QUIT_LOGIN_BUTTON_NAME = "character-quit-login-btn";
+		/// <summary>
+		/// The name of the quit button in the UI.
+		/// </summary>
 		private const string QUIT_BUTTON_NAME = "character-quit-btn";
+		/// <summary>
+		/// The name of the character list container in the UI.
+		/// </summary>
 		private const string CHARACTER_LIST_NAME = "character-list";
 
+		/// <summary>
+		/// The USS class applied to each character row.
+		/// </summary>
 		private const string CHARACTER_ROW_CLASS = "character-row";
+		/// <summary>
+		/// The USS class applied to the selected character row.
+		/// </summary>
 		private const string CHARACTER_ROW_SELECTED_CLASS = "character-row--selected";
+		/// <summary>
+		/// The USS class applied to the character name label within a row.
+		/// </summary>
 		private const string CHARACTER_ROW_NAME_CLASS = "character-row__name";
+		/// <summary>
+		/// The USS class applied to the character scene label within a row.
+		/// </summary>
 		private const string CHARACTER_ROW_SCENE_CLASS = "character-row__scene";
 
 		/// <summary>
@@ -32,9 +62,21 @@ namespace FishMMO.Client
 		/// </summary>
 		private class CharacterRow
 		{
+			/// <summary>
+			/// The root VisualElement for this character row.
+			/// </summary>
 			public VisualElement Root;
+			/// <summary>
+			/// The Label displaying the character name.
+			/// </summary>
 			public Label Name;
+			/// <summary>
+			/// The Label displaying the scene name.
+			/// </summary>
 			public Label Scene;
+			/// <summary>
+			/// The character details associated with this row.
+			/// </summary>
 			public CharacterDetails Details;
 		}
 
@@ -57,7 +99,13 @@ namespace FishMMO.Client
 		private Button connectButton;
 		private Button deleteButton;
 
+		/// <summary>
+		/// The list of all character row view models currently displayed.
+		/// </summary>
 		private readonly List<CharacterRow> characterList = new List<CharacterRow>();
+		/// <summary>
+		/// The currently selected character row, or null if none is selected.
+		/// </summary>
 		private CharacterRow selectedCharacter;
 
 		/// <summary>

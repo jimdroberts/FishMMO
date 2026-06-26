@@ -14,18 +14,51 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKSelector : UITKControl
 	{
+		/// <summary>
+		/// Name of the selector list container element.
+		/// </summary>
 		private const string BUTTON_PARENT_NAME = "selector-list";
+		/// <summary>
+		/// Name of the accept button element.
+		/// </summary>
 		private const string ACCEPT_BUTTON_NAME = "selector-accept-btn";
+		/// <summary>
+		/// Name of the cancel button element.
+		/// </summary>
 		private const string CANCEL_BUTTON_NAME = "selector-cancel-btn";
+		/// <summary>
+		/// USS class applied to the currently selected item.
+		/// </summary>
 		private const string SELECTED_CLASS = "selector-item-selected";
 
+		/// <summary>
+		/// The container element for the option buttons.
+		/// </summary>
 		private VisualElement buttonParent;
+		/// <summary>
+		/// The accept button.
+		/// </summary>
 		private Button acceptButton;
+		/// <summary>
+		/// The cancel button.
+		/// </summary>
 		private Button cancelButton;
 
+		/// <summary>
+		/// Callback invoked with the selected object's ID when accepted.
+		/// </summary>
 		private Action<int> onAccept;
+		/// <summary>
+		/// Index of the currently selected item, or -1 if none.
+		/// </summary>
 		private int selectedIndex = -1;
+		/// <summary>
+		/// List of cached objects available for selection.
+		/// </summary>
 		private List<ICachedObject> cachedObjects;
+		/// <summary>
+		/// Pool of button elements for each selectable option.
+		/// </summary>
 		private readonly List<Button> buttonSlots = new List<Button>();
 
 		/// <summary>

@@ -6,6 +6,9 @@ namespace FishMMO.Shared.Core
 	/// </summary>
 	public interface IBindstone : IInteractable
 	{
+		/// <summary>
+		/// Achievement template to increment when a player binds at this bindstone.
+		/// </summary>
 		AchievementTemplate AchievementTemplate { get; }
 	}
 }

@@ -24,6 +24,11 @@ namespace FishMMO.Shared
 		private readonly List<AbilityEvent> knownAbilityEventBuffer = new List<AbilityEvent>();
 
 #if !UNITY_SERVER
+		/// <summary>
+		/// Called when the character starts. On the owning client, registers network broadcast
+		/// handlers for learning abilities and events, then fires <see cref="OnReset"/> and
+		/// <see cref="OnAddAbility"/> for all known abilities.
+		/// </summary>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -52,6 +57,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Called when the character stops. On the owning client, unregisters all network
+		/// broadcast handlers for abilities and events.
+		/// </summary>
 		public override void OnStopCharacter()
 		{
 			base.OnStopCharacter();

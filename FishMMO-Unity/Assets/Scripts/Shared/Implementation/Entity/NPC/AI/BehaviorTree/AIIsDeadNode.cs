@@ -15,6 +15,11 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New AI Is Dead Node", menuName = "FishMMO/Character/NPC/AI/Behavior Tree/Is Dead Node")]
 	public class AIIsDeadNode : AIBehaviorNode
 	{
+		/// <summary>
+		/// Checks if the NPC is dead via its damage controller.
+		/// </summary>
+		/// <param name="controller">The AI controller of the evaluating NPC.</param>
+		/// <returns>Success if the NPC is dead, Failure if alive or missing a damage controller.</returns>
 		public override AINodeResult Evaluate(AIController controller)
 		{
 			if (controller.Character == null)

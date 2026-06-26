@@ -39,6 +39,10 @@ namespace FishMMO.Shared
 		/// Evaluates whether the subject's health percentage satisfies the comparison.
 		/// Returns false if the subject is null, dead, or has no health resource.
 		/// </summary>
+		/// <param name="controller">The AI controller of the NPC.</param>
+		/// <param name="self">The NPC's character.</param>
+		/// <param name="target">The NPC's current target (may be null).</param>
+		/// <returns>True if the health comparison holds, false otherwise.</returns>
 		public override bool Evaluate(AIController controller, ICharacter self, ICharacter target)
 		{
 			ICharacter subject = Subject == ConditionSubject.Self ? self : target;

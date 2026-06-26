@@ -163,6 +163,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		private float tickDelta;
 
+		/// <summary>
+		/// Cached reference to the character prediction controller for resolving authoritative ticks.
+		/// </summary>
 		private CharacterPredictionController predictionController;
 
 		public override void OnStartNetwork()
@@ -538,16 +541,13 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Applies a buff to the character by template, creating a new instance if needed and handling stacking.
+		/// Applies a buff using the provided prediction tick as the application time.
+		/// This should be used by prediction-path callers to compute ExpiryTick deterministically
+		/// rather than using <c>TimeManager.LocalTick</c>.
+		/// Creates a new buff instance if needed and handles stacking.
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
-		/// <remarks>
-		/// <b>Tick source:</b> Use the explicit tick overload to make the source deterministic.
-		/// </remarks>
-		/// <summary>
-		/// Applies a buff using the provided absolute network tick as the application time.
-		/// This should be used by prediction-path callers to compute ExpiryTick deterministically.
-		/// </summary>
+		/// <param name="currentTick">The prediction tick at the time of application.</param>
 		public void Apply(BaseBuffTemplate template, PredictionTick currentTick)
 		{
 			// The prediction path already holds a replicate-domain tick (it came from
@@ -1120,6 +1120,15 @@ namespace FishMMO.Shared
 			RemoveAll(ignoreInvokeRemove: true);
 		}
 
+		/// <summary>
+		/// Safely removes a buff's effects from the character by draining all stacks and calling
+		/// <see cref="Buff.Remove"/>. Returns false if an exception occurs during effect cleanup,
+		/// indicating the buff should remain tracked to avoid orphaned attribute modifiers.
+		/// </summary>
+		/// <param name="buff">The buff instance to clean up.</param>
+		/// <param name="buffID">The template ID of the buff (for warning logging).</param>
+		/// <param name="context">Name of the calling method (for warning logging).</param>
+		/// <returns>True if effects were fully removed; false if an exception occurred.</returns>
 		private bool TryRemoveBuffEffects(Buff buff, int buffID, string context)
 		{
 			if (buff == null)

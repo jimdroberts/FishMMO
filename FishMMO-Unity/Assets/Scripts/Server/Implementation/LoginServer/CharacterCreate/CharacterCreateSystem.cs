@@ -1054,10 +1054,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private readonly struct PreparedAttributeEntry
 		{
+			/// <summary>The character attribute template ID.</summary>
 			public readonly int TemplateID;
+			/// <summary>The initial value for this attribute.</summary>
 			public readonly int Value;
+			/// <summary>Whether this attribute is a resource attribute (e.g. health, mana).</summary>
 			public readonly bool IsResourceAttribute;
 
+			/// <summary>
+			/// Initializes a new attribute entry with the given settings.
+			/// </summary>
+			/// <param name="templateID">The character attribute template ID.</param>
+			/// <param name="value">The initial value for this attribute.</param>
+			/// <param name="isResourceAttribute">Whether this attribute is a resource attribute.</param>
 			public PreparedAttributeEntry(int templateID, int value, bool isResourceAttribute)
 			{
 				TemplateID = templateID;
@@ -1071,9 +1080,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private readonly struct PreparedFactionEntry
 		{
+			/// <summary>The faction template ID.</summary>
 			public readonly int TemplateID;
+			/// <summary>The initial faction standing value.</summary>
 			public readonly int Value;
 
+			/// <summary>
+			/// Initializes a new faction entry with the given template and value.
+			/// </summary>
+			/// <param name="templateID">The faction template ID.</param>
+			/// <param name="value">The initial faction standing value.</param>
 			public PreparedFactionEntry(int templateID, int value)
 			{
 				TemplateID = templateID;
@@ -1086,9 +1102,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private readonly struct PreparedAbilityEntry
 		{
+			/// <summary>The ability template ID.</summary>
 			public readonly int TemplateID;
+			/// <summary>The list of ability event IDs for this ability.</summary>
 			public readonly List<int> AbilityEvents;
 
+			/// <summary>
+			/// Initializes a new ability entry with the given template and events.
+			/// </summary>
+			/// <param name="templateID">The ability template ID.</param>
+			/// <param name="abilityEvents">The list of ability event IDs.</param>
 			public PreparedAbilityEntry(int templateID, List<int> abilityEvents)
 			{
 				TemplateID = templateID;
@@ -1101,9 +1124,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private readonly struct PreparedInventoryEntry
 		{
+			/// <summary>The item template ID.</summary>
 			public readonly int TemplateID;
+			/// <summary>The inventory slot index for this item.</summary>
 			public readonly int Slot;
 
+			/// <summary>
+			/// Initializes a new inventory entry with the given template and slot.
+			/// </summary>
+			/// <param name="templateID">The item template ID.</param>
+			/// <param name="slot">The inventory slot index.</param>
 			public PreparedInventoryEntry(int templateID, int slot)
 			{
 				TemplateID = templateID;
@@ -1116,10 +1146,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		private readonly struct PreparedEquipmentEntry
 		{
+			/// <summary>The equipment item template ID.</summary>
 			public readonly int TemplateID;
+			/// <summary>The equipment slot this item occupies.</summary>
 			public readonly int Slot;
+			/// <summary>The random seed used for item generation.</summary>
 			public readonly int Seed;
 
+			/// <summary>
+			/// Initializes a new equipment entry with the given template, slot, and seed.
+			/// </summary>
+			/// <param name="templateID">The equipment item template ID.</param>
+			/// <param name="slot">The equipment slot index.</param>
+			/// <param name="seed">The random seed for item generation.</param>
 			public PreparedEquipmentEntry(int templateID, int slot, int seed)
 			{
 				TemplateID = templateID;

@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 		public List<Trigger> OnRegionExit = new List<Trigger>();
 
 		/// <summary>
-		/// The NetworkTrigger component used to detect player entry, stay, and exit events.
+		/// The <see cref="NetworkTrigger"/> component used to detect player entry, stay, and exit events.
 		/// </summary>
 		private NetworkTrigger networkTrigger;
 
@@ -105,6 +105,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Cleans up event handler subscriptions and removes this region from its parent's children list.
+		/// </summary>
 		void OnDestroy()
 		{
 			if (networkTrigger != null)
@@ -141,7 +144,9 @@ namespace FishMMO.Shared
 #endif
 
 		/// <summary>
-		/// Handles logic when a player enters the region's collider. Children regions take priority over parents.
+		/// Handles logic when a player enters the region's collider.
+		/// Children regions take priority over parents.
+		/// Notifies the parent region of exit if this region fully contains the player.
 		/// </summary>
 		/// <param name="other">The collider of the entering object.</param>
 		private void NetworkCollider_OnEnter(Collider other)
@@ -234,6 +239,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Handles logic when a player exits the region's collider.
+		/// Notifies the parent region of entry if applicable.
 		/// </summary>
 		/// <param name="other">The collider of the exiting object.</param>
 		private void NetworkCollider_OnExit(Collider other)

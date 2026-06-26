@@ -48,15 +48,24 @@ namespace FishMMO.Client
 		/// <summary>Name of the shared UGUI tooltip overlay.</summary>
 		private const string TOOLTIP_NAME = "UITooltip";
 
+		/// <summary>The items tab button.</summary>
 		private Button itemsTab;
+		/// <summary>The abilities tab button.</summary>
 		private Button abilitiesTab;
+		/// <summary>The ability events tab button.</summary>
 		private Button eventsTab;
+		/// <summary>The container that holds the item entry slots.</summary>
 		private VisualElement itemsList;
+		/// <summary>The container that holds the ability entry slots.</summary>
 		private VisualElement abilitiesList;
+		/// <summary>The container that holds the ability event entry slots.</summary>
 		private VisualElement eventsList;
 
+		/// <summary>The interactable ID of the current merchant.</summary>
 		private long lastMerchantID;
+		/// <summary>The template ID of the current merchant.</summary>
 		private int currentTemplateID;
+		/// <summary>The currently visible merchant tab.</summary>
 		private MerchantTabType currentTab = MerchantTabType.Item;
 
 		/// <summary>

@@ -8,6 +8,9 @@ using UnityEngine.UI;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for displaying target information including name, health, buffs and debuffs, and overhead labels.
+	/// </summary>
 	public class UITarget : UICharacterControl
 	{
 		/// <summary>

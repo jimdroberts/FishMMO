@@ -19,13 +19,37 @@ namespace FishMMO.Client
 	/// </remarks>
 	public class UITKRegister : UITKControl
 	{
+		/// <summary>
+		/// The name of the username TextField in the UI.
+		/// </summary>
 		private const string USERNAME_NAME = "register-username";
+		/// <summary>
+		/// The name of the email TextField in the UI.
+		/// </summary>
 		private const string EMAIL_NAME = "register-email";
+		/// <summary>
+		/// The name of the password TextField in the UI.
+		/// </summary>
 		private const string PASSWORD_NAME = "register-password";
+		/// <summary>
+		/// The name of the age DropdownField in the UI.
+		/// </summary>
 		private const string AGE_SELECT_NAME = "register-age";
+		/// <summary>
+		/// The name of the key TextField in the UI.
+		/// </summary>
 		private const string KEY_NAME = "register-key";
+		/// <summary>
+		/// The name of the register submit button in the UI.
+		/// </summary>
 		private const string REGISTER_BUTTON_NAME = "register-submit-btn";
+		/// <summary>
+		/// The name of the quit button in the UI.
+		/// </summary>
 		private const string QUIT_BUTTON_NAME = "register-quit-btn";
+		/// <summary>
+		/// The name of the status Label in the UI.
+		/// </summary>
 		private const string STATUS_NAME = "register-status";
 
 		/// <summary>

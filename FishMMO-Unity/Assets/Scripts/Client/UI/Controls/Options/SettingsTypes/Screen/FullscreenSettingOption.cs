@@ -6,6 +6,11 @@ using UnityEngine;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// Setting option for selecting the fullscreen mode (FullScreenWindow,
+	/// ExclusiveFullScreen, MaximizedWindow, Windowed). Populates available
+	/// modes per platform and persists the selection to configuration.
+	/// </summary>
 	public class FullscreenSettingOption : SettingOption
 	{
 		/// <summary>

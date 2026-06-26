@@ -19,6 +19,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// </summary>
 		public readonly long ServerID;
 
+		/// <summary>
+		/// Initializes a new session info with the given ownership token and server ID.
+		/// </summary>
+		/// <param name="token">The session ownership token returned by TryClaimAsync.</param>
+		/// <param name="serverID">The server ID that owns this session.</param>
 		public CharacterSessionInfo(Guid token, long serverID)
 		{
 			Token = token;

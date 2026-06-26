@@ -16,6 +16,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public const long NULL_REFERENCE_ID = -1;
 
+		/// <summary>
+		/// Name of the drag icon element.
+		/// </summary>
 		private const string DRAG_ICON_NAME = "drag-icon";
 
 		/// <summary>
@@ -38,7 +41,13 @@ namespace FishMMO.Client
 		/// </summary>
 		public float DropDistance = 5.0f;
 
+		/// <summary>
+		/// The visual element used as the drag icon.
+		/// </summary>
 		private VisualElement dragIcon;
+		/// <summary>
+		/// The sprite displayed while dragging.
+		/// </summary>
 		private Sprite iconSprite;
 
 		/// <summary>

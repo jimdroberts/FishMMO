@@ -45,39 +45,120 @@ namespace FishMMO.Client
 		/// </summary>
 		public const int RGBA_MAX = 255;
 
+		/// <summary>
+		/// Name of the current color swatch element.
+		/// </summary>
 		private const string CURRENT_SWATCH_NAME = "color-current";
+		/// <summary>
+		/// Name of the HSV picking texture element.
+		/// </summary>
 		private const string HSV_TEXTURE_NAME = "hsv-texture";
+		/// <summary>
+		/// Name of the HSV cursor element.
+		/// </summary>
 		private const string HSV_CURSOR_NAME = "hsv-cursor";
+		/// <summary>
+		/// Name of the hex input field element.
+		/// </summary>
 		private const string HEX_INPUT_NAME = "hex-input";
+		/// <summary>
+		/// Name of the close button element.
+		/// </summary>
 		private const string CLOSE_BUTTON_NAME = "colorpicker-close-btn";
 
+		/// <summary>
+		/// Name of the hue slider element.
+		/// </summary>
 		private const string H_SLIDER_NAME = "h-slider";
+		/// <summary>
+		/// Name of the hue integer input field element.
+		/// </summary>
 		private const string H_INPUT_NAME = "h-input";
+		/// <summary>
+		/// Name of the hue slider background element.
+		/// </summary>
 		private const string H_BACKGROUND_NAME = "h-background";
+		/// <summary>
+		/// Name of the hue slider spectrum texture element.
+		/// </summary>
 		private const string H_TEXTURE_NAME = "hsv-texture";
 
+		/// <summary>
+		/// Name of the saturation slider element.
+		/// </summary>
 		private const string S_SLIDER_NAME = "s-slider";
+		/// <summary>
+		/// Name of the saturation integer input field element.
+		/// </summary>
 		private const string S_INPUT_NAME = "s-input";
+		/// <summary>
+		/// Name of the saturation slider background element.
+		/// </summary>
 		private const string S_BACKGROUND_NAME = "s-background";
 
+		/// <summary>
+		/// Name of the value (brightness) slider element.
+		/// </summary>
 		private const string V_SLIDER_NAME = "v-slider";
+		/// <summary>
+		/// Name of the value (brightness) integer input field element.
+		/// </summary>
 		private const string V_INPUT_NAME = "v-input";
+		/// <summary>
+		/// Name of the value slider background element.
+		/// </summary>
 		private const string V_BACKGROUND_NAME = "v-background";
 
+		/// <summary>
+		/// Name of the red channel slider element.
+		/// </summary>
 		private const string R_SLIDER_NAME = "r-slider";
+		/// <summary>
+		/// Name of the red channel integer input field element.
+		/// </summary>
 		private const string R_INPUT_NAME = "r-input";
+		/// <summary>
+		/// Name of the red channel slider background element.
+		/// </summary>
 		private const string R_BACKGROUND_NAME = "r-background";
 
+		/// <summary>
+		/// Name of the green channel slider element.
+		/// </summary>
 		private const string G_SLIDER_NAME = "g-slider";
+		/// <summary>
+		/// Name of the green channel integer input field element.
+		/// </summary>
 		private const string G_INPUT_NAME = "g-input";
+		/// <summary>
+		/// Name of the green channel slider background element.
+		/// </summary>
 		private const string G_BACKGROUND_NAME = "g-background";
 
+		/// <summary>
+		/// Name of the blue channel slider element.
+		/// </summary>
 		private const string B_SLIDER_NAME = "b-slider";
+		/// <summary>
+		/// Name of the blue channel integer input field element.
+		/// </summary>
 		private const string B_INPUT_NAME = "b-input";
+		/// <summary>
+		/// Name of the blue channel slider background element.
+		/// </summary>
 		private const string B_BACKGROUND_NAME = "b-background";
 
+		/// <summary>
+		/// Name of the alpha channel slider element.
+		/// </summary>
 		private const string A_SLIDER_NAME = "a-slider";
+		/// <summary>
+		/// Name of the alpha channel integer input field element.
+		/// </summary>
 		private const string A_INPUT_NAME = "a-input";
+		/// <summary>
+		/// Name of the alpha channel slider background element.
+		/// </summary>
 		private const string A_BACKGROUND_NAME = "a-background";
 
 		/// <summary>
@@ -106,31 +187,106 @@ namespace FishMMO.Client
 		/// </summary>
 		private bool suppressCallbacks;
 
+		/// <summary>
+		/// The current color swatch element.
+		/// </summary>
 		private VisualElement currentSwatch;
+		/// <summary>
+		/// The HSV texture display element.
+		/// </summary>
 		private VisualElement hsvTexture;
+		/// <summary>
+		/// The HSV cursor overlay element.
+		/// </summary>
 		private VisualElement hsvCursor;
+		/// <summary>
+		/// The hue slider background element.
+		/// </summary>
 		private VisualElement hBackground;
+		/// <summary>
+		/// The saturation slider background element.
+		/// </summary>
 		private VisualElement sBackground;
+		/// <summary>
+		/// The value slider background element.
+		/// </summary>
 		private VisualElement vBackground;
+		/// <summary>
+		/// The red channel slider background element.
+		/// </summary>
 		private VisualElement rBackground;
+		/// <summary>
+		/// The green channel slider background element.
+		/// </summary>
 		private VisualElement gBackground;
+		/// <summary>
+		/// The blue channel slider background element.
+		/// </summary>
 		private VisualElement bBackground;
+		/// <summary>
+		/// The alpha channel slider background element.
+		/// </summary>
 		private VisualElement aBackground;
 
+		/// <summary>
+		/// The hex text input field.
+		/// </summary>
 		private TextField hexInput;
+		/// <summary>
+		/// The hue slider.
+		/// </summary>
 		private Slider hSlider;
+		/// <summary>
+		/// The saturation slider.
+		/// </summary>
 		private Slider sSlider;
+		/// <summary>
+		/// The value (brightness) slider.
+		/// </summary>
 		private Slider vSlider;
+		/// <summary>
+		/// The red channel slider.
+		/// </summary>
 		private Slider rSlider;
+		/// <summary>
+		/// The green channel slider.
+		/// </summary>
 		private Slider gSlider;
+		/// <summary>
+		/// The blue channel slider.
+		/// </summary>
 		private Slider bSlider;
+		/// <summary>
+		/// The alpha channel slider.
+		/// </summary>
 		private Slider aSlider;
+		/// <summary>
+		/// The hue integer input field.
+		/// </summary>
 		private IntegerField hInput;
+		/// <summary>
+		/// The saturation integer input field.
+		/// </summary>
 		private IntegerField sInput;
+		/// <summary>
+		/// The value (brightness) integer input field.
+		/// </summary>
 		private IntegerField vInput;
+		/// <summary>
+		/// The red channel integer input field.
+		/// </summary>
 		private IntegerField rInput;
+		/// <summary>
+		/// The green channel integer input field.
+		/// </summary>
 		private IntegerField gInput;
+		/// <summary>
+		/// The blue channel integer input field.
+		/// </summary>
 		private IntegerField bInput;
+		/// <summary>
+		/// The alpha channel integer input field.
+		/// </summary>
 		private IntegerField aInput;
 
 		/// <summary>
@@ -366,6 +522,11 @@ namespace FishMMO.Client
 			UpdateBackgroundSprites();
 		}
 
+		/// <summary>
+		/// Returns the current value of the slider, or zero if the slider is null.
+		/// </summary>
+		/// <param name="slider">The slider to read.</param>
+		/// <returns>The slider's value, or 0f if null.</returns>
 		private float SliderValue(Slider slider)
 		{
 			return slider != null ? slider.value : 0f;

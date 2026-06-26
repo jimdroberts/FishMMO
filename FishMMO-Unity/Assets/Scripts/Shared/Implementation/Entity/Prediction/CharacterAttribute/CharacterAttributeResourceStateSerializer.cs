@@ -92,6 +92,9 @@ namespace FishMMO.Shared
 			GenericDeltaReader<CharacterAttributeResourceState>.SetRead(ReadDelta);
 		}
 
+		/// <summary>Epsilon for float comparisons to avoid false-positive deltas from cross-platform drift.</summary>
+		private const float FLOAT_EPSILON = 0.001f;
+
 		/// <summary>
 		/// Delta writer for <see cref="CharacterAttributeResourceState"/>.
 		/// Writes a 1-byte bitmask indicating which of the 7 fields changed,
@@ -111,10 +114,6 @@ namespace FishMMO.Shared
 		/// If FishNet adds a public float-delta API in the future, the float fields
 		/// should be migrated for better compression on small regen increments.
 		/// </remarks>
-
-		/// <summary>Epsilon for float comparisons to avoid false-positive deltas from cross-platform drift.</summary>
-		private const float FLOAT_EPSILON = 0.001f;
-
 		private static bool WriteDelta(
 			Writer writer,
 			CharacterAttributeResourceState prev,

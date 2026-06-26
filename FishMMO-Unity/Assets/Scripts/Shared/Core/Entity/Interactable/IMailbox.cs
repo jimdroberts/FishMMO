@@ -6,6 +6,9 @@ namespace FishMMO.Shared.Core
 	/// </summary>
 	public interface IMailbox : IInteractable
 	{
+		/// <summary>
+		/// Achievement template to increment when a player uses this mailbox.
+		/// </summary>
 		AchievementTemplate AchievementTemplate { get; }
 	}
 }
