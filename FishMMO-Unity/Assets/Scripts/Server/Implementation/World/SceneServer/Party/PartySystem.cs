@@ -1128,6 +1128,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						return;
 					}
+					
+					if (!CharacterStateValidation.CanAct(pc))
+						return;
 
 					pc.ID = partyID;
 					pc.Rank = PartyRank.Member;

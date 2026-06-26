@@ -249,6 +249,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
+					// Require the requester to be loaded in a scene to prevent
+					// cross-server character name harvesting.
+					IPlayerCharacter requester = conn.FirstObject.GetComponent<IPlayerCharacter>();
+					if (requester == null || string.IsNullOrEmpty(requester.SceneName))
+						return;
 					// check our local scene server first
 					if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 						mappingData.CharactersByID.TryGetValue(msg.ID, out IPlayerCharacter character))

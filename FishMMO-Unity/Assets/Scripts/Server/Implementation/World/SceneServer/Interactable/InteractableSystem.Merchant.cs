@@ -2,6 +2,7 @@ using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 using FishMMO.Database;

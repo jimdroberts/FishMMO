@@ -243,6 +243,11 @@ namespace FishMMO.Shared
 				replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld) &&
 				activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 			{
+				// Enforce a maximum hold duration (2x normal activation time) to prevent
+				// clients from holding charged abilities indefinitely with no resource cost.
+				if (remainingTicks < validatedAbility.ActivationTime * 2f / (float)base.TimeManager.TickDelta)
+					return;
+				Cancel(ReplicateState.Invalid, true);
 				return;
 			}
 

@@ -1,5 +1,6 @@
 using FishNet.Connection;
 using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -32,11 +33,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				return;
 			}
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				return;
 			}
+			
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			// Acquire ingress guard for dungeon finder
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))

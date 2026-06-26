@@ -366,12 +366,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Log.Debug("InteractableSystem", "No first object");
 				return;
 			}
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				Log.Debug("InteractableSystem", "No character");
 				return;
 			}
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{

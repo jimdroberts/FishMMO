@@ -563,6 +563,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Prevent unloaded characters from chatting. Dead players can still send messages.
+			if (!sender.IsFlagged(CharacterFlags.IsLoaded))
+				return;
+
 			// Use ticks directly from the broadcast struct — avoids DateTime allocation per message.
 			long receivedTicks = msg.ReceivedUtcTicks;
 

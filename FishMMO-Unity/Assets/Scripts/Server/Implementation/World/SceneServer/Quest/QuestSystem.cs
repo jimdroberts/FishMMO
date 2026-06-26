@@ -478,11 +478,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				return;
 			}
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.QuestAccepted, out long guardKey))
 			{
@@ -563,11 +564,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				return;
 			}
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.QuestTurnedIn, out long guardKey))
 			{
@@ -643,11 +645,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				return;
 			}
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.QuestAbandoned, out long guardKey))
 			{

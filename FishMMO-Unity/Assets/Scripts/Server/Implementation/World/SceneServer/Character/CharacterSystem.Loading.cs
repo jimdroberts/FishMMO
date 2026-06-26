@@ -876,6 +876,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Rate-limit scene unload broadcasts to prevent spam disconnects.
+			DateTime now2 = DateTime.UtcNow;
+			if (authCallbackLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastUnload) &&
+				(now2 - lastUnload).TotalSeconds < 5.0)
+				return;
+			authCallbackLastTimeByClientId[conn.ClientId] = now2;
+
 			// Check if the connection has a character loaded.
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 				mappingData.ConnectionCharacters.TryGetValue(conn, out var character))

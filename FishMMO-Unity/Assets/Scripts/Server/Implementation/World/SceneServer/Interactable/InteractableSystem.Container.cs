@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
@@ -56,7 +57,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				Item takenItem = itemContainer.RemoveItem(msg.Slot);
+				if (!itemContainer.IsValidSlot((int)msg.Slot))
+				return;
+			Item takenItem = itemContainer.RemoveItem(msg.Slot);
 				if (takenItem == null)
 				{
 					return;

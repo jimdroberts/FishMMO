@@ -306,6 +306,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
 			return;
 
+		// Only dead players can respawn at bind point.
+		if (!player.IsFlagged(CharacterFlags.IsDead))
+			return;
+
 		player.DisableFlags(CharacterFlags.IsDead);
 		if (player.TryGet(out ICharacterDamageController damageController))
 			damageController.Revive(null, 999999);
@@ -337,6 +341,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 			return;
 		if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+			return;
+
+		// Only dead players can accept a resurrect.
+		if (!player.IsFlagged(CharacterFlags.IsDead))
 			return;
 
 		player.DisableFlags(CharacterFlags.IsDead);

@@ -334,7 +334,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 				if (character != null &&
-					!character.IsTeleporting &&
+					CharacterStateValidation.CanAct(character) &&
 					character.TryGet(out IInventoryController inventoryController))
 				{
 					// Validate slot bounds before processing
@@ -389,7 +389,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 				if (character == null ||
-					character.IsTeleporting ||
+					!CharacterStateValidation.CanAct(character) ||
 					!character.TryGet(out IInventoryController inventoryController))
 				{
 					return;
@@ -502,7 +502,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 				if (character == null ||
-					character.IsTeleporting ||
+					!CharacterStateValidation.CanAct(character) ||
 					!character.TryGet(out IEquipmentController equipmentController))
 				{
 					return;
@@ -638,7 +638,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 				if (character == null ||
-					character.IsTeleporting ||
+					!CharacterStateValidation.CanAct(character) ||
 					!character.TryGet(out IEquipmentController equipmentController))
 				{
 					return;
@@ -769,7 +769,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 				if (character != null &&
-					!character.IsTeleporting &&
+					CharacterStateValidation.CanAct(character) &&
 					character.TryGet(out IBankController bankController))
 				{
 					// validate banker scene object before allowing bank removal
@@ -830,7 +830,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 				if (character == null ||
-					character.IsTeleporting ||
+					!CharacterStateValidation.CanAct(character) ||
 					!character.TryGet(out IBankController bankController))
 				{
 					return;

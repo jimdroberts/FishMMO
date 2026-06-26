@@ -210,7 +210,7 @@ namespace FishMMO.Shared
 				};
 				foreach (NetworkConnection conn in controller.NetworkObject.Observers)
 				{
-					controller.ServerManager.Broadcast(conn, chatMsg, false, Channel.Reliable);
+					controller.ServerManager.Broadcast(conn, chatMsg, true, Channel.Reliable);
 				}
 			}
 		}

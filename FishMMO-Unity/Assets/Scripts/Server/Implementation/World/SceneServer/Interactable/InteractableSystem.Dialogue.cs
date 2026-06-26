@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 using System.Collections.Generic;
@@ -151,11 +152,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				return;
 			}
+			
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{

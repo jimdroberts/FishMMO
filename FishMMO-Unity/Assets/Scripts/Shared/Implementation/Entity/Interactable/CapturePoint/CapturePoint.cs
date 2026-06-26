@@ -151,7 +151,7 @@ namespace FishMMO.Shared
 		{
 			base.ReadPayload(connection, reader);
 			OwnerCharacterID = reader.ReadInt64();
-			State = (ObjectiveState)reader.ReadInt8Unpacked();
+			State = (ObjectiveState)reader.ReadUInt8Unpacked();
 		}
 	}
 }

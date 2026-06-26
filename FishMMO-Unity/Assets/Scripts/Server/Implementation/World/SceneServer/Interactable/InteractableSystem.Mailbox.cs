@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 using FishMMO.Database;
@@ -39,11 +40,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				return;
 			}
+
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
@@ -130,8 +133,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					{
 						ID = mail.ID,
 						SenderName = mail.SenderName ?? "",
-						Subject = mail.Subject ?? "",
-						Body = mail.Body ?? "",
+						Subject = ChatHelper.Sanitize(mail.Subject) ?? "",
+						Body = ChatHelper.Sanitize(mail.Body) ?? "",
 						Read = mail.Read,
 						ItemTemplateID = mail.ItemAttachment,
 						CurrencyAmount = mail.CurrencyAttachment,
@@ -171,11 +174,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				return;
 			}
+
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
@@ -187,6 +192,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				// Validate input
 				if (string.IsNullOrWhiteSpace(msg.RecipientName) ||
+					!Authentication.IsAllowedCharacterName(msg.RecipientName) ||
 					string.IsNullOrWhiteSpace(msg.Subject) ||
 					string.IsNullOrWhiteSpace(msg.Body))
 				{
@@ -292,11 +298,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
 			{
 				return;
 			}
+			
+			if (!CharacterStateValidation.CanAct(character))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{

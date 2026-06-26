@@ -53,6 +53,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
+			// Sender must be in a loaded scene to send tell messages.
+			if (sender == null || !sender.IsFlagged(CharacterFlags.IsLoaded))
+				return false;
+
 			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return false;

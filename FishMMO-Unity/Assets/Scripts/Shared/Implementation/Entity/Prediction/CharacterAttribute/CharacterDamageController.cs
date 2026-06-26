@@ -229,6 +229,7 @@ namespace FishMMO.Shared
 		public void Kill(ICharacter killer)
 		{
 			if (Immortal) return;
+			if (!base.IsServerStarted) return;
 
 			if (killer != null)
 			{

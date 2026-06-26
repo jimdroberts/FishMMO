@@ -275,7 +275,7 @@ namespace FishMMO.Shared
 		/// <returns>Sanitized message with formatting removed.</returns>
 		public static string Sanitize(string message)
 		{
-			return Regex.Replace(message, CombinedRTTPattern, "");
+			return Regex.Replace(message, CombinedRTTPattern, "", RegexOptions.None, TimeSpan.FromSeconds(1));
 		}
 	}
 }
