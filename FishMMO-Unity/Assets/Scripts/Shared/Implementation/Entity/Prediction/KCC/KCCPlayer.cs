@@ -106,6 +106,14 @@ namespace FishMMO.Shared
 			CharacterController.Motor = Motor;
 			Motor.CharacterController = CharacterController;
 
+			// Initialize the motor's PhysicsScene from the GameObject's scene so that
+			// collision queries (CapsuleCast, OverlapCapsule, Raycast) work on both
+			// client and server. The server overrides this during character loading
+			// (CharacterSystem.Loading.cs:820) with the scene-specific physics scene.
+			// Without this, the client motor's collision queries silently return
+			// nothing, causing constant position reconciles every tick.
+			Motor.SetPhysicsScene(Motor.gameObject.scene.GetPhysicsScene());
+
 			Rigidbody rb = GetComponent<Rigidbody>();
 			if (rb != null)
 			{
