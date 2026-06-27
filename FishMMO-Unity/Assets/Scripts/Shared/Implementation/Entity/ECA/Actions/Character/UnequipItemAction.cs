@@ -8,6 +8,8 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Action that attempts to unequip an item from the initiating character.
 	/// Optionally uses <see cref="ItemEventData"/> from the <see cref="EventData"/> to override the target slot and container.
+	/// Server-only execution — equipment mutations rearrange persistent item ownership
+	/// between containers and must never run during client prediction replay.
 	/// </summary>
 	[Serializable]
 	public class UnequipItemAction : BaseAction
@@ -24,6 +26,7 @@ namespace FishMMO.Shared
 		/// <param name="eventData">Optional event data containing <see cref="ItemEventData"/> to override slot and target container.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+#if UNITY_SERVER
 			if (initiator == null)
 			{
 				Log.Warning("UnequipItemAction", "Initiator is null. Cannot execute action.");
@@ -64,6 +67,7 @@ namespace FishMMO.Shared
 			{
 				Log.Warning("UnequipItemAction", $"Failed to unequip item from {unequipSlot}.");
 			}
+#endif
 		}
 	}
 }

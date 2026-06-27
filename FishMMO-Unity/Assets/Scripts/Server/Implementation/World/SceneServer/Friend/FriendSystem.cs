@@ -224,6 +224,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.AddFriend, out long guardKey))
 			{
 				return;
@@ -263,7 +267,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (!deferGuardRelease)
 				{
-					EndIngressGuard(guardKey); SendServerBusy(conn); SendServerBusy(conn);
+					EndIngressGuard(guardKey); SendServerBusy(conn);
 				}
 			}
 		}
@@ -372,6 +376,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.RemoveFriend, out long guardKey))
 			{

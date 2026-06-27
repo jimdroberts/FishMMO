@@ -620,9 +620,12 @@ namespace FishMMO.Shared
 			}
 
 
-			// Server-authoritative speed cap — prevents super-speed exploits from
-			// stacking movement buffs or attribute calculation bugs producing
-			// unbounded target velocities.
+			// Speed cap — enforced identically on client and server through the
+			// shared deterministic prediction pipeline. Prevents super-speed exploits
+			// from stacking movement buffs or attribute calculation bugs.
+			// Because this runs in shared code on both sides, a modified client that
+			// removes the clamp will see a brief local misprediction that snaps back
+			// on the next reconcile pass.
 			const float MaxAllowedSpeed = Constants.Character.SprintSpeed * 3.0f;
 			targetSpeed = Mathf.Min(targetSpeed, MaxAllowedSpeed);
 

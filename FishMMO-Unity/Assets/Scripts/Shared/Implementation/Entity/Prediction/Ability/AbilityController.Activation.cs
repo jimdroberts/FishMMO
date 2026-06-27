@@ -148,7 +148,10 @@ namespace FishMMO.Shared
 			{
 				//Log.Debug($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
 				currentAbilityID = newAbility.ID;
-				remainingTicks = (uint)Mathf.CeilToInt(newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility)) / (float)base.TimeManager.TickDelta);
+				// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
+				// between x86 and ARM that Mathf.CeilToInt is susceptible to.
+				float activationTimeSec = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
+				remainingTicks = (uint)(int)Math.Ceiling(activationTimeSec / (double)base.TimeManager.TickDelta);
 				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 				{
 					replicatedFlags.EnableBit(AbilityActivationFlags.IsHeld);
@@ -502,7 +505,9 @@ namespace FishMMO.Shared
 			// leaving the controller in an inconsistent state.
 			currentAbilityID = templateID;
 			replicatedFlags.EnableBit(AbilityActivationFlags.IsConsumable);
-			remainingTicks = (uint)Mathf.CeilToInt(consumable.ActivationTime / (float)base.TimeManager.TickDelta);
+			// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
+			// between x86 and ARM that Mathf.CeilToInt is susceptible to.
+			remainingTicks = (uint)(int)Math.Ceiling(consumable.ActivationTime / (double)base.TimeManager.TickDelta);
 
 			// Lock the inventory slot to prevent movement during activation.
 			// consumableSlot is assigned AFTER LockSlot so that if LockSlot throws,

@@ -113,6 +113,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+
 #if !UNITY_SERVER
 		/// <summary>
 		/// Called when the client starts. Sets up camera following and ignored colliders for the owner.
@@ -157,6 +158,24 @@ namespace FishMMO.Shared
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
 		{
 			TryResolvePendingPlatform();
+
+			// Server-authoritative movement gate: reject movement input from characters
+			// that are dead, frozen, teleporting, unloaded, or in combat. This prevents
+			// combat-escape exploits and ensures movement-controlling status effects
+			// are enforced server-side.
+			if (base.IsServerStarted &&
+				CharacterController != null &&
+				CharacterController.Character != null)
+			{
+				IPlayerCharacter character = CharacterController.Character;
+				if (character.IsFlagged(CharacterFlags.IsDead) ||
+					character.IsTeleporting ||
+					character.IsFlagged(CharacterFlags.IsFrozen) ||
+					!character.IsFlagged(CharacterFlags.IsLoaded))
+				{
+					return;
+				}
+			}
 
 			KCCInputReplicateData kccInput = new KCCInputReplicateData(
 				input.MoveAxisForward, input.MoveAxisRight, input.MoveFlags,

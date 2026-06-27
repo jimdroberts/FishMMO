@@ -20,8 +20,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
-			// Clean up auth callback rate-limit tracking for this connection.
-			authCallbackLastTimeByClientId.TryRemove(conn.ClientId, out _);
+			// Clean up per-connection scene-unload rate-limit tracking.
+			sceneUnloadLastTimeByClientId.TryRemove(conn.ClientId, out _);
+
+			// Clean up per-account auth callback rate-limit tracking.
+			if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			{
+				authCallbackLastTimeByAccount.TryRemove(accountName, out _);
+			}
 
 			if (Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
@@ -108,12 +114,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// Should we prevent players from moving to a different scene if they are in combat?
-			/*if (character.TryGet(out CharacterDamageController damageController) &&
-				  damageController.Attackers.Count > 0)
+			// Prevent players from teleporting while in combat.
+			// This closes the combat-escape exploit where a player could instantly
+			// teleport to a different scene to avoid death or PvP.
+			if (character.IsFlagged(CharacterFlags.IsInCombat))
 			{
 				return;
-			}*/
+			}
 
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
@@ -295,61 +302,102 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// <summary>
 	/// Handles a dead player requesting respawn at their bind point.
 	/// Revives the character at full health and teleports to bind.
+	/// Rate-limited per-connection to prevent spam.
 	/// </summary>
 	/// <param name="conn">The network connection of the dead player.</param>
 	/// <param name="msg">The respawn-at-bind-point broadcast message.</param>
 	/// <param name="channel">The channel on which the broadcast was received.</param>
 	private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
 	{
-		if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
-			return;
-		if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+		if (!TryBeginRespawnResurrectGuard(conn.ClientId, RespawnOperation, out long guardKey))
 			return;
 
-		// Only dead players can respawn at bind point.
-		if (!player.IsFlagged(CharacterFlags.IsDead))
-			return;
-
-		player.DisableFlags(CharacterFlags.IsDead);
-		if (player.TryGet(out ICharacterDamageController damageController))
-			damageController.Revive(null, 999999);
-
-		if ((player.IsInInstance() && player.InstanceSceneName != player.BindScene) ||
-			(!player.IsInInstance() && player.SceneName != player.BindScene))
+		try
 		{
-			player.SceneName = player.BindScene;
-			player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);
-			player.DisableFlags(CharacterFlags.IsInInstance);
-			player.DisableFlags(CharacterFlags.IsLoaded);
-			player.NetworkObject.Owner.Disconnect(false);
+			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+				return;
+			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+				return;
+
+			// Only dead players can respawn at bind point.
+			if (!player.IsFlagged(CharacterFlags.IsDead))
+				return;
+
+			player.DisableFlags(CharacterFlags.IsDead);
+			if (player.TryGet(out ICharacterDamageController damageController))
+				damageController.Revive(null, 999999);
+
+			if ((player.IsInInstance() && player.InstanceSceneName != player.BindScene) ||
+				(!player.IsInInstance() && player.SceneName != player.BindScene))
+			{
+				player.SceneName = player.BindScene;
+				player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);
+				player.DisableFlags(CharacterFlags.IsInInstance);
+				player.DisableFlags(CharacterFlags.IsLoaded);
+				player.NetworkObject.Owner.Disconnect(false);
+			}
+			else
+			{
+				player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, Quaternion.identity, Vector3.zero);
+			}
 		}
-		else
+		finally
 		{
-			player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, Quaternion.identity, Vector3.zero);
+			EndRespawnResurrectGuard(guardKey);
 		}
 	}
 
 	/// <summary>
 	/// Handles a dead player accepting a resurrect from another player.
 	/// Revives at the current position (corpse location), no teleport.
+	/// Rate-limited per-connection to prevent spam.
 	/// </summary>
 	/// <param name="conn">The network connection of the dead player.</param>
 	/// <param name="msg">The resurrect-accept broadcast message.</param>
 	/// <param name="channel">The channel on which the broadcast was received.</param>
 	private void OnClientResurrectAcceptBroadcastReceived(NetworkConnection conn, ResurrectAcceptBroadcast msg, FishNet.Transporting.Channel channel)
 	{
-		if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
-			return;
-		if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+		if (!TryBeginRespawnResurrectGuard(conn.ClientId, ResurrectOperation, out long guardKey))
 			return;
 
-		// Only dead players can accept a resurrect.
-		if (!player.IsFlagged(CharacterFlags.IsDead))
-			return;
+		try
+		{
+			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+				return;
+			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+				return;
 
-		player.DisableFlags(CharacterFlags.IsDead);
-		if (player.TryGet(out ICharacterDamageController damageController))
-			damageController.Revive(null, 999999);
+			// Only dead players can accept a resurrect.
+			if (!player.IsFlagged(CharacterFlags.IsDead))
+				return;
+
+			player.DisableFlags(CharacterFlags.IsDead);
+			if (player.TryGet(out ICharacterDamageController damageController))
+				damageController.Revive(null, 999999);
+		}
+		finally
+		{
+			EndRespawnResurrectGuard(guardKey);
+		}
+	}
+
+	/// <summary>
+	/// Ingress guard for respawn and resurrect broadcasts to prevent rate-limit spam.
+	/// </summary>
+	private readonly IngressGuard respawnResurrectGuard = new IngressGuard();
+
+	private const byte RespawnOperation = 1;
+	private const byte ResurrectOperation = 2;
+	private const int RespawnResurrectDebounceMs = 2000;
+
+	private bool TryBeginRespawnResurrectGuard(int clientId, byte operation, out long guardKey)
+	{
+		return respawnResurrectGuard.TryBegin(clientId, operation, RespawnResurrectDebounceMs, out guardKey);
+	}
+
+	private void EndRespawnResurrectGuard(long guardKey)
+	{
+		respawnResurrectGuard.End(guardKey);
 	}
 	}
 }

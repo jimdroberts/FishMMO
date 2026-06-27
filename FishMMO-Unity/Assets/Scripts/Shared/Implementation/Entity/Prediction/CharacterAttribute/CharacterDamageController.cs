@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
+using FishNet.Managing.Timing;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -7,7 +8,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Controls damage, healing, kill, and resurrection logic. Handles resistance
-	/// calculation, ECA trigger dispatch, immortal state, and combat state transitions.
+	/// calculation, ECA trigger dispatch, immortal state, combat state transitions,
+	/// and combat-escape prevention via the <see cref="CharacterFlags.IsInCombat"/> flag.
 	/// </summary>
 	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController
 	{
@@ -80,6 +82,45 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool Immortal { get { return this.immortal; } set { this.immortal = value; } }
 
+		// ───── Combat State ─────────────────────────────────────────────────
+
+		[Header("Combat")]
+		[Tooltip("Duration in ticks before combat ends after the last combat action. Default 600 = 20s at 30 tick/s.")]
+		/// <summary>Duration in ticks before combat ends after the last combat action.</summary>
+		[SerializeField]
+		private uint combatDurationTicks = 600;
+
+		/// <summary>
+		/// The replicate-domain tick of the last combat action (damage dealt/received, or healing an in-combat ally).
+		/// Used with <see cref="combatDurationTicks"/> to manage the <see cref="CharacterFlags.IsInCombat"/> flag.
+		/// </summary>
+		private uint lastCombatTick = 0;
+
+		/// <summary>
+		/// True while the character has seen at least one combat action and the timer has not expired.
+		/// </summary>
+		private bool combatTimerActive = false;
+
+		/// <summary>
+		/// Cached reference to the prediction controller for replicate-domain tick resolution.
+		/// </summary>
+		private CharacterPredictionController predictionController;
+
+		/// <summary>
+		/// Gets whether this character is currently in combat (within the combat duration window).
+		/// </summary>
+		public bool IsInCombat => combatTimerActive;
+
+		/// <summary>
+		/// Gets the tick of the last combat action.
+		/// </summary>
+		public uint LastCombatTick => lastCombatTick;
+
+		/// <summary>
+		/// Gets the configured combat duration in ticks.
+		/// </summary>
+		public uint CombatDurationTicks => combatDurationTicks;
+
 		/// <summary>
 		/// Returns true if the character is alive (resource attribute's current value is above zero).
 		/// </summary>
@@ -121,6 +162,122 @@ namespace FishMMO.Shared
 				return resourceInstance;
 			}
 		}
+
+		// ───── Network Lifecycle ────────────────────────────────────────────
+
+		/// <summary>
+		/// Caches the prediction controller reference and subscribes to tick events for combat timer management.
+		/// </summary>
+		public override void OnStartNetwork()
+		{
+			base.OnStartNetwork();
+
+			predictionController = GetComponent<CharacterPredictionController>();
+
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick += TimeManager_OnTick;
+			}
+		}
+
+		/// <summary>
+		/// Unsubscribes from tick events and clears cached references.
+		/// </summary>
+		public override void OnStopNetwork()
+		{
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+
+			predictionController = null;
+
+			base.OnStopNetwork();
+		}
+
+		// ───── Combat Timer ─────────────────────────────────────────────────
+
+		/// <summary>
+		/// Tick-aligned combat timer. Called every tick on both client and server.
+		/// Clears the <see cref="CharacterFlags.IsInCombat"/> flag when the combat duration
+		/// has elapsed since the last combat action.
+		/// </summary>
+		private void TimeManager_OnTick()
+		{
+			if (!combatTimerActive || Character == null)
+			{
+				return;
+			}
+
+			uint currentTick = ResolveCurrentCombatTick();
+			if (currentTick == TimeManager.UNSET_TICK)
+			{
+				return;
+			}
+
+			if (currentTick - lastCombatTick >= combatDurationTicks)
+			{
+				combatTimerActive = false;
+				Character.DisableFlags(CharacterFlags.IsInCombat);
+			}
+		}
+
+		/// <summary>
+		/// Resolves the best available tick for combat timer evaluation.
+		/// Prefers the prediction controller's replicate-domain tick when available,
+		/// falling back to the raw TimeManager LocalTick.
+		/// </summary>
+		private uint ResolveCurrentCombatTick()
+		{
+			if (predictionController != null)
+			{
+				if (predictionController.CurrentReplicateTickSnapshot != TimeManager.UNSET_TICK)
+				{
+					return predictionController.CurrentReplicateTickSnapshot;
+				}
+				if (predictionController.CurrentLocalTickSnapshot != TimeManager.UNSET_TICK)
+				{
+					return predictionController.CurrentLocalTickSnapshot;
+				}
+			}
+			if (base.TimeManager != null)
+			{
+				return base.TimeManager.LocalTick;
+			}
+			return TimeManager.UNSET_TICK;
+		}
+
+		/// <summary>
+		/// Enters combat state, refreshing the timer. Sets <see cref="CharacterFlags.IsInCombat"/>
+		/// and records the current tick. Safe to call every combat action — repeated calls
+		/// within the combat window simply refresh the expiry.
+		/// </summary>
+		public void EnterCombat()
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			uint currentTick = ResolveCurrentCombatTick();
+			if (currentTick == TimeManager.UNSET_TICK)
+			{
+				// No tick source available (TimeManager not yet wired, prediction
+				// controller not present). Defer combat entry until the first tick
+				// where ResolveCurrentCombatTick returns a valid value.
+				return;
+			}
+
+			lastCombatTick = currentTick;
+
+			if (!combatTimerActive)
+			{
+				combatTimerActive = true;
+				Character.EnableFlags(CharacterFlags.IsInCombat);
+			}
+		}
+
+		// ───── Damage / Resistance ──────────────────────────────────────────
 
 		/// <summary>
 		/// Applies resistance modifiers to the damage amount for the target character.
@@ -165,8 +322,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Applies damage to this character from an attacker. Handles resistance calculation,
-		/// kill detection, and ECA trigger dispatch. Does nothing if the character is immortal
-		/// or already dead. Resistance-reduced damage below 1 is silently discarded.
+		/// kill detection, combat state, and ECA trigger dispatch. Does nothing if the character
+		/// is immortal or already dead. Resistance-reduced damage below 1 is silently discarded.
 		/// </summary>
 		/// <param name="attacker">The character dealing damage, or null for environmental damage.</param>
 		/// <param name="amount">Base damage before resistance is applied.</param>
@@ -197,6 +354,14 @@ namespace FishMMO.Shared
 				return;
 			}
 			ResourceInstance.Consume(amount);
+
+			// Enter combat: both defender (self) and attacker.
+			EnterCombat();
+			if (attacker != null &&
+				attacker.TryGet(out ICharacterDamageController attackerDamageController))
+			{
+				attackerDamageController.EnterCombat();
+			}
 
 			ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
 
@@ -231,6 +396,10 @@ namespace FishMMO.Shared
 			if (Immortal) return;
 			if (!base.IsServerStarted) return;
 
+			// Clear combat state on death.
+			combatTimerActive = false;
+			Character.DisableFlags(CharacterFlags.IsInCombat);
+
 			if (killer != null)
 			{
 				if (killer.TryGet(out IFactionController fc) &&
@@ -256,6 +425,7 @@ namespace FishMMO.Shared
 		/// Heals this character by the specified amount. Events and ECA triggers are only
 		/// fired when healing actually changes the resource value; healing a dead character,
 		/// healing for zero, or attempting to heal a full-health character are all silent no-ops.
+		/// If the target is in combat, the healer also enters combat.
 		/// </summary>
 		/// <param name="healer">The character providing the healing, or null.</param>
 		/// <param name="amount">The amount to heal.</param>
@@ -276,6 +446,19 @@ namespace FishMMO.Shared
 			if (ResourceInstance.CurrentValue <= valueBefore)
 			{
 				return;
+			}
+
+			// Enter combat: the healed target always enters combat.
+			EnterCombat();
+
+			// If the healer is healing someone who is already in combat, the healer also enters combat.
+			if (healer != null &&
+				healer.TryGet(out ICharacterDamageController healerDamageController))
+			{
+				if (combatTimerActive)
+				{
+					healerDamageController.EnterCombat();
+				}
 			}
 
 			ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
@@ -332,15 +515,18 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Clears the cached health resource attribute reference so it is re-resolved on the
-		/// next access. Prevents a stale object reference if the
-		/// <see cref="CharacterAttributeController"/> is re-initialized (character pooling,
-		/// hot-reload, or any scenario where attribute instances are recreated).
+		/// Clears the cached health resource attribute reference and combat state
+		/// so it is re-resolved on the next access. Prevents a stale object reference
+		/// if the <see cref="CharacterAttributeController"/> is re-initialized
+		/// (character pooling, hot-reload, or any scenario where attribute instances
+		/// are recreated).
 		/// </summary>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
 			resourceInstance = null;
+			combatTimerActive = false;
+			lastCombatTick = 0;
 		}
 	}
 }

@@ -53,6 +53,13 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of <see cref="GameObject"/>s representing the chain of selected targets, starting with <paramref name="context"/>.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
+			// Physics queries are non-deterministic across client/server.
+			// Suppress during prediction replay to prevent target divergence.
+			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick)
+			{
+				yield break;
+			}
+
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();

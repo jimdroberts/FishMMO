@@ -55,5 +55,12 @@
 		/// Enables death dialog UI on client. Cleared on respawn or resurrect.
 		/// </summary>
 		IsDead,
+		/// <summary>
+		/// Character is in combat. Set when dealing damage, taking damage, or healing
+		/// an in-combat ally. Managed by a tick-aligned timer that auto-clears after
+		/// <see cref="CharacterDamageController.CombatDurationTicks"/> ticks of inactivity.
+		/// Prevents teleportation and other combat-escape exploits.
+		/// </summary>
+		IsInCombat,
 	}
 }

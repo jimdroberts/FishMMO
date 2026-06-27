@@ -24,9 +24,13 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing collision or interaction information.</param>
 		/// <remarks>
 		/// This method attempts to retrieve <see cref="CollisionEventData"/> from the event data. The FX is spawned at the first contact point if available, otherwise at the collision transform's position, the initiator's position, or Vector3.zero as fallback.
+		/// VFX instantiation is suppressed during prediction replay ticks to prevent visual spam.
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+			// Suppress VFX during prediction replay to prevent visual spam
+			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick) return;
+
 			// Try to get the collision event data. If not present, log a warning and exit.
 			if (eventData.TryGet(out CollisionEventData collisionEventData))
 			{

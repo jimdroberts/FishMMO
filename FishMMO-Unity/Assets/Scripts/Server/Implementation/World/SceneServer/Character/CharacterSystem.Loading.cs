@@ -31,10 +31,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private const float AuthCallbackCooldownSeconds = 2.0f;
 
 		/// <summary>
-		/// Tracks the last auth-callback time per connection ClientId for rate limiting.
+		/// Tracks the last auth-callback time per account name for rate limiting.
+		/// Keying by account name prevents a single user from bypassing the limit by
+		/// opening multiple connections.
 		/// Entries are removed when the connection disconnects via OnRemoteConnectionStopped.
 		/// </summary>
-		private readonly ConcurrentDictionary<int, DateTime> authCallbackLastTimeByClientId =
+		private readonly ConcurrentDictionary<string, DateTime> authCallbackLastTimeByAccount =
+			new ConcurrentDictionary<string, DateTime>();
+
+		/// <summary>
+		/// Tracks the last scene-unload broadcast time per connection ClientId for rate limiting.
+		/// Scene unload is per-connection, not per-account; a separate dictionary from
+		/// authCallbackLastTimeByAccount.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, DateTime> sceneUnloadLastTimeByClientId =
 			new ConcurrentDictionary<int, DateTime>();
 		/// <summary>
 		/// Handles client authentication results, loads character data and initiates scene loading.
@@ -43,12 +53,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="authenticated">True if authentication succeeded.</param>
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
-			// Per-connection rate limit: prevent repeated auth callbacks from triggering
-			// expensive DB load operations in rapid succession.
 			DateTime nowUtc = DateTime.UtcNow;
+
+			// Resolve account name first so the rate limit can be applied per-account.
+			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			// Per-account rate limit: prevent repeated auth callbacks from triggering
+			// expensive DB load operations in rapid succession. Keying by account name
+			// prevents a single user from bypassing the limit by opening multiple connections.
 			bool wasCoolingDown = false;
-			authCallbackLastTimeByClientId.AddOrUpdate(
-				conn.ClientId,
+			authCallbackLastTimeByAccount.AddOrUpdate(
+				accountName,
 				nowUtc,
 				(_, lastTime) =>
 				{
@@ -61,7 +80,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				});
 			if (wasCoolingDown)
 			{
-				Log.Warning("CharacterSystem", $"Auth callback rate-limited for connection {conn.ClientId}");
+				Log.Warning("CharacterSystem", $"Auth callback rate-limited for account {accountName}");
 				return;
 			}
 
@@ -77,7 +96,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 			if (!authenticated ||
-				!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
 				!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -878,10 +896,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Rate-limit scene unload broadcasts to prevent spam disconnects.
 			DateTime now2 = DateTime.UtcNow;
-			if (authCallbackLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastUnload) &&
+			if (sceneUnloadLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastUnload) &&
 				(now2 - lastUnload).TotalSeconds < 5.0)
 				return;
-			authCallbackLastTimeByClientId[conn.ClientId] = now2;
+			sceneUnloadLastTimeByClientId[conn.ClientId] = now2;
 
 			// Check if the connection has a character loaded.
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&

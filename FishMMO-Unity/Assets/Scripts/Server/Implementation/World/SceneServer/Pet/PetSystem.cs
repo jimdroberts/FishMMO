@@ -234,6 +234,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Follow, out long guardKey))
 			{
 				return;
@@ -270,6 +274,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Stay, out long guardKey))
 			{
@@ -308,6 +316,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Summon, out long guardKey))
 			{
 				return;
@@ -344,6 +356,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Release, out long guardKey))
 			{
 				return;
@@ -351,35 +367,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return;
-			}
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
 
-			IPetController petController = conn.FirstObject.GetComponent<IPetController>();
-			if (petController == null || petController.Pet == null)
-			{
-				// no pet exists
-				return;
-			}
+				IPetController petController = conn.FirstObject.GetComponent<IPetController>();
+				if (petController == null || petController.Pet == null)
+				{
+					// no pet exists
+					return;
+				}
 
-			// Capture immutable data for the async path
-			long characterID = petController.Character.ID;
-			int templateID = petController.Pet.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
-			List<int> abilities = petController.Pet.PetAbilityIDs != null ? new List<int>(petController.Pet.PetAbilityIDs) : new List<int>();
+				// Capture immutable data for the async path
+				long characterID = petController.Character.ID;
+				int templateID = petController.Pet.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
+				List<int> abilities = petController.Pet.PetAbilityIDs != null ? new List<int>(petController.Pet.PetAbilityIDs) : new List<int>();
 
-			if (petController.Pet != null &&
-				petController.Pet.NetworkObject.IsSpawned)
-			{
-				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
-			}
-			petController.Pet.PetOwner = null;
-			petController.Pet = null;
+				if (petController.Pet != null &&
+					petController.Pet.NetworkObject.IsSpawned)
+				{
+					ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
+				}
+				petController.Pet.PetOwner = null;
+				petController.Pet = null;
 
-			Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
+				Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 
-			// Async DB save with spawned=false, keyed by characterID to serialize with summon ops
-			EnqueuePersistence(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
+				// Async DB save with spawned=false, keyed by characterID to serialize with summon ops
+				EnqueuePersistence(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
 			}
 			finally
 			{

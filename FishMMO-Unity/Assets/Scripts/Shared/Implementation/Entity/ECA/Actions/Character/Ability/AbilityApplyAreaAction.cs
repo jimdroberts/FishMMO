@@ -41,6 +41,13 @@ namespace FishMMO.Shared
 		/// <param name="eventData">Event data containing context for the action.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+			// Physics queries are non-deterministic across client/server.
+			// Suppress during prediction replay to prevent target divergence.
+			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick)
+			{
+				return;
+			}
+
 			if (RadiusValue == null || MaxHitsValue == null)
 			{
 				Log.Warning("AbilityApplyAreaAction", "RadiusValue or MaxHitsValue provider is null.");

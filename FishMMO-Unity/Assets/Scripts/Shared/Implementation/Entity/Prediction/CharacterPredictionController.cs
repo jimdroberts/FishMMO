@@ -4,6 +4,7 @@ using FishNet.Object.Prediction;
 using FishNet.Transporting;
 using FishNet.Managing.Timing;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace FishMMO.Shared
 {
@@ -66,8 +67,11 @@ namespace FishMMO.Shared
 		{
 			List<IPredictableController> list = new List<IPredictableController>();
 			GetComponents(list);
-			list.Sort((a, b) => a.Order.CompareTo(b.Order));
-			controllers = list.ToArray();
+			List<IPredictableController> sortedList = list
+				.OrderBy(c => c.Order)
+				.ThenBy(c => c.GetType().FullName)
+				.ToList();
+			controllers = sortedList.ToArray();
 		}
 
 		/// <summary>

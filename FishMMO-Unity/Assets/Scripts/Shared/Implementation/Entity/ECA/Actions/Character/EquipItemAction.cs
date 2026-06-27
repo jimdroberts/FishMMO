@@ -7,6 +7,8 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Action that attempts to equip an item on the initiating character.
 	/// Requires an <see cref="ItemEventData"/> in the <see cref="EventData"/>.
+	/// Server-only execution — equipment mutations rearrange persistent item ownership
+	/// between containers and must never run during client prediction replay.
 	/// </summary>
 	[Serializable]
 	public class EquipItemAction : BaseAction
@@ -18,6 +20,7 @@ namespace FishMMO.Shared
 		/// <param name="eventData">Event data containing the <see cref="ItemEventData"/> with item and slot information.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+#if UNITY_SERVER
 			if (initiator == null || eventData == null)
 			{
 				Log.Warning("EquipItemAction", "Initiator or EventData is null. Cannot execute action.");
@@ -62,6 +65,7 @@ namespace FishMMO.Shared
 			{
 				Log.Warning("EquipItemAction", $"Failed to equip {itemToEquip.Template.name} to {targetSlot}.");
 			}
+#endif
 		}
 	}
 }

@@ -18,9 +18,12 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing the target object.</param>
 		/// <remarks>
 		/// Reads <see cref="EventData.Target"/>; logs a warning when no target is present.
+		/// Object destruction is gated behind <c>UNITY_SERVER</c> to ensure only the
+		/// authoritative server can destroy objects.
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+		#if UNITY_SERVER
 			if (eventData != null && eventData.Target != null)
 			{
 				GameObject target = eventData.Target;
@@ -31,6 +34,7 @@ namespace FishMMO.Shared
 			{
 				Log.Warning("DestroyObjectAction", "Expected an EventData with a non-null Target.");
 			}
+		#endif
 		}
 	}
 }

@@ -81,5 +81,26 @@ namespace FishMMO.Shared.Core
 		/// <param name="resurrector">The character performing the resurrection, or null.</param>
 		/// <param name="amount">The amount of health to restore.</param>
 		void Revive(ICharacter resurrector, int amount);
+
+		/// <summary>
+		/// Gets whether this character is currently in combat (within the combat duration window).
+		/// </summary>
+		bool IsInCombat { get; }
+
+		/// <summary>
+		/// Gets the tick of the last combat action.
+		/// </summary>
+		uint LastCombatTick { get; }
+
+		/// <summary>
+		/// Gets the configured combat duration in ticks.
+		/// </summary>
+		uint CombatDurationTicks { get; }
+
+		/// <summary>
+		/// Enters combat state, refreshing the combat timer. Sets IsInCombat flag
+		/// and records the current tick. Safe to call repeatedly — refreshes expiry.
+		/// </summary>
+		void EnterCombat();
 	}
 }
