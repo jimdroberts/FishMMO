@@ -23,6 +23,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Clean up per-connection scene-unload rate-limit tracking.
 			sceneUnloadLastTimeByClientId.TryRemove(conn.ClientId, out _);
 
+			// Clean up per-connection validated-scene rate-limit tracking.
+			validatedSceneLastTimeByClientId.TryRemove(conn.ClientId, out _);
+
 			// Clean up per-account auth callback rate-limit tracking.
 			if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
@@ -408,6 +411,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	private void EndRespawnResurrectGuard(long guardKey)
 	{
 		respawnResurrectGuard.End(guardKey);
+	}
+
+	/// <summary>
+	/// Periodic sweep to evict stale respawn/resurrect guard entries,
+	/// preventing unbounded dictionary growth from aborted or partial client sessions.
+	/// </summary>
+	private void OnPeriodicRespawnResurrectSweep(float deltaTime)
+	{
+		if (Server == null || Server.ServerState != ConnectionState.Started)
+			return;
+
+		respawnResurrectGuard.Sweep(30f, 120f, 128);
 	}
 	}
 }

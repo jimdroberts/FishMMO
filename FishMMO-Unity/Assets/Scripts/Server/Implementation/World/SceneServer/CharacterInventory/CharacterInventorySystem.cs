@@ -354,9 +354,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					int slot = msg.Slot;
 					item.Version++;
 					long version = item.Version;
-					EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, slot, version), characterID);
-
-					Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+					if (EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, slot, version), characterID))
+					{
+						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+					}
+					else
+					{
+						SendServerBusy(conn);
+					}
 				}
 			}
 			finally
@@ -411,10 +416,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						{
 							// fire-and-forget async persist for each affected inventory item
 							var invDtos = BuildInventoryItemDataList(characterID, invAffected);
-							EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID);
-
-							// tell the client we succeeded
-							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							if (EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID))
+							{
+								// tell the client we succeeded
+								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							}
+							else
+							{
+								SendServerBusy(conn);
+							}
 						}
 						break;
 					case InventoryType.Equipment:
@@ -441,31 +451,50 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (SwapContainerItems(bankController, inventoryController, msg.From, msg.To,
 								out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
 							{
+								bool allEnqueued = true;
+
 								// Persist bank items that moved to the source (bank) container
 								if (fromItems != null && fromItems.Count > 0)
 								{
 									var bankDtos = BuildBankItemDataList(characterID, fromItems);
-									EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID);
+									if (!EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID))
+									{
+										allEnqueued = false;
+									}
 								}
 								// Delete vacated bank slots
-								if (deletedSlots != null && deletedSlots.Count > 0)
+								if (allEnqueued && deletedSlots != null && deletedSlots.Count > 0)
 								{
 									foreach (long slot in deletedSlots)
 									{
 										// Deleted slots no longer have an item reference;
 										// use long.MaxValue to ensure the delete succeeds.
-										EnqueuePersistence(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue), characterID);
+										if (!EnqueuePersistence(() => DeleteBankSlotAsync(characterID, (int)slot, long.MaxValue), characterID))
+										{
+											allEnqueued = false;
+											break;
+										}
 									}
 								}
 								// Persist inventory items that moved to the destination (inventory) container
-								if (toItems != null && toItems.Count > 0)
+								if (allEnqueued && toItems != null && toItems.Count > 0)
 								{
 									var invDtos2 = BuildInventoryItemDataList(characterID, toItems);
-									EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos2), characterID);
+									if (!EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos2), characterID))
+									{
+										allEnqueued = false;
+									}
 								}
 
-								// Tell the client
-								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+								if (allEnqueued)
+								{
+									// Tell the client
+									Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+								}
+								else
+								{
+									SendServerBusy(conn);
+								}
 							}
 						}
 						break;
@@ -529,27 +558,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							}
 
 							// did we replace an already equipped item?
+							bool allEnqueued = true;
 							if (inventoryController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 							{
 								var dto = BuildInventoryItemData(characterID, prevItem);
-								EnqueuePersistence(() => PersistInventoryItemAsync(dto), characterID);
+								allEnqueued = EnqueuePersistence(() => PersistInventoryItemAsync(dto), characterID);
 							}
 							// remove the inventory item from the database
 							else
 							{
 								// Item moved out of inventory — use long.MaxValue to ensure delete succeeds
-								EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
+								allEnqueued = EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
 							}
 
 							// set the equipment slot in the database
-							var equipDto = BuildEquipmentItemData(characterID, inventoryItem);
-							EnqueuePersistence(() => PersistEquipmentItemAsync(equipDto), characterID);
+							if (allEnqueued)
+							{
+								var equipDto = BuildEquipmentItemData(characterID, inventoryItem);
+								allEnqueued = EnqueuePersistence(() => PersistEquipmentItemAsync(equipDto), characterID);
+							}
 
 							// save attributes
-							var attrDtos = BuildAttributeDataList(character);
-							EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
+							if (allEnqueued)
+							{
+								var attrDtos = BuildAttributeDataList(character);
+								allEnqueued = EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
+							}
 
-							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							if (allEnqueued)
+							{
+								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							}
+							else
+							{
+								SendServerBusy(conn);
+							}
 						}
 						break;
 					case InventoryType.Equipment:
@@ -581,27 +624,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								}
 
 								// did we replace an already equipped item?
+								bool allEnqueued = true;
 								if (bankController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 								{
 									var dto = BuildBankItemData(characterID, prevItem);
-									EnqueuePersistence(() => PersistBankItemAsync(dto), characterID);
+									allEnqueued = EnqueuePersistence(() => PersistBankItemAsync(dto), characterID);
 								}
 								// remove the bank item from the database
 								else
 								{
 									// Item moved out of bank — use long.MaxValue to ensure delete succeeds
-									EnqueuePersistence(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
+									allEnqueued = EnqueuePersistence(() => DeleteBankSlotAsync(characterID, msg.InventoryIndex, long.MaxValue), characterID);
 								}
 
 								// set the equipment slot in the database
-								var equipDto = BuildEquipmentItemData(characterID, bankItem);
-								EnqueuePersistence(() => PersistEquipmentItemAsync(equipDto), characterID);
+								if (allEnqueued)
+								{
+									var equipDto = BuildEquipmentItemData(characterID, bankItem);
+									allEnqueued = EnqueuePersistence(() => PersistEquipmentItemAsync(equipDto), characterID);
+								}
 
 								// save attributes
-								var attrDtos = BuildAttributeDataList(character);
-								EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
+								if (allEnqueued)
+								{
+									var attrDtos = BuildAttributeDataList(character);
+									allEnqueued = EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
+								}
 
-								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+								if (allEnqueued)
+								{
+									Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+								}
+								else
+								{
+									SendServerBusy(conn);
+								}
 							}
 						}
 						break;
@@ -676,17 +733,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 							// persist all modified inventory slots
 							var invDtos = BuildInventoryItemDataList(characterID, modifiedItems);
-							EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID);
+							bool allEnqueued = EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID);
 
 							// delete the item from the equipment table
 							// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
-							EnqueuePersistence(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
+							if (allEnqueued)
+							{
+								allEnqueued = EnqueuePersistence(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
+							}
 
 							// save attributes
-							var attrDtos = BuildAttributeDataList(character);
-							EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
+							if (allEnqueued)
+							{
+								var attrDtos = BuildAttributeDataList(character);
+								allEnqueued = EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
+							}
 
-							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							if (allEnqueued)
+							{
+								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							}
+							else
+							{
+								SendServerBusy(conn);
+							}
 						}
 						break;
 					case InventoryType.Equipment:
@@ -722,17 +792,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 								// persist all modified bank slots
 								var bankDtos = BuildBankItemDataList(characterID, modifiedItems);
-								EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID);
+								bool allEnqueued = EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID);
 
 								// delete the item from the equipment table
 								// Item moved out of equipment — use long.MaxValue to ensure delete succeeds
-								EnqueuePersistence(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
+								if (allEnqueued)
+								{
+									allEnqueued = EnqueuePersistence(() => DeleteEquipmentSlotAsync(characterID, oldSlot, long.MaxValue), characterID);
+								}
 
 								// save attributes
-								var attrDtos = BuildAttributeDataList(character);
-								EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
+								if (allEnqueued)
+								{
+									var attrDtos = BuildAttributeDataList(character);
+									allEnqueued = EnqueuePersistence(() => PersistAttributesAsync(attrDtos), characterID);
+								}
 
-								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+								if (allEnqueued)
+								{
+									Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+								}
+								else
+								{
+									SendServerBusy(conn);
+								}
 							}
 						}
 						break;
@@ -795,9 +878,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					int slot = msg.Slot;
 					item.Version++;
 					long version = item.Version;
-					EnqueuePersistence(() => DeleteBankSlotAsync(characterID, slot, version), characterID);
-
-					Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+					if (EnqueuePersistence(() => DeleteBankSlotAsync(characterID, slot, version), characterID))
+					{
+						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+					}
+					else
+					{
+						SendServerBusy(conn);
+					}
 				}
 			}
 			finally
@@ -854,30 +942,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
 						{
 							// persist inventory items that went into source (inventory) container
+							bool allEnqueued = true;
 							if (fromItems != null && fromItems.Count > 0)
 							{
 								var invDtos = BuildInventoryItemDataList(characterID, fromItems);
-								EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID);
+								if (!EnqueuePersistence(() => PersistInventoryItemsAsync(invDtos), characterID))
+								{
+									allEnqueued = false;
+								}
 							}
 							// delete vacated inventory slots
-							if (deletedSlots != null && deletedSlots.Count > 0)
+							if (allEnqueued && deletedSlots != null && deletedSlots.Count > 0)
 							{
 								foreach (long slot in deletedSlots)
 								{
 									// Deleted slots no longer have an item reference;
 									// use long.MaxValue to ensure the delete succeeds.
-									EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, (int)slot, long.MaxValue), characterID);
+									if (!EnqueuePersistence(() => DeleteInventorySlotAsync(characterID, (int)slot, long.MaxValue), characterID))
+									{
+										allEnqueued = false;
+										break;
+									}
 								}
 							}
 							// persist bank items that went into destination (bank) container
-							if (toItems != null && toItems.Count > 0)
+							if (allEnqueued && toItems != null && toItems.Count > 0)
 							{
 								var bankDtos = BuildBankItemDataList(characterID, toItems);
-								EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID);
+								if (!EnqueuePersistence(() => PersistBankItemsAsync(bankDtos), characterID))
+								{
+									allEnqueued = false;
+								}
 							}
 
-							// tell the client
-							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							if (allEnqueued)
+							{
+								// tell the client
+								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							}
+							else
+							{
+								SendServerBusy(conn);
+							}
 						}
 						break;
 					case InventoryType.Equipment:
@@ -893,10 +999,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected))
 						{
 							var bankDtos2 = BuildBankItemDataList(characterID, bankAffected);
-							EnqueuePersistence(() => PersistBankItemsAsync(bankDtos2), characterID);
-
-							// tell the client we succeeded
-							Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							if (EnqueuePersistence(() => PersistBankItemsAsync(bankDtos2), characterID))
+							{
+								// tell the client we succeeded
+								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
+							}
+							else
+							{
+								SendServerBusy(conn);
+							}
 						}
 						break;
 					default: break;

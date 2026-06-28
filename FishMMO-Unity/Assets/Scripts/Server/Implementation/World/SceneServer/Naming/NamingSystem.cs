@@ -270,7 +270,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						if (runtimeData.CharacterNameByIdInFlight.Count < MaxInFlightLookups &&
 							runtimeData.CharacterNameByIdInFlight.TryAdd(msg.ID, 0) &&
-							!TryEnqueueAsyncWork(() => FetchCharacterNameAsync(conn, msg.ID), msg.ID))
+							!TryEnqueueAsyncWork(() => FetchCharacterNameAsync(conn, msg.ID), conn, msg.ID))
 						{
 							runtimeData.CharacterNameByIdInFlight.TryRemove(msg.ID, out _);
 						}
@@ -288,7 +288,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						if (runtimeData.GuildNameByIdInFlight.Count < MaxInFlightLookups &&
 							runtimeData.GuildNameByIdInFlight.TryAdd(msg.ID, 0) &&
-							!TryEnqueueAsyncWork(() => FetchGuildNameAsync(conn, msg.ID), msg.ID))
+							!TryEnqueueAsyncWork(() => FetchGuildNameAsync(conn, msg.ID), conn, msg.ID))
 						{
 							runtimeData.GuildNameByIdInFlight.TryRemove(msg.ID, out _);
 						}
@@ -490,7 +490,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						if (runtimeData.CharacterByNameInFlight.Count < MaxInFlightLookups &&
 							runtimeData.CharacterByNameInFlight.TryAdd(nameLowerCase, 0) &&
-							!TryEnqueueAsyncWork(() => FetchCharacterByNameAsync(conn, nameLowerCase)))
+							!TryEnqueueAsyncWork(() => FetchCharacterByNameAsync(conn, nameLowerCase), conn))
 						{
 							runtimeData.CharacterByNameInFlight.TryRemove(nameLowerCase, out _);
 						}

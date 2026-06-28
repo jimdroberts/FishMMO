@@ -788,7 +788,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				objectiveValues: SerializeObjectiveValues(objectiveValues)
 			);
 
-			EnqueuePersistence(() => PersistQuestAsync(questService, dto), characterID);
+			TryEnqueueAsyncWork(() => PersistQuestAsync(questService, dto), character.Owner, characterID);
 		}
 
 		/// <summary>
@@ -811,7 +811,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			int templateID = quest.Template.ID;
 			long version = quest.Version;
 
-			EnqueuePersistence(() => DeleteQuestAsync(questService, characterID, templateID, version), characterID);
+			TryEnqueueAsyncWork(() => DeleteQuestAsync(questService, characterID, templateID, version), character.Owner, characterID);
 		}
 
 		/// <summary>
@@ -963,7 +963,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								seed: item.IsGenerated ? item.Generator.Seed : 0,
 								amount: item.IsStackable ? item.Stackable.Amount : 0
 							);
-							EnqueuePersistence(() => PersistInventorySlotAsync(inventoryService, dto), character.ID);
+							TryEnqueueAsyncWork(() => PersistInventorySlotAsync(inventoryService, dto), character.Owner, character.ID);
 						}
 
 						modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -1021,7 +1021,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								seed: item.IsGenerated ? item.Generator.Seed : 0,
 								amount: item.IsStackable ? item.Stackable.Amount : 0
 							);
-							EnqueuePersistence(() => PersistBankSlotAsync(bankService, dto), character.ID);
+							TryEnqueueAsyncWork(() => PersistBankSlotAsync(bankService, dto), character.Owner, character.ID);
 						}
 
 						modifiedItemBroadcasts.Add(new BankSetItemBroadcast()

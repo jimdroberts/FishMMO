@@ -99,7 +99,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				// Fire-and-forget: process dungeon instance assignment asynchronously.
 				// The async task's own finally block will release the guard on completion.
-				if (TryEnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails, guardKey), characterID))
+				if (TryEnqueueAsyncWork(() => ProcessDungeonFinderAsync(conn, character, characterID, worldServerID, partyID, dungeonName, respawnDetails, guardKey), conn, characterID))
 				{
 					asyncOwnsGuard = true;
 				}

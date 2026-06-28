@@ -160,6 +160,24 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
+		/// Enqueues async work and sends <see cref="ServerBusyBroadcast"/> to the client on failure.
+		/// Use this for broadcast handlers where the client expects a response.
+		/// </summary>
+		/// <param name="work">The async work to enqueue.</param>
+		/// <param name="conn">The client connection to notify on failure.</param>
+		/// <param name="entityKey">Optional entity key for consistent hashing.</param>
+		/// <param name="callerName">Caller name for diagnostics.</param>
+		/// <returns>True if the work was enqueued successfully.</returns>
+		protected bool TryEnqueueAsyncWork(Func<Task> work, NetworkConnection conn, long entityKey = 0, [CallerMemberName] string callerName = null)
+		{
+			if (TryEnqueueAsyncWork(work, entityKey, callerName))
+				return true;
+
+			SendServerBusy(conn);
+			return false;
+		}
+
+		/// <summary>
 		/// Enqueues persistence work through the async worker. If the bounded channel is full,
 		/// runs the work directly on the thread pool as a fallback to prevent data loss.
 		/// <para>

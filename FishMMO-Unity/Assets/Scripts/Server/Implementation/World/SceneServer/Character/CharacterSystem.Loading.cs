@@ -46,6 +46,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private readonly ConcurrentDictionary<int, DateTime> sceneUnloadLastTimeByClientId =
 			new ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>
+		/// Tracks the last validated-scene broadcast time per connection ClientId for rate limiting.
+		/// Prevents a malicious client from spamming <see cref="OnClientValidatedSceneBroadcastReceived"/>,
+		/// which triggers expensive character-spawn and mapping operations.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, DateTime> validatedSceneLastTimeByClientId =
+			new ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>
+		/// Minimum seconds between validated-scene broadcasts per connection.
+		/// </summary>
+		private const float ValidatedSceneBroadcastCooldownSeconds = 2.0f;
+
 		/// <summary>
 		/// Handles client authentication results, loads character data and initiates scene loading.
 		/// </summary>
@@ -757,6 +771,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnClientValidatedSceneBroadcastReceived(NetworkConnection conn, ClientValidatedSceneBroadcast msg, Channel channel)
 		{
+			// Rate-limit validated-scene broadcasts to prevent spam.
+			DateTime now2 = DateTime.UtcNow;
+			if (validatedSceneLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastValidated) &&
+				(now2 - lastValidated).TotalSeconds < ValidatedSceneBroadcastCooldownSeconds)
+				return;
+			validatedSceneLastTimeByClientId[conn.ClientId] = now2;
+
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
 				return;

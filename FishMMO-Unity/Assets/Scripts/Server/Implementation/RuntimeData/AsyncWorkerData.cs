@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
+using UnityEngine;
 
 namespace FishMMO.Server.Implementation
 {
@@ -32,21 +33,29 @@ namespace FishMMO.Server.Implementation
 	///
 	/// Systems declare dependency via:
 	/// <c>[RequiresDataContainer(typeof(AsyncWorkerData))]</c>
+	///
+	/// <para><b>Pool isolation:</b> Total capacity = workerCount × channelCapacity.
+	/// Default 8 × 2048 = 16,384 slots. A single saturated system cannot starve
+	/// others because entity-keyed enqueues are hash-routed to specific workers
+	/// and round-robin enqueues are distributed evenly. Increase workerCount for
+	/// high-load deployments; increase channelCapacity to absorb bursts.</para>
 	/// </summary>
 	public class AsyncWorkerData : RuntimeDataContainer, IAsyncWorkerData
 	{
 		/// <summary>
-		/// Number of worker loops to spawn. Defaults to 4.
+		/// Number of worker loops. Configurable per-deployment via Inspector.
+		/// Increase for high-load servers to prevent cross-system starvation.
 		/// </summary>
-		private const int DEFAULT_WORKER_COUNT = 4;
+		[SerializeField]
+		private int workerCount = 8;
 
 		/// <summary>
 		/// Bounded capacity per worker channel. Backpressure kicks in when full.
+		/// Total pool capacity = workerCount × channelCapacity. Configurable.
 		/// </summary>
-		private const int DEFAULT_CHANNEL_CAPACITY = 1024;
+		[SerializeField]
+		private int channelCapacity = 2048;
 
-		/// <summary>Number of active worker loops.</summary>
-		private int workerCount;
 		/// <summary>Array of worker channels, one per worker loop.</summary>
 		private Channel<AsyncWorkItem>[] channels;
 		/// <summary>Array of running worker tasks.</summary>
@@ -81,14 +90,16 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			workerCount = DEFAULT_WORKER_COUNT;
+			workerCount = Mathf.Max(1, workerCount);
+			channelCapacity = Mathf.Max(256, channelCapacity);
+
 			cts = new CancellationTokenSource();
 			channels = new Channel<AsyncWorkItem>[workerCount];
 			workerTasks = new Task[workerCount];
 
 			for (int i = 0; i < workerCount; i++)
 			{
-				channels[i] = Channel.CreateBounded<AsyncWorkItem>(new BoundedChannelOptions(DEFAULT_CHANNEL_CAPACITY)
+				channels[i] = Channel.CreateBounded<AsyncWorkItem>(new BoundedChannelOptions(channelCapacity)
 				{
 					FullMode = BoundedChannelFullMode.DropWrite,
 					SingleReader = true,
@@ -99,7 +110,7 @@ namespace FishMMO.Server.Implementation
 				workerTasks[i] = Task.Run(() => WorkerLoopAsync(workerId, cts.Token));
 			}
 
-			_ = Log.Debug("AsyncWorkerData", $"Initialized ({workerCount} workers, {DEFAULT_CHANNEL_CAPACITY} capacity per channel)");
+			_ = Log.Debug("AsyncWorkerData", $"Initialized ({workerCount} workers, {channelCapacity} capacity per channel, {workerCount * channelCapacity} total slots)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -129,8 +140,6 @@ namespace FishMMO.Server.Implementation
 		/// Long-lived worker loop that processes work items from its assigned channel.
 		/// Drains remaining items after cancellation before exiting.
 		/// </summary>
-		/// <param name="workerId">The index of this worker (for channel lookup and logging).</param>
-		/// <param name="ct">CancellationToken that signals graceful shutdown.</param>
 		private async Task WorkerLoopAsync(int workerId, CancellationToken ct)
 		{
 			var channel = channels[workerId];
@@ -198,7 +207,6 @@ namespace FishMMO.Server.Implementation
 			{
 				cts.Cancel();
 
-				// Complete all writers so readers exit ReadAllAsync
 				if (channels != null)
 				{
 					for (int i = 0; i < channels.Length; i++)
@@ -207,7 +215,6 @@ namespace FishMMO.Server.Implementation
 					}
 				}
 
-				// Wait for workers to finish draining
 				if (workerTasks != null)
 				{
 					try
@@ -234,16 +241,9 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private readonly struct AsyncWorkItem
 		{
-			/// <summary>The async delegate to execute.</summary>
 			public readonly Func<Task> Work;
-			/// <summary>Name of the caller for diagnostics and error logging.</summary>
 			public readonly string CallerName;
 
-			/// <summary>
-			/// Initializes a new async work item.
-			/// </summary>
-			/// <param name="work">The async delegate to execute.</param>
-			/// <param name="callerName">Name of the caller for diagnostics.</param>
 			public AsyncWorkItem(Func<Task> work, string callerName)
 			{
 				Work = work;

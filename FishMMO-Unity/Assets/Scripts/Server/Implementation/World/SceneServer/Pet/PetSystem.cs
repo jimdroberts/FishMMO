@@ -457,6 +457,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}, characterID))
 			{
+				Log.Warning("PetSystem", $"Failed to enqueue LoadPet async work for character {characterID} — queue may be full or shutting down.");
 				runtimeData.IngressGuard.End(guardKey);
 			}
 		}

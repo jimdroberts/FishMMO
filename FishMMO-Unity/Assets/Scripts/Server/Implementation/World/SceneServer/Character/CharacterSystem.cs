@@ -150,6 +150,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				periodicSystem.RegisterPeriodicCallback(saveRate, OnPeriodicSave);
 				periodicSystem.RegisterPeriodicCallback(outOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
+				periodicSystem.RegisterPeriodicCallback(30f, OnPeriodicRespawnResurrectSweep);
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
@@ -204,6 +205,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSave);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutOfBoundsCheck);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicRespawnResurrectSweep);
 			}
 
 			// Save all characters and release all sessions before shutdown

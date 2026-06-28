@@ -78,7 +78,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				long characterID = character.ID;
 
-				if (TryEnqueueAsyncWork(() => FetchMailAsync(conn, character, characterID, guardKey), characterID))
+				if (TryEnqueueAsyncWork(() => FetchMailAsync(conn, character, characterID, guardKey), conn, characterID))
 				{
 					asyncOwnsGuard = true;
 				}
@@ -229,7 +229,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				string subject = msg.Subject;
 				string body = msg.Body;
 
-				if (TryEnqueueAsyncWork(() => SendMailAsync(senderID, recipientName, subject, body, guardKey), senderID))
+				if (TryEnqueueAsyncWork(() => SendMailAsync(senderID, recipientName, subject, body, guardKey), conn, senderID))
 				{
 					asyncOwnsGuard = true;
 				}
@@ -336,7 +336,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				long characterID = character.ID;
 				long mailID = msg.MailID;
 
-				if (TryEnqueueAsyncWork(() => DeleteMailAsync(characterID, mailID, guardKey), characterID))
+				if (TryEnqueueAsyncWork(() => DeleteMailAsync(characterID, mailID, guardKey), conn, characterID))
 				{
 					asyncOwnsGuard = true;
 				}
