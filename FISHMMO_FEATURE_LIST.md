@@ -1,6 +1,6 @@
 # FishMMO — Complete Feature List
 
-> Generated 2026-06-26 from the FishMMO-Dev monorepo.  
+> Generated 2026-06-26 from the FishMMO-Dev monorepo. Updated 2026-06-28.  
 > Built on Unity 6.3 LTS, FishNet, PostgreSQL, .NET 8.0.
 
 ---
@@ -527,6 +527,19 @@
 47. **Faction System** — Faction relationship management.  
 48. **Scene Channel System** — Open-world channel listing and same-server channel switching with per-connection cooldown enforcement.
 
+### Server Authority & Security
+49. **CharacterStateValidation** — Centralized static validation gate for all broadcast handlers. `CanAct()` rejects dead, teleporting, frozen, and unloaded characters. `CanActOrMove()` additionally rejects in-combat characters. `TryGetPlayerAndValidate(conn, out player)` canonical pattern resolves player from connection and validates in one call. Called at entry of every state-mutating broadcast handler.
+50. **Comprehensive CanAct Coverage** — All server-side broadcast handlers validated: CharacterInventory (6 ops), Bank (2 ops), Equipment (2 ops), Quest (3 ops), Guild (7 ops), Party (7 ops), Friend (2 ops), Pet (4 ops), Hotkey (2 ops), Chat, Interactable. Movement pipeline also gated server-side in KCCPlayer.OnReplicate.
+51. **Per-Account Rate Limiting** — Auth callback rate limit keyed by account name (not ClientId), preventing multi-connection bypass. Separate per-connection rate limit for scene unload broadcasts.
+52. **Respawn/Resurrect IngressGuard** — Per-operation IngressGuard (2s debounce) on respawn-at-bind-point and resurrect-accept handlers. Prevents spam and concurrent-operation races.
+53. **TCP/TLS Transport Encryption** — All network traffic encrypted at transport layer.
+
+### Observer LOD System
+54. **HashGrid Spatial Partitioning** — FishNet `HashGrid` component on NetworkManager (Accuracy=70, GridAxes=XZ). O(1) hash-based proximity: objects in same or adjacent grid cells are "nearby." Covers ~105m effective radius.
+55. **Global Observer Conditions** — `ObserverManager` configured with `SceneCondition` (never observe cross-scene) + `GridCondition` (spatial hash pre-filter). Applied to all `NetworkObject`s with `OverrideType = AddMissing`.
+56. **Tiered Distance Conditions** — Four `DistanceCondition` ScriptableObjects (FishMMO → Create Observer Distance Conditions): Player(100m/10% hysteresis), Monster(50m/15%), Interactable(30m/10%), WorldItem(15m/20%). Added per-prefab on `NetworkObserver`.
+57. **Bandwidth Reduction** — Per-client observer bandwidth drops from ~256 KB/s to ~43 KB/s (83% reduction) with full observer condition setup. Server aggregate outbound drops from ~25.6 MB/s to ~4.3 MB/s for 100 players + 100 NPCs.
+
 ---
 
 ## FishMMO-Unity — Shared
@@ -538,7 +551,9 @@
 2. **BaseCharacter** — Abstract NetworkBehaviour implementing ICharacter: behaviour registry, bitwise flag management, ECA trigger invocation, race model instantiation (Addressable), client character dictionary.  
 3. **PlayerCharacter** — Concrete player class requiring 13+ behaviour components (attribute, target, cooldown, inventory, equipment, bank, ability, achievement, buff, quest, damage, guild, party, friend, faction controllers). KCC movement, chat anti-spam token bucket.  
 4. **CharacterBehaviour** — Abstract base for modular behaviour components: InitializeOnce, OnStartCharacter, OnStopCharacter lifecycle.  
-5. **CharacterFlags** — Bitwise state flags: Idle, IsMoving, IsRunning, IsCrouching, IsSwimming, IsTeleporting, IsFrozen, IsStunned, IsMesmerized, IsInInstance, IsLoaded, IsDead.
+5. **CharacterFlags** — Bitwise state flags: Idle, IsMoving, IsRunning, IsCrouching, IsSwimming, IsTeleporting, IsFrozen, IsStunned, IsMesmerized, IsInInstance, IsLoaded, IsDead, IsInCombat.
+6. **Combat State System** — Tick-aligned combat timer on `CharacterDamageController`. Enters combat on dealing damage, taking damage, or healing an in-combat ally. Auto-clears after configurable duration (default 600 ticks / 20s at 30Hz) of inactivity. `EnterCombat()` safe to call repeatedly — refreshes expiry. `IsInCombat` flag cleared on death and network reset. Combat state prevents teleportation (combat-escape prevention).
+7. **Combat-Escape Prevention** — Teleport blocked while `IsInCombat` flag is active. Movement gate in `KCCPlayer.OnReplicate` rejects input from dead, frozen, teleporting, unloaded, and in-combat characters.
 
 ### ECA Trigger System (Entity-Component-Action)
 *The data-driven trigger/action pipeline powering abilities, quests, dialogue, interactables, and game events.*
@@ -550,11 +565,11 @@
 #### ECA Actions (~80 implementations)
 9. **Combat Actions** — ApplyDamage, ApplyHeal, ApplyBuff, ApplyDispel, ConsumeResource, Interrupt, KnockbackHit.  
 10. **Ability Actions** — AbilityApplyArea, AbilityApplyTarget, AbilityForkHit, AbilityHitCount, AbilityMoveTransform, AbilityPierceHit, AbilitySpawnMultiply.  
-11. **Item Actions** — EquipItem, UnequipItem, GiveItem, RemoveItem.  
+11. **Item Actions** — EquipItem, UnequipItem, GiveItem, RemoveItem. (Equip/Unequip `#if UNITY_SERVER` guarded — persistent state mutations never run during prediction replay.)  
 12. **Quest Actions** — AcceptQuest, AbandonQuest, AdvanceQuestObjective, CompleteQuest, FailQuest, TurnInQuest.  
 13. **Interactable Actions** — Bindstone, GatheringNode, LoreObject, NPCLookAtInteractor, PickupWorldItem, SendAbilityCrafterBroadcast, SendBankerBroadcast, SendContainerOpenBroadcast, SendDungeonFinderBroadcast, SendMailboxBroadcast, SendMerchantBroadcast, SendQuestOffer, Shrine, Switch, Teleport.  
 14. **Region Actions** — ApplyRegionAttribute, ApplyRegionBuff, ChangeFog, ChangeSkybox, DisplayRegionName, PlayRegionAudio.  
-15. **Utility Actions** — AchievementIncrement, AddFaction, ClearTarget, DestroyObject, DisplayDialogue, PlayFX.
+15. **Utility Actions** — AchievementIncrement, AddFaction, ClearTarget, DestroyObject, DisplayDialogue, PlayFX. (DestroyObject `#if UNITY_SERVER` guarded; PlayFX/ClearTarget suppress during prediction replay via `IsReplicateTick`.)
 
 #### ECA Conditions (~30 implementations)
 16. **Combat/Attribute Conditions** — HasResource, HasRequiredAttribute, HasBuff, HasCooldown, IsCharacterAlive, IsImmortal.  
@@ -600,16 +615,22 @@
 44. **Attribute Formulas** — Flat bonus and percentage bonus formulas with dependency tracking.  
 45. **Propagation Batching** — Deferred notifications with suppression for replay performance.  
 46. **Tick-Driven Regeneration** — Monotonic guard against double-advance.  
-47. **Damage System** — `CharacterDamageController`: damage, healing, kill, resurrection with full ECA trigger invocation.  
+47. **Damage System** — `CharacterDamageController`: damage, healing, kill, resurrection, combat state management with full ECA trigger invocation. Client+server deterministic prediction (Damage/Heal/Revive run on both sides; Kill server-only for non-deterministic side effects). Healer enters combat when healing an in-combat ally.
 48. **Damage Types & Resistances** — `DamageAttributeTemplate` (physical, fire, frost, etc.) and `ResistanceAttributeTemplate` pairing.  
 49. **Death System** — Player death shows dialog with Respawn/Resurrect options. NPC corpse decay timer (configurable per spawner). `ResurrectOfferBroadcast`/`ResurrectAcceptBroadcast`/`RespawnAtBindPointBroadcast`/`DeathBroadcast`. Reconnect-while-dead re-shows death dialog.  
 50. **Revive** — `Revive(ICharacter, int)` works on dead characters (unlike Heal). Fires `OnResurrected` static event, resets death animation, fires ECA resurrect triggers.
 
 ### Client-Side Prediction Pipeline
-49. **Unified Prediction Controller** — `CharacterPredictionController` discovers all `IPredictableController` components, sorts by Order, drives a single FishNet Prediction V2 pipeline.  
+49. **Unified Prediction Controller** — `CharacterPredictionController` discovers all `IPredictableController` components, stable-sorts by Order with deterministic type-name tiebreaker, drives a single FishNet Prediction V2 pipeline.  
 50. **Participating Subsystems** — KCC movement (Order 80), BuffController (85), CooldownController (90), EquipmentController (93), CharacterAttributeController (95), AbilityController (100).  
 51. **Type-Safe Ticks** — `PredictionTick` struct prevents accidental raw tick usage.  
-52. **Delta Compression** — `CharacterReconcileDataDeltaSerializer`, `CharacterAttributeResourceStateSerializer` for bandwidth-efficient sync.
+52. **Delta Compression** — `CharacterReconcileDataDeltaSerializer`, `CharacterAttributeResourceStateSerializer`, KCC motor state delta serializer for bandwidth-efficient sync (~43 bytes/tick typical, ~86 bytes/tick combat).  
+53. **Deterministic RNG** — xoshiro128** algorithm with full 128-bit state capture in reconcile data. All prediction-path code uses `DeterministicRNG` — zero `UnityEngine.Random` or `System.Random`.  
+54. **Shared Speed Enforcement** — `MaxAllowedSpeed = SprintSpeed × 3.0f` runs identically on client and server in shared code. No server-only branches.  
+55. **Motor PhysicsScene Init** — `KCCPlayer.Awake` initializes motor's `PhysicsScene` from GameObject scene, ensuring client collision queries (ground detection, wall collision) work identically to server.  
+56. **Deterministic Ability Math** — `Math.Ceiling(double)` replaces `Mathf.CeilToInt(float)` for platform-independent activation time rounding (prevents x86/ARM one-tick mismatches).  
+57. **Physics Query Guards** — All ECA target selectors (`AreaTarget`, `ConeTarget`, `LineTarget`, `ChainTarget`, `NearestTarget`, `FurthestTarget`, `RandomTarget`) and `AbilityApplyAreaAction` suppress physics queries during prediction replay via `IsReplicateTick` guard.  
+58. **Reconcile Delta Efficiency** — Delta serializer sends only changed fields. Idle tick: ~20 bytes. Walking: ~43 bytes. Combat: ~86 bytes. Full struct: ~223-1300 bytes raw → 95-97% reduction.
 
 ### AI System (NPC)
 53. **State Machine** — Idle, Wander, Patrol, ReturnHome, Retreat, MeleeAttacking, RangedAttacking, CasterAttacking, HealerAttacking, GetBehind, Orbit, PetIdle states.  
