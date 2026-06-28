@@ -225,6 +225,7 @@ GameObject:
   - component: {fileID: 8097462252018206294}
   - component: {fileID: 8097462252018206296}
   - component: {fileID: 8097462252018206295}
+  - component: {fileID: 8097462252018206297}
   m_Layer: 0
   m_Name: NetworkManager Scene
   m_TagString: Untagged
@@ -246,6 +247,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxMainThreadActionsPerUpdate: 100
   useConnectionIdForRateLimit: 0
+  renewalTokenExpirationMinutes: 10
 --- !u!114 &3165019703713927972
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -277,6 +279,7 @@ MonoBehaviour:
   _maximumTimedObserversDuration: 10
   _defaultConditions:
   - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
+  - {fileID: 11400000, guid: cc503f7541ebd424c94541e6a767efee, type: 2}
 --- !u!4 &3329575399928312653
 Transform:
   m_ObjectHideFlags: 0
@@ -439,13 +442,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _useWss: 0
-  _sslConfiguration:
-    Enabled: 0
-    CertificatePath: 
-    CertificatePassword: 
-    SslProtocol: 0
   _mtu: 1023
   _useProxyProtocol: 1
+  _serverBindAddress: localhost
   _port: 7770
   _maximumClients: 2000
   _clientAddress: localhost
@@ -477,6 +476,20 @@ MonoBehaviour:
   _lightProbeUpdating: 0
   _moveClientObjects: 0
   _setActiveScene: 0
+--- !u!114 &8097462252018206297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2696072683415778311}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a9fc3aafb02eb74fb571c300f846bf2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Observing.HashGrid
+  _gridAxes: 0
+  _accuracy: 70
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
