@@ -59,9 +59,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Maximum valid hotkey type byte value.
-		/// Corresponds to the highest defined ReferenceButtonType enum member.
+		/// Mirrors ReferenceButtonType (Client assembly, unreferenceable from Server):
+		/// None=0, Inventory=1, Equipment=2, Bank=3, Ability=4.
 		/// </summary>
 		private const byte MaxHotkeyType = 4;
+
+		/// <summary>
+		/// Hotkey type constants mirroring ReferenceButtonType values from the Client assembly.
+		/// </summary>
+		private const byte HotkeyTypeInventory = 1;
+		private const byte HotkeyTypeEquipment = 2;
+		private const byte HotkeyTypeAbility = 4;
 
 		/// <summary>
 		/// Ensures the character hotkey list exists and is initialized to the configured maximum size.
@@ -86,6 +94,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Tries to apply a hotkey binding to the character hotkey list.
+		/// Validates ownership: the player must actually own the item/equipment/ability
+		/// they are attempting to bind to a hotkey slot.
 		/// </summary>
 		/// <param name="playerCharacter">Character receiving the hotkey binding.</param>
 		/// <param name="incomingData">Incoming hotkey data from client message.</param>
@@ -113,36 +123,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Server-authoritative ownership validation: verify the player actually
 			// owns the item, equipment, or ability they are attempting to bind.
-			// Without this check, a client can bind any ID regardless of ownership.
-			switch ((ReferenceButtonType)incomingData.Type)
+			// Without this check, a client could bind any ID regardless of ownership.
+			int referenceID = (int)incomingData.ReferenceID;
+			switch (incomingData.Type)
 			{
-				case ReferenceButtonType.Inventory:
-					if (incomingData.ReferenceID >= 0)
+				case HotkeyTypeInventory:
+					if (referenceID >= 0)
 					{
 						if (!playerCharacter.TryGet(out IInventoryController inventoryController) ||
-							!inventoryController.IsValidSlot(incomingData.ReferenceID) ||
-							!inventoryController.TryGetItem(incomingData.ReferenceID, out _))
+							!inventoryController.IsValidSlot(referenceID) ||
+							!inventoryController.TryGetItem(referenceID, out _))
 						{
 							return false;
 						}
 					}
 					break;
-				case ReferenceButtonType.Equipment:
-					if (incomingData.ReferenceID >= 0)
+				case HotkeyTypeEquipment:
+					if (referenceID >= 0)
 					{
 						if (!playerCharacter.TryGet(out IEquipmentController equipmentController) ||
-							!equipmentController.IsValidSlot((ItemSlot)incomingData.ReferenceID) ||
-							!equipmentController.TryGetItem((ItemSlot)incomingData.ReferenceID, out _))
+							!equipmentController.IsValidSlot(referenceID) ||
+							!equipmentController.TryGetItem(referenceID, out _))
 						{
 							return false;
 						}
 					}
 					break;
-				case ReferenceButtonType.Ability:
-					if (incomingData.ReferenceID >= 0)
+				case HotkeyTypeAbility:
+					if (referenceID >= 0)
 					{
 						if (!playerCharacter.TryGet(out IAbilityController abilityController) ||
-							!abilityController.KnowsAbility(incomingData.ReferenceID))
+							!abilityController.KnowsAbility(referenceID))
 						{
 							return false;
 						}

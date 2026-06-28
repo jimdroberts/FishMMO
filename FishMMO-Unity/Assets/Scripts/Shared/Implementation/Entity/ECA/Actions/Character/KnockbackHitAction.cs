@@ -54,7 +54,7 @@ namespace FishMMO.Shared
 					// Apply knockback as a velocity impulse through the KCC motor.
 					// This respects collision geometry, prediction/reconciliation,
 					// and is deterministic across client and server.
-					if (character.TryGet(out IPlayerCharacter playerCharacter) &&
+					if (character is IPlayerCharacter playerCharacter &&
 						playerCharacter.CharacterController?.Motor != null)
 					{
 						var motor = playerCharacter.CharacterController.Motor;
@@ -69,7 +69,7 @@ namespace FishMMO.Shared
 							currentVelocity -= opposingComponent * knockbackDirection;
 						}
 						currentVelocity += knockbackDirection * force;
-						motor.SetVelocity(currentVelocity);
+						motor.BaseVelocity = currentVelocity;
 					}
 				}
 			}
