@@ -17,7 +17,7 @@ namespace FishMMO.Auth.Implementation
 		/// Gets or sets the authentication state for this connection.
 		/// Transitions are guarded by AccountManager's <c>syncRoot</c> lock.
 		/// </summary>
-		public AuthState AuthState { get; set; }
+		public AuthState AuthState { get; internal set; }
 
 		/// <summary>
 		/// Gets the access level of the account.

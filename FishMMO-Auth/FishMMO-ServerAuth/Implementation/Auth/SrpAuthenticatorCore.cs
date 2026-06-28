@@ -365,7 +365,6 @@ namespace FishMMO.Auth.Implementation
 			totpPendingStates.TryRemove(clientId, out _);
 			totpEnabledByClientId.TryRemove(clientId, out _);
 			verifyCodeExpiryByClientId.TryRemove(clientId, out _);
-			verifyCodeExpiryByClientId.TryRemove(clientId, out _);
 			connectionIpCache.Remove(clientId);
 		}
 
@@ -752,7 +751,6 @@ namespace FishMMO.Auth.Implementation
 						accessLevel = lookupResult.AccessLevel;
 						totpEnabledByClientId[GetConnectionClientId(conn)] = lookupResult.TotpEnabled;
 						verifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.VerifyCodeExpiresUtc;
-					verifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.VerifyCodeExpiresUtc;
 					}
 				}
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Threading;
 using FishMMO.Auth.Core;
@@ -53,16 +54,36 @@ namespace FishMMO.Auth.Implementation
 		protected const int HandshakeRateLimitSweepMaxRemovals = 2048;
 
 		/// <summary>
+		/// Synchronization gate for <see cref="authStartTimeByClientId"/>,
+		/// <see cref="authOriginalStartByClientId"/>, and <see cref="authConnectionByClientId"/>.
+		/// All access to these three dictionaries must acquire this lock first.
+		/// Never acquired while holding <see cref="handshakeCountGate"/> or
+		/// <c>AccountManager.syncRoot</c> — disconnect/cleanup calls that need those
+		/// locks are performed outside the critical section.
+		/// </summary>
+		private readonly object ttlGate = new object();
+
+		/// <summary>
+		/// Synchronization gate for <see cref="globalHandshakeCount"/> and
+		/// <see cref="nextGlobalHandshakeResetUtc"/>. All read/write access to
+		/// these two fields must acquire this lock first.
+		/// </summary>
+		private readonly object handshakeCountGate = new object();
+
+		/// <summary>
 		/// Tracks authentication start times for stale-auth TTL enforcement.
 		/// Key: connection identifier, Value: UTC start timestamp.
+		/// Guarded by <see cref="ttlGate"/>.
 		/// </summary>
-		private readonly ConcurrentDictionary<int, DateTime> authStartTimeByClientId = new ConcurrentDictionary<int, DateTime>();
+		private readonly Dictionary<int, DateTime> authStartTimeByClientId = new Dictionary<int, DateTime>();
 
-		/// <summary>Tracks original authentication start times for hard deadline enforcement.</summary>
-		private readonly ConcurrentDictionary<int, DateTime> authOriginalStartByClientId = new ConcurrentDictionary<int, DateTime>();
+		/// <summary>Tracks original authentication start times for hard deadline enforcement.
+		/// Guarded by <see cref="ttlGate"/>.</summary>
+		private readonly Dictionary<int, DateTime> authOriginalStartByClientId = new Dictionary<int, DateTime>();
 
-		/// <summary>Reverse map from client ID to active connection for stale-auth cleanup.</summary>
-		private readonly ConcurrentDictionary<int, TConnection> authConnectionByClientId = new ConcurrentDictionary<int, TConnection>();
+		/// <summary>Reverse map from client ID to active connection for stale-auth cleanup.
+		/// Guarded by <see cref="ttlGate"/>.</summary>
+		private readonly Dictionary<int, TConnection> authConnectionByClientId = new Dictionary<int, TConnection>();
 
 		/// <summary>Per-IP handshake rate limiter. Prevents X25519 CPU abuse from rapid handshake replay.</summary>
 		private readonly ConcurrentDictionary<string, DateTime> handshakeIpNextAllowedUtc = new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
@@ -74,10 +95,12 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		private volatile byte[]? cookieHmacKey;
 
-		/// <summary>Rolling count of completed X25519 handshakes in the current 1-second window.</summary>
+		/// <summary>Rolling count of completed X25519 handshakes in the current 1-second window.
+		/// Guarded by <see cref="handshakeCountGate"/>.</summary>
 		private int globalHandshakeCount;
 
-		/// <summary>UTC instant when the current global handshake window expires and the counter resets.</summary>
+		/// <summary>UTC instant when the current global handshake window expires and the counter resets.
+		/// Guarded by <see cref="handshakeCountGate"/>.</summary>
 		private DateTime nextGlobalHandshakeResetUtc = DateTime.UtcNow.AddSeconds(1);
 
 		/// <summary>Rate limiter for the pending auth cap warning log.</summary>
@@ -133,11 +156,17 @@ namespace FishMMO.Auth.Implementation
 				cookieHmacKey = null;
 			}
 
-			Interlocked.Exchange(ref globalHandshakeCount, 0);
-			nextGlobalHandshakeResetUtc = DateTime.UtcNow.AddSeconds(1);
-			authStartTimeByClientId.Clear();
-			authOriginalStartByClientId.Clear();
-			authConnectionByClientId.Clear();
+			lock (handshakeCountGate)
+			{
+				globalHandshakeCount = 0;
+				nextGlobalHandshakeResetUtc = DateTime.UtcNow.AddSeconds(1);
+			}
+			lock (ttlGate)
+			{
+				authStartTimeByClientId.Clear();
+				authOriginalStartByClientId.Clear();
+				authConnectionByClientId.Clear();
+			}
 			handshakeIpNextAllowedUtc.Clear();
 		}
 
@@ -179,11 +208,51 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		private void ResetGlobalHandshakeWindowIfExpired()
 		{
-			DateTime utcNow = DateTime.UtcNow;
-			if (utcNow >= nextGlobalHandshakeResetUtc)
+			lock (handshakeCountGate)
 			{
-				nextGlobalHandshakeResetUtc = utcNow.AddSeconds(1);
-				Interlocked.Exchange(ref globalHandshakeCount, 0);
+				DateTime utcNow = DateTime.UtcNow;
+				if (utcNow >= nextGlobalHandshakeResetUtc)
+				{
+					nextGlobalHandshakeResetUtc = utcNow.AddSeconds(1);
+					globalHandshakeCount = 0;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Atomically increments the global handshake count if the rate limit has not been
+		/// reached this window.  Resets the window lazily when it has expired.
+		/// Returns <c>true</c> if the handshake may proceed; <c>false</c> if the global cap
+		/// has been exhausted and the handshake must be rejected.
+		/// </summary>
+		private bool TryIncrementGlobalHandshakeCount()
+		{
+			lock (handshakeCountGate)
+			{
+				DateTime now = DateTime.UtcNow;
+				if (now >= nextGlobalHandshakeResetUtc)
+				{
+					nextGlobalHandshakeResetUtc = now.AddSeconds(1);
+					globalHandshakeCount = 0;
+				}
+				if (globalHandshakeCount >= MaxGlobalHandshakesPerSecond)
+					return false;
+				globalHandshakeCount++;
+				return true;
+			}
+		}
+
+		/// <summary>
+		/// Decrements the global handshake count on a failure path so a rejected handshake
+		/// does not consume a rate-limit slot.  Safe to call even if the count is already
+		/// zero (floor at 0).
+		/// </summary>
+		private void DecrementGlobalHandshakeCount()
+		{
+			lock (handshakeCountGate)
+			{
+				if (globalHandshakeCount > 0)
+					globalHandshakeCount--;
 			}
 		}
 
@@ -194,46 +263,62 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		private void SweepStaleAuthentication()
 		{
-			if (authStartTimeByClientId.Count == 0) return;
-
 			DateTime now = DateTime.UtcNow;
-			int scanned = 0;
-			int removed = 0;
 
-			foreach (var kvp in authStartTimeByClientId)
+			// Phase 1: under ttlGate, capture the set of stale client IDs and their
+			// associated connections.  The snapshot, staleness check, and removal all
+			// happen under a single lock hold — no TOCTOU window between observing a
+			// stale timestamp and removing the entry (fixes HIGH-1).
+			List<TConnection> staleConns;
+
+			lock (ttlGate)
 			{
-				if (scanned >= AuthSweepMaxScan || removed >= AuthSweepMaxRemovals)
-					break;
-
-				scanned++;
-
-				if ((now - kvp.Value).TotalSeconds < AuthStaleTtlSeconds)
-					continue;
-
-				if (!authStartTimeByClientId.TryRemove(kvp.Key, out _))
-					continue;
-
-				removed++;
-
-				authOriginalStartByClientId.TryRemove(kvp.Key, out _);
-				authConnectionByClientId.TryRemove(kvp.Key, out TConnection conn);
-
-				if (conn != null)
+				if (authStartTimeByClientId.Count == 0)
 				{
-					if (IsConnectionAuthenticated(conn))
-					{
-						_ = Log.Warning(LogPrefix, $"SweepStaleAuthentication: id {kvp.Key} is authenticated (likely recycled) — skipping purge.");
+					OnAuthSweep();
+					return;
+				}
+
+				var staleIds = new List<int>(Math.Min(AuthSweepMaxRemovals, authStartTimeByClientId.Count));
+				staleConns = new List<TConnection>(staleIds.Capacity);
+
+				foreach (var kvp in authStartTimeByClientId)
+				{
+					if (staleIds.Count >= AuthSweepMaxRemovals)
+						break;
+
+					if ((now - kvp.Value).TotalSeconds < AuthStaleTtlSeconds)
 						continue;
-					}
 
-					OnPurgeConnectionState(conn);
-					AccountManager.RemoveConnectionAccount(conn);
-					DisconnectConnection(conn, graceful: false);
+					staleIds.Add(kvp.Key);
 				}
-				else
+
+				foreach (int clientId in staleIds)
 				{
-					_ = Log.Warning(LogPrefix, $"SweepStaleAuthentication: conn was null for id {kvp.Key} — dictionary entries cleaned.");
+					authStartTimeByClientId.Remove(clientId);
+					authOriginalStartByClientId.Remove(clientId);
+
+					if (authConnectionByClientId.TryGetValue(clientId, out TConnection conn))
+					{
+						authConnectionByClientId.Remove(clientId);
+						staleConns.Add(conn);
+					}
 				}
+			}
+
+			// Phase 2: disconnect and purge OUTSIDE the lock so that
+			// TrackAuthStart / RefreshAuthTtl are never blocked by disconnect I/O.
+			foreach (TConnection conn in staleConns)
+			{
+				if (IsConnectionAuthenticated(conn))
+				{
+					_ = Log.Warning(LogPrefix, $"SweepStaleAuthentication: conn is authenticated (likely recycled) — skipping purge.");
+					continue;
+				}
+
+				OnPurgeConnectionState(conn);
+				AccountManager.RemoveConnectionAccount(conn);
+				DisconnectConnection(conn, graceful: false);
 			}
 
 			OnAuthSweep();
@@ -363,11 +448,8 @@ namespace FishMMO.Auth.Implementation
 			handshakeIpNextAllowedUtc[rateLimitKey] = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
 
 			// ── Global rate limit ─────────────────────────────────────────
-			if (Interlocked.Increment(ref globalHandshakeCount) > MaxGlobalHandshakesPerSecond)
-			{
-				Interlocked.Decrement(ref globalHandshakeCount);
+			if (!TryIncrementGlobalHandshakeCount())
 				return;
-			}
 
 			// Begin TTL tracking after all rate-limit gates have passed.
 			if (!TrackAuthStart(conn))
@@ -378,7 +460,7 @@ namespace FishMMO.Auth.Implementation
 					nextPendingAuthCapWarningUtc = capNow.AddSeconds(5);
 					_ = Log.Warning(LogPrefix, $"Pending auth cap ({MaxPendingAuthConnections}) reached — handshake(s) dropped.");
 				}
-				Interlocked.Decrement(ref globalHandshakeCount);
+				DecrementGlobalHandshakeCount();
 				return;
 			}
 
@@ -386,15 +468,19 @@ namespace FishMMO.Auth.Implementation
 			var kaResult = HandshakeService.ServerPerformKeyAgreement(publicKey, minVersion, maxVersion);
 			if (!kaResult.Success)
 			{
-				Interlocked.Decrement(ref globalHandshakeCount);
+				DecrementGlobalHandshakeCount();
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
 
 			if (!AccountManager.TryAddConnectionEncryptionData(conn, publicKey))
 			{
-				ClearTransientAuthState(GetConnectionClientId(conn));
-				Interlocked.Decrement(ref globalHandshakeCount);
+				// Do NOT call ClearTransientAuthState here — a concurrent handshake
+				// packet may have succeeded at TryAddConnectionEncryptionData and
+				// relies on the TTL tracking that TrackAuthStart established.
+				// Orphaned TTL entries created by the losing packet are naturally
+				// swept after AuthStaleTtlSeconds (15 s) by SweepStaleAuthentication.
+				DecrementGlobalHandshakeCount();
 				return;
 			}
 
@@ -424,19 +510,22 @@ namespace FishMMO.Auth.Implementation
 		protected bool TrackAuthStart(TConnection conn)
 		{
 			if (conn == null) return false;
-			if (authStartTimeByClientId.Count >= MaxPendingAuthConnections)
-				return false;
 			int clientId = GetConnectionClientId(conn);
 			if (clientId <= 0)
 			{
 				_ = Log.Warning(LogPrefix, $"TrackAuthStart: refusing to track invalid clientId {clientId}.");
 				return false;
 			}
-			DateTime now = DateTime.UtcNow;
-			authStartTimeByClientId.TryAdd(clientId, now);
-			authOriginalStartByClientId.TryAdd(clientId, now);
-			authConnectionByClientId[clientId] = conn;
-			return true;
+			lock (ttlGate)
+			{
+				if (authStartTimeByClientId.Count >= MaxPendingAuthConnections)
+					return false;
+				DateTime now = DateTime.UtcNow;
+				authStartTimeByClientId[clientId] = now;
+				authOriginalStartByClientId[clientId] = now;
+				authConnectionByClientId[clientId] = conn;
+				return true;
+			}
 		}
 
 		/// <summary>
@@ -450,12 +539,15 @@ namespace FishMMO.Auth.Implementation
 			if (conn == null) return;
 			int clientId = GetConnectionClientId(conn);
 			if (clientId <= 0) return;
-			if (authOriginalStartByClientId.TryGetValue(clientId, out DateTime originalStart))
+			lock (ttlGate)
 			{
-				if ((DateTime.UtcNow - originalStart).TotalSeconds >= AuthHardDeadlineSeconds)
-					return;
+				if (authOriginalStartByClientId.TryGetValue(clientId, out DateTime originalStart))
+				{
+					if ((DateTime.UtcNow - originalStart).TotalSeconds >= AuthHardDeadlineSeconds)
+						return;
+				}
+				authStartTimeByClientId[clientId] = DateTime.UtcNow;
 			}
-			authStartTimeByClientId[clientId] = DateTime.UtcNow;
 		}
 
 		/// <summary>
@@ -464,9 +556,12 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="clientId">Connection client ID.</param>
 		protected void ClearTransientAuthState(int clientId)
 		{
-			authStartTimeByClientId.TryRemove(clientId, out _);
-			authOriginalStartByClientId.TryRemove(clientId, out _);
-			authConnectionByClientId.TryRemove(clientId, out _);
+			lock (ttlGate)
+			{
+				authStartTimeByClientId.Remove(clientId);
+				authOriginalStartByClientId.Remove(clientId);
+				authConnectionByClientId.Remove(clientId);
+			}
 		}
 
 		/// <summary>

@@ -40,13 +40,25 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>SRP client state.</summary>
 		private ClientSrpData? srpData;
 
-		/// <summary>Guard to ignore duplicate SRP verify messages. Main-thread only.</summary>
+		/// <summary>
+		/// Guard to ignore duplicate SRP verify messages.
+		/// <para>Thread-safety: single-threaded by FishNet convention — all incoming
+		/// message handlers run on the Unity main thread. If a transport implementation
+		/// delivers messages on a worker thread, this guard must be replaced with an
+		/// atomic compare-and-swap or lock.</para>
+		/// </summary>
 		private bool srpVerifyProcessed;
 
-		/// <summary>Guard to ignore duplicate SRP success messages. Main-thread only.</summary>
+		/// <summary>
+		/// Guard to ignore duplicate SRP success messages.
+		/// <para>Thread-safety: same single-threaded convention as <see cref="srpVerifyProcessed"/>.</para>
+		/// </summary>
 		private bool srpSuccessProcessed;
 
-		/// <summary>Guard to prevent echoing the cookie challenge more than once per connection.</summary>
+		/// <summary>
+		/// Guard to prevent echoing the cookie challenge more than once per connection.
+		/// <para>Thread-safety: same single-threaded convention as <see cref="srpVerifyProcessed"/>.</para>
+		/// </summary>
 		private bool cookieEchoed;
 
 		/// <summary>Signed auth token from the LoginServer. Persists across connections; used for World/Scene auth.</summary>
