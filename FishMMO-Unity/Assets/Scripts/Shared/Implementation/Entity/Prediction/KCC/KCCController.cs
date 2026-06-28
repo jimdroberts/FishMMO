@@ -383,6 +383,13 @@ namespace FishMMO.Shared
 			VirtualCameraRotation = inputs.CameraRotation;
 
 			// Clamp input
+
+			// Sanitize movement axes 342200224 NaN/Infinity bypasses Vector3.ClampMagnitude
+			// and propagates into the KCC motor, corrupting collision and reconcile state.
+			if (float.IsNaN(inputs.MoveAxisForward) || float.IsInfinity(inputs.MoveAxisForward))
+				inputs.MoveAxisForward = 0f;
+			if (float.IsNaN(inputs.MoveAxisRight) || float.IsInfinity(inputs.MoveAxisRight))
+				inputs.MoveAxisRight = 0f;
 			Vector3 clampedInput = Vector3.ClampMagnitude(new Vector3(inputs.MoveAxisRight, 0f, inputs.MoveAxisForward), 1f);
 
 			// Calculate camera direction and rotation on the character plane

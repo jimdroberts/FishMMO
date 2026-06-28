@@ -1203,6 +1203,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (character == null || !CharacterStateValidation.CanAct(character))
+				return;
+
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.DeclineInvite, out long guardKey))
 			{
 				return;
@@ -1210,9 +1214,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
-				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-
-				if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData) && CharacterStateValidation.CanAct(character))
+				if (Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 				{
 					runtimeData.RemovePendingInvitation(character.ID);
 				}

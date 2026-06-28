@@ -572,6 +572,9 @@ namespace FishMMO.Shared
 		{
 			if (template == null) return;
 
+
+			// Dead characters cannot receive buffs or debuffs.
+			if (Character.IsFlagged(CharacterFlags.IsDead)) return;
 			bool isNew = false;
 			bool changed = false;
 			if (!buffs.TryGetValue(template.ID, out Buff buffInstance))
@@ -732,6 +735,9 @@ namespace FishMMO.Shared
 				Log.Warning("BuffController", "Apply(Buff): Template is null. Dropping orphaned buff instance.");
 				return;
 			}
+
+			// Dead characters cannot receive buffs or debuffs.
+			if (Character.IsFlagged(CharacterFlags.IsDead)) return;
 
 			if (!buffs.ContainsKey(buff.Template.ID))
 			{

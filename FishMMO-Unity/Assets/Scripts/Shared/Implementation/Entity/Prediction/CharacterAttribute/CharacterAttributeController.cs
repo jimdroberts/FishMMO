@@ -969,7 +969,7 @@ namespace FishMMO.Shared
 			// indefinitely, silently leaving the interval stale.
 			if (regenTickInterval == 0u || Math.Abs(td - regenIntervalSourceTickDelta) > 1e-10)
 			{
-				regenTickInterval = (uint)Mathf.Max(1, Mathf.CeilToInt((float)(regenTickRate / td)));
+				regenTickInterval = (uint)Math.Max(1, (int)Math.Ceiling(regenTickRate / td));
 				regenIntervalSourceTickDelta = td;
 			}
 		}

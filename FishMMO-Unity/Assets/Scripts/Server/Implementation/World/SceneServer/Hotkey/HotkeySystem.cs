@@ -272,13 +272,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetSingle, out long guardKey))
-			{
-				return;
-			}
-
-			try
-			{
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
 			if (playerCharacter == null || msg.HotkeyData == null || !CharacterStateValidation.CanAct(playerCharacter))
@@ -286,7 +279,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			TryApplyHotkey(playerCharacter, msg.HotkeyData);
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetSingle, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
+				TryApplyHotkey(playerCharacter, msg.HotkeyData);
 			}
 			finally
 			{
@@ -308,13 +308,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetMultiple, out long guardKey))
-			{
-				return;
-			}
-
-			try
-			{
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
 			if (playerCharacter == null || msg.Hotkeys == null || msg.Hotkeys.Count < 1 || !CharacterStateValidation.CanAct(playerCharacter))
@@ -322,18 +315,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			int applyCount = Mathf.Min(msg.Hotkeys.Count, maxBulkHotkeyUpdates);
-
-			for (int i = 0; i < applyCount; ++i)
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetMultiple, out long guardKey))
 			{
-				HotkeySetBroadcast subMsg = msg.Hotkeys[i];
-				if (subMsg.HotkeyData == null)
-				{
-					continue;
-				}
-
-				TryApplyHotkey(playerCharacter, subMsg.HotkeyData);
+				return;
 			}
+
+			try
+			{
+				int applyCount = Mathf.Min(msg.Hotkeys.Count, maxBulkHotkeyUpdates);
+
+				for (int i = 0; i < applyCount; ++i)
+				{
+					HotkeySetBroadcast subMsg = msg.Hotkeys[i];
+					if (subMsg.HotkeyData == null)
+					{
+						continue;
+					}
+
+					TryApplyHotkey(playerCharacter, subMsg.HotkeyData);
+				}
 			}
 			finally
 			{

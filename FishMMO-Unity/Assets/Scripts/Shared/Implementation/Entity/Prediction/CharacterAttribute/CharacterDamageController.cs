@@ -396,6 +396,9 @@ namespace FishMMO.Shared
 			if (Immortal) return;
 			if (!base.IsServerStarted) return;
 
+			// Already dead — prevent duplicate OnKilled events and ECA triggers.
+			if (Character.IsFlagged(CharacterFlags.IsDead)) return;
+
 			// Clear combat state on death.
 			combatTimerActive = false;
 			Character.DisableFlags(CharacterFlags.IsInCombat);
@@ -449,16 +452,16 @@ namespace FishMMO.Shared
 			}
 
 			// Enter combat: the healed target always enters combat.
+			// Capture combat state BEFORE EnterCombat so we know if the defender
+			// was already fighting — the healer only joins an existing combat.
+			bool defenderWasInCombat = combatTimerActive;
 			EnterCombat();
 
 			// If the healer is healing someone who is already in combat, the healer also enters combat.
-			if (healer != null &&
+			if (healer != null && defenderWasInCombat &&
 				healer.TryGet(out ICharacterDamageController healerDamageController))
 			{
-				if (combatTimerActive)
-				{
-					healerDamageController.EnterCombat();
-				}
+				healerDamageController.EnterCombat();
 			}
 
 			ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
@@ -527,6 +530,8 @@ namespace FishMMO.Shared
 			resourceInstance = null;
 			combatTimerActive = false;
 			lastCombatTick = 0;
+			Character?.DisableFlags(CharacterFlags.IsInCombat);
+				immortal = false;
 		}
 	}
 }

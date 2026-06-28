@@ -168,9 +168,9 @@ namespace FishMMO.Shared
 			TryResolvePendingPlatform();
 
 			// Server-authoritative movement gate: reject movement input from characters
-			// that are dead, frozen, teleporting, unloaded, or in combat. This prevents
-			// combat-escape exploits and ensures movement-controlling status effects
-			// are enforced server-side.
+			// that are dead, frozen, teleporting, or unloaded. IsInCombat is intentionally
+			// excluded — players can move freely during combat. Only teleportation is
+			// blocked while in combat (see CharacterSystem.Connection.cs).
 			if (base.IsServerStarted &&
 				CharacterController != null &&
 				CharacterController.Character != null)

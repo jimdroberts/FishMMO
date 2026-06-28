@@ -100,7 +100,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="sessionInfo">Session ownership info to release after save, or null if no session is claimed.</param>
 		private void SaveAndDespawnCharacter(NetworkConnection conn, IPlayerCharacter character, CharacterSessionInfo? sessionInfo = null)
 		{
-			// Remove loaded state so when a character is reloaded into a different scene/server, it will properly clamp attributes 
+			// Combat is transient state — clear it before saving so it never persists to DB.
+			// (BuildCharacterData also masks the flag for defense-in-depth.)
+			character.DisableFlags(CharacterFlags.IsInCombat);
+
+			// Remove loaded state so when a character is reloaded into a different scene/server, it will properly clamp attributes
 			// and prevent actions until fully loaded in the new scene.
 			character.DisableFlags(CharacterFlags.IsLoaded);
 
@@ -183,7 +187,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				rotW: rot.w,
 				accessLevel: (byte)(int)character.AccessLevel,
 				online: true,
-				flags: character.Flags,
+				flags: character.Flags & ~(1 << (int)CharacterFlags.IsInCombat),
 				version: character.Version,
 				timeCreated: character.TimeCreated,
 				lastSaved: DateTime.UtcNow

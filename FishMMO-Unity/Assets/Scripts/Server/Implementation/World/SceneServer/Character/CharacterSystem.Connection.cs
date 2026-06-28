@@ -371,6 +371,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!player.IsFlagged(CharacterFlags.IsDead))
 				return;
 
+			// Validate the resurrector: must be online and in the same scene.
+			// Without this check, a dead player could self-revive by sending a
+			// fake ResurrectAcceptBroadcast with an arbitrary ResurrectorID.
+			if (msg.ResurrectorID <= 0 ||
+				!data.CharactersByID.TryGetValue(msg.ResurrectorID, out IPlayerCharacter resurrector) ||
+				resurrector.SceneName != player.SceneName)
+			{
+				return;
+			}
+
 			player.DisableFlags(CharacterFlags.IsDead);
 			if (player.TryGet(out ICharacterDamageController damageController))
 				damageController.Revive(null, 999999);

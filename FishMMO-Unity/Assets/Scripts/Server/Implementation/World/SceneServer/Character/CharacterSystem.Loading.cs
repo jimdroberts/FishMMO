@@ -457,6 +457,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			character.InstanceID = charData.InstanceID;
 			character.Flags = charData.Flags;
 
+			// Combat is transient state — never persist or restore across sessions.
+			// The save path also strips this flag, but sanitize on load for defense-in-depth.
+			character.DisableFlags(CharacterFlags.IsInCombat);
+
 			if (character.IsInInstance())
 			{
 				character.InstancePosition = new Vector3(charData.InstanceX, charData.InstanceY, charData.InstanceZ);

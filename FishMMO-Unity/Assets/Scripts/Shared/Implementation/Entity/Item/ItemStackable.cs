@@ -103,8 +103,10 @@ namespace FishMMO.Shared
 			if (IsStackFull || other.Stackable == null || other.Stackable.IsStackFull) return false;
 
 			uint remainingCapacity = item.Template.MaxStackSize - Amount;
-			uint remainingAmount = remainingCapacity.AbsoluteSubtract(other.Stackable.Amount);
+			uint incomingAmount = other.Stackable.Amount;
+			uint remainingAmount = remainingCapacity.AbsoluteSubtract(incomingAmount);
 			other.Stackable.Amount = remainingAmount;
+			Amount += incomingAmount - remainingAmount;
 
 			return true;
 		}
