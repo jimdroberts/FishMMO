@@ -51,7 +51,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ReverseNamingBroadcast>(OnClientReverseNamingBroadcastReceived);
 
-#if !UNITY_EDITOR
+#if !UNITY_EDITOR && !UNITY_WEBGL
 			string workingDirectory = Constants.GetWorkingDirectory();
 			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
 			{
@@ -80,7 +80,7 @@ namespace FishMMO.Client
 				Client.NetworkManager.ClientManager.UnregisterBroadcast<ReverseNamingBroadcast>(OnClientReverseNamingBroadcastReceived);
 			}
 
-#if !UNITY_EDITOR
+#if !UNITY_EDITOR && !UNITY_WEBGL
 			if (idToName.Count < 1)
 			{
 				return;

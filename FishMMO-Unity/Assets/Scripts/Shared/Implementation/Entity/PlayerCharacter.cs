@@ -243,15 +243,15 @@ namespace FishMMO.Shared
 			Flags = reader.ReadInt32();
 
 #if !UNITY_SERVER
-		ClientCharacters[ID] = this;
+			ClientCharacters[ID] = this;
 
-		IPlayerCharacter.OnReadPayload?.Invoke(this);
+			IPlayerCharacter.OnReadPayload?.Invoke(this);
 
-		RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(RaceID);
-		if (raceTemplate != null)
-		{
-			InstantiateRaceModelFromIndex(raceTemplate, ModelIndex);
-		}
+			RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(RaceID);
+			if (raceTemplate != null)
+			{
+				InstantiateRaceModelFromIndex(raceTemplate, ModelIndex);
+			}
 #endif
 		}
 
@@ -278,17 +278,17 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnStartClient()
 		{
-		base.OnStartClient();
+			base.OnStartClient();
 
-		if (base.IsOwner)
-		{
-			IPlayerCharacter.OnStartLocalClient?.Invoke(this);
-
-			foreach (ICharacterBehaviour behaviour in this.Behaviours.Values)
+			if (base.IsOwner)
 			{
-				behaviour.OnStartCharacter();
+				IPlayerCharacter.OnStartLocalClient?.Invoke(this);
+
+				foreach (ICharacterBehaviour behaviour in this.Behaviours.Values)
+				{
+					behaviour.OnStartCharacter();
+				}
 			}
-		}
 		}
 
 		/// <summary>
@@ -296,16 +296,16 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnStopClient()
 		{
-		base.OnStopClient();
-		if (base.IsOwner)
-		{
-			foreach (ICharacterBehaviour behaviour in this.Behaviours.Values)
+			base.OnStopClient();
+			if (base.IsOwner)
 			{
-				behaviour.OnStopCharacter();
-			}
+				foreach (ICharacterBehaviour behaviour in this.Behaviours.Values)
+				{
+					behaviour.OnStopCharacter();
+				}
 
-			IPlayerCharacter.OnStopLocalClient?.Invoke(this);
-		}
+				IPlayerCharacter.OnStopLocalClient?.Invoke(this);
+			}
 		}
 #endif
 
@@ -319,7 +319,7 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 #if !UNITY_SERVER
-		ClientCharacters.Remove(ID);
+			ClientCharacters.Remove(ID);
 #endif
 
 			TeleporterName = "";
@@ -357,10 +357,10 @@ namespace FishMMO.Shared
 		public void SetGuildName(string guildName)
 		{
 #if !UNITY_SERVER
-		if (CharacterGuildLabel != null)
-		{
-			CharacterGuildLabel.text = !string.IsNullOrWhiteSpace(guildName) ? "[" + guildName + "]" : "";
-		}
+			if (CharacterGuildLabel != null)
+			{
+				CharacterGuildLabel.text = !string.IsNullOrWhiteSpace(guildName) ? "[" + guildName + "]" : "";
+			}
 #endif
 		}
 	}
