@@ -407,6 +407,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in attrController.Attributes)
 			{
 				var attr = kvp.Value;
+				// Skip attributes with Version <= 0: these are template-initialized defaults
+				// that were never loaded from DB. Saving them with a stale/invalid version
+				// would poison the batch upsert with a STALE_STATE rejection.
+				if (attr.Version <= 0)
+					continue;
 				attr.Version++;
 				attributes.Add(new CharacterAttributeData(
 					id: 0,
@@ -420,6 +425,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in attrController.ResourceAttributes)
 			{
 				var resAttr = kvp.Value;
+				if (resAttr.Version <= 0)
+					continue;
 				resAttr.Version++;
 				attributes.Add(new CharacterAttributeData(
 					id: 0,

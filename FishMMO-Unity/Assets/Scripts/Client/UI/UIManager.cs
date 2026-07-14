@@ -279,7 +279,7 @@ namespace FishMMO.Client
 			{
 				tkResult.ToggleVisibility();
 			}
-			PlayerInputHandler.ResetForcedMouseMode();
+			PlayerInputController.ResetForcedMouseMode();
 		}
 
 		/// <summary>

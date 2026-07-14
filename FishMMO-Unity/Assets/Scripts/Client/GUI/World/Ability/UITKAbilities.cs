@@ -177,7 +177,7 @@ namespace FishMMO.Client
 		/// <returns>True if manipulation is allowed.</returns>
 		private bool CanManipulateAbility()
 		{
-			return !PlayerInputHandler.MouseMode;
+			return !PlayerInputController.MouseMode;
 		}
 
 		/// <summary>

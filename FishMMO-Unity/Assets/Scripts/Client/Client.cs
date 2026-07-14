@@ -171,7 +171,7 @@ namespace FishMMO.Client
 			fogManager = new ClientFogManager(this);
 			fogManager.Initialize();
 
-	#if !UNITY_SERVER
+#if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload += OnCharacterReadPayload;
 			IPlayerCharacter.OnStartLocalClient += OnCharacterStartLocal;
 			IPlayerCharacter.OnStopLocalClient += OnCharacterStopLocal;
@@ -179,7 +179,7 @@ namespace FishMMO.Client
 			Pet.OnReadID += OnPetReadId;
 			regionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
 			DisplayRegionNameAction.OnDisplay2DLabel += OnRegionNameDisplay;
-	#endif
+#endif
 		}
 
 		/// <summary>
@@ -192,13 +192,13 @@ namespace FishMMO.Client
 		/// </summary>
 		void OnDestroy()
 		{
-	#if UNITY_EDITOR
-			PlayerInputHandler.MouseMode = true;
-	#endif
-	#if !UNITY_EDITOR
+#if UNITY_EDITOR
+			PlayerInputController.MouseMode = true;
+#endif
+#if !UNITY_EDITOR
 			try { Configuration.GlobalSettings.Save(); } catch (Exception ex) { Log.Warning("Client", $"Settings save failed: {ex.Message}"); }
-	#endif
-	#if !UNITY_SERVER
+#endif
+#if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload -= OnCharacterReadPayload;
 			IPlayerCharacter.OnStartLocalClient -= OnCharacterStartLocal;
 			IPlayerCharacter.OnStopLocalClient -= OnCharacterStopLocal;
@@ -206,7 +206,7 @@ namespace FishMMO.Client
 			Pet.OnReadID -= OnPetReadId;
 			if (regionNameLabel != null) { Destroy(regionNameLabel.gameObject); regionNameLabel = null; }
 			DisplayRegionNameAction.OnDisplay2DLabel -= OnRegionNameDisplay;
-	#endif
+#endif
 			AudioListener = null;
 			combatDisplay?.Shutdown();
 			fogManager?.Shutdown();
@@ -271,11 +271,11 @@ namespace FishMMO.Client
 			if (tm == null) { Log.Error("Client", "TransportManager not found."); return false; }
 			var mp = tm.GetTransport<Multipass>();
 			if (mp == null) { Log.Error("Client", "Multipass not found."); return false; }
-	#if UNITY_WEBGL && !UNITY_EDITOR
+#if UNITY_WEBGL && !UNITY_EDITOR
 			mp.SetClientTransport<Bayou>();
-	#else
+#else
 			mp.SetClientTransport<Tugboat>();
-	#endif
+#endif
 			return true;
 		}
 
@@ -287,13 +287,13 @@ namespace FishMMO.Client
 		/// </summary>
 		public void Quit()
 		{
-	#if UNITY_EDITOR
+#if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
-	#elif UNITY_WEBGL
+#elif UNITY_WEBGL
 			GetComponent<WebGLKeyHijack>()?.ClientQuit();
-	#else
+#else
 			Application.Quit();
-	#endif
+#endif
 		}
 
 		/// <summary>
@@ -310,9 +310,9 @@ namespace FishMMO.Client
 			LoginAuthenticator?.RevokeAndClearAuthToken();
 			Connection?.ResetReconnectState();
 			OnQuitToLogin?.Invoke();
-	#if UNITY_EDITOR
-			PlayerInputHandler.MouseMode = true;
-	#endif
+#if UNITY_EDITOR
+			PlayerInputController.MouseMode = true;
+#endif
 		}
 
 		/// <summary>
@@ -323,9 +323,9 @@ namespace FishMMO.Client
 		/// <param name="isWorldServer">If true, marks this as a world server connection.</param>
 		public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
 		{
-	#if UNITY_WEBGL && !UNITY_EDITOR
+#if UNITY_WEBGL && !UNITY_EDITOR
 			address = Constants.Configuration.GameHost + "/ws/" + port; port = 443;
-	#endif
+#endif
 			Connection?.ConnectToServer(address, port, isWorldServer);
 		}
 
@@ -576,7 +576,7 @@ namespace FishMMO.Client
 
 		// ── Character / guild / pet / region handlers ──────────────────
 
-	#if !UNITY_SERVER
+#if !UNITY_SERVER
 		/// <summary>
 		/// Called when a character payload is received. Sets the character's name and updates the name label.
 		/// </summary>
@@ -594,7 +594,7 @@ namespace FishMMO.Client
 			UIManager.SetCharacter(c);
 			var input = c.GameObject.GetComponent<PlayerInputController>() ?? c.GameObject.AddComponent<PlayerInputController>();
 			input.Initialize(c);
-			PlayerInputHandler.MouseMode = false;
+			PlayerInputController.MouseMode = false;
 		}
 		/// <summary>
 		/// Called when the local character stops. Cleans up input, UI, fog, and destroys the character object.
@@ -602,7 +602,7 @@ namespace FishMMO.Client
 		/// <param name="c">The local player character.</param>
 		private void OnCharacterStopLocal(IPlayerCharacter c)
 		{
-			PlayerInputHandler.MouseMode = true;
+			PlayerInputController.MouseMode = true;
 			c.GameObject.GetComponent<PlayerInputController>()?.Deinitialize();
 			UIManager.UnsetCharacter();
 			if (regionNameLabel != null && regionNameLabel.gameObject != null) regionNameLabel.gameObject.SetActive(false);
@@ -644,6 +644,6 @@ namespace FishMMO.Client
 		{
 			if (regionNameLabel != null) { regionNameLabel.gameObject.SetActive(true); regionNameLabel.Initialize(text, style, font, size, color, life, fade, up, offset); }
 		}
-	#endif
+#endif
 	}
 }

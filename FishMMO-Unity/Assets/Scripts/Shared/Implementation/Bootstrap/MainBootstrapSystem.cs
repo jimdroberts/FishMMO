@@ -221,40 +221,6 @@ namespace FishMMO.Shared
 
 			string workingDir = Constants.GetWorkingDirectory();
 
-#if !UNITY_EDITOR
-			string versionFilePath = Path.Combine(workingDir, "version.txt");
-
-			if (File.Exists(versionFilePath))
-			{
-				try
-				{
-					string versionText = File.ReadAllText(versionFilePath).Trim();
-					VersionConfig loadedVersionConfig = VersionConfig.Parse(versionText);
-
-					if (loadedVersionConfig != null)
-					{
-						Debug.Log($"[MainBootstrapSystem] Loaded VersionConfig from version.txt: {versionConfig.FullVersion}");
-
-						if (versionConfig != null && versionConfig != loadedVersionConfig)
-						{
-							Debug.LogError($"Version mismatch between asset and version.txt: {versionConfig.FullVersion} vs {loadedVersionConfig.FullVersion}");
-						}
-					}
-					else
-					{
-						Debug.LogError("[MainBootstrapSystem] Failed to parse version.txt content into VersionConfig.");
-					}
-				}
-				catch (System.Exception ex)
-				{
-					Debug.LogError($"[MainBootstrapSystem] Exception reading or parsing version.txt: {ex}");
-				}
-			}
-			else
-			{
-				Debug.LogError($"[MainBootstrapSystem] version.txt not found in working directory: {workingDir}");
-			}
-#endif
 			GameVersion = versionConfig?.FullVersion ?? "UNKNOWN";
 
 			Debug.Log($"[MainBootstrapSystem] Loaded GameVersion: {GameVersion}");

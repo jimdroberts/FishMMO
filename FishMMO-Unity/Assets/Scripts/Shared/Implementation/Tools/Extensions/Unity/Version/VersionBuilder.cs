@@ -25,40 +25,12 @@ namespace FishMMO.Shared
 		private const string VersionConfigPath = "Assets/VersionConfig.asset";
 
 		/// <summary>
-		/// Name of the version file to be written in the build output directory.
-		/// </summary>
-		private const string VersionFileName = "version.txt";
-
-		/// <summary>
 		/// Called after the build is completed. Writes the current version to a file in the build output directory.
 		/// </summary>
 		/// <param name="report">The build report containing build details.</param>
 		public void OnPostprocessBuild(BuildReport report)
 		{
 			//UpdateBuildVersion(); // Auto increment build version
-
-			// Retrieve the current version configuration asset.
-			VersionConfig config = GetVersionConfig();
-			if (config != null)
-			{
-				// Path to the built executable or app bundle.
-				string buildPath = report.summary.outputPath;
-				// Directory containing the build output.
-				string buildDirectory = Path.GetDirectoryName(buildPath);
-				// Full path for the version.txt file.
-				string versionFilePath = Path.Combine(buildDirectory, VersionFileName);
-
-				try
-				{
-					// Write the full version string to the version.txt file.
-					File.WriteAllText(versionFilePath, config.FullVersion);
-					Log.Debug("VersionBuilder", $"Version file written to: {versionFilePath} with content: {config.FullVersion}");
-				}
-				catch (System.Exception e)
-				{
-					Log.Error("VersionBuilder", $"Failed to write version file to {versionFilePath}: {e.Message}");
-				}
-			}
 		}
 
 		/// <summary>

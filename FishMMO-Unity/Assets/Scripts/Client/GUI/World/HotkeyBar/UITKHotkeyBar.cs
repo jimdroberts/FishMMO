@@ -288,7 +288,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (PlayerInputHandler.MouseMode || UIManager.InputControlHasFocus())
+			if (PlayerInputController.MouseMode || UIManager.InputControlHasFocus())
 			{
 				return;
 			}
@@ -618,7 +618,7 @@ namespace FishMMO.Client
 		/// <returns>True if the corresponding input is pressed.</returns>
 		private static bool IsHotkeyPressed(int hotkeyIndex)
 		{
-			if (PlayerInputHandler.Controls == null)
+			if (PlayerInputController.Controls == null)
 			{
 				return false;
 			}
@@ -630,25 +630,25 @@ namespace FishMMO.Client
 				case 1:
 					return Mouse.current != null && Mouse.current.rightButton.isPressed;
 				case 2:
-					return PlayerInputHandler.Controls.Player.Hotkey1.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey1.IsPressed();
 				case 3:
-					return PlayerInputHandler.Controls.Player.Hotkey2.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey2.IsPressed();
 				case 4:
-					return PlayerInputHandler.Controls.Player.Hotkey3.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey3.IsPressed();
 				case 5:
-					return PlayerInputHandler.Controls.Player.Hotkey4.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey4.IsPressed();
 				case 6:
-					return PlayerInputHandler.Controls.Player.Hotkey5.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey5.IsPressed();
 				case 7:
-					return PlayerInputHandler.Controls.Player.Hotkey6.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey6.IsPressed();
 				case 8:
-					return PlayerInputHandler.Controls.Player.Hotkey7.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey7.IsPressed();
 				case 9:
-					return PlayerInputHandler.Controls.Player.Hotkey8.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey8.IsPressed();
 				case 10:
-					return PlayerInputHandler.Controls.Player.Hotkey9.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey9.IsPressed();
 				case 11:
-					return PlayerInputHandler.Controls.Player.Hotkey0.IsPressed();
+					return PlayerInputController.Controls.Player.Hotkey0.IsPressed();
 				default:
 					return false;
 			}

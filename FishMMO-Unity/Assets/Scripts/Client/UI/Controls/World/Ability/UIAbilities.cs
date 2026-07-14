@@ -104,7 +104,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private bool CanManipulateAbility()
 		{
-			return !PlayerInputHandler.MouseMode;
+			return !PlayerInputController.MouseMode;
 		}
 
 		/// <summary>

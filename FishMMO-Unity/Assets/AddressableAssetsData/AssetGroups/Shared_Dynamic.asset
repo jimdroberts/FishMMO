@@ -21,6 +21,11 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3beac095da1831c42b95c47d02fbaf12
+    m_Address: Assets/VersionConfig.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 41f73c28208285445b37a7980665ead3
     m_Address: GenericGameBackgroundDefaultLoadingScreen
     m_ReadOnly: 0

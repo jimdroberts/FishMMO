@@ -45,11 +45,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3beac095da1831c42b95c47d02fbaf12
-    m_Address: Assets/VersionConfig.asset
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4e2f32e9a1fefc24092337ae061f3dbc
     m_Address: EthanOcclusion
     m_ReadOnly: 0

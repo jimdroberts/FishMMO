@@ -17,6 +17,87 @@ namespace FishMMO.Client
 	public class PlayerInputController : MonoBehaviour
 	{
 #if !UNITY_SERVER
+		// ── Static mouse-mode & global input state ─────────────────────────
+
+		/// <summary>
+		/// True when the mouse mode was explicitly set by a UI element
+		/// (prevents auto-dismiss from overriding a deliberate cursor show).
+		/// </summary>
+		public static bool ForcedMouseMode { get; private set; }
+
+		/// <summary>
+		/// Gets or sets the current mouse mode. True = cursor visible/unlocked.
+		/// False = cursor hidden/locked to the game window.
+		/// </summary>
+		public static bool MouseMode
+		{
+			get => Cursor.visible;
+			set
+			{
+				if (Cursor.visible == value) return;
+				Cursor.visible = value;
+				Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
+
+				if (!value && UnityEngine.EventSystems.EventSystem.current != null &&
+					!UnityEngine.EventSystems.EventSystem.current.alreadySelecting)
+				{
+					UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
+				}
+#if UNITY_EDITOR
+				if (!value) ForceClickMouseButtonInCenterOfGameWindow();
+#endif
+				OnToggleMouseMode?.Invoke(value);
+			}
+		}
+
+		/// <summary>Invoked when MouseMode changes.</summary>
+		public static event Action<bool> OnToggleMouseMode;
+
+		/// <summary>Shared PlayerControls for read-only queries (hotkey bar, chat).</summary>
+		public static PlayerControls Controls { get; private set; }
+
+		/// <summary>Ensures the static Controls instance is created.</summary>
+		public static void InitializeControls()
+		{
+			if (Controls != null) return;
+			Controls = new PlayerControls();
+			Controls.Enable();
+			Controls.Player.Enable();
+			Controls.UI.Enable();
+		}
+
+		/// <summary>Clears the forced-mouse-mode flag.</summary>
+		public static void ResetForcedMouseMode() => ForcedMouseMode = false;
+
+		/// <summary>Toggles mouse mode. Pass true to force the new state.</summary>
+		public static void ToggleMouseMode(bool forceMouseMode = false)
+		{
+			ForcedMouseMode = forceMouseMode;
+			MouseMode = !MouseMode;
+		}
+
+		/// <summary>Persists keybinding overrides to global configuration.</summary>
+		public static void SaveBindingOverrides()
+		{
+			if (Configuration.GlobalSettings != null && Controls != null)
+				Configuration.GlobalSettings.Set("InputBindingOverrides", Controls.SaveBindingOverridesAsJson());
+		}
+
+#if UNITY_EDITOR
+		[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+		public static void ForceClickMouseButtonInCenterOfGameWindow()
+		{
+			var game = UnityEditor.EditorWindow.GetWindow(
+				typeof(UnityEditor.EditorWindow).Assembly.GetType("UnityEditor.GameView"));
+			if (game == null) return;
+			Vector2 center = game.rootVisualElement.contentRect.center;
+			game.SendEvent(new Event { button = 0, clickCount = 1,
+				type = EventType.MouseDown, mousePosition = center });
+		}
+#endif
+
+		// ── Instance state ─────────────────────────────────────────────────
+
 		/// <summary>
 		/// The player character associated with this input controller.
 		/// </summary>
@@ -26,6 +107,7 @@ namespace FishMMO.Client
 		/// Indicates if a jump input has been queued for processing.
 		/// </summary>
 		private bool jumpQueued = false;
+		/// <summary>
 		/// <summary>
 		/// Indicates if crouch input is currently active.
 		/// </summary>
@@ -67,6 +149,13 @@ namespace FishMMO.Client
 				Character.KCCPlayer.OnHandleCharacterInput += KCCPlayer_OnHandleCharacterInput;
 			}
 
+			// Ensure the shared PlayerControls exists and load saved keybinds.
+			InitializeControls();
+			LoadBindingOverrides();
+
+			// Start with cursor visible (login/loading state).
+			MouseMode = true;
+
 			SubscribeToInputActions();
 		}
 
@@ -89,50 +178,48 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Subscribes to all relevant input actions from the Input System.
+		/// <summary>
+		/// Subscribes to all relevant input actions from this character's
+		/// PlayerControls instance. Called once from Initialize().
 		/// </summary>
 		private void SubscribeToInputActions()
 		{
-			if (PlayerInputHandler.Controls == null)
-			{
-				Log.Error("PlayerInputController", "PlayerControls not initialized. Ensure PlayerInputHandler is active in the scene.");
-				return;
-			}
+			if (Controls == null) return;
 
 			// Player continuous input
-			PlayerInputHandler.Controls.Player.Move.performed += OnMovePerformed;
-			PlayerInputHandler.Controls.Player.Move.canceled += OnMoveCanceled;
+			Controls.Player.Move.performed += OnMovePerformed;
+			Controls.Player.Move.canceled += OnMoveCanceled;
 
-			PlayerInputHandler.Controls.Player.Look.performed += OnLookPerformed;
-			PlayerInputHandler.Controls.Player.Look.canceled += OnLookCanceled;
+			Controls.Player.Look.performed += OnLookPerformed;
+			Controls.Player.Look.canceled += OnLookCanceled;
 
-			PlayerInputHandler.Controls.UI.ScrollWheel.performed += OnScrollWheelPerformed;
-			PlayerInputHandler.Controls.UI.ScrollWheel.canceled += OnScrollWheelCanceled;
+			Controls.UI.ScrollWheel.performed += OnScrollWheelPerformed;
+			Controls.UI.ScrollWheel.canceled += OnScrollWheelCanceled;
 
-			PlayerInputHandler.Controls.Player.Jump.performed += OnJumpPerformed;
-			PlayerInputHandler.Controls.Player.Crouch.performed += OnCrouchPerformed;
-			PlayerInputHandler.Controls.Player.Crouch.canceled += OnCrouchCanceled;
-			PlayerInputHandler.Controls.Player.Sprint.performed += OnSprintPerformed;
-			PlayerInputHandler.Controls.Player.Sprint.canceled += OnSprintCanceled;
+			Controls.Player.Jump.performed += OnJumpPerformed;
+			Controls.Player.Crouch.performed += OnCrouchPerformed;
+			Controls.Player.Crouch.canceled += OnCrouchCanceled;
+			Controls.Player.Sprint.performed += OnSprintPerformed;
+			Controls.Player.Sprint.canceled += OnSprintCanceled;
 
 			// Player action callbacks
-			PlayerInputHandler.Controls.Player.Interact.performed += OnInteractPerformed;
-			PlayerInputHandler.Controls.Player.ToggleFirstPerson.performed += OnToggleFirstPersonPerformed;
-			PlayerInputHandler.Controls.Player.Cancel.performed += OnCancelPerformed;
-			PlayerInputHandler.Controls.Player.CloseLastUI.performed += OnCloseLastUIPerformed;
-			PlayerInputHandler.Controls.Player.Chat.performed += OnChatPerformed;
+			Controls.Player.Interact.performed += OnInteractPerformed;
+			Controls.Player.ToggleFirstPerson.performed += OnToggleFirstPersonPerformed;
+			Controls.Player.Cancel.performed += OnCancelPerformed;
+			Controls.Player.CloseLastUI.performed += OnCloseLastUIPerformed;
+			Controls.Player.Chat.performed += OnChatPerformed;
 
 			// UI/Menu toggles
-			PlayerInputHandler.Controls.Player.Inventory.performed += OnInventoryPerformed;
-			PlayerInputHandler.Controls.Player.Abilities.performed += OnAbilitiesPerformed;
-			PlayerInputHandler.Controls.Player.Equipment.performed += OnEquipmentPerformed;
-			PlayerInputHandler.Controls.Player.Guild.performed += OnGuildPerformed;
-			PlayerInputHandler.Controls.Player.Party.performed += OnPartyPerformed;
-			PlayerInputHandler.Controls.Player.Friends.performed += OnFriendsPerformed;
-			PlayerInputHandler.Controls.Player.Achievements.performed += OnAchievementsPerformed;
-			PlayerInputHandler.Controls.Player.Factions.performed += OnFactionsPerformed;
-			PlayerInputHandler.Controls.Player.Minimap.performed += OnMinimapPerformed;
-			PlayerInputHandler.Controls.Player.Menu.performed += OnMenuPerformed;
+			Controls.Player.Inventory.performed += OnInventoryPerformed;
+			Controls.Player.Abilities.performed += OnAbilitiesPerformed;
+			Controls.Player.Equipment.performed += OnEquipmentPerformed;
+			Controls.Player.Guild.performed += OnGuildPerformed;
+			Controls.Player.Party.performed += OnPartyPerformed;
+			Controls.Player.Friends.performed += OnFriendsPerformed;
+			Controls.Player.Achievements.performed += OnAchievementsPerformed;
+			Controls.Player.Factions.performed += OnFactionsPerformed;
+			Controls.Player.Minimap.performed += OnMinimapPerformed;
+			Controls.Player.Menu.performed += OnMenuPerformed;
 		}
 
 		/// <summary>
@@ -140,42 +227,42 @@ namespace FishMMO.Client
 		/// </summary>
 		private void UnsubscribeFromInputActions()
 		{
-			if (PlayerInputHandler.Controls == null) return;
+			if (Controls == null) return;
 
 			// Player continuous input
-			PlayerInputHandler.Controls.Player.Move.performed -= OnMovePerformed;
-			PlayerInputHandler.Controls.Player.Move.canceled -= OnMoveCanceled;
+			Controls.Player.Move.performed -= OnMovePerformed;
+			Controls.Player.Move.canceled -= OnMoveCanceled;
 
-			PlayerInputHandler.Controls.Player.Look.performed -= OnLookPerformed;
-			PlayerInputHandler.Controls.Player.Look.canceled -= OnLookCanceled;
+			Controls.Player.Look.performed -= OnLookPerformed;
+			Controls.Player.Look.canceled -= OnLookCanceled;
 
-			PlayerInputHandler.Controls.UI.ScrollWheel.performed -= OnScrollWheelPerformed;
-			PlayerInputHandler.Controls.UI.ScrollWheel.canceled -= OnScrollWheelCanceled;
+			Controls.UI.ScrollWheel.performed -= OnScrollWheelPerformed;
+			Controls.UI.ScrollWheel.canceled -= OnScrollWheelCanceled;
 
-			PlayerInputHandler.Controls.Player.Jump.performed -= OnJumpPerformed;
-			PlayerInputHandler.Controls.Player.Crouch.performed -= OnCrouchPerformed;
-			PlayerInputHandler.Controls.Player.Crouch.canceled -= OnCrouchCanceled;
-			PlayerInputHandler.Controls.Player.Sprint.performed -= OnSprintPerformed;
-			PlayerInputHandler.Controls.Player.Sprint.canceled -= OnSprintCanceled;
+			Controls.Player.Jump.performed -= OnJumpPerformed;
+			Controls.Player.Crouch.performed -= OnCrouchPerformed;
+			Controls.Player.Crouch.canceled -= OnCrouchCanceled;
+			Controls.Player.Sprint.performed -= OnSprintPerformed;
+			Controls.Player.Sprint.canceled -= OnSprintCanceled;
 
 			// Player action callbacks
-			PlayerInputHandler.Controls.Player.Interact.performed -= OnInteractPerformed;
-			PlayerInputHandler.Controls.Player.ToggleFirstPerson.performed -= OnToggleFirstPersonPerformed;
-			PlayerInputHandler.Controls.Player.Cancel.performed -= OnCancelPerformed;
-			PlayerInputHandler.Controls.Player.CloseLastUI.performed -= OnCloseLastUIPerformed;
-			PlayerInputHandler.Controls.Player.Chat.performed -= OnChatPerformed;
+			Controls.Player.Interact.performed -= OnInteractPerformed;
+			Controls.Player.ToggleFirstPerson.performed -= OnToggleFirstPersonPerformed;
+			Controls.Player.Cancel.performed -= OnCancelPerformed;
+			Controls.Player.CloseLastUI.performed -= OnCloseLastUIPerformed;
+			Controls.Player.Chat.performed -= OnChatPerformed;
 
 			// UI/Menu toggles
-			PlayerInputHandler.Controls.Player.Inventory.performed -= OnInventoryPerformed;
-			PlayerInputHandler.Controls.Player.Abilities.performed -= OnAbilitiesPerformed;
-			PlayerInputHandler.Controls.Player.Equipment.performed -= OnEquipmentPerformed;
-			PlayerInputHandler.Controls.Player.Guild.performed -= OnGuildPerformed;
-			PlayerInputHandler.Controls.Player.Party.performed -= OnPartyPerformed;
-			PlayerInputHandler.Controls.Player.Friends.performed -= OnFriendsPerformed;
-			PlayerInputHandler.Controls.Player.Achievements.performed -= OnAchievementsPerformed;
-			PlayerInputHandler.Controls.Player.Factions.performed -= OnFactionsPerformed;
-			PlayerInputHandler.Controls.Player.Minimap.performed -= OnMinimapPerformed;
-			PlayerInputHandler.Controls.Player.Menu.performed -= OnMenuPerformed;
+			Controls.Player.Inventory.performed -= OnInventoryPerformed;
+			Controls.Player.Abilities.performed -= OnAbilitiesPerformed;
+			Controls.Player.Equipment.performed -= OnEquipmentPerformed;
+			Controls.Player.Guild.performed -= OnGuildPerformed;
+			Controls.Player.Party.performed -= OnPartyPerformed;
+			Controls.Player.Friends.performed -= OnFriendsPerformed;
+			Controls.Player.Achievements.performed -= OnAchievementsPerformed;
+			Controls.Player.Factions.performed -= OnFactionsPerformed;
+			Controls.Player.Minimap.performed -= OnMinimapPerformed;
+			Controls.Player.Menu.performed -= OnMenuPerformed;
 		}
 
 		/// <summary>
@@ -211,6 +298,17 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Cleans up input subscriptions on the static Controls to prevent
+		/// leaks when the GameObject is destroyed without Deinitialize().
+		/// </summary>
+		private void OnDestroy()
+		{
+			if (Character != null && Character.KCCPlayer != null)
+				Character.KCCPlayer.OnHandleCharacterInput -= KCCPlayer_OnHandleCharacterInput;
+			UnsubscribeFromInputActions();
+		}
+
+		/// <summary>
 		/// Determines if input should be processed for the player character.
 		/// Input is only processed if the character is alive, mouse mode is off, and no UI input field has focus.
 		/// </summary>
@@ -225,7 +323,7 @@ namespace FishMMO.Client
 					return false;
 				}
 			}
-			return !PlayerInputHandler.MouseMode && !UIManager.InputControlHasFocus();
+			return !PlayerInputController.MouseMode && !UIManager.InputControlHasFocus();
 		}
 
 		/// <summary>
@@ -337,11 +435,11 @@ namespace FishMMO.Client
 		/// </summary>
 		private void HandleAutoDismiss()
 		{
-			if (!PlayerInputHandler.ForcedMouseMode && !UIManager.CloseNext(true))
+			if (!PlayerInputController.ForcedMouseMode && !UIManager.CloseNext(true))
 			{
-				if (PlayerInputHandler.MouseMode)
+				if (PlayerInputController.MouseMode)
 				{
-					PlayerInputHandler.ToggleMouseMode();
+					PlayerInputController.ToggleMouseMode();
 				}
 			}
 		}
@@ -352,7 +450,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void HandleRightClickContextMenu()
 		{
-			if (!PlayerInputHandler.MouseMode)
+			if (!PlayerInputController.MouseMode)
 			{
 				return;
 			}
@@ -535,9 +633,9 @@ namespace FishMMO.Client
 		{
 			if (!UIManager.CloseNext())
 			{
-				if (PlayerInputHandler.MouseMode)
+				if (PlayerInputController.MouseMode)
 				{
-					PlayerInputHandler.ToggleMouseMode();
+					PlayerInputController.ToggleMouseMode();
 				}
 			}
 		}
@@ -612,6 +710,15 @@ namespace FishMMO.Client
 		private void OnMenuPerformed(InputAction.CallbackContext context)
 		{
 			UIManager.ToggleVisibility("UIMenu");
+		}
+
+		/// <summary>Loads keybinding overrides from global config.</summary>
+		private static void LoadBindingOverrides()
+		{
+			if (Configuration.GlobalSettings == null || Controls == null) return;
+			if (Configuration.GlobalSettings.TryGetString("InputBindingOverrides", out string json)
+				&& !string.IsNullOrEmpty(json))
+				Controls.LoadBindingOverridesFromJson(json);
 		}
 #endif
 	}

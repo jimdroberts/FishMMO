@@ -182,13 +182,13 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (PlayerInputHandler.Controls == null ||
-				!PlayerInputHandler.Controls.Player.Chat.triggered)
+			if (PlayerInputController.Controls == null ||
+				!PlayerInputController.Controls.Player.Chat.triggered)
 			{
 				return;
 			}
 
-			if (PlayerInputHandler.MouseMode &&
+			if (PlayerInputController.MouseMode &&
 				!InputField.isFocused)
 			{
 				InputField.OnSelect(new BaseEventData(EventSystem.current)
@@ -204,7 +204,7 @@ namespace FishMMO.Client
 				});
 
 				// enable mouse mode
-				PlayerInputHandler.MouseMode = true;
+				PlayerInputController.MouseMode = true;
 			}
 		}
 
@@ -246,8 +246,8 @@ namespace FishMMO.Client
 		/// <param name="input">The submitted chat text.</param>
 		public void OnSubmit(string input)
 		{
-			if (PlayerInputHandler.Controls == null ||
-				!PlayerInputHandler.Controls.Player.Chat.triggered)
+			if (PlayerInputController.Controls == null ||
+				!PlayerInputController.Controls.Player.Chat.triggered)
 			{
 				return;
 			}

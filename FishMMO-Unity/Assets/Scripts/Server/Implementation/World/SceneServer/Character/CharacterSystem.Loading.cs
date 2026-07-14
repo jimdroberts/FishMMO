@@ -489,7 +489,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				foreach (CharacterAttributeData attr in attributeData)
 				{
-					if (attr.CurrentValue > 0)
+					// Use the template to determine if this is a resource attribute,
+					// NOT CurrentValue. A resource with CurrentValue == 0 (dead character,
+					// empty mana) is still a resource and must go into the ResourceAttributes
+					// dictionary. Using CurrentValue > 0 puts dead-player health into the
+					// base-attribute dictionary, leaving the real resource at Version=0,
+					// which causes STALE_STATE on every save.
+					CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(attr.TemplateID);
+					if (template != null && template.IsResourceAttribute)
 					{
 						attrController.SetResourceAttribute(attr.TemplateID, attr.Value, attr.CurrentValue, null);
 						if (attrController.ResourceAttributes.TryGetValue(attr.TemplateID, out var resAttr))

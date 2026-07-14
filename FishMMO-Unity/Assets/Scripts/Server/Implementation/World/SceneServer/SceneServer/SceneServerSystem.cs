@@ -341,13 +341,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="amount">Amount to adjust by (+1 or -1).</param>
 		private void AdjustSceneCharacterCount(long worldServerID, string sceneName, int sceneHandle, int amount)
 		{
-			// update scene instance details
 			if (TryGetSceneInstanceDetails(worldServerID,
 											sceneName,
 											sceneHandle,
 											out ISceneInstanceDetails instance))
 			{
 				instance.AddCharacterCount(amount);
+			}
+			else
+			{
+				// Hard error: instance must exist after scene load. Silent failure
+				// means character count stays 0, pulse reports StalePulse, and the
+				// scene may be collected before the client finishes loading.
+				Log.Error("SceneServerSystem",
+					$"AdjustSceneCharacterCount: scene instance not found for " +
+					$"World={worldServerID} Scene={sceneName} Handle={sceneHandle} " +
+					$"Amount={amount:+0;-#}. Character count will be stale.");
 			}
 		}
 

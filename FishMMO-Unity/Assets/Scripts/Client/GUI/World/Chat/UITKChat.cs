@@ -261,8 +261,8 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (PlayerInputHandler.Controls == null ||
-				!PlayerInputHandler.Controls.Player.Chat.triggered)
+			if (PlayerInputController.Controls == null ||
+				!PlayerInputController.Controls.Player.Chat.triggered)
 			{
 				return;
 			}
@@ -270,7 +270,7 @@ namespace FishMMO.Client
 			inputField.Focus();
 
 			// Enable mouse mode so the cursor is available for typing.
-			PlayerInputHandler.MouseMode = true;
+			PlayerInputController.MouseMode = true;
 		}
 
 		/// <summary>
