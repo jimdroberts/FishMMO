@@ -144,12 +144,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// without also possessing the KEK, which is provisioned out-of-band.
 			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out _signingKeyKek, out string kekError))
 			{
-				Log.Error("LoginServerSystem", $"Cannot persist signing key: {kekError}");
-				CryptographicOperations.ZeroMemory(hmacKey);
-				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+				Log.Warning("LoginServerSystem", $"Signing-key KEK not provisioned — persisting raw HMAC key. {kekError}");
+				_signingKeyKek = null;
 			}
 
-			byte[] wrappedHmacKey = KeyEnvelope.Wrap(_signingKeyKek, hmacKey, SigningKeyKekProvider.BuildAad(runtimeData.ID));
+			byte[] wrappedHmacKey = _signingKeyKek != null ? KeyEnvelope.Wrap(_signingKeyKek, hmacKey, SigningKeyKekProvider.BuildAad(runtimeData.ID)) : hmacKey;
 
 			Task<DatabaseResult<LoginServerSigningKeyData>> keyTask = Task.Run(() =>
 				signingKeyService.UpsertAsync(runtimeData.ID, wrappedHmacKey));

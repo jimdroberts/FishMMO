@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using FishNet.Serializing;
 
@@ -67,10 +68,205 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Registers the custom delta serializers at runtime via <see cref="GenericDeltaWriter{T}"/> and <see cref="GenericDeltaReader{T}"/>.
+		/// Full array write cap — 4096 entries covers any realistic buff/debuff/cooldown set
+		/// and provides a backstop against accidental runaway allocation.
+		/// </summary>
+		private const ushort MaxArrayEntries = 4096;
+
+		/// <summary>
+		/// Custom full serializer: writes all fields of <see cref="CharacterReconcileData"/>.
+		/// Nested types use their full serializers. Arrays write count + entries.
+		/// </summary>
+		public static void WriteCharacterReconcileData(this Writer writer, CharacterReconcileData value)
+		{
+			KinematicCharacterMotorStateDeltaSerializer.WriteKinematicCharacterMotorState(writer, value.MotorState);
+			writer.WriteInt64(value.AbilityID);
+			writer.WriteUInt32(value.RemainingTicks);
+			writer.WriteInt32(value.Seed);
+			CharacterAttributeResourceStateSerializer.WriteCharacterAttributeResourceState(writer, value.ResourceState);
+			writer.WriteInt32(value.PackedFlagsAndSlot);
+
+			// Cooldowns
+			if (value.Cooldowns == null || value.Cooldowns.Length == 0)
+			{
+				writer.WriteUInt16(0);
+			}
+			else
+			{
+				ushort count = (ushort)Math.Min(value.Cooldowns.Length, MaxArrayEntries);
+				writer.WriteUInt16(count);
+				for (int i = 0; i < count; i++)
+				{
+					writer.WriteInt64(value.Cooldowns[i].AbilityID);
+					writer.WriteUInt32(value.Cooldowns[i].StartTick);
+					writer.WriteUInt32(value.Cooldowns[i].DurationTicks);
+				}
+			}
+
+			// Buffs
+			if (value.Buffs == null || value.Buffs.Length == 0)
+			{
+				writer.WriteUInt16(0);
+			}
+			else
+			{
+				ushort count = (ushort)Math.Min(value.Buffs.Length, MaxArrayEntries);
+				writer.WriteUInt16(count);
+				for (int i = 0; i < count; i++)
+				{
+					writer.WriteInt32(value.Buffs[i].TemplateID);
+					writer.WriteUInt32(value.Buffs[i].ExpiryTick);
+					writer.WriteUInt32(value.Buffs[i].NextTickTick);
+					writer.WriteInt32(value.Buffs[i].Stacks);
+					writer.WriteInt32(value.Buffs[i].TickCount);
+					writer.WriteInt32(value.Buffs[i].CumulativeTickMultiplier);
+				}
+			}
+
+			// Equipment
+			if (value.Equipment == null || value.Equipment.Length == 0)
+			{
+				writer.WriteUInt16(0);
+			}
+			else
+			{
+				ushort count = (ushort)Math.Min(value.Equipment.Length, EquipmentReconcileEntry.MaxEntries);
+				writer.WriteUInt16(count);
+				for (int i = 0; i < count; i++)
+				{
+					writer.WriteInt32(value.Equipment[i].TemplateID);
+					writer.WriteUInt8Unpacked(value.Equipment[i].Slot);
+					writer.WriteInt32(value.Equipment[i].Seed);
+					writer.WriteInt64(value.Equipment[i].InstanceID);
+				}
+			}
+
+			// Attributes
+			if (value.Attributes == null || value.Attributes.Length == 0)
+			{
+				writer.WriteUInt16(0);
+			}
+			else
+			{
+				ushort count = (ushort)Math.Min(value.Attributes.Length, MaxArrayEntries);
+				writer.WriteUInt16(count);
+				for (int i = 0; i < count; i++)
+				{
+					writer.WriteInt32(value.Attributes[i].TemplateID);
+					writer.WriteInt32(value.Attributes[i].Value);
+					writer.WriteInt32(value.Attributes[i].ExternalModifier);
+				}
+			}
+
+			// RNG state
+			writer.WriteUInt32(value.RngS0);
+			writer.WriteUInt32(value.RngS1);
+			writer.WriteUInt32(value.RngS2);
+			writer.WriteUInt32(value.RngS3);
+		}
+
+		/// <summary>
+		/// Custom full deserializer: reads all fields of <see cref="CharacterReconcileData"/>.
+		/// Must read in the same order as <see cref="WriteCharacterReconcileData"/>.
+		/// </summary>
+		public static CharacterReconcileData ReadCharacterReconcileData(this Reader reader)
+		{
+			var result = new CharacterReconcileData
+			{
+				MotorState = KinematicCharacterMotorStateDeltaSerializer.ReadKinematicCharacterMotorState(reader),
+				AbilityID = reader.ReadInt64(),
+				RemainingTicks = reader.ReadUInt32(),
+				Seed = reader.ReadInt32(),
+				ResourceState = CharacterAttributeResourceStateSerializer.ReadCharacterAttributeResourceState(reader),
+				PackedFlagsAndSlot = reader.ReadInt32(),
+			};
+
+			// Cooldowns
+			ushort cdCount = reader.ReadUInt16();
+			if (cdCount > 0)
+			{
+				result.Cooldowns = new CooldownReconcileEntry[cdCount];
+				for (int i = 0; i < cdCount; i++)
+				{
+					result.Cooldowns[i] = new CooldownReconcileEntry
+					{
+						AbilityID = reader.ReadInt64(),
+						StartTick = reader.ReadUInt32(),
+						DurationTicks = reader.ReadUInt32(),
+					};
+				}
+			}
+
+			// Buffs
+			ushort buffCount = reader.ReadUInt16();
+			if (buffCount > 0)
+			{
+				result.Buffs = new BuffReconcileEntry[buffCount];
+				for (int i = 0; i < buffCount; i++)
+				{
+					result.Buffs[i] = new BuffReconcileEntry
+					{
+						TemplateID = reader.ReadInt32(),
+						ExpiryTick = reader.ReadUInt32(),
+						NextTickTick = reader.ReadUInt32(),
+						Stacks = reader.ReadInt32(),
+						TickCount = reader.ReadInt32(),
+						CumulativeTickMultiplier = reader.ReadInt32(),
+					};
+				}
+			}
+
+			// Equipment
+			ushort equipCount = reader.ReadUInt16();
+			if (equipCount > 0)
+			{
+				result.Equipment = new EquipmentReconcileEntry[equipCount];
+				for (int i = 0; i < equipCount; i++)
+				{
+					result.Equipment[i] = new EquipmentReconcileEntry
+					{
+						TemplateID = reader.ReadInt32(),
+						Slot = reader.ReadUInt8Unpacked(),
+						Seed = reader.ReadInt32(),
+						InstanceID = reader.ReadInt64(),
+					};
+				}
+			}
+
+			// Attributes
+			ushort attrCount = reader.ReadUInt16();
+			if (attrCount > 0)
+			{
+				result.Attributes = new AttributeReconcileEntry[attrCount];
+				for (int i = 0; i < attrCount; i++)
+				{
+					result.Attributes[i] = new AttributeReconcileEntry
+					{
+						TemplateID = reader.ReadInt32(),
+						Value = reader.ReadInt32(),
+						ExternalModifier = reader.ReadInt32(),
+					};
+				}
+			}
+
+			// RNG state
+			result.RngS0 = reader.ReadUInt32();
+			result.RngS1 = reader.ReadUInt32();
+			result.RngS2 = reader.ReadUInt32();
+			result.RngS3 = reader.ReadUInt32();
+
+			return result;
+		}
+
+		/// <summary>
+		/// Registers custom full + delta serializers. Full must be registered before delta
+		/// to prevent FishNet from clearing the delta registration.
 		/// </summary>
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-		private static void RegisterDeltaSerializers()
+		private static void RegisterSerializers()
 		{
+			GenericWriter<CharacterReconcileData>.SetWrite(WriteCharacterReconcileData);
+			GenericReader<CharacterReconcileData>.SetRead(ReadCharacterReconcileData);
 			GenericDeltaWriter<CharacterReconcileData>.SetWrite(WriteDelta);
 			GenericDeltaReader<CharacterReconcileData>.SetRead(ReadDelta);
 		}

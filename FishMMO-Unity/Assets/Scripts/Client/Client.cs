@@ -324,10 +324,53 @@ namespace FishMMO.Client
 		public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
 		{
 #if UNITY_WEBGL && !UNITY_EDITOR
-			address = Constants.Configuration.GameHost + "/ws/" + port; port = 443;
+			RewriteWebGlGameAddress(ref address, ref port, isWorldServer);
 #endif
 			Connection?.ConnectToServer(address, port, isWorldServer);
 		}
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+		/// <summary>
+		/// Rewrites a game-server address for WebGL (Bayou/WebSocket).
+		/// Multi-host mode: each public host connects on :443 without a path suffix.
+		/// Single-host path mode: rewrites to GameHost/ws/{port}.
+		/// </summary>
+		private static void RewriteWebGlGameAddress(ref string address, ref ushort port, bool isWorldServer)
+		{
+			// Already a public hostname → keep the host, force port 443 (WSS).
+			if (address.Contains(".") && !address.StartsWith("127.") && !address.StartsWith("10.") && !address.StartsWith("192.168.") && !address.StartsWith("172.16."))
+			{
+				port = 443;
+				return;
+			}
+
+			if (!string.IsNullOrEmpty(Constants.Configuration.WorldGameHost) || !string.IsNullOrEmpty(Constants.Configuration.SceneGameHost))
+			{
+				// Multi-host mode: map by local server port to the correct public host.
+				string host;
+				if (isWorldServer && !string.IsNullOrEmpty(Constants.Configuration.WorldGameHost))
+					host = Constants.Configuration.WorldGameHost;
+				else if (!isWorldServer && !string.IsNullOrEmpty(Constants.Configuration.SceneGameHost))
+					host = Constants.Configuration.SceneGameHost;
+				else
+					host = Constants.Configuration.GameHost;
+				address = host;
+				port = 443;
+			}
+			else if (Constants.Configuration.GameHostUseWsPortPath)
+			{
+				// Path mode: single host, route by /ws/{port}.
+				address = Constants.Configuration.GameHost + "/ws/" + port;
+				port = 443;
+			}
+			else
+			{
+				// Direct host-only mode (no path suffix).
+				address = Constants.Configuration.GameHost;
+				port = 443;
+			}
+		}
+#endif
 
 		/// <summary>
 		/// Checks whether the client connection is ready, optionally requiring authentication.
@@ -493,7 +536,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The world scene connect message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { if (IsConnectionReady()) ConnectToServer(msg.Address, msg.Port); }
+		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) ConnectToServer(msg.Address, msg.Port); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
 		/// <summary>
 		/// Handles a validated scene broadcast by beginning the world scene preload queue.
 		/// </summary>
@@ -521,7 +564,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The death broadcast message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnDeathBroadcast(DeathBroadcast msg, Channel ch) { if (UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog d)) d.ShowDeathDialog(); }
+		private void OnDeathBroadcast(DeathBroadcast msg, Channel ch) { try { if (UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog d)) d.ShowDeathDialog(); } catch (Exception ex) { Log.Error("Client", $"OnDeathBroadcast: {ex}"); } }
 
 		// ── Auth ────────────────────────────────────────────────────────
 
@@ -535,7 +578,7 @@ namespace FishMMO.Client
 			{
 				case ClientAuthenticationResult.LoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Login; break;
 				case ClientAuthenticationResult.WorldLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.World; break;
-				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; OnEnterGameWorld?.Invoke(); break;
+				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; DismissLoadingScreen(true); OnEnterGameWorld?.Invoke(); break;
 			}
 		}
 
@@ -589,12 +632,28 @@ namespace FishMMO.Client
 		/// Called when the local character starts. Sets up input controller and UI.
 		/// </summary>
 		/// <param name="c">The local player character.</param>
+		/// <summary>True after world entry — suppresses loading overlay re-shows.</summary>
+		public static bool LoadingSuppressed { get; private set; }
+
+		/// <summary>
+		/// Hides the loading overlay and optionally suppresses future Show calls.
+		/// Called on successful scene login and local character start so the player
+		/// is never stuck behind a loading screen after world entry.
+		/// </summary>
+		public static void DismissLoadingScreen(bool suppress)
+		{
+			if (suppress) LoadingSuppressed = true;
+			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out _)) UIManager.Hide("UITKLoadingScreen");
+			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out _)) UIManager.Hide("UILoadingScreen");
+		}
+
 		private void OnCharacterStartLocal(IPlayerCharacter c)
 		{
 			UIManager.SetCharacter(c);
 			var input = c.GameObject.GetComponent<PlayerInputController>() ?? c.GameObject.AddComponent<PlayerInputController>();
 			input.Initialize(c);
 			PlayerInputController.MouseMode = false;
+			DismissLoadingScreen(true);
 		}
 		/// <summary>
 		/// Called when the local character stops. Cleans up input, UI, fog, and destroys the character object.

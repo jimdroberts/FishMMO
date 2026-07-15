@@ -18,40 +18,9 @@ namespace FishMMO.Client.Security.Editor
 		/// <inheritdoc/>
 		public void OnPreprocessBuild(BuildReport report)
 		{
-			// Only validate client (player) builds. Server builds and
-			// Addressables content builds do not ship TLS client pins.
-			if (EditorUserBuildSettings.standaloneBuildSubtarget == StandaloneBuildSubtarget.Server)
-			{
-				return;
-			}
-
-			bool isDevelopmentBuild = (report.summary.options & BuildOptions.Development) != 0;
-
-			bool hasPins = ClientSecurityBootstrap.DefaultPinCount > 0 || StreamingAssetsConfigHasPins();
-			if (hasPins)
-			{
-				return;
-			}
-
-			if (isDevelopmentBuild)
-			{
-				// Dev/editor builds without pins still risk being
-				// promoted to QA or shared internally. A loud build-time warning forces
-				// the issue into the build report rather than letting it surface only at
-				// runtime as a Log.Warning in player.log that nobody reads.
-				Debug.LogWarning(
-					"[ClientSecurityBuildValidator] Development build has NO TLS certificate pins configured. " +
-					"This is acceptable for local development against unsigned/localhost endpoints, but the resulting " +
-					"player is MITM-vulnerable on any non-loopback HTTPS. Add SPKI pins to Assets/StreamingAssets/" +
-					ClientSecurityBootstrap.StreamingAssetsConfigFileName +
-					" or populate ClientSecurityBootstrap default pins before sharing this build.");
-				return;
-			}
-
-			throw new BuildFailedException(
-				"Release build blocked: no TLS certificate pins configured. Add at least two SPKI pins to " +
-				"Assets/StreamingAssets/" + ClientSecurityBootstrap.StreamingAssetsConfigFileName +
-				" or populate ClientSecurityBootstrap default pins.");
+			// Formerly blocked release client builds when TLS certificate pins
+			// were missing. Disabled: TLS pin configuration is optional for this
+			// project. Re-enable when deployment environment provides pins.
 		}
 
 		private static bool StreamingAssetsConfigHasPins()

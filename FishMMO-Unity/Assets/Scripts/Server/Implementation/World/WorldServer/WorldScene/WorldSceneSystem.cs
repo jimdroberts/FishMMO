@@ -581,12 +581,23 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 
 				int preferredHandle = charData.SceneHandle;
-				if (preferredHandle > 0 &&
+				if (preferredHandle != 0 &&
 					capacityByHandle.TryGetValue(preferredHandle, out int prefRemaining) &&
 					prefRemaining > 0 &&
 					serverInfoByHandle.TryGetValue(preferredHandle, out var prefServer))
 				{
 					capacityByHandle[preferredHandle] = prefRemaining - 1;
+
+					// After a World restart, the character's saved world_server_id or scene
+					// may be stale. Rebind to the current world instance before broadcasting
+					// so the Scene server accepts the connection (world+scene+handle must match).
+					// This mirrors the Pass 2 rebind logic below.
+					if (charData.SceneHandle != preferredHandle || charData.WorldServerID != worldServerID)
+					{
+						_ = charService.UpdateSceneAsync(charData.ID, sceneName, preferredHandle);
+						Log.Info("WorldSceneSystem", $"Pass1 rebind: Character {charData.ID} world={charData.WorldServerID}->{worldServerID} scene={charData.SceneHandle}->{preferredHandle}");
+					}
+
 					BroadcastSceneConnect(conn, prefServer);
 				}
 				else
@@ -1249,6 +1260,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					return;
 				}
 
+				Log.Info("WorldSceneSystem", $"BroadcastSceneConnect conn={conn.ClientId} -> {server.Address}:{server.Port}");
 				Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
 				{
 					Address = server.Address,

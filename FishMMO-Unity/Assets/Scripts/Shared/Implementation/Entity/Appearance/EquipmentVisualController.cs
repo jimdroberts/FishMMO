@@ -63,9 +63,13 @@ namespace FishMMO.Shared
 			appearanceManager = ami;
 
 			Transform meshRoot = Character.MeshRoot;
+			// Fall back to KCC MeshRoot when the serialized MeshRoot is null
+			// (e.g. race model not yet bound or prefab missing the reference).
+			if (meshRoot == null && Character is IPlayerCharacter pc && pc.CharacterController != null)
+				meshRoot = pc.CharacterController.MeshRoot;
 			if (meshRoot == null)
 			{
-				Debug.LogError("[EquipmentVisualController] MeshRoot is null.");
+				Debug.LogWarning($"[EquipmentVisualController] MeshRoot is null for {Character.GameObject.name}. Appearance will be retried.");
 				return;
 			}
 

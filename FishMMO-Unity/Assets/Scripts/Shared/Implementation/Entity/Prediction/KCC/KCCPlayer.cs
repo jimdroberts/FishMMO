@@ -129,19 +129,36 @@ namespace FishMMO.Shared
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
+			TryBindOwnerCamera();
+		}
 
-			if (base.IsOwner)
+		/// <summary>
+		/// Called when the local client gains ownership. Binds the main camera
+		/// for the case where ownership arrives after OnStartClient.
+		/// </summary>
+		public override void OnOwnershipClient(NetworkConnection prevOwner)
+		{
+			base.OnOwnershipClient(prevOwner);
+			TryBindOwnerCamera();
+		}
+
+		/// <summary>
+		/// Binds the main camera to this character's follow point. Safe to call
+		/// repeatedly — only runs once (when CharacterCamera is still null and we own the object).
+		/// </summary>
+		private void TryBindOwnerCamera()
+		{
+			if (!base.IsOwner || CharacterCamera != null) return;
+
+			Camera mc = Camera.main;
+			if (mc != null)
 			{
-				Camera mc = Camera.main;
-				if (mc != null)
+				CharacterCamera = mc.gameObject.GetComponent<KCCCamera>();
+				if (CharacterCamera != null)
 				{
-					CharacterCamera = mc.gameObject.GetComponent<KCCCamera>();
-					if (CharacterCamera != null)
-					{
-						CharacterCamera.SetFollowTransform(CharacterController.CameraFollowPoint);
-						CharacterCamera.IgnoredColliders.Clear();
-						CharacterCamera.IgnoredColliders.AddRange(CharacterController.GetComponentsInChildren<Collider>());
-					}
+					CharacterCamera.SetFollowTransform(CharacterController.CameraFollowPoint);
+					CharacterCamera.IgnoredColliders.Clear();
+					CharacterCamera.IgnoredColliders.AddRange(CharacterController.GetComponentsInChildren<Collider>());
 				}
 			}
 		}

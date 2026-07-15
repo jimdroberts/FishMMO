@@ -43,6 +43,12 @@ namespace FishMMO.Shared
 			/// NGINX dynamically routes /ws/{port} to the correct backend game server.
 			/// </summary>
 			public static readonly string GameHost = "game.fishmmo.com";
+			/// <summary>World server host (WebGL multi-host). If empty, falls back to GameHost.</summary>
+			public static readonly string WorldGameHost = "";
+			/// <summary>Scene server host (WebGL multi-host). If empty, falls back to GameHost.</summary>
+			public static readonly string SceneGameHost = "";
+			/// <summary>If true, WebGL uses GameHost/ws/{port} path mode instead of per-host connect.</summary>
+			public static readonly bool GameHostUseWsPortPath = true;
 
 			public static readonly string ScenePath = "Assets/Scenes/";
 			public static readonly string BootstrapScenePath = "Assets/Scenes/";

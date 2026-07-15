@@ -119,14 +119,8 @@ namespace FishMMO.Server.Implementation
 			// HmacKey is an AES-256-GCM envelope keyed on the deployment KEK with AAD bound
 			// to the owning LoginServer id. Unwrap and fail closed on any tag/AAD/structural error.
 			byte[] kek = TryGetSigningKeyKek();
-			if (kek == null) return null;
-
-			byte[] unwrapped = KeyEnvelope.Unwrap(kek, result.Data.HmacKey, SigningKeyKekProvider.BuildAad(loginServerId));
-			if (unwrapped == null)
-			{
-				await Log.Warning(LogPrefix, $"Signing key {signingKeyId} failed AEAD unwrap for LoginServer {loginServerId}.");
-				return null;
-			}
+			byte[] unwrapped;
+			if (kek == null) { if (KeyEnvelope.LooksWrapped(result.Data.HmacKey)) { await Log.Warning(LogPrefix, $"Signing key is wrapped but no KEK configured."); return null; } unwrapped = result.Data.HmacKey; } else { unwrapped = KeyEnvelope.Unwrap(kek, result.Data.HmacKey, SigningKeyKekProvider.BuildAad(loginServerId)); if (unwrapped == null) { await Log.Warning(LogPrefix, $"Signing key failed AEAD unwrap."); return null; } }
 
 			if (unwrapped.Length < CryptoHelper.HmacKeyLength)
 			{
@@ -158,14 +152,8 @@ namespace FishMMO.Server.Implementation
 			}
 
 			byte[] kek = TryGetSigningKeyKek();
-			if (kek == null) return (null, 0);
-
-			byte[] unwrapped = KeyEnvelope.Unwrap(kek, result.Data.HmacKey, SigningKeyKekProvider.BuildAad(loginServerId));
-			if (unwrapped == null)
-			{
-				await Log.Warning(LogPrefix, $"Current signing key failed AEAD unwrap for LoginServer {loginServerId}.");
-				return (null, 0);
-			}
+			byte[] unwrapped;
+			if (kek == null) { if (KeyEnvelope.LooksWrapped(result.Data.HmacKey)) { await Log.Warning(LogPrefix, $"Current signing key is wrapped but no KEK configured."); return (null, 0); } unwrapped = result.Data.HmacKey; } else { unwrapped = KeyEnvelope.Unwrap(kek, result.Data.HmacKey, SigningKeyKekProvider.BuildAad(loginServerId)); if (unwrapped == null) { await Log.Warning(LogPrefix, $"Current signing key failed AEAD unwrap."); return (null, 0); } }
 
 			if (unwrapped.Length < CryptoHelper.HmacKeyLength)
 			{

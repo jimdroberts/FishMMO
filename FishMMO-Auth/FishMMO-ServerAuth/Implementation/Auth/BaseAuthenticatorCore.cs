@@ -511,7 +511,9 @@ namespace FishMMO.Auth.Implementation
 		{
 			if (conn == null) return false;
 			int clientId = GetConnectionClientId(conn);
-			if (clientId <= 0)
+			// FishNet assigns ClientId 0 to the first remote connection; -1 is unset.
+			// Reject only genuinely invalid IDs (negative), not ClientId 0.
+			if (clientId < 0)
 			{
 				_ = Log.Warning(LogPrefix, $"TrackAuthStart: refusing to track invalid clientId {clientId}.");
 				return false;
@@ -538,7 +540,7 @@ namespace FishMMO.Auth.Implementation
 		{
 			if (conn == null) return;
 			int clientId = GetConnectionClientId(conn);
-			if (clientId <= 0) return;
+			if (clientId < 0) return;
 			lock (ttlGate)
 			{
 				if (authOriginalStartByClientId.TryGetValue(clientId, out DateTime originalStart))

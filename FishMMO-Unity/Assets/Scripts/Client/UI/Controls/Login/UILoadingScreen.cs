@@ -108,6 +108,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void Show()
 		{
+			if (Client.LoadingSuppressed) return;
 			base.Show();
 
 			if (LoadingProgress == null)
@@ -204,7 +205,7 @@ namespace FishMMO.Client
 		/// <param name="endEvent">The event arguments for scene unload end.</param>
 		private void OnSceneEndUnload(SceneUnloadEndEventArgs endEvent)
 		{
-			//Hide();
+			Hide();
 		}
 		#endregion
 	}

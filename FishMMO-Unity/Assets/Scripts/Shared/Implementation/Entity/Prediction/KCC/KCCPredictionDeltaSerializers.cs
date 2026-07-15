@@ -15,27 +15,61 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class CharacterReplicateDataDeltaSerializer
 	{
-			/// <summary>Bit flag for forward axis changes.</summary>
+		/// <summary>Bit flag for forward axis changes.</summary>
 		private const byte FORWARD_BIT = 1 << 0;
-			/// <summary>Bit flag for right axis changes.</summary>
+		/// <summary>Bit flag for right axis changes.</summary>
 		private const byte RIGHT_BIT = 1 << 1;
-			/// <summary>Bit flag for move flags changes.</summary>
+		/// <summary>Bit flag for move flags changes.</summary>
 		private const byte MOVE_FLAGS_BIT = 1 << 2;
-			/// <summary>Bit flag for camera position changes.</summary>
+		/// <summary>Bit flag for camera position changes.</summary>
 		private const byte POSITION_BIT = 1 << 3;
-			/// <summary>Bit flag for camera rotation changes.</summary>
+		/// <summary>Bit flag for camera rotation changes.</summary>
 		private const byte ROTATION_BIT = 1 << 4;
-			/// <summary>Bit flag for activation flags changes.</summary>
+		/// <summary>Bit flag for activation flags changes.</summary>
 		private const byte ACTIVATION_FLAGS_BIT = 1 << 5;
-			/// <summary>Bit flag for queued ability ID changes.</summary>
+		/// <summary>Bit flag for queued ability ID changes.</summary>
 		private const byte QUEUED_ABILITY_BIT = 1 << 6;
 
 		/// <summary>
 		/// Registers the custom delta serializers at runtime, before any scene loads.
 		/// </summary>
-		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-		private static void RegisterDeltaSerializers()
+		/// <summary>
+		/// Custom full serializer: writes all fields of <see cref="CharacterReplicateData"/>.
+		/// Extension method discovered by FishNet codegen via naming convention.
+		/// </summary>
+		public static void WriteCharacterReplicateData(this Writer writer, CharacterReplicateData value)
 		{
+			writer.WriteSingle(value.MoveAxisForward);
+			writer.WriteSingle(value.MoveAxisRight);
+			writer.WriteInt32(value.MoveFlags);
+			writer.WriteVector3(value.CameraPosition);
+			writer.WriteQuaternion32(value.CameraRotation);
+			writer.WriteInt32(value.ActivationFlags);
+			writer.WriteInt64(value.QueuedAbilityID);
+		}
+
+		/// <summary>
+		/// Custom full deserializer: reads all fields of <see cref="CharacterReplicateData"/>.
+		/// </summary>
+		public static CharacterReplicateData ReadCharacterReplicateData(this Reader reader)
+		{
+			return new CharacterReplicateData
+			{
+				MoveAxisForward = reader.ReadSingle(),
+				MoveAxisRight = reader.ReadSingle(),
+				MoveFlags = reader.ReadInt32(),
+				CameraPosition = reader.ReadVector3(),
+				CameraRotation = reader.ReadQuaternion32(),
+				ActivationFlags = reader.ReadInt32(),
+				QueuedAbilityID = reader.ReadInt64(),
+			};
+		}
+
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+		private static void RegisterSerializers()
+		{
+			GenericWriter<CharacterReplicateData>.SetWrite(WriteCharacterReplicateData);
+			GenericReader<CharacterReplicateData>.SetRead(ReadCharacterReplicateData);
 			GenericDeltaWriter<CharacterReplicateData>.SetWrite(WriteDelta);
 			GenericDeltaReader<CharacterReplicateData>.SetRead(ReadDelta);
 		}
@@ -150,25 +184,57 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class CharacterTransientGroundingReportDeltaSerializer
 	{
-			/// <summary>Bit flag for FoundAnyGround changes.</summary>
+		/// <summary>Bit flag for FoundAnyGround changes.</summary>
 		private const byte FOUND_GROUND_BIT = 1 << 0;
-			/// <summary>Bit flag for IsStableOnGround changes.</summary>
+		/// <summary>Bit flag for IsStableOnGround changes.</summary>
 		private const byte STABLE_BIT = 1 << 1;
-			/// <summary>Bit flag for SnappingPrevented changes.</summary>
+		/// <summary>Bit flag for SnappingPrevented changes.</summary>
 		private const byte SNAPPING_BIT = 1 << 2;
-			/// <summary>Bit flag for GroundNormal changes.</summary>
+		/// <summary>Bit flag for GroundNormal changes.</summary>
 		private const byte GROUND_NORMAL_BIT = 1 << 3;
-			/// <summary>Bit flag for InnerGroundNormal changes.</summary>
+		/// <summary>Bit flag for InnerGroundNormal changes.</summary>
 		private const byte INNER_NORMAL_BIT = 1 << 4;
-			/// <summary>Bit flag for OuterGroundNormal changes.</summary>
+		/// <summary>Bit flag for OuterGroundNormal changes.</summary>
 		private const byte OUTER_NORMAL_BIT = 1 << 5;
 
 		/// <summary>
 		/// Registers the custom delta serializers at runtime.
 		/// </summary>
-		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-		private static void RegisterDeltaSerializers()
+		/// <summary>
+		/// Custom full serializer: writes all fields of <see cref="CharacterTransientGroundingReport"/>.
+		/// Called from <see cref="WriteKinematicCharacterMotorState"/> for its nested GroundingStatus.
+		/// </summary>
+		internal static void WriteCharacterTransientGroundingReport(this Writer writer, CharacterTransientGroundingReport value)
 		{
+			writer.WriteBoolean(value.FoundAnyGround);
+			writer.WriteBoolean(value.IsStableOnGround);
+			writer.WriteBoolean(value.SnappingPrevented);
+			writer.WriteVector3(value.GroundNormal);
+			writer.WriteVector3(value.InnerGroundNormal);
+			writer.WriteVector3(value.OuterGroundNormal);
+		}
+
+		/// <summary>
+		/// Custom full deserializer: reads all fields of <see cref="CharacterTransientGroundingReport"/>.
+		/// </summary>
+		internal static CharacterTransientGroundingReport ReadCharacterTransientGroundingReport(this Reader reader)
+		{
+			return new CharacterTransientGroundingReport
+			{
+				FoundAnyGround = reader.ReadBoolean(),
+				IsStableOnGround = reader.ReadBoolean(),
+				SnappingPrevented = reader.ReadBoolean(),
+				GroundNormal = reader.ReadVector3(),
+				InnerGroundNormal = reader.ReadVector3(),
+				OuterGroundNormal = reader.ReadVector3(),
+			};
+		}
+
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+		private static void RegisterSerializers()
+		{
+			GenericWriter<CharacterTransientGroundingReport>.SetWrite(CharacterTransientGroundingReportDeltaSerializer.WriteCharacterTransientGroundingReport);
+			GenericReader<CharacterTransientGroundingReport>.SetRead(CharacterTransientGroundingReportDeltaSerializer.ReadCharacterTransientGroundingReport);
 			GenericDeltaWriter<CharacterTransientGroundingReport>.SetWrite(WriteDelta);
 			GenericDeltaReader<CharacterTransientGroundingReport>.SetRead(ReadDelta);
 		}
@@ -270,41 +336,90 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class KinematicCharacterMotorStateDeltaSerializer
 	{
-			/// <summary>Bit flag for Position changes.</summary>
+		/// <summary>Bit flag for Position changes.</summary>
 		private const ushort POSITION_BIT = 1 << 0;
-			/// <summary>Bit flag for Rotation changes.</summary>
+		/// <summary>Bit flag for Rotation changes.</summary>
 		private const ushort ROTATION_BIT = 1 << 1;
-			/// <summary>Bit flag for BaseVelocity changes.</summary>
+		/// <summary>Bit flag for BaseVelocity changes.</summary>
 		private const ushort VELOCITY_BIT = 1 << 2;
-			/// <summary>Bit flag for CurrentPlatformID changes.</summary>
+		/// <summary>Bit flag for CurrentPlatformID changes.</summary>
 		private const ushort PLATFORM_ID_BIT = 1 << 3;
-			/// <summary>Bit flag for LastPlatformPosition changes.</summary>
+		/// <summary>Bit flag for LastPlatformPosition changes.</summary>
 		private const ushort LAST_PLATFORM_POS_BIT = 1 << 4;
-			/// <summary>Bit flag for MustUnground changes.</summary>
+		/// <summary>Bit flag for MustUnground changes.</summary>
 		private const ushort MUST_UNGROUND_BIT = 1 << 5;
-			/// <summary>Bit flag for MustUngroundTime changes.</summary>
+		/// <summary>Bit flag for MustUngroundTime changes.</summary>
 		private const ushort MUST_UNGROUND_TIME_BIT = 1 << 6;
-			/// <summary>Bit flag for LastMovementIterationFoundAnyGround changes.</summary>
+		/// <summary>Bit flag for LastMovementIterationFoundAnyGround changes.</summary>
 		private const ushort LAST_FOUND_GROUND_BIT = 1 << 7;
-			/// <summary>Bit flag for GroundingStatus changes.</summary>
+		/// <summary>Bit flag for GroundingStatus changes.</summary>
 		private const ushort GROUNDING_BIT = 1 << 8;
-			/// <summary>Bit flag for AttachedRigidbodyVelocity changes.</summary>
+		/// <summary>Bit flag for AttachedRigidbodyVelocity changes.</summary>
 		private const ushort ATTACHED_RB_VEL_BIT = 1 << 9;
-			/// <summary>Bit flag for IsCrouching changes.</summary>
+		/// <summary>Bit flag for IsCrouching changes.</summary>
 		private const ushort IS_CROUCHING_BIT = 1 << 10;
-			/// <summary>Bit flag for JumpRequested changes.</summary>
+		/// <summary>Bit flag for JumpRequested changes.</summary>
 		private const ushort JUMP_REQUESTED_BIT = 1 << 11;
-			/// <summary>Bit flag for TimeSinceLastAbleToJump changes.</summary>
+		/// <summary>Bit flag for TimeSinceLastAbleToJump changes.</summary>
 		private const ushort TIME_SINCE_JUMP_BIT = 1 << 12;
-			/// <summary>Bit flag for TimeSinceJumpRequested changes.</summary>
+		/// <summary>Bit flag for TimeSinceJumpRequested changes.</summary>
 		private const ushort TIME_SINCE_JUMP_REQ_BIT = 1 << 13;
 
 		/// <summary>
 		/// Registers the custom delta serializers at runtime.
 		/// </summary>
-		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-		private static void RegisterDeltaSerializers()
+		/// <summary>
+		/// Custom full serializer: writes all fields of <see cref="KinematicCharacterMotorState"/>.
+		/// Nested <see cref="CharacterTransientGroundingReport"/> uses its full serializer.
+		/// Extension method discovered by FishNet codegen via naming convention.
+		/// </summary>
+		public static void WriteKinematicCharacterMotorState(this Writer writer, KinematicCharacterMotorState value)
 		{
+			writer.WriteVector3(value.Position);
+			writer.WriteQuaternion32(value.Rotation);
+			writer.WriteVector3(value.BaseVelocity);
+			writer.WriteInt64(value.CurrentPlatformID);
+			writer.WriteVector3(value.LastPlatformPosition);
+			writer.WriteBoolean(value.MustUnground);
+			writer.WriteSingle(value.MustUngroundTime);
+			writer.WriteBoolean(value.LastMovementIterationFoundAnyGround);
+			CharacterTransientGroundingReportDeltaSerializer.WriteCharacterTransientGroundingReport(writer, value.GroundingStatus);
+			writer.WriteVector3(value.AttachedRigidbodyVelocity);
+			writer.WriteBoolean(value.IsCrouching);
+			writer.WriteBoolean(value.JumpRequested);
+			writer.WriteSingle(value.TimeSinceLastAbleToJump);
+			writer.WriteSingle(value.TimeSinceJumpRequested);
+		}
+
+		/// <summary>
+		/// Custom full deserializer: reads all fields of <see cref="KinematicCharacterMotorState"/>.
+		/// </summary>
+		public static KinematicCharacterMotorState ReadKinematicCharacterMotorState(this Reader reader)
+		{
+			return new KinematicCharacterMotorState
+			{
+				Position = reader.ReadVector3(),
+				Rotation = reader.ReadQuaternion32(),
+				BaseVelocity = reader.ReadVector3(),
+				CurrentPlatformID = reader.ReadInt64(),
+				LastPlatformPosition = reader.ReadVector3(),
+				MustUnground = reader.ReadBoolean(),
+				MustUngroundTime = reader.ReadSingle(),
+				LastMovementIterationFoundAnyGround = reader.ReadBoolean(),
+				GroundingStatus = CharacterTransientGroundingReportDeltaSerializer.ReadCharacterTransientGroundingReport(reader),
+				AttachedRigidbodyVelocity = reader.ReadVector3(),
+				IsCrouching = reader.ReadBoolean(),
+				JumpRequested = reader.ReadBoolean(),
+				TimeSinceLastAbleToJump = reader.ReadSingle(),
+				TimeSinceJumpRequested = reader.ReadSingle(),
+			};
+		}
+
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+		private static void RegisterSerializers()
+		{
+			GenericWriter<KinematicCharacterMotorState>.SetWrite(WriteKinematicCharacterMotorState);
+			GenericReader<KinematicCharacterMotorState>.SetRead(ReadKinematicCharacterMotorState);
 			GenericDeltaWriter<KinematicCharacterMotorState>.SetWrite(WriteDelta);
 			GenericDeltaReader<KinematicCharacterMotorState>.SetRead(ReadDelta);
 		}

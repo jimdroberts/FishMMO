@@ -46,6 +46,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab822550643fb454788ff0e4beacb4e0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  PivotYAxis: 0
 --- !u!1 &995763922733204262
 GameObject:
   m_ObjectHideFlags: 0
@@ -214,6 +215,7 @@ GameObject:
   - component: {fileID: 7334820797300942041}
   - component: {fileID: 3444804090579496595}
   - component: {fileID: 8478061901066445689}
+  - component: {fileID: -5823274886434283089}
   m_Layer: 0
   m_Name: Human
   m_TagString: Untagged
@@ -617,6 +619,7 @@ MonoBehaviour:
   onResurrectTriggers: []
   onResurrectedTriggers: []
   immortal: 0
+  combatDurationTicks: 600
 --- !u!114 &6038023079570568745
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -632,6 +635,10 @@ MonoBehaviour:
   _componentIndexCache: 13
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  meshRoot: {fileID: 0}
+  characterNameLabel: {fileID: 0}
+  characterGuildLabel: {fileID: 0}
+  equipmentViewCamera: {fileID: 0}
 --- !u!136 &4989737185595066850
 CapsuleCollider:
   m_ObjectHideFlags: 8
@@ -821,6 +828,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d1546cc7a45eb8fb2b12984901c73d94, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterAnimationController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &-5823274886434283089
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: caae36f1c31918fb3b93631b89c69b12, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPredictionController
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}

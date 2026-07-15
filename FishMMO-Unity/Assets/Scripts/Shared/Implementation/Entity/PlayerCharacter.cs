@@ -29,6 +29,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(PartyController))]
 	[RequireComponent(typeof(FriendController))]
 	[RequireComponent(typeof(FactionController))]
+	[RequireComponent(typeof(CharacterPredictionController))]
 	[RequireComponent(typeof(BodyVisibilityManager))]
 	[RequireComponent(typeof(CharacterAppearanceManager))]
 	[RequireComponent(typeof(EquipmentVisualController))]
@@ -273,22 +274,39 @@ namespace FishMMO.Shared
 
 #if !UNITY_SERVER
 
+		/// <summary>True once local client initialization has completed (idempotent).</summary>
+		private bool localClientInitialized;
+
 		/// <summary>
-		/// Called when the client starts. Invokes OnStartLocalClient and starts all character behaviours for the local player.
+		/// Called when the client starts or gains ownership. Idempotent — only
+		/// fires OnStartLocalClient and behaviour start once, even if ownership
+		/// is applied after OnStartClient (race condition on fast spawns).
 		/// </summary>
+		private void TryInitializeLocalClient()
+		{
+			if (localClientInitialized || !base.IsOwner) return;
+			localClientInitialized = true;
+
+			IPlayerCharacter.OnStartLocalClient?.Invoke(this);
+
+			foreach (ICharacterBehaviour behaviour in this.Behaviours.Values)
+			{
+				behaviour.OnStartCharacter();
+			}
+		}
+
+		/// <inheritdoc/>
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
+			TryInitializeLocalClient();
+		}
 
-			if (base.IsOwner)
-			{
-				IPlayerCharacter.OnStartLocalClient?.Invoke(this);
-
-				foreach (ICharacterBehaviour behaviour in this.Behaviours.Values)
-				{
-					behaviour.OnStartCharacter();
-				}
-			}
+		/// <inheritdoc/>
+		public override void OnOwnershipClient(NetworkConnection prevOwner)
+		{
+			base.OnOwnershipClient(prevOwner);
+			TryInitializeLocalClient();
 		}
 
 		/// <summary>

@@ -118,6 +118,43 @@ public class LoginServerController : ControllerBase
 	}
 
 	/// <summary>
+	/// Rewrites loopback/private addresses to production public hostnames
+	/// before caching so WebGL clients never receive 127.0.0.1.
+	/// </summary>
+	private static LoginServerAddressDto[] RewritePublicAddresses(LoginServerAddressDto[] servers)
+	{
+		var rewritten = new LoginServerAddressDto[servers.Length];
+		for (int i = 0; i < servers.Length; i++)
+			rewritten[i] = IsLoopbackOrPrivate(servers[i].Address)
+				? new LoginServerAddressDto(GetPublicHost(servers[i].Port), 443)
+				: servers[i];
+		return rewritten;
+	}
+
+	private static bool IsLoopbackOrPrivate(string a)
+	{
+		if (string.IsNullOrEmpty(a) || a == "127.0.0.1" || a == "::1" || a == "0.0.0.0") return true;
+		if (a.StartsWith("10.") || a.StartsWith("192.168.")) return true;
+		if (a.StartsWith("172."))
+		{
+			int second = int.Parse(a.Split('.')[1]);
+			if (second >= 16 && second <= 31) return true;
+		}
+		return false;
+	}
+
+	private static string GetPublicHost(ushort port)
+	{
+		return port switch
+		{
+			7770 => "loginserver.eqbrowser.com",
+			7780 => "worldserver.eqbrowser.com",
+			7781 => "sceneserver.eqbrowser.com",
+			_ => "game.fishmmo.com",
+		};
+	}
+
+	/// <summary>
 	/// Immutable projection of <see cref="LoginServerEntity"/> used both as the
 	/// cached representation and as the wire format returned to clients. Field
 	/// names are PascalCase to match the Unity <c>ServerAddress</c> JsonUtility

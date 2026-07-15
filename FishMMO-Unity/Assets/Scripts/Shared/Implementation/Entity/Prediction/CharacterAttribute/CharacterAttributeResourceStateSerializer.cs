@@ -86,8 +86,10 @@ namespace FishMMO.Shared
 		/// code-gen serializers. Our custom delegates take priority over generated ones.
 		/// </summary>
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-		private static void RegisterDeltaSerializers()
+		private static void RegisterSerializers()
 		{
+			GenericWriter<CharacterAttributeResourceState>.SetWrite(WriteCharacterAttributeResourceState);
+			GenericReader<CharacterAttributeResourceState>.SetRead(ReadCharacterAttributeResourceState);
 			GenericDeltaWriter<CharacterAttributeResourceState>.SetWrite(WriteDelta);
 			GenericDeltaReader<CharacterAttributeResourceState>.SetRead(ReadDelta);
 		}

@@ -139,7 +139,8 @@ namespace FishMMO.Shared
 			// Validate spawnables
 			for (int i = 0; i < Spawnables.Count; ++i)
 			{
-				Spawnables[i].OnValidate();
+				if (Spawnables[i] != null)
+					Spawnables[i].OnValidate();
 			}
 
 			InitialSpawnCount = InitialSpawnCount.Clamp(0, MaxSpawnCount);
