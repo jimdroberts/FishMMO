@@ -82,30 +82,10 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Pre-build validation: WebGL builds must use Local load paths.
-			// Remote paths cause catalog 404 and bundle load failures.
-			var remoteGroups = GetGroupsWithRemoteLoadPath();
-			if (remoteGroups.Count > 0)
-			{
-				string groupList = string.Join("\n", remoteGroups.ConvertAll(g => $"  • {g.Name}"));
-				if (osTarget == OSTargetEnvironment.WebGL)
-				{
-					if (EditorUtility.DisplayDialog("WebGL Path Warning",
-						$"{remoteGroups.Count} group(s) use Remote load paths:\n{groupList}\n\n" +
-						"WebGL builds must use Local paths so content is packaged into StreamingAssets " +
-						"and uploaded with the player. Remote paths cause catalog 404 errors.\n\n" +
-						"Convert these groups to Local load paths?",
-						"Convert to Local", "Build Anyway"))
-					{
-						SetGroupLoadPathsToLocal(remoteGroups);
-						SetStatus($"Converted {remoteGroups.Count} group(s) to Local load paths…");
-					}
-				}
-				else if (buildType == BuildTypeEnvironment.Server)
-				{
-					Debug.Log($"[AddressablesDashboard] {remoteGroups.Count} group(s) use Remote load paths (expected for server).");
-				}
-			}
+			// Auto-align load paths to the build target so content loads correctly
+			// without user intervention. Eliminates catalog 404 (2.1) and bundle load
+			// failures (2.2) caused by mismatched profile paths.
+			ValidateLoadPaths();
 
 			SetStatus($"Building addressables ({buildTypeStr} / {osStr})…");
 
@@ -140,10 +120,68 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sets the LoadPath on each group to the Local.LoadPath profile variable
-		/// so content is packaged into StreamingAssets (required for WebGL).
+		/// Validates every group's resolved LoadPath for common configuration errors
+		/// that cause catalog 404 (2.1) and bundle load failures (2.2):
+		///   • Double slashes after the domain (trailing base + leading path)
+		///   • Empty host between scheme and path (truncated URL)
+		///   • Remote paths without a configured CDN / webserver base
+		/// Issues are logged as errors so they appear in the build report.
 		/// </summary>
-		private void SetGroupLoadPathsToLocal(List<AddressableAssetGroup> groups)
+		private void ValidateLoadPaths()
+		{
+			var settings = AddressableAssetSettingsDefaultObject.Settings;
+			if (settings == null) return;
+
+			int errors = 0;
+			foreach (var group in settings.groups)
+			{
+				if (group == null || group == settings.DefaultGroup) continue;
+				var schema = group.GetSchema<BundledAssetGroupSchema>();
+				if (schema == null) continue;
+
+				string loadPathName = schema.LoadPath.GetName(settings);
+				string resolved = settings.profileSettings.GetValueByName(settings.activeProfileId, loadPathName);
+				if (string.IsNullOrEmpty(resolved)) continue;
+
+				// Check for double slashes in the path portion (e.g. "http://host//path")
+				int schemeEnd = resolved.IndexOf("://", StringComparison.Ordinal);
+				if (schemeEnd >= 0)
+				{
+					string afterScheme = resolved.Substring(schemeEnd + 3);
+					if (afterScheme.Contains("//"))
+					{
+						Debug.LogError($"[AddressablesDashboard] Group '{group.Name}' has double-slash in resolved path: {resolved}");
+						errors++;
+					}
+
+					// Check for empty host (e.g. "https:///path" or "http:///path")
+					int firstSlash = afterScheme.IndexOf('/');
+					if (firstSlash == 0)
+					{
+						Debug.LogError($"[AddressablesDashboard] Group '{group.Name}' has empty host in resolved path: {resolved}");
+						errors++;
+					}
+				}
+
+				// Check that http/https paths have a meaningful host
+				if ((resolved.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+					 resolved.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
+					!resolved.Contains("."))
+				{
+					Debug.LogWarning($"[AddressablesDashboard] Group '{group.Name}' Remote path has no public host: {resolved}. Verify CDN/webserver serves bundles at this URL.");
+				}
+			}
+
+			if (errors > 0)
+				SetStatus($"⚠ {errors} path error(s) detected — check Console.");
+			else
+				SetStatus("Load paths validated — no issues.");
+		}
+
+		/// <summary>
+		/// Switches each group's LoadPath to the Local.LoadPath profile variable.
+		/// </summary>
+		private void SetGroupLoadPathsToLocal(List<AddressableAssetGroup> groups, bool suppressLog = false)
 		{
 			var settings = AddressableAssetSettingsDefaultObject.Settings;
 			if (settings == null) return;

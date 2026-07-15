@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -48,7 +49,18 @@ namespace FishMMO.Shared
 		private Foldout detailFoldout;
 		private Label detailContent;
 
-		// Path Simulator
+		// Global Path Summary (profile-level, always visible)
+		private Foldout globalPathFoldout;
+		private Label globalPathProfile;
+		private Label globalPathRemoteBuild;
+		private Label globalPathRemoteLoad;
+		private Label globalPathLocalBuild;
+		private Label globalPathLocalLoad;
+		private Label globalPathCatalog;
+		private Label globalPathClientBase;
+		private Label globalPathServerBase;
+
+		// Path Simulator (per-asset)
 		private Label pathSimBuild;
 		private Label pathSimInternalId;
 		private Label pathSimClient;
@@ -157,6 +169,26 @@ namespace FishMMO.Shared
 			detailFoldout = rootVisualElement.Q<Foldout>("detail-foldout");
 			detailContent = rootVisualElement.Q<Label>("detail-content");
 
+			// Global Path Summary — always visible, profile-level
+			globalPathFoldout = new Foldout { text = "Global Path Summary", value = false };
+			globalPathFoldout.AddToClassList("detail-foldout");
+			globalPathFoldout.style.marginTop = 4;
+			globalPathFoldout.style.marginBottom = 4;
+
+			globalPathProfile  = NewPathRow(globalPathFoldout, "Active Profile:");
+			globalPathRemoteBuild = NewPathRow(globalPathFoldout, "Remote Build:");
+			globalPathRemoteLoad  = NewPathRow(globalPathFoldout, "Remote Load:");
+			globalPathLocalBuild  = NewPathRow(globalPathFoldout, "Local Build:");
+			globalPathLocalLoad   = NewPathRow(globalPathFoldout, "Local Load:");
+			globalPathCatalog     = NewPathRow(globalPathFoldout, "Catalog:");
+			globalPathClientBase  = NewPathRow(globalPathFoldout, "Runtime → Client:");
+			globalPathServerBase  = NewPathRow(globalPathFoldout, "Runtime → Server:");
+
+			// Insert after the toolbar
+			var toolbar = rootVisualElement.Q<Toolbar>("toolbar");
+			if (toolbar != null)
+				rootVisualElement.Insert(rootVisualElement.IndexOf(toolbar) + 1, globalPathFoldout);
+
 			// Path Simulator
 			pathSimBuild = rootVisualElement.Q<Label>("path-sim-build");
 			pathSimInternalId = rootVisualElement.Q<Label>("path-sim-internal-id");
@@ -241,8 +273,77 @@ namespace FishMMO.Shared
 			treeView.RegisterCallback<PointerDownEvent>(OnPointerDownForDrag);
 
 			RebuildTree();
+			UpdateGlobalPathSummary();
 		}
 
+
+
+		/// <summary>
+		/// Creates a label row inside the foldout and returns the value label.
+		/// </summary>
+		private static Label NewPathRow(VisualElement parent, string caption)
+		{
+			var row = new VisualElement();
+			row.AddToClassList("path-simulator-row");
+			var cap = new Label(caption);
+			cap.AddToClassList("path-simulator-label");
+			var val = new Label("—");
+			val.AddToClassList("path-simulator-value");
+			row.Add(cap);
+			row.Add(val);
+			parent.Add(row);
+			return val;
+		}
+
+		/// <summary>
+		/// Populates the Global Path Summary with resolved profile-level paths
+		/// and the runtime rewrite bases used by DynamicAddressableLoadPathSystem.
+		/// </summary>
+		private void UpdateGlobalPathSummary()
+		{
+			if (globalPathProfile == null) return;
+
+			var settings = AddressableAssetSettingsDefaultObject.Settings;
+			if (settings == null) return;
+
+			globalPathProfile.text = settings.activeProfileId;
+
+			globalPathRemoteBuild.text = ResolveProfilePath(settings, "Remote", "Build");
+			globalPathRemoteLoad.text  = ResolveProfilePath(settings, "Remote", "Load");
+			globalPathLocalBuild.text  = ResolveProfilePath(settings, "Local",  "Build");
+			globalPathLocalLoad.text   = ResolveProfilePath(settings, "Local",  "Load");
+
+			// Simulated catalog path for the current build target
+			string target = EditorUserBuildSettings.activeBuildTarget.ToString();
+			globalPathCatalog.text = ResolveProfilePath(settings, "Remote", "Load") + "/catalog_" + target + ".hash";
+
+			// Runtime rewrite bases (mirrors DynamicAddressableLoadPathSystem)
+			globalPathClientBase.text = DefaultClientBaseUrl;
+			globalPathServerBase.text = ServerBaseUrlPrefix + Application.streamingAssetsPath + ServerBaseUrlSuffix;
+		}
+
+		/// <summary>
+		/// Finds a profile variable by scope (Remote/Local) and role (Build/Load)
+		/// and returns its resolved value for the active profile.
+		/// </summary>
+		private static string ResolveProfilePath(AddressableAssetSettings settings, string scope, string role)
+		{
+			string resolved = "(not set)";
+			foreach (var name in settings.profileSettings.GetVariableNames())
+			{
+				string lower = name.ToLowerInvariant();
+				if (lower.Contains(scope.ToLowerInvariant()) &&
+					lower.Contains(role.ToLowerInvariant()) &&
+					lower.Contains("path"))
+				{
+					string value = settings.profileSettings.GetValueByName(settings.activeProfileId, name);
+					if (!string.IsNullOrEmpty(value))
+						resolved = value;
+					break;
+				}
+			}
+			return resolved;
+		}
 	}
 }
 #endif
