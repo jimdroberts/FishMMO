@@ -35,7 +35,7 @@ public class LoginServerController : ControllerBase
 		this.dbContextFactory = dbContextFactory;
 		this.memoryCache = memoryCache;
 	}
-	
+
 	/// <summary>
 	/// Retrieves a list of available login servers (address and port).
 	/// Results are cached in memory for a short duration to reduce database load.
@@ -83,14 +83,21 @@ public class LoginServerController : ControllerBase
 						.Select(l => new LoginServerAddressDto(l.Address, l.Port))
 						.ToArrayAsync(HttpContext.RequestAborted);
 
-					var cacheEntryOptions = new MemoryCacheEntryOptions
+					// Never cache an empty list — after a LoginServer restart it takes
+					// 60-90s for the server to re-register. A cached empty result would
+					// make clients receive 404 for the full cache TTL window.
+					if (loginServers.Length == 0)
 					{
-						AbsoluteExpirationRelativeToNow = CacheTtl(),
-					};
-
-					memoryCache.Set(cacheKey, loginServers, cacheEntryOptions);
-					// Cache miss is a routine condition; downgrade from Info to Debug to
-					// keep request-rate logs from drowning operationally important events.
+						await Log.Warning("LoginServerController", "DB returned zero login servers — serving live, not cached.");
+					}
+					else
+					{
+						var cacheEntryOptions = new MemoryCacheEntryOptions
+						{
+							AbsoluteExpirationRelativeToNow = CacheTtl(),
+						};
+						memoryCache.Set(cacheKey, loginServers, cacheEntryOptions);
+					}
 					await Log.Debug("LoginServerController", $"Cache miss. Loaded {loginServers.Length} login server(s) from DB.");
 				}
 			}
