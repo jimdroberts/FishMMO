@@ -13,6 +13,7 @@
   <Project Path="FishMMO.UnitTests.csproj" />
   <Project Path="Bayou.csproj" />
   <Project Path="Assembly-CSharp-firstpass.csproj" />
+  <Project Path="WebTransport.csproj" />
   <Project Path="FishNet.Demos.csproj" />
   <Project Path="FishMMO.Client.Input.Generated.csproj" />
   <Project Path="QuickOutline.csproj" />
