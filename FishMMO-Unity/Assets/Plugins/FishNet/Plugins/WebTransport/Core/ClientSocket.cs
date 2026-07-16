@@ -64,6 +64,8 @@ namespace FishNet.Transporting.WebTransport.Client
 
             base.SetConnectionState(LocalConnectionState.Starting, false);
 
+            WebTransportNative.EnsureInitialized();
+
             _port = port;
             _address = address;
 

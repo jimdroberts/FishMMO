@@ -334,6 +334,21 @@ WT_API int32_t wt_client_is_connected(WT_CLIENT client);
  */
 WT_API int32_t wt_client_get_mtu(WT_CLIENT client);
 
+/* ── Lifecycle ─────────────────────────────────────────────── */
+
+/**
+ * Initialise the WebTransport library. Must be called once before
+ * any server or client operations. Initialises the MsQuic API table.
+ * @return WT_OK on success, negative error code on failure.
+ */
+WT_API int32_t wt_init(void);
+
+/**
+ * Shut down the WebTransport library. Call after all servers and
+ * clients have been destroyed. Closes the MsQuic API table.
+ */
+WT_API void wt_deinit(void);
+
 /* ── Utility ───────────────────────────────────────────────── */
 
 /**

@@ -33,17 +33,24 @@ namespace FishNet.Transporting.WebTransport.Native
 	}
 
 	// ── Callback delegates (always available) ─────────────────
+	// IMPORTANT: Every delegate's first parameter is IntPtr context,
+	// matching the C function pointer signature void (*fn)(void* ctx, ...).
+	// Without this, all arguments are shifted by one position.
 
 	public static class NativeCallbacks
 	{
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		public delegate void ServerConnectDelegate(ulong connectionId, IntPtr remoteAddress);
+		public delegate void ServerConnectDelegate(
+			IntPtr context, ulong connectionId, IntPtr remoteAddress);
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		public delegate void ServerDisconnectDelegate(ulong connectionId, int errorCode);
+		public delegate void ServerDisconnectDelegate(
+			IntPtr context, ulong connectionId, int errorCode);
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		public delegate void ServerStreamDataDelegate(ulong connectionId, ulong streamId, IntPtr data, int length);
+		public delegate void ServerStreamDataDelegate(
+			IntPtr context, ulong connectionId, ulong streamId, IntPtr data, int length);
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		public delegate void ServerDatagramDelegate(ulong connectionId, IntPtr data, int length);
+		public delegate void ServerDatagramDelegate(
+			IntPtr context, ulong connectionId, IntPtr data, int length);
 
 		[StructLayout(LayoutKind.Sequential)]
 		public struct ServerCallbacks
@@ -55,13 +62,17 @@ namespace FishNet.Transporting.WebTransport.Native
 		}
 
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		public delegate void ClientConnectDelegate();
+		public delegate void ClientConnectDelegate(
+			IntPtr context);
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		public delegate void ClientDisconnectDelegate(int errorCode);
+		public delegate void ClientDisconnectDelegate(
+			IntPtr context, int errorCode);
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		public delegate void ClientStreamDataDelegate(ulong streamId, IntPtr data, int length);
+		public delegate void ClientStreamDataDelegate(
+			IntPtr context, ulong streamId, IntPtr data, int length);
 		[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-		public delegate void ClientDatagramDelegate(IntPtr data, int length);
+		public delegate void ClientDatagramDelegate(
+			IntPtr context, IntPtr data, int length);
 
 		[StructLayout(LayoutKind.Sequential)]
 		public struct ClientCallbacks
@@ -77,6 +88,20 @@ namespace FishNet.Transporting.WebTransport.Native
 
 	public static class WebTransportNative
 	{
+		private static bool _initialized = false;
+
+		/// <summary>Ensure wt_init() is called exactly once before any native operations.</summary>
+		public static void EnsureInitialized()
+		{
+			if (_initialized) return;
+			_initialized = true;
+#if !UNITY_WEBGL || UNITY_EDITOR
+			int result = wt_init();
+			if (result != 0)
+				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {result}");
+#endif
+		}
+
 #if !UNITY_WEBGL || UNITY_EDITOR
 		private const string LIB = "fishmmo_webtransport";
 
@@ -174,6 +199,12 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static extern int wt_client_get_mtu(SafeClientHandle client);
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
+		public static extern int wt_init();
+
+		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
+		public static extern void wt_deinit();
+
+		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern IntPtr wt_error_string(int errorCode);
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
@@ -181,39 +212,41 @@ namespace FishNet.Transporting.WebTransport.Native
 
 #else  // UNITY_WEBGL && !UNITY_EDITOR — stub implementations
 
-        public static SafeServerHandle wt_server_create(
-            string certificatePath, string privateKeyPath,
-            string alpn, string bindAddress, ushort port,
-            uint maxClients,
-            ref NativeCallbacks.ServerCallbacks callbacks,
-            IntPtr context) => new SafeServerHandle();
+		public static SafeServerHandle wt_server_create(
+			string certificatePath, string privateKeyPath,
+			string alpn, string bindAddress, ushort port,
+			uint maxClients,
+			ref NativeCallbacks.ServerCallbacks callbacks,
+			IntPtr context) => new SafeServerHandle();
 
-        internal static void wt_server_destroy_impl(IntPtr server) { }
-        public static void wt_server_destroy(SafeServerHandle server) { }
-        public static int wt_server_start(SafeServerHandle server) => -1;
-        public static void wt_server_stop(SafeServerHandle server) { }
-        public static void wt_server_poll(SafeServerHandle server, int timeoutUs) { }
-        public static int wt_server_send_stream(SafeServerHandle s, ulong c, byte[] d, int l) => -1;
-        public static int wt_server_send_datagram(SafeServerHandle s, ulong c, byte[] d, int l) => -1;
-        public static void wt_server_disconnect(SafeServerHandle s, ulong c) { }
-        public static IntPtr wt_server_get_client_address(SafeServerHandle s, ulong c) => IntPtr.Zero;
-        public static int wt_server_get_client_count(SafeServerHandle s) => 0;
-        public static int wt_server_get_max_clients(SafeServerHandle s) => 0;
-        public static int wt_server_get_state(SafeServerHandle s) => 0;
+		internal static void wt_server_destroy_impl(IntPtr server) { }
+		public static void wt_server_destroy(SafeServerHandle server) { }
+		public static int wt_server_start(SafeServerHandle server) => -1;
+		public static void wt_server_stop(SafeServerHandle server) { }
+		public static void wt_server_poll(SafeServerHandle server, int timeoutUs) { }
+		public static int wt_server_send_stream(SafeServerHandle s, ulong c, byte[] d, int l) => -1;
+		public static int wt_server_send_datagram(SafeServerHandle s, ulong c, byte[] d, int l) => -1;
+		public static void wt_server_disconnect(SafeServerHandle s, ulong c) { }
+		public static IntPtr wt_server_get_client_address(SafeServerHandle s, ulong c) => IntPtr.Zero;
+		public static int wt_server_get_client_count(SafeServerHandle s) => 0;
+		public static int wt_server_get_max_clients(SafeServerHandle s) => 0;
+		public static int wt_server_get_state(SafeServerHandle s) => 0;
 
-        public static SafeClientHandle wt_client_create(
-            ref NativeCallbacks.ClientCallbacks cb, IntPtr ctx) => new SafeClientHandle();
-        internal static void wt_client_destroy_impl(IntPtr client) { }
-        public static void wt_client_destroy(SafeClientHandle client) { }
-        public static int wt_client_connect(SafeClientHandle c, string sn, string addr, ushort p, int tls) => -1;
-        public static void wt_client_disconnect(SafeClientHandle c) { }
-        public static void wt_client_poll(SafeClientHandle c, int timeoutUs) { }
-        public static int wt_client_send_stream(SafeClientHandle c, byte[] d, int l) => -1;
-        public static int wt_client_send_datagram(SafeClientHandle c, byte[] d, int l) => -1;
-        public static int wt_client_is_connected(SafeClientHandle c) => 0;
-        public static int wt_client_get_mtu(SafeClientHandle c) => 1200;
-        public static IntPtr wt_error_string(int errorCode) => IntPtr.Zero;
-        public static IntPtr wt_version() => IntPtr.Zero;
+		public static SafeClientHandle wt_client_create(
+			ref NativeCallbacks.ClientCallbacks cb, IntPtr ctx) => new SafeClientHandle();
+		internal static void wt_client_destroy_impl(IntPtr client) { }
+		public static void wt_client_destroy(SafeClientHandle client) { }
+		public static int wt_client_connect(SafeClientHandle c, string sn, string addr, ushort p, int tls) => -1;
+		public static void wt_client_disconnect(SafeClientHandle c) { }
+		public static void wt_client_poll(SafeClientHandle c, int timeoutUs) { }
+		public static int wt_client_send_stream(SafeClientHandle c, byte[] d, int l) => -1;
+		public static int wt_client_send_datagram(SafeClientHandle c, byte[] d, int l) => -1;
+		public static int wt_client_is_connected(SafeClientHandle c) => 0;
+		public static int wt_client_get_mtu(SafeClientHandle c) => 1200;
+		public static int wt_init() => 0;
+		public static void wt_deinit() { }
+		public static IntPtr wt_error_string(int errorCode) => IntPtr.Zero;
+		public static IntPtr wt_version() => IntPtr.Zero;
 #endif
 	}
 }

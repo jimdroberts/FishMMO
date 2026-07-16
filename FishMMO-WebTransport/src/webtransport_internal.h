@@ -1,8 +1,6 @@
 /**
  * @file webtransport_internal.h
  * @brief Internal structures and helpers shared across the library.
- *
- * NOT part of the public API. Do not expose to P/Invoke callers.
  */
 
 #ifndef WEBTRANSPORT_INTERNAL_H
@@ -11,32 +9,69 @@
 #include "webtransport_api.h"
 
 #include <msquic.h>
-#include <stdatomic.h>
 #include <stdbool.h>
+#include <string.h>
+#include <stdio.h>
+
+/* ── Atomics (GCC/Clang builtins, MSVC interlocked intrinsics) ─ */
+typedef int atomic_int;
+typedef unsigned int atomic_uint;
+typedef bool atomic_bool;
+
+#if defined(_MSC_VER)
+  #include <intrin.h>
+  #define atomic_init(p, v)       (*(p) = (v))
+  #define atomic_load(p)          (_InterlockedOr((long*)(p), 0))
+  #define atomic_store(p, v)      (_InterlockedExchange((long*)(p), (long)(v)))
+  #define atomic_fetch_add(p, v)  (_InterlockedExchangeAdd((long*)(p), (long)(v)))
+  #define atomic_fetch_sub(p, v)  (_InterlockedExchangeAdd((long*)(p), -(long)(v)))
+  #define atomic_compare_exchange_strong(p, expected, desired) \
+      (_InterlockedCompareExchange((long*)(p), (long)(desired), (long)(*(expected))) == (long)(*(expected)))
+#else
+  #define atomic_init(p, v)       (*(p) = (v))
+  #define atomic_load(p)          __atomic_load_n(p, __ATOMIC_SEQ_CST)
+  #define atomic_store(p, v)      __atomic_store_n(p, v, __ATOMIC_SEQ_CST)
+  #define atomic_fetch_add(p, v)  __atomic_fetch_add(p, v, __ATOMIC_SEQ_CST)
+  #define atomic_fetch_sub(p, v)  __atomic_fetch_sub(p, v, __ATOMIC_SEQ_CST)
+  #define atomic_compare_exchange_strong(p, expected, desired) \
+      __atomic_compare_exchange_n(p, expected, desired, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
+#endif
+
+/* msquic C header does not declare the MsQuic global.
+ * It is obtained via MsQuicOpen2() and stored here. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern const QUIC_API_TABLE* MsQuic;
+#ifdef __cplusplus
+}
+#endif
+
+/* ── Platform includes ────────────────────────────────────── */
+#if defined(WT_PLATFORM_WINDOWS)
+  #include <windows.h>
+#else
+  #include <unistd.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* ── Platform macros ────────────────────────────────────────── */
-
-#if defined(WT_PLATFORM_WINDOWS)
-  #define WT_THREAD_RETURN  DWORD WINAPI
-  #define WT_THREAD_PARAM   LPVOID
-  #define wt_sleep_ms(ms)   Sleep(ms)
-#else
-  #define WT_THREAD_RETURN  void*
-  #define WT_THREAD_PARAM   void*
-  #define wt_sleep_ms(ms)   usleep((ms) * 1000)
-#endif
-
 /* ── Constants ──────────────────────────────────────────────── */
 
-#define WT_MAX_CLIENTS          4096
-#define WT_MAX_ALPN_LENGTH      64
-#define WT_MAX_ADDRESS_LENGTH   256
+#define WT_MAX_CLIENTS             4096
+#define WT_MAX_ALPN_LENGTH         64
+#define WT_MAX_ADDRESS_LENGTH      256
 
 #define WT_DEFAULT_IDLE_TIMEOUT_MS  120000
+#define WT_DEFAULT_MTU              1200
+
+#define WT_DGRAM_MAX_SIZE          1500   /* max QUIC datagram payload (path MTU) */
+#define WT_DGRAM_QUEUE_CAPACITY    256
+
+#define WT_MAX_STREAMS             1024
+#define WT_MAX_STREAM_RECV_BUF      (1024 * 1024)  /* 1 MB per stream */
 
 /* ── Connection state enum ──────────────────────────────────── */
 
@@ -69,16 +104,15 @@ typedef enum {
 /* ── Logging ────────────────────────────────────────────────── */
 
 #ifndef WT_NO_LOGGING
-  #include <stdio.h>
   #define WT_LOG(level, fmt, ...) \
       fprintf(stderr, "[wt:%s] " fmt "\n", level, ##__VA_ARGS__)
   #define WT_LOG_INFO(fmt, ...)  WT_LOG("INFO",  fmt, ##__VA_ARGS__)
   #define WT_LOG_WARN(fmt, ...)  WT_LOG("WARN",  fmt, ##__VA_ARGS__)
   #define WT_LOG_ERROR(fmt, ...) WT_LOG("ERROR", fmt, ##__VA_ARGS__)
 #else
-  #define WT_LOG_INFO(fmt, ...)
-  #define WT_LOG_WARN(fmt, ...)
-  #define WT_LOG_ERROR(fmt, ...)
+  #define WT_LOG_INFO(fmt, ...)  ((void)0)
+  #define WT_LOG_WARN(fmt, ...)  ((void)0)
+  #define WT_LOG_ERROR(fmt, ...) ((void)0)
 #endif
 
 #ifdef __cplusplus

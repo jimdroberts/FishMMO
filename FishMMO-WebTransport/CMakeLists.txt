@@ -18,12 +18,12 @@ if(WT_STATIC_MSQUIC)
     set(QUIC_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
     set(QUIC_BUILD_TEST OFF CACHE BOOL "" FORCE)
     set(QUIC_BUILD_PERF OFF CACHE BOOL "" FORCE)
-    set(QUIC_TLS "openssl" CACHE STRING "" FORCE)
+    set(QUIC_TLS_LIB "quictls" CACHE STRING "" FORCE)
 
     FetchContent_Declare(
         msquic
         GIT_REPOSITORY https://github.com/microsoft/msquic.git
-        GIT_TAG v2.4.7
+        GIT_TAG v2.5.9
         GIT_SHALLOW TRUE
     )
 

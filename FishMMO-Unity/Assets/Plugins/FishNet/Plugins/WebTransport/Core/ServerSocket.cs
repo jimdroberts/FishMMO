@@ -104,6 +104,8 @@ namespace FishNet.Transporting.WebTransport.Server
 
             base.SetConnectionState(LocalConnectionState.Starting, true);
 
+            WebTransportNative.EnsureInitialized();
+
             _port = port;
             _maximumClients = maximumClients;
             ResetQueues();
