@@ -167,8 +167,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 					{
 						Name = data.Name,
 						LastPulse = data.LastPulse,
-						Address = data.Address,
-						Port = data.Port,
+						// Rewrite loopback to GameHost so clients receive the public hostname.
+						string addr = data.Address;
+						ushort p = data.Port;
+						if (IsLoopbackOrPrivate(addr) && (p >= 7770 && p <= 7899))
+							addr = Constants.Configuration.GameHost;
+
+						Address = addr,
+						Port = p,
 						CharacterCount = data.CharacterCount,
 						Locked = data.Locked,
 					});
@@ -293,5 +299,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 				runtimeData.NextAllowedRequestUtcByClientId.TryRemove(conn.ClientId, out _);
 			}
 		}
+	private static bool IsLoopbackOrPrivate(string a)
+	{
+		if (string.IsNullOrEmpty(a) || a == "127.0.0.1" || a == "::1" || a == "0.0.0.0")
+			return true;
+		if (a.StartsWith("10.") || a.StartsWith("192.168."))
+			return true;
+		if (a.StartsWith("172.") && a.Length >= 7)
+		{
+			if (int.TryParse(a.Split('.')[1], out int second) && second >= 16 && second <= 31)
+				return true;
+		}
+		return false;
+	}
+
 	}
 }

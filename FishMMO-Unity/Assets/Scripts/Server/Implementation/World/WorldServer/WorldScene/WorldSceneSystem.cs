@@ -468,7 +468,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					foreach (var serverData in batchResult.Data)
 					{
-						var addr = (serverData.Address, serverData.Port);
+						var addr = RewritePublicAdvertise(serverData.Address, serverData.Port);
 						if (serverTtl > TimeSpan.Zero)
 						{
 							runtimeData.SceneServerAddressCache.Set(serverData.ID, addr);
@@ -1369,12 +1369,47 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return null;
 			}
 
-			var addr = (result.Data.Address, result.Data.Port);
+			var addr = RewritePublicAdvertise(result.Data.Address, result.Data.Port);
 			if (ttl > TimeSpan.Zero)
 			{
 				runtimeData.SceneServerAddressCache.Set(sceneServerID, addr);
 			}
 			return addr;
+		}
+
+		/// <summary>
+		/// Rewrites loopback/private addresses to public hostnames for WebGL.
+		/// DB stores bind addresses; rewrite happens at read/broadcast time.
+		/// Uses the same port->hostname mapping as IPFetch's RewritePublicAddresses.
+		/// </summary>
+		private (string Address, ushort Port) RewritePublicAdvertise(string address, ushort port)
+		{
+			if (!IsLoopbackOrPrivate(address))
+				return (address, port);
+
+			// Read the public hostname from this server's .cfg file.
+			// All traffic flows through nginx (UDP stream + WSS). A single
+			// hostname serves all ports; ports distinguish server roles.
+			if (Server.Configuration.TryGetString("PublicAdvertise", out string host) &&
+				!string.IsNullOrWhiteSpace(host) &&
+				(port >= 7770 && port <= 7899))
+				return (Constants.Configuration.GameHost, port);
+
+			return (address, port);
+		}
+
+		private static bool IsLoopbackOrPrivate(string a)
+		{
+			if (string.IsNullOrEmpty(a) || a == "127.0.0.1" || a == "::1" || a == "0.0.0.0")
+				return true;
+			if (a.StartsWith("10.") || a.StartsWith("192.168."))
+				return true;
+			if (a.StartsWith("172.") && a.Length >= 7)
+			{
+				if (int.TryParse(a.Split('.')[1], out int second) && second >= 16 && second <= 31)
+					return true;
+			}
+			return false;
 		}
 
 		/// <summary>

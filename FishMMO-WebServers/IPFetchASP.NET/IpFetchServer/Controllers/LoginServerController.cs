@@ -133,7 +133,7 @@ public class LoginServerController : ControllerBase
 		var rewritten = new LoginServerAddressDto[servers.Length];
 		for (int i = 0; i < servers.Length; i++)
 			rewritten[i] = IsLoopbackOrPrivate(servers[i].Address)
-				? new LoginServerAddressDto(GetPublicHost(servers[i].Port), 443)
+				? new LoginServerAddressDto(GetPublicHost(servers[i].Port), servers[i].Port)
 				: servers[i];
 		return rewritten;
 	}

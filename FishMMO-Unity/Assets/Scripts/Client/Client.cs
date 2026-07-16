@@ -335,40 +335,31 @@ namespace FishMMO.Client
 		/// Multi-host mode: each public host connects on :443 without a path suffix.
 		/// Single-host path mode: rewrites to GameHost/ws/{port}.
 		/// </summary>
+		/// <summary>
+		/// On WebGL, public hostnames connect via WSS on :443. Loopback/private
+		/// addresses use single-host path mode: GameHost/ws/{port}. Server addresses
+		/// come from IPFetch discovery already rewritten to public hostnames.
+		/// </summary>
 		private static void RewriteWebGlGameAddress(ref string address, ref ushort port, bool isWorldServer)
 		{
-			// Already a public hostname → keep the host, force port 443 (WSS).
-			if (address.Contains(".") && !address.StartsWith("127.") && !address.StartsWith("10.") && !address.StartsWith("192.168.") && !address.StartsWith("172.16."))
+			// Already a public hostname → keep host, force port 443 (WSS).
+			bool isPublic = address.Contains(".")
+				&& !address.StartsWith("127.")
+				&& !address.StartsWith("10.")
+				&& !address.StartsWith("192.168.")
+				&& !address.StartsWith("172.16.")
+				&& !address.StartsWith("0.")
+				&& address != "::1";
+			if (isPublic)
 			{
 				port = 443;
 				return;
 			}
 
-			if (!string.IsNullOrEmpty(Constants.Configuration.WorldGameHost) || !string.IsNullOrEmpty(Constants.Configuration.SceneGameHost))
-			{
-				// Multi-host mode: map by local server port to the correct public host.
-				string host;
-				if (isWorldServer && !string.IsNullOrEmpty(Constants.Configuration.WorldGameHost))
-					host = Constants.Configuration.WorldGameHost;
-				else if (!isWorldServer && !string.IsNullOrEmpty(Constants.Configuration.SceneGameHost))
-					host = Constants.Configuration.SceneGameHost;
-				else
-					host = Constants.Configuration.GameHost;
-				address = host;
-				port = 443;
-			}
-			else if (Constants.Configuration.GameHostUseWsPortPath)
-			{
-				// Path mode: single host, route by /ws/{port}.
-				address = Constants.Configuration.GameHost + "/ws/" + port;
-				port = 443;
-			}
-			else
-			{
-				// Direct host-only mode (no path suffix).
-				address = Constants.Configuration.GameHost;
-				port = 443;
-			}
+			// Loopback / private → single-host path mode.
+			// NGINX routes /ws/{port} to the correct backend.
+			address = Constants.Configuration.GameHost + "/ws/" + port;
+			port = 443;
 		}
 #endif
 
