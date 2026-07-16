@@ -554,7 +554,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (!Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+			if (!Client.TryGetRandomLoginServerPort(out ushort serverPort))
 			{
 				if (handshakeMessage != null)
 				{
@@ -565,23 +565,12 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (!Authentication.IsAddressValid(serverAddress.Address))
-			{
-				if (handshakeMessage != null)
-				{
-					handshakeMessage.text = "Invalid server address. Please try again.";
-				}
-				Log.Warning("UITKLogin", $"Connect failed: invalid server address '{serverAddress.Address}'.");
-				SetSignInLocked(false);
-				return;
-			}
-
 			if (handshakeMessage != null)
 			{
 				handshakeMessage.text = handshakeMsg;
 			}
 			Client.LoginAuthenticator.SetLoginCredentials(identifier, passwordText);
-			Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
+			Client.ConnectToServer(serverPort);
 		}
 
 		/// <summary>

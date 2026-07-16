@@ -514,16 +514,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					// Resolve the scene server's address (cache-aware)
-					var serverAddr = await FetchSceneServerAddressAsync(sceneServerService, runtimeData, sceneData.SceneServerID);
-					if (!serverAddr.HasValue)
+					ushort? serverPort = await FetchSceneServerAddressAsync(sceneServerService, runtimeData, sceneData.SceneServerID);
+					if (!serverPort.HasValue)
 					{
 						continue;
 					}
 
 					addresses.Add(new ChannelAddress
 					{
-						Address = serverAddr.Value.Address,
-						Port = serverAddr.Value.Port,
+						Port = serverPort.Value,
 						SceneHandle = sceneData.SceneHandle,
 						SceneName = sceneData.SceneName,
 						CharacterCount = sceneData.CharacterCount,
@@ -822,14 +821,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// caching is disabled (<see cref="sceneServerCacheTtlSeconds"/> = 0).
 		/// </summary>
 		/// <returns>The scene server address and port, or <c>null</c> on failure.</returns>
-		private async Task<(string Address, ushort Port)?> FetchSceneServerAddressAsync(
+		private async Task<ushort?> FetchSceneServerAddressAsync(
 			ISceneServerService sceneServerService,
 			SceneChannelSystemRuntimeData runtimeData,
 			long sceneServerID)
 		{
 			TimeSpan ttl = TimeSpan.FromSeconds(sceneServerCacheTtlSeconds);
 			if (ttl > TimeSpan.Zero &&
-				runtimeData.SceneServerAddressCache.TryGet(sceneServerID, ttl, out var cached))
+				runtimeData.SceneServerAddressCache.TryGet(sceneServerID, ttl, out ushort cached))
 			{
 				return cached;
 			}
@@ -842,12 +841,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return null;
 			}
 
-			var addr = (result.Data.Address, result.Data.Port);
+			ushort port = result.Data.Port;
 			if (ttl > TimeSpan.Zero)
 			{
-				runtimeData.SceneServerAddressCache.Set(sceneServerID, addr);
+				runtimeData.SceneServerAddressCache.Set(sceneServerID, port);
 			}
-			return addr;
+			return port;
 		}
 
 		/// <summary>

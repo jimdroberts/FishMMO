@@ -2,6 +2,8 @@ using FishNet.Connection;
 using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Transporting;
+using FishNet.Transporting.Bayou;
+using FishNet.Transporting.Multipass;
 using FishMMO.Logging;
 using System;
 using System.Runtime.CompilerServices;
@@ -64,7 +66,7 @@ namespace FishMMO.Server.Implementation
 					coroutineHost.StopCoroutine(awaitingConnectionCoroutine);
 					awaitingConnectionCoroutine = null;
 				}
-				
+
 				NetworkManager.ServerManager.StopConnection(true);
 			}
 		}
@@ -124,6 +126,41 @@ namespace FishMMO.Server.Implementation
 			transport.SetServerBindAddress(address, IPAddressType.IPv4);
 			transport.SetPort(port);
 			transport.SetMaximumClients(maxClients);
+
+			// SSL offloading: nginx terminates TLS and passes plain HTTP/WS
+			// over loopback. Server must NOT do its own SSL — nginx handles the
+			// CPU-intensive TLS handshake. PROXY protocol tells Bayou to expect
+			// a PROXY v1 header before the WebSocket handshake (real client IP).
+			if (NetworkManager.TransportManager.GetTransport<Multipass>() is Multipass mp)
+			{
+				if (mp.Transports == null || mp.Transports.Count == 0)
+				{
+					Log.Warning("FishNetNetworkWrapper", "Multipass has no child transports.");
+					return;
+				}
+				bool configured = false;
+				foreach (var t in mp.Transports)
+				{
+					if (t is Bayou bayou)
+					{
+						ConfigureBayou(bayou);
+						configured = true;
+					}
+				}
+				if (!configured)
+					Log.Warning("FishNetNetworkWrapper", "No Bayou transport in Multipass — PROXY protocol not set.");
+			}
+			else if (transport is Bayou bayou)
+			{
+				ConfigureBayou(bayou);
+			}
+		}
+
+		private static void ConfigureBayou(Bayou bayou)
+		{
+			bayou.SetUseWSS(false);
+			bayou.SetUseProxyProtocol(true);
+			Log.Debug("FishNetNetworkWrapper", "Bayou configured for nginx: WSS=off, PROXY=on.");
 		}
 
 		/// <summary>

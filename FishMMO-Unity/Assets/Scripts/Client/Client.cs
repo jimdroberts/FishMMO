@@ -3,7 +3,6 @@ using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Managing.Transporting;
 using FishNet.Transporting.Multipass;
-using FishNet.Transporting.Tugboat;
 using FishNet.Transporting.Bayou;
 using FishNet.Managing.Scened;
 using FishMMO.Shared;
@@ -55,7 +54,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Cached list of login server addresses discovered via API host probing.
 		/// </summary>
-		public List<ServerAddress> LoginServerAddresses;
+		public List<ushort> LoginServerAddresses;
 		/// <summary>
 		/// Timestamp of the last successful login server address fetch.
 		/// </summary>
@@ -262,7 +261,8 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Configures the client transport (Tugboat for standalone, Bayou for WebGL).
+		/// Configures the client transport. All platforms use Bayou (WebSocket)
+		/// through nginx. No UDP/Tugboat needed.
 		/// </summary>
 		/// <returns>True if initialization succeeded; otherwise, false.</returns>
 		private bool TryInitializeTransport()
@@ -271,11 +271,13 @@ namespace FishMMO.Client
 			if (tm == null) { Log.Error("Client", "TransportManager not found."); return false; }
 			var mp = tm.GetTransport<Multipass>();
 			if (mp == null) { Log.Error("Client", "Multipass not found."); return false; }
-#if UNITY_WEBGL && !UNITY_EDITOR
+// Bayou (WebSocket) for all platforms — unified nginx proxy path.
+			// All clients connect via wss:// through nginx which terminates SSL.
 			mp.SetClientTransport<Bayou>();
-#else
-			mp.SetClientTransport<Tugboat>();
-#endif
+			// WSS is disabled by default on Bayou. Enable it so the client
+			// connects via wss:// instead of plain ws://. nginx rejects plaintext.
+			if (mp.GetTransport<Bayou>() is Bayou bayou)
+				bayou.SetUseWSS(true);
 			return true;
 		}
 
@@ -316,53 +318,27 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Connects the client to a server at the specified address and port.
+		/// Connects the client to a game server at the specified port.
+		/// Address is always <see cref="Constants.Configuration.GameHost"/>.
 		/// </summary>
-		/// <param name="address">The server address.</param>
 		/// <param name="port">The server port.</param>
 		/// <param name="isWorldServer">If true, marks this as a world server connection.</param>
-		public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
+		public void ConnectToServer(ushort port, bool isWorldServer = false)
 		{
-#if UNITY_WEBGL && !UNITY_EDITOR
-			RewriteWebGlGameAddress(ref address, ref port, isWorldServer);
-#endif
-			Connection?.ConnectToServer(address, port, isWorldServer);
+			Connection?.ConnectToServer(BuildGameServerUrl(port), 443, isWorldServer);
 		}
 
-#if UNITY_WEBGL && !UNITY_EDITOR
 		/// <summary>
-		/// Rewrites a game-server address for WebGL (Bayou/WebSocket).
-		/// Multi-host mode: each public host connects on :443 without a path suffix.
-		/// Single-host path mode: rewrites to GameHost/ws/{port}.
+		/// Builds a WebSocket URL for a game server port.
+		/// All clients connect through nginx at <see cref="Constants.Configuration.GameHost"/>.
 		/// </summary>
-		/// <summary>
-		/// On WebGL, public hostnames connect via WSS on :443. Loopback/private
-		/// addresses use single-host path mode: GameHost/ws/{port}. Server addresses
-		/// come from IPFetch discovery already rewritten to public hostnames.
-		/// </summary>
-		private static void RewriteWebGlGameAddress(ref string address, ref ushort port, bool isWorldServer)
+		/// <param name="port">The server port.</param>
+		/// <returns>The full WebSocket URL for the game server.</returns>
+		private static string BuildGameServerUrl(ushort port)
 		{
-			// Already a public hostname → keep host, force port 443 (WSS).
-			bool isPublic = address.Contains(".")
-				&& !address.StartsWith("127.")
-				&& !address.StartsWith("10.")
-				&& !address.StartsWith("192.168.")
-				&& !address.StartsWith("172.16.")
-				&& !address.StartsWith("0.")
-				&& address != "::1";
-			if (isPublic)
-			{
-				port = 443;
-				return;
-			}
-
-			// Loopback / private → single-host path mode.
 			// NGINX routes /ws/{port} to the correct backend.
-			address = Constants.Configuration.GameHost + "/ws/" + port;
-			port = 443;
+			return Constants.Configuration.GameHost + "/ws/" + port;
 		}
-#endif
-
 		/// <summary>
 		/// Checks whether the client connection is ready, optionally requiring authentication.
 		/// </summary>
@@ -411,10 +387,10 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="addr">The selected server address if found.</param>
 		/// <returns>True if an address was available; otherwise, false.</returns>
-		public bool TryGetRandomLoginServerAddress(out ServerAddress addr)
+		public bool TryGetRandomLoginServerPort(out ushort port)
 		{
-			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0) { addr = LoginServerAddresses.GetRandom(); return true; }
-			addr = default; return false;
+			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0) { port = LoginServerAddresses.GetRandom(); return true; }
+			port = default; return false;
 		}
 
 		/// <summary>
@@ -423,7 +399,7 @@ namespace FishMMO.Client
 		/// <param name="onFail">Callback invoked with an error message if all probes fail.</param>
 		/// <param name="onDone">Callback invoked with the list of discovered server addresses.</param>
 		/// <returns>Coroutine enumerator.</returns>
-		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ServerAddress>> onDone)
+		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>> onDone)
 		{
 			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0)
 			{
@@ -435,7 +411,7 @@ namespace FishMMO.Client
 			const float stagger = 0.25f;
 			var pending = new List<PendingProbe>(candidates.Count);
 			float lastStart = float.NegativeInfinity;
-			int next = 0; string lastErr = null; List<ServerAddress> winner = null;
+			int next = 0; string lastErr = null; List<ushort> winner = null;
 			try
 			{
 				while (winner == null)
@@ -461,8 +437,8 @@ namespace FishMMO.Client
 						{
 							if (done.Request.result != UnityWebRequest.Result.Success) { lastErr = done.Request.error; continue; }
 							var parsed = JsonUtility.FromJson<ServerAddresses>(done.Request.downloadHandler.text);
-							if (parsed?.Addresses == null) { lastErr = "Parse failed."; continue; }
-							winner = parsed.Addresses;
+							if (parsed?.Ports == null) { lastErr = "Parse failed."; continue; }
+							winner = parsed.Ports;
 							break;
 						}
 						finally { done.Request.Dispose(); }
@@ -527,7 +503,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The world scene connect message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) ConnectToServer(msg.Address, msg.Port); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
+		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) ConnectToServer(msg.Port); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
 		/// <summary>
 		/// Handles a validated scene broadcast by beginning the world scene preload queue.
 		/// </summary>

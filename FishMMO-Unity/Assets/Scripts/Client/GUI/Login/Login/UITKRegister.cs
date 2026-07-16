@@ -489,15 +489,14 @@ namespace FishMMO.Client
 		private void Connect(string usernameText, string passwordText, string emailText, int age)
 		{
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress) &&
-				Authentication.IsAddressValid(serverAddress.Address))
+				Client.TryGetRandomLoginServerPort(out ushort serverPort))
 			{
 				if (statusMessage != null)
 				{
 					statusMessage.text = "Creating account...";
 				}
 				Client.LoginAuthenticator.SetLoginCredentials(usernameText, passwordText, true, emailText, age);
-				Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
+				Client.ConnectToServer(serverPort);
 			}
 			else
 			{

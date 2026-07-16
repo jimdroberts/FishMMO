@@ -22,12 +22,10 @@ namespace FishMMO.Shared
 	}
 	/// <summary>
 	/// Broadcast for connecting to a world scene server.
-	/// Contains the server address and port.
+	/// Contains only the port; address is always Constants.Configuration.GameHost.
 	/// </summary>
 	public struct WorldSceneConnectBroadcast : IBroadcast
 	{
-		/// <summary>IP address or hostname of the world scene server.</summary>
-		public string Address;
 		/// <summary>Port number for the world scene server.</summary>
 		public ushort Port;
 	}

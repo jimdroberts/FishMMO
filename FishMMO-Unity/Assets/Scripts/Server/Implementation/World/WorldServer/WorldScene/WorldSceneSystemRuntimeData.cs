@@ -69,7 +69,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Cache of scene server addresses keyed by scene server ID.
 		/// Addresses change infrequently, so a longer TTL is appropriate.
 		/// </summary>
-		public TimedCache<long, (string Address, ushort Port)> SceneServerAddressCache { get; set; }
+		public TimedCache<long, ushort> SceneServerAddressCache { get; set; }
 
 		/// <summary>
 		/// Cached total character count across all scenes for this world server.
@@ -106,7 +106,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			InstanceLookupDebounce = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 			WaitingQueueEnteredUtcByClientId = new Dictionary<int, DateTime>();
 			AvailableSceneCache = new TimedCache<string, IReadOnlyList<SceneData>>(StringComparer.OrdinalIgnoreCase);
-			SceneServerAddressCache = new TimedCache<long, (string, ushort)>();
+			SceneServerAddressCache = new TimedCache<long, ushort>();
 			CachedSceneCharacterCount = 0;
 			CachedSceneCharacterCountUtc = DateTime.MinValue;
 			return ServerComponentInitializationStatus.Initialized;

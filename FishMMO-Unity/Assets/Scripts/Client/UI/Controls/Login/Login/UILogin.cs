@@ -475,7 +475,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (!Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+			if (!Client.TryGetRandomLoginServerPort(out ushort serverPort))
 			{
 				HandshakeMSG.text = "No login servers available. Check your internet connection.";
 				Log.Warning("UILogin", "Connect failed: no login server addresses available.");
@@ -483,17 +483,9 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (!Authentication.IsAddressValid(serverAddress.Address))
-			{
-				HandshakeMSG.text = "Invalid server address. Please try again.";
-				Log.Warning("UILogin", $"Connect failed: invalid server address '{serverAddress.Address}'.");
-				SetSignInLocked(false);
-				return;
-			}
-
 			HandshakeMSG.text = handshakeMessage;
 			Client.LoginAuthenticator.SetLoginCredentials(identifier, password);
-			Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
+			Client.ConnectToServer(serverPort);
 		}
 
 		/// <summary>

@@ -9,8 +9,6 @@ namespace FishMMO.Shared
 	[Serializable]
 	public struct ChannelAddress
 	{
-		/// <summary>IP address or hostname of the scene server hosting this channel.</summary>
-		public string Address;
 		/// <summary>Port number for the scene server hosting this channel.</summary>
 		public ushort Port;
 		/// <summary>Handle identifying the specific scene instance for this channel.</summary>

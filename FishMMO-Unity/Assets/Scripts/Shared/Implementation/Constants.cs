@@ -38,9 +38,9 @@ namespace FishMMO.Shared
 			public static readonly string APIHost = "https://api.fishmmo.com/";
 
 			/// <summary>
-			/// NGINX game WebSocket hostname for Bayou/WebGL clients.
-			/// WebGL clients connect via wss://GameHost/ws/{port} instead of direct IP:port.
-			/// NGINX dynamically routes /ws/{port} to the correct backend game server.
+			/// NGINX game WebSocket hostname. All clients (standalone + WebGL) use
+			/// Bayou via wss://GameHost/ws/{port}. NGINX routes /ws/{port} to the
+			/// correct backend game server on localhost or a remote machine.
 			/// </summary>
 			public static readonly string GameHost = "game.fishmmo.com";
 

@@ -414,9 +414,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			try
 			{
-					if (!TryGetDbService(out ICharacterService characterService) ||
-					!TryGetDbService(out IWorldServerService worldServerService) ||
-					!TryGetDbService(out IUnitOfWorkService unitOfWorkService))
+				if (!TryGetDbService(out ICharacterService characterService) ||
+				!TryGetDbService(out IWorldServerService worldServerService) ||
+				!TryGetDbService(out IUnitOfWorkService unitOfWorkService))
 				{
 					await Log.Warning("CharacterSelectSystem", "DB services unavailable for character select.");
 					SendEmptyServerList(conn);
@@ -504,7 +504,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							Name = data.Name,
 							LastPulse = data.LastPulse,
-							Address = data.Address,
 							Port = data.Port,
 							CharacterCount = data.CharacterCount,
 							Locked = data.Locked,

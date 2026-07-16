@@ -3,7 +3,7 @@ using System;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Serializable class containing details about a world server, including name, address, status, and player count.
+	/// Serializable class containing details about a world server, including name, port, status, and player count.
 	/// </summary>
 	[Serializable]
 	public class WorldServerDetails
@@ -12,8 +12,6 @@ namespace FishMMO.Shared
 		public string Name;
 		/// <summary>Timestamp of the last server heartbeat or status update.</summary>
 		public DateTime LastPulse;
-		/// <summary>IP address or hostname of the server.</summary>
-		public string Address;
 		/// <summary>Port number for the server.</summary>
 		public ushort Port;
 		/// <summary>Number of characters currently on the server.</summary>

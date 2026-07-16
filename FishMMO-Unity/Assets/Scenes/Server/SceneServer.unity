@@ -119,28 +119,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!114 &142982559104787067
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2696072683415778311}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _stopSocketsOnThread: 0
-  _dontRoute: 0
-  _reuseAddress: 0
-  _unreliableMtu: 1023
-  _ipv4BindAddress: 0.0.0.0
-  _enableIpv6: 1
-  _ipv6BindAddress: 
-  _port: 7781
-  _maximumClients: 5000
-  _clientAddress: 127.0.0.1
 --- !u!114 &363288935454560800
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -221,7 +199,6 @@ GameObject:
   - component: {fileID: 2946536618568869384}
   - component: {fileID: 3897615595877637487}
   - component: {fileID: 8097462252018206293}
-  - component: {fileID: 142982559104787067}
   - component: {fileID: 8097462252018206294}
   - component: {fileID: 8097462252018206296}
   - component: {fileID: 8097462252018206295}
@@ -427,7 +404,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   GlobalServerActions: 1
   _transports:
-  - {fileID: 142982559104787067}
   - {fileID: 8097462252018206294}
 --- !u!114 &8097462252018206294
 MonoBehaviour:

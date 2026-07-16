@@ -151,28 +151,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &142982559366625886
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2696072683140574242}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _stopSocketsOnThread: 0
-  _dontRoute: 0
-  _reuseAddress: 0
-  _unreliableMtu: 1023
-  _ipv4BindAddress: 0.0.0.0
-  _enableIpv6: 1
-  _ipv6BindAddress: 
-  _port: 7780
-  _maximumClients: 5000
-  _clientAddress: 127.0.0.1
 --- !u!114 &363288935713114629
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -203,6 +181,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxMainThreadActionsPerUpdate: 100
   useConnectionIdForRateLimit: 0
+  renewalTokenExpirationMinutes: 10
   maxPlayers: 5000
 --- !u!114 &567623045811336610
 MonoBehaviour:
@@ -268,7 +247,6 @@ GameObject:
   - component: {fileID: 452158361366794860}
   - component: {fileID: 3897615596154832202}
   - component: {fileID: 6776049994908595652}
-  - component: {fileID: 142982559366625886}
   - component: {fileID: 6776049994908595653}
   m_Layer: 0
   m_Name: NetworkManager World
@@ -412,7 +390,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   GlobalServerActions: 1
   _transports:
-  - {fileID: 142982559366625886}
   - {fileID: 6776049994908595653}
 --- !u!114 &6776049994908595653
 MonoBehaviour:
@@ -427,13 +404,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _useWss: 0
-  _sslConfiguration:
-    Enabled: 0
-    CertificatePath: 
-    CertificatePassword: 
-    SslProtocol: 0
   _mtu: 1023
   _useProxyProtocol: 1
+  _serverBindAddress: localhost
   _port: 7770
   _maximumClients: 2000
   _clientAddress: localhost

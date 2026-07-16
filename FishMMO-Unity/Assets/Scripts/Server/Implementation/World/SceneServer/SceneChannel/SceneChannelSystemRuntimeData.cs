@@ -32,7 +32,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Cache of scene server addresses keyed by scene server ID.
 		/// Addresses change infrequently, so a longer TTL is appropriate.
 		/// </summary>
-		public TimedCache<long, (string Address, ushort Port)> SceneServerAddressCache { get; set; }
+		public TimedCache<long, ushort> SceneServerAddressCache { get; set; }
 
 		/// <summary>
 		/// Initializes the runtime data, creating the ingress guard and cooldown dictionary.
@@ -43,7 +43,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ChannelSwitchCooldownByClientId = new Dictionary<int, DateTime>();
 			NextCooldownCleanup = 0f;
 			AvailableSceneCache = new TimedCache<string, IReadOnlyList<SceneData>>(StringComparer.OrdinalIgnoreCase);
-			SceneServerAddressCache = new TimedCache<long, (string, ushort)>();
+			SceneServerAddressCache = new TimedCache<long, ushort>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 

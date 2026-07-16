@@ -428,7 +428,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Resolve all scene server addresses upfront and build a capacity tracker.
 			// instanceHandles preserves insertion order for deterministic fallback assignment.
 			var instanceHandles = new List<int>(availableScenes.Count);
-			var serverInfoByHandle = new Dictionary<int, (string Address, ushort Port)>(availableScenes.Count);
+			var serverInfoByHandle = new Dictionary<int, ushort>(availableScenes.Count);
 			var capacityByHandle = new Dictionary<int, int>(availableScenes.Count);
 
 			// Resolve scene server addresses: check cache first, batch-fetch any misses.
@@ -468,10 +468,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					foreach (var serverData in batchResult.Data)
 					{
-						var addr = RewritePublicAdvertise(serverData.Address, serverData.Port);
+						ushort serverPort = serverData.Port;
 						if (serverTtl > TimeSpan.Zero)
 						{
-							runtimeData.SceneServerAddressCache.Set(serverData.ID, addr);
+							runtimeData.SceneServerAddressCache.Set(serverData.ID, serverPort);
 						}
 
 						if (scenesByServerId.TryGetValue(serverData.ID, out var scenes))
@@ -480,7 +480,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 							{
 								int handle = sd.SceneHandle;
 								instanceHandles.Add(handle);
-								serverInfoByHandle[handle] = addr;
+								serverInfoByHandle[handle] = serverPort;
 								capacityByHandle[handle] = maxClientsPerInstance - sd.CharacterCount;
 							}
 						}
@@ -830,7 +830,6 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 						Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
 						{
-							Address = sceneServer.Address,
 							Port = sceneServer.Port,
 						});
 					});
@@ -1243,8 +1242,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Skips the broadcast if the connection has been re-queued during async processing.
 		/// </summary>
 		/// <param name="conn">Target network connection.</param>
-		/// <param name="server">Scene server address and port to broadcast.</param>
-		private void BroadcastSceneConnect(NetworkConnection conn, (string Address, ushort Port) server)
+		/// <param name="port">Scene server port to broadcast (address is always GameHost).</param>
+		private void BroadcastSceneConnect(NetworkConnection conn, ushort port)
 		{
 			TryEnqueueMainThread(() =>
 			{
@@ -1260,11 +1259,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					return;
 				}
 
-				Log.Info("WorldSceneSystem", $"BroadcastSceneConnect conn={conn.ClientId} -> {server.Address}:{server.Port}");
+				Log.Info("WorldSceneSystem", $"BroadcastSceneConnect conn={conn.ClientId} -> port={port}");
 				Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
 				{
-					Address = server.Address,
-					Port = server.Port,
+					Port = port,
 				});
 			});
 		}
@@ -1349,14 +1347,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// caching is disabled (<see cref="sceneServerCacheTtlSeconds"/> = 0).
 		/// </summary>
 		/// <returns>The scene server address and port, or <c>null</c> on failure.</returns>
-		private async Task<(string Address, ushort Port)?> FetchSceneServerAddressAsync(
+		private async Task<ushort?> FetchSceneServerAddressAsync(
 			ISceneServerService sceneServerService,
 			WorldSceneSystemRuntimeData runtimeData,
 			long sceneServerID)
 		{
 			TimeSpan ttl = TimeSpan.FromSeconds(sceneServerCacheTtlSeconds);
 			if (ttl > TimeSpan.Zero &&
-				runtimeData.SceneServerAddressCache.TryGet(sceneServerID, ttl, out var cached))
+				runtimeData.SceneServerAddressCache.TryGet(sceneServerID, ttl, out ushort cached))
 			{
 				return cached;
 			}
@@ -1369,47 +1367,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return null;
 			}
 
-			var addr = RewritePublicAdvertise(result.Data.Address, result.Data.Port);
+			ushort port = result.Data.Port;
 			if (ttl > TimeSpan.Zero)
 			{
-				runtimeData.SceneServerAddressCache.Set(sceneServerID, addr);
+				runtimeData.SceneServerAddressCache.Set(sceneServerID, port);
 			}
-			return addr;
-		}
-
-		/// <summary>
-		/// Rewrites loopback/private addresses to public hostnames for WebGL.
-		/// DB stores bind addresses; rewrite happens at read/broadcast time.
-		/// Uses the same port->hostname mapping as IPFetch's RewritePublicAddresses.
-		/// </summary>
-		private (string Address, ushort Port) RewritePublicAdvertise(string address, ushort port)
-		{
-			if (!IsLoopbackOrPrivate(address))
-				return (address, port);
-
-			// Read the public hostname from this server's .cfg file.
-			// All traffic flows through nginx (UDP stream + WSS). A single
-			// hostname serves all ports; ports distinguish server roles.
-			if (Server.Configuration.TryGetString("PublicAdvertise", out string host) &&
-				!string.IsNullOrWhiteSpace(host) &&
-				(port >= 7770 && port <= 7899))
-				return (Constants.Configuration.GameHost, port);
-
-			return (address, port);
-		}
-
-		private static bool IsLoopbackOrPrivate(string a)
-		{
-			if (string.IsNullOrEmpty(a) || a == "127.0.0.1" || a == "::1" || a == "0.0.0.0")
-				return true;
-			if (a.StartsWith("10.") || a.StartsWith("192.168."))
-				return true;
-			if (a.StartsWith("172.") && a.Length >= 7)
-			{
-				if (int.TryParse(a.Split('.')[1], out int second) && second >= 16 && second <= 31)
-					return true;
-			}
-			return false;
+			return port;
 		}
 
 		/// <summary>
