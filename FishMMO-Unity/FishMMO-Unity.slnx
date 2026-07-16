@@ -12,7 +12,6 @@
   <Project Path="SimpleWebTransport.csproj" />
   <Project Path="FishMMO.UnitTests.csproj" />
   <Project Path="Bayou.csproj" />
-  <Project Path="SimpleWebRTC.csproj" />
   <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="FishNet.Demos.csproj" />
   <Project Path="FishMMO.Client.Input.Generated.csproj" />
