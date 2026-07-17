@@ -177,7 +177,7 @@ sequenceDiagram
     Client->>Client: DNS resolve game.fishmmo.com, → Server IP
 
     Client->>NGINX: QUIC Initial packet, UDP → game.fishmmo.com:7770
-    Note over NGINX: "stream {} block, listen 7770 udp;, proxy_pass 127.0.0.1:7770;"
+    Note over NGINX: NGINX L4 stream block — listens UDP 7770 — proxies to 127.0.0.1:7770
 
     NGINX->>Server: Forward UDP to loopback
     Note over NGINX,Server: Source IP = 127.0.0.1, (proxy rewrites address)
