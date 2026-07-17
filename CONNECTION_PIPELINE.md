@@ -99,19 +99,19 @@
 sequenceDiagram
     actor Player
     participant Launcher as ClientLauncher
-    participant API as api.fishmmo.com<br/>(NGINX → Patcher)
+    participant API as api.fishmmo.com, (NGINX → Patcher)
     participant CMS as CMS Server
 
     Player->>Launcher: Launch game
-    Launcher->>Launcher: Awake()<br/>• Init services<br/>• Set screen resolution<br/>• Build updater path
+    Launcher->>Launcher: Awake(), • Init services, • Set screen resolution, • Build updater path
 
     par Fetch News & Version
         Launcher->>CMS: GET /news (HTML)
         CMS-->>Launcher: HTML content
-        Launcher->>Launcher: Parse div.content<br/>→ HtmlText
+        Launcher->>Launcher: Parse div.content, → HtmlText
     and Happy-Eyeballs Version Check
-        Launcher->>API: GET /latest_version<br/>X-FishMMO-Client: v1.{ts}.{nonce}.{sig}
-        API->>API: ClientGate validation<br/>• HMAC-SHA256 verify<br/>• Timestamp ±300s<br/>• Nonce replay check
+        Launcher->>API: GET /latest_version, X-FishMMO-Client: v1.{ts}.{nonce}.{sig}
+        API->>API: ClientGate validation, • HMAC-SHA256 verify, • Timestamp ±300s, • Nonce replay check
         API-->>Launcher: { version, upToDate, patch: { sha256, size } }
     end
 
@@ -120,13 +120,13 @@ sequenceDiagram
         Player->>Launcher: Click Update
         Launcher->>API: GET /{version} (patch ZIP)
         API-->>Launcher: patch-{version}.zip
-        Launcher->>Launcher: SHA-256 verify<br/>Extract to temp
-        Launcher->>Launcher: Launch Updater.exe<br/>• Transactional patch apply<br/>• Atomic file replacement
+        Launcher->>Launcher: SHA-256 verify, Extract to temp
+        Launcher->>Launcher: Launch Updater.exe, • Transactional patch apply, • Atomic file replacement
         Updater-->>Launcher: Exit code 0 (success)
     else Client == Server
         Launcher->>Launcher: Show "Play" button
     else Client > Server
-        Launcher->>Launcher: Show "Client Ahead"<br/>(allow play anyway)
+        Launcher->>Launcher: Show "Client Ahead", (allow play anyway)
     end
 ```
 
@@ -134,30 +134,30 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant Client as Client.cs<br/>GetLoginServerList()
-    participant API as api.fishmmo.com<br/>(NGINX → IPFetch :8080)
+    participant Client as Client.cs, GetLoginServerList()
+    participant API as api.fishmmo.com, (NGINX → IPFetch :8080)
     participant DB as PostgreSQL
-    participant Cache as Client Cache<br/>(55s TTL)
+    participant Cache as Client Cache, (55s TTL)
 
-    Note over Client: Triggered after "Play" click<br/>or from login screen
+    Note over Client: Triggered after "Play" click, or from login screen
 
     alt Cache valid (< 55s old)
         Client->>Cache: Return cached ports + token
         Cache-->>Client: List<ushort> + connectionToken
     else Cache expired / empty
-        Client->>Client: ApiHostResolver.GetCandidates()<br/>• Parse comma-separated hosts<br/>• Random shuffle (Happy Eyeballs)
+        Client->>Client: ApiHostResolver.GetCandidates(), • Parse comma-separated hosts, • Random shuffle (Happy Eyeballs)
 
         loop Staggered probes (0.25s apart)
-            Client->>API: GET /loginserver<br/>X-FishMMO-Client: v1.{ts}.{nonce}.{sig}<br/>CertificateHandler: ClientSSLCertificateHandler
+            Client->>API: GET /loginserver, X-FishMMO-Client: v1.{ts}.{nonce}.{sig}, CertificateHandler: ClientSSLCertificateHandler
             API->>API: ClientGate HMAC verify
             API->>DB: SELECT active login servers
             DB-->>API: Server rows
-            API->>API: Generate one-time connection token<br/>• SHA-256(random bytes)<br/>• Store in DB with TTL (60s)
+            API->>API: Generate one-time connection token, • SHA-256(random bytes), • Store in DB with TTL (60s)
             API-->>Client: { ports: [7770], connectionToken: "abc123..." }
         end
 
         Client->>Client: Cache result (55s TTL)
-        Client->>Client: Pick random port<br/>→ ConnectToServer(7770)
+        Client->>Client: Pick random port, → ConnectToServer(7770)
     end
 ```
 
@@ -165,28 +165,28 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant Client as Unity Client<br/>WebTransport + Multipass
-    participant NGINX as NGINX L4 Stream<br/>UDP :7770
-    participant Server as LoginServer :7770<br/>MsQuic C++ Server
+    participant Client as Unity Client, WebTransport + Multipass
+    participant NGINX as NGINX L4 Stream, UDP :7770
+    participant Server as LoginServer :7770, MsQuic C++ Server
 
-    Note over Client: ClientConnectionManager<br/>ConnectToServer("game.fishmmo.com", 7770)
+    Note over Client: ClientConnectionManager, ConnectToServer("game.fishmmo.com", 7770)
 
-    Client->>Client: StopConnection() (if existing)<br/>Wait for Stopped state
+    Client->>Client: StopConnection() (if existing), Wait for Stopped state
 
     Client->>Client: StartConnection("game.fishmmo.com", 7770)
-    Client->>Client: DNS resolve game.fishmmo.com<br/>→ Server IP
+    Client->>Client: DNS resolve game.fishmmo.com, → Server IP
 
-    Client->>NGINX: QUIC Initial packet<br/>UDP → game.fishmmo.com:7770
-    Note over NGINX: stream {} block<br/>listen 7770 udp;<br/>proxy_pass 127.0.0.1:7770;
+    Client->>NGINX: QUIC Initial packet, UDP → game.fishmmo.com:7770
+    Note over NGINX: stream {} block, listen 7770 udp;, proxy_pass 127.0.0.1:7770;
 
     NGINX->>Server: Forward UDP to loopback
-    Note over NGINX,Server: Source IP = 127.0.0.1<br/>(proxy rewrites address)
+    Note over NGINX,Server: Source IP = 127.0.0.1, (proxy rewrites address)
 
-    Server->>Server: MsQuic QUIC_CONNECTION_EVENT_CONNECTED<br/>• TLS 1.3 handshake<br/>• ALPN negotiation
-    Server->>Server: QUIC_CONNECTION_EVENT_STREAM_STARTED<br/>→ on_stream_data callback
+    Server->>Server: MsQuic QUIC_CONNECTION_EVENT_CONNECTED, • TLS 1.3 handshake, • ALPN negotiation
+    Server->>Server: QUIC_CONNECTION_EVENT_STREAM_STARTED, → on_stream_data callback
 
     Client-->>Server: QUIC connection established
-    Note over Client,Server: Encrypted QUIC tunnel active<br/>TLS terminated at game server<br/>(NGINX never sees plaintext)
+    Note over Client,Server: Encrypted QUIC tunnel active, TLS terminated at game server, (NGINX never sees plaintext)
 ```
 
 ### Phase 4: Cryptographic Handshake (X25519 ECDH)
@@ -194,35 +194,35 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Client as ClientAuthenticatorCore
-    participant Server as BaseAuthenticatorCore<br/>(Login Server)
+    participant Server as BaseAuthenticatorCore, (Login Server)
 
     Note over Client,Server: Triggered by OnConnected()
 
-    Client->>Client: Generate X25519 ephemeral keypair<br/>• crypto_box_keypair()
+    Client->>Client: Generate X25519 ephemeral keypair, • crypto_box_keypair()
 
-    Client->>Server: ClientHandshake {<br/>  PublicKey: client_x25519_pub,<br/>  Cookie: null,<br/>  ConnectionToken: "abc123...",<br/>  MinVersion: 1, MaxVersion: 1<br/>}
+    Client->>Server: ClientHandshake {,   PublicKey: client_x25519_pub,,   Cookie: null,,   ConnectionToken: "abc123...",,   MinVersion: 1, MaxVersion: 1, }
 
-    Server->>Server: Validate:<br/>• PublicKey.Length == 32 ✓<br/>• Not already authenticated ✓<br/>• Validate small-order points ✓
+    Server->>Server: Validate:, • PublicKey.Length == 32 ✓, • Not already authenticated ✓, • Validate small-order points ✓
 
-    Server->>Server: Phase 1: Cookie Challenge<br/>• Generate HMAC-SHA256 cookie<br/>  bound to IP + pubkey + time bucket<br/>• Cookie is STATELESS (no server-side storage)
+    Server->>Server: Phase 1: Cookie Challenge, • Generate HMAC-SHA256 cookie,   bound to IP + pubkey + time bucket, • Cookie is STATELESS (no server-side storage)
 
-    Server-->>Client: ServerHandshake {<br/>  PublicKey: null,<br/>  Cookie: hmac_cookie_bytes<br/>}
+    Server-->>Client: ServerHandshake {,   PublicKey: null,,   Cookie: hmac_cookie_bytes, }
 
-    Client->>Client: Echo cookie<br/>• Guard: cookieEchoed = true<br/>(duplicate prevention)
+    Client->>Client: Echo cookie, • Guard: cookieEchoed = true, (duplicate prevention)
 
-    Client->>Server: ClientHandshake {<br/>  PublicKey: client_x25519_pub,<br/>  Cookie: hmac_cookie_bytes,<br/>  ConnectionToken: null<br/>}
+    Client->>Server: ClientHandshake {,   PublicKey: client_x25519_pub,,   Cookie: hmac_cookie_bytes,,   ConnectionToken: null, }
 
-    Server->>Server: Phase 2: Cookie Verification<br/>• HMAC-SHA256 verify with rollover<br/>  (current + previous time bucket)<br/>• Per-IP rate limit check (250ms debounce)<br/>• Global rate limit check (500/sec)
+    Server->>Server: Phase 2: Cookie Verification, • HMAC-SHA256 verify with rollover,   (current + previous time bucket), • Per-IP rate limit check (250ms debounce), • Global rate limit check (500/sec)
 
-    Server->>Server: X25519 ECDH Key Agreement<br/>• Generate server ephemeral keypair<br/>• Compute shared secret<br/>• HKDF derive session keys:<br/>  - ClientToServerKey (AES-256)<br/>  - ServerToClientKey (AES-256)<br/>  - ClientNoncePrefix<br/>  - ServerNoncePrefix
+    Server->>Server: X25519 ECDH Key Agreement, • Generate server ephemeral keypair, • Compute shared secret, • HKDF derive session keys:,   - ClientToServerKey (AES-256),   - ServerToClientKey (AES-256),   - ClientNoncePrefix,   - ServerNoncePrefix
 
-    Server->>Server: TrackAuthStart(conn)<br/>• TTL = 15s (stale sweep)<br/>• Hard deadline = 60s
+    Server->>Server: TrackAuthStart(conn), • TTL = 15s (stale sweep), • Hard deadline = 60s
 
-    Server-->>Client: ServerHandshake {<br/>  PublicKey: server_x25519_pub,<br/>  AgreedVersion: 1<br/>}
+    Server-->>Client: ServerHandshake {,   PublicKey: server_x25519_pub,,   AgreedVersion: 1, }
 
-    Client->>Client: ECDH Key Agreement<br/>• Compute shared secret from server pubkey<br/>• HKDF derive same session keys<br/>• Initialize GcmNonceContext (send + receive)<br/>• Dispose ephemeral keypair
+    Client->>Client: ECDH Key Agreement, • Compute shared secret from server pubkey, • HKDF derive same session keys, • Initialize GcmNonceContext (send + receive), • Dispose ephemeral keypair
 
-    Note over Client,Server: 🔐 AES-256-GCM encrypted channel established<br/>All subsequent messages are encrypted with AAD
+    Note over Client,Server: 🔐 AES-256-GCM encrypted channel established, All subsequent messages are encrypted with AAD
 ```
 
 ### Phase 5: SRP-6a Authentication
@@ -230,59 +230,59 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Client as ClientAuthenticatorCore
-    participant Server as SrpAuthenticatorCore<br/>(Login Server)
+    participant Server as SrpAuthenticatorCore, (Login Server)
     participant DB as PostgreSQL
-    participant Worker as SRP Worker<br/>(Async Channel)
+    participant Worker as SRP Worker, (Async Channel)
 
     Note over Client,Server: After ECDH handshake complete
 
     alt Has stored auth token (reconnect)
-        Client->>Server: TokenAuthBroadcast {<br/>  Token: aes_gcm_encrypted_token<br/>}
+        Client->>Server: TokenAuthBroadcast {,   Token: aes_gcm_encrypted_token, }
         Note over Server: → TokenAuth path (see Phase 8)
     else Fresh login
-        Client->>Client: Generate SRP client ephemeral 'A'<br/>Encrypt username + 'A' under AES-GCM
+        Client->>Client: Generate SRP client ephemeral 'A', Encrypt username + 'A' under AES-GCM
 
-        Client->>Server: SrpVerifyBroadcast {<br/>  S: enc(username),<br/>  PublicEphemeral: enc(client_ephemeral_A)<br/>}
+        Client->>Server: SrpVerifyBroadcast {,   S: enc(username),,   PublicEphemeral: enc(client_ephemeral_A), }
 
-        Server->>Server: Validate:<br/>• Connection has encryption data ✓<br/>• Not already in auth state ✓<br/>• Duplicate SRP verify guard ✓
+        Server->>Server: Validate:, • Connection has encryption data ✓, • Not already in auth state ✓, • Duplicate SRP verify guard ✓
 
         Server->>Server: Decrypt username + client ephemeral
-        Server->>Server: Per-account rate limit check<br/>Resolve canonical username
+        Server->>Server: Per-account rate limit check, Resolve canonical username
 
-        Server->>Worker: Enqueue SrpVerifyRequest<br/>→ bounded async channel
+        Server->>Worker: Enqueue SrpVerifyRequest, → bounded async channel
 
         Worker->>DB: FetchForLoginAsync(username)
-        DB-->>Worker: { salt, verifier, accessLevel,<br/>  totpEnabled, verified }
+        DB-->>Worker: { salt, verifier, accessLevel,,   totpEnabled, verified }
 
-        Worker->>Worker: SRP-6a server:<br/>• Compute server ephemeral 'B'<br/>• Compute shared session key<br/>• Generate server proof M2
+        Worker->>Worker: SRP-6a server:, • Compute server ephemeral 'B', • Compute shared session key, • Generate server proof M2
 
-        Worker-->>Server: SrpVerifyResponse {<br/>  enc(salt), enc(server_ephemeral_B)<br/>}
+        Worker-->>Server: SrpVerifyResponse {,   enc(salt), enc(server_ephemeral_B), }
 
-        Server-->>Client: SrpVerifyBroadcast {<br/>  S: enc(salt),<br/>  PublicEphemeral: enc(server_ephemeral_B)<br/>}
+        Server-->>Client: SrpVerifyBroadcast {,   S: enc(salt),,   PublicEphemeral: enc(server_ephemeral_B), }
 
-        Client->>Client: Decrypt salt + server ephemeral<br/>Compute client proof M1<br/>Clear username/password from memory
+        Client->>Client: Decrypt salt + server ephemeral, Compute client proof M1, Clear username/password from memory
 
-        Client->>Server: SrpProofBroadcast {<br/>  Proof: enc(client_proof_M1)<br/>}
+        Client->>Server: SrpProofBroadcast {,   Proof: enc(client_proof_M1), }
 
         Server->>Server: Decrypt client proof
 
         Server->>Worker: Enqueue SrpProofRequest
 
-        Worker->>Worker: Verify client proof M1<br/>against server session key
+        Worker->>Worker: Verify client proof M1, against server session key
 
         alt Proof valid
-            Worker->>Worker: Generate HMAC-SHA256 auth token<br/>• Bind: username + accessLevel +<br/>  loginServerId + expiration<br/>• Encrypt under session AES-GCM
+            Worker->>Worker: Generate HMAC-SHA256 auth token, • Bind: username + accessLevel +,   loginServerId + expiration, • Encrypt under session AES-GCM
 
             Worker->>DB: PersistTokenHash(token_hash)
 
-            Worker-->>Server: SrpProofResponse {<br/>  success, enc(server_proof_M2),<br/>  enc(auth_token)<br/>}
+            Worker-->>Server: SrpProofResponse {,   success, enc(server_proof_M2),,   enc(auth_token), }
         else Proof invalid
             Worker-->>Server: SrpProofResponse { failed }
         end
 
-        Server-->>Client: SrpSuccessBroadcast {<br/>  Proof: enc(server_proof_M2),<br/>  Result: LoginSuccess,<br/>  Token: enc(auth_token)<br/>}
+        Server-->>Client: SrpSuccessBroadcast {,   Proof: enc(server_proof_M2),,   Result: LoginSuccess,,   Token: enc(auth_token), }
 
-        Client->>Client: Verify server proof M2<br/>Decrypt and store auth token<br/>Fire OnAuthResult(LoginSuccess)
+        Client->>Client: Verify server proof M2, Decrypt and store auth token, Fire OnAuthResult(LoginSuccess)
     end
 ```
 
@@ -296,31 +296,31 @@ sequenceDiagram
 
     Note over Client,Server: Only when account has TOTP enabled
 
-    Server-->>Client: ClientAuthResultBroadcast {<br/>  Result: TwoFactorRequired<br/>}
+    Server-->>Client: ClientAuthResultBroadcast {,   Result: TwoFactorRequired, }
 
-    Client->>Client: Show TOTP input field<br/>User enters 6-digit code
+    Client->>Client: Show TOTP input field, User enters 6-digit code
 
-    Client->>Server: TwoFactorVerifyBroadcast {<br/>  Code: enc(totp_code)<br/>}
+    Client->>Server: TwoFactorVerifyBroadcast {,   Code: enc(totp_code), }
 
     Server->>Server: Decrypt TOTP code
 
     Server->>DB: FetchForLoginAsync(username)
     DB-->>Server: { totpSecret (encrypted), lastTotpWindow }
 
-    Server->>Server: Decrypt TOTP secret<br/>via TotpMasterKey (AES-256)
+    Server->>Server: Decrypt TOTP secret, via TotpMasterKey (AES-256)
 
     alt Standard TOTP (6 digits)
-        Server->>Server: CryptoHelper.VerifyTotpCode()<br/>• ±1 window drift tolerance<br/>• PersistLastTotpWindow on success
+        Server->>Server: CryptoHelper.VerifyTotpCode(), • ±1 window drift tolerance, • PersistLastTotpWindow on success
     else Recovery Code (XXXXX-XXXXX hex)
         Server->>DB: FetchUnusedRecoveryCodes(username)
-        Server->>Server: VerifyRecoveryCode()<br/>• Constant-time HMAC compare<br/>• ConsumeCode on success (single-use)
+        Server->>Server: VerifyRecoveryCode(), • Constant-time HMAC compare, • ConsumeCode on success (single-use)
     end
 
     alt Code valid
-        Server-->>Client: SrpSuccessBroadcast {<br/>  Result: LoginSuccess,<br/>  Token: enc(auth_token)<br/>}
+        Server-->>Client: SrpSuccessBroadcast {,   Result: LoginSuccess,,   Token: enc(auth_token), }
     else Code invalid
-        Server-->>Client: ClientAuthResultBroadcast {<br/>  Result: TwoFactorFailed<br/>}
-        Note over Server: Per-username failure counter<br/>Lockout after 5 failures (60 min)
+        Server-->>Client: ClientAuthResultBroadcast {,   Result: TwoFactorFailed, }
+        Note over Server: Per-username failure counter, Lockout after 5 failures (60 min)
     end
 ```
 
@@ -334,10 +334,10 @@ sequenceDiagram
 
     Note over Client,Login: After successful SRP login
 
-    Login->>DB: PersistTokenHash(token_hash, username,<br/>  loginServerId, expiresAt)
-    Note over DB: Token stored as SHA-256 hash<br/>Expiration: configurable (default 10 min)
+    Login->>DB: PersistTokenHash(token_hash, username,,   loginServerId, expiresAt)
+    Note over DB: Token stored as SHA-256 hash, Expiration: configurable (default 10 min)
 
-    Client->>Client: OnAuthResult(LoginSuccess)<br/>• Store decrypted token in memory<br/>• CurrentConnectionType = Login
+    Client->>Client: OnAuthResult(LoginSuccess), • Store decrypted token in memory, • CurrentConnectionType = Login
 
     Client->>Login: RequestServerListBroadcast
     Login->>DB: FetchActiveWorldServers()
@@ -347,7 +347,7 @@ sequenceDiagram
     Client->>Client: Display character select screen
     Client->>Login: Character list / create / delete / select
 
-    Login->>DB: Character CRUD operations<br/>• Unit of Work transactions<br/>• Ownership verification
+    Login->>DB: Character CRUD operations, • Unit of Work transactions, • Ownership verification
 
     alt Character selected
         Login-->>Client: WorldSceneConnectBroadcast { Port: 7780 }
@@ -360,16 +360,16 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Client as Client
-    participant NGINX as NGINX L4 Stream<br/>UDP :7780
+    participant NGINX as NGINX L4 Stream, UDP :7780
     participant World as WorldServer :7780
     participant DB as PostgreSQL
 
-    Note over Client: ClientConnectionManager<br/>ConnectToServer("game.fishmmo.com", 7780, true)
+    Note over Client: ClientConnectionManager, ConnectToServer("game.fishmmo.com", 7780, true)
 
     Client->>NGINX: QUIC connection → :7780
     NGINX->>World: UDP forward to :7780
 
-    Note over Client,World: Phase 4: X25519 ECDH handshake<br/>(same cookie-challenge flow)
+    Note over Client,World: Phase 4: X25519 ECDH handshake, (same cookie-challenge flow)
 
     Client->>World: ClientHandshake { PublicKey, Cookie, ... }
 
@@ -378,28 +378,28 @@ sequenceDiagram
 
     Note over Client,World: AES-256-GCM channel established
 
-    Client->>World: TokenAuthBroadcast {<br/>  Token: enc(stored_auth_token)<br/>}
+    Client->>World: TokenAuthBroadcast {,   Token: enc(stored_auth_token), }
 
-    World->>World: Decrypt token via session key<br/>Parse: username, accessLevel,<br/>  loginServerId, signingKeyId, expiration
+    World->>World: Decrypt token via session key, Parse: username, accessLevel,,   loginServerId, signingKeyId, expiration
 
     World->>DB: FetchSigningKeyAsync(loginServerId, signingKeyId)
     DB-->>World: { hmacKey (AES-256-GCM wrapped) }
 
-    World->>World: Unwrap signing key via KEK<br/>Verify HMAC-SHA256(token)
+    World->>World: Unwrap signing key via KEK, Verify HMAC-SHA256(token)
     World->>DB: CheckTokenRevocationAsync(tokenHash)
 
     alt Token valid + not revoked + not expired
-        World->>World: WorldServerAuthenticator.TryLoginAsync()<br/>• Per-account debounce (1s)<br/>• Server lock check<br/>• Population cap check<br/>• Verify character selection
+        World->>World: WorldServerAuthenticator.TryLoginAsync(), • Per-account debounce (1s), • Server lock check, • Population cap check, • Verify character selection
 
-        World->>World: IssueRenewalTokenCoreAsync()<br/>• Mint fresh token with new expiration<br/>• Persist hash → DB<br/>• Send RenewTokenResponseBroadcast
+        World->>World: IssueRenewalTokenCoreAsync(), • Mint fresh token with new expiration, • Persist hash → DB, • Send RenewTokenResponseBroadcast
 
-        World-->>Client: ClientAuthResultBroadcast {<br/>  Result: WorldLoginSuccess<br/>}
-        World-->>Client: RenewTokenResponseBroadcast {<br/>  Token: enc(new_token)<br/>}
+        World-->>Client: ClientAuthResultBroadcast {,   Result: WorldLoginSuccess, }
+        World-->>Client: RenewTokenResponseBroadcast {,   Token: enc(new_token), }
 
-        Client->>Client: TryApplyRenewedToken()<br/>• Decrypt new token<br/>• Replace stored token<br/>• OnAuthResult(WorldLoginSuccess)
+        Client->>Client: TryApplyRenewedToken(), • Decrypt new token, • Replace stored token, • OnAuthResult(WorldLoginSuccess)
     else Token invalid/expired/revoked
-        World-->>Client: ClientAuthResultBroadcast {<br/>  Result: TokenInvalid / TokenExpired / TokenRevoked<br/>}
-        Client->>Client: ClearAuthToken()<br/>→ Must re-login via LoginServer
+        World-->>Client: ClientAuthResultBroadcast {,   Result: TokenInvalid / TokenExpired / TokenRevoked, }
+        Client->>Client: ClearAuthToken(), → Must re-login via LoginServer
     end
 ```
 
@@ -414,30 +414,30 @@ sequenceDiagram
 
     Note over Client,World: After WorldLoginSuccess
 
-    World->>World: Scene routing logic<br/>• Select scene server<br/>• Load scene via FishNet SceneManager
+    World->>World: Scene routing logic, • Select scene server, • Load scene via FishNet SceneManager
 
     World-->>Client: WorldSceneConnectBroadcast { Port: 7790 }
 
-    Client->>Client: ConnectToServer(7790)<br/>CurrentConnectionType = Scene
+    Client->>Client: ConnectToServer(7790), CurrentConnectionType = Scene
 
-    Note over Client,Scene: Phase 4: X25519 ECDH handshake<br/>(same cookie-challenge flow)
+    Note over Client,Scene: Phase 4: X25519 ECDH handshake, (same cookie-challenge flow)
 
     Client->>Scene: ClientHandshake → Cookie challenge → ECDH
 
-    Client->>Scene: TokenAuthBroadcast {<br/>  Token: enc(auth_token)<br/>}
+    Client->>Scene: TokenAuthBroadcast {,   Token: enc(auth_token), }
 
-    Scene->>Scene: TokenAuthenticatorCore<br/>• Same verify flow as WorldServer<br/>• SceneServerAuthenticator.TryLoginAsync()<br/>  → SceneLoginSuccess (simple pass-through)
+    Scene->>Scene: TokenAuthenticatorCore, • Same verify flow as WorldServer, • SceneServerAuthenticator.TryLoginAsync(),   → SceneLoginSuccess (simple pass-through)
 
     Scene->>DB: FetchSigningKey + CheckRevocation
 
-    Scene-->>Client: ClientAuthResultBroadcast {<br/>  Result: SceneLoginSuccess<br/>}
+    Scene-->>Client: ClientAuthResultBroadcast {,   Result: SceneLoginSuccess, }
     Scene-->>Client: RenewTokenResponseBroadcast { Token }
 
-    Client->>Client: OnAuthResult(SceneLoginSuccess)<br/>• CurrentConnectionType = Scene<br/>• DismissLoadingScreen(true)<br/>• Fire OnEnterGameWorld
+    Client->>Client: OnAuthResult(SceneLoginSuccess), • CurrentConnectionType = Scene, • DismissLoadingScreen(true), • Fire OnEnterGameWorld
 
     Client->>Client: Character spawn → gameplay begins
 
-    Note over Client,Scene: 🎮 Gameplay active<br/>• Prediction pipeline running<br/>• Observer LOD system active<br/>• All scene systems operational
+    Note over Client,Scene: 🎮 Gameplay active, • Prediction pipeline running, • Observer LOD system active, • All scene systems operational
 ```
 
 ### Phase 10: Token Renewal & Revocation
@@ -449,30 +449,30 @@ sequenceDiagram
     participant Login as LoginServer
     participant DB as PostgreSQL
 
-    Note over Client,World: Token renewal happens automatically<br/>after each successful World/Scene auth
+    Note over Client,World: Token renewal happens automatically, after each successful World/Scene auth
 
     rect rgb(240, 255, 240)
         Note over Client,World: TOKEN RENEWAL (Phase 8/9)
-        World->>World: IssueRenewalTokenCoreAsync()<br/>• Fetch current signing key from DB<br/>• GenerateAndEncryptToken()<br/>  - New expiration: now + 10min<br/>  - Same username, accessLevel, loginServerId
+        World->>World: IssueRenewalTokenCoreAsync(), • Fetch current signing key from DB, • GenerateAndEncryptToken(),   - New expiration: now + 10min,   - Same username, accessLevel, loginServerId
         World->>DB: PersistTokenHash(new_token_hash)
         World-->>Client: RenewTokenResponseBroadcast { Token }
-        Client->>Client: TryApplyRenewedToken()<br/>• Decrypt + store new token
+        Client->>Client: TryApplyRenewedToken(), • Decrypt + store new token
     end
 
     rect rgb(255, 240, 240)
         Note over Client,Login: TOKEN REVOCATION (logout)
-        Client->>Client: RevokeAndClearAuthToken()<br/>• TryConsumeStoredTokenForRevoke()<br/>  - Defensive copy of raw token bytes<br/>  - ZeroMemory original
-        Client->>Login: RevokeTokenBroadcast { Token }<br/>(3 retry attempts)
+        Client->>Client: RevokeAndClearAuthToken(), • TryConsumeStoredTokenForRevoke(),   - Defensive copy of raw token bytes,   - ZeroMemory original
+        Client->>Login: RevokeTokenBroadcast { Token }, (3 retry attempts)
         Login->>Login: TokenService.HashToken(tokenCopy)
         Login->>DB: RevokeByHashAsync(tokenHash)
         Login->>Login: ZeroMemory(tokenCopy)
-        Note over Client: Local token already zeroed<br/>Server revocation is best-effort
+        Note over Client: Local token already zeroed, Server revocation is best-effort
     end
 
     rect rgb(255, 255, 240)
         Note over Client: APPLICATION LIFECYCLE
-        Client->>Client: OnApplicationPause(true)<br/>→ RevokeAndClearAuthToken()
-        Client->>Client: OnApplicationQuit()<br/>→ RevokeAndClearAuthToken()
+        Client->>Client: OnApplicationPause(true), → RevokeAndClearAuthToken()
+        Client->>Client: OnApplicationQuit(), → RevokeAndClearAuthToken()
     end
 ```
 
@@ -577,7 +577,7 @@ stateDiagram-v2
     Disconnected --> Reconnecting: CanReconnect? (World/Scene only)
     Disconnected --> LoginScreen: Cannot reconnect (Login)
     Reconnecting --> Connected: Reconnect success
-    Reconnecting --> Reconnecting: Attempt failed<br/>(exponential backoff + jitter)
+    Reconnecting --> Reconnecting: Attempt failed, (exponential backoff + jitter)
     Reconnecting --> LoginScreen: Max attempts (10) exhausted
     LoginScreen --> [*]: Full re-auth required
 
