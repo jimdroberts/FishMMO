@@ -11,10 +11,10 @@ namespace FishNet.Transporting.WebTransport.Native
 		public SafeServerHandle() : base(true) { }
 		protected override bool ReleaseHandle()
 		{
-#if !UNITY_WEBGL || UNITY_EDITOR
+	#if !UNITY_WEBGL || UNITY_EDITOR
 			if (!IsInvalid)
 				WebTransportNative.wt_server_destroy_impl(handle);
-#endif
+	#endif
 			return true;
 		}
 	}
@@ -24,10 +24,10 @@ namespace FishNet.Transporting.WebTransport.Native
 		public SafeClientHandle() : base(true) { }
 		protected override bool ReleaseHandle()
 		{
-#if !UNITY_WEBGL || UNITY_EDITOR
+	#if !UNITY_WEBGL || UNITY_EDITOR
 			if (!IsInvalid)
 				WebTransportNative.wt_client_destroy_impl(handle);
-#endif
+	#endif
 			return true;
 		}
 	}
@@ -88,21 +88,69 @@ namespace FishNet.Transporting.WebTransport.Native
 
 	public static class WebTransportNative
 	{
-		private static bool _initialized = false;
+		// ── Error code constants (match webtransport_api.h) ──────
+		public const int WT_OK                 =  0;
+		public const int WT_ERR_UNKNOWN        = -1;
+		public const int WT_ERR_INVALID_STATE  = -2;
+		public const int WT_ERR_CONNECT_FAILED = -3;
+		public const int WT_ERR_TLS_FAILED     = -4;
+		public const int WT_ERR_SEND_FAILED    = -5;
+		public const int WT_ERR_BUFFER_FULL    = -6;
+		public const int WT_ERR_NOT_FOUND      = -7;
+
+		/// <summary>
+		/// Thread-safe init guard. 0 = not initialized, 1 = initializing/in progress.
+		/// Prevents double-init races when called from multiple threads.
+		/// </summary>
+		private static int _initGuard = 0;
+		private static volatile bool _initialized = false;
+
+		public static bool IsInitialized => _initialized;
 
 		/// <summary>Ensure wt_init() is called exactly once before any native operations.</summary>
 		public static void EnsureInitialized()
 		{
 			if (_initialized) return;
-			_initialized = true;
-#if !UNITY_WEBGL || UNITY_EDITOR
+
+			/* Only one thread proceeds past this guard. */
+			if (System.Threading.Interlocked.CompareExchange(ref _initGuard, 1, 0) != 0)
+			{
+				/* Another thread is initializing — spin-wait with generous timeout (~5s).
+				 * MsQuic DLL loading / entropy gathering can take a moment on some systems. */
+				for (int i = 0; i < 2500 && !_initialized; i++)
+					System.Threading.Thread.SpinWait(2000);
+				/* If still not initialized after timeout, proceed anyway —
+				 * the caller will get an error from the native operation. */
+				return;
+			}
+
+			/* Double-check — another thread may have completed init while we waited for the guard. */
+			if (_initialized) { _initGuard = 0; return; }
+
+	#if !UNITY_WEBGL || UNITY_EDITOR
 			int result = wt_init();
 			if (result != 0)
+			{
 				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {result}");
-#endif
+				_initGuard = 0;
+				return;
+			}
+	#endif
+			_initialized = true;
 		}
 
-#if !UNITY_WEBGL || UNITY_EDITOR
+		/// <summary>Call wt_deinit() and reset state. Safe to call even if not initialized.</summary>
+		public static void Deinitialize()
+		{
+			if (!_initialized) return;
+	#if !UNITY_WEBGL || UNITY_EDITOR
+			wt_deinit();
+	#endif
+			_initialized = false;
+			_initGuard = 0;
+		}
+
+	#if !UNITY_WEBGL || UNITY_EDITOR
 		private const string LIB = "fishmmo_webtransport";
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wt_server_create")]
@@ -210,7 +258,7 @@ namespace FishNet.Transporting.WebTransport.Native
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern IntPtr wt_version();
 
-#else  // UNITY_WEBGL && !UNITY_EDITOR — stub implementations
+	#else  // UNITY_WEBGL && !UNITY_EDITOR — stub implementations
 
 		public static SafeServerHandle wt_server_create(
 			string certificatePath, string privateKeyPath,
@@ -247,6 +295,6 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static void wt_deinit() { }
 		public static IntPtr wt_error_string(int errorCode) => IntPtr.Zero;
 		public static IntPtr wt_version() => IntPtr.Zero;
-#endif
+	#endif
 	}
 }

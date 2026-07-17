@@ -28,6 +28,11 @@ typedef struct wt_session_s {
     } parent;
 
     wt_connection_id_t      conn_id;
+
+    /* Refcount: 1 on creation, +1 for each in-flight send.
+     * Free only when refcount reaches 0 after the owner releases. */
+    atomic_uint             ref_count;
+    atomic_bool             released;     /* owner has released its reference */
 } wt_session_t;
 
 /* ── API ────────────────────────────────────────────────────── */
@@ -46,6 +51,15 @@ int32_t wt_session_send_stream(
 
 int32_t wt_session_send_datagram(
     wt_session_t* session, const uint8_t* data, int32_t length);
+
+/** Acquire a reference for in-flight send. Returns true if acquired.
+ *  If the session has been released (released==true), returns false.
+ *  Call wt_session_release() when the send operation completes. */
+bool wt_session_acquire(wt_session_t* session);
+
+/** Release a reference. Frees the session if refcount reaches 0
+ *  and the owner has released. Safe to call from any thread. */
+void wt_session_release(wt_session_t* session);
 
 #ifdef __cplusplus
 }

@@ -3,6 +3,7 @@
  * @brief WebTransport QUIC client implementation using msquic.
  */
 
+#include <time.h>
 #include "client.h"
 #include <stdlib.h>
 #include <string.h>
@@ -40,14 +41,14 @@ void wt_client_free_impl(wt_client_s* client)
 {
     if (!client) return;
 
-    /* Snapshot state BEFORE disconnect_impl */
-    int prev_state = atomic_load(&client->state);
-    bool was_connected = (prev_state == WT_CLIENT_STARTED);
-
     wt_client_disconnect_impl(client);
 
-    if (was_connected) {
+    /* Use pending_shutdowns to decide path — not state.
+     * disconnect_impl sets state=STOPPED before ConnectionShutdown
+     * completes, so state is unreliable for distinguishing paths. */
+    if (atomic_load(&client->pending_shutdowns) > 0) {
         /* Spin-wait for SHUTDOWN_COMPLETE to close handles (bounded).
+         * 300 iterations * 10ms = 3 second max wait.
          * The callback closes Connection, Config, Registration, and
          * destroys the dgram_queue, then signals pending_shutdowns=0.
          * We do the final free(cli) here — never in the callback. */
@@ -56,11 +57,15 @@ void wt_client_free_impl(wt_client_s* client)
 #if defined(WT_PLATFORM_WINDOWS)
             Sleep(10);
 #else
-            usleep(10000);
+            struct timespec ts = {0, 10000000}; /* 10ms */
+            nanosleep(&ts, NULL);
 #endif
         }
-        if (retries < 0)
-            WT_LOG_WARN("Client shutdown timed out, forcing free");
+        if (retries < 0) {
+            WT_LOG_WARN("Client shutdown timed out (pending=%u), forcing free",
+                        (unsigned)atomic_load(&client->pending_shutdowns));
+        }
+        wt_datagram_queue_destroy(&client->dgram_queue);
         free(client);
         return;
     }
@@ -219,6 +224,18 @@ void wt_client_poll_impl(wt_client_s* client, int32_t timeout_us)
 {
     (void)timeout_us;
     if (!client) return;
+
+    /* Process deferred session shutdown (set by QUIC callback thread).
+     * This runs on the application thread — same thread as send —
+     * guaranteeing no TOCTOU race between session free and acquire. */
+    if (client->pending_shutdown_session) {
+        wt_session_t* s = client->pending_shutdown_session;
+        client->pending_shutdown_session = NULL;
+        wt_session_shutdown(s);
+        /* wt_session_shutdown releases the owner reference — session
+         * is freed here if no in-flight sends hold a ref. */
+    }
+
     wt_datagram_queue_drain(&client->dgram_queue,
                              on_client_dgram_drain, client);
 }
@@ -226,23 +243,47 @@ void wt_client_poll_impl(wt_client_s* client, int32_t timeout_us)
 int32_t wt_client_send_stream_impl(
     wt_client_s* client, const uint8_t* data, int32_t length)
 {
-    if (!client || !client->session || !data || length <= 0)
+    if (!client || !data || length <= 0)
         return WT_ERR_SEND_FAILED;
-    if (!atomic_load(&client->connected))
+
+    wt_session_t* session = (wt_session_t*)atomic_ptr_load(&client->session);
+    if (!session || !wt_session_acquire(session))
         return WT_ERR_INVALID_STATE;
 
-    return wt_session_send_stream(client->session, data, length);
+    /* Re-check state AFTER acquiring — SHUTDOWN_COMPLETE may have
+     * nulled session and set connected=false between our load and acquire.
+     * If session ptr changed, our acquire is on a potentially stale
+     * (but still alive) session — release and bail. */
+    if (atomic_ptr_load(&client->session) != session ||
+        !atomic_load(&client->connected)) {
+        wt_session_release(session);
+        return WT_ERR_INVALID_STATE;
+    }
+
+    int32_t result = wt_session_send_stream(session, data, length);
+    wt_session_release(session);
+    return result;
 }
 
 int32_t wt_client_send_datagram_impl(
     wt_client_s* client, const uint8_t* data, int32_t length)
 {
-    if (!client || !client->session || !data || length <= 0)
+    if (!client || !data || length <= 0)
         return WT_ERR_SEND_FAILED;
-    if (!atomic_load(&client->connected))
+
+    wt_session_t* session = (wt_session_t*)atomic_ptr_load(&client->session);
+    if (!session || !wt_session_acquire(session))
         return WT_ERR_INVALID_STATE;
 
-    return wt_session_send_datagram(client->session, data, length);
+    if (atomic_ptr_load(&client->session) != session ||
+        !atomic_load(&client->connected)) {
+        wt_session_release(session);
+        return WT_ERR_INVALID_STATE;
+    }
+
+    int32_t result = wt_session_send_datagram(session, data, length);
+    wt_session_release(session);
+    return result;
 }
 
 bool wt_client_is_connected_impl(wt_client_s* client)
@@ -273,6 +314,7 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 
         wt_session_t* session = (wt_session_t*)calloc(1, sizeof(wt_session_t));
         if (!session) {
+            atomic_fetch_add(&cli->pending_shutdowns, 1);
             MsQuic->ConnectionShutdown(conn,
                 QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
             break;
@@ -282,12 +324,13 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         if (r != WT_OK) {
             WT_LOG_ERROR("Session init failed");
             free(session);
+            atomic_fetch_add(&cli->pending_shutdowns, 1);
             MsQuic->ConnectionShutdown(conn,
                 QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
             break;
         }
 
-        cli->session = session;
+        atomic_ptr_store(&cli->session, session);
         session->parent_type = WT_PARENT_CLIENT;
         session->parent.client = cli;
         wt_session_wire_callbacks(session);
@@ -305,9 +348,15 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         atomic_store(&cli->connected, false);
 
         if (cli->session) {
-            wt_session_shutdown(cli->session);
-            free(cli->session);
-            cli->session = NULL;
+            wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&cli->session);
+            if (old_session) {
+                atomic_ptr_store(&cli->session, NULL);
+
+            /* Defer shutdown to poll (application thread) to guarantee
+             * session free never races with in-flight sends. The poll
+             * thread is the same thread that calls send, so no TOCTOU. */
+            cli->pending_shutdown_session = old_session;
+            }
         }
 
         MsQuic->ConnectionClose(conn);
@@ -323,13 +372,10 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             cli->registration = NULL;
         }
 
-        /* Fire disconnect before freeing the struct */
         if (cli->callbacks.on_disconnect)
             cli->callbacks.on_disconnect(cli->user_context, 0);
 
-        /* Signal completion — free_impl will do the final free(cli)
-         * after its spin-wait sees pending_shutdowns reach 0. This
-         * prevents UAF on the pending_shutdowns read in the spin loop. */
+        /* Signal completion — free_impl does final cleanup + free(cli). */
         atomic_fetch_sub(&cli->pending_shutdowns, 1);
         break;
     }

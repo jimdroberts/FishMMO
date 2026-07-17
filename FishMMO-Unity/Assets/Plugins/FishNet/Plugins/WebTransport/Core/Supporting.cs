@@ -49,7 +49,11 @@ namespace FishNet.Transporting.WebTransport
 
         public void Dispose()
         {
-            ByteArrayPool.Store(Data);
+            if (Data != null)
+            {
+                ByteArrayPool.Store(Data);
+                Data = null;
+            }
         }
     }
 }

@@ -42,7 +42,7 @@ namespace FishNet.Transporting.WebTransport.Server
         /// <summary>
         /// Connection IDs to disconnect next iteration.
         /// </summary>
-        private List<int> _disconnectingNext = new List<int>();
+        private HashSet<int> _disconnectingNext = new HashSet<int>();
         /// <summary>
         /// Connection IDs to disconnect immediately.
         /// </summary>
@@ -74,6 +74,12 @@ namespace FishNet.Transporting.WebTransport.Server
         private ConcurrentQueue<Action> _incomingEvents = new ConcurrentQueue<Action>();
 
         /// <summary>
+        /// Atomic guard to ensure StopConnection runs exactly once,
+        /// even if called from both a native callback and user code.
+        /// </summary>
+        private int _stopGuard = 0;
+
+        /// <summary>
         /// Pinned delegate handles (prevent GC collection of callback delegates).
         /// </summary>
         private NativeCallbacks.ServerCallbacks _pinnedCallbacks;
@@ -103,6 +109,9 @@ namespace FishNet.Transporting.WebTransport.Server
                 return false;
 
             base.SetConnectionState(LocalConnectionState.Starting, true);
+
+            /* Reset stop guard for server restart support. */
+            _stopGuard = 0;
 
             WebTransportNative.EnsureInitialized();
 
@@ -154,10 +163,21 @@ namespace FishNet.Transporting.WebTransport.Server
         /// </summary>
         internal bool StopConnection()
         {
+            /* Atomic guard — ensure StopConnection runs exactly once. */
+            if (System.Threading.Interlocked.CompareExchange(ref _stopGuard, 1, 0) != 0)
+                return false;
+
             if (_serverHandle == null || _serverHandle.IsInvalid ||
                 base.GetConnectionState() == LocalConnectionState.Stopped ||
                 base.GetConnectionState() == LocalConnectionState.Stopping)
+            {
+                _stopGuard = 0;
                 return false;
+            }
+
+            /* Drain any stale incoming events before shutdown to prevent
+             * callbacks from referencing freed native resources. */
+            while (_incomingEvents.TryDequeue(out _)) { }
 
             ResetQueues();
             base.SetConnectionState(LocalConnectionState.Stopping, true);
@@ -219,7 +239,7 @@ namespace FishNet.Transporting.WebTransport.Server
 
             while (_incomingEvents.TryDequeue(out Action act))
             {
-                act?.Invoke();
+                try { act?.Invoke(); } catch (Exception e) { UnityEngine.Debug.LogException(e); }
             }
         }
 
@@ -241,7 +261,7 @@ namespace FishNet.Transporting.WebTransport.Server
         /// </summary>
         internal void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
         {
-            Send(ref _outgoing, channelId, segment, connectionId);
+            Send(_outgoing, channelId, segment, connectionId);
         }
 
         /// <summary>
@@ -262,7 +282,7 @@ namespace FishNet.Transporting.WebTransport.Server
             _idMapFromNative.Clear();
             _clientAddresses.Clear();
             _nextConnectionId = 1;
-            base.ClearPacketQueue(ref _outgoing);
+            base.ClearPacketQueue(_outgoing);
             _disconnectingNext.Clear();
             _disconnectingNow.Clear();
         }
@@ -278,11 +298,10 @@ namespace FishNet.Transporting.WebTransport.Server
                 _disconnectingNow.Clear();
             }
 
-            count = _disconnectingNext.Count;
-            if (count > 0)
+            if (_disconnectingNext.Count > 0)
             {
-                for (int i = 0; i < count; i++)
-                    _disconnectingNow.Add(_disconnectingNext[i]);
+                foreach (int cid in _disconnectingNext)
+                    _disconnectingNow.Add(cid);
                 _disconnectingNext.Clear();
             }
         }
@@ -293,7 +312,7 @@ namespace FishNet.Transporting.WebTransport.Server
             if (base.GetConnectionState() != LocalConnectionState.Started ||
                 _serverHandle == null || _serverHandle.IsInvalid)
             {
-                base.ClearPacketQueue(ref _outgoing);
+                base.ClearPacketQueue(_outgoing);
                 return;
             }
 
@@ -347,9 +366,11 @@ namespace FishNet.Transporting.WebTransport.Server
 
         #region Native Callbacks (invoked from QUIC worker threads)
 
-        private void HandleNativeConnect(ulong nativeConnectionId, IntPtr remoteAddressPtr)
+        private void HandleNativeConnect(IntPtr context, ulong nativeConnectionId, IntPtr remoteAddressPtr)
         {
-            string remoteAddr = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(remoteAddressPtr) ?? "unknown";
+            string remoteAddr = remoteAddressPtr != IntPtr.Zero
+                ? (System.Runtime.InteropServices.Marshal.PtrToStringAnsi(remoteAddressPtr) ?? "unknown")
+                : "unknown";
 
             _incomingEvents.Enqueue(() =>
             {
@@ -364,10 +385,13 @@ namespace FishNet.Transporting.WebTransport.Server
             });
         }
 
-        private void HandleNativeDisconnect(ulong nativeConnectionId, int errorCode)
+        private void HandleNativeDisconnect(IntPtr context, ulong nativeConnectionId, int errorCode)
         {
             _incomingEvents.Enqueue(() =>
             {
+                if (errorCode != 0)
+                    UnityEngine.Debug.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected with error code {errorCode}");
+
                 if (_idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
                 {
                     _clients.Remove(fishNetId);
@@ -381,7 +405,7 @@ namespace FishNet.Transporting.WebTransport.Server
             });
         }
 
-        private void HandleNativeStreamData(ulong nativeConnectionId, ulong streamId, IntPtr dataPtr, int length)
+        private void HandleNativeStreamData(IntPtr context, ulong nativeConnectionId, ulong streamId, IntPtr dataPtr, int length)
         {
             byte[] buffer = new byte[length];
             System.Runtime.InteropServices.Marshal.Copy(dataPtr, buffer, 0, length);
@@ -398,7 +422,7 @@ namespace FishNet.Transporting.WebTransport.Server
             });
         }
 
-        private void HandleNativeDatagram(ulong nativeConnectionId, IntPtr dataPtr, int length)
+        private void HandleNativeDatagram(IntPtr context, ulong nativeConnectionId, IntPtr dataPtr, int length)
         {
             byte[] buffer = new byte[length];
             System.Runtime.InteropServices.Marshal.Copy(dataPtr, buffer, 0, length);

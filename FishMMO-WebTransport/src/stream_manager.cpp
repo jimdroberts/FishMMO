@@ -23,7 +23,7 @@ static QUIC_STATUS stream_cb(HQUIC stream, void* ctx,
 
 /* ── Stream callback (function pointer type) ────────────────── */
 
-static QUIC_STREAM_CALLBACK_HANDLER k_stream_handler = NULL;
+static QUIC_STREAM_CALLBACK_HANDLER k_stream_handler = stream_cb;
 
 /* ── Callback implementation ────────────────────────────────── */
 
@@ -41,16 +41,35 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
         if (total == 0) return QUIC_STATUS_SUCCESS;
 
-        /* Bound check — prevent OOM from unbounded receive buffer */
-        if (sctx->recv_offset + total > WT_MAX_STREAM_RECV_BUF) {
+        /* Per-stream bound check — prevent OOM from unbounded receive buffer.
+         * Check for integer overflow first (defense in depth). */
+        if (total > WT_MAX_STREAM_RECV_BUF ||
+            sctx->recv_offset > WT_MAX_STREAM_RECV_BUF - total) {
             MsQuic->StreamShutdown(stream,
                                     QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
             return QUIC_STATUS_ABORTED;
         }
 
+        /* Per-connection total bound check — prevent multi-stream exhaustion.
+         * atomic_fetch_add returns the OLD value, so we check if the NEW value
+         * would exceed the limit. */
+        {
+            uint32_t prev_total = atomic_fetch_add(
+                &sctx->mgr->total_recv_bytes, total);
+            if (prev_total + total > WT_MAX_TOTAL_RECV_BUF) {
+                atomic_fetch_sub(&sctx->mgr->total_recv_bytes, total);
+                MsQuic->StreamShutdown(stream,
+                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                return QUIC_STATUS_ABORTED;
+            }
+        }
+
         uint32_t needed = sctx->recv_offset + total;
         uint8_t* newbuf = (uint8_t*)realloc(sctx->recv_buf, needed);
-        if (!newbuf) return QUIC_STATUS_OUT_OF_MEMORY;
+        if (!newbuf) {
+            atomic_fetch_sub(&sctx->mgr->total_recv_bytes, total);
+            return QUIC_STATUS_OUT_OF_MEMORY;
+        }
         sctx->recv_buf = newbuf;
 
         for (uint32_t i = 0; i < count; i++) {
@@ -65,6 +84,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         /* Peer finished sending — deliver accumulated data.
          * on_stream_data may be NULL if session is shutting down. */
         if (!sctx->mgr->on_stream_data || !sctx->mgr->callback_ctx) {
+            atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
             free(sctx->recv_buf);
             sctx->recv_buf = NULL;
             sctx->recv_offset = 0;
@@ -81,6 +101,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                 (int32_t)sctx->recv_offset);
         }
 
+        atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
         free(sctx->recv_buf);
         sctx->recv_buf = NULL;
         sctx->recv_offset = 0;
@@ -105,6 +126,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
         /* Peer aborted — discard any partial data */
+        atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
         free(sctx->recv_buf);
         sctx->recv_buf = NULL;
         sctx->recv_offset = 0;
@@ -123,6 +145,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                 break;
             }
         }
+        atomic_fetch_sub(&mgr->total_recv_bytes, sctx->recv_offset);
         free(sctx->recv_buf);
         free(sctx);
         MsQuic->StreamClose(stream);
@@ -131,7 +154,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * was the last stream, fire the completion callback so the
          * session can safely free the manager. */
         uint32_t prev = atomic_fetch_sub(&mgr->active_streams, 1);
-        if (prev == 1 && mgr->shutting_down && mgr->on_all_streams_done) {
+        if (prev == 1 && atomic_load(&mgr->shutting_down) && mgr->on_all_streams_done) {
             mgr->on_all_streams_done(mgr->done_ctx);
         }
         return QUIC_STATUS_SUCCESS;
@@ -159,27 +182,31 @@ void wt_stream_manager_init(
     mgr->callback_ctx = callback_ctx;
     mgr->next_id = 1;
     atomic_init(&mgr->active_streams, 0);
-    mgr->shutting_down = false;
+    atomic_init(&mgr->streams_done_flag, false);
+    atomic_init(&mgr->shutdown_complete, false);
+    atomic_init(&mgr->freed, false);
+    atomic_store(&mgr->shutting_down, false);
+    atomic_init(&mgr->total_recv_bytes, 0);
 
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
         mgr->streams[i].id = 0;
         mgr->streams[i].in_use = false;
     }
 
-    /* Set handler once */
-    k_stream_handler = stream_cb;
 }
 
 void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
 {
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
         if (mgr->streams[i].in_use && mgr->streams[i].quic_stream) {
-            MsQuic->StreamShutdown(mgr->streams[i].quic_stream,
-                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-            /* StreamClose is called by SHUTDOWN_COMPLETE handler,
-             * which also frees the stream_ctx_t. Do NOT call
-             * StreamClose here — it prevents the callback. */
-            mgr->streams[i].quic_stream = NULL;
+            HQUIC s = mgr->streams[i].quic_stream;
+            mgr->streams[i].quic_stream = NULL;  /* NULL before shutdown — prevents
+                SHUTDOWN_COMPLETE from finding this slot again */
+            MsQuic->StreamShutdown(s, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+            /* StreamShutdown may fire SHUTDOWN_COMPLETE synchronously,
+             * which decrements active_streams, but the mgr is not freed
+             * here because shutdown_complete is not yet set. Safe to
+             * continue iterating. */
         }
     }
 }
@@ -188,6 +215,7 @@ int32_t wt_stream_manager_send(
     wt_stream_manager_t* mgr, const uint8_t* data, int32_t length)
 {
     if (!data || length <= 0) return WT_ERR_SEND_FAILED;
+    if (atomic_load(&mgr->shutting_down)) return WT_ERR_INVALID_STATE;
 
     /* Find free slot */
     int slot = -1;
@@ -217,6 +245,15 @@ int32_t wt_stream_manager_send(
     sctx->stream_id = stream_id;
     sctx->quic_stream = quic_stream;
 
+    /* Record the stream BEFORE SetCallbackHandler and StreamStart —
+     * if SHUTDOWN_COMPLETE fires synchronously from either, the
+     * callback scans slots by stream_id and needs to find it. */
+    mgr->streams[slot].id = stream_id;
+    mgr->streams[slot].quic_stream = quic_stream;
+    mgr->streams[slot].in_use = true;
+    mgr->streams[slot].send_closed = false;
+    atomic_fetch_add(&mgr->active_streams, 1);
+
     MsQuic->SetCallbackHandler(quic_stream,
                                 (void*)(uintptr_t)k_stream_handler, sctx);
 
@@ -224,25 +261,18 @@ int32_t wt_stream_manager_send(
                                   QUIC_STREAM_START_FLAG_IMMEDIATE);
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("StreamStart failed: 0x%x", status);
-        free(sctx);
+        /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE will
+         * fire from StreamClose and handle slot cleanup. Prematurely
+         * freeing the slot risks reuse before the callback fires. */
         MsQuic->StreamClose(quic_stream);
         return WT_ERR_SEND_FAILED;
     }
 
-    /* Record the stream BEFORE StreamSend — if SHUTDOWN_COMPLETE
-     * fires synchronously, it needs to find the slot populated. */
-    mgr->streams[slot].id = stream_id;
-    mgr->streams[slot].quic_stream = quic_stream;
-    mgr->streams[slot].in_use = true;
-    mgr->streams[slot].send_closed = false;
-    atomic_fetch_add(&mgr->active_streams, 1);
-
     /* Send data — copy to ensure lifetime across async send */
     uint8_t* copy = (uint8_t*)malloc((size_t)length);
     if (!copy) {
-        mgr->streams[slot].in_use = false;
-        mgr->streams[slot].quic_stream = NULL;
-        /* SHUTDOWN_COMPLETE will call StreamClose and free sctx */
+        /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE from
+         * StreamShutdown will handle slot cleanup. */
         MsQuic->StreamShutdown(quic_stream,
                                 QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
         return WT_ERR_BUFFER_FULL;
@@ -259,9 +289,8 @@ int32_t wt_stream_manager_send(
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("StreamSend failed: 0x%x", status);
         free(copy);
-        mgr->streams[slot].in_use = false;
-        mgr->streams[slot].quic_stream = NULL;
-        /* SHUTDOWN_COMPLETE will call StreamClose and free sctx */
+        /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE from
+         * StreamShutdown will handle slot cleanup. */
         MsQuic->StreamShutdown(quic_stream,
                                 QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
         return WT_ERR_SEND_FAILED;

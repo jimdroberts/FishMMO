@@ -22,11 +22,15 @@ extern "C" {
 typedef struct {
     wt_connection_id_t      id;
     HQUIC                   quic_conn;
-    wt_session_t*           session;
-    wt_connection_state_t   state;
+    wt_session_t*           session;          /* use atomic_ptr_load/store */
+    atomic_int              state;            /* wt_connection_state_t, atomic */
     char                    remote_addr[WT_MAX_ADDRESS_LENGTH];
-    bool                    in_use;
-    struct wt_server_s*     owner;          /* back-pointer to parent server */
+    atomic_bool             in_use;           /* atomic — set from two threads */
+    struct wt_server_s*     owner;            /* back-pointer to parent server */
+
+    /* Session pending deferred shutdown. Set by QUIC callback thread,
+     * consumed by poll (application thread). */
+    wt_session_t*           pending_shutdown_session;
 } wt_server_conn_t;
 
 /* ── Server structure ───────────────────────────────────────── */

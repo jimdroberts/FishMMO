@@ -1,4 +1,5 @@
 using FishNet.Transporting.WebTransport.Native;
+using FishNet.Transporting.WebTransport.WebGL;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -6,33 +7,27 @@ using System.Runtime.CompilerServices;
 
 namespace FishNet.Transporting.WebTransport.Client
 {
-    /// <summary>
-    /// Client-side socket wrapping the native WebTransport C library.
-    /// Manages a single QUIC connection to the server with one WebTransport session.
-    /// </summary>
     public class ClientSocket : CommonSocket
     {
         #region Private Configuration
         private string _address = string.Empty;
         private ushort _port;
         private int _mtu;
-        /// <summary>
-        /// Raw SNI hostname extracted from the address (before any '/' path separator).
-        /// </summary>
         private string _serverName = string.Empty;
         #endregion
 
         #region Queues
-        /// <summary>
-        /// Outbound messages to be sent during IterateOutgoing.
-        /// </summary>
         private Queue<Packet> _outgoing = new Queue<Packet>();
         #endregion
 
-        /// <summary>
-        /// Native client handle from the C library.
-        /// </summary>
         private SafeClientHandle _clientHandle;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        private int _webglIndex = -1;
+#endif
+        /// <summary>
+        /// Atomic guard to ensure StopConnection runs exactly once.
+        /// </summary>
+        private int _stopGuard = 0;
 
         /// <summary>
         /// Thread-safe queue for events arriving from native callbacks.
@@ -64,18 +59,52 @@ namespace FishNet.Transporting.WebTransport.Client
 
             base.SetConnectionState(LocalConnectionState.Starting, false);
 
-            WebTransportNative.EnsureInitialized();
+            /* Reset stop guard to allow StopConnection on this new session.
+             * Drain any stale incoming events from a previous session first
+             * to prevent callbacks from referencing freed resources. */
+            while (_incomingEvents.TryDequeue(out _)) { }
+            _stopGuard = 0;
 
             _port = port;
             _address = address;
 
-            // Extract SNI hostname (everything before the first '/')
             int slashIndex = address.IndexOf('/');
             _serverName = slashIndex >= 0 ? address.Substring(0, slashIndex) : address;
 
             ResetQueues();
 
-            // Pin callback delegates
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // WebGL: use browser WebTransport API via JS bridge
+            int slashIdx = address.IndexOf('/');
+            string host = slashIdx >= 0 ? address.Substring(0, slashIdx) : address;
+            string path = slashIdx >= 0 ? address.Substring(slashIdx) : "";
+            string url = "https://" + host + ":" + port + path;
+            _webglIndex = WebTransportJSLib.WTConnect(url,
+                (_) => { _incomingEvents.Enqueue(() => SetConnectionState(LocalConnectionState.Started, false)); },
+                (_) => { _incomingEvents.Enqueue(() => { SetConnectionState(LocalConnectionState.Stopped, false); }); },
+                (_, dataPtr, length) => {
+                    byte[] buf = new byte[length];
+                    System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
+                    _incomingEvents.Enqueue(() => Transport.HandleClientReceivedDataArgs(
+                        new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Reliable, Transport.Index)));
+                },
+                (_, dataPtr, length) => {
+                    byte[] buf = new byte[length];
+                    System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
+                    _incomingEvents.Enqueue(() => Transport.HandleClientReceivedDataArgs(
+                        new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Unreliable, Transport.Index)));
+                },
+                (_) => { _incomingEvents.Enqueue(() => SetConnectionState(LocalConnectionState.Stopped, false)); }
+            );
+            if (_webglIndex < 0)
+            {
+                base.SetConnectionState(LocalConnectionState.Stopped, false);
+                return false;
+            }
+            return true;
+#else
+            WebTransportNative.EnsureInitialized();
+
             _pinnedCallbacks = new NativeCallbacks.ClientCallbacks
             {
                 OnConnect = new NativeCallbacks.ClientConnectDelegate(HandleNativeConnect),
@@ -84,7 +113,6 @@ namespace FishNet.Transporting.WebTransport.Client
                 OnDatagram = new NativeCallbacks.ClientDatagramDelegate(HandleNativeDatagram),
             };
 
-            // Create native client
             _clientHandle = WebTransportNative.wt_client_create(
                 ref _pinnedCallbacks,
                 IntPtr.Zero);
@@ -112,25 +140,42 @@ namespace FishNet.Transporting.WebTransport.Client
             }
 
             return true;
+#endif
         }
 
-        /// <summary>
-        /// Stops the local client socket.
-        /// </summary>
         internal bool StopConnection()
         {
+            /* Atomic guard — ensure StopConnection runs exactly once,
+             * even if called from both a native callback and user code. */
+            if (System.Threading.Interlocked.CompareExchange(ref _stopGuard, 1, 0) != 0)
+                return false;
+
             if (base.GetConnectionState() == LocalConnectionState.Stopped ||
                 base.GetConnectionState() == LocalConnectionState.Stopping)
+            {
+                _stopGuard = 0;
                 return false;
+            }
+
+            /* Drain stale incoming events before shutdown. */
+            while (_incomingEvents.TryDequeue(out _)) { }
 
             base.SetConnectionState(LocalConnectionState.Stopping, false);
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (_webglIndex >= 0)
+            {
+                WebTransportJSLib.WTDisconnect(_webglIndex);
+                _webglIndex = -1;
+            }
+#else
             if (_clientHandle != null && !_clientHandle.IsInvalid)
             {
                 WebTransportNative.wt_client_disconnect(_clientHandle);
                 WebTransportNative.wt_client_destroy(_clientHandle);
                 _clientHandle = null;
             }
+#endif
 
             base.SetConnectionState(LocalConnectionState.Stopped, false);
             return true;
@@ -142,16 +187,16 @@ namespace FishNet.Transporting.WebTransport.Client
         /// </summary>
         internal void IterateIncoming()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // WebGL: no poll needed, callbacks fire via JS
+#else
             if (_clientHandle == null || _clientHandle.IsInvalid)
                 return;
-
-            // Poll the native library (non-blocking)
             WebTransportNative.wt_client_poll(_clientHandle, 0);
-
-            // Drain thread-safe event queue onto the main thread
+#endif
             while (_incomingEvents.TryDequeue(out Action act))
             {
-                act?.Invoke();
+                try { act?.Invoke(); } catch (Exception e) { UnityEngine.Debug.LogException(e); }
             }
         }
 
@@ -178,7 +223,11 @@ namespace FishNet.Transporting.WebTransport.Client
             if (base.GetConnectionState() != LocalConnectionState.Started)
                 return;
 
-            base.Send(ref _outgoing, channelId, segment, -1);
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (_webglIndex < 0) return;
+#endif
+
+            base.Send(_outgoing, channelId, segment, -1);
         }
 
         /// <summary>
@@ -186,31 +235,41 @@ namespace FishNet.Transporting.WebTransport.Client
         /// </summary>
         private void DequeueOutgoing()
         {
+            if (base.GetConnectionState() != LocalConnectionState.Started)
+            {
+                ClearPacketQueue(ref _outgoing);
+                return;
+            }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (_webglIndex < 0) return;
+#else
             if (_clientHandle == null || _clientHandle.IsInvalid)
                 return;
+#endif
 
             int count = _outgoing.Count;
             for (int i = 0; i < count; i++)
             {
                 Packet outgoing = _outgoing.Dequeue();
+                bool ok;
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+                if (outgoing.Channel == 1)
+                    ok = WebTransportJSLib.WTSendDatagram(_webglIndex, outgoing.Data, outgoing.Length);
+                else
+                    ok = WebTransportJSLib.WTSendStream(_webglIndex, outgoing.Data, outgoing.Length);
+                if (!ok)
+                    UnityEngine.Debug.LogWarning("[WebTransport Client] Send failed (WebGL)");
+#else
                 int result;
-                if (outgoing.Channel == 1) // Unreliable → datagram
-                {
-                    result = WebTransportNative.wt_client_send_datagram(
-                        _clientHandle, outgoing.Data, outgoing.Length);
-                }
-                else // Reliable → stream
-                {
-                    result = WebTransportNative.wt_client_send_stream(
-                        _clientHandle, outgoing.Data, outgoing.Length);
-                }
-
+                if (outgoing.Channel == 1)
+                    result = WebTransportNative.wt_client_send_datagram(_clientHandle, outgoing.Data, outgoing.Length);
+                else
+                    result = WebTransportNative.wt_client_send_stream(_clientHandle, outgoing.Data, outgoing.Length);
                 if (result != 0)
-                {
-                    // Send failed — connection likely lost
                     UnityEngine.Debug.LogWarning($"[WebTransport Client] Send failed with code {result}");
-                }
+#endif
                 outgoing.Dispose();
             }
         }
@@ -221,12 +280,12 @@ namespace FishNet.Transporting.WebTransport.Client
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ResetQueues()
         {
-            base.ClearPacketQueue(ref _outgoing);
+            base.ClearPacketQueue(_outgoing);
         }
 
         #region Native Callbacks (invoked from QUIC worker threads)
 
-        private void HandleNativeConnect()
+        private void HandleNativeConnect(IntPtr context)
         {
             _incomingEvents.Enqueue(() =>
             {
@@ -234,15 +293,17 @@ namespace FishNet.Transporting.WebTransport.Client
             });
         }
 
-        private void HandleNativeDisconnect(int errorCode)
+        private void HandleNativeDisconnect(IntPtr context, int errorCode)
         {
             _incomingEvents.Enqueue(() =>
             {
+                if (errorCode != 0)
+                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Disconnected with error code {errorCode}");
                 StopConnection();
             });
         }
 
-        private void HandleNativeStreamData(ulong streamId, IntPtr dataPtr, int length)
+        private void HandleNativeStreamData(IntPtr context, ulong streamId, IntPtr dataPtr, int length)
         {
             // Copy data from native memory before queueing
             byte[] buffer = new byte[length];
@@ -260,7 +321,7 @@ namespace FishNet.Transporting.WebTransport.Client
             });
         }
 
-        private void HandleNativeDatagram(IntPtr dataPtr, int length)
+        private void HandleNativeDatagram(IntPtr context, IntPtr dataPtr, int length)
         {
             // Copy data from native memory before queueing
             byte[] buffer = new byte[length];

@@ -20,7 +20,7 @@ static atomic_bool g_initialised = false;
 
 WT_API int32_t wt_init(void)
 {
-    if (g_initialised) return WT_OK;
+    if (atomic_load(&g_initialised)) return WT_OK;
 
     const QUIC_API_TABLE* api = NULL;
     QUIC_STATUS status = MsQuicOpen2(&api);
@@ -29,20 +29,25 @@ WT_API int32_t wt_init(void)
         return WT_ERR_UNKNOWN;
     }
 
-    /* Set the global API table so all code using MsQuic-> works */
     MsQuic = api;
-    g_initialised = true;
+    /* Release-store: paired with acquire-load in API guards.
+     * Ensures MsQuic is visible before g_initialised. */
+    atomic_store(&g_initialised, true);
     WT_LOG_INFO("WebTransport library initialised (msquic %s)", wt_version());
     return WT_OK;
 }
 
 WT_API void wt_deinit(void)
 {
-    if (!g_initialised) return;
-    /* All servers and clients MUST be destroyed before calling deinit.
-     * After this point, no MsQuic callbacks may fire. */
+    if (!atomic_load(&g_initialised)) return;
+
+    /* Null the API table first, then clear the guard. New API calls
+     * are gated by g_initialised and will return early. In-flight calls
+     * that already passed the guard will see MsQuic != NULL (they were
+     * ahead of us) or MsQuic == NULL (they followed us — but by then
+     * g_initialised is false so new callers are already blocked). */
     MsQuic = NULL;
-    g_initialised = false;
+    atomic_store(&g_initialised, false);
 }
 
 /* ── Version ────────────────────────────────────────────────── */
@@ -83,7 +88,7 @@ WT_API WT_SERVER wt_server_create(
     uint32_t max_clients, const wt_server_callbacks_t* callbacks,
     void* context)
 {
-    if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return NULL; }
+    if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return NULL; }
     return (WT_SERVER)wt_server_alloc_impl(
         certificate_path, private_key_path, alpn, bind_address,
         port, max_clients, callbacks, context);
@@ -91,25 +96,25 @@ WT_API WT_SERVER wt_server_create(
 
 WT_API void wt_server_destroy(WT_SERVER server)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return; }
     wt_server_free_impl((wt_server_s*)server);
 }
 
 WT_API int32_t wt_server_start(WT_SERVER server)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     return wt_server_start_impl((wt_server_s*)server);
 }
 
 WT_API void wt_server_stop(WT_SERVER server)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return; }
     wt_server_stop_impl((wt_server_s*)server);
 }
 
 WT_API void wt_server_poll(WT_SERVER server, int32_t timeout_us)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return; }
     wt_server_poll_impl((wt_server_s*)server, timeout_us);
 }
 
@@ -117,7 +122,7 @@ WT_API int32_t wt_server_send_stream(
     WT_SERVER server, wt_connection_id_t conn_id,
     const uint8_t* data, int32_t length)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     return wt_server_send_stream_impl(
         (wt_server_s*)server, conn_id, data, length);
 }
@@ -126,7 +131,7 @@ WT_API int32_t wt_server_send_datagram(
     WT_SERVER server, wt_connection_id_t conn_id,
     const uint8_t* data, int32_t length)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     return wt_server_send_datagram_impl(
         (wt_server_s*)server, conn_id, data, length);
 }
@@ -134,35 +139,35 @@ WT_API int32_t wt_server_send_datagram(
 WT_API void wt_server_disconnect(
     WT_SERVER server, wt_connection_id_t conn_id)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return; }
     wt_server_disconnect_impl((wt_server_s*)server, conn_id);
 }
 
 WT_API const char* wt_server_get_client_address(
     WT_SERVER server, wt_connection_id_t conn_id)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return NULL; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return NULL; }
     return wt_server_get_client_addr_impl(
         (wt_server_s*)server, conn_id);
 }
 
 WT_API int32_t wt_server_get_client_count(WT_SERVER server)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     if (!server) return 0;
     return wt_server_get_client_count_impl((wt_server_s*)server);
 }
 
 WT_API int32_t wt_server_get_max_clients(WT_SERVER server)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     if (!server) return 0;
     return (int32_t)((wt_server_s*)server)->max_clients;
 }
 
 WT_API int32_t wt_server_get_state(WT_SERVER server)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     if (!server) return 0;
     return atomic_load(&((wt_server_s*)server)->state);
 }
@@ -174,13 +179,13 @@ WT_API int32_t wt_server_get_state(WT_SERVER server)
 WT_API WT_CLIENT wt_client_create(
     const wt_client_callbacks_t* callbacks, void* context)
 {
-    if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return NULL; }
+    if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return NULL; }
     return (WT_CLIENT)wt_client_alloc_impl(callbacks, context);
 }
 
 WT_API void wt_client_destroy(WT_CLIENT client)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return; }
     wt_client_free_impl((wt_client_s*)client);
 }
 
@@ -188,7 +193,7 @@ WT_API int32_t wt_client_connect(
     WT_CLIENT client, const char* server_name,
     const char* address, uint16_t port, int32_t use_tls)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     return wt_client_connect_impl(
         (wt_client_s*)client, server_name, address,
         port, (use_tls != 0));
@@ -196,20 +201,20 @@ WT_API int32_t wt_client_connect(
 
 WT_API void wt_client_disconnect(WT_CLIENT client)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return; }
     wt_client_disconnect_impl((wt_client_s*)client);
 }
 
 WT_API void wt_client_poll(WT_CLIENT client, int32_t timeout_us)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return; }
     wt_client_poll_impl((wt_client_s*)client, timeout_us);
 }
 
 WT_API int32_t wt_client_send_stream(
     WT_CLIENT client, const uint8_t* data, int32_t length)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     return wt_client_send_stream_impl(
         (wt_client_s*)client, data, length);
 }
@@ -217,19 +222,19 @@ WT_API int32_t wt_client_send_stream(
 WT_API int32_t wt_client_send_datagram(
     WT_CLIENT client, const uint8_t* data, int32_t length)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     return wt_client_send_datagram_impl(
         (wt_client_s*)client, data, length);
 }
 
 WT_API int32_t wt_client_is_connected(WT_CLIENT client)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     return wt_client_is_connected_impl((wt_client_s*)client) ? 1 : 0;
 }
 
 WT_API int32_t wt_client_get_mtu(WT_CLIENT client)
 {
-	if (!g_initialised) { WT_LOG_ERROR("wt_init() not called"); return -1; }
+	if (!atomic_load(&g_initialised)) { WT_LOG_ERROR("wt_init() not called"); return -1; }
     return wt_client_get_mtu_impl((wt_client_s*)client);
 }

@@ -16,7 +16,16 @@
 /* ── Atomics (GCC/Clang builtins, MSVC interlocked intrinsics) ─ */
 typedef int atomic_int;
 typedef unsigned int atomic_uint;
-typedef bool atomic_bool;
+typedef int atomic_bool;    /* always 4 bytes — consistent struct layout across platforms */
+
+/* Pointer atomics — prevents TOCTOU when session ptr is freed on another thread */
+#if defined(_MSC_VER)
+  #define atomic_ptr_load(p)   (void*)_InterlockedCompareExchangePointer((void* volatile*)(p), NULL, NULL)
+  #define atomic_ptr_store(p,v) _InterlockedExchangePointer((void* volatile*)(p), (void*)(v))
+#else
+  #define atomic_ptr_load(p)   __atomic_load_n(p, __ATOMIC_ACQUIRE)
+  #define atomic_ptr_store(p,v) __atomic_store_n(p, v, __ATOMIC_RELEASE)
+#endif
 
 #if defined(_MSC_VER)
   #include <intrin.h>
@@ -25,6 +34,12 @@ typedef bool atomic_bool;
   #define atomic_store(p, v)      (_InterlockedExchange((long*)(p), (long)(v)))
   #define atomic_fetch_add(p, v)  (_InterlockedExchangeAdd((long*)(p), (long)(v)))
   #define atomic_fetch_sub(p, v)  (_InterlockedExchangeAdd((long*)(p), -(long)(v)))
+  /* NOTE: This macro does NOT update *expected on failure (unlike C11).
+   * Current call sites do not depend on *expected being updated.
+   * If future code needs post-failure *expected, use a proper loop:
+   *   long cur = atomic_load(p);
+   *   do { *expected = cur; } while ((cur = _InterlockedCompareExchange(...)) != *expected);
+   */ \
   #define atomic_compare_exchange_strong(p, expected, desired) \
       (_InterlockedCompareExchange((long*)(p), (long)(desired), (long)(*(expected))) == (long)(*(expected)))
 #else

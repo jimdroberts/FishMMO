@@ -291,13 +291,16 @@ WT_API void wt_client_disconnect(WT_CLIENT client);
  * Poll the client for events.  Must be called regularly (e.g. each frame)
  * to process QUIC I/O and deliver callbacks.  Safe to call from any thread.
  *
- * @param timeout_ms  Max microseconds to block (0 = non-blocking).
+ * @param timeout_us  Max microseconds to block (0 = non-blocking).
  */
 WT_API void wt_client_poll(WT_CLIENT client, int32_t timeout_us);
 
 /**
  * Poll the server for events.  Must be called regularly (e.g. each frame)
  * to process QUIC I/O and deliver callbacks.  Safe to call from any thread.
+ *
+ * Also processes deferred session shutdowns from QUIC worker threads,
+ * guaranteeing safe cleanup of session resources on the application thread.
  *
  * @param timeout_us  Max microseconds to block (0 = non-blocking).
  */

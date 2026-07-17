@@ -37,9 +37,10 @@ static void session_on_stream_data(
 int32_t wt_session_init(
     wt_session_t* session, HQUIC quic_conn, wt_connection_id_t conn_id)
 {
-    memset(session, 0, sizeof(*session));
     session->quic_conn = quic_conn;
     session->conn_id = conn_id;
+    atomic_init(&session->ref_count, 1);   /* owner reference */
+    atomic_init(&session->released, false);
 
     session->stream_mgr = (wt_stream_manager_t*)calloc(
         1, sizeof(wt_stream_manager_t));
@@ -50,35 +51,101 @@ int32_t wt_session_init(
     return WT_OK;
 }
 
+bool wt_session_acquire(wt_session_t* session)
+{
+    if (!session) return false;
+    /* Increment refcount. If the owner has already released,
+     * we may still acquire as long as refcount > 0. The release
+     * path won't free until we decrement. */
+    uint32_t prev = atomic_fetch_add(&session->ref_count, 1);
+    if (prev == 0) {
+        /* refcount was 0 — session is already freed or being freed.
+         * Undo our increment. */
+        atomic_fetch_sub(&session->ref_count, 1);
+        return false;
+    }
+    return true;
+}
+
+void wt_session_release(wt_session_t* session)
+{
+    if (!session) return;
+    uint32_t prev = atomic_fetch_sub(&session->ref_count, 1);
+    if (prev == 1) {
+        /* We were the last reference. If the owner has released,
+         * it's safe to free. Otherwise the owner still holds it. */
+        if (atomic_load(&session->released)) {
+            free(session);
+        }
+    }
+}
+
+static void try_free_mgr(wt_stream_manager_t* mgr)
+{
+    bool expected = false;
+    if (atomic_compare_exchange_strong(&mgr->freed, &expected, true))
+        free(mgr);
+}
+
 static void on_streams_done(void* ctx)
 {
-    wt_session_t* session = (wt_session_t*)ctx;
-    free(session->stream_mgr);
-    session->stream_mgr = NULL;
+    wt_stream_manager_t* mgr = (wt_stream_manager_t*)ctx;
+
+    /* Check shutdown_complete FIRST — if set, mgr may be concurrently
+     * freed by wt_session_shutdown. Only write to mgr fields after
+     * confirming shutdown_complete is still false. */
+    if (atomic_load(&mgr->shutdown_complete)) {
+        try_free_mgr(mgr);
+        return;  /* do NOT touch mgr after try_free_mgr */
+    }
+
+    atomic_store(&mgr->streams_done_flag, true);
+    /* Re-check after store — shutdown may have completed between
+     * our first check and the store. */
+    if (atomic_load(&mgr->shutdown_complete))
+        try_free_mgr(mgr);
 }
 
 void wt_session_shutdown(wt_session_t* session)
 {
     if (!session) return;
 
+    /* Mark as released — no new acquires will succeed after this point
+     * (acquire checks ref_count > 0 before incrementing, but we still
+     * hold our owner reference, so ref_count >= 1). */
+    atomic_store(&session->released, true);
+
     if (session->stream_mgr) {
-        /* Mark as shutting down and null callbacks. If no active
-         * streams remain, free immediately. Otherwise defer to the
-         * last SHUTDOWN_COMPLETE callback via on_all_streams_done. */
-        session->stream_mgr->on_stream_data = NULL;
-        session->stream_mgr->callback_ctx = NULL;
-        session->stream_mgr->shutting_down = true;
-        session->stream_mgr->on_all_streams_done = on_streams_done;
-        session->stream_mgr->done_ctx = session;
+        wt_stream_manager_t* mgr = session->stream_mgr;
 
-        wt_stream_manager_shutdown(session->stream_mgr);
+        mgr->on_stream_data = NULL;
+        mgr->callback_ctx = NULL;
+        mgr->on_all_streams_done = on_streams_done;
+        mgr->done_ctx = mgr;
+        atomic_store(&mgr->streams_done_flag, false);
+        atomic_store(&mgr->shutdown_complete, false);
+        atomic_store(&mgr->freed, false);
+        atomic_store(&mgr->shutting_down, true);
 
-        if (atomic_load(&session->stream_mgr->active_streams) == 0) {
-            free(session->stream_mgr);
-            session->stream_mgr = NULL;
+        wt_stream_manager_shutdown(mgr);
+
+        atomic_store(&mgr->shutdown_complete, true);
+
+        /* Free if no streams active or callback already fired. CAS ensures
+         * exactly one of session_shutdown or on_streams_done wins the free. */
+        if (atomic_load(&mgr->active_streams) == 0 ||
+            atomic_load(&mgr->streams_done_flag)) {
+            try_free_mgr(mgr);
         }
+        /* Always null the pointer — if we didn't free mgr, on_streams_done
+         * will free it via its done_ctx reference. Leaving a dangling pointer
+         * here would allow sends to access freed memory. */
+        session->stream_mgr = NULL;
     }
     session->quic_conn = NULL;
+
+    /* Release owner reference — may free session if no in-flight sends. */
+    wt_session_release(session);
 }
 
 void wt_session_wire_callbacks(wt_session_t* session)
@@ -103,6 +170,7 @@ int32_t wt_session_send_datagram(
     wt_session_t* session, const uint8_t* data, int32_t length)
 {
     if (!session || !session->quic_conn) return WT_ERR_INVALID_STATE;
+    if (!data || length <= 0) return WT_ERR_SEND_FAILED;
 
     /* Copy data for async send — QUIC buffers must outlive the call */
     uint8_t* copy = (uint8_t*)malloc((size_t)length);

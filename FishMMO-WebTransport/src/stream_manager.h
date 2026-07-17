@@ -25,7 +25,7 @@ typedef struct wt_stream_manager_s {
     uint32_t            next_id;
     HQUIC               quic_conn;
     atomic_uint         active_streams;
-    bool                shutting_down;  /* set by session_shutdown, prevents new sends */
+    atomic_bool         shutting_down;
 
     void (*on_stream_data)(void* ctx, wt_connection_id_t conn_id,
                            wt_stream_id_t stream_id,
@@ -37,6 +37,15 @@ typedef struct wt_stream_manager_s {
      * The session uses this to defer free(mgr) until all streams are done. */
     void (*on_all_streams_done)(void* ctx);
     void*               done_ctx;
+    atomic_bool         streams_done_flag;
+    atomic_bool         shutdown_complete;
+    atomic_bool         freed;              /* CAS gate — exactly one path frees */
+
+    /* Per-connection total receive buffer tracking.
+     * Prevents a single peer from exhausting memory by opening
+     * many streams without sending FIN. */
+    atomic_uint         total_recv_bytes;
+#define WT_MAX_TOTAL_RECV_BUF  (16 * 1024 * 1024)  /* 16 MB per connection */
 } wt_stream_manager_t;
 
 void wt_stream_manager_init(

@@ -55,7 +55,7 @@ namespace FishNet.Transporting.WebTransport
         /// Sends data to the given connection.  Queues for deferred send during IterateOutgoing.
         /// connectionId of -1 on server means broadcast to all.
         /// </summary>
-        internal void Send(ref Queue<Packet> queue, byte channelId, ArraySegment<byte> segment, int connectionId)
+        internal void Send(Queue<Packet> queue, byte channelId, ArraySegment<byte> segment, int connectionId)
         {
             if (GetConnectionState() != LocalConnectionState.Started)
                 return;
@@ -67,7 +67,7 @@ namespace FishNet.Transporting.WebTransport
         /// <summary>
         /// Clears a queue of Packets, returning their backing buffers to the pool.
         /// </summary>
-        internal void ClearPacketQueue(ref Queue<Packet> queue)
+        internal void ClearPacketQueue(Queue<Packet> queue)
         {
             int count = queue.Count;
             for (int i = 0; i < count; i++)

@@ -3,6 +3,7 @@
  * @brief WebTransport QUIC server implementation using msquic.
  */
 
+#include <time.h>
 #include "server.h"
 #include <stdlib.h>
 #include <string.h>
@@ -77,7 +78,8 @@ void wt_server_free_impl(wt_server_s* server)
 #if defined(WT_PLATFORM_WINDOWS)
         Sleep(10);
 #else
-        usleep(10000);
+        struct timespec ts = {0, 10000000}; /* 10ms */
+	        nanosleep(&ts, NULL);
 #endif
     }
     if (retries < 0) {
@@ -209,7 +211,7 @@ void wt_server_stop_impl(wt_server_s* server)
         return;
 
     for (uint32_t i = 1; i < server->max_clients; i++) {
-        if (server->connections[i].in_use)
+        if (atomic_load(&server->connections[i].in_use))
             wt_server_disconnect_impl(server, server->connections[i].id);
     }
 
@@ -235,6 +237,19 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
     (void)timeout_us;
     if (!server || atomic_load(&server->state) != WT_SERVER_STARTED)
         return;
+
+    /* Process deferred session shutdowns for any connections.
+     * This runs on the application thread — same thread as send —
+     * guaranteeing no TOCTOU between session free and acquire. */
+    for (uint32_t i = 1; i < server->max_clients; i++) {
+        wt_server_conn_t* c = &server->connections[i];
+        if (c->pending_shutdown_session) {
+            wt_session_t* s = c->pending_shutdown_session;
+            c->pending_shutdown_session = NULL;
+            wt_session_shutdown(s);
+        }
+    }
+
     wt_datagram_queue_drain(&server->dgram_queue,
                              on_server_dgram_drain, server);
 }
@@ -249,10 +264,21 @@ int32_t wt_server_send_stream_impl(
         int32_t worst = WT_OK;
         for (uint32_t i = 1; i < server->max_clients; i++) {
             wt_server_conn_t* c = &server->connections[i];
-            if (c->in_use && c->state == WT_CONN_STATE_CONNECTED && c->session) {
-                int32_t r = wt_session_send_stream(c->session, data, length);
-                if (r != WT_OK) worst = r;
+            if (!atomic_load(&c->in_use) ||
+                (wt_connection_state_t)atomic_load(&c->state) != WT_CONN_STATE_CONNECTED)
+                continue;
+            wt_session_t* session = (wt_session_t*)atomic_ptr_load(&c->session);
+            if (!session || !wt_session_acquire(session))
+                continue;
+            /* Re-check after acquire — session pointer may have changed */
+            if (atomic_ptr_load(&c->session) != session ||
+                !atomic_load(&c->in_use)) {
+                wt_session_release(session);
+                continue;
             }
+            int32_t r = wt_session_send_stream(session, data, length);
+            if (r != WT_OK) worst = r;
+            wt_session_release(session);
         }
         return worst;
     }
@@ -261,11 +287,26 @@ int32_t wt_server_send_stream_impl(
         return WT_ERR_NOT_FOUND;
 
     wt_server_conn_t* conn = &server->connections[conn_id];
-    if (!conn->in_use || conn->state != WT_CONN_STATE_CONNECTED ||
-        !conn->session)
+    if (!atomic_load(&conn->in_use) ||
+        (wt_connection_state_t)atomic_load(&conn->state) != WT_CONN_STATE_CONNECTED)
         return WT_ERR_NOT_FOUND;
 
-    return wt_session_send_stream(conn->session, data, length);
+    {
+        wt_session_t* session = (wt_session_t*)atomic_ptr_load(&conn->session);
+        if (!session || !wt_session_acquire(session))
+            return WT_ERR_NOT_FOUND;
+
+        /* Re-check — session may have been nulled by SHUTDOWN_COMPLETE */
+        if (atomic_ptr_load(&conn->session) != session ||
+            !atomic_load(&conn->in_use)) {
+            wt_session_release(session);
+            return WT_ERR_NOT_FOUND;
+        }
+
+        int32_t result = wt_session_send_stream(session, data, length);
+        wt_session_release(session);
+        return result;
+    }
 }
 
 int32_t wt_server_send_datagram_impl(
@@ -278,10 +319,20 @@ int32_t wt_server_send_datagram_impl(
         int32_t worst = WT_OK;
         for (uint32_t i = 1; i < server->max_clients; i++) {
             wt_server_conn_t* c = &server->connections[i];
-            if (c->in_use && c->state == WT_CONN_STATE_CONNECTED && c->session) {
-                int32_t r = wt_session_send_datagram(c->session, data, length);
-                if (r != WT_OK) worst = r;
+            if (!atomic_load(&c->in_use) ||
+                (wt_connection_state_t)atomic_load(&c->state) != WT_CONN_STATE_CONNECTED)
+                continue;
+            wt_session_t* session = (wt_session_t*)atomic_ptr_load(&c->session);
+            if (!session || !wt_session_acquire(session))
+                continue;
+            if (atomic_ptr_load(&c->session) != session ||
+                !atomic_load(&c->in_use)) {
+                wt_session_release(session);
+                continue;
             }
+            int32_t r = wt_session_send_datagram(session, data, length);
+            if (r != WT_OK) worst = r;
+            wt_session_release(session);
         }
         return worst;
     }
@@ -290,11 +341,25 @@ int32_t wt_server_send_datagram_impl(
         return WT_ERR_NOT_FOUND;
 
     wt_server_conn_t* conn = &server->connections[conn_id];
-    if (!conn->in_use || conn->state != WT_CONN_STATE_CONNECTED ||
-        !conn->session)
+    if (!atomic_load(&conn->in_use) ||
+        (wt_connection_state_t)atomic_load(&conn->state) != WT_CONN_STATE_CONNECTED)
         return WT_ERR_NOT_FOUND;
 
-    return wt_session_send_datagram(conn->session, data, length);
+    {
+        wt_session_t* session = (wt_session_t*)atomic_ptr_load(&conn->session);
+        if (!session || !wt_session_acquire(session))
+            return WT_ERR_NOT_FOUND;
+
+        if (atomic_ptr_load(&conn->session) != session ||
+            !atomic_load(&conn->in_use)) {
+            wt_session_release(session);
+            return WT_ERR_NOT_FOUND;
+        }
+
+        int32_t result = wt_session_send_datagram(session, data, length);
+        wt_session_release(session);
+        return result;
+    }
 }
 
 void wt_server_disconnect_impl(
@@ -304,7 +369,7 @@ void wt_server_disconnect_impl(
         return;
 
     wt_server_conn_t* conn = &server->connections[conn_id];
-    if (!conn->in_use) return;
+    if (!atomic_load(&conn->in_use)) return;
 
     /* Atomically claim the shutdown — prevents double-increment
      * if called twice for the same connection. */
@@ -316,9 +381,9 @@ void wt_server_disconnect_impl(
     atomic_fetch_add(&server->pending_shutdowns, 1);
     MsQuic->ConnectionShutdown(qconn,
                                 QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
-    /* Session cleanup deferred to SHUTDOWN_COMPLETE. */
+    /* Session cleanup deferred to SHUTDOWN_COMPLETE → poll. */
 
-    conn->state = WT_CONN_STATE_CLOSED;
+    atomic_store(&conn->state, WT_CONN_STATE_CLOSED);
     /* fire_disconnect is called by SHUTDOWN_COMPLETE — don't double-fire */
 }
 
@@ -328,7 +393,7 @@ const char* wt_server_get_client_addr_impl(
     if (!server || conn_id == 0 || conn_id >= server->max_clients)
         return NULL;
     wt_server_conn_t* conn = &server->connections[conn_id];
-    if (!conn->in_use) return NULL;
+    if (!atomic_load(&conn->in_use)) return NULL;
     return conn->remote_addr;
 }
 
@@ -363,7 +428,7 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     wt_connection_id_t conn_id = 0;
 
     for (uint32_t i = 1; i < srv->max_clients; i++) {
-        if (!srv->connections[i].in_use) {
+        if (!atomic_load(&srv->connections[i].in_use)) {
             conn = &srv->connections[i];
             conn_id = i;
             break;
@@ -377,8 +442,8 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     memset(conn, 0, sizeof(*conn));
     conn->id = conn_id;
     conn->quic_conn = event->NEW_CONNECTION.Connection;
-    conn->state = WT_CONN_STATE_HANDSHAKING;
-    conn->in_use = true;
+    atomic_store(&conn->state, WT_CONN_STATE_HANDSHAKING);
+    atomic_store(&conn->in_use, true);
     conn->owner = srv;
 
     atomic_fetch_add(&srv->connection_count, 1);
@@ -390,7 +455,7 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     if (QUIC_FAILED(status)) {
         WT_LOG_WARN("ConnectionSetConfiguration: 0x%x", status);
         MsQuic->ConnectionClose(conn->quic_conn);
-        conn->in_use = false;
+        atomic_store(&conn->in_use, false);
         atomic_fetch_sub(&srv->connection_count, 1);
         return QUIC_STATUS_SUCCESS;  /* handle closed, tell msquic we handled it */
     }
@@ -424,7 +489,7 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     switch (event->Type) {
 
     case QUIC_CONNECTION_EVENT_CONNECTED: {
-        sconn->state = WT_CONN_STATE_CONNECTED;
+        atomic_store(&sconn->state, WT_CONN_STATE_CONNECTED);
 
         wt_session_t* session = (wt_session_t*)calloc(1, sizeof(wt_session_t));
         if (!session) {
@@ -443,7 +508,7 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             break;
         }
 
-        sconn->session = session;
+        atomic_ptr_store(&sconn->session, session);
         session->parent_type = WT_PARENT_SERVER;
         session->parent.server = sconn->owner;
         wt_session_wire_callbacks(session);
@@ -469,22 +534,27 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 
     case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE: {
         if (sconn->session) {
-            wt_session_shutdown(sconn->session);
-            free(sconn->session);
-            sconn->session = NULL;
+            wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&sconn->session);
+            if (old_session) {
+                atomic_ptr_store(&sconn->session, NULL);
+
+            /* Defer shutdown to poll (application thread) to guarantee
+             * session free never races with in-flight sends. */
+            sconn->pending_shutdown_session = old_session;
+            }
         }
 
         MsQuic->ConnectionClose(conn);
 
-        if (sconn->in_use) {
+        if (atomic_load(&sconn->in_use)) {
             fire_disconnect(sconn, 0);
 
             if (sconn->owner) {
                 atomic_fetch_sub(&sconn->owner->connection_count, 1);
             }
 
-            sconn->in_use = false;
-            sconn->state = WT_CONN_STATE_CLOSED;
+            atomic_store(&sconn->in_use, false);
+            atomic_store(&sconn->state, WT_CONN_STATE_CLOSED);
         }
 
         /* Signal completion LAST — after all sconn accesses.

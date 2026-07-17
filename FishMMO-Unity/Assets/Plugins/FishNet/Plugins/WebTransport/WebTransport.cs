@@ -319,6 +319,7 @@ namespace FishNet.Transporting.WebTransport
         {
             StopConnection(false);
             StopConnection(true);
+            WebTransportNative.Deinitialize();
         }
 
         private bool StartServer()

@@ -24,15 +24,21 @@ cmake -S . -B "${BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DWT_BUILD_TESTS=OFF \
     -DBUILD_SHARED_LIBS=ON \
-    -DWT_STATIC_MSQUIC=OFF \
+    -DWT_STATIC_MSQUIC=ON \
     -G "Unix Makefiles"
 
 # Build
 cmake --build "${BUILD_DIR}" --config Release -j"$(nproc)"
 
-# Copy output
-cp "${BUILD_DIR}"/libfishmmo_webtransport.so "${OUT_DIR}/" 2>/dev/null || true
-
 echo "=== Build complete ==="
 echo "Output: ${OUT_DIR}/libfishmmo_webtransport.so"
 ls -lh "${OUT_DIR}/libfishmmo_webtransport.so"
+
+# Copy to Unity project plugin directory
+UNITY_PLUGIN_DIR="../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/linux_x86_64"
+if [ -d "${UNITY_PLUGIN_DIR}" ]; then
+    cp "${OUT_DIR}/libfishmmo_webtransport.so" "${UNITY_PLUGIN_DIR}/"
+    echo "Copied to Unity project: ${UNITY_PLUGIN_DIR}/libfishmmo_webtransport.so"
+else
+    echo "Warning: Unity plugin directory not found at ${UNITY_PLUGIN_DIR}"
+fi

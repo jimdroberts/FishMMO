@@ -88,23 +88,35 @@ int32_t wt_datagram_queue_drain(
     while (r != w) {
         wt_datagram_entry_t* entry = &q->entries[r];
         if (entry->occupied) {
-            /* Unlock around callback to avoid deadlocks */
-            wt_mutex_unlock(&q->mutex);
-            cb(ctx, entry->conn_id, entry->data, entry->length);
-            wt_mutex_lock(&q->mutex);
-
+            /* Copy to stack before unlocking — prevents producer from
+             * overwriting entry data during the callback window. */
+            uint8_t tmp[WT_DGRAM_MAX_SIZE];
+            int32_t len = entry->length;
+            wt_connection_id_t cid = entry->conn_id;
+            memcpy(tmp, entry->data, len);
             entry->occupied = false;
             entry->length = 0;
-            count++;
 
+            /* Advance read_idx before callback — prevents producer from
+             * seeing a false-full queue while the callback is running.
+             * This also updates r so we don't double-advance below. */
+            r = (r + 1) % WT_DGRAM_QUEUE_CAPACITY;
+            q->read_idx = r;
+
+            wt_mutex_unlock(&q->mutex);
+            cb(ctx, cid, tmp, len);
+            wt_mutex_lock(&q->mutex);
+
+            count++;
             /* Re-read write_idx — producer may have added entries
              * while the mutex was released during the callback. */
             w = q->write_idx;
+        } else {
+            r = (r + 1) % WT_DGRAM_QUEUE_CAPACITY;
+            q->read_idx = r;
         }
-        r = (r + 1) % WT_DGRAM_QUEUE_CAPACITY;
     }
 
-    q->read_idx = r;
     wt_mutex_unlock(&q->mutex);
     return count;
 }

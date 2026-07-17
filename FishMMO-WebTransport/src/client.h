@@ -35,6 +35,12 @@ typedef struct wt_client_s {
     atomic_uint             pending_shutdowns;
 
     wt_session_t*           session;
+
+    /* Session pending deferred shutdown. Set by QUIC callback thread,
+     * consumed by poll (application thread) to ensure session free
+     * never races with concurrent sends. */
+    wt_session_t*           pending_shutdown_session;
+
     wt_datagram_queue_t     dgram_queue;
 } wt_client_s;
 
