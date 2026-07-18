@@ -1,3 +1,4 @@
+using System;
 using System.Security.Cryptography;
 
 namespace FishMMO.Auth.Implementation
@@ -13,19 +14,19 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// The client's X25519 public key received during the handshake.
 		/// </summary>
-		public byte[]? PublicKey;
+		public byte[]? PublicKey { get; private set; }
 
 		/// <summary>
 		/// Master secret derived via X25519 ECDH + HKDF. Null after promotion to directional keys.
 		/// </summary>
-		public byte[]? MasterSecret;
+		public byte[]? MasterSecret { get; private set; }
 
 		/// <summary>
 		/// Directional AES keys derived via HKDF-SHA256. <c>ClientToServerKey</c> is used to decrypt client→server messages.
 		/// <c>ServerToClientKey</c> is used to encrypt server→client messages.
 		/// </summary>
-		public byte[]? ClientToServerKey;
-		public byte[]? ServerToClientKey;
+		public byte[]? ClientToServerKey { get; private set; }
+		public byte[]? ServerToClientKey { get; private set; }
 
 		/// <summary>
 		/// Nonce context for server→client (send/encrypt) direction.
@@ -45,6 +46,9 @@ namespace FishMMO.Auth.Implementation
 		/// Defaults to <see cref="CryptoHelper.ProtocolVersion"/> for backward compatibility.
 		/// </summary>
 		public ushort AgreedVersion;
+
+		/// <summary>Lock for thread-safe access to nonce contexts in Clear/NextSendNonce/NextReceiveNonce.</summary>
+		private readonly object clearLock = new object();
 
 		/// <summary>
 		/// Initializes a new instance storing the peer's public key.
@@ -69,7 +73,12 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>Tuple of (12-byte nonce, sequence number).</returns>
 		public (byte[] Nonce, uint Sequence) NextSendNonce()
 		{
-			return SendNonceCtx!.NextNonce();
+			CryptoHelper.GcmNonceContext ctx;
+			lock (clearLock)
+			{
+				ctx = SendNonceCtx!;
+			}
+			return ctx.NextNonce();
 		}
 
 		/// <summary>
@@ -89,7 +98,12 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>Tuple of (12-byte nonce, sequence number).</returns>
 		public (byte[] Nonce, uint Sequence) NextReceiveNonce()
 		{
-			return ReceiveNonceCtx!.NextNonce();
+			CryptoHelper.GcmNonceContext ctx;
+			lock (clearLock)
+			{
+				ctx = ReceiveNonceCtx!;
+			}
+			return ctx.NextNonce();
 		}
 
 		/// <summary>
@@ -158,10 +172,13 @@ namespace FishMMO.Auth.Implementation
 				CryptographicOperations.ZeroMemory(ServerToClientKey);
 				ServerToClientKey = null;
 			}
-			SendNonceCtx?.Dispose();
-			SendNonceCtx = null;
-			ReceiveNonceCtx?.Dispose();
-			ReceiveNonceCtx = null;
+			lock (clearLock)
+			{
+				SendNonceCtx?.Dispose();
+				SendNonceCtx = null;
+				ReceiveNonceCtx?.Dispose();
+				ReceiveNonceCtx = null;
+			}
 			if (PublicKey != null)
 			{
 				// Zero the peer public key before dropping the reference. Public keys
@@ -181,9 +198,11 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		public void PromoteToDirectional(CryptoHelper.SessionKeys keys)
 		{
-			// Assign derived directional AES keys
-			ClientToServerKey = keys.ClientToServerKey;
-			ServerToClientKey = keys.ServerToClientKey;
+			// Copy key arrays to prevent use-after-zero if SessionKeys.Dispose() is ever called
+			ClientToServerKey = new byte[keys.ClientToServerKey.Length];
+			Buffer.BlockCopy(keys.ClientToServerKey, 0, ClientToServerKey, 0, keys.ClientToServerKey.Length);
+			ServerToClientKey = new byte[keys.ServerToClientKey.Length];
+			Buffer.BlockCopy(keys.ServerToClientKey, 0, ServerToClientKey, 0, keys.ServerToClientKey.Length);
 
 			// Create nonce contexts that own copies of the session prefixes.
 			// Server send = server→client direction, uses ServerPrefix

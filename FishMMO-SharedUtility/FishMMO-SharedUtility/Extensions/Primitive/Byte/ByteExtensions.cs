@@ -45,8 +45,7 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static byte GetDigit(this byte number, int digitIndex)
 		{
-			// If index is negative or out of bounds for a byte, return 0 or the base value
-			if (digitIndex <= 0) return (byte)(number % 10);
+			if (digitIndex < 0) return 0;
 
 			int val = number;
 			for (int i = 0; i < digitIndex; i++)

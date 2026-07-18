@@ -47,7 +47,25 @@ WT_API int32_t wt_init(void)
 
 WT_API void wt_deinit(void)
 {
-    /* Single-entry gate: use atomic CAS to ensure only ONE thread
+    /* ── MEDIUM: Caller thread-safety requirement ─────────────────
+     *
+     * IMPORTANT: Callers MUST ensure all API calls (wt_server_*,
+     * wt_client_*, wt_server_poll, wt_client_poll, etc.) have
+     * COMPLETED before calling wt_deinit(). Threads mid-call may
+     * still hold references to the MsQuic API table (MsQuic global
+     * pointer). Closing MsQuic beneath them is a use-after-free.
+     *
+     * Safe pattern:
+     *   1. Stop all servers and clients (wt_server_stop, wt_client_disconnect)
+     *   2. Join/drain all application threads that call the API
+     *   3. Destroy all server/client handles (wt_server_destroy, wt_client_destroy)
+     *   4. Call wt_deinit() — only after step 3 has completed.
+     *
+     * Do NOT call wt_deinit() from a QUIC callback or while any
+     * wt_server_poll / wt_client_poll call is in progress on another
+     * thread.
+     *
+     * Single-entry gate: use atomic CAS to ensure only ONE thread
      * proceeds into deinit.  The first call that CAS's g_initialised
      * from true to false wins; all subsequent calls (concurrent or
      * after deinit completes) see false and return immediately.

@@ -81,6 +81,11 @@ namespace FishMMO.Client
 	/// <param name="isWorldServer">If true, stores address for reconnection logic.</param>
 	public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
 		{
+			if (string.IsNullOrWhiteSpace(address))
+			{
+				Log.Error("ClientConnection", "ConnectToServer: address is null or empty.");
+				return;
+			}
 			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
 			NetworkManager.ClientManager.StopConnection();
 			CoroutineRunner.Start(OnAwaitingConnectionReady(address, port, isWorldServer));
@@ -89,7 +94,11 @@ namespace FishMMO.Client
 		/// <summary>Attempts an immediate reconnect with exponential backoff + jitter.</summary>
 	public void TryReconnect()
 		{
-			if (nextReconnect < 0) nextReconnect = ComputeReconnectDelay(ReconnectsAttempted);
+			// Compute and store the backoff delay. Update() decrements this each frame.
+			// Only proceed with the reconnect when the timer has elapsed (nextReconnect <= 0).
+			this.nextReconnect = ComputeReconnectDelay(ReconnectsAttempted);
+			if (this.nextReconnect > 0)
+				return;
 			if (ReconnectsAttempted < MaxReconnectAttempts)
 			{
 				if (!string.IsNullOrEmpty(lastWorldAddress) && lastWorldPort != 0)

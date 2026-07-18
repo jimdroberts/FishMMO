@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// Extension methods for compressing and decompressing dictionaries using GZip.
 	/// Uses manual binary serialization for security and performance.
 	/// </summary>
-	public static class DictionaryExtensions
+	public static class DictionaryCompression
 	{
 		/// <summary>
 		/// Serializes and compresses a dictionary to a GZip file.
@@ -33,7 +33,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Reads and decompresses a dictionary from a GZip file.
 		/// </summary>
-		public static Dictionary<long, string> ReadFromGZipFile(string filePath)
+		public static Dictionary<long, string> ReadFromGZipFile(this Dictionary<long, string> _, string filePath)
 		{
 			if (!File.Exists(filePath)) return new Dictionary<long, string>();
 

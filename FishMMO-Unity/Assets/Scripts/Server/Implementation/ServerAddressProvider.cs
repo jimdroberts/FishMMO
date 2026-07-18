@@ -104,7 +104,7 @@ namespace FishMMO.Server.Implementation
 			{
 				string actualAddress = LoopBack;
 				if (!string.IsNullOrWhiteSpace(coreServerAddress) &&
-					(coreServerAddress.Equals(LoopBack) || coreServerAddress.Equals(LocalHost)))
+					!coreServerAddress.Equals(LoopBack) && !coreServerAddress.Equals(LocalHost))
 				{
 					actualAddress = coreServerAddress;
 				}

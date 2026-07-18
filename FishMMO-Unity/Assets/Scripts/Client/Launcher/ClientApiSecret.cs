@@ -48,6 +48,12 @@ namespace FishMMO.Client
 			"FishMMO-default-client-gate-secret-replace-before-release-d8b1c4a6e7f23519";
 
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+		/// <summary>
+		/// True when the default placeholder API secret is still active in a release build.
+		/// Other security-sensitive code (e.g. ClientSecurityBuildValidator) should check this flag.
+		/// </summary>
+		public static bool IsPlaceholderSecret { get; private set; }
+
 		static ClientApiSecret()
 		{
 			UnityEngine.Debug.LogError(
@@ -61,6 +67,9 @@ namespace FishMMO.Client
 				"[ClientApiSecret] *  This binary's gate secret is PUBLIC and provides    *\n" +
 				"[ClientApiSecret] *  NO protection against general crawler traffic.      *\n" +
 				"[ClientApiSecret] *******************************************************");
+			// Alert other security code (e.g. ClientSecurityBuildValidator) that the
+			// default placeholder API secret is still active in a release build.
+			IsPlaceholderSecret = true;
 		}
 #endif
 

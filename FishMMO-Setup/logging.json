@@ -1,6 +1,14 @@
 {
   "LoggingManager": {
-    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"]
+    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"],
+    "FileSink": {
+      "_comment": "EXAMPLE: Uncomment and adjust for production file logging. Remove _comment key when enabling.",
+      "_enabled": false,
+      "Path": "/var/log/fishmmo/server.log",
+      "FileSizeLimitMb": 100,
+      "MaxFileCount": 10,
+      "AllowedLevels": ["Warning", "Error", "Critical"]
+    }
   },
   "Loggers": []
 }

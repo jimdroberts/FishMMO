@@ -29,11 +29,16 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// </summary>
 		public int Level { get; set; }
 		/// <summary>
-		/// Timestamp (unix) when the cast time ends.
+		/// Unix timestamp (seconds) when the cast time ends.
+		/// Stored as <c>double</c> rather than <c>DateTime</c> to maintain
+		/// compatibility with Unity's game time representation and to avoid
+		/// timezone-related serialization issues between the server and client.
 		/// </summary>
 		public double CastTimeEnd { get; set; }
 		/// <summary>
-		/// Timestamp (unix) when the cooldown expires.
+		/// Unix timestamp (seconds) when the cooldown expires.
+		/// Stored as <c>double</c> rather than <c>DateTime</c> for the same
+		/// Unity compatibility reasons as <see cref="CastTimeEnd"/>.
 		/// </summary>
 		public double CooldownEnd { get; set; }
 		public DateTime TimeCreated { get; set; }

@@ -429,6 +429,8 @@ namespace FishMMO.Auth.Implementation
 					{
 						_ = Log.Warning(LogPrefix, string.Format("Game version mismatch: client=\"{0}\", server=\"{1}\"", gameVersion, ExpectedGameVersion));
 						BroadcastAuthResult(conn, ClientAuthenticationResult.VersionMismatch, reliable: true);
+						// Small delay to let the transport flush the reliable broadcast before disconnecting
+						Thread.Sleep(1);
 						DisconnectConnection(conn, graceful: true);
 						return;
 					}

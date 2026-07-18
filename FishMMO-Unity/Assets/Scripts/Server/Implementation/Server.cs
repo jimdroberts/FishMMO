@@ -195,12 +195,20 @@ namespace FishMMO.Server.Implementation
 			if (!hasShutdown)
 			{
 				Log.Warning("Server", $"External IP fetch timed out after {ExternalIpFetchTimeoutSeconds}s; falling back to loopback.");
+				usedFallbackAddress = true;
 				onDone("127.0.0.1");
 			}
 		}
 
 		private int setupFinalized = 0;
 		private Coroutine externalIpTimeoutCoroutine;
+
+		/// <summary>
+		/// Set to true when the external IP timeout fires before the real fetch completes.
+		/// Used in the CAS guard of <see cref="OnFinalizeSetup"/> to warn operators that a
+		/// real external IP arrived after the loopback fallback was already applied.
+		/// </summary>
+		private bool usedFallbackAddress = false;
 
 		/// <summary>
 		/// Finalizes server setup after fetching the external IP address.
@@ -211,7 +219,19 @@ namespace FishMMO.Server.Implementation
 			// Guard against double-initialization — the timeout coroutine may fire
 			// after the real fetch has already completed, or vice versa.
 			if (System.Threading.Interlocked.CompareExchange(ref setupFinalized, 1, 0) != 0)
+			{
+				// The CAS guard rejected this call -- another invocation already
+				// initialized the server. If that call used the loopback fallback,
+				// the real external IP is now arriving too late for registration.
+				if (usedFallbackAddress)
+				{
+					Log.Warning("Server",
+						$"External IP was received AFTER the loopback fallback was already applied. " +
+						$"The real external IP ({remoteAddress}) could not be used. " +
+						$"Operator: update the server config with Address={remoteAddress}");
+				}
 				return;
+			}
 
 			// Cancel the timeout coroutine — the IP fetch succeeded, so the fallback
 			// is not needed. Prevents the coroutine from running for the full 30s
@@ -437,18 +457,24 @@ namespace FishMMO.Server.Implementation
 
 			periodicCallbacks.Clear();
 
-			// 1. Stop accepting new connections first — prevents new clients from starting
-			//    auth handshakes after workers have already been signalled to shut down.
-			NetworkWrapper?.StopServer();
-
-			// 2. Shutdown authenticator workers so no in-flight auth operations remain
-			//    before server behaviours are deinitialized.
+			// 1. Signal worker cancellation FIRST — in-flight auth operations can
+			//    finish broadcasting before the transport is stopped.
+			//    We also drain the main-thread queue so pending broadcasts are flushed.
 			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator authenticator)
 			{
 				authenticator.ShutdownWorkers();
 			}
 
-			// 3. Deinitialize server behaviours — this is safe only after the network is
+			// 2. Brief drain wait for workers to complete their teardown before stopping
+			//    the transport, ensuring pending broadcasts from cancellation callbacks
+			//    are not interrupted by transport teardown.
+			System.Threading.Thread.Sleep(2000);
+
+			// 3. Stop accepting new connections — workers have been signalled and
+			//    drained; no new connections should be accepted.
+			NetworkWrapper?.StopServer();
+
+			// 4. Deinitialize server behaviours — this is safe only after the network is
 			//    stopped and workers have completed, ensuring no callbacks reference
 			//    partially-destroyed components.
 			DeinitializeAllBehaviours();

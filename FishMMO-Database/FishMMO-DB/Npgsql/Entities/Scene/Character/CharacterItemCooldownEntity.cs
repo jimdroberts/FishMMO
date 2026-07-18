@@ -25,7 +25,10 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// </summary>
 		public string Category { get; set; }
 		/// <summary>
-		/// Timestamp (unix) when the cooldown expires.
+		/// Unix timestamp (seconds) when the cooldown expires.
+		/// Stored as <c>double</c> rather than <c>DateTime</c> to maintain
+		/// compatibility with Unity's game time representation and to avoid
+		/// timezone-related serialization issues between the server and client.
 		/// </summary>
 		public double CooldownEnd { get; set; }
 		public DateTime TimeCreated { get; set; }

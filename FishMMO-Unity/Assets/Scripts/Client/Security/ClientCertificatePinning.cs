@@ -217,7 +217,14 @@ namespace FishMMO.Client.Security
 			SubjectPublicKeyInfo spki = SubjectPublicKeyInfoFactory
 				.CreateSubjectPublicKeyInfo(cert.GetPublicKey());
 			byte[] der = spki.GetDerEncoded();
-			byte[] hash = DigestUtilities.CalculateDigest("SHA-256", der);
+			// Use BCL SHA256.Create() + ComputeHash() instead of
+			// DigestUtilities.CalculateDigest("SHA-256", der) because the algorithm
+			// name lookup path in DigestUtilities may fail on AOT/IL2CPP platforms
+			// where dynamic reflection-based type resolution is constrained.
+			// SHA256.HashData(der) is .NET 5+ only — not available in Unity Mono.
+			byte[] hash;
+			using (var sha = System.Security.Cryptography.SHA256.Create())
+				hash = sha.ComputeHash(der);
 			return Convert.ToBase64String(hash);
 		}
 

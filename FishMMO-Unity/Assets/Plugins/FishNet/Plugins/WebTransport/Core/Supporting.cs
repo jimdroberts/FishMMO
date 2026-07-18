@@ -16,8 +16,11 @@ namespace FishNet.Transporting.WebTransport
 		public readonly int ConnectionId;
 		/// <summary>
 		/// The packet data buffer, leased from <see cref="ByteArrayPool"/>.
+		/// Public getter allows reading the buffer; private setter prevents
+		/// external code from replacing the array reference (which could
+		/// orphan the leased buffer in the pool).
 		/// </summary>
-		public byte[] Data;
+		public byte[] Data { get; private set; }
 		/// <summary>
 		/// The number of valid bytes in <see cref="Data"/>.
 		/// </summary>

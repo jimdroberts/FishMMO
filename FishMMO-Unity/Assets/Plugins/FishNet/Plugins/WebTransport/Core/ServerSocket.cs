@@ -230,6 +230,21 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <summary>
 		/// Gets the remote address string for a connected client.
 		/// </summary>
+		/// <returns>
+		/// The remote address as a string, or <see cref="string.Empty"/> if the connection is not found.
+		///
+		/// <para><b>Memory model:</b> The native function <c>wt_server_get_client_address</c> returns
+		/// a pointer to internal static storage within the server's connection struct
+		/// (<c>conn-&gt;remote_addr</c>, a fixed-size char array embedded in <c>wt_server_conn_t</c>).
+		/// This pointer is NOT per-call allocated memory — it lives as long as the connection
+		/// is active in the native server's connection array. No free is required and no
+		/// corresponding free function exists in the C API.</para>
+		///
+		/// <para><b>Thread safety:</b> The returned pointer is atomically guarded by
+		/// <c>atomic_load(&amp;conn-&gt;in_use)</c> in the native code. The C# side marshals
+		/// (copies) the string immediately via <see cref="System.Runtime.InteropServices.Marshal.PtrToStringAnsi"/>,
+		/// so there is no dangling-pointer window on this side.</para>
+		/// </returns>
 		internal string GetConnectionAddress(int connectionId)
 		{
 			if (serverHandle == null || serverHandle.IsInvalid)
@@ -304,6 +319,14 @@ namespace FishNet.Transporting.WebTransport.Server
 		{
 			if (GetConnectionState() != LocalConnectionState.Stopped)
 				return;
+			/* Security: clamp to valid range [1, 100000] to prevent
+			 * resource exhaustion from unbounded input. */
+			if (value < 1 || value > 100000)
+			{
+				UnityEngine.Debug.LogWarning(
+					$"[WebTransport Server] SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {System.Math.Clamp(value, 1, 100000)}.");
+				value = System.Math.Clamp(value, 1, 100000);
+			}
 			maximumClients = value;
 		}
 

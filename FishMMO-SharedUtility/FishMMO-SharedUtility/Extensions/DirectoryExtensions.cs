@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Gets all files recursively inside a root directory with an optional extension.
 		/// </summary>
-		public static HashSet<string> GetAllFiles(string rootDirectory, string extension = "")
+		public static HashSet<string> GetAllFiles(this string rootDirectory, string extension = "")
 		{
 			HashSet<string> files = new HashSet<string>();
 			Stack<string> directories = new Stack<string>();

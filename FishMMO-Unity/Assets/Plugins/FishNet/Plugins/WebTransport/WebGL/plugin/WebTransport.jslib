@@ -219,7 +219,17 @@ mergeInto(LibraryManager.library, {
         /* Track in-flight stream count to avoid exhausting browser limits.
          * Each send creates a new bidirectional stream with FIN; browsers
          * typically cap concurrent streams at ~100. Drop data if we exceed
-         * a safe threshold rather than queuing unboundedly. */
+         * a safe threshold rather than queuing unboundedly.
+         *
+         * Stuck-stream detection threshold: if _pendingStreams stays above 80
+         * for more than 10 seconds, the counter is reset. This prevents
+         * permanent blockage when the browser suspends promise resolution
+         * (e.g., tab backgrounding, mobile sleep).
+         *
+         * NOTE: The 80-stream / 10-second thresholds are hardcoded. In
+         * high-throughput scenarios with many concurrent reliable sends,
+         * these values may need tuning. Consider making them configurable
+         * via a future JS API function if false positives occur. */
         if (!session._pendingStreams) session._pendingStreams = 0;
         if (session._pendingStreams > 80) {
             /* Check for stuck counters: if _pendingStreams has been above

@@ -456,9 +456,16 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
         uint64_t name_len_val;
         /* The varint after the prefix byte encodes the name length.
          * First byte already consumed the 3-bit prefix;
-         * re-read the full varint from the start. */
-        uint8_t raw_first = first & 0x1F; /* mask off 001 prefix */
-        if (raw_first < 32) {
+         * re-read the full varint from the start.
+         *
+         * Per RFC 9204 Section 4.1.1.3, the first byte format is:
+         *   001 N H LLL
+         * where N (bit 4) is the never-indexed flag, H (bit 3) is the
+         * Huffman flag for the name, and LLL (bits 2-0) are the first
+         * 3 bits of the name length.  Previously we masked with 0x1F
+         * (5 bits), incorrectly including N and H as part of the length. */
+        uint8_t raw_first = first & 0x07; /* mask off 001 prefix + N/H flags */
+        if (raw_first < 7) {
             /* Single-byte varint for name length */
             out->name_len = raw_first;
             consumed = 1;
@@ -701,6 +708,14 @@ static QUIC_STATUS h3_stream_send(HQUIC stream, const uint8_t* data,
     return QUIC_STATUS_SUCCESS;
 }
 
+#if 0
+/* ── Dead Code: h3_stream_send_without_fin ──────────────────────────
+ * PRESERVED but DISABLED: This function sends stream data without the
+ * FIN flag. It was originally intended for HTTP/3 frame streaming where
+ * multiple frames are sent on a single stream without closing it.
+ * Current implementation uses h3_stream_send (with FIN) for the simple
+ * SETTINGS and HEADERS exchanges. May be needed if HTTP/3 data frame
+ * streaming is implemented for browser WebTransport in the future. */
 static QUIC_STATUS h3_stream_send_without_fin(HQUIC stream,
                                                const uint8_t* data,
                                                uint32_t len)
@@ -721,6 +736,8 @@ static QUIC_STATUS h3_stream_send_without_fin(HQUIC stream,
     }
     return QUIC_STATUS_SUCCESS;
 }
+
+#endif /* h3_stream_send_without_fin */
 
 /* ═══════════════════════════════════════════════════════════════
  * Stream Reader (buffered, callback-based)
@@ -1054,6 +1071,13 @@ void h3_session_free(h3_session_t* h3)
     free(h3);
 }
 
+#if 0
+/* ── Dead Code: h3_session_accept_stream ───────────────────────────
+ * PRESERVED but DISABLED: This function was the original HTTP/3 stream
+ * acceptance API. The handshake now uses h3_server_handle_stream which
+ * integrates with the state machine for automatic protocol detection
+ * (HTTP/3 vs native). Keeping this for reference in case a separate
+ * accept-stream API is needed for future HTTP/3 work. */
 bool h3_session_accept_stream(h3_session_t* h3, HQUIC stream)
 {
     if (!h3 || !h3->is_server) return false;
@@ -1079,6 +1103,7 @@ bool h3_session_accept_stream(h3_session_t* h3, HQUIC stream)
      * to wt_stream_manager. */
     return false;
 }
+#endif /* h3_session_accept_stream */
 
 int32_t h3_client_connect(h3_session_t* h3,
                           const char* path, const char* authority)
@@ -1307,11 +1332,21 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
             h3->handshake_complete = true;
             h3->server_state = H3_SRV_ESTABLISHED;
 
+            /* ── CRITICAL: Save stream context for data replay ──
+             * The buffered data in sctx->recv_buf was received before
+             * the wt_session was created. Store the sctx so
+             * on_h3_session_ready (in server.cpp) can accept this
+             * stream into the stream_manager and replay the data.
+             * Without this, the first stream's data is silently lost. */
+            h3->native_stream_ctx = sctx;
+
             if (h3->on_ready) {
                 h3->on_ready(h3->callback_ctx, h3->quic_conn, "/", "");
             }
-            /* The raw data in sctx->recv_buf must be replayed to
-             * wt_stream_manager.  The caller is responsible for this. */
+            /* native_stream_ctx consumed (or NULLed) by on_h3_session_ready.
+             * If it was consumed, the stream and data are now managed by
+             * the stream_manager. If on_ready failed, the data is lost
+             * (acceptable — connection is shutting down anyway). */
             return 1;
         }
     }
@@ -1468,6 +1503,14 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
     return 0;
 }
 
+#if 0
+/* ── Dead Code: h3_send_wt_response ───────────────────────────────
+ * PRESERVED but DISABLED: This function sends the 200 OK HEADERS
+ * response on the CONNECT request stream. The 200 OK is now sent
+ * inline in h3_server_process_data after creating the wt_session,
+ * which eliminates the race between session creation and data streams.
+ * May be useful if the response logic is ever separated from the
+ * handshake processing. */
 /**
  * For the CONNECT request stream, send the 200 OK response.
  * Called after h3_server_process_data detects a valid CONNECT.
@@ -1481,3 +1524,4 @@ int32_t h3_send_wt_response(h3_session_t* h3, HQUIC req_stream)
     return (h3_stream_send(req_stream, buf, (uint32_t)len) == QUIC_STATUS_SUCCESS)
            ? 0 : -1;
 }
+#endif /* h3_send_wt_response */

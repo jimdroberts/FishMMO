@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -132,7 +133,7 @@ namespace FishMMO.Shared
 
 			// Strip Port (e.g. :7770) - Handle IPv6 carefully (they use colons)
 			int colonIndex = host.LastIndexOf(':');
-			if (colonIndex >= 0 && !host.Contains("]")) // Simple check if not an IPv6 block
+			if (colonIndex >= 0 && !IPAddress.TryParse(host, out _))
 			{
 				host = host.Substring(0, colonIndex);
 			}

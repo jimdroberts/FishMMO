@@ -56,19 +56,19 @@ namespace FishMMO.Auth.Implementation
 		/// delivers messages on a worker thread, this guard must be replaced with an
 		/// atomic compare-and-swap or lock.</para>
 		/// </summary>
-		private bool srpVerifyProcessed;
+		private volatile bool srpVerifyProcessed;
 
 		/// <summary>
 		/// Guard to ignore duplicate SRP success messages.
 		/// <para>Thread-safety: same single-threaded convention as <see cref="srpVerifyProcessed"/>.</para>
 		/// </summary>
-		private bool srpSuccessProcessed;
+		private volatile bool srpSuccessProcessed;
 
 		/// <summary>
 		/// Guard to prevent echoing the cookie challenge more than once per connection.
 		/// <para>Thread-safety: same single-threaded convention as <see cref="srpVerifyProcessed"/>.</para>
 		/// </summary>
-		private bool cookieEchoed;
+		private volatile bool cookieEchoed;
 
 		/// <summary>Signed auth token from the LoginServer. Persists across connections; used for World/Scene auth.</summary>
 		private byte[]? storedAuthToken;
@@ -508,6 +508,15 @@ namespace FishMMO.Auth.Implementation
 					try
 					{
 						storedAuthToken = SrpService.ClientDecryptAuthToken(encryptedToken, serverToClientKey, receiveNonceCtx, agreedVersion);
+						if (storedAuthToken == null || storedAuthToken.Length == 0)
+						{
+							if (storedAuthToken != null)
+							{
+								CryptographicOperations.ZeroMemory(storedAuthToken);
+							}
+							storedAuthToken = null;
+							_ = Log.Warning(LogPrefix, "Decrypted auth token is null or empty.");
+						}
 					}
 					catch (CryptographicException tokenEx)
 					{

@@ -48,6 +48,12 @@ namespace FishMMO.Server.Implementation
 		/// <summary>CancellationTokenSource for async workers. Created in InitializeWorkers, cancelled in ShutdownWorkers.</summary>
 		protected CancellationTokenSource workerCts;
 
+		/// <summary>
+		/// Token derived from <see cref="workerCts"/> for cooperative cancellation checks
+		/// in fire-and-forget async operations. Set during <see cref="InitializeWorkers"/>.
+		/// </summary>
+		private CancellationToken shutdownToken;
+
 		/// <summary>The engine-independent authenticator core. Created by <see cref="InitializeCoreInstance"/>.</summary>
 		protected abstract BaseAuthenticatorCore<NetworkConnection> Core { get; }
 
@@ -97,6 +103,7 @@ namespace FishMMO.Server.Implementation
 			InitializeCoreInstance();
 			Core.ExpectedGameVersion = MainBootstrapSystem.GameVersion;
 			workerCts = new CancellationTokenSource();
+			shutdownToken = workerCts.Token;
 			Core.InitializeWorkers(workerCts.Token);
 
 			// Operational warning: keying rate limits by FishNet ClientId is only safe
@@ -128,12 +135,14 @@ namespace FishMMO.Server.Implementation
 		public abstract IAccountManager<NetworkConnection> CreateAccountManager();
 
 		/// <summary>
-		/// Unity OnDestroy callback. Ensures async workers are stopped even if the owning
-		/// Server does not call <see cref="ShutdownWorkers"/> (e.g. abnormal teardown).
+		/// Unity OnDestroy callback. Ensures async workers are stopped and network
+		/// event handlers are unregistered even if the owning Server does not call
+		/// <see cref="ShutdownWorkers"/> (e.g. abnormal teardown).
 		/// </summary>
 		private void OnDestroy()
 		{
 			ShutdownWorkers();
+			CleanupNetworkHandlers();
 		}
 
 		/// <summary>Drains the main-thread queue and calls <see cref="Core"/>.Tick() each frame.</summary>
@@ -187,6 +196,29 @@ namespace FishMMO.Server.Implementation
 		/// <summary>Thread-safe enqueue of an action to be executed on the main Unity thread.</summary>
 		protected void EnqueueMainThreadAction(Action action) => mainThreadQueue.Enqueue(action);
 
+		/// <summary>
+		/// Unregisters broadcast handlers and event subscriptions that were registered
+		/// in <see cref="InitializeOnce"/>. Subclasses overriding <see cref="RegisterProtocolHandlers"/>
+		/// should override this method to unregister their protocol-specific handlers as well.
+		/// Called during <see cref="OnDestroy"/> to prevent handler accumulation if the
+		/// authenticator is destroyed and re-initialized.
+		/// </summary>
+		protected virtual void UnregisterProtocolHandlers(NetworkManager networkManager) { }
+
+		/// <summary>
+		/// Cleans up all network event handlers and broadcast registrations created
+		/// during <see cref="InitializeOnce"/>.
+		/// </summary>
+		private void CleanupNetworkHandlers()
+		{
+			if (NetworkManager == null)
+				return;
+
+			NetworkManager.ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+			NetworkManager.ServerManager.UnregisterBroadcast<ClientHandshake>(OnServerClientHandshakeReceived);
+			UnregisterProtocolHandlers(NetworkManager);
+		}
+
 		#endregion
 
 		#region Rate Limit Key Resolution
@@ -234,6 +266,14 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private async Task ProcessConnectionTokenAsync(NetworkConnection conn, string rawToken)
 		{
+			// Snapshot the cancellation token before any await to ensure
+			// shutdown detection is reliable even if workerCts is disposed later.
+			CancellationToken ct = shutdownToken;
+
+			// Bail early if shutdown has been signalled.
+			if (ct.IsCancellationRequested)
+				return;
+
 				// Snapshot Server before any await to prevent nullification during
 				// execution (the property setter may be called from another thread).
 				var server = Server;
@@ -253,12 +293,16 @@ namespace FishMMO.Server.Implementation
 					sha256.ComputeHash(Encoding.UTF8.GetBytes(rawToken)))
 					.Replace("-", "").ToLowerInvariant();
 
+				if (ct.IsCancellationRequested) return;
+
 				if (server?.Database?.ServiceRegistry == null ||
 					!server.Database.ServiceRegistry.TryGet<IConnectionTokenService>(out var svc))
 				{
 					await Log.Debug(LogPrefix, "IConnectionTokenService not registered — token skipped.");
 					return;
 				}
+
+				if (ct.IsCancellationRequested) return;
 
 				var result = await svc.ValidateAndConsumeAsync(tokenHash);
 				if (!result.IsSuccess || result.Data == null)

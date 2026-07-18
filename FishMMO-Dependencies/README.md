@@ -114,6 +114,9 @@ top-level package DLLs) into the Unity `Assets/Dependencies/` folder after build
 | `System.Text.Encodings.Web` | Encoders for JSON / HTML / URL |
 | `System.Text.Json` | High-performance JSON |
 | `System.Threading.Channels` | Producer/consumer queues |
+| `BouncyCastle.Cryptography` | ASN.1 / PKCS12 / PEM certificate parsing and cryptographic primitives used by the Auth project |
+| `Otp.NET` | Time-based one-time password (TOTP) generation and validation for two-factor authentication |
+| `ZString` | Zero-allocation string formatting and UTF-8 encoding for performance-critical paths |
 
 ---
 

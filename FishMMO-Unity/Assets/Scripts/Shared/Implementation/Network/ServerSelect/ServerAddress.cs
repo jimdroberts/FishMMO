@@ -23,6 +23,7 @@ namespace FishMMO.Shared
 		/// real client IP that was visible to the HTTP layer (X-Forwarded-For)
 		/// but is lost through the L4 UDP proxy.
 		/// </summary>
+		[field: SerializeField]
 		public string ConnectionToken;
 	}
 

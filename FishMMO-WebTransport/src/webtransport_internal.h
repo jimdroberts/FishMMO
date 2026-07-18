@@ -13,7 +13,19 @@
 #include <string.h>
 #include <stdio.h>
 
-/* ── Atomics (GCC/Clang builtins, MSVC interlocked intrinsics) ─ */
+/* ── Atomics (GCC/Clang builtins, MSVC interlocked intrinsics) ─
+ *
+ * MEDIUM: These are PLAIN integer types, NOT C11 _Atomic types.
+ * When the macros below are defined (via GCC/Clang __atomic builtins
+ * or MSVC Interlocked intrinsics), operations via atomic_load(),
+ * atomic_store(), atomic_fetch_add(), etc. are correctly atomic.
+ *
+ * WARNING: Direct assignment (e.g. `my_atomic_int = 5;`) or direct
+ * reads (e.g. `int x = my_atomic_int;`) COMPILE SILENTLY but are
+ * NOT ATOMIC — they produce plain memory accesses without proper
+ * memory ordering or atomicity guarantees. ALWAYS use the atomic
+ * macros (atomic_load, atomic_store, atomic_fetch_add, etc.) for
+ * every access to these variables. */
 typedef int atomic_int;
 typedef unsigned int atomic_uint;
 typedef int atomic_bool;    /* always 4 bytes — consistent struct layout across platforms */

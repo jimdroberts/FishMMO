@@ -150,7 +150,7 @@ namespace FishMMO.Shared
 
 			// ── Layers Section ──
 			VisualElement layerSection = CreateConstantsSection("Layers");
-			AddConstantRow(layerSection, "Default", Constants.Layers.Default.ToString());
+			AddConstantRow(layerSection, "Default", Constants.Layers.DefaultLayer.ToString());
 			AddConstantRow(layerSection, "Ignore Raycast", Constants.Layers.IgnoreRaycast.ToString());
 			AddConstantRow(layerSection, "Ground", Constants.Layers.Ground.ToString());
 			AddConstantRow(layerSection, "Obstruction", Constants.Layers.Obstruction.ToString());

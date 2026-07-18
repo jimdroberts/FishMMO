@@ -37,6 +37,7 @@ namespace FishMMO.WebServer
 			catch (Exception ex)
 			{
 				await Log.Error("Program", $"Host terminated unexpectedly: {ex.Message}");
+				Environment.ExitCode = 1;
 			}
 			finally
 			{
@@ -62,6 +63,9 @@ namespace FishMMO.WebServer
 					webBuilder.UseContentRoot(AppContext.BaseDirectory);
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
+							// WebServer:HttpPort accepts both string ("8090") and number (8090) formats
+							// through the configuration binder. This inconsistency is intentional
+							// so operators can use either format in appsettings.json.
 						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8090";
 						// Refuse to start on a malformed port rather than crashing inside Parse.
 						if (!int.TryParse(httpPort, out int port) || port <= 0 || port > 65535)

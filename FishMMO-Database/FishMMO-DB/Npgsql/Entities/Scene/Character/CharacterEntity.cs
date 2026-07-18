@@ -33,7 +33,10 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int SceneHandle { get; set; }
 		/// <summary>Bind point scene name.</summary>
 		public string BindScene { get; set; }
-		/// <summary>Bind point world position X.</summary>
+		/// <summary>
+		/// Bind point world position X.
+		/// Uses <c>float</c> for Unity <c>Vector3</c> compatibility.
+		/// </summary>
 		public float BindX { get; set; }
 		/// <summary>Bind point world position Y.</summary>
 		public float BindY { get; set; }
@@ -41,7 +44,10 @@ namespace FishMMO.Database.Npgsql.Entities
 		public float BindZ { get; set; }
 		/// <summary>Instance ID of the current instance the character occupies (0 if over-world).</summary>
 		public long InstanceID { get; set; }
-		/// <summary>Instance spawn position X.</summary>
+		/// <summary>
+		/// Instance spawn position X.
+		/// Uses <c>float</c> for Unity <c>Vector3</c> compatibility.
+		/// </summary>
 		public float InstanceX { get; set; }
 		/// <summary>Instance spawn position Y.</summary>
 		public float InstanceY { get; set; }
@@ -59,7 +65,12 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int RaceID { get; set; }
 		/// <summary>Character model/prefab index.</summary>
 		public int ModelIndex { get; set; }
-		/// <summary>Current world position X.</summary>
+		/// <summary>
+		/// Current world position X.
+		/// Uses <c>float</c> for direct compatibility with Unity's <c>Vector3</c>.
+		/// Precision is approximately 1.5 cm at 10 km from origin; suitable
+		/// for most game worlds but may exhibit jitter past ~100 km.
+		/// </summary>
 		public float X { get; set; }
 		/// <summary>Current world position Y.</summary>
 		public float Y { get; set; }

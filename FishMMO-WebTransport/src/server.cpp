@@ -51,6 +51,61 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
     session->parent.server = sconn->owner;
     wt_session_wire_callbacks(session);
 
+    /* ── CRITICAL: Native client data replay ──────────────────
+     * If this session was created via native protocol detection
+     * (first byte != 0x00), the first peer stream's data was
+     * buffered in h3's stream context before the wt_session
+     * existed. Accept the stream into the stream manager and
+     * deliver the buffered data to prevent silent data loss on
+     * the very first stream from a native client. */
+    if (sconn->h3_session && sconn->h3_session->native_stream_ctx) {
+        h3_stream_ctx_t* nsctx =
+            (h3_stream_ctx_t*)sconn->h3_session->native_stream_ctx;
+        sconn->h3_session->native_stream_ctx = NULL;
+
+        if (nsctx->recv_buf && nsctx->recv_offset > 0 &&
+            session->stream_mgr) {
+            /* Accept the stream into the stream manager.
+             * After this, the stream_manager owns the QUIC stream
+             * and its callback handler replaces h3_stream_cb. */
+            wt_stream_manager_accept_stream(
+                session->stream_mgr, nsctx->quic_stream);
+
+            /* Look up the stream_id assigned by accept_stream.
+             * Safe: the slot was just booked and no other thread
+             * knows about it yet. */
+            wt_stream_id_t stream_id = 0;
+            for (uint32_t _i = 0; _i < WT_MAX_STREAMS; _i++) {
+                if (session->stream_mgr->streams[_i].quic_stream ==
+                    nsctx->quic_stream) {
+                    stream_id = session->stream_mgr->streams[_i].id;
+                    break;
+                }
+            }
+
+            if (stream_id > 0 &&
+                session->stream_mgr->on_stream_data) {
+                session->stream_mgr->on_stream_data(
+                    session->stream_mgr->callback_ctx,
+                    session->stream_mgr->conn_id,
+                    stream_id,
+                    nsctx->recv_buf,
+                    (int32_t)nsctx->recv_offset);
+            }
+        }
+
+        /* Free the orphaned h3 stream context and its buffer.
+         * The stream's callback has been replaced by the stream_manager,
+         * so h3_stream_cb will never fire again for this stream.
+         * h3_session_free does not track individual stream contexts
+         * (see KNOWN LIMITATION in h3_session_free), so we must
+         * clean up here. */
+        free(nsctx->recv_buf);
+        nsctx->recv_buf = NULL;
+        nsctx->recv_offset = 0;
+        free(nsctx);
+    }
+
     WT_LOG_INFO("Client %llu WebTransport session established (path=%s)",
                 (unsigned long long)sconn->id, path ? path : "/");
     fire_connect(sconn);
@@ -699,9 +754,25 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             uint32_t tail = atomic_fetch_add(
                 &sconn->owner->pending_shutdown_tail, 1);
             if ((tail - head) >= WT_MAX_CLIENTS) {
-                WT_LOG_WARN("Pending shutdown queue overflow — dropping connection %llu (tail %u, head %u, pending %u)",
-                            (unsigned long long)sconn->id, tail, head,
-                            (unsigned)(tail - head));
+                WT_LOG_ERROR("Pending shutdown queue overflow — freeing session for connection %llu immediately (tail %u, head %u)",
+                            (unsigned long long)sconn->id, tail, head);
+                /* ── CRITICAL: Free session immediately ───────────
+                 * The pending shutdown queue is full. Instead of
+                 * silently dropping this connection ID (which would
+                 * leak the session), shut down the session right now.
+                 * We are in SHUTDOWN_COMPLETE on a QUIC callback
+                 * thread — no in-flight sends remain for this
+                 * session, so calling wt_session_shutdown directly
+                 * is safe (it sets released=true, shuts down the
+                 * stream manager, and drops the owner reference). */
+                wt_session_t* overflow_session =
+                    (wt_session_t*)atomic_ptr_load(
+                        &sconn->pending_shutdown_session);
+                if (overflow_session) {
+                    atomic_ptr_store(
+                        &sconn->pending_shutdown_session, NULL);
+                    wt_session_shutdown(overflow_session);
+                }
             } else {
                 sconn->owner->pending_shutdown_queue[
                     tail % WT_MAX_CLIENTS] = sconn->id;

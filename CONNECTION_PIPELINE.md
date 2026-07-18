@@ -59,6 +59,63 @@
 | **SRP-6a + X25519 ECDH** | Zero-knowledge password proof; forward secrecy for session keys |
 | **HMAC-signed auth tokens** | Stateless World/Scene server auth; no LoginServer dependency after login |
 
+### Static Deployment Architecture
+
+```
+                            ┌──────────────────────────────────────────────────────────┐
+                            │                       INTERNET                           │
+                            │  (Public-facing: ports 80/TCP, 443/TCP, 7770-7999/UDP)   │
+                            └──────────┬───────────────┬───────────────────┬───────────┘
+                                       │               │                   │
+                          ┌────────────┴────┐   ┌──────┴───────┐   ┌──────┴───────┐
+                          │   Client 443    │   │  WebSocket   │   │  QUIC/UDP    │
+                          │  (HTTPS API)    │   │   (WebGL)    │   │   :7770-7999 │
+                          │  api.fishmmo.com│   │ play.fishmmo │   │ game.fishmmo │
+                          └────────┬────────┘   └──────┬───────┘   └──────┬───────┘
+                                   │                    │                  │
+                          ┌────────┴────────────────────┴──────────────────┴────────┐
+                          │                   NGINX REVERSE PROXY                   │
+                          │  L4 UDP stream proxy for game ports (:7770-7999)        │
+                          │  L7 HTTPS reverse proxy for web servers (:80/443)       │
+                          │  Rate limiting, TLS termination (web servers only)      │
+                          └──────┬────────────┬────────────────┬───────────────────┘
+                                 │            │                │
+                    ┌────────────┴──┐  ┌──────┴───────┐  ┌────┴──────────┐
+                    │  Web Servers   │  │  Game Servers  │  │  WebGL       │
+                    │  (private)     │  │  (private,     │  │  Static      │
+                    │                │  │   via proxy)   │  │  (private)   │
+                    │  IPFetch :8080 │  │                │  │  :8000       │
+                    │  Patcher :8090 │  │  Login  :7770  │  └─────────────┘
+                    └────────┬───────┘  │  World  :7780  │
+                             │          │  Scene  :7790+ │
+                             │          └────────┬───────┘
+                             │                    │
+                    ┌────────┴────────────────────┴──────────────────────────┐
+                    │                   POSTGRESQL / pgBouncer               │
+                    │  pgBouncer :6432 (connection pooling)                  │
+                    │  PostgreSQL :5432 (database, localhost only)           │
+                    │                                                       │
+                    │  Web servers (IPFetch, Patcher) → DB for config/auth  │
+                    │  LoginServer → DB for accounts, characters, tokens    │
+                    │  WorldServer → DB for signing keys, world state       │
+                    │  SceneServer → DB for scene state, character data     │
+                    └───────────────────────────────────────────────────────┘
+```
+
+**Data flow summary:**
+- **Client → NGINX (HTTPS :443) → IPFetch :8080 / Patcher :8090**: Login server discovery, version check, patching
+- **Client → NGINX (QUIC/UDP :7770-7999) → Login/World/Scene servers**: Gameplay traffic (end-to-end encrypted, NGINX forwards raw UDP)
+- **Client → NGINX (HTTPS :443) → WebGL :8000**: Browser client static assets
+- **All game servers → PostgreSQL**: Persistence (accounts, characters, world state)
+- **IPFetch / Patcher → PostgreSQL**: Auth tokens, version data
+
+**Security domains:**
+- **Public**: Ports 80 (redirect), 443 (HTTPS/WSS), 7770-7999 (QUIC/UDP game ports via NGINX)
+- **Private (localhost only)**: PostgreSQL :5432, pgBouncer :6432
+- **Private (behind NGINX, same host)**: IPFetch :8080, Patcher :8090, WebGL :8000, Game servers (via L4 proxy)
+
+> For a full port listing see the [Port Reference](#port-reference) table below.
+
 ---
 
 ## Infrastructure Topology
@@ -532,6 +589,45 @@ sequenceDiagram
 | **API request signing** | HMAC-SHA256 + timestamp + nonce | Prevents replay of launcher API requests |
 | **TOTP secret encryption** | AES-256 master key | TOTP secrets encrypted at rest in DB |
 
+### Security Incident Response
+
+Quick-reference playbooks for common security incidents. Each scenario assumes the on-call operator has access to the deployment's server configuration files, database credentials, and the `LoginServerSystem` management interface.
+
+#### Token Signing Key Compromise
+
+Suspicion: a signing key used by LoginServer to HMAC-auth tokens has been exposed (e.g., leaked config file, compromised host).
+
+1. **Rotate the signing key** via `LoginServerSystem.RotateSigningKey()` which generates a new HMAC key, wraps it with the KEK, and persists the new row in the `signing_keys` table.
+2. **Revoke all outstanding tokens** by incrementing the deployment's key generation counter, or by calling `TokenService.RevokeAllForLoginServer(loginServerId)`. World/Scene servers will reject existing tokens at the next `CheckTokenRevocationAsync` lookup.
+3. **Force all connected clients to re-authenticate** by restarting World and Scene servers after the rotation so in-memory caches of the old signing key are flushed.
+
+#### DDoS Attack
+
+Suspicion: a flood of connection requests, handshake attempts, or API calls from distributed sources.
+
+1. **Verify NGINX rate limits are active** — check `limit_req_zone` and `limit_conn_zone` counters via `nginx -s reopen` logs or live metrics. Confirm the zones are not exhausted by legitimate traffic.
+2. **Enable stricter limits** — reduce `limit_req` to 5r/s (API) and 1r/s (patch), tighten `limit_conn` to 5 conn/IP. Apply at NGINX edge; no game-server restart required.
+3. **Check nonce cache pressure** — if the `ClientGate` nonce LRU exceeds 20,000 entries, the `Array.Sort` on eviction causes CPU spikes. Consider restarting the IPFetch/Patcher processes to flush the cache.
+4. **If the attack targets QUIC game ports**, the game server's per-IP handshake debounce (250ms) and global cap (500/sec) provide the last line of defense. Monitor `MaxPendingAuthConnections` (10,000) — if hit, legitimate clients are locked out.
+
+#### Account Takeover
+
+Suspicion: a user reports unauthorized access, or an anomaly detection alert fires on an account.
+
+1. **Revoke the account's tokens** via `TokenService.RevokeByUsername(username)` — this forces all active sessions to re-authenticate.
+2. **Force a password reset** by setting `password_change_required` on the account row, which the client will enforce on next login.
+3. **Check TOTP status** — if TOTP was not enabled, or was recently disabled, re-enable it and generate new recovery codes via `CryptoHelper.TwoFactor.GenerateRecoveryCodes()`. Review `lastTotpWindow` for signs of code replay.
+4. **Audit the account's recent auth attempts** via IPFetch or LoginServer logs to identify the source IP of the intrusion.
+
+#### Certificate Compromise
+
+Suspicion: the TLS private key for `game.fishmmo.com` (or `api.fishmmo.com`) has been exposed.
+
+1. **Renew certificates immediately** — run `certbot renew --force-renewal` on the server hosting the affected domain. The certbot deploy hook (`certbot-fishmmo.sh`) copies new certs to `/etc/fishmmo/certs/`.
+2. **Restart all game servers** that terminate QUIC/TLS (LoginServer, WorldServer, SceneServer) — each reads certificate paths from `.cfg` files (`CertificatePath` / `PrivateKeyPath`) at startup.
+3. **Reload NGINX** with `nginx -t && nginx -s reload` to pick up updated web server certificates.
+4. **Verify the new certificate** — check `openssl x509 -in /etc/fishmmo/certs/fullchain.pem -noout -dates` and confirm the private key matches with `openssl pkey -in /etc/fishmmo/certs/privkey.pem -pubout`.
+
 ---
 
 ## Rate Limiting & DDoS Protection
@@ -723,6 +819,98 @@ Application wants to quit
 | `MaxReconnectDelay` | 60s | `ClientConnectionManager.cs` |
 | `WT_MAX_STREAMS` | 1024 | `webtransport_internal.h` |
 | `WT_MAX_CLIENTS` | 4000 (configurable) | `.cfg` files |
+
+---
+
+## Operations
+
+Common operational procedures for FishMMO game servers. These procedures assume ssh access to the deployment host and familiarity with the project's configuration and binary layout.
+
+### Deploy a New Game Server
+
+- **Build the server binary** via the FishMMO Dashboard (Build → Server) targeting the desired platform and server type (Login/World/Scene).
+- **Copy the binary and its `.cfg` file** to the deployment host. Use the appropriate template from `FishMMO-Setup/Production/` (e.g., `SceneServer.cfg` for a new scene server).
+- **Register the server** in the database: insert a row into the `world_scenes` or `login_servers` table with the server's address, port, and metadata. The IPFetch/LoginServer discovery queries read these tables.
+- **Add a new NGINX stream block** via `gen-fishmmo-stream-config.sh` if the server uses a port that hasn't been opened yet, then reload NGINX with `nginx -t && nginx -s reload`.
+- **Verify** by checking server logs for "Initialization Complete" and confirming client connections succeed.
+
+### Rotate Certificates
+
+- **Run certbot renewal** with `certbot renew` on the host that manages TLS certificates. The deploy hook at `FishMMO-Setup/deploy-hooks/certbot-fishmmo.sh` copies renewed certs to `/etc/fishmmo/certs/`.
+- **Reload NGINX** with `nginx -t && nginx -s reload` to pick up new web server certificates.
+- **Restart game servers** (LoginServer, WorldServer, SceneServer) one at a time to minimize downtime. Each reads `CertificatePath` and `PrivateKeyPath` from its `.cfg` file at startup.
+- **Verify** certs with `openssl x509 -in /etc/fishmmo/certs/fullchain.pem -noout -dates` and check the private key matches via modulus comparison.
+
+### Handle a DDoS Attack
+
+- **Enable NGINX edge rate limits** immediately: drop `limit_req` to 5r/s (API), 1r/s (patch), and `limit_conn` to 5 conn/IP. No server restart required; NGINX reloads limits on config change.
+- **Verify game-server defenses** are active: the handshake global cap (500/sec), per-IP debounce (250ms), and pending auth cap (10,000) are compiled-in constants that cannot be changed at runtime — if overwhelmed, consider adding additional NGINX stream proxy nodes.
+- **Check nonce cache pressure** in `ClientGate`: if the LRU exceeds 20,000 entries, the eviction sort causes CPU spikes. Restart IPFetch/Patcher processes to flush the cache.
+- **Scale horizontally** by adding NGINX proxy instances behind a load balancer, then distributing game server ports across them.
+
+### Add a New Scene Server
+
+- **Create a new SceneServer.cfg** based on the Production template, assigning a unique port in the 7790-7999 range.
+- **Deploy the SceneServer binary** with the new config to the target host or container.
+- **Register the scene** in the database via `world_scenes` table: set the scene's `WorldServerID`, `Handle`, `Name`, `Address`, and `Port`. The WorldServer discovers scene servers through this table.
+- **Add an NGINX stream block** for the new UDP port if not already open, then reload NGINX.
+- **Restart the WorldServer** so it picks up the new scene registration (or wait for the next heartbeat cycle if runtime discovery is implemented).
+
+### Common Troubleshooting
+
+- **Server fails to start ("Initialization Complete" not logged):** Check the `.cfg` file path and format. Verify `CertificatePath` and `PrivateKeyPath` exist and are readable. Ensure `Address`/`Port` are not already in use.
+- **Client gets "Token Invalid" on World/Scene connect:** The auth token has expired (default 10 min lifetime) or the signing key was rotated. The client must re-authenticate through the LoginServer. Check that the LoginServer's `SigningKeyKekBase64` is identical across all servers in the deployment.
+- **WebGL client cannot connect:** Verify the browser supports WebTransport (Chromium 97+). Check that CSP headers on `play.fishmmo.com` include `connect-src https://game.fishmmo.com:*`. The server must be compiled with HTTP/3 support enabled.
+- **TLS handshake fails between client and game server:** Ensure the server's certificate is valid for the `game.fishmmo.com` hostname. If using a self-signed cert for development, the client must skip certificate validation (not supported in production builds due to TLS certificate pinning).
+- **Database connection errors:** Verify PostgreSQL is running on `localhost:5432` and pgBouncer on `localhost:6432`. Check the `FISHMMO_CONNECTION_STRING` environment variable or the default connection string in the server configuration.
+
+---
+
+## Configuration Reference
+
+All FishMMO servers read configuration from `.cfg` files in the working directory (e.g., `LoginServer.cfg`, `WorldServer.cfg`, `SceneServer.cfg`). The file format is `Key=Value` with `#`/`;` comments. Keys are case-insensitive. Environment variable overrides follow the pattern `FISHMMO_CONFIG_{KEY}` (where dots, colons, and dashes are replaced with underscores and the name is upper-cased).
+
+### Common Keys (all server types)
+
+| Key | Type | Default | Servers | Description |
+|-----|------|---------|---------|-------------|
+| `ServerName` | string | `"TestName"` | All | Human-readable server instance name shown in logs and window title. |
+| `MaximumClients` | int | `4000` | All | Maximum concurrent client connections. Overrides the FishNet transport default of 100. |
+| `Address` | string | `"127.0.0.1"` | All | Bind address. `127.0.0.1` = loopback (traffic through NGINX proxy). `0.0.0.0` = all interfaces. |
+| `Port` | ushort | `7777` | All | Network port. Defaults: Login=7770, World=7780, Scene=7781 (code default) / 7790 (file default). |
+| `StaleSceneTimeout` | int | `5` | All | Minutes before an unresponsive scene is considered stale and eligible for cleanup. |
+| `CertificatePath` | string | platform-specific | All | PEM certificate path for QUIC/TLS termination. Platform defaults: Linux=`/etc/fishmmo/certs/fullchain.pem`, Windows=`C:\ProgramData\FishMMO\certs\fullchain.pem`, macOS=`/usr/local/share/fishmmo/certs/fullchain.pem`. |
+| `PrivateKeyPath` | string | platform-specific | All | PEM private key path for QUIC/TLS termination. Same platform-specific pattern as `CertificatePath` with `privkey.pem`. |
+
+### LoginServer-Only Keys
+
+| Key | Type | Default | Servers | Description |
+|-----|------|---------|---------|-------------|
+| `AutoVerifyAccounts` | bool (string) | `true` (dev), `false` (prod) | Login | When `true`, new accounts are automatically verified without email confirmation. Must be `false` in production. Only effective in `UNITY_EDITOR` or `DEVELOPMENT_BUILD` builds. |
+| `Smtp:Host` | string | `"localhost"` | Login | SMTP server hostname for sending verification emails. Overridable via `FISHMMO_SMTP_HOST` env var. |
+| `Smtp:Port` | int | `587` | Login | SMTP server port. Production typically uses 465 (implicit TLS). Overridable via `FISHMMO_SMTP_PORT` env var. |
+| `Smtp:Username` | string | `""` | Login | SMTP authentication username. Overridable via `FISHMMO_SMTP_USERNAME` env var. |
+| `Smtp:Password` | string | `""` | Login | SMTP authentication password. Overridable via `FISHMMO_SMTP_PASSWORD` env var. |
+| `Smtp:FromAddress` | string | `"noreply@fishmmo.com"` | Login | Email From address for outgoing verification emails. Overridable via `FISHMMO_SMTP_FROM_ADDRESS` env var. |
+| `Smtp:FromName` | string | `"FishMMO"` | Login | Display name for the From address. Overridable via `FISHMMO_SMTP_FROM_NAME` env var. |
+| `Smtp:UseSsl` | bool (string) | `true` | Login | Enable SSL/TLS for SMTP. Production must be `true`. Overridable via `FISHMMO_SMTP_USE_SSL` env var. |
+
+### Secret Keys (not stored in .cfg files)
+
+These keys are configured via environment variables only and must never be committed to version control or stored in `.cfg` files.
+
+| Key | Env Variable | Type | Servers | Description |
+|-----|-------------|------|---------|-------------|
+| `SigningKeyKekBase64` | `FISHMMO_SIGNING_KEY_KEK_BASE64` | string (base64) | All | 32-byte AES-256 key encryption key (KEK) used to wrap per-LoginServer HMAC signing keys at rest. Must decode to exactly 32 bytes. Must be identical across all servers in the deployment. |
+
+### Configuration Precedence
+
+Values are resolved in the following priority order (highest wins):
+
+1. **Specific environment variable** (e.g., `FISHMMO_SMTP_HOST` for SMTP settings, `FISHMMO_SIGNING_KEY_KEK_BASE64` for the KEK)
+2. **Generic environment variable** (`FISHMMO_CONFIG_{KEY}` where key separators become underscores, e.g., `FISHMMO_CONFIG_SMTP_HOST`)
+3. **`.cfg` file value** from the server's config file in the working directory
+4. **Code-level default** (hardcoded in `CoreServer.cs`, `FishNetNetworkWrapper.cs`, `SmtpService.cs`, etc.)
 
 ---
 

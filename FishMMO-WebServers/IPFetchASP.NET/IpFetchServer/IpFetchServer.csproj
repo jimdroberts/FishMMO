@@ -2,10 +2,15 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <NoWarn>$(NoWarn);CS8618;CS8625;CS8600;CS8601;CS4014</NoWarn>
+    <NoWarn>$(NoWarn);CS8618;CS8625;CS8600;CS8601</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <!--
+      EF Core 5.0.17 is end-of-life and should be upgraded to 8.x when the
+      netstandard2.1 dependency is dropped. Pinned here for compatibility
+      with FishMMO-DB (netstandard2.1).
+    -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="5.0.17" />
   </ItemGroup>
   <ItemGroup>
@@ -28,7 +33,7 @@
     <Copy SourceFiles="..\..\..\FishMMO-Setup\Development\appsettings.IpFetchServer.Development.json"
           DestinationFiles="$(OutDir)appsettings.Development.json"
           SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\..\FishMMO-Setup\Release\appsettings.IpFetchServer.Production.json"
+    <Copy SourceFiles="..\..\..\FishMMO-Setup\Production\appsettings.IpFetchServer.Production.json"
           DestinationFiles="$(OutDir)appsettings.Production.json"
           SkipUnchangedFiles="true" />
   </Target>

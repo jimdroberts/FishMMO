@@ -81,6 +81,9 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ulong GetPercentOf(this ulong number, ulong percent)
 		{
+			// Guard against division by zero
+			if (percent == 0) return 0;
+
 			// Guard against overflow: if number * percent would exceed ulong.MaxValue,
 			// use division-first approach to avoid silent wrap-around.
 			if (number > ulong.MaxValue / percent)

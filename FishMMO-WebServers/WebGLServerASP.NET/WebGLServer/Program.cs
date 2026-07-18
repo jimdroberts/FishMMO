@@ -37,6 +37,7 @@ namespace FishMMO.WebServer
 			catch (Exception ex)
 			{
 				await Log.Error("Program", $"Host terminated unexpectedly: {ex.Message}");
+				Environment.ExitCode = 1;
 			}
 			finally
 			{
@@ -62,6 +63,9 @@ namespace FishMMO.WebServer
 					webBuilder.UseContentRoot(AppContext.BaseDirectory);
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
+								// WebServer:HttpPort accepts both string ("8000") and number (8000) formats
+								// through the configuration binder. This inconsistency is intentional
+								// so operators can use either format in appsettings.json.
 						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8000";
 						if (!int.TryParse(httpPort, out int port) || port <= 0 || port > 65535)
 						{
@@ -168,6 +172,11 @@ namespace FishMMO.WebServer
 							if (!h.ContainsKey("Content-Security-Policy"))
 								h["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' wss://game.fishmmo.com:* https://game.fishmmo.com:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 						});
+						// NOTE: ClientGate (UseFishMMOClientGate) is intentionally NOT used
+						// here. Browsers cannot add custom headers (X-FishMMO-Client) to static
+						// file requests served via <script> / <link> / <img> tags, so the gate
+						// would reject legitimate WebGL asset loads. Access control relies on the
+						// rate limiter and CSP headers instead.
 						app.UseCors("Public");
 						app.UseRateLimiter();
 

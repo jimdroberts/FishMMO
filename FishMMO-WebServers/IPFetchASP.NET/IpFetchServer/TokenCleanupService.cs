@@ -34,6 +34,11 @@ namespace FishMMO.WebServer
 				{
 					await Task.Delay(cleanupInterval, stoppingToken);
 					using var db = dbFactory.CreateDbContext();
+					// Uses raw SQL (ExecuteSqlRawAsync) instead of EF LINQ because the query is a
+					// simple DELETE with no user-supplied parameters -- there is no risk of SQL
+					// injection. Bypassing the EF change tracker is intentional: this is an
+					// idempotent maintenance task that should not load entities into memory or
+					// track changes. The EF Core provider translates the SQL directly.
 					int deleted = await db.Database.ExecuteSqlRawAsync(
 						"DELETE FROM connection_tokens WHERE expires_at < NOW()",
 						stoppingToken);

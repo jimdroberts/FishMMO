@@ -93,6 +93,13 @@ namespace FishMMO.Client
 		/// The default screen height for the launcher window.
 		/// </summary>
 		public int DefaultScreenHeight = 768;
+		/// <summary>
+		/// Timeout in seconds for the addressable scene load watchdog.
+		/// If the scene load takes longer than this, the Play button is re-enabled so the player can retry.
+		/// </summary>
+		[Tooltip("Timeout in seconds for the addressable scene load watchdog.")]
+		[SerializeField]
+		private float launchWatchdogTimeoutSeconds = 30f;
 		#endregion
 
 		#region DEPENDENCIES (Injected via Inspector)
@@ -529,7 +536,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private System.Collections.IEnumerator LaunchWatchdog()
 		{
-			yield return new WaitForSeconds(30f);
+			yield return new WaitForSeconds(launchWatchdogTimeoutSeconds);
 			isLaunching = false;
 			SetLauncherState(LauncherState.LaunchFailed,
 				"Scene load timed out. Check that Addressable bundles are built and up to date.");

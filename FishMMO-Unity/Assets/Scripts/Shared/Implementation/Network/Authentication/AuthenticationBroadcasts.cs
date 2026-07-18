@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using FishNet.Broadcast;
 using FishMMO.Auth.Core;
 
@@ -230,10 +231,15 @@ namespace FishMMO.Shared
 	/// DO NOT reorder <see cref="OtpauthUri"/> and <see cref="RecoveryCodes"/>.
 	/// </para>
 	/// </summary>
+	[StructLayout(LayoutKind.Sequential)]
 	public struct TwoFactorSetupBroadcast : IBroadcast
 	{
 		/// <summary>
 		/// Encrypted otpauth:// URI for authenticator app setup (AES-GCM, server->client).
+		///
+		/// WARNING: FIELD ORDER IS WIRE PROTOCOL -- DO NOT REORDER.
+		/// The nonce-derivation scheme depends on field declaration order
+		/// matching FishNet serialization order. See struct remarks.
 		///
 		/// WARNING: Declaration order IS the wire protocol (see struct remarks).
 		/// This field MUST remain declared before <see cref="RecoveryCodes"/>.

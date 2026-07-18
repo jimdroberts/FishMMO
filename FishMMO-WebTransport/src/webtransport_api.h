@@ -14,6 +14,15 @@
  * to the Unity main thread. The poll functions (wt_server_poll, wt_client_poll)
  * are safe to call from any thread and drain internal queues.
  *
+ * IMPORTANT: All send functions (wt_server_send_stream, wt_server_send_datagram,
+ * wt_client_send_stream, wt_client_send_datagram) and wt_server_disconnect /
+ * wt_client_disconnect MUST be called from the SAME thread that calls the
+ * corresponding poll function (wt_server_poll / wt_client_poll). Calling send
+ * from a different thread creates a use-after-free race: deferred session
+ * shutdowns processed on the poll thread may free session resources between
+ * the send call and the underlying MsQuic send on the other thread. Each
+ * function's @thread_safety annotation repeats this requirement.
+ *
  * ## Channel Mapping
  *
  * FishNet uses two channels:
@@ -205,8 +214,12 @@ WT_API void wt_server_stop(WT_SERVER server);
  *
  * @return WT_OK (0) on success, negative on failure.
  *
- * @thread_safety Safe to call from the application thread (same thread
- *                that calls wt_server_poll). Not safe from QUIC callbacks.
+ * @thread_safety MUST be called from the SAME thread that calls
+ *                wt_server_poll. Calling from a different thread
+ *                creates a use-after-free race: wt_session_shutdown
+ *                (deferred to the poll thread) may free the session
+ *                between the acquire and send on the other thread.
+ *                NOT safe to call from QUIC callbacks.
  */
 WT_API int32_t wt_server_send_stream(
     WT_SERVER           server,
@@ -220,8 +233,12 @@ WT_API int32_t wt_server_send_stream(
  *
  * @return WT_OK (0) on success, negative on failure.
  *
- * @thread_safety Safe to call from the application thread (same thread
- *                that calls wt_server_poll). Not safe from QUIC callbacks.
+ * @thread_safety MUST be called from the SAME thread that calls
+ *                wt_server_poll. Calling from a different thread
+ *                creates a use-after-free race: wt_session_shutdown
+ *                (deferred to the poll thread) may free the session
+ *                between the acquire and send on the other thread.
+ *                NOT safe to call from QUIC callbacks.
  */
 WT_API int32_t wt_server_send_datagram(
     WT_SERVER           server,
@@ -359,8 +376,12 @@ WT_API void wt_server_poll(WT_SERVER server, int32_t timeout_us);
  *
  * @return WT_OK (0) on success, negative on failure.
  *
- * @thread_safety Safe to call from the application thread (same thread
- *                that calls wt_client_poll). Not safe from QUIC callbacks.
+ * @thread_safety MUST be called from the SAME thread that calls
+ *                wt_client_poll. Calling from a different thread
+ *                creates a use-after-free race: wt_session_shutdown
+ *                (deferred to the poll thread) may free the session
+ *                between the acquire and send on the other thread.
+ *                NOT safe to call from QUIC callbacks.
  */
 WT_API int32_t wt_client_send_stream(
     WT_CLIENT       client,
@@ -372,8 +393,12 @@ WT_API int32_t wt_client_send_stream(
  *
  * @return WT_OK (0) on success, negative on failure.
  *
- * @thread_safety Safe to call from the application thread (same thread
- *                that calls wt_client_poll). Not safe from QUIC callbacks.
+ * @thread_safety MUST be called from the SAME thread that calls
+ *                wt_client_poll. Calling from a different thread
+ *                creates a use-after-free race: wt_session_shutdown
+ *                (deferred to the poll thread) may free the session
+ *                between the acquire and send on the other thread.
+ *                NOT safe to call from QUIC callbacks.
  */
 WT_API int32_t wt_client_send_datagram(
     WT_CLIENT       client,

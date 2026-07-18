@@ -48,12 +48,18 @@ namespace FishMMO.Shared
 		{
 			/// <summary>
 			/// Display name of the game project, used in UI labels and window titles.
+			///
+			/// <para>
+			/// <c>static readonly</c> rather than <c>const</c> to allow the name to be
+			/// overridden by a config file or branding patch without recompiling.
+			/// </para>
 			/// </summary>
 			public static readonly string ProjectName = "FishMMO";
 
 			/// <summary>
 			/// File name of the client executable. Platform-conditional:
 			/// Windows uses ".exe" suffix; Linux and macOS omit it.
+			/// <c>static readonly</c> required because of the <c>#if</c> conditional compilation.
 			/// </summary>
 			public static readonly string ClientExecutable =
 #if UNITY_STANDALONE_WIN
@@ -67,6 +73,7 @@ namespace FishMMO.Shared
 			/// <summary>
 			/// File name of the updater executable. Platform-conditional:
 			/// Windows uses ".exe" suffix; Linux and macOS omit it.
+			/// <c>static readonly</c> required because of the <c>#if</c> conditional compilation.
 			/// </summary>
 			public static readonly string UpdaterExecutable =
 #if UNITY_STANDALONE_WIN
@@ -79,12 +86,24 @@ namespace FishMMO.Shared
 
 			/// <summary>
 			/// Relative path to the FishMMO-Setup directory containing deployment config files.
+			///
+			/// <para>
+			/// <c>static readonly</c> rather than <c>const</c> to allow future runtime
+			/// configuration (e.g. from a setup config file or environment variable).
+			/// </para>
 			/// </summary>
 			public static readonly string SetupDirectory = "FishMMO-Setup";
 
 			/// <summary>
 			/// Unified API Host URL. NGINX routes to the correct backend by path.
-			/// Change this constant when deploying to a different domain.
+			///
+			/// <para>
+			/// This is a <c>const</c> — the canonical deployment domain is baked
+			/// at compile time. Changing the deployment domain requires a rebuild.
+			/// For development/testing against different servers, use the
+			/// <see cref="GlobalSettings"/> override mechanism (see
+			/// <c>ApiHostResolver</c>) instead of modifying this constant.
+			/// </para>
 			/// </summary>
 			public const string APIHost = "https://api.fishmmo.com/";
 
@@ -92,17 +111,35 @@ namespace FishMMO.Shared
 			/// Game server hostname. All clients (standalone + WebGL) connect via
 			/// WebTransport (QUIC/HTTP3) to https://GameHost:{port}. NGINX forwards
 			/// raw UDP to the correct backend game server on loopback.
-			/// Change this constant when deploying to a different domain.
+			///
+			/// <para>
+			/// This is a <c>const</c> — the canonical deployment domain is baked
+			/// at compile time. Changing the deployment domain requires a rebuild.
+			/// For development/testing against different servers, use the
+			/// <see cref="GlobalSettings"/> override mechanism (see
+			/// <c>ApiHostResolver</c>) instead of modifying this constant.
+			/// </para>
 			/// </summary>
 			public const string GameHost = "game.fishmmo.com";
 
 			/// <summary>
 			/// Root path for Unity scene assets.
+			///
+			/// <para>
+			/// <c>static readonly</c> (not <c>const</c>) so that downstream references
+			/// resolve at runtime and can be replaced for specialized layouts.
+			/// </para>
 			/// </summary>
 			public static readonly string ScenePath = "Assets/Scenes/";
 
 			/// <summary>
 			/// Root path for bootstrap scene assets.
+			///
+			/// <para>
+			/// NOTE: Currently identical to <see cref="ScenePath"/> by design. Both bootstrap and regular
+			/// scenes live under the same root tree. If the bootstrap scenes are ever moved to a separate
+			/// directory, update this value independently of <see cref="ScenePath"/>.
+			/// </para>
 			/// </summary>
 			public static readonly string BootstrapScenePath = "Assets/Scenes/";
 
@@ -135,9 +172,9 @@ namespace FishMMO.Shared
 		public static class Layers
 		{
 			/// <summary>
-			/// Default layer (Layer 0), used for most GameObjects.
+			/// DefaultLayer (Layer 0), used for most GameObjects.
 			/// </summary>
-			public static readonly LayerMask Default = LayerMask.NameToLayer("Default");
+			public static readonly LayerMask DefaultLayer = LayerMask.NameToLayer("Default");
 
 			/// <summary>
 			/// Ignore Raycast layer, used for UI and non-interactive objects.
@@ -160,6 +197,16 @@ namespace FishMMO.Shared
 			/// </summary>
 			public static readonly LayerMask Player = LayerMask.NameToLayer("Player");
 
+			static Layers()
+			{
+				var missing = Validate();
+				if (missing.Count > 0)
+				{
+					UnityEngine.Debug.LogWarning("[Constants.Layers] Missing layer(s): " + string.Join(", ", missing) + ". "
+					+ "Check Project Settings > Tags and Layers.");
+				}
+			}
+
 			/// <summary>
 			/// Validates that all required layers exist in the project's Tag Manager.
 			/// Returns a list of missing layer names, or an empty list if all are present.
@@ -170,7 +217,7 @@ namespace FishMMO.Shared
 				var missing = new System.Collections.Generic.List<string>();
 				void Check(int layer, string name) { if (layer < 0) missing.Add(name); }
 
-				Check(Default, "Default");
+				Check(DefaultLayer, "Default");
 				Check(IgnoreRaycast, "Ignore Raycast");
 				Check(Ground, "Ground");
 				Check(Player, "Player");
@@ -221,6 +268,7 @@ namespace FishMMO.Shared
 
 			/// <summary>
 			/// Gravity vector applied to characters.
+			/// <c>static readonly</c> because <see cref="Vector3"/> is a non-primitive type and cannot be <c>const</c>.
 			/// </summary>
 			public static readonly Vector3 Gravity = new Vector3(0, -14.0f, 0);
 		}

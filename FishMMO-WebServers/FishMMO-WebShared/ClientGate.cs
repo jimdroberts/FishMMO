@@ -275,6 +275,17 @@ namespace FishMMO.WebShared
                     Log.Warning(LogChannel, $"Nonce cache exceeded {NonceCacheCapacity}; evicting {target} oldest entries.");
                     // Re-snapshot post-expiry. Use Array.Sort so we operate on a fully
                     // detached copy instead of an OrderBy enumerator over the live dict.
+                    //
+                    // NOTE: Array.Sort is O(n log n) and runs under pruneLock, which
+                    // serialises all concurrent eviction attempts. During a sustained
+                    // flood attack, the 5-second throttle in MaybePruneNonceCache prevents
+                    // this sort from being invoked more than once every ~5 seconds, so the
+                    // cost is bounded. However, at NonceCacheCapacity=20000, a full sort of
+                    // the snapshot adds measurable latency on the request thread that wins
+                    // the lock after a burst.
+                    // TODO: Replace the full-sort LRU with a sampling-based eviction strategy
+                    // (e.g., evict from a random subset of entries) to keep eviction O(1) and
+                    // avoid stalling the request pipeline under attack.
                     var liveSnapshot = seenNonces.ToArray();
                     Array.Sort(liveSnapshot, (a, b) => a.Value.CompareTo(b.Value));
                     int evictCount = Math.Min(target, liveSnapshot.Length);

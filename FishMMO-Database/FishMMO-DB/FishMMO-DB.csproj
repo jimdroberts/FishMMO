@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <!--
+      Intentionally targeting netstandard2.1 for Unity compatibility.
+      The Microsoft.Extensions.* 9.0.4 packages are compatible with
+      netstandard2.1; the version gap between netstandard2.1 and
+      the 9.0.x NuGet packages is intentional and supported.
+    -->
     <TargetFramework>netstandard2.1</TargetFramework>
     <RootNamespace>FishMMO.Database</RootNamespace>
     <Nullable>enable</Nullable>

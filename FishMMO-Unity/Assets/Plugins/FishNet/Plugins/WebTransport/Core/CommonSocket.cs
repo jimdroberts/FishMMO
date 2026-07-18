@@ -46,6 +46,15 @@ namespace FishNet.Transporting.WebTransport
 			if (this.connectionState == connectionState)
 				return;
 
+			/* Guard: transport may be null if Initialize() was not called before SetConnectionState.
+			 * This can happen during error-recovery paths where the socket is torn down before
+			 * it was fully initialized. Silently return instead of throwing NullReferenceException. */
+			if (transport == null)
+			{
+				UnityEngine.Debug.LogWarning($"[WebTransport] SetConnectionState({connectionState}, {asServer}) skipped: transport is null. Was Initialize() called?");
+				return;
+			}
+
 			this.connectionState = connectionState;
 			if (asServer)
 				transport.HandleServerConnectionState(new ServerConnectionStateArgs(connectionState, transport.Index));

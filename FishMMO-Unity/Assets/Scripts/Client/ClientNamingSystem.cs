@@ -55,7 +55,7 @@ namespace FishMMO.Client
 			string workingDirectory = Constants.GetWorkingDirectory();
 			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
 			{
-				idToName[type] = DictionaryExtensions.ReadFromGZipFile(Path.Combine(workingDirectory, type.ToString() + ".bin"));
+				idToName[type] = DictionaryCompression.ReadFromGZipFile(null, Path.Combine(workingDirectory, type.ToString() + ".bin"));
 			}
 
 			Dictionary<long, string> characterNames = idToName[NamingSystemType.CharacterName];

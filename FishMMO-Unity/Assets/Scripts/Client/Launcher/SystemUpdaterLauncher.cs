@@ -41,6 +41,11 @@ namespace FishMMO.Client
 		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
 		public IEnumerator LaunchUpdater(string updaterPath, string currentClientVersion, string latestServerVersion, Action onComplete, Action<string> onError)
 		{
+#if UNITY_WEBGL && !UNITY_EDITOR
+			Log.Error("SystemUpdaterLauncher", "LaunchUpdater is not supported on WebGL platform.");
+			onError?.Invoke("Updater is not supported on WebGL. Please use a desktop client.");
+			yield break;
+#else
 			// Check if the updater executable exists before launching
 			if (!System.IO.File.Exists(updaterPath))
 			{
@@ -153,6 +158,10 @@ namespace FishMMO.Client
 				yield return new WaitForSeconds(PollIntervalSeconds);
 			}
 
+			// WaitForExit ensures the process handle is fully updated before reading ExitCode.
+			// Without this, reading ExitCode can throw InvalidOperationException in the
+			// normal exit path (not just the timeout path).
+			process.WaitForExit();
 			int exitCode = process.ExitCode;
 			process.OutputDataReceived -= outputHandler;
 			process.ErrorDataReceived -= errorHandler;
@@ -167,6 +176,7 @@ namespace FishMMO.Client
 			{
 				onError?.Invoke($"Updater process exited with code {exitCode}. See logs for details.");
 			}
+#endif
 		}
 	}
 }

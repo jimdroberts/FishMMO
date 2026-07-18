@@ -179,11 +179,10 @@ namespace FishMMO.Client
 				return string.Empty;
 			}
 
-			string colorTag = "";
-			string sizeTag = "";
-			string alignTag = "";
-			string tmpTagOpen = "";
-			string tmpTagClose = "";
+			// Collect all open tags in open order, then derive close tags by reversing.
+			// This ensures proper LIFO nesting regardless of CSS style attribute order,
+			// and guarantees each open tag gets exactly one close tag.
+			List<string> openTags = new List<string>();
 
 			string styleAttributes = node.GetAttributeValue("style", "");
 			if (!string.IsNullOrEmpty(styleAttributes))
@@ -196,26 +195,22 @@ namespace FishMMO.Client
 					switch (prop)
 					{
 						case "color":
-							colorTag = $"<color={value}>";
-							tmpTagClose = "</color>" + tmpTagClose;
+							openTags.Add($"<color={value}>");
 							break;
 						case "font-size":
 							if (value.EndsWith("%") && float.TryParse(value.Replace("%", ""), out float percentage))
 							{
-								sizeTag = $"<size={(int)(percentage)}> ";
-								tmpTagClose = "</size>" + tmpTagClose;
+								openTags.Add($"<size={(int)(percentage)}>");
 							}
 							else if (value.EndsWith("px") && float.TryParse(value.Replace("px", ""), out float pxValue))
 							{
-								sizeTag = $"<size={(int)(pxValue * HtmlPxToTmpSizeFactor)}> ";
-								tmpTagClose = "</size>" + tmpTagClose;
+								openTags.Add($"<size={(int)(pxValue * HtmlPxToTmpSizeFactor)}>");
 							}
 							break;
 						case "text-align":
 							if (value == "center" || value == "left" || value == "right" || value == "justify")
 							{
-								alignTag = $"<align=\"{value}\">";
-								tmpTagClose = "</align>" + tmpTagClose;
+								openTags.Add($"<align=\"{value}\">");
 							}
 							break;
 					}
@@ -225,17 +220,17 @@ namespace FishMMO.Client
 			bool isBlockElement = false;
 			switch (node.Name.ToLower())
 			{
-				case "h1": tmpTagOpen += "<size=180%><B>"; tmpTagClose = "</B></size>" + tmpTagClose; isBlockElement = true; break;
-				case "h2": tmpTagOpen += "<size=150%><B>"; tmpTagClose = "</B></size>" + tmpTagClose; isBlockElement = true; break;
-				case "h3": tmpTagOpen += "<size=130%><B>"; tmpTagClose = "</B></size>" + tmpTagClose; isBlockElement = true; break;
+				case "h1": openTags.Add("<size=180%>"); openTags.Add("<B>"); isBlockElement = true; break;
+				case "h2": openTags.Add("<size=150%>"); openTags.Add("<B>"); isBlockElement = true; break;
+				case "h3": openTags.Add("<size=130%>"); openTags.Add("<B>"); isBlockElement = true; break;
 				case "h4":
 				case "h5":
-				case "h6": tmpTagOpen += "<B>"; tmpTagClose = "</B>" + tmpTagClose; isBlockElement = true; break;
+				case "h6": openTags.Add("<B>"); isBlockElement = true; break;
 				case "strong":
-				case "b": tmpTagOpen += "<B>"; tmpTagClose = "</B>" + tmpTagClose; break;
+				case "b": openTags.Add("<B>"); break;
 				case "em":
-				case "i": tmpTagOpen += "<I>"; tmpTagClose = "</I>" + tmpTagClose; break;
-				case "u": tmpTagOpen += "<U>"; tmpTagClose = "</U>" + tmpTagClose; break;
+				case "i": openTags.Add("<I>"); break;
+				case "u": openTags.Add("<U>"); break;
 				case "li": sb.Append("• "); break;
 				case "br": sb.AppendLine(); return sb.ToString();
 				case "hr": sb.AppendLine("----------------------------------------"); sb.AppendLine(); return sb.ToString();
@@ -243,8 +238,8 @@ namespace FishMMO.Client
 					string href = node.GetAttributeValue("href", "");
 					if (!string.IsNullOrEmpty(href))
 					{
-						tmpTagOpen += $"<color=#00FF00><link=\"{href}\">";
-						tmpTagClose = "</link></color>" + tmpTagClose;
+						openTags.Add("<color=#00FF00>");
+						openTags.Add($"<link=\"{href}\">");
 					}
 					break;
 				case "ul":
@@ -260,17 +255,37 @@ namespace FishMMO.Client
 				sb.AppendLine();
 			}
 
-			sb.Append(alignTag);
-			sb.Append(sizeTag);
-			sb.Append(colorTag);
-			sb.Append(tmpTagOpen);
+			// Build the open tag string by concatenating tags in order
+			foreach (string tag in openTags)
+			{
+				sb.Append(tag);
+			}
 
 			foreach (HtmlNode child in node.ChildNodes)
 			{
 				sb.Append(ConvertHtmlNodeToTmpText(child, depth + 1));
 			}
 
-			sb.Append(tmpTagClose);
+			// Build and append close tags by reversing the open order.
+			// Each open tag maps to its corresponding close tag.
+			for (int i = openTags.Count - 1; i >= 0; i--)
+			{
+				string tag = openTags[i];
+				if (tag.StartsWith("<color=", StringComparison.Ordinal))
+					sb.Append("</color>");
+				else if (tag.StartsWith("<size=", StringComparison.Ordinal))
+					sb.Append("</size>");
+				else if (tag.StartsWith("<align=", StringComparison.Ordinal))
+					sb.Append("</align>");
+				else if (tag.StartsWith("<link=", StringComparison.Ordinal))
+					sb.Append("</link>");
+				else if (tag == "<B>")
+					sb.Append("</B>");
+				else if (tag == "<I>")
+					sb.Append("</I>");
+				else if (tag == "<U>")
+					sb.Append("</U>");
+			}
 
 			if (isBlockElement && sb.Length > 0 && sb[sb.Length - 1] != '\n')
 			{

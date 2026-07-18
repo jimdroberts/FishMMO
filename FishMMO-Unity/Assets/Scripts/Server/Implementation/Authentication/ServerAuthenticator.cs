@@ -3,6 +3,7 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database;
 using FishMMO.Database.Data;
+using FishMMO.Server.Core.Collections;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
 using System.Net;
@@ -26,6 +27,15 @@ namespace FishMMO.Server.Implementation
 	{
 		/// <summary>Lifetime of issued auth tokens, in minutes. Configurable via the Unity Inspector.</summary>
 		[SerializeField] private float tokenExpirationMinutes = 10f;
+
+		/// <summary>
+		/// Per-IP rate limiter for token revocation broadcasts. Prevents unauthenticated
+		/// clients from triggering DB queries at high frequency (DoS vector).
+		/// Limits to 1 revocation attempt per 5 seconds per IP.
+		/// </summary>
+		private readonly ExpiringKeyTracker<string> revokeRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		private static readonly TimeSpan RevokeRateLimitDuration = TimeSpan.FromSeconds(5);
 
 		/// <summary>The SRP-specific core instance. Null until <see cref="InitializeCoreInstance"/> is called.</summary>
 		private ServerAuthenticatorCore core;
@@ -125,6 +135,16 @@ namespace FishMMO.Server.Implementation
 			// Validate payload bounds up front on the network thread; defer DB work to a Task.
 			if (msg.Token == null || msg.Token.Length == 0 || msg.Token.Length > 4096)
 			{
+				return;
+			}
+
+			// Per-IP rate limiting: prevent unauthenticated clients from triggering DB
+			// queries at high frequency (DoS vector). Limit to 1 attempt per 5 seconds per IP.
+			string ip = conn.GetAddress();
+			if (!string.IsNullOrEmpty(ip) &&
+				!revokeRateLimiter.TryBegin(ip, DateTime.UtcNow, RevokeRateLimitDuration))
+			{
+				_ = Log.Warning(LogPrefix, $"Revoke token rate limited for IP {ip}.");
 				return;
 			}
 

@@ -4,8 +4,14 @@ using Npgsql;
 
 Console.WriteLine("FishMMO DB Migrator starting...");
 
-string connectionString = Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_STRING")
-    ?? "Host=127.0.0.1;Port=5432;Database=fish_mmo_postgresql;Username=user;Password=pass";
+string? connectionString = Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_STRING");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    Console.Error.WriteLine("FATAL: FISHMMO_CONNECTION_STRING environment variable is not set. "
+        + "The Migrator requires a database connection string to apply migrations. "
+        + "Example: FISHMMO_CONNECTION_STRING=\"Host=127.0.0.1;Port=5432;Database=fish_mmo;Username=fishmmo;Password=...\"");
+    return 1;
+}
 
 const int maxRetries = 3;
 const int retryDelayMs = 2000;

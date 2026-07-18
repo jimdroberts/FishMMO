@@ -26,6 +26,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static Configuration? GlobalSettings { get; private set; }
 
+		private static int nextInstanceId = 0;
+
+		private readonly int instanceId;
+
 		private CultureInfo cultureInfo = CultureInfo.InvariantCulture;
 
 		/// <summary>
@@ -93,6 +97,7 @@ namespace FishMMO.Shared
 			{
 				throw new ArgumentNullException(nameof(defaultFileDirectory), "Default file directory cannot be null or empty.");
 			}
+			instanceId = Interlocked.Increment(ref nextInstanceId);
 			DefaultFileDirectory = defaultFileDirectory;
 		}
 
@@ -168,10 +173,10 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Acquire locks in a consistent order (by identity hash code) to prevent
+			// Acquire locks in a consistent order (by unique instance ID) to prevent
 			// deadlock when two threads call a.Combine(b) and b.Combine(a) concurrently.
 			// Always copies FROM other TO this, regardless of lock acquisition order.
-			bool lockSelfFirst = RuntimeHelpers.GetHashCode(this) < RuntimeHelpers.GetHashCode(other);
+			bool lockSelfFirst = this.instanceId < other.instanceId;
 
 			if (lockSelfFirst)
 			{
@@ -294,11 +299,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Removes the UTF-8 Byte Order Mark (BOM) from a string and any null characters.
-		/// This is crucial for correctly parsing files that might have been saved with a BOM.
+		/// Removes the UTF-8 Byte Order Mark (BOM) from the beginning of a string if present.
 		/// </summary>
 		/// <param name="s">The input string.</param>
-		/// <returns>The string with BOM and null characters removed.</returns>
+		/// <returns>The string with BOM removed if present.</returns>
 		private string RemoveBOM(string s)
 		{
 			// Gets the UTF-8 BOM as a string.
@@ -309,8 +313,7 @@ namespace FishMMO.Shared
 				// Removes the BOM from the beginning of the string.
 				s = s.Remove(0, bomMarkUtf8.Length);
 			}
-			// Removes any null characters that might appear if the file was read with incorrect encoding.
-			return s.Replace("\0", "");
+			return s;
 		}
 
 		/// <summary>

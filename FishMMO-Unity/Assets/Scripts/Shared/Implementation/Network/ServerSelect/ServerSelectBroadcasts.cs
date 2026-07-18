@@ -18,7 +18,9 @@ namespace FishMMO.Shared
 	public struct ServerListBroadcast : IBroadcast
 	{
 		/// <summary>
-		/// List of available world servers.
+		/// List of available world servers. Each entry is a <see cref="WorldServerDetails"/>
+		/// defined in the <c>FishMMO.Shared</c> namespace at
+		/// <see cref="WorldServerDetails"/> (file: Network/WorldServerDetails.cs).
 		///
 		/// WARNING: FishNet serializes this list by iterating over it.
 		/// Any modifications (add/remove/clear) during serialization cause

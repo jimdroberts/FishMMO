@@ -35,6 +35,7 @@ namespace FishMMO.WebServer
 			catch (Exception ex)
 			{
 				await Log.Error("Program", $"Host terminated unexpectedly: {ex.Message}");
+				Environment.ExitCode = 1;
 			}
 			finally
 			{
@@ -64,15 +65,18 @@ namespace FishMMO.WebServer
 						// Use nullable GetValue: if the key is missing, GetValue<int> returns 0
 							// (default(int)) which would bind Kestrel to a random OS port, not 8080.
 							int port = context.Configuration.GetValue<int?>("WebServer:HttpPort") ?? 8080;
+						// WebServer:HttpPort accepts both string ("8080") and number (8080) formats
+						// through the configuration binder. This inconsistency is intentional
+						// so operators can use either format in appsettings.json.
 						options.ListenLocalhost(port);
 						// Hardening: cap request body for this metadata-only endpoint.
 						// /loginserver is GET-only; legitimate clients never upload anything.
 						options.Limits.MaxRequestBodySize = 16 * 1024; // 16 KiB.
-						Log.Info("Kestrel", $"Kestrel listening on localhost port {port} in {context.HostingEnvironment.EnvironmentName} mode.");
+						_ = Log.Info("Kestrel", $"Kestrel listening on localhost port {port} in {context.HostingEnvironment.EnvironmentName} mode.");
 					})
 					.ConfigureServices((context, services) =>
 					{
-						Log.Info("Services", "Registering services...");
+						_ = Log.Info("Services", "Registering services...");
 
 						ValidateNpgsqlSslMode(context.Configuration, context.HostingEnvironment);
 
@@ -111,7 +115,7 @@ namespace FishMMO.WebServer
 									// Empty origin list → CORS middleware will not match any
 									// preflight, effectively denying cross-origin requests.
 									builder.WithOrigins(System.Array.Empty<string>()).AllowAnyMethod().AllowAnyHeader();
-									Log.Warning("CORS", "Cors:AllowedOrigins is unset; defaulting to deny. Configure explicit origins for browser clients.");
+									_ = Log.Warning("CORS", "Cors:AllowedOrigins is unset; defaulting to deny. Configure explicit origins for browser clients.");
 								}
 							});
 						});
@@ -151,7 +155,7 @@ namespace FishMMO.WebServer
 							};
 						});
 
-						Log.Info("Services", "All services registered.");
+						_ = Log.Info("Services", "All services registered.");
 					})
 					.Configure((context, app) =>
 					{

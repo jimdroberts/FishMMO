@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -72,14 +73,14 @@ namespace FishMMO.Shared
 		{
 			if (digitIndex < 0) return 0;
 
-			// Use long.MaxValue logic for absolute to avoid overflow
-			long val = (number == long.MinValue) ? long.MaxValue : (number < 0 ? -number : number);
+			// Use BigInteger for the absolute value to correctly handle long.MinValue
+			BigInteger absVal = number == long.MinValue ? new BigInteger(9223372036854775808) : (number < 0 ? -number : number);
 
 			for (int i = 0; i < digitIndex; ++i)
 			{
-				val /= 10L;
+				absVal /= 10L;
 			}
-			return val % 10L;
+			return (long)(absVal % 10L);
 		}
 
 		/// <summary>

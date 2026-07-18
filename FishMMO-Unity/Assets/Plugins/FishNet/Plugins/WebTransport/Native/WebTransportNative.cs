@@ -157,6 +157,15 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static bool IsInitialized => initialized;
 
 		/// <summary>Ensure wt_init() is called exactly once before any native operations.</summary>
+		/// <remarks>
+		/// <b>Thread safety:</b> This method MUST be called from the Unity main thread only.
+		/// It uses an Interlocked.CompareExchange guard as a secondary safety net, but
+		/// concurrent calls from multiple threads are not a supported scenario.
+		/// Both <c>EnsureInitialized</c> and <c>Deinitialize</c> are called from the main
+		/// thread during controlled startup/shutdown sequences (see ServerSocket.StartConnection,
+		/// WebTransport.Shutdown). Calling them concurrently would violate the expected
+		/// lifecycle and may produce undefined behavior in the native library.
+		/// </remarks>
 		public static void EnsureInitialized()
 		{
 			if (initialized) return;
@@ -189,6 +198,12 @@ namespace FishNet.Transporting.WebTransport.Native
 		}
 
 		/// <summary>Call wt_deinit() and reset state. Safe to call even if not initialized.</summary>
+		/// <remarks>
+		/// <b>Thread safety:</b> This method MUST be called from the Unity main thread only.
+		/// See <see cref="EnsureInitialized"/> for details. The deinitGuard using
+		/// Interlocked.CompareExchange is a secondary safety net; concurrent calls are
+		/// not a supported scenario.
+		/// </remarks>
 		public static void Deinitialize()
 		{
 			if (System.Threading.Interlocked.CompareExchange(ref deinitGuard, 1, 0) != 0) return;

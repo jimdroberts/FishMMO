@@ -101,17 +101,18 @@ namespace FishMMO.Auth.Implementation
 		/// Simple HKDF-SHA256 extract-and-expand (RFC 5869).
 		/// </summary>
 		/// <remarks>
-		/// <para><b>Empty salt:</b> Per RFC 5869 §2.2, when salt is not provided it defaults to
-		/// a string of <c>HashLen</c> zeros. BouncyCastle's <see cref="HkdfBytesGenerator"/>
-		/// handles this internally: passing <c>Array.Empty&lt;byte&gt;()</c> triggers the
-		/// zero-salt path, producing the same PRK as an explicit 32-byte zero salt.</para>
+		/// <para><b>Salt behavior:</b> When <paramref name="salt"/> is <c>null</c>, the code passes
+		/// <c>new byte[32]</c> (32 zero bytes) to BouncyCastle's <c>HkdfParameters</c>, satisfying
+		/// RFC 5869 §2.2 which mandates a <c>HashLen</c>-length zero salt when none is provided.
+		/// The info parameter defaults to <c>Array.Empty&lt;byte&gt;()</c> when <c>null</c> (RFC 5869
+		/// §2.2 allows empty info).</para>
 		/// </remarks>
 		private static byte[] HkdfSha256(byte[] salt, byte[] ikm, byte[] info, int outputLength)
 		{
 			if (ikm == null) throw new ArgumentNullException(nameof(ikm));
 			// RFC 5869 §2.2: salt defaults to HashLen zeros, info defaults to empty.
 			var hkdf = new HkdfBytesGenerator(new Sha256Digest());
-			var parameters = new HkdfParameters(ikm, salt ?? Array.Empty<byte>(), info ?? Array.Empty<byte>());
+			var parameters = new HkdfParameters(ikm, salt ?? new byte[32], info ?? Array.Empty<byte>());
 			hkdf.Init(parameters);
 			byte[] okm = new byte[outputLength];
 			hkdf.GenerateBytes(okm, 0, okm.Length);
@@ -271,7 +272,7 @@ namespace FishMMO.Auth.Implementation
 
 				try
 				{
-					return deriveX25519SharedSecret(privateKey!, peerPublicKey, handshakeTranscriptHash);
+					return DeriveX25519SharedSecret(privateKey!, peerPublicKey, handshakeTranscriptHash);
 				}
 				finally
 				{
@@ -306,7 +307,7 @@ namespace FishMMO.Auth.Implementation
 		/// Internal: Generate X25519 keypair (private/public).
 		/// Prefer <see cref="X25519EphemeralKeyPair"/> which enforces private key zeroization.
 		/// </summary>
-		private static void generateX25519Keypair(out byte[] privateKey, out byte[] publicKey)
+		private static void GenerateX25519Keypair(out byte[] privateKey, out byte[] publicKey)
 		{
 			privateKey = new byte[32];
 			publicKey = new byte[32];
@@ -326,7 +327,7 @@ namespace FishMMO.Auth.Implementation
 		/// <para>This is the low-level primitive used by <see cref="X25519EphemeralKeyPair.DeriveSharedSecret"/>.
 		/// External callers should use the ephemeral keypair wrapper which enforces private key zeroization.</para>
 		/// </remarks>
-		private static byte[] deriveX25519SharedSecret(byte[] ourPrivateKey, byte[] peerPublicKey, byte[] handshakeTranscriptHash)
+		private static byte[] DeriveX25519SharedSecret(byte[] ourPrivateKey, byte[] peerPublicKey, byte[] handshakeTranscriptHash)
 		{
 			if (ourPrivateKey == null) throw new ArgumentNullException(nameof(ourPrivateKey));
 			if (peerPublicKey == null) throw new ArgumentNullException(nameof(peerPublicKey));
@@ -1669,6 +1670,15 @@ namespace FishMMO.Auth.Implementation
 			/// window and the already-encrypted-at-rest storage.</para>
 			/// <para><b>TODO:</b> If a future OtpNet release exposes <c>IDisposable</c> or a zeroing
 			/// API on <c>Totp</c>, adopt it here to eliminate the residual heap copy.</para>
+			/// <para><b>TryZeroizeTotpInternals is best-effort:</b>
+			/// <see cref="TryZeroizeTotpInternals"/> uses reflection to find and zero
+			/// any <c>byte[]</c> fields inside the OtpNet <c>Totp</c> object graph, including the
+			/// embedded <c>InMemoryKey</c>. This is best-effort: it depends on the internal
+			/// field layout of OtpNet, which may change between versions without notice.
+			/// After this method returns, the original TOTP secret remains in the managed heap
+			/// (inside OtpNet-internal arrays) until the next garbage collection. Callers must
+			/// zero <paramref name="plaintextSecret"/> independently in a <c>finally</c> block.
+			/// Do not rely solely on <see cref="TryZeroizeTotpInternals"/> for security guarantees.</para>
 			/// </remarks>
 			public static (bool Valid, long WindowUsed) VerifyTotpCode(byte[] plaintextSecret, string submittedCode, long lastWindow)
 			{

@@ -36,7 +36,7 @@ namespace FishNet.Transporting.WebTransport
 	{
 		#region Configuration
 		/// <summary>QUIC minimum MTU (RFC 9000 §14).</summary>
-		private const int mtu = 1200;
+		private const int Mtu = 1200;
 
 		/// <summary>Server bind address. Set at startup from .cfg file.</summary>
 		private string serverBindAddress = "127.0.0.1";
@@ -163,10 +163,10 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
 			sanitizeChannel(ref channelId);
-			if (channelId == 1 && segment.Count > mtu)
+			if (channelId == 1 && segment.Count > Mtu)
 			{
 				base.NetworkManager.LogWarning(
-					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {mtu}. Dropping.");
+					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {Mtu}. Dropping.");
 				return;
 			}
 			clientSocket.SendToServer(channelId, segment);
@@ -176,10 +176,10 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
 			sanitizeChannel(ref channelId);
-			if (channelId == 1 && segment.Count > mtu)
+			if (channelId == 1 && segment.Count > Mtu)
 			{
 				base.NetworkManager.LogWarning(
-					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {mtu}. Dropping.");
+					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {Mtu}. Dropping.");
 				return;
 			}
 			serverSocket.SendToClient(channelId, segment, connectionId);
@@ -225,6 +225,15 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override void SetMaximumClients(int value)
 		{
+			/* Security: clamp to valid range [1, 100000] to prevent
+			 * resource exhaustion from unbounded input. */
+			if (value < 1 || value > 100000)
+			{
+				base.NetworkManager.LogWarning(
+					$"SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {System.Math.Clamp(value, 1, 100000)}.");
+				value = System.Math.Clamp(value, 1, 100000);
+			}
+
 			if (serverSocket.GetConnectionState() != LocalConnectionState.Stopped)
 				base.NetworkManager.LogWarning($"Cannot set maximum clients when server is running.");
 			else
@@ -316,7 +325,7 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startServer()
 		{
-			serverSocket.Initialize(this, mtu, certificatePath, privateKeyPath);
+			serverSocket.Initialize(this, Mtu, certificatePath, privateKeyPath);
 			return serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);
 		}
 
@@ -327,7 +336,7 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startClient(string address)
 		{
-			clientSocket.Initialize(this, mtu);
+			clientSocket.Initialize(this, Mtu);
 			return clientSocket.StartConnection(address, port, useTls: true);
 		}
 
@@ -366,7 +375,7 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override int GetMTU(byte channel)
 		{
-			return mtu;
+			return Mtu;
 		}
 		#endregion
 

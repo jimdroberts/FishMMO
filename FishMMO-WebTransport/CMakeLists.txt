@@ -103,6 +103,42 @@ elseif(APPLE)
         PREFIX "lib"
         SUFFIX ".dylib"
     )
+# ── ARM64 (aarch64) Build Targets ─────────────────────────────────
+# These are COMMENTED OUT by default because cross-compilation
+# toolchains may not be available on all build machines. Uncomment
+# and adjust paths for your environment when targeting ARM64.
+#
+# Prerequisites for cross-compilation:
+#   - Linux ARM64: install gcc-aarch64-linux-gnu (or use aarch64
+#     native build machine). The msquic library must also be
+#     cross-compiled or obtained as an ARM64 binary.
+#   - Windows ARM64: Use VS 2022+ with ARM64/ARM64EC toolsets.
+#     msquic v2.5.9+ supports ARM64EC builds natively.
+#
+# The output directories use Unity's standard plugin folder naming
+# convention (e.g. "linux_aarch64", "windows_arm64").
+#
+# Linux ARM64:
+# elseif(WT_PLATFORM_LINUX_ARM64)
+#     set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+#     set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+#     target_compile_definitions(${PROJECT_NAME} PRIVATE WT_PLATFORM_LINUX)
+#     set_target_properties(${PROJECT_NAME} PROPERTIES
+#         LIBRARY_OUTPUT_DIRECTORY "${UNITY_PLUGIN_DIR}/linux_aarch64"
+#         PREFIX "lib"
+#         SUFFIX ".so"
+#     )
+#
+# Windows ARM64:
+# elseif(WT_PLATFORM_WINDOWS_ARM64)
+#     target_compile_definitions(${PROJECT_NAME} PRIVATE
+#         WT_PLATFORM_WINDOWS
+#         _CRT_SECURE_NO_WARNINGS
+#     )
+#     set_target_properties(${PROJECT_NAME} PROPERTIES
+#         RUNTIME_OUTPUT_DIRECTORY "${UNITY_PLUGIN_DIR}/windows_arm64"
+#         PREFIX ""
+#     )
 else()
     target_compile_definitions(${PROJECT_NAME} PRIVATE WT_PLATFORM_LINUX)
     set_target_properties(${PROJECT_NAME} PROPERTIES

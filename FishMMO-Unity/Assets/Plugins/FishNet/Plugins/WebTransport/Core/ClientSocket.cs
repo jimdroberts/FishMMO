@@ -83,6 +83,16 @@ namespace FishNet.Transporting.WebTransport.Client
 			{
 				try { act?.Invoke(); } catch (System.Exception ex) { UnityEngine.Debug.LogWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
 			}
+			/* stopGuard is reset on the main thread (StartConnection is always called
+			 * from the Unity main thread). The race window is acceptable because
+			 * handleNativeDisconnect callbacks are queued in incomingEvents and
+			 * processed on the main thread during IterateIncoming — they cannot
+			 * race with the stopGuard reset here.
+			 *
+			 * Assert we are on the Unity main thread. */
+			System.Diagnostics.Debug.Assert(
+				System.Threading.Thread.CurrentThread.ManagedThreadId == 1,
+				"[WebTransport Client] StartConnection must be called from the Unity main thread.");
 			stopGuard = 0;
 
 			this.port = port;

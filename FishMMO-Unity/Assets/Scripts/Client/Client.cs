@@ -446,7 +446,13 @@ namespace FishMMO.Client
 						{
 							if (done.Request.result != UnityWebRequest.Result.Success) { lastErr = done.Request.error; continue; }
 							var parsed = JsonUtility.FromJson<ServerAddresses>(done.Request.downloadHandler.text);
-							if (parsed?.Ports == null) { lastErr = "Parse failed."; continue; }
+							if (parsed?.Ports == null) 
+							{ 
+								string rawText = done.Request.downloadHandler.text;
+								lastErr = "Parse failed.";
+								Log.Debug("Client", $"GetLoginServerList: JSON parse failed. Raw response (truncated): {(rawText != null && rawText.Length > 200 ? rawText.Substring(0, 200) + "..." : rawText)}");
+								continue; 
+							}
 							cachedConnectionToken = parsed.ConnectionToken;
 							winner = parsed.Ports;
 							break;
@@ -529,7 +535,16 @@ namespace FishMMO.Client
 		/// Called during world scene preload progress. Sends a validated scene broadcast when loading completes.
 		/// </summary>
 		/// <param name="p">Progress value from 0 to 1.</param>
-		private void OnValidatedSceneProgress(float p) { if (p >= 1f) { AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress; Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable); } }
+		private void OnValidatedSceneProgress(float p) 
+		{ 
+			// Unsubscribe on completion (p >= 1) or error/failure (p < 0).
+			if (p >= 1f || p < 0f) 
+			{ 
+				AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress; 
+				if (p >= 1f) 
+					Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable); 
+			} 
+		}
 		/// <summary>
 		/// Handles a server busy broadcast by showing a dialog to the player.
 		/// </summary>

@@ -71,7 +71,7 @@ namespace FishMMO.Auth.Implementation
 
 				connectionEncryptionEntries[connection] = data;
 
-				if (!connectionAccountData.TryGetValue(connection, out AccountData existing) || existing == null)
+				if (!connectionAccountData.TryGetValue(connection, out AccountData existing))
 				{
 					connectionAccountData[connection] = new AccountData();
 				}

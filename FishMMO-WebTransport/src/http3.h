@@ -151,6 +151,15 @@ typedef struct h3_session_s {
     h3_on_error_fn          on_error;
     void*                   callback_ctx;
 
+    /**
+     * If non-NULL, this h3_stream_ctx_t holds buffered data from the first
+     * peer stream in a native (non-HTTP/3) connection. Set during native
+     * protocol detection in h3_server_process_data, consumed by
+     * on_h3_session_ready to replay the data into the stream_manager.
+     * Freed after replay -- never accessed by h3 after consumption.
+     */
+    void*               native_stream_ctx;  /* h3_stream_ctx_t* */
+
     /* Link to parent (for cleanup during teardown) */
     /* Allowed origins for CORS (comma-separated, empty = allow all) */
     char                    allowed_origins[1024];
@@ -183,15 +192,23 @@ h3_session_t* h3_session_create(
  */
 void h3_session_free(h3_session_t* h3);
 
+#if 0
 /**
  * Process a new peer-initiated bidirectional stream.
  * Must be called from the QUIC PEER_STREAM_STARTED callback.
+ *
+ * PRESERVED but DISABLED: This function was part of the original HTTP/3
+ * stream acceptance design. The handshake now uses h3_server_handle_stream
+ * instead, which integrates with the state machine for automatic protocol
+ * detection (HTTP/3 vs native). Keeping this for reference in case a
+ * separate accept-stream API is needed for future HTTP/3 work.
  *
  * Returns true if h3 took ownership of the stream (HTTP/3 protocol stream).
  * Returns false if the stream is a regular data stream (the caller
  * should process it via wt_stream_manager).
  */
 bool h3_session_accept_stream(h3_session_t* h3, HQUIC stream);
+#endif
 
 /**
  * Begin the WebTransport handshake as a client.
