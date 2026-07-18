@@ -3,7 +3,7 @@
 
 # FishMMO
 
-A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, and **PostgreSQL**.
+A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, **QUIC/WebTransport**, and **PostgreSQL**.
 
 ---
 
@@ -16,7 +16,8 @@ A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, an
   - [1. Clone the Repository](#1-clone-the-repository)
   - [2. Build the FishMMO-Installer](#2-build-the-fishmmo-installer)
   - [3. Run the Installer](#3-run-the-installer)
-  - [4. Open the Unity Project](#4-open-the-unity-project)
+  - [4. Build the WebTransport C++ Library](#4-build-the-webtransport-c-library)
+  - [5. Open the Unity Project](#5-open-the-unity-project)
 - [Database Setup](#database-setup)
 - [Unity Project Setup](#unity-project-setup)
   - [Build World Scene Details](#build-world-scene-details)
@@ -27,12 +28,18 @@ A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, an
   - [Constants.cs — Client Domains](#constantscs--client-domains)
   - [Server Configuration Files](#server-configuration-files)
   - [Logging Configuration](#logging-configuration)
+  - [Configuration Files — `FishMMO-Setup/`](#configuration-files--fishmmo-setup)
   - [FishMMO-Auth — Signing Keys & KEK](#fishmmo-auth--signing-keys--kek)
 - [Infrastructure Setup](#infrastructure-setup)
   - [Configure Unity Hub](#configure-unity-hub)
   - [Configure PostgreSQL](#configure-postgresql)
   - [Configure pgBouncer](#configure-pgbouncer)
-    - [Configure NGINX](#configure-nginx)
+  - [Configure NGINX](#configure-nginx)
+  - [NGINX Stream Configuration (UDP Game Traffic)](#nginx-stream-configuration-udp-game-traffic)
+  - [TLS Certificate Setup for Game Servers](#tls-certificate-setup-for-game-servers)
+- [Web Server Configuration](#web-server-configuration)
+  - [ClientGate Middleware](#clientgate-middleware)
+  - [Web Server Security & Environment Variables](#web-server-security--environment-variables)
 - [Running the Servers](#running-the-servers)
   - [Launch Order](#launch-order)
   - [Starting Game Servers](#starting-game-servers)
@@ -46,9 +53,14 @@ A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, an
   - [Client TLS Certificate Pinning](#client-tls-certificate-pinning)
 - [Production Deployment](#production-deployment)
   - [Linux Config Hardening](#linux-config-hardening)
+  - [Firewall Configuration](#firewall-configuration)
   - [Systemd Services](#systemd-services)
   - [Port Reference](#port-reference)
-- [Flow Diagram](#flow-diagram)
+  - [Certbot Deploy Hook (TLS Renewal)](#certbot-deploy-hook-tls-renewal)
+- [Architecture](#architecture)
+  - [Connection Pipeline](#connection-pipeline)
+  - [Server Initialization Order](#server-initialization-order)
+  - [Flow Diagram](#flow-diagram)
 - [License](#license)
 
 ---
@@ -60,16 +72,17 @@ FishMMO is a complete multiplayer online game framework consisting of:
 | Component | Description |
 |---|---|
 | **FishMMO-Unity** | Unity project containing client, server, and shared game code (560+ C# files) — full prediction pipeline, modular character visuals, threat-based AI, ECA trigger system |
-| **FishMMO-Auth** | Transport-agnostic .NET authentication library (SRP-6a, token auth, TOTP 2FA) |
-| **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql |
+| **FishMMO-Auth** | Transport-agnostic .NET authentication library (SRP-6a, X25519 ECDH, token auth, TOTP 2FA) |
+| **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql (36+ tables, 38+ services) |
+| **FishMMO-WebTransport** | C++ native library wrapping MsQuic (QUIC/HTTP3) — P/Invoked from C# as a FishNet transport plugin |
 | **FishMMO-Installer** | Cross-platform .NET 8 console tool that automates dependency installation |
-| **FishMMO-Dependencies** | Centralised NuGet dependency library (netstandard2.1) |
+| **FishMMO-Dependencies** | Centralised NuGet dependency aggregator (54 packages, netstandard2.1) — copies DLLs to Unity |
 | **FishMMO-Logger** | Flexible logging library with file, email, and console backends |
 | **FishMMO-SharedUtility** | Pure C# utility library shared between client and server projects |
 | **FishMMO-AppHealthMonitor** | Daemon that monitors, auto-restarts, and health-checks server processes |
-| **FishMMO-WebServers** | ASP.NET Core web services — IPFetch, Patcher, and WebGL static server |
+| **FishMMO-WebServers** | ASP.NET Core 8.0 web services — IPFetch (8080), Patcher (8090), and WebGL static server (8000) |
 | **FishMMO-Patcher** | Client-side updater that applies versioned patch files |
-| **FishMMO-Setup** | Configuration templates — nginx.conf, server .cfg files, appsettings.json |
+| **FishMMO-Setup** | Configuration templates — nginx.conf, server .cfg files, appsettings.json, deploy hooks, stream config generator |
 | **FishMMO-DiscordBot** | Discord bot bridging in-game chat with a Discord guild |
 | **FishMMO-CMS** | ASP.NET Core CMS for launcher news, announcements, and web content |
 
@@ -81,6 +94,33 @@ The server architecture uses three server types:
 
 All three are launched from a single `GameServer` executable with a command-line argument (`LOGIN`, `WORLD`, or `SCENE`).
 
+### Networking Architecture
+
+FishMMO uses **QUIC/WebTransport** (RFC 9000) as its sole transport protocol — there is no TCP or WebSocket fallback for game traffic:
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Transport** | QUIC (UDP) via MsQuic C++ library | Encrypted, multiplexed transport with 0-RTT support |
+| **Reliable Channel** | QUIC bidirectional streams | FishNet Channel 0 (game state, RPCs, broadcasts) |
+| **Unreliable Channel** | QUIC DATAGRAM frames (RFC 9221) | FishNet Channel 1 (position updates, snapshots) |
+| **WebGL/Browser** | Browser WebTransport API → HTTP/3 | Native browser QUIC without plugin |
+| **Reverse Proxy** | NGINX L4 UDP stream + L7 HTTP | L7: TLS termination for HTTP APIs. L4: zero-copy UDP forwarding (no TLS termination for game traffic) |
+| **HTTP TLS** | TLS 1.2/1.3 terminated by NGINX | NGINX handles HTTPS for `api.fishmmo.com` and `play.fishmmo.com` |
+| **Game TLS** | QUIC/TLS 1.3 terminated by each game server | NGINX **cannot** terminate QUIC TLS — raw UDP packets pass through unmodified. Each game server **must** have certificates configured |
+
+#### Default Architecture: Loopback + NGINX Reverse Proxy
+
+All backend servers (LoginServer, WorldServer, SceneServer, IPFetch, Patcher, WebGL) are configured to **bind to `127.0.0.1` (loopback) by default**. NGINX acts as the sole public-facing reverse proxy, forwarding traffic to these loopback-bound upstream servers. This is a deliberate security posture:
+
+- **Backend servers are never directly exposed to the internet** — only NGINX ports 80 and 443 (and UDP 7770-7999 via the stream module) are public.
+- **NGINX handles TLS for HTTP APIs** (api.fishmmo.com, play.fishmmo.com) at Layer 7.
+- **NGINX does NOT terminate TLS for game traffic.** QUIC/WebTransport uses UDP at Layer 4 — NGINX forwards raw encrypted QUIC packets without inspecting them. Each game server **must** have valid TLS certificates configured in its `.cfg` file (`CertificatePath`/`PrivateKeyPath`) because it terminates its own QUIC/TLS session. There is no way for NGINX to do this on the game server's behalf.
+- **The real client IP is recovered via a one-time connection token** from the HTTP API, since game servers only see NGINX's loopback address.
+
+**When to bind to `0.0.0.0` or a specific IP:** Only when a backend server runs on a **different machine** than NGINX. In that case, change the `Address` in the server's `.cfg` file (or the `BACKEND_IP` env var for stream config generation) to the server's network-facing IP, and ensure NGINX's `proxy_pass` targets that IP instead of `127.0.0.1`.
+
+For the complete end-to-end connection flow, see [CONNECTION_PIPELINE.md](CONNECTION_PIPELINE.md). For server startup, see [SERVER_INITIALIZATION_ORDER.md](SERVER_INITIALIZATION_ORDER.md).
+
 ---
 
 ## Supported Platforms
@@ -90,13 +130,15 @@ All three are launched from a single `GameServer` executable with a command-line
 | Windows 10/11 | Yes | Yes |
 | Linux (Ubuntu/Debian, Arch/CachyOS) | Yes | Yes |
 | macOS | Yes | Yes |
-| WebGL | Yes (via browser) | N/A |
+| WebGL | Yes (via browser WebTransport) | N/A |
 
 | Requirement | Version |
 |---|---|
-| Unity | 6.3 LTS |
+| Unity | 6.3 LTS (6000.3.2f1) |
 | .NET SDK | 8.0+ |
 | PostgreSQL | 14+ |
+| CMake | 3.20+ (for WebTransport C++ library) |
+| C++ Compiler | GCC 9+/Clang 10+/MSVC 2022+ (C11/C++17) |
 | Scripting Backend | IL2CPP |
 
 ---
@@ -106,9 +148,13 @@ All three are launched from a single `GameServer` executable with a command-line
 - **Git** for cloning the repository
 - **.NET 8.0 SDK**
 - **Unity Hub** with **Unity 6.3 LTS** (the installer can install these for you)
+- **CMake 3.20+** and a C++17 compiler (for building the WebTransport native library)
+- **OpenSSL 3+** development headers (libssl-dev / openssl-devel)
 - **PostgreSQL 14+** (the installer can install this for you)
 - Administrator/root privileges for system-level installs
 - Internet connectivity
+
+> **Note:** The C++ WebTransport library links statically against msquic (fetched automatically by CMake), so you do **not** need to install msquic separately. OpenSSL is the only system-level dependency needed beyond a C++ compiler.
 
 ---
 
@@ -254,6 +300,29 @@ FishMMO-Installer --non-interactive -f install-config.json
 
 > **Download integrity:** Downloaded files are verified against SHA256 checksums in `checksums.json`. Corrupt or tampered downloads are rejected.
 
+#### Pre-built Install Config Templates
+
+`FishMMO-Setup/Development/` includes three ready-to-use install configs:
+
+| Template | Purpose |
+|---|---|
+| `install-config.quickstart.json` | Minimal dev setup (dotnet-ef, postgresql, fishmmo-db, appsettings) |
+| `install-config.web.json` | Web server setup (nginx, letsencrypt, firewall, systemd-services) |
+| `install-config.full.json` | Complete production setup (all components including UDP game port firewall rules) |
+
+The full template maps to:
+```json
+{
+  "components": ["dotnet-ef", "aspnet-runtime", "postgresql", "pgbouncer",
+    "fishmmo-db", "nginx", "letsencrypt", "firewall", "systemd-services", "appsettings"],
+  "configureFirewall": true,
+  "firewallPorts": [80, 443, "7770-7999/udp"],
+  "registerSystemdServices": true,
+  "webServers": ["ipfetch", "patcher", "webgl"],
+  "validateAfterInstall": true
+}
+```
+
 #### Recommended Installation Order (Fresh Setup)
 
 | Step | Menu | Action | Windows | Linux |
@@ -276,7 +345,7 @@ FishMMO-Installer --non-interactive -f install-config.json
 | 16 | Configuration | Configure appsettings.json | Yes | Yes |
 
 > **"Build all C# Projects"** discovers and builds all `.csproj` files under the repository root, including:
-> - `FishMMO-Dependencies` — copies dependency DLLs into `FishMMO-Unity/Assets/Dependencies/`
+> - `FishMMO-Dependencies` — copies 54 dependency DLLs into `FishMMO-Unity/Assets/Dependencies/`
 > - `FishMMO-Auth` — authentication library (copies DLL to Unity Dependencies)
 > - `FishMMO-Database/FishMMO-DB` — database library
 > - `FishMMO-Logger` — logging library (copies DLL to Unity Dependencies)
@@ -288,9 +357,102 @@ FishMMO-Installer --non-interactive -f install-config.json
 > - `FishMMO-DiscordBot` — Discord chat bridge bot
 > - `FishMMO-CMS` — content management system
 
-### 4. Open the Unity Project
+### 4. Build the WebTransport C++ Library
 
-After building all C# projects, open the Unity project to compile Unity-side scripts and perform Unity-specific setup:
+The WebTransport native library (`libfishmmo_webtransport`) is a C++ shared library that wraps Microsoft's [MsQuic](https://github.com/microsoft/msquic) QUIC implementation. It is P/Invoked from C# as FishNet's transport plugin. **This must be built before running the game server** — the Unity project expects the native binary at `Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/{platform}/`.
+
+#### Linux (Native Build)
+
+**Prerequisites:**
+```bash
+# Arch / CachyOS
+sudo pacman -S cmake openssl gcc
+
+# Ubuntu / Debian
+sudo apt-get install cmake libssl-dev build-essential
+
+# Fedora
+sudo dnf install cmake openssl-devel gcc-c++
+```
+
+**Build:**
+```bash
+cd FishMMO-WebTransport
+./build_linux.sh
+```
+
+**Output:** `libfishmmo_webtransport.so` placed directly into `../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/linux_x86_64/`
+
+#### Windows (Native Build)
+
+**Prerequisites:**
+- Visual Studio 2022 with C++ workload
+- CMake 3.20+ (`winget install Kitware.CMake`)
+- OpenSSL (`vcpkg install openssl:x64-windows`)
+
+**Build:**
+```powershell
+cd FishMMO-WebTransport
+.\build_windows.ps1
+```
+
+**Output:** `fishmmo_webtransport.dll` + `msquic.dll` in `.../Plugins/windows_x86_64/`
+
+#### Windows Cross-Compile from Linux (Zig)
+
+If you develop on Linux but need a Windows `.dll` for client builds:
+
+**Prerequisites:**
+```bash
+# Arch / CachyOS
+sudo pacman -S zig
+# Or download from https://ziglang.org/download/
+```
+
+**Build:**
+```bash
+cd FishMMO-WebTransport
+./build_windows_cross.sh
+```
+
+This script:
+1. Downloads the msquic NuGet package (`Microsoft.Native.Quic.MsQuic.Schannel/2.5.9`)
+2. Extracts headers and DLL from the NuGet package
+3. Compiles all `.cpp` files with `zig c++ -target x86_64-windows-gnu`
+4. Links into a DLL importing `msquic.dll`
+5. Copies both `fishmmo_webtransport.dll` and `msquic.dll` to the Unity plugins directory
+
+#### macOS (Native Build)
+
+Must be built on a Mac:
+```bash
+brew install cmake openssl@3
+cd FishMMO-WebTransport
+./build_macos.sh
+```
+
+**Output:** `libfishmmo_webtransport.dylib` in `.../Plugins/mac_x86_64/`
+
+#### What CMake Does
+
+The `CMakeLists.txt`:
+- Fetches msquic v2.5.9 from GitHub (`FetchContent`) and statically links it
+- Uses `quictls` (OpenSSL fork) as msquic's TLS backend
+- Finds system OpenSSL for the wrapper library's own TLS needs
+- Compiles 7 `.cpp` source files (server, client, session, stream_manager, datagram_queue, http3, webtransport_api)
+- Outputs the shared library directly to the Unity project's Plugins directory
+
+#### Build Options
+
+| CMake Option | Default | Description |
+|---|---|---|
+| `BUILD_SHARED_LIBS` | ON | Build as shared library (`.so`/`.dylib`/`.dll`) |
+| `WT_STATIC_MSQUIC` | ON | Statically link msquic (recommended) |
+| `WT_BUILD_TESTS` | OFF | Build test programs |
+
+### 5. Open the Unity Project
+
+After building all C# projects and the WebTransport native library, open the Unity project:
 
 1. Open **Unity Hub**
 2. Click **ADD** → Select the `FishMMO-Unity` directory
@@ -338,13 +500,13 @@ dotnet run
 When your data model changes, create a new migration via the Installer (Database menu, option `4`) or manually:
 
 ```bash
-cd FishMMO-Database/FishMMO-DB-Migrator
+cd FishMMO-Database/FishMMO-DB
 dotnet ef migrations add YourMigrationName
+cd ../FishMMO-DB-Migrator
 dotnet run
 ```
 
 ### Database Configuration
-
 
 **Environment-based overrides:** The database library supports layered configuration in this priority order:
 
@@ -378,8 +540,6 @@ Example (bash):
 export FISHMMO_ENVIRONMENT=Production
 export Npgsql__Password=super_secret
 ```
-
----
 
 ---
 
@@ -429,8 +589,8 @@ The FishMMO Dashboard provides a comprehensive build interface:
 
 | Environment | Address Binding | Use Case |
 |---|---|---|
-| **Development** | `127.0.0.1` (loopback) | Local testing |
-| **Release** | `0.0.0.0` (all interfaces) | Production deployment |
+| **Development** | `127.0.0.1` (loopback) | Local testing — all servers on the same machine |
+| **Release** | Configurable via `.cfg` files | Production deployment — default is `127.0.0.1` (behind NGINX); change to server's network IP only if NGINX is on a separate machine |
 
 The build process copies the appropriate `.cfg` and `appsettings.json` files from `FishMMO-Setup/Development/` or `FishMMO-Setup/Release/` into the build output.
 
@@ -478,18 +638,18 @@ public static class Configuration
     /// Unified API Host URL. NGINX routes to the correct backend by path.
     public static readonly string APIHost = "https://api.fishmmo.com/";
 
-    /// NGINX game WebSocket hostname for Bayou/WebGL clients.
-    /// WebGL clients connect via wss://GameHost/ws/{port} instead of direct IP:port.
+    /// Game server hostname. Clients connect to this host via QUIC/WebTransport (UDP).
+    /// NGINX forwards game traffic at Layer 4 to loopback-bound game servers.
     public static readonly string GameHost = "game.fishmmo.com";
 }
 ```
 
 | Field | Purpose | Update When |
 |---|---|---|
-| `APIHost` | Base URL for IPFetch and Patcher API calls | You use a different domain or run without NGINX |
-| `GameHost` | WebSocket hostname for WebGL game connections | You use a different domain for game traffic |
+| `APIHost` | Base URL for IPFetch and Patcher API calls — NGINX reverse-proxies to loopback web servers | You use a different domain or run without NGINX |
+| `GameHost` | Hostname for game QUIC/WebTransport connections — NGINX forwards UDP to loopback game servers | You use a different domain for game traffic |
 
-> For local development, override these to `https://localhost/` and `localhost` respectively, or configure your hosts file.
+> For local development, override these to `https://localhost/` and `localhost` respectively, or configure your hosts file. When running without NGINX, change `APIHost` to point directly to your web server's address and set `GameHost` to the game server's address.
 
 ### Server Configuration Files
 
@@ -503,6 +663,8 @@ MaximumClients=4000
 Address=127.0.0.1
 Port=7770
 StaleSceneTimeout=5
+CertificatePath=/etc/fishmmo/certs/fullchain.pem
+PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 ```
 
 #### WorldServer.cfg
@@ -513,6 +675,8 @@ MaximumClients=4000
 Address=127.0.0.1
 Port=7780
 StaleSceneTimeout=5
+CertificatePath=/etc/fishmmo/certs/fullchain.pem
+PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 ```
 
 #### SceneServer.cfg
@@ -521,21 +685,39 @@ StaleSceneTimeout=5
 ServerName=Scene Server
 MaximumClients=4000
 Address=127.0.0.1
-Port=7781
+Port=7790
 StaleSceneTimeout=5
+CertificatePath=/etc/fishmmo/certs/fullchain.pem
+PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 ```
 
 | Key | Description | Default |
 |---|---|---|
 | `ServerName` | Display name for logs and monitoring | varies |
 | `MaximumClients` | Maximum concurrent connections | 4000 |
-| `Address` | Bind address (`127.0.0.1` for dev, `0.0.0.0` for production) | varies |
-| `Port` | Listen port (Login=7770, World=7780, Scene=7781+) | varies |
+| `Address` | Bind address — `127.0.0.1` when behind NGINX (default); set to the server's network IP only if NGINX runs on a different machine | `127.0.0.1` |
+| `Port` | Listen port (Login=7770, World=7780, Scene=7790+) | varies |
 | `StaleSceneTimeout` | Seconds before idle scenes are unloaded | 5 |
+| `CertificatePath` | PEM certificate for QUIC/TLS (game servers terminate their own TLS) | platform-dependent |
+| `PrivateKeyPath` | PEM private key for QUIC/TLS | platform-dependent |
+| `AutoVerifyAccounts` | Skip email verification (Development only — never in Production) | `true` (Dev) / `false` (Prod) |
 
-**Format:** Simple `key=value` per line. Lines starting with `#` or `;` are comments.
+**Format:** Simple `key=value` per line. Lines starting with `#` or `;` are comments. SMTP settings (LoginServer only) may also be present in the `.cfg` file and can be overridden via environment variables.
 
-> **Production:** Edit the `Release/` templates before building. Each SceneServer needs a unique port if running multiple instances.
+> **Certificate paths are required on every game server.** `CertificatePath` and `PrivateKeyPath` must point to valid PEM files on each server. NGINX cannot terminate QUIC TLS — it only forwards raw UDP. If certificates are missing, the server will fail to start or clients will be unable to connect. See [TLS Certificate Setup for Game Servers](#tls-certificate-setup-for-game-servers).
+
+> **Production:** Edit the `Release/` templates before building. Each SceneServer needs a unique port if running multiple instances (e.g., 7790, 7791, 7792...).
+
+> **About the bind address:** All server `.cfg` templates default to `Address=127.0.0.1` — servers listen on loopback and NGINX forwards public traffic to them via `proxy_pass`. This keeps backend servers off the public network. Only change `Address` if the server runs on a different machine than NGINX; in that case, set it to the machine's network-facing IP and update the corresponding NGINX upstream or stream config to point to that IP.
+
+#### Platform-Specific Certificate Paths
+
+| Platform | Default Certificate Path |
+|---|---|
+| Linux | `/etc/fishmmo/certs/fullchain.pem` |
+| Windows | `C:\ProgramData\FishMMO\certs\fullchain.pem` |
+| macOS | `/usr/local/share/fishmmo/certs/fullchain.pem` |
+| Other | `certs/fullchain.pem` (relative to working directory) |
 
 ### Logging Configuration
 
@@ -604,26 +786,31 @@ All project configuration lives in [`FishMMO-Setup/`](FishMMO-Setup/) as the sin
 ```
 FishMMO-Setup/
 ├── logging.json                              # Shared logging — all projects
-├── nginx.conf                                # NGINX reverse-proxy config
+├── nginx.conf                                # NGINX reverse-proxy config (L4 UDP + L7 HTTP)
+├── gen-fishmmo-stream-config.sh              # Generates per-port NGINX UDP stream configs
 ├── Development/                              # Dev / local configurations
 │   ├── appsettings.json                      # Unity server Npgsql (dev)
 │   ├── appsettings.AppHealthMonitor.json      # Process supervisor config
 │   ├── appsettings.DiscordBot.json           # Discord token + Npgsql
 │   ├── appsettings.IpFetchServer.json        # IP-fetch web server base
-│   ├── appsettings.IpFetchServer.Development.json  # Dev overrides
+│   ├── appsettings.IpFetchServer.Development.json  # Dev overrides (DB connection string)
 │   ├── appsettings.Patcher.json              # Patch delivery web server
 │   ├── appsettings.WebGLServer.json          # Static asset web server
 │   ├── appsettings.CMS.json                  # CMS web app
 │   ├── appsettings.Database.json             # Npgsql pool / retry template
-│   ├── install-config.*.json                 # Installer templates (3)
+│   ├── install-config.full.json              # Full production install template
+│   ├── install-config.quickstart.json         # Minimal dev install template
+│   ├── install-config.web.json               # Web server install template
 │   ├── LoginServer.cfg / WorldServer.cfg / SceneServer.cfg
 ├── Release/                                  # Production configurations
-│   ├── appsettings.json                      # Unity server Npgsql + Redis
-│   ├── appsettings.IpFetchServer.Production.json  # Prod overrides
+│   ├── appsettings.json                      # Unity server Npgsql
+│   ├── appsettings.IpFetchServer.Production.json  # Prod overrides (empty — must set env vars)
 │   ├── LoginServer.cfg / WorldServer.cfg / SceneServer.cfg
+├── deploy-hooks/
+│   └── certbot-fishmmo.sh                   # Let's Encrypt renewal deploy hook
 ```
 
-**How it works:** Each project's `.csproj` copies the appropriate file from `FishMMO-Setup/` into its build output directory, renaming it to `appsettings.json` (or `logging.json`). At runtime, applications resolve config with a **working-directory-first** pattern: if a modified file exists in the working directory, it overrides the bundled copy. Environment variables (prefixed `FISHMMO_`) provide the highest-priority overrides.
+**How it works:** Each project's `.csproj` copies the appropriate file from `FishMMO-Setup/` into its build output directory, renaming it to `appsettings.json` (or `logging.json`). At runtime, applications resolve config with a **working-directory-first** pattern: if a modified file exists in the working directory, it overrides the bundled copy. Environment variables (prefixed `FISHMMO_` or using `__` separator) provide the highest-priority overrides.
 
 **Unity Npgsql example** ([`Development/appsettings.json`](FishMMO-Setup/Development/appsettings.json)):
 
@@ -640,98 +827,26 @@ FishMMO-Setup/
 }
 ```
 
-**Release adds Redis** ([`Release/appsettings.json`](FishMMO-Setup/Release/appsettings.json)):
+**Release Npgsql example** ([`Release/appsettings.json`](FishMMO-Setup/Release/appsettings.json)):
 
+```json
 {
-  "_comment": "Non-sensitive defaults only. Override secrets via env vars: Npgsql__Password, Npgsql__Username, Redis__Password",
-  "Npgsql": {
-{
+  "_comment": "Non-sensitive defaults only. Override secrets via env vars: Npgsql__Password, Npgsql__Username",
   "Npgsql": {
     "Database": "fish_mmo_postgresql",
     "Username": "",
     "Password": "",
     "Host": "127.0.0.1",
     "Port": "5432"
-  },
-  "Redis": {
-    "Host": "127.0.0.1",
-    "Port": "6379",
-    "Password": ""
+  }
 }
 ```
 
 If using PgBouncer, change `Npgsql.Port` to `6432` (see [Configure pgBouncer](#configure-pgbouncer)).
 
+**Database pool and retry configuration** ([`Development/appsettings.Database.json`](FishMMO-Setup/Development/appsettings.Database.json)) — sets `CommandTimeout: 10`, `ConnectionTimeout: 15`, `MinPoolSize: 5`, `MaxPoolSize: 100`, Npgsql retry policy (3 retries, 20ms base, 10ms jitter), and optional query performance tracking.
+
 > **Security:** Never commit `appsettings.json` with real passwords. Use environment variables for secrets in production (see [Database Setup](#database-setup) for environment variable override syntax).
-
-### Configuration & Deployment Flow
-
-```mermaid
-flowchart TB
-    subgraph Source["Single Source of Truth"]
-        Setup["FishMMO-Setup/"]
-        Templates["appsettings.json templates<br/>(non-sensitive defaults only)"]
-        NginxT["nginx.conf"]
-        CfgFiles[".cfg files<br/>LoginServer / WorldServer / SceneServer"]
-        LogCfg["logging.json<br/>(shared across all projects)"]
-    end
-
-    subgraph Build["Build Time (csproj Copy Targets)"]
-        CopyConfig["Copy appsettings.json<br/>from FishMMO-Setup/ → bin/output"]
-        CopyLog["Copy logging.json<br/>from FishMMO-Setup/ → bin/output"]
-        UnityCopy["Unity BuildExecutor<br/>copies .cfg + appsettings.json<br/>+ logging.json to player build"]
-    end
-
-    subgraph Secrets["Secrets Layer (never on disk in JSON)"]
-        EnvFile["fishmmo-secrets.env<br/>(generated by AppSettingsInstaller)"]
-        FishSnippet["fishmmo-secrets.fish<br/>(fish shell)"]
-        PSSnippet["fishmmo-secrets.ps1<br/>(PowerShell)"]
-        SystemdEnv["EnvironmentFile=-<br/>(systemd unit directive)"]
-        NssmEnv["NSSM AppEnvironmentExtra<br/>(Windows services)"]
-        RuntimeEnv["Environment variables<br/>(Npgsql__Password, etc.)"]
-    end
-
-    subgraph Runtime["Runtime (IConfiguration Chain)"]
-        JsonLayer["1. appsettings.json<br/>(non-sensitive defaults)"]
-        EnvJsonLayer["2. appsettings.{env}.json<br/>(environment-specific settings)"]
-        EnvVarLayer["3. Environment Variables<br/>(HIGHEST priority — secrets)"]
-        Bound["IConfiguration.Get<AppSettings>()<br/>or NpgsqlDbConfiguration"]
-    end
-
-    subgraph Consumers["Consumers"]
-        Installer["FishMMO-Installer"]
-        UnitySvr["Unity GameServer<br/>(Login/World/Scene)"]
-        IpFetch["IpFetchServer"]
-        WebGL["WebGLServer"]
-        Patcher["PatcherServer"]
-        Discord["DiscordBot"]
-        CMS["CMS Server"]
-        AppHealth["AppHealthMonitor"]
-    end
-
-    Setup --> Templates
-    Setup --> NginxT
-    Setup --> CfgFiles
-    Setup --> LogCfg
-    Templates --> CopyConfig
-    LogCfg --> CopyLog
-    CopyConfig --> JsonLayer
-    CopyLog --> Consumers
-    UnityCopy --> JsonLayer
-    UnityCopy --> Consumers
-    JsonLayer --> EnvJsonLayer
-    EnvJsonLayer --> EnvVarLayer
-    EnvVarLayer --> Bound
-    Bound --> Consumers
-    EnvFile --> SystemdEnv
-    EnvFile --> NssmEnv
-    FishSnippet --> RuntimeEnv
-    PSSnippet --> RuntimeEnv
-    SystemdEnv --> RuntimeEnv
-    NssmEnv --> RuntimeEnv
-    RuntimeEnv --> EnvVarLayer
-```
-
 
 ### FishMMO-Auth — Signing Keys & KEK
 
@@ -770,6 +885,21 @@ set -Ux FISHMMO_SIGNING_KEY_KEK_BASE64 your_base64_kek_here
 5. Keys are rotated each time the LoginServer restarts.
 
 > **Without a KEK:** If `FISHMMO_SIGNING_KEY_KEK_BASE64` is not set, the LoginServer will log a warning and tokens will not be issued. Client authentication will fail on World/Scene servers.
+
+#### Auth Protocol Constants
+
+The authentication library has several compile-time security constants (see `BaseAuthenticatorCore`):
+
+| Constant | Default | Description |
+|---|---|---|
+| `AuthStaleTtlSeconds` | 15 | Stale-auth sweep interval |
+| `AuthHardDeadlineSeconds` | 60 | Hard authentication deadline |
+| `MaxPendingAuthConnections` | 10,000 | Concurrent pending auth cap |
+| `HandshakeIpDebounceSeconds` | 0.25 | Per-IP handshake rate limit |
+| `MaxGlobalHandshakesPerSecond` | 500 | Global handshake cap |
+| `MaxTotpAttempts` | 5 | TOTP attempts per connection |
+| `MaxTotpFailuresPerUsername` | 15 | Per-account TOTP lockout threshold |
+| `TotpUsernameLockoutDuration` | 5 min | TOTP lockout duration |
 
 ---
 
@@ -901,6 +1031,189 @@ psql -h 127.0.0.1 -p 6432 -U fishmmo -d fish_mmo_postgresql
 sc.exe query pgbouncer
 ```
 
+### Configure NGINX
+
+NGINX is the **single public-facing reverse proxy** for all FishMMO traffic. Every backend server binds to `127.0.0.1` (loopback) and NGINX forwards public traffic to them — backend servers are never directly reachable from the internet. The configuration in `FishMMO-Setup/nginx.conf` implements a dual-layer architecture:
+
+- **Layer 7 (HTTP/HTTPS):** Terminates TLS for `api.fishmmo.com` and `play.fishmmo.com`, then reverse-proxies requests to the loopback-bound ASP.NET web servers.
+- **Layer 4 (UDP Stream):** Forwards raw QUIC/UDP packets to loopback-bound game servers. **NGINX does not and cannot terminate QUIC TLS** — the game servers receive the encrypted QUIC packets directly and must have their own certificates.
+
+> **Critical:** Because NGINX only forwards UDP at Layer 4, **every game server must be provisioned with valid TLS certificates** via the `CertificatePath` and `PrivateKeyPath` settings in its `.cfg` file. NGINX's Let's Encrypt integration covers the HTTP hostnames only. See [TLS Certificate Setup for Game Servers](#tls-certificate-setup-for-game-servers) for the full procedure.
+
+**NGINX upstream routing table:**
+
+| Public Hostname | Protocol | NGINX Role | Upstream Backend | Backend Bind |
+|---|---|---|---|---|
+| `api.fishmmo.com` | HTTPS | TLS termination → reverse proxy | IPFetch (`127.0.0.1:8080`) + Patcher (`127.0.0.1:8090`) | loopback |
+| `play.fishmmo.com` | HTTPS | TLS termination → reverse proxy | WebGL Static Server (`127.0.0.1:8000`) | loopback |
+| `game.fishmmo.com` | UDP (QUIC) | L4 stream forward | Game Servers (`127.0.0.1:7770-7999`) | loopback |
+| `game.fishmmo.com:443` | TCP | Returns 444 (close) | — | — |
+
+> **If a backend server is on a different machine than NGINX:** Change the `proxy_pass` (HTTP) or stream `server` block (UDP) to target that machine's network IP instead of `127.0.0.1`, and update the server's `.cfg` `Address` accordingly.
+
+Deploy the nginx config via the Installer (Web Server menu, option `3`) or manually:
+
+```bash
+sudo cp FishMMO-Setup/nginx.conf /etc/nginx/nginx.conf
+sudo nginx -t && sudo nginx -s reload
+```
+
+### NGINX Stream Configuration (UDP Game Traffic)
+
+Game traffic uses UDP ports **7770-7999** forwarded at Layer 4 through NGINX's stream module. Each port gets its own `server {}` block. By default, streams forward to **`127.0.0.1`** — the game servers are expected to be on the same machine, bound to loopback.
+
+> **NGINX does not terminate TLS for these streams.** It forwards the raw encrypted QUIC packets. Each game server terminates its own QUIC/TLS session, so certificates must be configured in every server's `.cfg` file (see [TLS Certificate Setup for Game Servers](#tls-certificate-setup-for-game-servers)).
+
+#### Auto-Generating Stream Configs
+
+Use the `gen-fishmmo-stream-config.sh` script to generate per-port configs:
+
+```bash
+sudo ./FishMMO-Setup/gen-fishmmo-stream-config.sh
+```
+
+This script:
+- Generates individual `.conf` files in `/etc/nginx/stream.d/` for each port
+- **Port ranges:**
+  - **7770-7779** — Login Servers
+  - **7780-7789** — World Servers
+  - **7790-7999** — Scene Servers
+- Configurable via environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `STREAM_DIR` | `/etc/nginx/stream.d` | Output directory for generated `.conf` files |
+| `BACKEND_IP` | `127.0.0.1` | IP where game servers are listening — change only if servers run on a different machine |
+| `LOGIN_START` / `LOGIN_END` | `7770` / `7779` | Login server port range |
+| `WORLD_START` / `WORLD_END` | `7780` / `7789` | World server port range |
+| `SCENE_START` / `SCENE_END` | `7790` / `7999` | Scene server port range |
+| `PROXY_TIMEOUT` | `300s` | Idle session timeout |
+
+- Uses atomic temp-directory-then-replace to avoid leaving partial configs
+- Validates generated configs with `nginx -t` before replacing live files
+
+**Configuration applied per port:**
+
+```nginx
+server {
+    listen 7770 udp;
+    proxy_pass 127.0.0.1:7770;
+    proxy_timeout 300s;
+    proxy_upload_rate 100m;
+    proxy_download_rate 100m;
+}
+```
+
+> **Multi-machine deployment:** If game servers run on a separate machine from NGINX, set `BACKEND_IP` to that machine's IP and update each server's `.cfg` `Address` to bind to its own network interface instead of `127.0.0.1`.
+
+Reload with zero downtime:
+```bash
+sudo nginx -s reload
+```
+
+### TLS Certificate Setup for Game Servers
+
+> **This is not optional.** NGINX cannot terminate QUIC/TLS for game traffic — it only forwards raw UDP packets at Layer 4. Every LoginServer, WorldServer, and SceneServer **must** have valid TLS certificates configured in its `.cfg` file (`CertificatePath` and `PrivateKeyPath`). Without certificates, game servers will fail to start or clients will be unable to connect.
+
+Unlike a typical web setup where NGINX terminates all TLS, **each FishMMO game server terminates its own QUIC/TLS session on loopback**. NGINX forwards raw UDP packets at Layer 4 without inspecting or decrypting them. This means:
+
+- Game data is **end-to-end encrypted** — NGINX never sees plaintext game traffic.
+- TLS certificates must be **present on each game server machine** (by default, the same machine as NGINX).
+- The real client IP is recovered via a **one-time connection token** from the HTTP API (IPFetch issues a SHA-256 hashed token, the client passes it in the QUIC handshake), since the game server only sees NGINX's `127.0.0.1` as the source address.
+
+> **Multi-machine:** If game servers run on separate machines, copy the certificates to each machine and update the `CertificatePath`/`PrivateKeyPath` in each server's `.cfg` file. NGINX itself does not need certs for the game ports (it only forwards UDP).
+
+#### Certificate Files
+
+Game servers read PEM certificates from the paths in their `.cfg` file. The defaults are:
+
+| File | Path |
+|---|---|
+| Full chain certificate | `/etc/fishmmo/certs/fullchain.pem` |
+| Private key | `/etc/fishmmo/certs/privkey.pem` |
+
+**Permissions:** `chmod 640`, owned by the `fishmmo` service user.
+
+#### Initial Certificate Setup (Let's Encrypt)
+
+```bash
+# Install certbot and obtain a wildcard certificate
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d fishmmo.com -d '*.fishmmo.com'
+
+# Create the game server cert directory
+sudo mkdir -p /etc/fishmmo/certs
+
+# Install the certbot deploy hook (auto-copies renewed certs)
+sudo ln -s $(pwd)/FishMMO-Setup/deploy-hooks/certbot-fishmmo.sh \
+  /etc/letsencrypt/renewal-hooks/deploy/fishmmo.sh
+
+# Run the hook manually for first setup
+sudo FishMMO-Setup/deploy-hooks/certbot-fishmmo.sh
+```
+
+#### Certificate Renewal
+
+The certbot deploy hook at `FishMMO-Setup/deploy-hooks/certbot-fishmmo.sh` runs automatically after each successful certificate renewal. It:
+
+1. **Validates** the renewed certificate (checks existence, non-empty, not expired)
+2. **Copies** `fullchain.pem` and `privkey.pem` to `/etc/fishmmo/certs/`
+3. **Sets ownership** and permissions (`640`, user `fishmmo`)
+4. **Reloads NGINX** with zero downtime
+5. **Restarts game servers** (MsQuic reads certs once at startup — a restart is required to pick up renewed certs)
+
+> **Important:** MsQuic does not auto-reload TLS certificates. After certificate renewal, game servers must be restarted. For zero-downtime rolling restart, use systemd template units with the certbot hook's built-in restart logic.
+
+---
+
+## Web Server Configuration
+
+### ClientGate Middleware
+
+The IPFetch and Patcher web servers use a **ClientGate** middleware that validates the `X-FishMMO-Client` header on every request. This prevents generic crawlers and unauthorized clients from accessing the API.
+
+**How it works:**
+- An HMAC-SHA256 shared secret is read from the `FISHMMO_CLIENT_GATE_SECRET` environment variable
+- The header format is: `v1.<timestamp>.<nonce>.<base64url-hmac>`
+- Replay protection via a 20,000-entry nonce cache with a 30-second timestamp window
+- The secret must be at least 32 bytes; comma-separated values enable key rotation
+
+**In Production:** The server **refuses to start** if `FISHMMO_CLIENT_GATE_SECRET` is not set.
+**In Development:** Logs a warning and passes all requests through.
+**WebGL Server:** Does not use ClientGate (static content, publicly accessible).
+
+Generate a secret:
+```bash
+openssl rand -base64 32
+# Set it:
+export FISHMMO_CLIENT_GATE_SECRET="your_base64_secret_here"
+```
+
+### Web Server Security & Environment Variables
+
+All three web servers (IPFetch, Patcher, WebGL) run on Kestrel bound to **`127.0.0.1` (localhost only)** — they are designed to sit behind NGINX. NGINX handles TLS termination and public exposure; the web servers themselves never accept connections from the public internet. This is enforced at the Kestrel level, not just by firewall rules.
+
+**Key environment variables:**
+
+| Variable | Used By | Purpose |
+|---|---|---|
+| `FISHMMO_ENVIRONMENT` | All servers | Sets `DOTNET_ENVIRONMENT` and `ASPNETCORE_ENVIRONMENT` |
+| `FISHMMO_CLIENT_GATE_SECRET` | IPFetch, Patcher | HMAC shared secret for API request signing (**required in Production**) |
+| `ConnectionStrings__NpgsqlConnection` | IPFetch | PostgreSQL connection string |
+
+**Production safety checks** (refuse to start if unmet):
+- `FISHMMO_CLIENT_GATE_SECRET` must be set (IPFetch, Patcher)
+- Trusted proxy IPs/networks must be configured in `ForwardedHeaders` (or set `ForwardedHeaders:AllowUnconfigured=true` to bypass)
+- Npgsql connection must use `Ssl Mode=Require` or stricter (IPFetch)
+
+**Web server port bindings** (all localhost):
+
+| Server | Config Key | Default Port |
+|---|---|---|
+| IPFetch Server | `WebServer:HttpPort` | 8080 |
+| Patcher Server | `WebServer:HttpPort` | 8090 |
+| WebGL Server | `WebServer:HttpPort` | 8000 |
+
 ---
 
 ## Running the Servers
@@ -967,8 +1280,11 @@ Each server needs these files in its working directory:
 - `appsettings.json` (database config, copied from `FishMMO-Setup/` at build)
 - `AddressableAssetsData/` (Addressable asset bundles from the build)
 - `StreamingAssets/` (if any)
+- TLS certificate and private key at the paths specified in the `.cfg` file
 
 > The Unity build process copies the correct `.cfg`, `appsettings.json`, and `logging.json` from `FishMMO-Setup/` automatically via `BuildExecutor.CopyConfigurationFiles()`.
+
+> **Bind address:** Server `.cfg` files default to `Address=127.0.0.1` — the server listens on loopback and expects NGINX to forward public traffic to it. If you are running without NGINX or on a separate machine, change `Address` to `0.0.0.0` (all interfaces) or the machine's specific network IP. NGINX's stream config (`BACKEND_IP`) and HTTP upstream blocks must point to the same address.
 
 ### Starting Web Servers
 
@@ -984,9 +1300,11 @@ FishMMO-Installer --component systemd-services
 FishMMO-Installer --component windows-services
 ```
 
-This configures automatic startup, crash recovery, environment variables (`FISHMMO_ENVIRONMENT=Production`), and log file capture. See the [Installer README](FishMMO-Installer/README.MD) for details.
+This configures automatic startup, crash recovery, environment variables (`FISHMMO_ENVIRONMENT=Production`, `FISHMMO_CLIENT_GATE_SECRET`, etc.), and log file capture. See the [Installer README](FishMMO-Installer/README.MD) for details.
 
 **For development:**
+
+> All web servers bind to `127.0.0.1` by default (configured via `WebServer:HttpPort` in their appsettings). NGINX reverse-proxies to them. To test a web server directly without NGINX, configure its `appsettings.json` to bind to `0.0.0.0` or a specific IP.
 
 **IPFetch Server (Login Server Discovery):**
 ```bash
@@ -1016,13 +1334,13 @@ Place a `Patches/` directory alongside the Patcher server containing your genera
 Each SceneServer needs a unique port. Copy `SceneServer.cfg` and change the port:
 
 ```ini
-# SceneServer A — Port 7781
+# SceneServer A — Port 7790
 ServerName=Scene Server A
-Port=7781
+Port=7790
 
-# SceneServer B — Port 7782
+# SceneServer B — Port 7791
 ServerName=Scene Server B
-Port=7782
+Port=7791
 ```
 
 Launch each with `./GameServer SCENE` from its own working directory (or pass a custom config path). The WorldServer will distribute characters across all registered scene servers.
@@ -1083,7 +1401,7 @@ Place `appsettings.json` in the AppHealthMonitor's working directory:
     {
       "Name": "SceneServer",
       "ApplicationExePath": "/path/to/GameServer",
-      "MonitoredPort": 7781,
+      "MonitoredPort": 7790,
       "PortTypes": ["TCP", "UDP"],
       "LaunchArguments": "SCENE",
       "CheckIntervalSeconds": 30,
@@ -1099,8 +1417,8 @@ Place `appsettings.json` in the AppHealthMonitor's working directory:
     {
       "Name": "IPFetch Server",
       "ApplicationExePath": "/path/to/IpFetchServer",
-      "MonitoredPort": 8080,
-      "PortTypes": ["TCP"],
+      "MonitoredPort": 0,
+      "PortTypes": [],
       "LaunchArguments": "",
       "CheckIntervalSeconds": 30,
       "LaunchDelaySeconds": 2,
@@ -1236,6 +1554,8 @@ dotnet run --project FishMMO-DiscordBot/FishMMO-DiscordBot.csproj
 
 The CMS serves launcher news, announcements, and web content. It is an ASP.NET Core application.
 
+> **Note:** The CMS is in early development. Controller endpoints (account registration, admin operations) have TODO stubs — the business logic has not been implemented yet.
+
 ```bash
 cd FishMMO-CMS
 dotnet build FishMMO-CMS.slnx -c Release
@@ -1260,10 +1580,11 @@ Place `appsettings.json` with database connection details alongside the executab
 1. **Launcher starts** — Fetches news HTML from the CMS, resolves the API host, checks for updates.
 2. **Version check** — Queries `api.fishmmo.com/latest_version`. If outdated, downloads and applies patches.
 3. **Login** — Client connects to the LoginServer discovered via `api.fishmmo.com/loginserver`.
-4. **Auth** — SRP-6a authentication handshake, optional TOTP 2FA.
-5. **Character Select** — Choose or create a character.
-6. **World Entry** — WorldServer routes the character to the correct SceneServer.
-7. **Gameplay** — SceneServer handles all in-game simulation.
+4. **QUIC/WebTransport Handshake** — X25519 ECDH key agreement + stateless cookie challenge → AES-256-GCM encrypted session.
+5. **Auth** — SRP-6a authentication handshake, optional TOTP 2FA.
+6. **Character Select** — Choose or create a character.
+7. **World Entry** — WorldServer routes the character to the correct SceneServer.
+8. **Gameplay** — SceneServer handles all in-game simulation.
 
 ### Client TLS Certificate Pinning
 
@@ -1332,7 +1653,35 @@ The installer can automate host firewall rules for the ports NGINX requires:
 - **Windows:** Uses `netsh advfirewall` — adds inbound rules for the same ports.
 - **Menu:** Web Server → `4` | **CLI:** `--component firewall` or `install-config.json` `"configureFirewall": true`
 
-> Backend server ports (`8000`, `8080`, `8090`, `7770-7899`) are **not** opened to the public — only NGINX ports 80/443 are exposed.
+**Standard deployment (NGINX on same machine as backend servers):**
+
+Only NGINX's public ports need to be open. Backend servers bind to loopback and are invisible to the public network:
+
+```bash
+# HTTP/HTTPS (the only ports that need to be publicly accessible)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# UDP game ports — NGINX listens publicly, forwards to loopback game servers
+sudo ufw allow 7770:7999/udp
+```
+
+**Multi-machine deployment (NGINX on separate machine from backend servers):**
+
+Only the NGINX machine opens public ports. Backend servers only need to accept connections from NGINX's IP (private network):
+
+```bash
+# On the NGINX machine:
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 7770:7999/udp
+
+# On each backend server machine (restrict to NGINX's IP):
+sudo ufw allow from <nginx-ip> to any port 8000,8080,8090 proto tcp
+sudo ufw allow from <nginx-ip> to any port 7770:7999 proto udp
+```
+
+> Backend HTTP ports (`8000`, `8080`, `8090`) should **never** be opened to the public — NGINX is the only entry point.
 
 ### Systemd Services
 
@@ -1420,7 +1769,7 @@ Generated services:
 - **`fishmmo-patcher.service`** — Patcher Web Server on port 8090
 - **`fishmmo-webgl.service`** — WebGL Web Server on port 8000
 
-Each service unit includes `EnvironmentFile=-/path/to/fishmmo-secrets.env` so database passwords and signing keys are never baked into the unit file. Generate the env file via the Configuration menu, option `1` → choose a component → `3` (Generate secrets environment-variable file).
+Each service unit includes `EnvironmentFile=-/path/to/fishmmo-secrets.env` so database passwords, signing keys, and the ClientGate secret are never baked into the unit file. Generate the env file via the Configuration menu, option `1` → choose a component → `3` (Generate secrets environment-variable file).
 
 ```bash
 # Verify after installer-generated registration:
@@ -1429,24 +1778,87 @@ systemctl status fishmmo-ipfetch fishmmo-patcher fishmmo-webgl
 
 ### Port Reference
 
-| Port | Service | Exposure |
-|---|---|---|
-| 80 | NGINX (HTTP → HTTPS redirect) | Public |
-| 443 | NGINX (HTTPS + WSS) | Public |
-| 5432 | PostgreSQL | Private (localhost) |
-| 6432 | PgBouncer | Private (localhost) |
-| 7770 | LoginServer | Private (behind NGINX for WebGL) |
-| 7780 | WorldServer | Private (behind NGINX for WebGL) |
-| 7781+ | SceneServer(s) | Private (behind NGINX for WebGL) |
-| 8000 | WebGL Static Server | Private (behind NGINX) |
-| 8080 | IPFetch Server | Private (behind NGINX) |
-| 8090 | Patcher Server | Private (behind NGINX) |
+| Port | Service | Protocol | Listens On | Public Exposure |
+|---|---|---|---|---|
+| 80 | NGINX (HTTP → HTTPS redirect) | TCP | `0.0.0.0` | Public |
+| 443 | NGINX (HTTPS) | TCP | `0.0.0.0` | Public |
+| 5432 | PostgreSQL | TCP | `127.0.0.1` | None (loopback only) |
+| 6432 | PgBouncer | TCP | `127.0.0.1` | None (loopback only) |
+| 7770-7779 | LoginServer(s) | UDP (QUIC) | `127.0.0.1` by default | Via NGINX L4 stream only |
+| 7780-7789 | WorldServer(s) | UDP (QUIC) | `127.0.0.1` by default | Via NGINX L4 stream only |
+| 7790-7999 | SceneServer(s) | UDP (QUIC) | `127.0.0.1` by default | Via NGINX L4 stream only |
+| 8000 | WebGL Static Server | TCP (HTTP) | `127.0.0.1` | Via NGINX reverse proxy only |
+| 8080 | IPFetch Server | TCP (HTTP) | `127.0.0.1` | Via NGINX reverse proxy only |
+| 8090 | Patcher Server | TCP (HTTP) | `127.0.0.1` | Via NGINX reverse proxy only |
 
-> Desktop clients connect directly to game server ports (TCP/UDP). WebGL clients connect through NGINX via WebSocket on port 443.
+> **All backend services bind to loopback by default.** NGINX is the only component with public-facing listeners. Desktop/native clients connect to NGINX's public IP for both HTTP APIs and UDP game traffic — from the client's perspective, it talks to `api.fishmmo.com:443` and `game.fishmmo.com:7770`; NGINX transparently proxies to the loopback-bound backend. If a backend server runs on a different machine, change its bind address and the corresponding NGINX upstream/stream target.
+
+### Certbot Deploy Hook (TLS Renewal)
+
+The `FishMMO-Setup/deploy-hooks/certbot-fishmmo.sh` script handles TLS certificate lifecycle:
+
+```
+┌────────────────────────────────────────────────────┐
+│ certbot renew → new certs in /etc/letsencrypt/    │
+│     ↓                                              │
+│ certbot-fishmmo.sh (deploy hook)                   │
+│     ├─ Validate renewed certificate                │
+│     ├─ Copy certs → /etc/fishmmo/certs/            │
+│     ├─ chown fishmmo:fishmmo, chmod 640            │
+│     ├─ nginx -s reload (zero-downtime)             │
+│     └─ systemctl restart fishmmo-login fishmmo-world │
+│        + fishmmo-scene@* (rolling restart)          │
+└────────────────────────────────────────────────────┘
+```
+
+**Install the hook:**
+```bash
+sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+sudo ln -s $(pwd)/FishMMO-Setup/deploy-hooks/certbot-fishmmo.sh \
+  /etc/letsencrypt/renewal-hooks/deploy/fishmmo.sh
+```
+
+**Test the renewal pipeline:**
+```bash
+sudo certbot renew --dry-run --deploy-hook /etc/letsencrypt/renewal-hooks/deploy/fishmmo.sh
+```
 
 ---
 
-## Flow Diagram
+## Architecture
+
+### Connection Pipeline
+
+The full end-to-end connection flow is documented in [CONNECTION_PIPELINE.md](CONNECTION_PIPELINE.md). Key phases:
+
+| Phase | Description |
+|---|---|
+| 1. Launcher Startup | News fetch, version check, HMAC-signed API requests |
+| 2. Server Discovery | IPFetch returns active login servers + one-time connection token |
+| 3. QUIC/WebTransport | QUIC Initial → TLS 1.3 handshake → encrypted tunnel |
+| 4. X25519 ECDH | Stateless cookie challenge → key agreement → AES-256-GCM session |
+| 5. SRP-6a Auth | Zero-knowledge password proof, async worker channel, token issuance |
+| 6. TOTP 2FA | 6-digit code or recovery code, failure lockout |
+| 7. Token & Character | Token hash persisted, character CRUD, server list |
+| 8. World Server | Token auth with HMAC verification, renewal token |
+| 9. Scene Server | Same token auth flow, gameplay begins |
+| 10. Token Lifecycle | Auto-renewal after each auth, revocation on logout/pause/quit |
+
+### Server Initialization Order
+
+The 5-phase server startup sequence is documented in [SERVER_INITIALIZATION_ORDER.md](SERVER_INITIALIZATION_ORDER.md):
+
+| Phase | What Happens |
+|---|---|
+| 1. MainBootstrap | Unity loads bootstrap scene, initializes logging, enqueues ServerLauncher |
+| 2. ServerLauncher | Determines server type (args), loads server scenes additively |
+| 3. Server Scene | Server.Start() — finds NetworkManager, creates CoreServer, fetches external IP |
+| 4. Finalize Setup | Data containers initialized, behaviours registered, physics + network started |
+| 5. Runtime | Frame-based LateUpdate, client connections, periodic callbacks |
+
+Key guarantee: **RuntimeDataContainers are always initialized before ServerBehaviours** — no race conditions between logic and data.
+
+### Flow Diagram
 
 ```mermaid
 flowchart TB
@@ -1455,7 +1867,7 @@ flowchart TB
     end
 
     subgraph NGINX["NGINX Reverse Proxy (ports 80/443)"]
-        SSL["SSL Termination<br/>Rate Limiting"]
+        SSL["NGINX<br/>L7: TLS termination (HTTP APIs)<br/>L4: UDP forward (no TLS for QUIC)"]
     end
 
     subgraph WebServices["ASP.NET Web Services"]
@@ -1468,8 +1880,8 @@ flowchart TB
     subgraph GameServers["Game Servers (GameServer executable)"]
         Login["LoginServer<br/>:7770<br/><i>SRP-6a auth, account mgmt</i>"]
         World["WorldServer<br/>:7780<br/><i>World state, routing</i>"]
-        Scene1["SceneServer<br/>:7781<br/><i>Gameplay simulation</i>"]
-        SceneN["SceneServer<br/>:778x<br/><i>Additional scenes</i>"]
+        Scene1["SceneServer<br/>:7790<br/><i>Gameplay simulation</i>"]
+        SceneN["SceneServer<br/>:779x<br/><i>Additional scenes</i>"]
     end
 
     subgraph DataLayer["Data Layer"]
@@ -1491,25 +1903,25 @@ flowchart TB
         DiscordBot["DiscordBot<br/><i>Chat bridge</i>"]
     end
 
-    Player -->|"HTTPS / WSS"| SSL
+    Player -->|"HTTPS :443"| SSL
+    Player -->|"QUIC/UDP :7770-7999"| SSL
     SSL -->|"/loginserver"| IPFetch
     SSL -->|"/latest_version<br/>/{version}"| Patcher
-    SSL -->|"play.fishmmo.com"| WebGL
-    SSL -->|"game.fishmmo.com<br/>/ws/{port}"| Login
-    SSL -->|"game.fishmmo.com<br/>/ws/{port}"| World
-    SSL -->|"game.fishmmo.com<br/>/ws/{port}"| Scene1
+    SSL -->|"/ (static)"| WebGL
+    SSL -->|"UDP stream :7770"| Login
+    SSL -->|"UDP stream :7780"| World
+    SSL -->|"UDP stream :7790+"| Scene1
     SSL -->|"news / content"| CMS
 
-    Player -.->|"Direct TCP/UDP<br/>(non-WebGL)"| Login
-    Player -.->|"Direct TCP/UDP<br/>(non-WebGL)"| World
-    Player -.->|"Direct TCP/UDP<br/>(non-WebGL)"| Scene1
+    Player -.->|"Direct UDP/QUIC<br/>(only if NGINX on<br/>separate machine)"| Login
+    Player -.->|"Direct UDP/QUIC<br/>(only if NGINX on<br/>separate machine)"| World
+    Player -.->|"Direct UDP/QUIC<br/>(only if NGINX on<br/>separate machine)"| Scene1
 
     Login --> PgBouncer
     World --> PgBouncer
     Scene1 --> PgBouncer
     SceneN --> PgBouncer
     PgBouncer --> PostgreSQL
-
 
     IPFetch --> PostgreSQL
     World --> Scene1
