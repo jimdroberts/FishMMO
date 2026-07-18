@@ -1257,11 +1257,6 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// Broadcasts a generic auth result to the client.
 		/// </summary>
-		/// <param name="conn">Target connection.</param>
-		/// <param name="result">Auth result code.</param>
-		/// <param name="reliable">True for reliable delivery, false for unreliable.</param>
-		protected abstract void BroadcastAuthResult(TConnection conn, ClientAuthenticationResult result, bool reliable);
-
 		/// <summary>
 		/// Broadcasts the SRP verify response (encrypted salt + server public ephemeral) to the client.
 		/// </summary>

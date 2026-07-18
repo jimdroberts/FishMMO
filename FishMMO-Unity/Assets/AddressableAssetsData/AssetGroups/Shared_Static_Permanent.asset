@@ -51,6 +51,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1543472ad0644ec4fbae5c4413d88243
+    m_Address: MainBootstrap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 15a71776a1f5e4245841b3301c881f80
     m_Address: Attack Speed
     m_ReadOnly: 0

@@ -244,6 +244,9 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.TokenInvalid:
 				case ClientAuthenticationResult.TokenExpired:
 				case ClientAuthenticationResult.TokenRevoked:
+				case ClientAuthenticationResult.VersionMismatch:
+					OnVersionMismatch();
+					break;
 				case ClientAuthenticationResult.TokenDecryptFailed:
 					OnLoginAuthenticationDialog("Authentication failed. Please log in again.");
 					break;
@@ -360,10 +363,24 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Shows a dialog box for login/authentication errors and disconnects the client.
+		/// Called when the server rejects the client due to a game version mismatch.
+		/// Shows a dialog and disconnects.
 		/// </summary>
-		/// <param name="errorMsg">The error message to display.</param>
-		private void OnLoginAuthenticationDialog(string errorMsg)
+		private void OnVersionMismatch()
+		{
+			string myVersion = MainBootstrapSystem.GameVersion ?? "unknown";
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			{
+				uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
+			}
+			Client.ForceDisconnect();
+		}
+
+		/// <summary>
+		/// Shows a dialog for authentication errors and disconnects the client.
+			/// </summary>
+			/// <param name="errorMsg">The error message to display.</param>
+			private void OnLoginAuthenticationDialog(string errorMsg)
 		{
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
 			{

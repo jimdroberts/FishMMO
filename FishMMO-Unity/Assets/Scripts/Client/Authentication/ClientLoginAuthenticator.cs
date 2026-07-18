@@ -49,7 +49,7 @@ namespace FishMMO.Client
 			/// Sends the initial client handshake (ephemeral public key, cookie, connection token,
 			/// supported protocol version range) to the server as a <see cref="ClientHandshake"/> broadcast.
 			/// </summary>
-			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion)
+			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion, string gameVersion)
 			{
 				Client.Broadcast(new ClientHandshake()
 				{
@@ -58,6 +58,7 @@ namespace FishMMO.Client
 					ConnectionToken = connectionToken,
 					MinVersion = minVersion,
 					MaxVersion = maxVersion,
+					GameVersion = gameVersion,
 				}, Channel.Reliable);
 			}
 
@@ -252,6 +253,7 @@ namespace FishMMO.Client
 			if (initialized) return;
 			base.InitializeOnce(networkManager);
 			core = new LoginAuthenticatorCore(this);
+			core.SetGameVersion(MainBootstrapSystem.GameVersion ?? "");
 			this.networkManager = networkManager;
 
 			base.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
@@ -301,6 +303,13 @@ namespace FishMMO.Client
 		/// <param name="password">The password.</param>
 		/// <param name="register">True to register a new account; false to login.</param>
 		/// <param name="email">The email address for multi-factor identification.</param>
+		/// <summary>
+		/// Stores the client game version to be sent during the handshake.
+		/// Must be called before connecting to a server.
+		/// </summary>
+		/// <param name="version">Game version string (e.g. "0.1.0").</param>
+		public void SetGameVersion(string version) => core.SetGameVersion(version);
+
 		/// <param name="age">The age for multi-factor identification.</param>
 		/// <returns><c>true</c> if credentials were accepted; <c>false</c> if rejected.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

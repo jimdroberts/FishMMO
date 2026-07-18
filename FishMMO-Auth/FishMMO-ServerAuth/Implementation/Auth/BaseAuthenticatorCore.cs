@@ -109,6 +109,14 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>The account manager for this authenticator.</summary>
 		protected IAccountManager<TConnection> AccountManager { get; private set; }
 
+		/// <summary>
+		/// Expected game version string (e.g. "0.1.0"). Set by the server host before
+		/// connections are accepted. If null or empty, game version validation is skipped
+		/// (development safety). When set, clients with a mismatched <c>ClientHandshake.GameVersion</c>
+		/// are rejected with <see cref="ClientAuthenticationResult.VersionMismatch"/>.
+		/// </summary>
+		public string ExpectedGameVersion { get; set; } = "";
+
 		/// <summary>Log source tag used in all log messages emitted by this core.</summary>
 		protected virtual string LogPrefix => GetType().Name;
 
@@ -365,7 +373,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="cookie">Cookie echoed from a prior challenge, or null on first attempt.</param>
 		/// <param name="minVersion">Minimum protocol version supported by the client.</param>
 		/// <param name="maxVersion">Maximum protocol version supported by the client.</param>
-		public void OnHandshakeReceived(TConnection conn, byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion)
+		public void OnHandshakeReceived(TConnection conn, byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion, string gameVersion = "")
 		{
 			if (IsConnectionAuthenticated(conn) ||
 				publicKey == null ||
@@ -411,6 +419,21 @@ namespace FishMMO.Auth.Implementation
 					DisconnectConnection(conn, graceful: true);
 					return;
 				}
+
+				// ── Game version validation ────────────────────────────────
+				// Reject clients whose game version does not match the server.
+				// Skipped when ExpectedGameVersion is empty (development safety).
+				if (!string.IsNullOrEmpty(ExpectedGameVersion))
+				{
+					if (string.IsNullOrEmpty(gameVersion) || gameVersion != ExpectedGameVersion)
+					{
+						_ = Log.Warning(LogPrefix, string.Format("Game version mismatch: client=\"{0}\", server=\"{1}\"", gameVersion, ExpectedGameVersion));
+						BroadcastAuthResult(conn, ClientAuthenticationResult.VersionMismatch, reliable: true);
+						DisconnectConnection(conn, graceful: true);
+						return;
+					}
+				}
+
 				string challengeIp = HandshakeService.NormalizeIp(GetConnectionAddress(conn));
 				// Bind the connection identity into the cookie so a
 				// captured cookie cannot be replayed by another connection from the
@@ -689,6 +712,14 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="conn">The connection to disconnect.</param>
 		/// <param name="graceful">If true, attempt a graceful close; otherwise force-close immediately.</param>
 		protected abstract void DisconnectConnection(TConnection conn, bool graceful);
+
+		/// <summary>
+		/// Broadcasts an authentication result to a single connection.
+		/// </summary>
+		/// <param name="conn">Target connection.</param>
+		/// <param name="result">Auth result code.</param>
+		/// <param name="reliable">True for reliable delivery, false for unreliable.</param>
+		protected abstract void BroadcastAuthResult(TConnection conn, ClientAuthenticationResult result, bool reliable);
 
 		#endregion
 	}

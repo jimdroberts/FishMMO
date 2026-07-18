@@ -84,6 +84,22 @@ namespace FishMMO.Auth.Implementation
 		private int age;
 		/// <summary>True when the current flow is account registration rather than login.</summary>
 		private bool register;
+		/// <summary>Client game version string (e.g. "0.1.0"), sent during handshake for server validation.</summary>
+		private string gameVersion = "";
+
+		#endregion
+
+		#region Game Version
+
+		/// <summary>
+		/// Stores the client game version to be sent during the handshake.
+		/// Must be called before <see cref="OnConnected"/>.
+		/// </summary>
+		/// <param name="version">Game version string (e.g. "0.1.0").</param>
+		public void SetGameVersion(string version)
+		{
+			gameVersion = version ?? "";
+		}
 
 		#endregion
 
@@ -156,7 +172,8 @@ namespace FishMMO.Auth.Implementation
 				cookie: null,
 				connectionToken,
 				CryptoHelper.MinSupportedProtocolVersion,
-				CryptoHelper.MaxSupportedProtocolVersion);
+				CryptoHelper.MaxSupportedProtocolVersion,
+				gameVersion);
 		}
 
 		/// <summary>
@@ -208,7 +225,8 @@ namespace FishMMO.Auth.Implementation
 					cookie,
 					connectionToken: null,
 					CryptoHelper.MinSupportedProtocolVersion,
-					CryptoHelper.MaxSupportedProtocolVersion);
+					CryptoHelper.MaxSupportedProtocolVersion,
+					gameVersion);
 				return;
 			}
 
@@ -760,7 +778,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="cookie">Cookie echoed from a prior challenge, or null on the initial handshake.</param>
 		/// <param name="minVersion">Minimum protocol version supported by this client.</param>
 		/// <param name="maxVersion">Maximum protocol version supported by this client.</param>
-		protected abstract void SendClientHandshake(byte[] publicKey, byte[]? cookie, string? connectionToken, ushort minVersion, ushort maxVersion);
+		protected abstract void SendClientHandshake(byte[] publicKey, byte[]? cookie, string? connectionToken, ushort minVersion, ushort maxVersion, string gameVersion);
 
 		/// <summary>
 		/// Sends a token auth broadcast (World/Scene server path).

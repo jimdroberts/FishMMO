@@ -57,5 +57,10 @@ namespace FishMMO.Client
 		/// There was an error with the client or server version.
 		/// </summary>
 		VersionError,
+		/// <summary>
+		/// The game server rejected the client because its game version does not match
+		/// the server's expected version. The client must be updated (or downgraded).
+		/// </summary>
+		ServerRejectedVersion,
 	}
 }

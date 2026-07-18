@@ -173,6 +173,7 @@ namespace FishMMO.Client
 			public const string StatusLaunchFailed = "Launch Failed";
 			public const string StatusVersionError = "Version Error";
 			public const string StatusClientAhead = "Client Version Ahead";
+				public const string StatusServerRejectedVersion = "Version Rejected by Server";
 
 			public const string ErrorLoadingNews = "Error loading news: ";
 			public const string ErrorNoNewsContent = "Could not display news content.";
@@ -362,8 +363,13 @@ namespace FishMMO.Client
 					break;
 				case LauncherState.ClientAhead:
 					buttonText = UIText.StatusClientAhead;
-					isButtonInteractable = true; // Allow playing even if client is ahead.
-					buttonAction = PlayButtonLaunch;
+					isButtonInteractable = true;
+					buttonAction = PlayButtonConnect; // Re-check version — don't allow Play when client is ahead.
+					break;
+				case LauncherState.ServerRejectedVersion:
+					buttonText = UIText.StatusServerRejectedVersion;
+					isButtonInteractable = true;
+					buttonAction = PlayButtonConnect; // Re-check version.
 					break;
 				case LauncherState.ConnectionFailed:
 					buttonText = UIText.StatusConnectionFailed;

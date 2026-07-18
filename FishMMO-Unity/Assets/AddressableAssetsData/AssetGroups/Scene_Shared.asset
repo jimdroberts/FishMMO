@@ -15,12 +15,6 @@ MonoBehaviour:
   m_GroupName: Scene_Shared
   m_GUID: 78ff5ab0fb2e04bf384d2bb38bea229a
   m_SerializeEntries:
-  - m_GUID: 1543472ad0644ec4fbae5c4413d88243
-    m_Address: MainBootstrap
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 372294cecb987eb418c8609b8fb4d289
     m_Address: Test Dungeon
     m_ReadOnly: 0

@@ -382,11 +382,6 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// Broadcasts a generic auth result to the client.
 		/// </summary>
-		/// <param name="conn">Target connection.</param>
-		/// <param name="result">Auth result code.</param>
-		/// <param name="reliable">True for reliable delivery, false for unreliable.</param>
-		protected abstract void BroadcastAuthResult(TConnection conn, ClientAuthenticationResult result, bool reliable);
-
 		/// <summary>
 		/// Enqueues an action to be executed on the main/UI thread.
 		/// Unity implementations must use this to marshal network API calls.

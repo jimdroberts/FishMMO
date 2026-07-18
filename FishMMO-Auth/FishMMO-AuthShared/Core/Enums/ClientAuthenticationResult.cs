@@ -88,5 +88,10 @@ namespace FishMMO.Auth.Core
 		/// World/Scene servers until re-authenticating. Not sent over the wire.
 		/// </summary>
 		TokenDecryptFailed,
+		/// <summary>
+		/// Server rejected the client because the game version does not match.
+		/// The client must update (or downgrade) to match the server's version.
+		/// </summary>
+		VersionMismatch,
 	}
 }

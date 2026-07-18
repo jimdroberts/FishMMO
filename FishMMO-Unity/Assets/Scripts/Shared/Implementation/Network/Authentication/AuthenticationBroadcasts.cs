@@ -72,6 +72,13 @@ namespace FishMMO.Shared
 		/// Maximum protocol version supported by this client.
 		/// </summary>
 		public ushort MaxVersion;
+
+		/// <summary>
+		/// Client game version string (e.g. "0.1.0"). Sent in plaintext so the server
+		/// can reject mismatched clients before starting the expensive ECDH key agreement.
+		/// Empty if the version is unavailable (development builds).
+		/// </summary>
+		public string GameVersion;
 	}
 
 	/// <summary>

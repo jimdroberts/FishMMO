@@ -40,6 +40,8 @@ namespace FishMMO.Auth.Core
 		public ushort MinVersion;
 		/// <summary>Maximum protocol version supported by this client.</summary>
 		public ushort MaxVersion;
+		/// <summary>Client game version string (e.g. "0.1.0"). Mirrors <c>ClientHandshake.GameVersion</c>.</summary>
+		public string GameVersion;
 	}
 
 	/// <summary>

@@ -95,6 +95,7 @@ namespace FishMMO.Server.Implementation
 		{
 			ShutdownWorkers();
 			InitializeCoreInstance();
+			Core.ExpectedGameVersion = MainBootstrapSystem.GameVersion;
 			workerCts = new CancellationTokenSource();
 			Core.InitializeWorkers(workerCts.Token);
 
@@ -224,7 +225,7 @@ namespace FishMMO.Server.Implementation
 				_ = ProcessConnectionTokenAsync(conn, msg.ConnectionToken);
 			}
 
-			Core?.OnHandshakeReceived(conn, msg.PublicKey, msg.Cookie, msg.ConnectionToken, msg.MinVersion, msg.MaxVersion);
+			Core?.OnHandshakeReceived(conn, msg.PublicKey, msg.Cookie, msg.ConnectionToken, msg.MinVersion, msg.MaxVersion, msg.GameVersion ?? "");
 		}
 
 		/// <summary>

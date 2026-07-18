@@ -214,6 +214,9 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.AccountUnverified:
 				case ClientAuthenticationResult.TwoFactorRequired:
 				case ClientAuthenticationResult.TwoFactorInvalid:
+				case ClientAuthenticationResult.VersionMismatch:
+					OnVersionMismatch();
+					break;
 				case ClientAuthenticationResult.TokenDecryptFailed:
 					break;
 			}
@@ -337,7 +340,24 @@ namespace FishMMO.Client
 		/// Shows a dialog box for registration feedback and disconnects the client.
 		/// </summary>
 		/// <param name="message">The message to display.</param>
-		private void OnRegistrationDialog(string message)
+		private void OnVersionMismatch()
+			{
+				string myVersion = MainBootstrapSystem.GameVersion ?? "unknown";
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+				{
+					uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
+				}
+				pendingVerifyUsername = null;
+				DeleteSavedTwoFactorSetupFile();
+				Client.ForceDisconnect();
+				SetFormLocked(false);
+			}
+
+			/// <summary>
+			/// Shows a dialog box for registration feedback and disconnects the client.
+			/// </summary>
+			/// <param name="message">The message to display.</param>
+			private void OnRegistrationDialog(string message)
 		{
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
 			{
