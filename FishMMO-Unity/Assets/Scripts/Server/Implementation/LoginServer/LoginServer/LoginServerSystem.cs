@@ -46,16 +46,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private float signingKeyRotationHours = 24.0f;
 
 		/// <summary>UTC timestamp when the currently active signing key was issued.</summary>
-		private DateTime _signingKeyIssuedUtc;
+		private DateTime signingKeyIssuedUtc;
 
 		/// <summary>Guards against re-entrant rotation while a previous rotation is still in flight.</summary>
-		private int _rotationInFlight;
+		private int rotationInFlight;
 
 		/// <summary>
 		/// 32-byte AES-256 KEK used by <see cref="KeyEnvelope"/> to wrap signing-key material before
 		/// it is written to the database. Loaded once from configuration in <see cref="InitializeOnce"/>.
 		/// </summary>
-		private byte[] _signingKeyKek;
+		private byte[] signingKeyKek;
 
 		/// <summary>
 		/// Initializes the login server system, registers event handlers, and adds the server to the database.
@@ -142,13 +142,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Load the deployment-shared KEK and wrap the signing key before persistence.
 			// A DB-only attacker (read or write) cannot recover or forge usable signing keys
 			// without also possessing the KEK, which is provisioned out-of-band.
-			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out _signingKeyKek, out string kekError))
+			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out signingKeyKek, out string kekError))
 			{
 				Log.Warning("LoginServerSystem", $"Signing-key KEK not provisioned — persisting raw HMAC key. {kekError}");
-				_signingKeyKek = null;
+				signingKeyKek = null;
 			}
 
-			byte[] wrappedHmacKey = _signingKeyKek != null ? KeyEnvelope.Wrap(_signingKeyKek, hmacKey, SigningKeyKekProvider.BuildAad(runtimeData.ID)) : hmacKey;
+			byte[] wrappedHmacKey = signingKeyKek != null ? KeyEnvelope.Wrap(signingKeyKek, hmacKey, SigningKeyKekProvider.BuildAad(runtimeData.ID)) : hmacKey;
 
 			Task<DatabaseResult<LoginServerSigningKeyData>> keyTask = Task.Run(() =>
 				signingKeyService.UpsertAsync(runtimeData.ID, wrappedHmacKey));
@@ -168,7 +168,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Configure the authenticator for token issuance
-			_signingKeyIssuedUtc = DateTime.UtcNow;
+			signingKeyIssuedUtc = DateTime.UtcNow;
 			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
 			{
 				authenticator.TokenSigningKey = hmacKey;
@@ -251,10 +251,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Zero the deployment signing-key KEK so a post-shutdown core dump cannot recover it.
-			if (this._signingKeyKek != null)
+			if (this.signingKeyKek != null)
 			{
-				CryptographicOperations.ZeroMemory(this._signingKeyKek);
-				this._signingKeyKek = null;
+				CryptographicOperations.ZeroMemory(this.signingKeyKek);
+				this.signingKeyKek = null;
 			}
 
 			// Deregister login server and signing key from database on shutdown
@@ -308,14 +308,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				// C6: Token signing key rotation. Inspects the age of the in-memory active key and
 				// triggers an asynchronous rotation when it exceeds the configured interval. A single
-				// rotation may be in flight at a time (CAS-guarded by _rotationInFlight).
+				// rotation may be in flight at a time (CAS-guarded by rotationInFlight).
 				if (signingKeyRotationHours > 0f &&
-					(DateTime.UtcNow - _signingKeyIssuedUtc).TotalHours >= signingKeyRotationHours &&
-					System.Threading.Interlocked.CompareExchange(ref _rotationInFlight, 1, 0) == 0)
+					(DateTime.UtcNow - signingKeyIssuedUtc).TotalHours >= signingKeyRotationHours &&
+					System.Threading.Interlocked.CompareExchange(ref rotationInFlight, 1, 0) == 0)
 				{
 					if (!TryEnqueueAsyncWork(() => RotateSigningKeyAsync(runtimeData.ID)))
 					{
-						System.Threading.Interlocked.Exchange(ref _rotationInFlight, 0);
+						System.Threading.Interlocked.Exchange(ref rotationInFlight, 0);
 						Log.Warning("LoginServerSystem", "Failed to enqueue signing key rotation work item.");
 					}
 				}
@@ -346,13 +346,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 				// Wrap the rotated key under the deployment KEK before persistence. If the
 				// KEK is not yet loaded (rotation racing init) we fail closed and retry on the
 				// next tick rather than silently writing a plaintext key.
-				if (_signingKeyKek == null)
+				if (signingKeyKek == null)
 				{
 					CryptographicOperations.ZeroMemory(newHmacKey);
 					await Log.Warning("LoginServerSystem", "Signing key rotation aborted: KEK not loaded.");
 					return;
 				}
-				byte[] wrappedNewHmacKey = KeyEnvelope.Wrap(_signingKeyKek, newHmacKey, SigningKeyKekProvider.BuildAad(serverId));
+				byte[] wrappedNewHmacKey = KeyEnvelope.Wrap(signingKeyKek, newHmacKey, SigningKeyKekProvider.BuildAad(serverId));
 				DatabaseResult<LoginServerSigningKeyData> keyResult = await signingKeyService.UpsertAsync(serverId, wrappedNewHmacKey);
 				if (!keyResult.IsSuccess)
 				{
@@ -382,7 +382,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 				}
 
-				_signingKeyIssuedUtc = DateTime.UtcNow;
+				signingKeyIssuedUtc = DateTime.UtcNow;
 				await Log.Debug("LoginServerSystem", $"Rotated token-signing key (ServerID={serverId}, NewKeyID={keyResult.Data.ID}).");
 			}
 			catch (Exception ex)
@@ -391,7 +391,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 			finally
 			{
-				System.Threading.Interlocked.Exchange(ref _rotationInFlight, 0);
+				System.Threading.Interlocked.Exchange(ref rotationInFlight, 0);
 			}
 		}
 

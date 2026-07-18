@@ -34,15 +34,17 @@ namespace FishMMO.Shared
 
 			/// <summary>
 			/// Unified API Host URL. NGINX routes to the correct backend by path.
+			/// Change this constant when deploying to a different domain.
 			/// </summary>
-			public static readonly string APIHost = "https://api.fishmmo.com/";
+			public const string APIHost = "https://api.fishmmo.com/";
 
 			/// <summary>
-			/// NGINX game WebSocket hostname. All clients (standalone + WebGL) use
-			/// Bayou via wss://GameHost/ws/{port}. NGINX routes /ws/{port} to the
-			/// correct backend game server on localhost or a remote machine.
+			/// Game server hostname. All clients (standalone + WebGL) connect via
+			/// WebTransport (QUIC/HTTP3) to https://GameHost:{port}. NGINX forwards
+			/// raw UDP to the correct backend game server on loopback.
+			/// Change this constant when deploying to a different domain.
 			/// </summary>
-			public static readonly string GameHost = "game.fishmmo.com";
+			public const string GameHost = "game.fishmmo.com";
 
 			public static readonly string ScenePath = "Assets/Scenes/";
 			public static readonly string BootstrapScenePath = "Assets/Scenes/";
@@ -61,6 +63,24 @@ namespace FishMMO.Shared
 			public static readonly LayerMask Ground = LayerMask.NameToLayer("Ground");
 			public static readonly LayerMask Obstruction = LayerMask.GetMask("Default", "Ground");
 			public static readonly LayerMask Player = LayerMask.NameToLayer("Player");
+
+			/// <summary>
+			/// Validates that all required layers exist in the project's Tag Manager.
+			/// Returns a list of missing layer names, or an empty list if all are present.
+			/// Call during bootstrap to catch misconfigured projects early.
+			/// </summary>
+			public static System.Collections.Generic.List<string> Validate()
+			{
+				var missing = new System.Collections.Generic.List<string>();
+				void Check(int layer, string name) { if (layer < 0) missing.Add(name); }
+
+				Check(Default, "Default");
+				Check(IgnoreRaycast, "Ignore Raycast");
+				Check(Ground, "Ground");
+				Check(Player, "Player");
+
+				return missing;
+			}
 		}
 
 		public static class Character

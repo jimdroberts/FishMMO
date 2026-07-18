@@ -199,7 +199,7 @@ GameObject:
   - component: {fileID: 2946536618568869384}
   - component: {fileID: 3897615595877637487}
   - component: {fileID: 8097462252018206293}
-  - component: {fileID: 8097462252018206294}
+  - component: {fileID: 8097462252018206298}
   - component: {fileID: 8097462252018206296}
   - component: {fileID: 8097462252018206295}
   - component: {fileID: 8097462252018206297}
@@ -404,26 +404,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   GlobalServerActions: 1
   _transports:
-  - {fileID: 8097462252018206294}
---- !u!114 &8097462252018206294
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2696072683415778311}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 362dfd7e6009fb44c90beec3df0ad853, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _useWss: 0
-  _mtu: 1023
-  _useProxyProtocol: 1
-  _serverBindAddress: localhost
-  _port: 7770
-  _maximumClients: 2000
-  _clientAddress: localhost
+  - {fileID: 8097462252018206298}
 --- !u!114 &8097462252018206295
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -466,6 +447,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Observing.HashGrid
   _gridAxes: 0
   _accuracy: 70
+--- !u!114 &8097462252018206298
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2696072683415778311}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8605cf07f1216f2f7a7d7d1b8c81f66b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WebTransport::FishNet.Transporting.WebTransport.WebTransport
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -1,3 +1,6 @@
+# --- Built native plugins (not tracked) ---
+/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/*/
+
 # --- Unity Folders (Root Only) ---
 /[Ll]ibrary/
 /[Tt]emp/

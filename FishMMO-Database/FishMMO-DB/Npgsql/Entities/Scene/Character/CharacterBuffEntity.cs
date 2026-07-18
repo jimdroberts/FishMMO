@@ -9,8 +9,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public long CharacterID { get; set; }
 		public CharacterEntity Character { get; set; }
 		public int TemplateID { get; set; }
-		public float RemainingTime { get; set; }
-		public float TickTime { get; set; }
+		public double RemainingTime { get; set; }
+		public double TickTime { get; set; }
 		public int Stacks { get; set; }
 		public int TickCount { get; set; }
 		public DateTime TimeCreated { get; set; }

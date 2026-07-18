@@ -47,11 +47,12 @@ void wt_client_free_impl(wt_client_s* client)
      * disconnect_impl sets state=STOPPED before ConnectionShutdown
      * completes, so state is unreliable for distinguishing paths. */
     if (atomic_load(&client->pending_shutdowns) > 0) {
-        /* Spin-wait for SHUTDOWN_COMPLETE to close handles (bounded).
+        /* Spin-wait for SHUTDOWN_COMPLETE to finish (bounded).
          * 300 iterations * 10ms = 3 second max wait.
-         * The callback closes Connection, Config, Registration, and
-         * destroys the dgram_queue, then signals pending_shutdowns=0.
-         * We do the final free(cli) here — never in the callback. */
+         * The callback closes the QUIC connection and signals
+         * pending_shutdowns=0. We close config/registration here
+         * on the application thread to avoid calling MsQuic
+         * handle-close functions from within a callback. */
         int retries = 300;
         while (atomic_load(&client->pending_shutdowns) > 0 && retries-- > 0) {
 #if defined(WT_PLATFORM_WINDOWS)
@@ -65,6 +66,18 @@ void wt_client_free_impl(wt_client_s* client)
             WT_LOG_WARN("Client shutdown timed out (pending=%u), forcing free",
                         (unsigned)atomic_load(&client->pending_shutdowns));
         }
+
+        /* Close handles deferred from SHUTDOWN_COMPLETE callback.
+         * Order: config before registration (reverse of creation). */
+        if (client->session_config) {
+            MsQuic->ConfigurationClose(client->session_config);
+            client->session_config = NULL;
+        }
+        if (client->registration) {
+            MsQuic->RegistrationClose(client->registration);
+            client->registration = NULL;
+        }
+
         wt_datagram_queue_destroy(&client->dgram_queue);
         free(client);
         return;
@@ -100,8 +113,16 @@ int32_t wt_client_connect_impl(
     strncpy(client->server_name, server_name,
             sizeof(client->server_name) - 1);
     client->server_name[sizeof(client->server_name) - 1] = '\0';
-    strncpy(client->address, address, sizeof(client->address) - 1);
-    client->address[sizeof(client->address) - 1] = '\0';
+    /* Copy address, stripping any URL path (e.g. "host/wt/port" → "host").
+     * The path is only meaningful for WebGL URL construction; native QUIC
+     * connections target host:port directly. */
+    {
+        const char* slash = strchr(address, '/');
+        size_t addr_len = slash ? (size_t)(slash - address) : strlen(address);
+        if (addr_len >= sizeof(client->address)) addr_len = sizeof(client->address) - 1;
+        memcpy(client->address, address, addr_len);
+        client->address[addr_len] = '\0';
+    }
     client->port = port;
     client->use_tls = use_tls;
 
@@ -141,11 +162,21 @@ int32_t wt_client_connect_impl(
         return WT_ERR_UNKNOWN;
     }
 
-    /* ── TLS credentials (client: no cert needed) ── */
+    /* ── TLS credentials ──
+     * QUIC_CREDENTIAL_TYPE_NONE  = no client certificate (mutual TLS not required)
+     * QUIC_CREDENTIAL_FLAG_CLIENT = client-mode handshake
+     * QUIC_CREDENTIAL_FLAG_INDICATE_CERTIFICATE_RECEIVED = deliver the server
+     *   certificate chain via QUIC_CONNECTION_EVENT_PEER_CERTIFICATE_RECEIVED
+     *   so we can log the certificate for diagnostics.
+     *
+     * Server certificate validation is ON by default (platform trust store).
+     * DO NOT add QUIC_CREDENTIAL_FLAG_NO_CERTIFICATE_VALIDATION — that would
+     * disable verification and accept any self-signed / MITM certificate. */
     QUIC_CREDENTIAL_CONFIG cred_cfg;
     memset(&cred_cfg, 0, sizeof(cred_cfg));
     cred_cfg.Type = QUIC_CREDENTIAL_TYPE_NONE;
-    cred_cfg.Flags = QUIC_CREDENTIAL_FLAG_CLIENT;
+    cred_cfg.Flags = QUIC_CREDENTIAL_FLAG_CLIENT
+                   | QUIC_CREDENTIAL_FLAG_INDICATE_CERTIFICATE_RECEIVED;
 
     status = MsQuic->ConfigurationLoadCredential(
         client->session_config, &cred_cfg);
@@ -171,12 +202,16 @@ int32_t wt_client_connect_impl(
         return WT_ERR_UNKNOWN;
     }
 
-    /* ── Start connection (SNI passed as ServerName parameter) ── */
+    /* ── Start connection ──
+     * Use the address (IP or hostname) for the connection target.
+     * server_name is only used for TLS SNI. msquic ConnectionStart
+     * resolves the 4th parameter via DNS if it's a hostname, or
+     * connects directly if it's an IP. */
     atomic_store(&client->state, WT_CLIENT_STARTING);
     status = MsQuic->ConnectionStart(client->quic_conn,
                                       client->session_config,
                                       QUIC_ADDRESS_FAMILY_UNSPEC,
-                                      server_name, port);
+                                      client->address, port);
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("ConnectionStart: 0x%x", status);
         MsQuic->ConnectionClose(client->quic_conn);
@@ -294,6 +329,15 @@ bool wt_client_is_connected_impl(wt_client_s* client)
 
 int32_t wt_client_get_mtu_impl(wt_client_s* client)
 {
+    /* QUIC requires a minimum path MTU of 1200 bytes for UDP payloads.
+     * Subtracting QUIC long-header overhead (~60 bytes for initial,
+     * ~20 bytes for 1-RTT) gives ~1140 usable for datagrams.
+     *
+     * MsQuic performs Path MTU Discovery (PMTUD) automatically, but
+     * the negotiated MTU is internal.  A future enhancement could
+     * expose QUIC_PARAM_CONN_STATISTICS.Pmtu from MsQuic's private
+     * connection struct, but 1200 is the safe, always-works value
+     * that avoids IP fragmentation across all paths. */
     (void)client;
     return WT_DEFAULT_MTU;
 }
@@ -312,6 +356,30 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     case QUIC_CONNECTION_EVENT_CONNECTED: {
         WT_LOG_INFO("Client connected!");
 
+        /* ── HTTP/3 WebTransport Handshake (Optional) ─────────
+         * If an h3_session was created before connecting, perform
+         * the HTTP/3 WebTransport handshake. Otherwise fall through
+         * to native raw-QUIC mode (backward compatible).
+         *
+         * h3_session is created by the C# layer when connecting to
+         * a standard WebTransport server (e.g., for testing against
+         * reference implementations). It is NULL for native-to-native
+         * connections. */
+        if (cli->h3_session) {
+            /* Start HTTP/3 handshake — sends SETTINGS and CONNECT.
+             * on_ready callback creates wt_session when complete. */
+            int32_t hr = h3_client_connect(cli->h3_session, "/", cli->server_name);
+            if (hr != 0) {
+                WT_LOG_ERROR("HTTP/3 client handshake start failed");
+                cli->h3_session->client_state = H3_CLI_ERROR;
+                MsQuic->ConnectionShutdown(conn,
+                    QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+            }
+            /* Session init deferred to on_h3_session_ready callback. */
+            break;
+        }
+
+        /* Native raw-QUIC path (backward compatible) */
         wt_session_t* session = (wt_session_t*)calloc(1, sizeof(wt_session_t));
         if (!session) {
             atomic_fetch_add(&cli->pending_shutdowns, 1);
@@ -347,60 +415,105 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         WT_LOG_INFO("Client disconnected.");
         atomic_store(&cli->connected, false);
 
-        if (cli->session) {
+        /* Atomic load — no non-atomic guard (avoids torn read on ARM). */
+        {
             wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&cli->session);
             if (old_session) {
                 atomic_ptr_store(&cli->session, NULL);
 
-            /* Defer shutdown to poll (application thread) to guarantee
-             * session free never races with in-flight sends. The poll
-             * thread is the same thread that calls send, so no TOCTOU. */
-            cli->pending_shutdown_session = old_session;
+                /* Defer shutdown to poll (application thread) to guarantee
+                 * session free never races with in-flight sends. The poll
+                 * thread is the same thread that calls send, so no TOCTOU. */
+                cli->pending_shutdown_session = old_session;
             }
         }
 
         MsQuic->ConnectionClose(conn);
         cli->quic_conn = NULL;
 
-        if (cli->session_config) {
-            MsQuic->ConfigurationClose(cli->session_config);
-            cli->session_config = NULL;
+        /* Clean up any incomplete HTTP/3 handshake */
+        if (cli->h3_session) {
+            h3_session_free(cli->h3_session);
+            cli->h3_session = NULL;
         }
 
-        if (cli->registration) {
-            MsQuic->RegistrationClose(cli->registration);
-            cli->registration = NULL;
-        }
+        /* Do NOT close session_config or registration here — they are
+         * closed by free_impl on the application thread after the
+         * pending_shutdowns spin-wait. Closing handles from within a
+         * QUIC callback is fragile and can race with internal state. */
 
+        /* Signal completion BEFORE firing the disconnect callback.
+         * If the callback triggers wt_client_destroy → free_impl,
+         * pending_shutdowns==0 allows the spin-wait to exit cleanly
+         * rather than deadlocking. */
+        atomic_fetch_sub(&cli->pending_shutdowns, 1);
+
+        /* Fire callback LAST — after all state changes are committed.
+         * The callback may enqueue work that calls back into the API;
+         * all invariants (connected=false, session=deferred, quic_conn=NULL)
+         * are established before any re-entrant call. */
         if (cli->callbacks.on_disconnect)
             cli->callbacks.on_disconnect(cli->user_context, 0);
+        break;
+    }
 
-        /* Signal completion — free_impl does final cleanup + free(cli). */
-        atomic_fetch_sub(&cli->pending_shutdowns, 1);
+    case QUIC_CONNECTION_EVENT_PEER_CERTIFICATE_RECEIVED: {
+        /* Log the server certificate for diagnostics.
+         * Validation against the platform trust store is performed by
+         * msquic/TLS before this event fires — if the cert failed
+         * validation the connection is already aborted. */
+        WT_LOG_INFO("Server certificate received and validated.");
         break;
     }
 
     case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED: {
-        if (cli->session && cli->session->stream_mgr) {
+        /* Acquire session refcount to prevent UAF — wt_session_shutdown
+         * on the poll thread may concurrently set stream_mgr=NULL and
+         * free it.  Holding a ref keeps the session (and its stream_mgr
+         * pointer) alive until we release. */
+        {
+            wt_session_t* session = (wt_session_t*)atomic_ptr_load(&cli->session);
+            if (!session || !wt_session_acquire(session)) {
+                MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
+                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+                break;
+            }
+            /* Re-check that the session pointer hasn't changed and
+             * the stream_mgr is still valid AFTER acquiring. */
+            if (atomic_ptr_load(&cli->session) != session ||
+                !session->stream_mgr) {
+                wt_session_release(session);
+                MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
+                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+                break;
+            }
             wt_stream_manager_accept_stream(
-                cli->session->stream_mgr,
+                session->stream_mgr,
                 event->PEER_STREAM_STARTED.Stream);
-        } else {
-            MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
-                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-            MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+            wt_session_release(session);
         }
         break;
     }
 
     case QUIC_CONNECTION_EVENT_DATAGRAM_RECEIVED: {
+        /* Atomic load — avoid non-atomic read of session pointer. */
         {
+            wt_session_t* session = (wt_session_t*)atomic_ptr_load(&cli->session);
+            if (!session) break;
+
+            static int dgram_drop_count = 0;
             const QUIC_BUFFER* buf = event->DATAGRAM_RECEIVED.Buffer;
             if (buf && buf->Length > 0 &&
                 buf->Length <= WT_DGRAM_MAX_SIZE) {
-                wt_datagram_queue_push(
-                    &cli->dgram_queue, 0, buf->Buffer,
-                    (int32_t)buf->Length);
+                if (!wt_datagram_queue_push(
+                        &cli->dgram_queue, 0, buf->Buffer,
+                        (int32_t)buf->Length)) {
+                    if (++dgram_drop_count % 100 == 1) {
+                        WT_LOG_WARN("Datagram queue full: %d drops so far", dgram_drop_count);
+                    }
+                }
             }
         }
         break;

@@ -16,19 +16,19 @@ namespace FishMMO.Server.Implementation.Smtp
 	public class SmtpService : ISmtpService
 	{
 		/// <summary>SMTP server hostname.</summary>
-		private readonly string _host;
+		private readonly string host;
 		/// <summary>SMTP server port.</summary>
-		private readonly int _port;
+		private readonly int port;
 		/// <summary>SMTP authentication username.</summary>
-		private readonly string _username;
+		private readonly string username;
 		/// <summary>SMTP authentication password.</summary>
-		private readonly string _password;
+		private readonly string password;
 		/// <summary>Email From address.</summary>
-		private readonly string _fromAddress;
+		private readonly string fromAddress;
 		/// <summary>Display name for the From address.</summary>
-		private readonly string _fromName;
+		private readonly string fromName;
 		/// <summary>Whether to use SSL/TLS for the SMTP connection.</summary>
-		private readonly bool _useSsl;
+		private readonly bool useSsl;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="SmtpService"/> class.
@@ -39,14 +39,14 @@ namespace FishMMO.Server.Implementation.Smtp
 		{
 			// Environment variables take precedence over config files so operators
 			// can inject SMTP credentials at runtime (Docker, k8s, systemd).
-			_host = EnvOrConfig("FISHMMO_SMTP_HOST", "Smtp:Host", "localhost", configuration);
-			_port = int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_SMTP_PORT"), out var p) ? p
+			host = EnvOrConfig("FISHMMO_SMTP_HOST", "Smtp:Host", "localhost", configuration);
+			port = int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_SMTP_PORT"), out var p) ? p
 				: configuration.GetInt("Smtp:Port", 587);
-			_username = EnvOrConfig("FISHMMO_SMTP_USERNAME", "Smtp:Username", "", configuration);
-			_password = EnvOrConfig("FISHMMO_SMTP_PASSWORD", "Smtp:Password", "", configuration);
-			_fromAddress = EnvOrConfig("FISHMMO_SMTP_FROM_ADDRESS", "Smtp:FromAddress", "noreply@fishmmo.com", configuration);
-			_fromName = EnvOrConfig("FISHMMO_SMTP_FROM_NAME", "Smtp:FromName", "FishMMO", configuration);
-			_useSsl = EnvOrConfig("FISHMMO_SMTP_USE_SSL", "Smtp:UseSsl", "true", configuration)
+			username = EnvOrConfig("FISHMMO_SMTP_USERNAME", "Smtp:Username", "", configuration);
+			password = EnvOrConfig("FISHMMO_SMTP_PASSWORD", "Smtp:Password", "", configuration);
+			fromAddress = EnvOrConfig("FISHMMO_SMTP_FROM_ADDRESS", "Smtp:FromAddress", "noreply@fishmmo.com", configuration);
+			fromName = EnvOrConfig("FISHMMO_SMTP_FROM_NAME", "Smtp:FromName", "FishMMO", configuration);
+			useSsl = EnvOrConfig("FISHMMO_SMTP_USE_SSL", "Smtp:UseSsl", "true", configuration)
 				.Equals("true", StringComparison.OrdinalIgnoreCase);
 		}
 
@@ -77,23 +77,23 @@ namespace FishMMO.Server.Implementation.Smtp
 			{
 				using var mailMessage = new MailMessage
 				{
-					From = new MailAddress(_fromAddress, _fromName),
+					From = new MailAddress(fromAddress, fromName),
 					Subject = subject,
 					Body = body,
 					IsBodyHtml = true,
 				};
 				mailMessage.To.Add(to);
 
-				using var smtpClient = new SmtpClient(_host, _port)
+				using var smtpClient = new SmtpClient(host, port)
 				{
-					EnableSsl = _useSsl,
+					EnableSsl = useSsl,
 					DeliveryMethod = SmtpDeliveryMethod.Network,
 					Timeout = 30_000, // 30 seconds
 				};
 
-				if (!string.IsNullOrEmpty(_username))
+				if (!string.IsNullOrEmpty(username))
 				{
-					smtpClient.Credentials = new NetworkCredential(_username, _password);
+					smtpClient.Credentials = new NetworkCredential(username, password);
 				}
 
 				await smtpClient.SendMailAsync(mailMessage);

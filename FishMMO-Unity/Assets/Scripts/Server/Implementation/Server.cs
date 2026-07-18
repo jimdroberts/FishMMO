@@ -168,7 +168,37 @@ namespace FishMMO.Server.Implementation
 			ServerEvents.OnSceneServerInitialized += sceneServerInitializedLogHandler;
 
 			StartCoroutine(NetHelper.FetchExternalIPAddress(OnFinalizeSetup));
+
+			// Guard against indefinite hang if the external IP service is unreachable.
+			// Falls back to loopback after ExternalIpFetchTimeoutSeconds so the server
+			// can start accepting local connections.
+			externalIpTimeoutCoroutine = StartCoroutine(ExternalIpFetchTimeout(OnFinalizeSetup));
 		}
+
+		/// <summary>
+		/// Maximum seconds to wait for the external IP address fetch before falling
+		/// back to loopback. Prevents the server from hanging indefinitely at startup
+		/// when the IP-check service is unreachable.
+		/// </summary>
+		private const float ExternalIpFetchTimeoutSeconds = 30f;
+
+		/// <summary>
+		/// Coroutine that fires <paramref name="onDone"/> with the loopback fallback
+		/// address if the external IP fetch does not complete within
+		/// <see cref="ExternalIpFetchTimeoutSeconds"/>.
+		/// </summary>
+		private System.Collections.IEnumerator ExternalIpFetchTimeout(System.Action<string> onDone)
+		{
+			yield return new WaitForSeconds(ExternalIpFetchTimeoutSeconds);
+			if (!hasShutdown)
+			{
+				Log.Warning("Server", $"External IP fetch timed out after {ExternalIpFetchTimeoutSeconds}s; falling back to loopback.");
+				onDone("127.0.0.1");
+			}
+		}
+
+		private int setupFinalized = 0;
+	private Coroutine externalIpTimeoutCoroutine;
 
 		/// <summary>
 		/// Finalizes server setup after fetching the external IP address.
@@ -176,6 +206,20 @@ namespace FishMMO.Server.Implementation
 		/// <param name="remoteAddress">The external remote address of the server.</param>
 		private void OnFinalizeSetup(string remoteAddress)
 		{
+			// Guard against double-initialization — the timeout coroutine may fire
+			// after the real fetch has already completed, or vice versa.
+			if (System.Threading.Interlocked.CompareExchange(ref setupFinalized, 1, 0) != 0)
+				return;
+
+			// Cancel the timeout coroutine — the IP fetch succeeded, so the fallback
+			// is not needed. Prevents the coroutine from running for the full 30s
+			// after the real fetch has already completed.
+			if (externalIpTimeoutCoroutine != null)
+			{
+				StopCoroutine(externalIpTimeoutCoroutine);
+				externalIpTimeoutCoroutine = null;
+			}
+
 			if (string.IsNullOrWhiteSpace(remoteAddress))
 				throw new UnityException("Server: Failed to retrieve Remote IP Address.");
 
@@ -203,12 +247,15 @@ namespace FishMMO.Server.Implementation
 			// synchronously calls InitializeWorkers() → InitializeWorkersCore(), which validates
 			// Server.AccountManager. If AccountManager is null at that point, an
 			// InvalidOperationException is thrown before workers can start.
-			// LoginServer uses SRP authentication → SrpAccountManager.
-			// World/Scene servers use token authentication → TokenAccountManager.
+			// Each authenticator subtype provides its own AccountManager via
+			// IServerAuthenticator.CreateAccountManager(), removing the fragile
+			// type-check that previously lived here.
 			var authenticator = NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator();
-			AccountManager = authenticator is ServerAuthenticator
-				? (IAccountManager<NetworkConnection>)new SrpAccountManager()
-				: new TokenAccountManager();
+			if (authenticator is IServerAuthenticator serverAuth)
+				AccountManager = serverAuth.CreateAccountManager();
+			else
+				throw new InvalidOperationException(
+					"Server: Authenticator does not implement IServerAuthenticator.");
 
 			NetworkWrapper.ApplyTransportConfiguration();
 			NetworkWrapper.AttachLoginAuthenticator(this);

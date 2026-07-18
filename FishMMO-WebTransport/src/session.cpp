@@ -82,9 +82,17 @@ void wt_session_release(wt_session_t* session)
 
 static void try_free_mgr(wt_stream_manager_t* mgr)
 {
-    bool expected = false;
-    if (atomic_compare_exchange_strong(&mgr->freed, &expected, true))
+    /* atomic_bool is typedef'd to int (4 bytes); the CAS macro writes
+     * 4 bytes to *expected. Using C++ bool (1 byte) would overflow. */
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&mgr->freed, &expected, 1)) {
+#if defined(WT_PLATFORM_WINDOWS)
+        DeleteCriticalSection(&mgr->streams_lock);
+#else
+        pthread_mutex_destroy(&mgr->streams_lock);
+#endif
         free(mgr);
+    }
 }
 
 static void on_streams_done(void* ctx)
@@ -183,7 +191,13 @@ int32_t wt_session_send_datagram(
 
     QUIC_STATUS status = MsQuic->DatagramSend(
         session->quic_conn, &dgram_buf, 1,
-        QUIC_SEND_FLAG_NONE, copy); /* copy freed by msquic on send complete */
+        QUIC_SEND_FLAG_NONE, copy);
+    /* On success, `copy` is freed by the DATAGRAM_SEND_STATE_CHANGED
+     * callback when QUIC_DATAGRAM_SEND_STATE_IS_FINAL (ACK or LOST).
+     * On failure, the datagram was never queued — no callback will fire
+     * for it, so we free `copy` ourselves. MsQuic guarantees that
+     * DATAGRAM_SEND_STATE_CHANGED does NOT fire synchronously from
+     * within DatagramSend, so there is no double-free risk. */
 
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("DatagramSend failed: 0x%x", status);

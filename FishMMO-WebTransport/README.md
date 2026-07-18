@@ -1,63 +1,133 @@
-# FishMMO WebTransport Native Library
+# FishMMO WebTransport
 
-WebTransport-over-HTTP/3 (QUIC) native library for FishMMO, built on [msquic](https://github.com/microsoft/msquic).
+WebTransport-over-HTTP/3 (QUIC) native library for FishMMO, wrapping
+[Microsoft msquic](https://github.com/microsoft/msquic) v2.5.9.
 
-## Requirements
+Provides the C ABI surface consumed by the C# `WebTransport` FishNet transport
+plugin (`FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/`).
 
-- **CMake** 3.20+
-- **OpenSSL** dev libraries
-- **C/C++ compiler**: GCC/Clang (Linux/macOS), MSVC 2022 (Windows)
-- **msquic**: Fetched automatically via CMake `FetchContent` (or use system package)
+## Architecture
 
-### Linux (Arch)
-```bash
-sudo pacman -S cmake openssl gcc
+```
+src/
+├── webtransport_api.cpp/h     Public C API (P/Invoke surface)
+├── webtransport_internal.h    Shared macros, atomics, platform abstractions
+├── server.cpp/h               QUIC server — listener, connection array, broadcast
+├── client.cpp/h               QUIC client — connection, polling, deferred shutdown
+├── session.cpp/h              Per-connection session — ref-counted, streams + datagrams
+├── stream_manager.cpp/h       Bidirectional stream lifecycle — slot array, send/accept
+├── datagram_queue.cpp/h       Thread-safe ring buffer for QUIC DATAGRAM frames
+└── http3.cpp/h                HTTP/3 WebTransport handshake — SETTINGS, CONNECT, QPACK
 ```
 
-### Linux (Ubuntu/Debian)
-```bash
-sudo apt-get install cmake libssl-dev build-essential
-```
+**Channel mapping:** Channel 0 → QUIC bidirectional streams (reliable), Channel 1 → QUIC DATAGRAM frames (unreliable).
 
-### Windows
-Install [Visual Studio 2022](https://visualstudio.microsoft.com/) with C++ workload and [CMake](https://cmake.org/).
-OpenSSL can be installed via [vcpkg](https://vcpkg.io/):
-```batch
-vcpkg install openssl:x64-windows
-```
+**Protocol detection:** The server auto-detects browser clients (HTTP/3 — first byte `0x00`) vs native clients (raw QUIC — any other first byte) on the initial peer stream. Both paths are handled transparently.
 
 ## Building
 
+CMake fetches msquic from source and links statically. Output goes directly to the Unity plugin directory (`../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/{platform}/`).
+
 ### Linux
+
 ```bash
+# Dependencies (Arch)
+sudo pacman -S cmake openssl gcc
+
+# Dependencies (Ubuntu/Debian)
+sudo apt-get install cmake libssl-dev build-essential
+
+# Build
 ./build_linux.sh
 ```
 
-### Windows
-```batch
-build_windows.bat
+Output: `libfishmmo_webtransport.so` in the Unity `linux_x86_64` plugin directory.
+
+### Windows (native)
+
+Build directly on Windows with Visual Studio 2022.
+
+```powershell
+# Dependencies
+winget install Kitware.CMake
+
+# Build
+powershell -File build_windows.ps1
 ```
+
+### Windows (cross-compile from Linux)
+
+Cross-compile from a Linux host using Zig. No Visual Studio required.
+
+```bash
+# Dependencies (Arch)
+sudo pacman -S zig
+
+# Dependencies (manual)
+# Download Zig 0.13+ from https://ziglang.org/download/
+# Place the `zig` binary anywhere on PATH or in /tmp/zig-*/
+
+# Build
+./build_windows_cross.sh
+```
+
+The cross-compile script downloads the msquic NuGet package for the import library and runtime DLL, compiles with `zig c++ -target x86_64-windows-gnu`, and links via `lld-link --out-implib`.
+
+Output (both methods): `fishmmo_webtransport.dll` + `msquic.dll` in the Unity `windows_x86_64` plugin directory.
 
 ### macOS
+
+Must be built on a Mac — msquic's quictls dependency contains platform-specific assembly that cannot be cross-compiled.
+
 ```bash
-cmake -S . -B build -DWT_BUILD_TESTS=OFF -DBUILD_SHARED_LIBS=ON
-cmake --build build --config Release -j$(sysctl -n hw.ncpu)
-cp build/libfishmmo_webtransport.dylib unity/mac_x86_64/
+# Dependencies
+brew install cmake openssl@3
+
+# Build
+./build_macos.sh
 ```
 
-## Output
-
-| Platform   | Output File                          |
-|------------|--------------------------------------|
-| Linux      | `unity/linux_x86_64/libfishmmo_webtransport.so` |
-| Windows    | `unity/windows_x86_64/fishmmo_webtransport.dll` |
-| macOS      | `unity/mac_x86_64/libfishmmo_webtransport.dylib` |
-
-Copy these into the Unity project at:
-```
-Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/{platform}/
-```
+Output: `libfishmmo_webtransport.dylib` in the Unity `mac_x86_64` plugin directory.
 
 ## API
 
-See [src/webtransport_api.h](src/webtransport_api.h) for the full C API surface designed for P/Invoke from C#.
+See [src/webtransport_api.h](src/webtransport_api.h) for the complete C API surface:
+
+| Function | Purpose |
+|----------|---------|
+| `wt_init()` / `wt_deinit()` | Lifecycle — initialises / closes the MsQuic API table |
+| `wt_server_alloc()` / `wt_server_start()` / `wt_server_stop()` / `wt_server_destroy()` | Server lifecycle |
+| `wt_server_poll()` | Drain pending shutdowns + datagrams (call each frame) |
+| `wt_server_send_stream()` / `wt_server_send_datagram()` | Send to a client |
+| `wt_server_disconnect()` | Disconnect a client |
+| `wt_client_alloc()` / `wt_client_connect()` / `wt_client_disconnect()` / `wt_client_destroy()` | Client lifecycle |
+| `wt_client_poll()` | Drain pending shutdowns + datagrams (call each frame) |
+| `wt_client_send_stream()` / `wt_client_send_datagram()` | Send to the server |
+| `wt_error_string()` | Human-readable error message |
+
+All functions return `WT_OK` (0) on success or a negative error code.
+
+## Platform Support
+
+| Platform | Status | Build Method |
+|----------|--------|-------------|
+| **Linux x86_64** | ✅ | Native CMake (`./build_linux.sh`) |
+| **Windows x86_64** | ✅ | Native CMake on Windows (`build_windows.ps1`) or Zig cross-compile from Linux (`./build_windows_cross.sh`) |
+| **macOS x86_64** | ✅ | Native CMake on Mac (`./build_macos.sh`) |
+
+Built libraries are gitignored — they live in the Unity plugins directory
+(`../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/{platform}/`)
+and are rebuilt per-deployment. |
+
+## Project Structure
+
+```
+FishMMO-WebTransport/
+├── CMakeLists.txt              CMake project (fetches msquic via FetchContent)
+├── build_linux.sh              Linux native build
+├── build_windows.ps1           Windows native build (PowerShell)
+├── build_windows_cross.sh      Windows cross-compile from Linux (Zig)
+├── build_macos.sh              macOS native build
+├── README.md
+└── src/                        C++ source (7 .cpp + 7 .h)
+```

@@ -412,7 +412,7 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			var request = new SrpVerifyRequest<TConnection>(conn, encryptedUsername, encryptedPublicEphemeral, encryptionData, seq);
+			var request = new SrpVerifyRequest<TConnection>(conn, encryptedUsername, encryptedPublicEphemeral, encryptionData.CloneForAsyncWorker(), seq);
 
 			if (verifyChannel == null || !verifyChannel.Writer.TryWrite(request))
 			{
@@ -457,7 +457,7 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			var request = new SrpProofRequest<TConnection>(conn, encryptedProof, encryptionData, seq);
+			var request = new SrpProofRequest<TConnection>(conn, encryptedProof, encryptionData.CloneForAsyncWorker(), seq);
 
 			if (proofChannel == null || !proofChannel.Writer.TryWrite(request))
 			{
@@ -846,17 +846,47 @@ namespace FishMMO.Auth.Implementation
 			AccessLevel accessLevel = AccessLevel.Player;
 			bool isUnverified = false;
 
+			// Phase 1: Read AccountData under the lock to get the SrpData reference.
+			// We must NOT call GetProof() inside the lock — that method performs
+			// 2048-bit modular exponentiation (CPU-bound, ~2-10ms). Holding the
+			// global syncRoot during that time blocks ALL other connections from
+			// registering encryption data, advancing auth state, or disconnecting.
+			ServerSrpData? srpDataSnapshot = null;
+			if (!AccountManager.GetConnectionAccountData(conn, out AccountData? accountData) ||
+				accountData == null ||
+				accountData.SrpData == null ||
+				accountData.AuthState != AuthState.ProofPending)
+			{
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+				return;
+			}
+			srpDataSnapshot = accountData.SrpData;
+			username = accountData.SrpData.UserName;
+			accessLevel = accountData.AccessLevel;
+			isUnverified = accountData.IsUnverified;
+
+			// Phase 2: Compute the SRP proof OUTSIDE the lock.
+			// SrpData is per-connection and only one proof verification runs per
+			// connection at a time (enforced by the ProofPending → SrpSuccess
+			// state transition). The only race is with ClearSrpState, which would
+			// require a concurrent state transition that TryAdvanceAuthState prevents.
+			bool proofOk = srpDataSnapshot.GetProof(clientProof, out string computedProof);
+			if (!proofOk || computedProof == null)
+			{
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+				return;
+			}
+			serverProof = computedProof;
+
+			// Phase 3: Atomically advance the auth state under the lock.
+			// The callback is now a trivial validation — no CPU-bound work.
 			bool proofValid = AccountManager.TryAdvanceAuthState(conn, AuthState.ProofPending, AuthState.SrpSuccess, (a) =>
 			{
-				if (a.SrpData != null && a.SrpData.GetProof(clientProof, out string proof))
-				{
-					serverProof = proof;
-					username = a.SrpData.UserName;
-					accessLevel = a.AccessLevel;
-					isUnverified = a.IsUnverified;
-					return true;
-				}
-				return false;
+				// Cross-check: the SrpData reference must still match and the
+				// proof result we pre-computed must be valid.
+				if (a.SrpData != srpDataSnapshot || serverProof == null)
+					return false;
+				return true;
 			});
 
 			if (!proofValid || serverProof == null || username == null)
@@ -1012,30 +1042,27 @@ namespace FishMMO.Auth.Implementation
 			string totpCode;
 			try
 			{
-				if (!pendingState.EncryptionData.TryConsumeReceiveSequence(seq))
-				{
-					TrackTotpUsernameFailure(pendingState.Username);
-
-					if (pendingState.Attempts > MaxTotpAttempts)
-					{
-						totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
-						EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: false));
-						PurgeConnectionAuthState(conn, disconnect: false);
-					}
-					else
-					{
-						BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true);
-					}
-					return;
-				}
-
+				// NOTE: Sequence consumption is handled inside ServerDecryptTotpCode.
+				// Do NOT call TryConsumeReceiveSequence here — that would double-consume
+				// the sequence number, causing every TOTP verification to fail with
+				// CryptographicException ("sequence out-of-order or duplicate").
 				totpCode = SrpService.ServerDecryptTotpCode(encryptedCode, pendingState.EncryptionData, seq);
 			}
 			catch (CryptographicException)
 			{
 				await Log.Warning(LogPrefix, "AES decryption failed for TOTP code.");
 				TrackTotpUsernameFailure(pendingState.Username);
-				BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true);
+
+				if (pendingState.Attempts > MaxTotpAttempts)
+				{
+					totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
+					EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: false));
+					PurgeConnectionAuthState(conn, disconnect: false);
+				}
+				else
+				{
+					BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true);
+				}
 				return;
 			}
 

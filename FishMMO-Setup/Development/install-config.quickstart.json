@@ -1,5 +1,6 @@
 {
   "components": ["postgresql", "fishmmo-db", "nginx", "firewall"],
   "configureFirewall": true,
+  "firewallPorts": [80, 443, "7770-7999/udp"],
   "validateAfterInstall": true
 }

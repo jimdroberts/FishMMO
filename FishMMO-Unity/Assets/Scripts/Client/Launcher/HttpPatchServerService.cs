@@ -99,8 +99,8 @@ namespace FishMMO.Client
 						{
 							UpToDate = versionFetch.up_to_date,
 							PatchAvailable = versionFetch.patch_available,
-							Sha256 = versionFetch.sha256,
-							Size = versionFetch.size,
+							sha256 = versionFetch.sha256,
+							size = versionFetch.size,
 						};
 						onComplete?.Invoke(serverVersion, info);
 					}

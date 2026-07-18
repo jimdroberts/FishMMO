@@ -131,7 +131,11 @@ namespace FishMMO.Auth.Implementation
 		/// Call when a new transport connection is established.
 		/// Generates the X25519 keypair and sends the initial <c>ClientHandshake</c>.
 		/// </summary>
-		public void OnConnected()
+		/// <param name="connectionToken">
+		/// One-time token from the IPFetch HTTP API. Used on initial Login Server
+		/// connection for real-IP recovery. Null for World/Scene reconnections.
+		/// </param>
+		public void OnConnected(string? connectionToken = null)
 		{
 			ephemeralKeyPair = new CryptoHelper.X25519EphemeralKeyPair();
 			srpVerifyProcessed = false;
@@ -141,6 +145,7 @@ namespace FishMMO.Auth.Implementation
 			SendClientHandshake(
 				ephemeralKeyPair.PublicKey,
 				cookie: null,
+				connectionToken,
 				CryptoHelper.MinSupportedProtocolVersion,
 				CryptoHelper.MaxSupportedProtocolVersion);
 		}
@@ -192,6 +197,7 @@ namespace FishMMO.Auth.Implementation
 				SendClientHandshake(
 					ephemeralKeyPair.PublicKey,
 					cookie,
+					connectionToken: null,
 					CryptoHelper.MinSupportedProtocolVersion,
 					CryptoHelper.MaxSupportedProtocolVersion);
 				return;
@@ -743,7 +749,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="cookie">Cookie echoed from a prior challenge, or null on the initial handshake.</param>
 		/// <param name="minVersion">Minimum protocol version supported by this client.</param>
 		/// <param name="maxVersion">Maximum protocol version supported by this client.</param>
-		protected abstract void SendClientHandshake(byte[] publicKey, byte[]? cookie, ushort minVersion, ushort maxVersion);
+		protected abstract void SendClientHandshake(byte[] publicKey, byte[]? cookie, string? connectionToken, ushort minVersion, ushort maxVersion);
 
 		/// <summary>
 		/// Sends a token auth broadcast (World/Scene server path).

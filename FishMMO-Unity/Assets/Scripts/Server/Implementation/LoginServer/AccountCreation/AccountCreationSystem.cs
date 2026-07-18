@@ -86,9 +86,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// reset atomically. Uses Interlocked operations rather than a lock so
 		/// the hot path stays alloc-free under contention.
 		/// </summary>
-		private long _globalCreationsCurrentHourBucket = -1;
-		private int _globalCreationsCurrentHourCount = 0;
-		private readonly object _globalCreationsCounterLock = new object();
+		private long globalCreationsCurrentHourBucket = -1;
+		private int globalCreationsCurrentHourCount = 0;
+		private readonly object globalCreationsCounterLock = new object();
 
 
 		/// <summary>
@@ -101,11 +101,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Accumulator for the email send interval timer.
 		/// </summary>
-		private float _emailSendTimer;
+		private float emailSendTimer;
 		/// <summary>
 		/// Lazily-constructed SMTP sender. Null until first email queue sweep.
 		/// </summary>
-		private ISmtpService _smtpService;
+		private ISmtpService smtpService;
 
 		/// <summary>
 		/// Injectable SMTP service. When set externally (e.g. by LoginServerSystem during
@@ -114,8 +114,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		public ISmtpService SmtpService
 		{
-			get => _smtpService;
-			set => _smtpService = value;
+			get => smtpService;
+			set => smtpService = value;
 		}
 		/// <summary>
 		/// Maximum number of queued main-thread response actions processed per frame.
@@ -536,18 +536,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			long currentBucket = (long)(nowUtc - DateTime.UnixEpoch).TotalHours;
-			lock (_globalCreationsCounterLock)
+			lock (globalCreationsCounterLock)
 			{
-				if (_globalCreationsCurrentHourBucket != currentBucket)
+				if (globalCreationsCurrentHourBucket != currentBucket)
 				{
-					_globalCreationsCurrentHourBucket = currentBucket;
-					_globalCreationsCurrentHourCount = 0;
+					globalCreationsCurrentHourBucket = currentBucket;
+					globalCreationsCurrentHourCount = 0;
 				}
-				if (_globalCreationsCurrentHourCount >= cap)
+				if (globalCreationsCurrentHourCount >= cap)
 				{
 					return false;
 				}
-				_globalCreationsCurrentHourCount++;
+				globalCreationsCurrentHourCount++;
 				return true;
 			}
 		}
@@ -1054,20 +1054,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private void ProcessEmailQueue(float deltaTime)
 		{
 			if (emailSendIntervalSeconds <= 0f) return;
-			_emailSendTimer += deltaTime;
-			if (_emailSendTimer < emailSendIntervalSeconds) return;
-			_emailSendTimer = 0f;
+			emailSendTimer += deltaTime;
+			if (emailSendTimer < emailSendIntervalSeconds) return;
+			emailSendTimer = 0f;
 
 			if (Server?.Database?.ServiceRegistry == null) return;
 			if (!Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService)) return;
 
 			// Lazily construct the SMTP service from server configuration.
 			// It is not a DB service, so it is not in the Npgsql service registry.
-			if (_smtpService == null && Server.Configuration != null)
+			if (smtpService == null && Server.Configuration != null)
 			{
-				_smtpService = new FishMMO.Server.Implementation.Smtp.SmtpService(Server.Configuration);
+				smtpService = new FishMMO.Server.Implementation.Smtp.SmtpService(Server.Configuration);
 			}
-			if (_smtpService == null) return;
+			if (smtpService == null) return;
 
 			// Resolve server identity for claim tracking so multiple LoginServers
 			// can safely share the email queue via FOR UPDATE SKIP LOCKED.
@@ -1088,7 +1088,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!result.IsSuccess) return;
 
 				var email = result.Data;
-				bool sent = await _smtpService.SendEmailAsync(email.RecipientEmail, email.Subject, email.Body);
+				bool sent = await smtpService.SendEmailAsync(email.RecipientEmail, email.Subject, email.Body);
 				if (sent)
 				{
 					await emailQueueService.MarkSentAsync(email.ID);

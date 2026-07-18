@@ -118,8 +118,38 @@ namespace FishMMO.Client.Security
 
 			string path = Path.Combine(Application.streamingAssetsPath, ConfigFileName);
 #if UNITY_ANDROID && !UNITY_EDITOR
-			// StreamingAssets on Android lives inside the .apk; File.Exists won't work.
-			// Defer to defaults for now; an Android-specific loader can replace this.
+			// On Android, StreamingAssets lives inside the .apk/.aab and cannot be
+			// accessed via File.Exists / File.ReadAllText. Use UnityWebRequest to
+			// fetch the config at runtime, or (preferred) ship pins via DefaultPins[]
+			// compiled into the build. We attempt the UnityWebRequest path here;
+			// if it fails, we fall through to compile-time defaults.
+			try
+			{
+				using (var request = UnityEngine.Networking.UnityWebRequest.Get(path))
+				{
+					var op = request.SendWebRequest();
+					// Blocking wait is acceptable here — this runs once during
+					// BeforeSceneLoad, before any game logic starts.
+					while (!op.isDone) { }
+					if (request.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
+					{
+						string json = request.downloadHandler.text;
+						var parsed = JsonUtility.FromJson<PinConfigPayload>(json);
+						if (parsed != null)
+						{
+							pins = new List<string>();
+							if (parsed.pins != null)
+								pins.AddRange(parsed.pins);
+							allowOnEmpty = parsed.allowOnEmpty;
+							return true;
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+				// Fall through to compile-time defaults.
+			}
 			return false;
 #else
 			if (!File.Exists(path))

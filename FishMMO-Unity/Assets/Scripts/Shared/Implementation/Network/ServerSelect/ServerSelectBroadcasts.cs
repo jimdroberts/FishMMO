@@ -17,7 +17,15 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct ServerListBroadcast : IBroadcast
 	{
-		/// <summary>List of available world servers.</summary>
+		/// <summary>
+		/// List of available world servers.
+		///
+		/// WARNING: FishNet serializes this list by iterating over it.
+		/// Any modifications (add/remove/clear) during serialization cause
+		/// undefined behavior (e.g. corrupt packets or crashes). The server
+		/// MUST copy the list before sending whenever it might be mutated
+		/// concurrently by another thread.
+		/// </summary>
 		public List<WorldServerDetails> Servers;
 	}
 	/// <summary>

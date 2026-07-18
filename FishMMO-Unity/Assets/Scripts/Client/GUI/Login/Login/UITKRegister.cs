@@ -458,9 +458,10 @@ namespace FishMMO.Client
 				Log.Error("UITKRegister", error);
 				SetFormLocked(false);
 			},
-			(servers) =>
+			(servers, token) =>
 			{
 				pendingVerifyUsername = usernameText;
+					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
 				Connect(usernameText, passwordText, emailText, ageIndex);
 			}));
 		}

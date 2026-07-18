@@ -118,8 +118,35 @@ public class LoginServerController : ControllerBase
 			return NotFound("No login servers available.");
 		}
 
+		// Generate a one-time connection token for real-IP recovery.
+		// The real client IP is visible here (via X-Forwarded-For from NGINX)
+		// but lost at the game server (L4 UDP proxy). The token bridges this gap:
+		// the client echoes it in the first ClientHandshake, and the Login Server
+		// looks it up to recover the real IP.
+		var tokenBytes = new byte[32];
+		System.Security.Cryptography.RandomNumberGenerator.Fill(tokenBytes);
+		var token = Convert.ToBase64String(tokenBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+		var tokenHash = BitConverter.ToString(
+			System.Security.Cryptography.SHA256.HashData(
+				System.Text.Encoding.UTF8.GetBytes(token)))
+			.Replace("-", "").ToLowerInvariant();
+
+		var realIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+		using var db = dbContextFactory.CreateDbContext();
+		db.ConnectionTokens.Add(new FishMMO.Database.Npgsql.Entities.ConnectionTokenEntity
+		{
+			TokenHash = tokenHash,
+			RealIp = realIp,
+			ExpiresAt = DateTime.UtcNow.AddSeconds(60)
+		});
+		await db.SaveChangesAsync(HttpContext.RequestAborted);
+
+		await Log.Debug("LoginServerController",
+			$"Issued connection token for IP {realIp} (hash={tokenHash[..8]}...)");
+
 		// Wrap in a "Ports" envelope so Unity's JsonUtility can deserialize
 		// the response without manual string rewriting on the client.
-		return Ok(new { Ports = loginServerPorts });
+		return Ok(new { Ports = loginServerPorts, ConnectionToken = token });
 	}
 }

@@ -249,6 +249,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			BuildStartingEquipmentEntries(startingEquipmentIDs, preparedEquipment);
 			BuildStartingEquipmentEntries(raceTemplate.StartingEquipment, preparedEquipment);
 
+			// Extract string data from Unity ScriptableObjects on the main thread
+			// so the async worker never touches Unity types.
+			string raceTemplateName = raceTemplate.Name;
+
 			// --- Dispatch DTO construction + DB work to async ---
 			if (!TryBeginCreateRequest(conn))
 			{
@@ -261,7 +265,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!TryEnqueueAsyncWork(() => ProcessCharacterCreateAsync(
 				conn, msg, accountName,
-				raceTemplate,
+				raceTemplateName,
 				preparedAttributes, preparedFactions, preparedAbilities,
 				preparedInventory, preparedEquipment,
 				characterService, factionService, abilityService,
@@ -280,8 +284,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Processes character creation on a background thread. Validates immutable spawn/race data,
 		/// builds all DTOs, performs database operations within a Unit of Work for atomicity,
 		/// and marshals responses to the main thread.
-		/// All template data (WorldSceneDetailsCache, StartingAbilities, StartingInventoryItems,
-		/// StartingEquipment, RaceTemplate) is immutable and safe to read from any thread.
+		/// All template data (Attributes, Factions, Abilities, Inventory, Equipment) is
+		/// pre-extracted into plain C# objects on the main thread before dispatch.
+		/// <paramref name="raceTemplateName"/> is the string name from the ScriptableObject,
+		/// extracted on the main thread — Unity objects are never accessed from this worker.
 		/// </summary>
 		/// <param name="conn">Network connection of the client.</param>
 		/// <param name="msg">Original CharacterCreateBroadcast to echo back on success.</param>
@@ -298,7 +304,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			NetworkConnection conn,
 			CharacterCreateBroadcast msg,
 			string accountName,
-			RaceTemplate raceTemplate,
+			string raceTemplateName,
 			List<PreparedAttributeEntry> preparedAttributes,
 			List<PreparedFactionEntry> preparedFactions,
 			List<PreparedAbilityEntry> preparedAbilities,
@@ -314,7 +320,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			try
 			{
-				// --- Validate immutable spawn data (safe to read off main thread) ---
+				// --- Validate spawn data (worldSceneDetailsCache is ScriptableObject data cached at startup) ---
 
 				if (worldSceneDetailsCache == null ||
 					worldSceneDetailsCache.Scenes == null ||
@@ -369,7 +375,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				bool validateAllowedRace = false;
 				foreach (RaceTemplate t in initialSpawnPosition.AllowedRaces)
 				{
-					if (t.Name == raceTemplate.Name)
+					if (string.Equals(t.Name, raceTemplateName, StringComparison.Ordinal))
 					{
 						validateAllowedRace = true;
 						break;

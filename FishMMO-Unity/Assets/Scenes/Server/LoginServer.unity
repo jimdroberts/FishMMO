@@ -198,7 +198,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68828c85278210948b9d50a8db3aab74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _authenticator: {fileID: 6586142925020834410}
+  _authenticator: {fileID: 0}
   _remoteClientTimeout: 0
   _remoteClientTimeoutDuration: 60
   _allowPredictedSpawning: 0
@@ -380,16 +380,17 @@ MonoBehaviour:
   m_GameObject: {fileID: 2696072683257248116}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 362dfd7e6009fb44c90beec3df0ad853, type: 3}
+  m_Script: {fileID: 11500000, guid: 8605cf07f1216f2f7a7d7d1b8c81f66b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
-  _useWss: 0
-  _mtu: 1023
-  _useProxyProtocol: 1
+  m_EditorClassIdentifier: WebTransport::FishNet.Transporting.WebTransport.WebTransport
+  _useCustomCertificate: 1
+  _mtu: 1200
   _serverBindAddress: localhost
   _port: 7770
   _maximumClients: 2000
   _clientAddress: localhost
+  _certificatePath: 
+  _privateKeyPath: 
 --- !u!114 &7600273199851258616
 MonoBehaviour:
   m_ObjectHideFlags: 0

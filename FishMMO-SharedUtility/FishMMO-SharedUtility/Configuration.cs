@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
 using Cysharp.Text;
 
 namespace FishMMO.Shared
@@ -21,7 +22,14 @@ namespace FishMMO.Shared
 		private CultureInfo cultureInfo = CultureInfo.InvariantCulture;
 
 		/// <summary>
+		/// Synchronizes access to the <see cref="settings"/> dictionary. ReaderWriterLockSlim is used
+		/// because reads vastly outnumber writes in typical usage.
+		/// </summary>
+		private static readonly ReaderWriterLockSlim _settingsLock = new ReaderWriterLockSlim();
+
+		/// <summary>
 		/// Stores the configuration settings as key-value pairs. Keys are treated case-insensitively using <see cref="StringComparer.OrdinalIgnoreCase"/>.
+		/// All access must be synchronized via <see cref="_settingsLock"/>.
 		/// </summary>
 		private Dictionary<string, string> settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -55,7 +63,15 @@ namespace FishMMO.Shared
 					return true;
 				}
 			}
-			return settings.TryGetValue(name, out value);
+			_settingsLock.EnterReadLock();
+			try
+			{
+				return settings.TryGetValue(name, out value);
+			}
+			finally
+			{
+				_settingsLock.ExitReadLock();
+			}
 		}
 
 		/// <summary>
@@ -96,21 +112,29 @@ namespace FishMMO.Shared
 				sb.Append(Path.Combine(DefaultFileDirectory, FileName + EXTENSION));
 				sb.AppendLine();
 
-				if (settings.Count > 0)
+				_settingsLock.EnterReadLock();
+				try
 				{
-					sb.AppendLine("Settings:");
-					foreach (KeyValuePair<string, string> setting in settings)
+					if (settings.Count > 0)
 					{
-						sb.Append("  "); // Adds indentation for better readability of the output.
-						sb.Append(setting.Key);
-						sb.Append(" = ");
-						sb.Append(setting.Value);
-						sb.AppendLine();
+						sb.AppendLine("Settings:");
+						foreach (KeyValuePair<string, string> setting in settings)
+						{
+							sb.Append("  "); // Adds indentation for better readability of the output.
+							sb.Append(setting.Key);
+							sb.Append(" = ");
+							sb.Append(setting.Value);
+							sb.AppendLine();
+						}
+					}
+					else
+					{
+						sb.AppendLine("No settings loaded.");
 					}
 				}
-				else
+				finally
 				{
-					sb.AppendLine("No settings loaded.");
+					_settingsLock.ExitReadLock();
 				}
 				return sb.ToString();
 			}
@@ -130,11 +154,19 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Iterates through each key-value pair in the other configuration and assigns them to this configuration.
-			// This operation will overwrite any existing keys in 'this' configuration.
-			foreach (KeyValuePair<string, string> pair in other.settings)
+			_settingsLock.EnterWriteLock();
+			try
 			{
-				settings[pair.Key] = pair.Value;
+				// Iterates through each key-value pair in the other configuration and assigns them to this configuration.
+				// This operation will overwrite any existing keys in 'this' configuration.
+				foreach (KeyValuePair<string, string> pair in other.settings)
+				{
+					settings[pair.Key] = pair.Value;
+				}
+			}
+			finally
+			{
+				_settingsLock.ExitWriteLock();
 			}
 		}
 
@@ -178,10 +210,18 @@ namespace FishMMO.Shared
 				using (FileStream fs = File.Open(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
 				using (StreamWriter sw = new StreamWriter(fs, new UTF8Encoding(false)))
 				{
-					// Writes each key-value pair to the file in "key=value" format, followed by a new line.
-					foreach (KeyValuePair<string, string> pair in settings)
+					_settingsLock.EnterReadLock();
+					try
 					{
-						sw.WriteLine($"{pair.Key}={pair.Value}");
+						// Writes each key-value pair to the file in "key=value" format, followed by a new line.
+						foreach (KeyValuePair<string, string> pair in settings)
+						{
+							sw.WriteLine($"{pair.Key}={pair.Value}");
+						}
+					}
+					finally
+					{
+						_settingsLock.ExitReadLock();
 					}
 				}
 			}
@@ -266,34 +306,45 @@ namespace FishMMO.Shared
 				// Strips any Byte Order Mark (BOM) from the beginning of the string.
 				unsplit = RemoveBOM(unsplit);
 
-				// Clears all existing settings before populating with new ones from the file.
-				settings.Clear();
-
-				// Splits the entire file content into individual lines, removing any empty lines.
-				string[] lines = unsplit.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-				// Processes each line read from the configuration file.
-				foreach (string line in lines)
+				// Synchronize the entire dictionary replacement under a single write lock
+				// to avoid nested locking with Set() and to keep the replacement atomic.
+				_settingsLock.EnterWriteLock();
+				try
 				{
-					// Skips lines that are empty or start with '#' or ';' (treated as comments).
-					if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#") || line.TrimStart().StartsWith(";"))
-					{
-						continue;
-					}
+					// Clears all existing settings before populating with new ones from the file.
+					settings.Clear();
 
-					// Splits the line into a key and a value pair, only at the *first* occurrence of '='.
-					// This allows values to safely contain '=' characters (e.g., for URLs or paths).
-					string[] pair = line.Split(new char[] { '=' }, 2, StringSplitOptions.None);
-					// Checks if the line was successfully split into two parts (key and value) and the key is not empty.
-					if (pair.Length == 2 && !string.IsNullOrWhiteSpace(pair[0]))
+					// Splits the entire file content into individual lines, removing any empty lines.
+					string[] lines = unsplit.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+					// Processes each line read from the configuration file.
+					foreach (string line in lines)
 					{
-						// Sets the configuration entry, trimming whitespace from both key and value.
-						Set(pair[0].Trim(), pair[1].Trim());
+						// Skips lines that are empty or start with '#' or ';' (treated as comments).
+						if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#") || line.TrimStart().StartsWith(";"))
+						{
+							continue;
+						}
+
+						// Splits the line into a key and a value pair, only at the *first* occurrence of '='.
+						// This allows values to safely contain '=' characters (e.g., for URLs or paths).
+						string[] pair = line.Split(new char[] { '=' }, 2, StringSplitOptions.None);
+						// Checks if the line was successfully split into two parts (key and value) and the key is not empty.
+						if (pair.Length == 2 && !string.IsNullOrWhiteSpace(pair[0]))
+						{
+							// Sets the configuration entry by writing directly to the dictionary under the write lock
+							// instead of calling Set(), to avoid nested lock acquisition.
+							settings[pair[0].Trim()] = pair[1].Trim();
+						}
+						else
+						{
+							// Logs a warning for any malformed lines that cannot be parsed.
+							Console.WriteLine($"Warning: Malformed configuration line skipped: '{line}' in {fullFileName}");
+						}
 					}
-					else
-					{
-						// Logs a warning for any malformed lines that cannot be parsed.
-						Console.WriteLine($"Warning: Malformed configuration line skipped: '{line}' in {fullFileName}");
-					}
+				}
+				finally
+				{
+					_settingsLock.ExitWriteLock();
 				}
 				return true;
 			}
@@ -330,7 +381,15 @@ namespace FishMMO.Shared
 			{
 				throw new ArgumentNullException(nameof(name), "Setting name cannot be null or empty.");
 			}
-			settings[name] = value ?? string.Empty; // Assigns the value; if 'value' is null, it stores an empty string.
+			_settingsLock.EnterWriteLock();
+			try
+			{
+				settings[name] = value ?? string.Empty; // Assigns the value; if 'value' is null, it stores an empty string.
+			}
+			finally
+			{
+				_settingsLock.ExitWriteLock();
+			}
 		}
 
 		/// <summary>
@@ -370,7 +429,15 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting exists; otherwise, false.</returns>
 		public bool Exists(string name)
 		{
-			return settings.ContainsKey(name);
+			_settingsLock.EnterReadLock();
+			try
+			{
+				return settings.ContainsKey(name);
+			}
+			finally
+			{
+				_settingsLock.ExitReadLock();
+			}
 		}
 
 		/// <summary>
@@ -380,7 +447,15 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was successfully removed; otherwise, false if the setting was not found.</returns>
 		public bool Remove(string name)
 		{
-			return settings.Remove(name);
+			_settingsLock.EnterWriteLock();
+			try
+			{
+				return settings.Remove(name);
+			}
+			finally
+			{
+				_settingsLock.ExitWriteLock();
+			}
 		}
 
 		/// <summary>

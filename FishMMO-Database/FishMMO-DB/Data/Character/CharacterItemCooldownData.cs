@@ -9,16 +9,16 @@ namespace FishMMO.Database.Data
 		public readonly long Version;
 		public readonly long CharacterID;
 		public readonly int Category;
-		public readonly float CooldownEnd;
+		public readonly double CooldownEnd;
 
 		long IVersioned<CharacterItemCooldownData>.Version => Version;
 
-		public CharacterItemCooldownData(long id, long characterID, int category, float cooldownEnd)
+		public CharacterItemCooldownData(long id, long characterID, int category, double cooldownEnd)
 			: this(id, version: 0, characterID, category, cooldownEnd)
 		{
 		}
 
-		public CharacterItemCooldownData(long id, long version, long characterID, int category, float cooldownEnd)
+		public CharacterItemCooldownData(long id, long version, long characterID, int category, double cooldownEnd)
 		{
 			ID = id;
 			Version = version;

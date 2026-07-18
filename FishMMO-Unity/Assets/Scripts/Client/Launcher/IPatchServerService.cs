@@ -20,7 +20,7 @@ namespace FishMMO.Client
 		/// <param name="onComplete">Callback invoked with the latest <see cref="VersionConfig"/> and per-version <see cref="PatchInfo"/> upon success.</param>
 		/// <param name="onError">Callback invoked with an error message upon failure.</param>
 		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
-		public abstract IEnumerator GetLatestVersion(string apiHost, string clientVersion, Action<VersionConfig, PatchInfo> onComplete, Action<string> onError);
+		IEnumerator GetLatestVersion(string apiHost, string clientVersion, Action<VersionConfig, PatchInfo> onComplete, Action<string> onError);
 
 		/// <summary>
 		/// Asynchronously downloads a patch file from the server. When
@@ -35,6 +35,6 @@ namespace FishMMO.Client
 		/// <param name="onError">Callback invoked with an error message upon failure.</param>
 		/// <param name="onProgress">Callback invoked periodically with download progress (0.0 to 1.0) and a formatted string.</param>
 		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
-		public abstract IEnumerator DownloadPatch(string patchUrl, string tempFilePath, string expectedSha256, Action onComplete, Action<string> onError, Action<float, string> onProgress);
+		IEnumerator DownloadPatch(string patchUrl, string tempFilePath, string expectedSha256, Action onComplete, Action<string> onError, Action<float, string> onProgress);
 	}
 }

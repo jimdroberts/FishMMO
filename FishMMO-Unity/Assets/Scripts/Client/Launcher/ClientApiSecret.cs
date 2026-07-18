@@ -34,6 +34,15 @@ namespace FishMMO.Client
 		private const string SecretLiteral =
 			"FishMMO-default-client-gate-secret-replace-before-release-d8b1c4a6e7f23519";
 
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+		static ClientApiSecret()
+		{
+			UnityEngine.Debug.LogError(
+				"[ClientApiSecret] The placeholder default secret is still in use in a release build. " +
+				"Set FISHMMO_CLIENT_GATE_SECRET to a unique value and update SecretLiteral before shipping.");
+		}
+#endif
+
 		/// <summary>
 		/// Returns the secret as a fresh UTF-8 byte array. Callers SHOULD zero
 		/// the buffer after use; this method exists so the secret string is

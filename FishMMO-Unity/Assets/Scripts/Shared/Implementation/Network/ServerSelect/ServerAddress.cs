@@ -4,7 +4,8 @@ using System.Collections.Generic;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Serializable class containing a list of server ports for server selection.
+	/// Serializable class containing a list of server ports and a one-time
+	/// connection token for real-IP recovery on the game server.
 	/// </summary>
 	[Serializable]
 	public class ServerAddresses
@@ -13,6 +14,13 @@ namespace FishMMO.Shared
 		public List<ServerAddress> Addresses;
 		/// <summary>List of available server ports (client use).</summary>
 		public List<ushort> Ports;
+		/// <summary>
+		/// One-time connection token issued by IPFetch. The client echoes this
+		/// in the first ClientHandshake so the Login Server can recover the
+		/// real client IP that was visible to the HTTP layer (X-Forwarded-For)
+		/// but is lost through the L4 UDP proxy.
+		/// </summary>
+		public string ConnectionToken;
 	}
 
 	/// <summary>

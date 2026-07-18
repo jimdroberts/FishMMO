@@ -14,12 +14,12 @@ namespace FishMMO.Shared
 		/// Hidden from default inspector; displayed as readonly by TeleporterDestinationEditor.
 		/// </summary>
 		[SerializeField, HideInInspector]
-		private string _destinationID;
+		private string destinationID;
 
 		/// <summary>
 		/// Gets the stable unique identifier for this teleporter destination.
 		/// </summary>
-		public string DestinationID => _destinationID;
+		public string DestinationID => destinationID;
 
 		/// <summary>
 		/// Auto-generates a DestinationID when the component is first added to a GameObject
@@ -27,9 +27,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void Reset()
 		{
-			if (string.IsNullOrEmpty(_destinationID))
+			if (string.IsNullOrEmpty(destinationID))
 			{
-				_destinationID = System.Guid.NewGuid().ToString();
+				destinationID = System.Guid.NewGuid().ToString();
 			}
 #if UNITY_EDITOR
 			string sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;

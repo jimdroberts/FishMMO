@@ -1,4 +1,5 @@
 using FishNet.Connection;
+using FishMMO.Auth.Core;
 using FishMMO.Server.Core;
 
 namespace FishMMO.Server.Implementation
@@ -25,5 +26,12 @@ namespace FishMMO.Server.Implementation
 		/// Gracefully shuts down all async workers and disposes channel resources.
 		/// </summary>
 		void ShutdownWorkers();
+
+		/// <summary>
+		/// Creates the appropriate <see cref="IAccountManager{TConnection}"/> for this
+		/// authenticator type. SRP authenticators return an <see cref="SrpAccountManager"/>,
+		/// token authenticators return a <see cref="TokenAccountManager"/>.
+		/// </summary>
+		IAccountManager<NetworkConnection> CreateAccountManager();
 	}
 }

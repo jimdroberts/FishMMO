@@ -16,6 +16,15 @@ namespace FishMMO.WebServer
 	{
 		public static async Task Main(string[] args)
 		{
+			// Propagate FISHMMO_ENVIRONMENT to standard ASP.NET environment variables.
+			// This allows operators to set a single env var to control all servers.
+			string? fishEnv = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT");
+			if (!string.IsNullOrWhiteSpace(fishEnv))
+			{
+				Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", fishEnv);
+				Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", fishEnv);
+			}
+
 			string loggingConfigPath = Path.Combine(AppContext.BaseDirectory, "logging.json");
 			await Log.Initialize(loggingConfigPath);
 			await Log.Info("Program", "Starting WebServer application...");
@@ -65,6 +74,19 @@ namespace FishMMO.WebServer
 					.ConfigureServices((context, services) =>
 					{
 						Log.Info("Services", "Registering services...");
+
+						// Compress static assets (.wasm, .data, .unityweb) to reduce
+						// bandwidth for large WebGL builds (20-50 MB uncompressed).
+						services.AddResponseCompression(options =>
+						{
+							options.EnableForHttps = true;
+							options.MimeTypes = new[]
+							{
+								"application/wasm",
+								"application/octet-stream",
+								"application/x-gzip",
+							};
+						});
 
 						services.AddControllers();
 
@@ -151,6 +173,7 @@ namespace FishMMO.WebServer
 						contentTypeProvider.Mappings[".webmanifest"] = "application/manifest+json";
 						contentTypeProvider.Mappings[".data"] = "application/octet-stream";
 
+						app.UseResponseCompression();
 						app.UseDefaultFiles();
 						// Built-in static-file handler: safe path resolution, ETag/If-Modified-Since,
 						// Range requests, and Last-Modified are all handled correctly.
@@ -222,7 +245,7 @@ namespace FishMMO.WebServer
 					if (!h.ContainsKey("Permissions-Policy"))
 						h["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()";
 					if (!h.ContainsKey("Content-Security-Policy"))
-						h["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ws: wss:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+						h["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' wss://game.fishmmo.com:* https://game.fishmmo.com:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 					if (exposeDiagnostics)
 					{
 						h["X-Server-Version"] = serverVersion;

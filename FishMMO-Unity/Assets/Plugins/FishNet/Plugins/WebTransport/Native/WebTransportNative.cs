@@ -9,6 +9,13 @@ namespace FishNet.Transporting.WebTransport.Native
 	public class SafeServerHandle : SafeHandleZeroOrMinusOneIsInvalid
 	{
 		public SafeServerHandle() : base(true) { }
+
+		/// <summary>
+		/// Releases the native server handle. This method MAY be invoked on the
+		/// GC finalizer thread (not just Dispose). The underlying native destroy
+		/// function (wt_server_destroy_impl) MUST be thread-safe and must not
+		/// depend on managed state or a specific COM apartment.
+		/// </summary>
 		protected override bool ReleaseHandle()
 		{
 	#if !UNITY_WEBGL || UNITY_EDITOR
@@ -22,6 +29,13 @@ namespace FishNet.Transporting.WebTransport.Native
 	public class SafeClientHandle : SafeHandleZeroOrMinusOneIsInvalid
 	{
 		public SafeClientHandle() : base(true) { }
+
+		/// <summary>
+		/// Releases the native client handle. This method MAY be invoked on the
+		/// GC finalizer thread (not just Dispose). The underlying native destroy
+		/// function (wt_client_destroy_impl) MUST be thread-safe and must not
+		/// depend on managed state or a specific COM apartment.
+		/// </summary>
 		protected override bool ReleaseHandle()
 		{
 	#if !UNITY_WEBGL || UNITY_EDITOR
@@ -99,6 +113,40 @@ namespace FishNet.Transporting.WebTransport.Native
 		public const int WT_ERR_NOT_FOUND      = -7;
 
 		/// <summary>
+		/// Returns a human-readable error string for a WebTransport error code.
+		/// Uses the native wt_error_string() function when available; falls back
+		/// to the code constant name for well-known codes, or the raw integer.
+		/// </summary>
+		public static string ErrorString(int errorCode)
+		{
+	#if !UNITY_WEBGL || UNITY_EDITOR
+			try
+			{
+				IntPtr ptr = wt_error_string(errorCode);
+				if (ptr != IntPtr.Zero)
+				{
+					string native = Marshal.PtrToStringAnsi(ptr);
+					if (!string.IsNullOrEmpty(native))
+						return $"{native} (code {errorCode})";
+				}
+			}
+			catch { /* Fall through to constant-name lookup. */ }
+	#endif
+			return errorCode switch
+			{
+				WT_OK                 => "OK",
+				WT_ERR_UNKNOWN        => "ERR_UNKNOWN",
+				WT_ERR_INVALID_STATE  => "ERR_INVALID_STATE",
+				WT_ERR_CONNECT_FAILED => "ERR_CONNECT_FAILED",
+				WT_ERR_TLS_FAILED     => "ERR_TLS_FAILED",
+				WT_ERR_SEND_FAILED    => "ERR_SEND_FAILED",
+				WT_ERR_BUFFER_FULL    => "ERR_BUFFER_FULL",
+				WT_ERR_NOT_FOUND      => "ERR_NOT_FOUND",
+				_                     => $"Unknown ({errorCode})"
+			};
+		}
+
+		/// <summary>
 		/// Thread-safe init guard. 0 = not initialized, 1 = initializing/in progress.
 		/// Prevents double-init races when called from multiple threads.
 		/// </summary>
@@ -115,15 +163,14 @@ namespace FishNet.Transporting.WebTransport.Native
 			/* Only one thread proceeds past this guard. */
 			if (System.Threading.Interlocked.CompareExchange(ref _initGuard, 1, 0) != 0)
 			{
-				/* Another thread is initializing — spin-wait with generous timeout (~5s).
-				 * MsQuic DLL loading / entropy gathering can take a moment on some systems. */
-				for (int i = 0; i < 2500 && !_initialized; i++)
-					System.Threading.Thread.SpinWait(2000);
-				/* If still not initialized after timeout, proceed anyway —
-				 * the caller will get an error from the native operation. */
+				/* Another thread is initializing — yield with bounded timeout (~500ms Linux, up to ~3s Windows).
+				 * MsQuic DLL loading / entropy gathering can take a moment on some systems.
+				 * Using Thread.Sleep(2) avoids burning CPU, unlike a spin-wait. */
+				for (int i = 0; i < 250 && !_initialized; i++)
+					System.Threading.Thread.Sleep(2);
+				/* Timed out — caller will get an error from the native operation; they can retry next frame. */
 				return;
 			}
-
 			/* Double-check — another thread may have completed init while we waited for the guard. */
 			if (_initialized) { _initGuard = 0; return; }
 
@@ -131,7 +178,7 @@ namespace FishNet.Transporting.WebTransport.Native
 			int result = wt_init();
 			if (result != 0)
 			{
-				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {result}");
+				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {ErrorString(result)}");
 				_initGuard = 0;
 				return;
 			}
@@ -153,12 +200,20 @@ namespace FishNet.Transporting.WebTransport.Native
 	#if !UNITY_WEBGL || UNITY_EDITOR
 		private const string LIB = "fishmmo_webtransport";
 
+			// ── P/Invoke marshaling ───────────────────────────────
+			// LPUTF8Str marshals .NET strings as UTF-8 to the native
+			// library, which uses const char* (UTF-8) on all platforms.
+			// Supported in Unity 2021.2+.
+			// On Linux/macOS LPStr already maps to UTF-8; on Windows
+			// LPStr would map to the system ANSI code page, corrupting
+			// non-ASCII cert paths, ALPNs, and addresses.
+
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wt_server_create")]
 		public static extern SafeServerHandle wt_server_create(
-			[MarshalAs(UnmanagedType.LPStr)] string certificatePath,
-			[MarshalAs(UnmanagedType.LPStr)] string privateKeyPath,
-			[MarshalAs(UnmanagedType.LPStr)] string alpn,
-			[MarshalAs(UnmanagedType.LPStr)] string bindAddress,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string certificatePath,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string privateKeyPath,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string alpn,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string bindAddress,
 			ushort port, uint maxClients,
 			ref NativeCallbacks.ServerCallbacks callbacks,
 			IntPtr context);
@@ -224,8 +279,8 @@ namespace FishNet.Transporting.WebTransport.Native
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_client_connect(SafeClientHandle client,
-			[MarshalAs(UnmanagedType.LPStr)] string serverName,
-			[MarshalAs(UnmanagedType.LPStr)] string address,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string serverName,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string address,
 			ushort port, int useTls);
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]

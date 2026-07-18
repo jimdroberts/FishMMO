@@ -3,7 +3,7 @@ using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Managing.Transporting;
 using FishNet.Transporting.Multipass;
-using FishNet.Transporting.Bayou;
+using FishNet.Transporting.WebTransport;
 using FishNet.Managing.Scened;
 using FishMMO.Shared;
 using FishMMO.Auth.Core;
@@ -56,13 +56,18 @@ namespace FishMMO.Client
 		/// </summary>
 		public List<ushort> LoginServerAddresses;
 		/// <summary>
-		/// Timestamp of the last successful login server address fetch.
+		/// UTC timestamp of the last successful login server address fetch.
+		/// Uses DateTime.UtcNow instead of Time.realtimeSinceStartup to survive scene reloads.
 		/// </summary>
-		private float loginServerAddressesFetchedAt = float.NegativeInfinity;
+		private DateTime loginServerAddressesFetchedAt = DateTime.MinValue;
+		/// <summary>
+		/// Cached connection token from the last successful IPFetch response.
+		/// </summary>
+		private string cachedConnectionToken;
 		/// <summary>
 		/// Time-to-live in seconds for the cached login server address list.
 		/// </summary>
-		public float LoginServerCacheTtlSeconds = 300f;
+		public float LoginServerCacheTtlSeconds = 55f; // Must be less than the 60s connection token TTL
 		/// <summary>
 		/// Timeout in seconds for each login server probe request.
 		/// </summary>
@@ -261,8 +266,9 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Configures the client transport. All platforms use Bayou (WebSocket)
-		/// through nginx. No UDP/Tugboat needed.
+		/// Configures the client transport. All platforms use WebTransport (QUIC/HTTP3)
+		/// via NGINX UDP stream proxy. Native: DllImport → libfishmmo_webtransport;
+		/// WebGL: jslib → browser WebTransport API.
 		/// </summary>
 		/// <returns>True if initialization succeeded; otherwise, false.</returns>
 		private bool TryInitializeTransport()
@@ -271,13 +277,8 @@ namespace FishMMO.Client
 			if (tm == null) { Log.Error("Client", "TransportManager not found."); return false; }
 			var mp = tm.GetTransport<Multipass>();
 			if (mp == null) { Log.Error("Client", "Multipass not found."); return false; }
-// Bayou (WebSocket) for all platforms — unified nginx proxy path.
-			// All clients connect via wss:// through nginx which terminates SSL.
-			mp.SetClientTransport<Bayou>();
-			// WSS is disabled by default on Bayou. Enable it so the client
-			// connects via wss:// instead of plain ws://. nginx rejects plaintext.
-			if (mp.GetTransport<Bayou>() is Bayou bayou)
-				bayou.SetUseWSS(true);
+			// WebTransport (QUIC/HTTP3) for all platforms.
+			mp.SetClientTransport<WebTransport>();
 			return true;
 		}
 
@@ -311,6 +312,7 @@ namespace FishMMO.Client
 			if (forceDisconnect) Connection?.ForceDisconnect();
 			LoginAuthenticator?.RevokeAndClearAuthToken();
 			Connection?.ResetReconnectState();
+			cachedConnectionToken = null;
 			OnQuitToLogin?.Invoke();
 #if UNITY_EDITOR
 			PlayerInputController.MouseMode = true;
@@ -319,31 +321,15 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Connects the client to a game server at the specified port.
-		/// Address is always <see cref="Constants.Configuration.GameHost"/>.
+		/// Hostname is always <see cref="Constants.Configuration.GameHost"/>.
+		/// With WebTransport, the port is a QUIC connection parameter, not a URL path.
 		/// </summary>
 		/// <param name="port">The server port.</param>
 		/// <param name="isWorldServer">If true, marks this as a world server connection.</param>
 		public void ConnectToServer(ushort port, bool isWorldServer = false)
 		{
-			Connection?.ConnectToServer(BuildGameServerUrl(port), 443, isWorldServer);
+			Connection?.ConnectToServer(Constants.Configuration.GameHost, port, isWorldServer);
 		}
-
-		/// <summary>
-		/// Builds a WebSocket URL for a game server port.
-		/// All clients connect through nginx at <see cref="Constants.Configuration.GameHost"/>.
-		/// </summary>
-		/// <param name="port">The server port.</param>
-		/// <returns>The full WebSocket URL for the game server.</returns>
-		private static string BuildGameServerUrl(ushort port)
-		{
-			// NGINX routes /ws/{port} to the correct backend.
-			return Constants.Configuration.GameHost + "/ws/" + port;
-		}
-		/// <summary>
-		/// Checks whether the client connection is ready, optionally requiring authentication.
-		/// </summary>
-		/// <param name="requireAuth">If true, the connection must be authenticated to be considered ready.</param>
-		/// <returns>True if the connection is ready; otherwise, false.</returns>
 		public bool IsConnectionReady(bool requireAuth = true) => Connection?.IsConnectionReady(requireAuth) ?? false;
 
 		/// <summary>Backward-compatible overload accepting LocalConnectionState.</summary>
@@ -399,12 +385,12 @@ namespace FishMMO.Client
 		/// <param name="onFail">Callback invoked with an error message if all probes fail.</param>
 		/// <param name="onDone">Callback invoked with the list of discovered server addresses.</param>
 		/// <returns>Coroutine enumerator.</returns>
-		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>> onDone)
+		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>, string> onDone)
 		{
 			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0)
 			{
-				float age = Time.realtimeSinceStartup - loginServerAddressesFetchedAt;
-				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(LoginServerAddresses); yield break; }
+				double age = (DateTime.UtcNow - loginServerAddressesFetchedAt).TotalSeconds;
+				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(LoginServerAddresses, cachedConnectionToken); yield break; }
 			}
 			var candidates = ApiHostResolver.GetCandidates();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
@@ -438,6 +424,7 @@ namespace FishMMO.Client
 							if (done.Request.result != UnityWebRequest.Result.Success) { lastErr = done.Request.error; continue; }
 							var parsed = JsonUtility.FromJson<ServerAddresses>(done.Request.downloadHandler.text);
 							if (parsed?.Ports == null) { lastErr = "Parse failed."; continue; }
+							cachedConnectionToken = parsed.ConnectionToken;
 							winner = parsed.Ports;
 							break;
 						}
@@ -447,7 +434,7 @@ namespace FishMMO.Client
 					if (!any && next >= candidates.Count) break;
 					yield return null;
 				}
-				if (winner != null) { LoginServerAddresses = winner; loginServerAddressesFetchedAt = Time.realtimeSinceStartup; onDone?.Invoke(winner); }
+				if (winner != null) { LoginServerAddresses = winner; loginServerAddressesFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, cachedConnectionToken); }
 				else onFail?.Invoke(lastErr ?? "Failed to reach any APIHost.");
 			}
 			finally

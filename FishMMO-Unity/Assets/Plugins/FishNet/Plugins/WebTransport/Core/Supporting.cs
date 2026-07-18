@@ -13,14 +13,12 @@ namespace FishNet.Transporting.WebTransport
         public byte[] Data;
         public int Length;
         public readonly byte Channel;
-
-        public Packet(int connectionId, byte[] data, int length, byte channel)
-        {
-            ConnectionId = connectionId;
-            Data = data;
-            Length = length;
-            Channel = channel;
-        }
+        /// <summary>
+        /// Guard against double-dispose. Dispose sets this to false
+        /// after returning the buffer to the pool, preventing a
+        /// second dispose from corrupting the ByteArrayPool.
+        /// </summary>
+        private bool _owned;
 
         public Packet(int sender, ArraySegment<byte> segment, byte channel)
         {
@@ -29,28 +27,14 @@ namespace FishNet.Transporting.WebTransport
             ConnectionId = sender;
             Length = segment.Count;
             Channel = channel;
-        }
-
-        public ArraySegment<byte> GetArraySegment()
-        {
-            return new ArraySegment<byte>(Data, 0, Length);
-        }
-
-        /// <summary>
-        /// Adds additional length to the packet, resizing Data if needed.
-        /// </summary>
-        public void AddLength(int length)
-        {
-            int totalNeeded = Length + length;
-            if (Data.Length < totalNeeded)
-                Array.Resize(ref Data, totalNeeded);
-            Length += length;
+            _owned = true;
         }
 
         public void Dispose()
         {
-            if (Data != null)
+            if (Data != null && _owned)
             {
+                _owned = false;
                 ByteArrayPool.Store(Data);
                 Data = null;
             }

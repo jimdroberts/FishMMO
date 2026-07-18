@@ -10,8 +10,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public CharacterEntity Character { get; set; }
 		public int Hash { get; set; }
 		public int Level { get; set; }
-		public float CastTimeEnd { get; set; }
-		public float CooldownEnd { get; set; }
+		public double CastTimeEnd { get; set; }
+		public double CooldownEnd { get; set; }
 		public DateTime TimeCreated { get; set; }
 		public bool Deleted { get; set; }
 		public DateTime? TimeDeleted { get; set; }

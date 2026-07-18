@@ -28,7 +28,7 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.CooldownEnd)
 				.IsRequired()
-				.HasDefaultValue(0f);
+				.HasDefaultValue(0d);
 
 			// Unique constraint: one cooldown category per character
 			builder.HasIndex(e => new { e.CharacterID, e.Category })

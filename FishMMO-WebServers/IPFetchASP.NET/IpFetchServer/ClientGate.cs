@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using FishMMO.Logging;
 
 namespace FishMMO.WebServer
@@ -222,10 +223,10 @@ namespace FishMMO.WebServer
 
 		private static bool FixedTimeEquals(string a, string b)
 		{
-			// Constant-time compare on the ASCII bytes; length leak is acceptable
+			// Constant-time compare on the UTF-8 bytes; length leak is acceptable
 			// because both sides are fixed-length base64url of a 32-byte HMAC.
-			byte[] ba = Encoding.ASCII.GetBytes(a);
-			byte[] bb = Encoding.ASCII.GetBytes(b);
+			byte[] ba = Encoding.UTF8.GetBytes(a);
+			byte[] bb = Encoding.UTF8.GetBytes(b);
 			return CryptographicOperations.FixedTimeEquals(ba, bb);
 		}
 
@@ -288,7 +289,7 @@ namespace FishMMO.WebServer
 		}
 
 		/// <summary>
-		/// Normalises the request path so client and server produce the same canonical string.
+		/// Normalizes the request path so client and server produce the same canonical string.
 		/// Collapses repeated slashes and rejects any path-traversal segment (raw or percent-encoded).
 		/// Returns null if the path is unsafe.
 		/// </summary>
@@ -300,6 +301,15 @@ namespace FishMMO.WebServer
 				char c = path[i];
 				if (c == '\0' || c == '\\') return null;
 			}
+
+			// URL-decode the path FIRST so that percent-encoded delimiters
+			// (e.g., "..%2f" → "../") cannot bypass the segment-level
+			// traversal check.  The raw path is then re-split on decoded
+			// separators and every segment is checked for traversal patterns.
+			string decoded;
+			try { decoded = Uri.UnescapeDataString(path); }
+			catch { return null; }
+
 			// Reject any traversal-style segment (literal or percent-encoded).
 			string[] segments = path.Split('/');
 			for (int i = 0; i < segments.Length; i++)
@@ -310,11 +320,17 @@ namespace FishMMO.WebServer
 				if (seg.Equals("%2e%2e", StringComparison.OrdinalIgnoreCase)) return null;
 				if (seg.Equals("%2e.", StringComparison.OrdinalIgnoreCase)) return null;
 				if (seg.Equals(".%2e", StringComparison.OrdinalIgnoreCase)) return null;
+
+				// Also check the URL-decoded segment.  Catches encoded-separator
+				// bypasses like "..%2f" where the raw segment is "..%2f" (not
+				// caught above) but the decoded form is "../".
+				string decodedSeg;
+				try { decodedSeg = Uri.UnescapeDataString(seg); }
+				catch { return null; }
+				if (decodedSeg == ".." || decodedSeg == ".") return null;
+				if (decodedSeg.Contains('/') || decodedSeg.Contains('\\')) return null;
 			}
-			while (path.IndexOf("//", StringComparison.Ordinal) >= 0)
-			{
-				path = path.Replace("//", "/");
-			}
+			path = System.Text.RegularExpressions.Regex.Replace(path, "/{2,}", "/");
 			return path;
 		}
 

@@ -16,6 +16,15 @@ namespace FishMMO.WebServer
 
 		public static async Task Main(string[] args)
 		{
+			// Propagate FISHMMO_ENVIRONMENT to standard ASP.NET environment variables.
+			// This allows operators to set a single env var to control all servers.
+			string? fishEnv = Environment.GetEnvironmentVariable("FISHMMO_ENVIRONMENT");
+			if (!string.IsNullOrWhiteSpace(fishEnv))
+			{
+				Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", fishEnv);
+				Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", fishEnv);
+			}
+
 			string loggingConfigPath = Path.Combine(AppContext.BaseDirectory, "logging.json");
 			await Log.Initialize(loggingConfigPath);
 			await Log.Info("Program", "Starting WebServer application...");
@@ -120,15 +129,17 @@ namespace FishMMO.WebServer
 							});
 
 							// Dedicated stricter policy for patch binary downloads.
+							// Sliding window prevents the fixed-window boundary burst
+							// (12 requests in 2 s across a window boundary).
 							options.AddPolicy(PatchDownloadPolicy, httpContext =>
 							{
 								string key = GetClientIpKey(httpContext);
-								return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+								return RateLimitPartition.GetSlidingWindowLimiter(key, _ => new SlidingWindowRateLimiterOptions
 								{
 									PermitLimit = 6,
 									Window = TimeSpan.FromMinutes(1),
+									SegmentsPerWindow = 6,
 									QueueLimit = 0,
-									AutoReplenishment = true,
 									QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
 								});
 							});

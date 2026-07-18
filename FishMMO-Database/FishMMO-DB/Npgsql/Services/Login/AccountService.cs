@@ -171,8 +171,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				// Insert preserves the user's original casing in `name` while the case-insensitive
-				// UNIQUE index on the generated `name_lowercase` column rejects case-variant duplicates.
+				// name is stored as lowercase via ToLowerInvariant(). Case-insensitive uniqueness
+				// is enforced by the name_lowercase generated column.
 				var sql = $@"INSERT INTO {TableName} (name, salt, verifier, access_level, email, age)
 					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}})
 					ON CONFLICT (name_lowercase) DO NOTHING";
@@ -661,8 +661,8 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Account name must be 3-32 characters.");
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $"UPDATE {TableName} SET verification_email_sent_at = CURRENT_TIMESTAMP WHERE name = {{0}}";
-				var affected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken).ConfigureAwait(false);
+				var sql = $"UPDATE {TableName} SET verification_email_sent_at = CURRENT_TIMESTAMP WHERE name_lowercase = {{0}}";
+				var affected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName.ToLowerInvariant() }, cancellationToken).ConfigureAwait(false);
 				if (affected == 0)
 					throw new DatabaseEntityNotFoundException("Account", accountName);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);

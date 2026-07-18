@@ -14,8 +14,8 @@ namespace FishMMO.Server.Implementation
 	/// </summary>
 	public abstract class MainThreadQueueData : RuntimeDataContainer, IMainThreadQueueData
 	{
-		private readonly Queue<Action> _queue = new Queue<Action>();
-		private readonly object _lock = new object();
+		private readonly Queue<Action> queue = new Queue<Action>();
+		private readonly object lockObj = new object();
 
 		/// <summary>
 		/// Reusable scratch list for draining actions, avoiding per-call allocation.
@@ -37,9 +37,9 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		public override void Clear()
 		{
-			lock (_lock)
+			lock (lockObj)
 			{
-				_queue.Clear();
+				queue.Clear();
 			}
 		}
 
@@ -59,13 +59,13 @@ namespace FishMMO.Server.Implementation
 		/// <inheritdoc/>
 		public bool TryEnqueue(Action action)
 		{
-			lock (_lock)
+			lock (lockObj)
 			{
-				if (_queue.Count >= MaxQueueCapacity)
+				if (queue.Count >= MaxQueueCapacity)
 				{
 					return false;
 				}
-				_queue.Enqueue(action);
+				queue.Enqueue(action);
 				return true;
 			}
 		}
@@ -85,17 +85,17 @@ namespace FishMMO.Server.Implementation
 			}
 
 			drainBuffer.Clear();
-			lock (_lock)
+			lock (lockObj)
 			{
-				if (_queue.Count == 0)
+				if (queue.Count == 0)
 				{
 					return 0;
 				}
 
-				int count = Math.Min(maxActions, _queue.Count);
+				int count = Math.Min(maxActions, queue.Count);
 				for (int i = 0; i < count; ++i)
 				{
-					drainBuffer.Add(_queue.Dequeue());
+					drainBuffer.Add(queue.Dequeue());
 				}
 			}
 

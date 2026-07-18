@@ -8,7 +8,7 @@
         "KinematicCharacterController",
         "Unity.Addressables",
         "Unity.ResourceManager",
-        "Bayou"
+        "WebTransport"
     ],
     "includePlatforms": [
         "Editor",

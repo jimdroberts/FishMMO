@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
@@ -18,21 +19,25 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool IsFlagged(this int flag, int bitPosition)
 		{
+			if (bitPosition < 0 || bitPosition > 31)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 31.");
 			return (flag & (1 << bitPosition)) != 0;
 		}
 
 		/// <summary>
-		/// Checks if the specified generic bit position is set. 
+		/// Checks if the specified generic bit position is set.
 		/// Use this for Enums representing bit indices.
 		/// </summary>
 		/// <typeparam name="T">A struct type (ideally an Enum).</typeparam>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool IsFlagged<T>(this int flag, T bitPosition) where T : struct
 		{
-			// Safety check: ensure we handle different enum underlying types correctly
-			int pos = EqualityComparer<T>.Default.GetHashCode(bitPosition);
-			// Note: In performance-critical netcode, we assume T is an int-sized enum.
-			return (flag & (1 << Unsafe.As<T, int>(ref bitPosition))) != 0;
+			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(int))
+				throw new ArgumentException($"Enum type {typeof(T).Name} is not int-backed. Only int-backed enums are supported.");
+			int pos = Unsafe.As<T, int>(ref bitPosition);
+			if (pos < 0 || pos > 31)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 31.");
+			return (flag & (1 << pos)) != 0;
 		}
 
 		/// <summary>
@@ -41,6 +46,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void DisableBit(this ref int flag, int bitPosition)
 		{
+			if (bitPosition < 0 || bitPosition > 31)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 31.");
 			flag &= ~(1 << bitPosition);
 		}
 
@@ -50,7 +57,12 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void DisableBit<T>(this ref int flag, T bitPosition) where T : struct
 		{
-			flag &= ~(1 << Unsafe.As<T, int>(ref bitPosition));
+			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(int))
+				throw new ArgumentException($"Enum type {typeof(T).Name} is not int-backed. Only int-backed enums are supported.");
+			int pos = Unsafe.As<T, int>(ref bitPosition);
+			if (pos < 0 || pos > 31)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 31.");
+			flag &= ~(1 << pos);
 		}
 
 		/// <summary>
@@ -59,6 +71,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void EnableBit(this ref int flag, int bitPosition)
 		{
+			if (bitPosition < 0 || bitPosition > 31)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 31.");
 			flag |= (1 << bitPosition);
 		}
 
@@ -68,7 +82,12 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void EnableBit<T>(this ref int flag, T bitPosition) where T : struct
 		{
-			flag |= (1 << Unsafe.As<T, int>(ref bitPosition));
+			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(int))
+				throw new ArgumentException($"Enum type {typeof(T).Name} is not int-backed. Only int-backed enums are supported.");
+			int pos = Unsafe.As<T, int>(ref bitPosition);
+			if (pos < 0 || pos > 31)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 31.");
+			flag |= (1 << pos);
 		}
 
 		/// <summary>
@@ -77,6 +96,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void ToggleBit(this ref int flag, int bitPosition)
 		{
+			if (bitPosition < 0 || bitPosition > 31)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 31.");
 			flag ^= (1 << bitPosition);
 		}
 	}

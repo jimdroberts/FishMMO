@@ -30,7 +30,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Callback for internal log messages.
 		/// </summary>
-		private static Action<string> _internalLogMessageCallback;
+		private static Action<string> internalLogMessageCallback;
 
 		/// <summary>
 		/// Initializes the Unity logger bridge and sets it as Unity's primary log handler.
@@ -39,7 +39,7 @@ namespace FishMMO.Shared
 		/// <param name="internalLogMessageCallback">Callback for internal log messages.</param>
 		public static void Initialize(Action<string> internalLogMessageCallback)
 		{
-			_internalLogMessageCallback = internalLogMessageCallback;
+			internalLogMessageCallback = internalLogMessageCallback;
 			if (instance != null)
 			{
 				internalLogMessageCallback?.Invoke($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss 'UTC'}] [UnityLoggerBridge] Bridge already initialized. Skipping re-initialization.");
@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 			// that doesn't pass through our system.
 			Debug.unityLogger.logHandler = instance;
 
-			_internalLogMessageCallback?.Invoke($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss 'UTC'}] [UnityLoggerBridge] Bridge initialized and set as ILogHandler.");
+			internalLogMessageCallback?.Invoke($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss 'UTC'}] [UnityLoggerBridge] Bridge initialized and set as ILogHandler.");
 		}
 
 		/// <summary>
@@ -77,7 +77,7 @@ namespace FishMMO.Shared
 				Debug.unityLogger.logHandler = instance.defaultUnityLogHandler;
 			}
 
-			_internalLogMessageCallback?.Invoke($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss 'UTC'}] [UnityLoggerBridge] Bridge shut down and default ILogHandler restored.");
+			internalLogMessageCallback?.Invoke($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss 'UTC'}] [UnityLoggerBridge] Bridge shut down and default ILogHandler restored.");
 			instance = null;
 		}
 

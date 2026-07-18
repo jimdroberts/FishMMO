@@ -18,9 +18,24 @@ namespace FishMMO.Client.Security.Editor
 		/// <inheritdoc/>
 		public void OnPreprocessBuild(BuildReport report)
 		{
-			// Formerly blocked release client builds when TLS certificate pins
-			// were missing. Disabled: TLS pin configuration is optional for this
-			// project. Re-enable when deployment environment provides pins.
+			// Only enforce for non-development standalone builds.
+			if (EditorUserBuildSettings.development)
+				return;
+
+			bool hasStreamingPins = StreamingAssetsConfigHasPins();
+			bool hasCompilePins = ClientSecurityBootstrap.DefaultPinCount >= 2;
+
+			if (!hasStreamingPins && !hasCompilePins)
+			{
+				Debug.LogWarning(
+					"[ClientSecurityBuildValidator] WARNING: Release build has NO TLS certificate pins configured.\n" +
+					"  - No StreamingAssets/client-security.json with 2+ pins found.\n" +
+					"  - No compile-time DefaultPins populated in ClientSecurityBootstrap.\n" +
+					"  In release builds without pins, allowOnEmpty defaults to FALSE — " +
+					"ALL HTTPS requests will be rejected. Ship a pin configuration or " +
+					"set allowOnEmpty=true in your security config.\n" +
+					"  See ClientSecurityBootstrap.cs and client-security.json for documentation.");
+			}
 		}
 
 		private static bool StreamingAssetsConfigHasPins()

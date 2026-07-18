@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+using System;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -17,6 +18,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool IsFlagged(this long flag, int bitPosition)
 		{
+			if (bitPosition < 0 || bitPosition > 63)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
 			return (flag & (1L << bitPosition)) != 0;
 		}
 
@@ -28,7 +31,12 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool IsFlagged<T>(this long flag, T bitPosition) where T : struct
 		{
-			return (flag & (1L << Unsafe.As<T, int>(ref bitPosition))) != 0;
+			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(long))
+				throw new ArgumentException($"Enum type {typeof(T).Name} is not long-backed. Only long-backed enums are supported.");
+			long pos = Unsafe.As<T, long>(ref bitPosition);
+			if (pos < 0 || pos > 63)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
+			return (flag & (1L << (int)pos)) != 0;
 		}
 
 		/// <summary>
@@ -37,6 +45,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void DisableBit(this ref long flag, int bitPosition)
 		{
+			if (bitPosition < 0 || bitPosition > 63)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
 			flag &= ~(1L << bitPosition);
 		}
 
@@ -46,7 +56,12 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void DisableBit<T>(this ref long flag, T bitPosition) where T : struct
 		{
-			flag &= ~(1L << Unsafe.As<T, int>(ref bitPosition));
+			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(long))
+				throw new ArgumentException($"Enum type {typeof(T).Name} is not long-backed. Only long-backed enums are supported.");
+			long pos = Unsafe.As<T, long>(ref bitPosition);
+			if (pos < 0 || pos > 63)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
+			flag &= ~(1L << (int)pos);
 		}
 
 		/// <summary>
@@ -55,6 +70,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void EnableBit(this ref long flag, int bitPosition)
 		{
+			if (bitPosition < 0 || bitPosition > 63)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
 			flag |= (1L << bitPosition);
 		}
 
@@ -64,7 +81,12 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void EnableBit<T>(this ref long flag, T bitPosition) where T : struct
 		{
-			flag |= (1L << Unsafe.As<T, int>(ref bitPosition));
+			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(long))
+				throw new ArgumentException($"Enum type {typeof(T).Name} is not long-backed. Only long-backed enums are supported.");
+			long pos = Unsafe.As<T, long>(ref bitPosition);
+			if (pos < 0 || pos > 63)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
+			flag |= (1L << (int)pos);
 		}
 
 		/// <summary>
@@ -73,6 +95,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void ToggleBit(this ref long flag, int bitPosition)
 		{
+			if (bitPosition < 0 || bitPosition > 63)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
 			flag ^= (1L << bitPosition);
 		}
 	}

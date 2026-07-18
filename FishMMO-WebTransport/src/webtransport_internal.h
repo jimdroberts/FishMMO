@@ -34,14 +34,25 @@ typedef int atomic_bool;    /* always 4 bytes — consistent struct layout acros
   #define atomic_store(p, v)      (_InterlockedExchange((long*)(p), (long)(v)))
   #define atomic_fetch_add(p, v)  (_InterlockedExchangeAdd((long*)(p), (long)(v)))
   #define atomic_fetch_sub(p, v)  (_InterlockedExchangeAdd((long*)(p), -(long)(v)))
-  /* NOTE: This macro does NOT update *expected on failure (unlike C11).
-   * Current call sites do not depend on *expected being updated.
-   * If future code needs post-failure *expected, use a proper loop:
-   *   long cur = atomic_load(p);
-   *   do { *expected = cur; } while ((cur = _InterlockedCompareExchange(...)) != *expected);
-   */ \
+  /* Helper: C11-style CAS — updates *expected to current value on failure.
+   * Cannot use statement expressions (GCC extension) for portability;
+   * instead delegate to an inline function (C++ only, matches our usage). */
+  #ifdef __cplusplus
+  static __inline int _wt_cas_strong(volatile long *p, long *expected, long desired) {
+      long cur = _InterlockedCompareExchange(p, desired, *expected);
+      if (cur == *expected) return 1;
+      *expected = (int)cur;
+      return 0;
+  }
+  #define atomic_compare_exchange_strong(p, expected, desired) \
+      _wt_cas_strong((volatile long*)(p), (long*)(expected), (long)(desired))
+  #else
+  /* Fallback for pure C: best-effort CAS (does NOT update *expected).
+   * All current call sites in this codebase are C++ and use the inline
+   * function above. */
   #define atomic_compare_exchange_strong(p, expected, desired) \
       (_InterlockedCompareExchange((long*)(p), (long)(desired), (long)(*(expected))) == (long)(*(expected)))
+  #endif
 #else
   #define atomic_init(p, v)       (*(p) = (v))
   #define atomic_load(p)          __atomic_load_n(p, __ATOMIC_SEQ_CST)
@@ -83,9 +94,9 @@ extern "C" {
 #define WT_DEFAULT_MTU              1200
 
 #define WT_DGRAM_MAX_SIZE          1500   /* max QUIC datagram payload (path MTU) */
-#define WT_DGRAM_QUEUE_CAPACITY    256
+#define WT_DGRAM_QUEUE_CAPACITY    1024
 
-#define WT_MAX_STREAMS             1024
+#define WT_MAX_STREAMS             4096
 #define WT_MAX_STREAM_RECV_BUF      (1024 * 1024)  /* 1 MB per stream */
 
 /* ── Connection state enum ──────────────────────────────────── */

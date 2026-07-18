@@ -32,13 +32,13 @@ namespace FishMMO.Client
 			/// Owning <see cref="ClientLoginAuthenticator"/>, used to access the FishNet client and to raise
 			/// outer events (auth result, two-factor setup) from core callbacks.
 			/// </summary>
-			private readonly ClientLoginAuthenticator _outer;
+			private readonly ClientLoginAuthenticator outer;
 
 			/// <summary>
 			/// Creates a new core bound to the given outer authenticator.
 			/// </summary>
 			/// <param name="outer">The owning <see cref="ClientLoginAuthenticator"/> MonoBehaviour.</param>
-			public LoginAuthenticatorCore(ClientLoginAuthenticator outer) => _outer = outer;
+			public LoginAuthenticatorCore(ClientLoginAuthenticator outer) => this.outer = outer;
 
 			/// <summary>
 			/// Log prefix used by base-class diagnostics.
@@ -46,15 +46,16 @@ namespace FishMMO.Client
 			protected override string LogPrefix => "ClientLoginAuthenticator";
 
 			/// <summary>
-			/// Sends the initial client handshake (ephemeral public key, cookie, supported protocol version range)
-			/// to the server as a <see cref="ClientHandshake"/> broadcast.
+			/// Sends the initial client handshake (ephemeral public key, cookie, connection token,
+			/// supported protocol version range) to the server as a <see cref="ClientHandshake"/> broadcast.
 			/// </summary>
-			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, ushort minVersion, ushort maxVersion)
+			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion)
 			{
 				Client.Broadcast(new ClientHandshake()
 				{
 					PublicKey = publicKey,
 					Cookie = cookie,
+					ConnectionToken = connectionToken,
 					MinVersion = minVersion,
 					MaxVersion = maxVersion,
 				}, Channel.Reliable);
@@ -75,13 +76,13 @@ namespace FishMMO.Client
 
 			/// <summary>
 			/// Sends the SRP-6a identification step (encrypted username + client ephemeral A) as a
-			/// <see cref="SrpVerifyBroadcast"/>.
+			/// <see cref="SrpVerifyRequestBroadcast"/>.
 			/// </summary>
 			protected override void SendSrpVerify(byte[] encryptedUsername, byte[] encryptedClientEphemeral, uint seq)
 			{
-				Client.Broadcast(new SrpVerifyBroadcast()
+				Client.Broadcast(new SrpVerifyRequestBroadcast()
 				{
-					S = encryptedUsername,
+					Username = encryptedUsername,
 					PublicEphemeral = encryptedClientEphemeral,
 					Seq = seq,
 				}, Channel.Reliable);
@@ -147,20 +148,20 @@ namespace FishMMO.Client
 			/// <summary>
 			/// Forces the underlying FishNet client connection to disconnect (used on fatal auth errors).
 			/// </summary>
-			protected override void Disconnect() => _outer.Client.ForceDisconnect();
+			protected override void Disconnect() => outer.Client.ForceDisconnect();
 
 			/// <summary>
 			/// Raises the outer <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event.
 			/// </summary>
 			protected override void OnAuthResultCallback(ClientAuthenticationResult result) =>
-				_outer.OnClientAuthenticationResult?.Invoke(result);
+				outer.OnClientAuthenticationResult?.Invoke(result);
 
 			/// <summary>
 			/// Raises the outer <see cref="ClientLoginAuthenticator.OnTwoFactorSetupReceived"/> event with
 			/// the otpauth URI and recovery codes returned by the server after registration.
 			/// </summary>
 			protected override void OnTwoFactorSetupCallback(string otpauthUri, string[] recoveryCodes) =>
-				_outer.OnTwoFactorSetupReceived?.Invoke(otpauthUri, recoveryCodes);
+				outer.OnTwoFactorSetupReceived?.Invoke(otpauthUri, recoveryCodes);
 
 			/// <summary>
 			/// Validates a username against FishMMO's shared character/format rules.
@@ -187,7 +188,19 @@ namespace FishMMO.Client
 		/// Engine-independent authentication state machine instance. Created in <see cref="InitializeOnce"/>
 		/// and disposed in <see cref="OnDestroy"/>; null before initialization and after teardown.
 		/// </summary>
-		private LoginAuthenticatorCore _core;
+		private LoginAuthenticatorCore core;
+
+		/// <summary>
+		/// Stored reference to the NetworkManager for safe unregistration in <see cref="OnDestroy"/>,
+		/// since <c>base.NetworkManager</c> may not be accessible after the object begins destruction.
+		/// </summary>
+		private NetworkManager networkManager;
+
+		/// <summary>
+		/// Tracks whether <see cref="InitializeOnce"/> completed successfully, so that
+		/// <see cref="OnDestroy"/> only attempts to unregister handlers when registration occurred.
+		/// </summary>
+		private bool initialized;
 
 		/// <summary>
 		/// Client authentication event. Subscribe to receive authentication results from the server.
@@ -216,12 +229,18 @@ namespace FishMMO.Client
 		/// Returns the current login identifier (username or email) if still set.
 		/// Returns null after credentials are cleared (post-SRP proof or disconnect).
 		/// </summary>
-		public string PendingLoginIdentifier => _core?.PendingLoginIdentifier;
+		public string PendingLoginIdentifier => core?.PendingLoginIdentifier;
+
+		/// <summary>
+		/// One-time connection token from IPFetch for real-IP recovery on the Login Server.
+		/// Set before ConnectToServer; null for World/Scene reconnections.
+		/// </summary>
+		public string ConnectionToken { get; set; }
 
 		/// <summary>
 		/// Returns whether the client has a stored authentication token for World/Scene server connections.
 		/// </summary>
-		public bool HasAuthToken => _core?.HasAuthToken ?? false;
+		public bool HasAuthToken => core?.HasAuthToken ?? false;
 
 		/// <summary>
 		/// Initializes the authenticator once with the provided network manager.
@@ -231,15 +250,17 @@ namespace FishMMO.Client
 		public override void InitializeOnce(NetworkManager networkManager)
 		{
 			base.InitializeOnce(networkManager);
-			_core = new LoginAuthenticatorCore(this);
+			core = new LoginAuthenticatorCore(this);
+			this.networkManager = networkManager;
 
 			base.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			base.NetworkManager.ClientManager.RegisterBroadcast<ServerHandshake>(OnClientServerHandshakeBroadcastReceived);
-			base.NetworkManager.ClientManager.RegisterBroadcast<SrpVerifyBroadcast>(OnClientSrpVerifyBroadcastReceived);
+			base.NetworkManager.ClientManager.RegisterBroadcast<SrpVerifyResponseBroadcast>(OnClientSrpVerifyBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<SrpSuccessBroadcast>(OnClientSrpSuccessBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<ClientAuthResultBroadcast>(OnClientAuthResultBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<TwoFactorSetupBroadcast>(OnClientTwoFactorSetupBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<RenewTokenResponseBroadcast>(OnClientRenewTokenResponseBroadcastReceived);
+			initialized = true;
 		}
 
 		/// <summary>
@@ -247,8 +268,18 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnDestroy()
 		{
-			_core?.Dispose();
-			_core = null;
+			if (initialized && networkManager != null)
+			{
+				networkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+				networkManager.ClientManager.UnregisterBroadcast<ServerHandshake>(OnClientServerHandshakeBroadcastReceived);
+				networkManager.ClientManager.UnregisterBroadcast<SrpVerifyResponseBroadcast>(OnClientSrpVerifyBroadcastReceived);
+				networkManager.ClientManager.UnregisterBroadcast<SrpSuccessBroadcast>(OnClientSrpSuccessBroadcastReceived);
+				networkManager.ClientManager.UnregisterBroadcast<ClientAuthResultBroadcast>(OnClientAuthResultBroadcastReceived);
+				networkManager.ClientManager.UnregisterBroadcast<TwoFactorSetupBroadcast>(OnClientTwoFactorSetupBroadcastReceived);
+				networkManager.ClientManager.UnregisterBroadcast<RenewTokenResponseBroadcast>(OnClientRenewTokenResponseBroadcastReceived);
+			}
+			core?.Dispose();
+			core = null;
 		}
 
 		/// <summary>
@@ -274,7 +305,7 @@ namespace FishMMO.Client
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool SetLoginCredentials(string username, string password, bool register = false, string email = "", int age = 0)
 		{
-			return _core.SetLoginCredentials(username, password, register, email, age);
+			return core.SetLoginCredentials(username, password, register, email, age);
 		}
 
 		/// <summary>
@@ -285,7 +316,7 @@ namespace FishMMO.Client
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SendVerifyCode(string username, string verifyCode)
 		{
-			_core.SendVerifyCode(username, verifyCode);
+			core.SendVerifyCode(username, verifyCode);
 		}
 
 		/// <summary>
@@ -295,7 +326,7 @@ namespace FishMMO.Client
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SendTotpCode(string code)
 		{
-			_core.SendTotpCode(code);
+			core.SendTotpCode(code);
 		}
 
 		/// <summary>
@@ -305,7 +336,7 @@ namespace FishMMO.Client
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ClearAuthToken()
 		{
-			_core?.ClearAuthToken();
+			core?.ClearAuthToken();
 		}
 
 		/// <summary>
@@ -320,8 +351,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public void RevokeAndClearAuthToken()
 		{
-			if (_core == null) return;
-			if (!_core.TryConsumeStoredTokenForRevoke(out byte[] tokenCopy) || tokenCopy == null)
+			if (core == null) return;
+			if (!core.TryConsumeStoredTokenForRevoke(out byte[] tokenCopy) || tokenCopy == null)
 			{
 				return;
 			}
@@ -383,11 +414,11 @@ namespace FishMMO.Client
 			if (args.ConnectionState == LocalConnectionState.Stopping ||
 				args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				_core.OnDisconnected();
+				core.OnDisconnected();
 			}
 			else if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				_core.OnConnected();
+				core.OnConnected(ConnectionToken); ConnectionToken = null;
 			}
 		}
 
@@ -399,16 +430,16 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientServerHandshakeBroadcastReceived(ServerHandshake msg, Channel channel)
 		{
-			_core.OnServerHandshakeReceived(msg.PublicKey, msg.Cookie, msg.AgreedVersion);
+			core.OnServerHandshakeReceived(msg.PublicKey, msg.Cookie, msg.AgreedVersion);
 		}
 
 		/// <summary>
 		/// Handles the server's SRP-6a identification response (salt s and server ephemeral B) and
 		/// forwards it to the core, which computes M1 and triggers <see cref="LoginAuthenticatorCore.SendSrpProof"/>.
 		/// </summary>
-		private void OnClientSrpVerifyBroadcastReceived(SrpVerifyBroadcast msg, Channel channel)
+		private void OnClientSrpVerifyBroadcastReceived(SrpVerifyResponseBroadcast msg, Channel channel)
 		{
-			_core.OnSrpVerifyResponseReceived(msg.S, msg.PublicEphemeral);
+			core.OnSrpVerifyResponseReceived(msg.Salt, msg.PublicEphemeral);
 		}
 
 		/// <summary>
@@ -417,7 +448,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientSrpSuccessBroadcastReceived(SrpSuccessBroadcast msg, Channel channel)
 		{
-			_core.OnSrpSuccessReceived(msg.Proof, msg.Result, msg.Token);
+			core.OnSrpSuccessReceived(msg.Proof, msg.Result, msg.Token);
 		}
 
 		/// <summary>
@@ -426,7 +457,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientAuthResultBroadcastReceived(ClientAuthResultBroadcast msg, Channel channel)
 		{
-			_core.OnAuthResultReceived(msg.Result);
+			core.OnAuthResultReceived(msg.Result);
 		}
 
 		/// <summary>
@@ -435,7 +466,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientTwoFactorSetupBroadcastReceived(TwoFactorSetupBroadcast msg, Channel channel)
 		{
-			_core.OnTwoFactorSetupReceived(msg.OtpauthUri, msg.RecoveryCodes);
+			core.OnTwoFactorSetupReceived(msg.OtpauthUri, msg.RecoveryCodes);
 		}
 
 		/// <summary>
@@ -446,8 +477,8 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientRenewTokenResponseBroadcastReceived(RenewTokenResponseBroadcast msg, Channel channel)
 		{
-			if (_core == null) return;
-			_core.TryApplyRenewedToken(msg.Token);
+			if (core == null) return;
+			core.TryApplyRenewedToken(msg.Token);
 		}
 	}
 }

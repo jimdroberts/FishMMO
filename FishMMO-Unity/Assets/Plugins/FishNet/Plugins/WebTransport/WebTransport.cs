@@ -1,4 +1,5 @@
 using FishNet.Managing;
+using FishNet.Transporting.WebTransport.Native;
 using FishNet.Managing.Transporting;
 using System;
 using System.Runtime.CompilerServices;
@@ -10,11 +11,10 @@ namespace FishNet.Transporting.WebTransport
     /// Architecture: WebTransport is designed to work with or without NGINX.
     /// WebTransport runs over HTTP/3 (QUIC), which requires TLS 1.3 natively.
     ///
-    /// Deployment modes:
-    ///   - Behind NGINX: NGINX terminates QUIC on UDP/443, proxies to backend.
-    ///     Set <c>_useTls = false</c> when NGINX handles TLS.
-    ///   - Direct: Game server runs QUIC directly. Set <c>_useTls = true</c>
-    ///     and provide certificate paths.
+    /// QUIC requires TLS 1.3 — there is no plain-QUIC mode.
+    /// Certificate and private key paths are configured in server .cfg files
+    /// and applied via <c>SetCertificatePath</c> / <c>SetPrivateKeyPath</c>
+    /// at startup by <c>FishNetNetworkWrapper.ConfigureWebTransport</c>.
     ///
     /// Channel mapping (native, no suffix byte needed):
     ///   - Channel 0 (Reliable)   → WebTransport bidirectional streams
@@ -23,65 +23,26 @@ namespace FishNet.Transporting.WebTransport
     [DisallowMultipleComponent]
     public class WebTransport : Transport
     {
-        #region Serialized
-        /// <summary>
-        /// True to use TLS (QUIC always needs TLS, but NGINX may handle it).
-        /// When behind NGINX that terminates QUIC, set to false.
-        /// For direct server, set to true and provide cert paths.
-        /// </summary>
-        [Tooltip("True to enable TLS in the native QUIC stack. Set false when NGINX terminates QUIC.")]
-        [SerializeField]
-        private bool _useTls = true;
+        #region Configuration
+        /// <summary>QUIC minimum MTU (RFC 9000 §14).</summary>
+        private const int _mtu = 1200;
 
-        /// <summary>
-        /// Maximum transmission unit for unreliable datagrams.
-        /// </summary>
-        [Tooltip("Maximum transmission unit for the unreliable (datagram) channel.")]
-        [Range(MINIMUM_MTU, MAXIMUM_MTU)]
-        [SerializeField]
-        private int _mtu = 1200;
+        /// <summary>Server bind address. Set at startup from .cfg file.</summary>
+        private string _serverBindAddress = "127.0.0.1";
 
-        /// <summary>
-        /// Address the server will bind to.
-        /// </summary>
-        [Tooltip("Server bind address. Use 'localhost' for co-located proxy, '0.0.0.0' for direct access.")]
-        [SerializeField]
-        private string _serverBindAddress = "localhost";
+        /// <summary>Server port. Set at startup from .cfg file.</summary>
+        private ushort _port;
 
-        /// <summary>
-        /// Port to use for QUIC/WebTransport.
-        /// </summary>
-        [Tooltip("Port to use for WebTransport QUIC connections.")]
-        [SerializeField]
-        private ushort _port = 7770;
+        /// <summary>Max concurrent clients. Set at startup from .cfg file.</summary>
+        private int _maximumClients = 100;
 
-        /// <summary>
-        /// Maximum number of players which may be connected at once.
-        /// </summary>
-        [Tooltip("Maximum number of concurrent clients.")]
-        [Range(1, 4096)]
-        [SerializeField]
-        private int _maximumClients = 2000;
+        /// <summary>Client connect hostname. Set at startup from Constants.GameHost.</summary>
+        private string _clientAddress = "game.fishmmo.com";
 
-        /// <summary>
-        /// Address the client will connect to.
-        /// </summary>
-        [Tooltip("Address the client will connect to.")]
-        [SerializeField]
-        private string _clientAddress = "localhost";
-
-        /// <summary>
-        /// Path to TLS certificate (PEM format). Used when _useTls is true.
-        /// </summary>
-        [Tooltip("Path to TLS certificate file (PEM). Only used when Use TLS is enabled.")]
-        [SerializeField]
+        /// <summary>TLS certificate PEM path. Set at startup from .cfg file.</summary>
         private string _certificatePath = "";
 
-        /// <summary>
-        /// Path to TLS private key (PEM format). Used when _useTls is true.
-        /// </summary>
-        [Tooltip("Path to TLS private key file (PEM). Only used when Use TLS is enabled.")]
-        [SerializeField]
+        /// <summary>TLS private key PEM path. Set at startup from .cfg file.</summary>
         private string _privateKeyPath = "";
         #endregion
 
@@ -96,10 +57,6 @@ namespace FishNet.Transporting.WebTransport
         private Client.ClientSocket _client = new Client.ClientSocket();
         #endregion
 
-        #region Const
-        private const int MINIMUM_MTU = 576;
-        private const int MAXIMUM_MTU = 65527; // QUIC max datagram payload
-        #endregion
 
         #region Initialization and Unity
         protected void OnDestroy()
@@ -181,6 +138,12 @@ namespace FishNet.Transporting.WebTransport
         public override void SendToServer(byte channelId, ArraySegment<byte> segment)
         {
             SanitizeChannel(ref channelId);
+            if (channelId == 1 && segment.Count > _mtu)
+            {
+                base.NetworkManager.LogWarning(
+                    $"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {_mtu}. Dropping.");
+                return;
+            }
             _client.SendToServer(channelId, segment);
         }
 
@@ -188,19 +151,17 @@ namespace FishNet.Transporting.WebTransport
         public override void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
         {
             SanitizeChannel(ref channelId);
+            if (channelId == 1 && segment.Count > _mtu)
+            {
+                base.NetworkManager.LogWarning(
+                    $"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {_mtu}. Dropping.");
+                return;
+            }
             _server.SendToClient(channelId, segment, connectionId);
         }
         #endregion
 
         #region Configuration
-        /// <summary>
-        /// Sets whether TLS is enabled for QUIC connections.
-        /// </summary>
-        public void SetUseTLS(bool useTls)
-        {
-            _useTls = useTls;
-        }
-
         /// <summary>
         /// Sets the TLS certificate path.
         /// </summary>
@@ -319,13 +280,15 @@ namespace FishNet.Transporting.WebTransport
         {
             StopConnection(false);
             StopConnection(true);
+#if !UNITY_WEBGL || UNITY_EDITOR
             WebTransportNative.Deinitialize();
+#endif
         }
 
         private bool StartServer()
         {
             _server.Initialize(this, _mtu, _certificatePath, _privateKeyPath);
-            return _server.StartConnection(_serverBindAddress, _port, _maximumClients, _useTls);
+            return _server.StartConnection(_serverBindAddress, _port, _maximumClients, useCustomCertificate: true);
         }
 
         private bool StopServer()
@@ -336,7 +299,7 @@ namespace FishNet.Transporting.WebTransport
         private bool StartClient(string address)
         {
             _client.Initialize(this, _mtu);
-            return _client.StartConnection(address, _port, _useTls);
+            return _client.StartConnection(address, _port, useTls: true);
         }
 
         private bool StopClient()
@@ -344,6 +307,12 @@ namespace FishNet.Transporting.WebTransport
             return _client.StopConnection();
         }
 
+        /// <summary>
+        /// Stops a server connection for the given connection ID.
+        /// Despite the "StopClient" name required by the transport interface,
+        /// this method delegates to <c>_server.StopConnection</c> because FishNet
+        /// passes <c>connectionId</c> overloads here for server-side disconnections.
+        /// </summary>
         private bool StopClient(int connectionId, bool immediately)
         {
             return _server.StopConnection(connectionId, immediately);
@@ -373,16 +342,5 @@ namespace FishNet.Transporting.WebTransport
         }
         #endregion
 
-        #region Editor
-#if UNITY_EDITOR
-        private void OnValidate()
-        {
-            if (_mtu < MINIMUM_MTU)
-                _mtu = MINIMUM_MTU;
-            else if (_mtu > MAXIMUM_MTU)
-                _mtu = MAXIMUM_MTU;
-        }
-#endif
-        #endregion
     }
 }

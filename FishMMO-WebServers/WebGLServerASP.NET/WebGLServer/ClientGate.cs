@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using FishMMO.Logging;
 
 namespace FishMMO.WebServer
@@ -222,10 +223,10 @@ namespace FishMMO.WebServer
 
 		private static bool FixedTimeEquals(string a, string b)
 		{
-			// Constant-time compare on the ASCII bytes; length leak is acceptable
+			// Constant-time compare on the UTF-8 bytes; length leak is acceptable
 			// because both sides are fixed-length base64url of a 32-byte HMAC.
-			byte[] ba = Encoding.ASCII.GetBytes(a);
-			byte[] bb = Encoding.ASCII.GetBytes(b);
+			byte[] ba = Encoding.UTF8.GetBytes(a);
+			byte[] bb = Encoding.UTF8.GetBytes(b);
 			return CryptographicOperations.FixedTimeEquals(ba, bb);
 		}
 
@@ -313,10 +314,7 @@ namespace FishMMO.WebServer
 				if (seg.Equals("%2e.", StringComparison.OrdinalIgnoreCase)) return null;
 				if (seg.Equals(".%2e", StringComparison.OrdinalIgnoreCase)) return null;
 			}
-			while (path.IndexOf("//", StringComparison.Ordinal) >= 0)
-			{
-				path = path.Replace("//", "/");
-			}
+			path = System.Text.RegularExpressions.Regex.Replace(path, "/{2,}", "/");
 			return path;
 		}
 

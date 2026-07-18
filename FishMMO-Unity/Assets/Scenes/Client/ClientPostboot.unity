@@ -358,7 +358,7 @@ GameObject:
   - component: {fileID: 2516426190219138202}
   - component: {fileID: 3897615594843188692}
   - component: {fileID: 6776049995475983710}
-  - component: {fileID: 6776049995475983711}
+  - component: {fileID: 6776049995475983714}
   - component: {fileID: 6776049995475983713}
   - component: {fileID: 6776049995475983712}
   m_Layer: 0
@@ -453,26 +453,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   GlobalServerActions: 1
   _transports:
-  - {fileID: 6776049995475983711}
---- !u!114 &6776049995475983711
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2696072684517196988}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 362dfd7e6009fb44c90beec3df0ad853, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _useWss: 1
-  _mtu: 1023
-  _useProxyProtocol: 0
-  _serverBindAddress: localhost
-  _port: 7770
-  _maximumClients: 2000
-  _clientAddress: localhost
+  - {fileID: 6776049995475983714}
 --- !u!114 &6776049995475983712
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -501,6 +482,18 @@ MonoBehaviour:
   _lightProbeUpdating: 0
   _moveClientObjects: 1
   _setActiveScene: 1
+--- !u!114 &6776049995475983714
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2696072684517196988}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8605cf07f1216f2f7a7d7d1b8c81f66b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: WebTransport::FishNet.Transporting.WebTransport.WebTransport
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

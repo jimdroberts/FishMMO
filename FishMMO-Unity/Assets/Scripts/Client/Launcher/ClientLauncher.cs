@@ -117,6 +117,14 @@ namespace FishMMO.Client
 
 		#region INTERNAL STATE
 		/// <summary>
+		/// Guards against re-entering PlayButton_Connect while a connection is in progress.
+		/// </summary>
+		private bool isConnecting = false;
+		/// <summary>
+		/// Guards against re-entering PlayButton_Launch while a launch is in progress.
+		/// </summary>
+		private bool isLaunching = false;
+		/// <summary>
 		/// Stores the latest client version string fetched from the patch server.
 		/// </summary>
 		private string latestVersionString;
@@ -247,7 +255,10 @@ namespace FishMMO.Client
 				denominator = 1,
 			});
 #endif
-			Title.text = $"{Constants.Configuration.ProjectName} v{MainBootstrapSystem.GameVersion}";
+			string versionString = !string.IsNullOrEmpty(MainBootstrapSystem.GameVersion)
+			? MainBootstrapSystem.GameVersion
+			: "0.0.0-unknown";
+		Title.text = $"{Constants.Configuration.ProjectName} v{versionString}";
 			ProgressBarGroup.SetActive(false); // Ensure progress bar is hidden initially.
 		}
 
@@ -466,6 +477,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public void PlayButton_Connect()
 		{
+			if (isConnecting) return;
+			isConnecting = true;
 			SetLauncherState(LauncherState.Connecting);
 			StartCoroutine(GetLatestVersion());
 		}
@@ -475,6 +488,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public void PlayButton_Launch()
 		{
+			if (isLaunching) return;
+			isLaunching = true;
 			SetLauncherState(LauncherState.ReadyToPlay);
 			if (PlayButton != null)
 			{
@@ -488,6 +503,7 @@ namespace FishMMO.Client
 			}
 			catch (UnityException ex)
 			{
+				isLaunching = false;
 				SetLauncherState(LauncherState.LaunchFailed,
 					$"Failed to load game scene: {ex.Message}. Check that Addressable bundles are built.");
 				return;
@@ -508,6 +524,7 @@ namespace FishMMO.Client
 		private System.Collections.IEnumerator LaunchWatchdog()
 		{
 			yield return new WaitForSeconds(30f);
+			isLaunching = false;
 			SetLauncherState(LauncherState.LaunchFailed,
 				"Scene load timed out. Check that Addressable bundles are built and up to date.");
 		}
@@ -558,7 +575,15 @@ namespace FishMMO.Client
 						updaterPath,
 						MainBootstrapSystem.GameVersion,
 						latestVersionString,
-						onComplete: () => Quit(), // Updater completed, quit launcher
+						onComplete: () => {
+						// Clean up temp patch file after successful update.
+						if (File.Exists(tempFilePath))
+						{
+							try { File.Delete(tempFilePath); }
+							catch (Exception ex) { Log.Error("ClientLauncher", $"Failed to delete temp patch file {tempFilePath}: {ex.Message}"); }
+						}
+						Quit(); // Updater completed, quit launcher
+					},
 						onError: (error) =>
 						{
 							SetLauncherState(LauncherState.UpdaterFailed, error);
@@ -589,11 +614,13 @@ namespace FishMMO.Client
 		private IEnumerator GetLatestVersion()
 		{
 			SetLauncherState(LauncherState.CheckingVersion);
+			isConnecting = true;
 
 			List<string> candidates = ApiHostResolver.GetCandidates();
 			if (candidates.Count == 0)
 			{
 				SetLauncherState(LauncherState.VersionCheckFailed, "No API host configured. Check Constants.cs Configuration.APIHost.");
+				isConnecting = false;
 				yield break;
 			}
 
@@ -637,12 +664,13 @@ namespace FishMMO.Client
 			{
 				SetLauncherState(LauncherState.VersionCheckFailed,
 					lastError ?? "All API hosts failed. Check your internet connection and firewall.");
+				isConnecting = false;
 				yield break;
 			}
 
 			selectedApiHost = successfulHost;
 			latestVersionString = serverVersion.ToString(); // Store for updater launch
-			expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
+			expectedPatchSha256 = patchInfo.sha256; // May be null/empty when not provided.
 			Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
 
 			VersionConfig clientVersion;
@@ -650,26 +678,30 @@ namespace FishMMO.Client
 			{
 				clientVersion = VersionConfig.Parse(MainBootstrapSystem.GameVersion);
 			}
-			catch (ArgumentException ex)
+			catch (ArgumentException)
 			{
 				SetLauncherState(LauncherState.VersionError,
 					$"Client version '{MainBootstrapSystem.GameVersion}' is not valid. Reinstall or delete version.txt.");
+				isConnecting = false;
 				yield break;
 			}
 
 			// Compare client and server versions to determine the appropriate action.
 			if (clientVersion < serverVersion)
 			{
+				isConnecting = false;
 				PlayButton_Update();
 			}
 			else if (clientVersion > serverVersion)
 			{
 				Log.Warning("ClientLauncher", string.Format(UIText.LogDebugClientVersionAhead, MainBootstrapSystem.GameVersion, latestVersionString));
 				SetLauncherState(LauncherState.ClientAhead);
+				isConnecting = false;
 			}
 			else
 			{
 				SetLauncherState(LauncherState.ReadyToPlay);
+				isConnecting = false;
 			}
 		}
 

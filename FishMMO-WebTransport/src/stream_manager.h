@@ -8,6 +8,16 @@
 
 #include "webtransport_internal.h"
 
+/* Platform mutex for streams[] array synchronisation.
+ * stream_manager_send runs on the application thread while
+ * stream callbacks (accept, SHUTDOWN_COMPLETE) fire on QUIC
+ * worker threads — the shared streams[] array needs a lock. */
+#if defined(WT_PLATFORM_WINDOWS)
+  #include <windows.h>
+#else
+  #include <pthread.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,6 +56,16 @@ typedef struct wt_stream_manager_s {
      * many streams without sending FIN. */
     atomic_uint         total_recv_bytes;
 #define WT_MAX_TOTAL_RECV_BUF  (16 * 1024 * 1024)  /* 16 MB per connection */
+
+    /* Mutex protecting streams[] array.
+     * stream_manager_send (app thread) and stream callbacks
+     * (QUIC thread) both read/write the slot array and
+     * must be serialised. */
+#if defined(WT_PLATFORM_WINDOWS)
+    CRITICAL_SECTION    streams_lock;
+#else
+    pthread_mutex_t     streams_lock;
+#endif
 } wt_stream_manager_t;
 
 void wt_stream_manager_init(

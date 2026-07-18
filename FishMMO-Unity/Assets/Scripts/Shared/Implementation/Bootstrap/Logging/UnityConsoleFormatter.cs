@@ -20,7 +20,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Controls whether timestamps are included in formatted output.
 		/// </summary>
-		private bool _includeTimestamps;
+		private bool includeTimestamps;
 
 		// Column widths and indentation are defined in ConsoleFormatterHelpers
 
@@ -33,7 +33,7 @@ namespace FishMMO.Shared
 		{
 			// Ensure the dictionary is always instantiated, even if null is passed.
 			this.logLevelColors = logLevelColors ?? new Dictionary<LogLevel, string>();
-			this._includeTimestamps = includeTimestamps;
+			this.includeTimestamps = includeTimestamps;
 		}
 
 		/// <summary>
@@ -54,7 +54,7 @@ namespace FishMMO.Shared
 				}
 
 				// Conditionally add timestamp with padding
-				if (_includeTimestamps)
+				if (includeTimestamps)
 				{
 					string timestampContent = entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
 					string paddedTimestamp = ConsoleFormatterHelpers.PadRight($"[{timestampContent}]", ConsoleFormatterHelpers.TimestampColumnWidth - 2);
@@ -127,7 +127,7 @@ namespace FishMMO.Shared
 				StringBuilder sb = new StringBuilder();
 
 				// Conditionally add timestamp with padding and color.
-				if (_includeTimestamps)
+				if (includeTimestamps)
 				{
 					string timestampContent = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
 					string paddedTimestamp = ConsoleFormatterHelpers.PadRight($"[{timestampContent}]", ConsoleFormatterHelpers.TimestampColumnWidth - 2);

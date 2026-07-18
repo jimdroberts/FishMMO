@@ -148,11 +148,11 @@ namespace FishMMO.UnitTests.Harness
 
 		#region Send abstracts — route to server
 
-		protected override void SendClientHandshake(byte[] publicKey, byte[]? cookie, ushort minVersion, ushort maxVersion)
+		protected override void SendClientHandshake(byte[] publicKey, byte[]? cookie, string? connectionToken, ushort minVersion, ushort maxVersion)
 		{
 			AuthTestTrace.Log("Client", "SendClientHandshake", $"pk={AuthTestTrace.Hex(publicKey)} cookie={AuthTestTrace.Hex(cookie)} versions={minVersion}..{maxVersion}");
 			// Server side expects null-cookie on phase 1, non-null on phase 2.
-			server!.OnHandshakeReceived(clientId, publicKey, cookie!, minVersion, maxVersion);
+			server!.OnHandshakeReceived(clientId, publicKey, cookie!, null, minVersion, maxVersion);
 		}
 
 		protected override void SendTokenAuth(byte[] encryptedToken, uint seq)

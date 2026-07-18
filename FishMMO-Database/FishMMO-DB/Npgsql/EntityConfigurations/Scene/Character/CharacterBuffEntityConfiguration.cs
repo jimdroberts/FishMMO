@@ -27,11 +27,11 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.RemainingTime)
 				.IsRequired()
-				.HasDefaultValue(0f);
+				.HasDefaultValue(0d);
 
 			builder.Property(e => e.TickTime)
 				.IsRequired()
-				.HasDefaultValue(0f);
+				.HasDefaultValue(0d);
 
 			builder.Property(e => e.Stacks)
 				.IsRequired()

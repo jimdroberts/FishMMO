@@ -2,7 +2,7 @@ using FishNet.Connection;
 using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Transporting;
-using FishNet.Transporting.Bayou;
+using FishNet.Transporting.WebTransport;
 using FishNet.Transporting.Multipass;
 using FishMMO.Logging;
 using System;
@@ -114,6 +114,11 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Applies transport configuration values from <see cref="IServerConfiguration"/>.
 		/// </summary>
+		/// <summary>
+		/// Applies transport configuration values from <see cref="IServerConfiguration"/>.
+		/// WebTransport (QUIC/HTTP3) for all platforms. Each game server terminates its
+		/// own TLS — NGINX forwards raw UDP at Layer 4.
+		/// </summary>
 		public void ApplyTransportConfiguration()
 		{
 			var transport = NetworkManager.TransportManager.Transport;
@@ -123,14 +128,15 @@ namespace FishMMO.Server.Implementation
 			ushort port = config.GetUShort("Port", 7777);
 			int maxClients = config.GetInt("MaximumClients", 100);
 
-			transport.SetServerBindAddress(address, IPAddressType.IPv4);
-			transport.SetPort(port);
-			transport.SetMaximumClients(maxClients);
-
-			// SSL offloading: nginx terminates TLS and passes plain HTTP/WS
-			// over loopback. Server must NOT do its own SSL — nginx handles the
-			// CPU-intensive TLS handshake. PROXY protocol tells Bayou to expect
-			// a PROXY v1 header before the WebSocket handshake (real client IP).
+			// WebTransport: each game server terminates QUIC/TLS with PEM certificates.
+			// Certificate paths come from the server .cfg file — configurable per platform,
+			// per deployment (Linux, Windows, macOS) and per certificate source
+			// (Let's Encrypt, Cloudflare, Porkbun, etc.).
+			//
+			// When using Multipass (the normal case), the top-level TransportManager.Transport
+			// IS Multipass — a connection multiplexer that does NOT forward SetServerBindAddress /
+			// SetPort / SetMaximumClients to children.  We must configure each child WebTransport
+			// directly with address, port, maxClients, AND TLS certificates.
 			if (NetworkManager.TransportManager.GetTransport<Multipass>() is Multipass mp)
 			{
 				if (mp.Transports == null || mp.Transports.Count == 0)
@@ -141,26 +147,53 @@ namespace FishMMO.Server.Implementation
 				bool configured = false;
 				foreach (var t in mp.Transports)
 				{
-					if (t is Bayou bayou)
+					if (t is WebTransport wt)
 					{
-						ConfigureBayou(bayou);
+						wt.SetServerBindAddress(address, IPAddressType.IPv4);
+						wt.SetPort(port);
+						wt.SetMaximumClients(maxClients);
+						ConfigureWebTransport(wt);
 						configured = true;
 					}
 				}
 				if (!configured)
-					Log.Warning("FishNetNetworkWrapper", "No Bayou transport in Multipass — PROXY protocol not set.");
+					Log.Warning("FishNetNetworkWrapper", "No WebTransport in Multipass — transport not configured.");
 			}
-			else if (transport is Bayou bayou)
+			else if (transport is WebTransport wt)
 			{
-				ConfigureBayou(bayou);
+				// No Multipass — configure the transport directly.
+				transport.SetServerBindAddress(address, IPAddressType.IPv4);
+				transport.SetPort(port);
+				transport.SetMaximumClients(maxClients);
+				ConfigureWebTransport(wt);
 			}
 		}
 
-		private static void ConfigureBayou(Bayou bayou)
+		private void ConfigureWebTransport(WebTransport wt)
 		{
-			bayou.SetUseWSS(false);
-			bayou.SetUseProxyProtocol(true);
-			Log.Debug("FishNetNetworkWrapper", "Bayou configured for nginx: WSS=off, PROXY=on.");
+			// Certificate paths from .cfg file — fully configurable per deployment.
+			// Falls back to platform defaults if not specified in config.
+#if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+			string defaultCertPath = "/etc/fishmmo/certs/fullchain.pem";
+			string defaultKeyPath  = "/etc/fishmmo/certs/privkey.pem";
+#elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+			string defaultCertPath = "C:\\ProgramData\\FishMMO\\certs\\fullchain.pem";
+			string defaultKeyPath  = "C:\\ProgramData\\FishMMO\\certs\\privkey.pem";
+#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
+			string defaultCertPath = "/usr/local/share/fishmmo/certs/fullchain.pem";
+			string defaultKeyPath  = "/usr/local/share/fishmmo/certs/privkey.pem";
+#else
+			string defaultCertPath = "certs/fullchain.pem";
+			string defaultKeyPath  = "certs/privkey.pem";
+#endif
+			string certPath = config.GetString("CertificatePath", defaultCertPath);
+			string keyPath  = config.GetString("PrivateKeyPath", defaultKeyPath);
+
+			wt.SetCertificatePath(certPath);
+			wt.SetPrivateKeyPath(keyPath);
+
+			Log.Debug("FishNetNetworkWrapper",
+				$"WebTransport configured: cert={certPath}, key={keyPath}");
 		}
 
 		/// <summary>

@@ -12,6 +12,7 @@
 #include "webtransport_internal.h"
 #include "session.h"
 #include "datagram_queue.h"
+#include "http3.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +32,12 @@ typedef struct {
     /* Session pending deferred shutdown. Set by QUIC callback thread,
      * consumed by poll (application thread). */
     wt_session_t*           pending_shutdown_session;
+
+    /* HTTP/3 handshake session. Created on CONNECTED, freed when
+     * the WebTransport session is established (on_h3_session_ready).
+     * If h3_session is non-NULL and handshake_complete is false,
+     * incoming streams are routed through HTTP/3 protocol detection. */
+    h3_session_t*           h3_session;
 } wt_server_conn_t;
 
 /* ── Server structure ───────────────────────────────────────── */
@@ -49,6 +56,7 @@ typedef struct wt_server_s {
     uint32_t                max_clients;
     char                    cert_path[512];
     char                    key_path[512];
+    char                    allowed_origins[1024];  /* comma-separated, empty = allow all */
 
     atomic_int              state;
     atomic_uint             connection_count;
@@ -57,6 +65,14 @@ typedef struct wt_server_s {
     wt_datagram_queue_t     dgram_queue;
 
     atomic_uint             pending_shutdowns;  /* count of connections awaiting SHUTDOWN_COMPLETE */
+
+    /* Pending shutdown queue for O(1) poll instead of O(N) scan.
+     * SHUTDOWN_COMPLETE enqueues connection IDs here; poll drains them.
+     * Protected by atomic reads/writes — only the QUIC callback thread
+     * writes (append), only the poll thread reads (drain). */
+    wt_connection_id_t      pending_shutdown_queue[WT_MAX_CLIENTS];
+    atomic_uint             pending_shutdown_head;  /* poll reads here */
+    atomic_uint             pending_shutdown_tail;  /* callback writes here */
 } wt_server_s;
 
 /* ── Internal API (called by webtransport_api.cpp) ──────────── */

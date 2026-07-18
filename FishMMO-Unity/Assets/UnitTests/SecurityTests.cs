@@ -362,7 +362,7 @@ namespace FishMMO.UnitTests
 				try
 				{
 					h.Server.OnHandshakeReceived(conn: 1, fakeClientPublicKey, cookie: null!,
-						minVersion: 0xFFFE, maxVersion: 0xFFFF);
+						null, minVersion: 0xFFFE, maxVersion: 0xFFFF);
 				}
 				catch (Exception)
 				{
@@ -516,7 +516,7 @@ namespace FishMMO.UnitTests
 				using AuthTestHarness h = new AuthTestHarness();
 				byte[] bad = new byte[badLen];
 				// Note: server treats null OR wrong-length as immediate disconnect.
-				try { h.Server.OnHandshakeReceived(1, bad, cookie: null!, minVersion: 1, maxVersion: 1); }
+				try { h.Server.OnHandshakeReceived(1, bad, cookie: null!, null, minVersion: 1, maxVersion: 1); }
 				catch { /* tolerate throw */ }
 				LogAssert.IsTrue(h.Server.WasDisconnected, $"Server must reject handshake with publicKey length {badLen}.");
 				LogAssert.AreEqual(0, h.Server.CookieChallengeCount, "No cookie challenge must be issued for malformed pubkey.");
@@ -559,7 +559,7 @@ namespace FishMMO.UnitTests
 				byte[] forgedCookie = new byte[32];
 				new Random(0xDEAD).NextBytes(forgedCookie);
 
-				h.Server.OnHandshakeReceived(1, pk, forgedCookie, minVersion: 1, maxVersion: 1);
+				h.Server.OnHandshakeReceived(1, pk, forgedCookie, null, minVersion: 1, maxVersion: 1);
 
 				LogAssert.IsTrue(h.Server.WasDisconnected, "Server must disconnect on forged cookie.");
 				LogAssert.AreEqual(0, h.Server.ServerHandshakeCount, "No server-handshake response must be emitted for a forged cookie.");
@@ -598,13 +598,13 @@ namespace FishMMO.UnitTests
 				byte[] pkB = new byte[32]; new Random(2).NextBytes(pkB);
 
 				// Phase-1 with pkA → server issues a cookie.
-				h.Server.OnHandshakeReceived(1, pkA, cookie: null!, minVersion: 1, maxVersion: 1);
+				h.Server.OnHandshakeReceived(1, pkA, cookie: null!, null, minVersion: 1, maxVersion: 1);
 				LogAssert.AreEqual(1, h.Server.CookieChallengeCount, "Server must issue exactly one cookie for the phase-1 request.");
 				byte[] cookie = h.Server.LastChallengeCookie;
 				LogAssert.IsNotNull(cookie);
 
 				// Phase-2 replaying the cookie but with a DIFFERENT public key must fail.
-				h.Server.OnHandshakeReceived(2, pkB, cookie!, minVersion: 1, maxVersion: 1);
+				h.Server.OnHandshakeReceived(2, pkB, cookie!, null, minVersion: 1, maxVersion: 1);
 				LogAssert.IsTrue(h.Server.WasDisconnected, "Cookie reused with a different public key must be rejected.");
 				LogAssert.AreEqual(0, h.Server.ServerHandshakeCount, "No phase-2 handshake must complete with mismatched (cookie, pubkey).");
 				AuthTestTrace.Log("SecurityTests", "SUCCESS", nameof(Security_HandshakeCookie_IsBoundToPublicKey)).GetAwaiter().GetResult();
@@ -934,7 +934,7 @@ namespace FishMMO.UnitTests
 				// 32 bytes, all zeros — valid length but the X25519 low-order point.
 				byte[] zeroKey = new byte[32];
 				bool threw = false;
-				try { h.Server.OnHandshakeReceived(1, zeroKey, cookie: null!, minVersion: 1, maxVersion: 1); }
+				try { h.Server.OnHandshakeReceived(1, zeroKey, cookie: null!, null, minVersion: 1, maxVersion: 1); }
 				catch { threw = true; }
 
 				LogAssert.IsTrue(h.Server.WasDisconnected || threw,

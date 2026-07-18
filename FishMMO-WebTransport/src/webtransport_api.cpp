@@ -6,13 +6,19 @@
 #include "webtransport_api.h"
 #include "server.h"
 #include "client.h"
+#include "webtransport_internal.h"  /* atomic macros, WT_LOG_*, platform abstractions */
 
 #include <stdio.h>
 #include <stdbool.h>
 
 /* ── Global MsQuic API table ──────────────────────────────────
  * Initialised once by wt_init(). All msquic operations use this
- * global pointer. Without this, every MsQuic-> call is NULL. */
+ * global pointer. Without this, every MsQuic-> call is NULL.
+ *
+ * Defined here (not just extern-declared in the header) because
+ * Windows PE/COFF requires an explicit definition; ELF common
+ * symbols are not portable. */
+const QUIC_API_TABLE* MsQuic = NULL;
 
 static atomic_bool g_initialised = false;
 
@@ -30,6 +36,8 @@ WT_API int32_t wt_init(void)
     }
 
     MsQuic = api;
+    /* release-store: MsQuic write must be visible before g_initialised.
+     * Paired with acquire-load in every API entry point. */
     /* Release-store: paired with acquire-load in API guards.
      * Ensures MsQuic is visible before g_initialised. */
     atomic_store(&g_initialised, true);
@@ -41,13 +49,20 @@ WT_API void wt_deinit(void)
 {
     if (!atomic_load(&g_initialised)) return;
 
-    /* Null the API table first, then clear the guard. New API calls
-     * are gated by g_initialised and will return early. In-flight calls
-     * that already passed the guard will see MsQuic != NULL (they were
-     * ahead of us) or MsQuic == NULL (they followed us — but by then
-     * g_initialised is false so new callers are already blocked). */
-    MsQuic = NULL;
+    /* Clear the guard FIRST (release-store). New API calls will see
+     * g_initialised==false and return early. In-flight calls that
+     * already passed the guard before this store will still see a
+     * valid MsQuic table (we haven't nulled it yet) and complete
+     * safely. The acquire-load in all API entry points pairs with
+     * this release-store, ensuring correct happens-before ordering. */
     atomic_store(&g_initialised, false);
+
+    /* Close the MsQuic API table to release library resources.
+     * This is the counterpart to MsQuicOpen2() called in wt_init(). */
+    if (MsQuic) {
+        MsQuicClose(MsQuic);
+    }
+    MsQuic = NULL;
 }
 
 /* ── Version ────────────────────────────────────────────────── */

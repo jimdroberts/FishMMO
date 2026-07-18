@@ -47,7 +47,10 @@ namespace FishMMO.Client
 				yield break;
 			}
 
-			Process process;
+			Process process = null;
+			DataReceivedEventHandler outputHandler = null;
+			DataReceivedEventHandler errorHandler = null;
+
 			try
 			{
 				// Prepare process start info with required arguments and settings
@@ -63,15 +66,18 @@ namespace FishMMO.Client
 
 				process = new Process { StartInfo = startInfo };
 
-				// Subscribe to output and error events for logging
-				process.OutputDataReceived += (sender, args) =>
+				// Subscribe to output and error events for logging.
+				// Store handler references so they can be detached in the finally block.
+				outputHandler = (sender, args) =>
 				{
 					if (!string.IsNullOrEmpty(args.Data)) Log.Debug("UpdaterOutput", args.Data);
 				};
-				process.ErrorDataReceived += (sender, args) =>
+				errorHandler = (sender, args) =>
 				{
 					if (!string.IsNullOrEmpty(args.Data)) Log.Error("UpdaterError", args.Data);
 				};
+				process.OutputDataReceived += outputHandler;
+				process.ErrorDataReceived += errorHandler;
 
 				process.Start();
 				process.BeginOutputReadLine();
@@ -81,43 +87,59 @@ namespace FishMMO.Client
 			}
 			catch (Exception ex)
 			{
-				// Log and report any exceptions during process launch
+				// Log and report any exceptions during process launch.
+				// Dispose the partially-created process to prevent a handle leak.
 				onError?.Invoke($"Failed to start updater process: {ex.Message}");
 				Log.Error("Updater", $"Exception during updater launch: {ex.Message}");
+				process?.Dispose();
 				yield break;
+			}
+			finally
+			{
+				// Detach event handlers before the process is disposed,
+				// but NOT here — the polling loop below still needs them
+				// to capture output/error from the running updater.
+				// Handlers are detached in the exit paths below.
 			}
 
 			// Poll for process exit on the main thread with a hard timeout.
 			// Without this timeout, a hung updater process (e.g. deadlocked on a
 			// corrupted patch or a filesystem stall) would lock the launcher UI
 			// forever with no path forward for the player.
-			WaitForSeconds wait = new WaitForSeconds(PollIntervalSeconds);
-			float elapsed = 0f;
-			while (!process.HasExited && elapsed < UpdaterTimeoutSeconds)
+			// Uses Time.realtimeSinceStartup for accurate elapsed-time measurement
+			// rather than accumulating WaitForSeconds durations, which drift due
+			// to frame-rate variance.
+			float startTime = Time.realtimeSinceStartup;
+			while (!process.HasExited)
 			{
-				yield return wait;
-				elapsed += PollIntervalSeconds;
-			}
-
-			if (!process.HasExited)
-			{
-				Log.Critical("Updater", $"Updater process timed out after {UpdaterTimeoutSeconds}s. Force-killing.");
-				try
+				if (Time.realtimeSinceStartup - startTime > UpdaterTimeoutSeconds)
 				{
-					process.Kill();
-					// Give the process a brief window to terminate.
-					process.WaitForExit(5000);
+					Log.Critical("Updater", $"Updater process timed out after {UpdaterTimeoutSeconds}s. Force-killing.");
+					try
+					{
+						process.Kill();
+						// Give the process a brief window to terminate.
+						process.WaitForExit(5000);
+					}
+					catch (Exception ex)
+					{
+						Log.Error("Updater", $"Error force-killing timed-out updater: {ex.Message}");
+					}
+					finally
+					{
+						process.OutputDataReceived -= outputHandler;
+						process.ErrorDataReceived -= errorHandler;
+						process.Dispose();
+					}
+					onError?.Invoke($"Updater process timed out after {UpdaterTimeoutSeconds} seconds. The patch may be corrupted or the system is under heavy load.");
+					yield break;
 				}
-				catch (Exception ex)
-				{
-					Log.Error("Updater", $"Error force-killing timed-out updater: {ex.Message}");
-				}
-				process.Dispose();
-				onError?.Invoke($"Updater process timed out after {UpdaterTimeoutSeconds} seconds. The patch may be corrupted or the system is under heavy load.");
-				yield break;
+				yield return new WaitForSeconds(PollIntervalSeconds);
 			}
 
 			int exitCode = process.ExitCode;
+			process.OutputDataReceived -= outputHandler;
+			process.ErrorDataReceived -= errorHandler;
 			process.Dispose();
 
 			Log.Debug("Updater", $"Updater process exited with code: {exitCode}");

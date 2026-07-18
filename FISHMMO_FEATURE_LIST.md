@@ -1,7 +1,7 @@
 # FishMMO — Complete Feature List
 
-> Generated 2026-06-26 from the FishMMO-Dev monorepo. Updated 2026-06-28.  
-> Built on Unity 6.3 LTS, FishNet, PostgreSQL, .NET 8.0.
+> Generated 2026-06-26 from the FishMMO-Dev monorepo. Updated 2026-07-17.  
+> Built on Unity 6.3 LTS, FishNet, PostgreSQL, .NET 8.0, WebTransport (QUIC/HTTP3).
 
 ---
 
@@ -23,6 +23,7 @@
 - [FishMMO-Unity — Server](#fishmmo-unity--server)
 - [FishMMO-Unity — Shared](#fishmmo-unity--shared)
 - [FishMMO-WebServers](#fishmmo-webservers)
+- [FishMMO-WebTransport](#fishmmo-webtransport)
 
 ---
 
@@ -71,10 +72,10 @@
 8. **ClientAuthenticatorCore** — Full client-side auth state machine: SRP-6a + X25519 ECDH flow, cookie challenge echo, token auth path, key material cleanup.
 
 ### Cryptographic Services
-9. **HandshakeService** — X25519 ECDH key agreement, stateless HMAC cookie challenge/verification with rollover, protocol version negotiation, IP normalization, key confirmation MACs.  
-10. **SrpService** — Encrypted SRP field handling, registration encryption, TOTP payload encryption/decryption, deterministic fake-salt derivation (HMAC-SHA512).  
-11. **TokenService** — Full token pipeline: build → hash → encrypt → decrypt → partial-parse → verify.  
-12. **CryptoHelper** — Cryptographic backbone: HKDF, AES-GCM, HMAC-SHA256/SHA512, nonce contexts, X25519 ephemeral keypairs, TOTP generation/validation, recovery code helpers.
+9. **HandshakeService** — X25519 ECDH key agreement, stateless HMAC cookie challenge/verification with rollover, protocol version negotiation, IP normalization, key confirmation MACs, transcript hash binding with crypto-suite ID.  
+10. **SrpService** — Encrypted SRP field handling with separated `SrpVerifyRequestBroadcast` (client→server) / `SrpVerifyResponseBroadcast` (server→client) types. Registration encryption, TOTP payload encryption/decryption, deterministic fake-salt derivation (HMAC-SHA512) with startup-time charset/length validation.  
+11. **TokenService** — Full token pipeline: build → hash → encrypt → decrypt → partial-parse → verify with cross-check against pre-HMAC parsed IDs.  
+12. **CryptoHelper** — Cryptographic backbone: HKDF, AES-GCM, HMAC-SHA256/SHA512, thread-safe `GcmNonceContext` (shared across async workers via `Interlocked`), X25519 ephemeral keypairs with small-order-point rejection, TOTP generation/validation with reflection-based OtpNet secret zeroization, recovery code PBKDF2 hashing (600K iterations, v2 envelope).
 
 ### Security Features
 13. **SRP-6a Authentication** — Secure Remote Password protocol with encrypted verify/proof payloads and strict sequence ordering.  
@@ -122,7 +123,7 @@
 13. **IAccountService** — Account CRUD: create, fetch for login (SRP data), online status check, kick request persist, token hash persist, TOTP verify.  
 14. **ICharacterService** — Character CRUD: save, load, delete, fetch by account, session claim/release, inventory/equipment/bank/hotkey persist.  
 15. **IChatService** — Chat message persistence and retrieval with channel, character, and server metadata.  
-16. **ILoginServerService** — Login server registration, heartbeat pulses, signing key storage.  
+16. **ILoginServerService** — Login server registration, heartbeat pulses, signing key storage (AEAD-wrapped via deployment KEK).  
 17. **IWorldServerService** — World server registration, heartbeat pulses, server listing.  
 18. **ISceneServerService** — Scene server registration, heartbeat pulses, pending scene queue, channel listing.  
 19. **ICharacterInventoryService** — Inventory/equipment/bank slot persistence.  
@@ -131,7 +132,9 @@
 22. **IFriendService** — Friend list add/remove/query persistence.  
 23. **IKickRequestService** — Kick request queue polling and processing.  
 24. **UnitOfWorkService** — Ambient DbContext + transaction scope for multi-step atomic operations. Supports savepoints for nested atomicity inside a unit of work.  
-25. **BaseService Execution Wrappers** — `ExecuteReadAsync`, `ExecuteWriteAsync`, `ExecuteTransactionAsync` with retry logic, transient error classification, and automatic SaveChanges.
+25. **BaseService Execution Wrappers** — `ExecuteReadAsync`, `ExecuteWriteAsync`, `ExecuteTransactionAsync` with retry logic, transient error classification (PostgreSQL error code mapping), and automatic SaveChanges.  
+26. **Convention Guards** — `ApplyTimeCreatedConventions` skips entities with explicit defaults (prevents silent override of `QuestEntity`'s `DateTime.UnixEpoch`). `ApplyLogicalVersionConventions` checks for existing defaults before applying.  
+27. **Npgsql Type Mapping** — `List<int>` properties natively map to PostgreSQL `integer[]` columns; `HasDefaultValueSql("'{}'")` for empty array defaults.
 
 ### Data Entities
 26. **AccountData** — Account credentials (SRP verifier, salt), email, 2FA state, verification status.  
@@ -170,7 +173,7 @@
 1. **EF Core Stack** — EF Core, Abstractions, Relational, Design, Tools, EFCore.NamingConventions (snake_case).  
 2. **Microsoft.Extensions Stack** — Configuration (Json, Abstractions), DependencyInjection, Logging, Caching, Options, Primitives, Bcl.AsyncInterfaces.  
 3. **Utility Libraries** — SRP (SRP-6a), HtmlAgilityPack, Humanizer, OpenAI, System.Collections.Immutable, ComponentModel.Annotations, DiagnosticSource, IO.Hashing (xxHash/Crc32/Crc64), Text.Json, Threading.Channels.  
-4. **Post-Build DLL Copy** — Output DLLs automatically copied to `FishMMO-Unity/Assets/Dependencies/` for Unity consumption.
+4. **Post-Build DLL Copy** — Output DLLs automatically copied to `../FishMMO-Unity/Assets/Dependencies/` via `CopyDependenciesToUnity` MSBuild target (cross-platform forward-slash paths). System DLLs excluded from copy to avoid Unity conflicts.
 
 ---
 
@@ -301,11 +304,28 @@
 
 **Configuration templates and reference files** for deployment environments.
 
-1. **nginx.conf** — Full NGINX reverse proxy configuration with SSL termination, rate limiting, WebSocket upgrade, subdomain routing (play/api/game), port mapping, security headers.  
-2. **LoginServer.cfg** — Server configuration template (server name, max clients, address, port, stale scene timeout).  
-3. **WorldServer.cfg** — Server configuration template.  
-4. **SceneServer.cfg** — Server configuration template.  
-5. **appsettings.json (Release)** — Production database configuration with `0.0.0.0` binding.
+### nginx.conf — Reverse Proxy
+1. **UDP Stream Proxy (L4)** — Raw UDP forwarding for game ports 7770–7999 via `stream {}` block. Auto-generated per-port configs via `gen-fishmmo-stream-config.sh` with atomic replacement and `nginx -t` validation. Zero-copy packet forwarding; no TLS termination at proxy.  
+2. **HTTP/HTTPS Gateway (L7)** — TLS 1.2/1.3 termination with Let's Encrypt certificates, HSTS (6 months + includeSubDomains), modern cipher suite (ECDHE+AESGCM:ECDHE+CHACHA20), OCSP stapling.  
+3. **Virtual Hosts** — `play.fishmmo.com` (WebGL client), `api.fishmmo.com` (IPFetch + Patcher), `game.fishmmo.com` (444-close — game traffic is UDP-only). Catch-all returns 444.  
+4. **Rate Limiting** — `limit_req_zone` per-endpoint: 10r/s API, 2r/s patch downloads, 30r/s WebGL. `limit_conn_zone` per-IP: 20 conn WebGL, 10 conn API, 3 conn patch. HTTP 429 with `Retry-After`.  
+5. **Security Headers** — CSP (WebGL: `wasm-unsafe-eval`, `connect-src wss://game.fishmmo.com:*`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, `Access-Control-Allow-Origin` for API.  
+6. **Performance** — `sendfile on`, `tcp_nopush on`, `tcp_nodelay on`, `gzip on` with `gzip_proxied any` (not `off`), `gzip_types` tuned for text/wasm, `keepalive_timeout 65s`.  
+7. **Hardening** — `server_tokens off`, `client_max_body_size 1k` (API), `client_body_timeout 10s`, `client_header_timeout 10s`.  
+
+### Server Configuration (.cfg files)
+8. **LoginServer.cfg** — ServerName, MaximumClients (4000), Address (127.0.0.1 via nginx), Port (7770), TLS certificate paths, SMTP config (with `UseSsl` per-environment).  
+9. **WorldServer.cfg** — Port 7780, same TLS cert paths.  
+10. **SceneServer.cfg** — Port 7790+, StaleSceneTimeout (5s), same TLS cert paths.  
+11. **AutoVerifyAccounts** — `true` in Development (local SMTP), `false` in Release (email verification required).  
+
+### Deploy Hooks
+12. **certbot-fishmmo.sh** — Post-renewal deploy hook: copies Let's Encrypt certs to `/etc/fishmmo/certs/`, `chmod 640`, `chown fishmmo:fishmmo`, reloads nginx, restarts game servers via systemd (with SIGHUP fallback).  
+13. **gen-fishmmo-stream-config.sh** — Regenerates `stream.d/*.conf` for all game UDP ports (230 ports across Login/World/Scene ranges). Validates with `nginx -t` before atomic replacement.  
+
+### Build System
+14. **WebTransport Build** — `build_all.sh` master script: Linux (native CMake), Windows (Zig cross-compile), macOS (native CMake).  
+15. **Cross-Platform Paths** — Forward-slash paths in `.csproj` files. `$(Configuration)` used directly (no redundant `BuildConfiguration` property).
 
 ---
 
@@ -314,15 +334,14 @@
 **Pure C# / netstandard2.1 utility library** — the lowest layer shared between Unity client and all .NET server projects.
 
 ### Top-Level Utilities
-1. **Authentication Validators** — Username, password, character name, and email validation rules (shared by LoginServer and account creation).  
-2. **CircularBuffer\<T\>** — Fixed-capacity ring buffer with overwrite-on-full semantics.  
-3. **Configuration Tree** — In-memory hierarchical config (`Node` tree) loadable from key/value text files.  
-4. **FastActivator\<T\>** — Expression-tree compiled object factory (faster than `Activator.CreateInstance`).  
-5. **MathHelper** — Numeric helpers: clamp, lerp, snapping.  
-6. **MemoryAccess** — `Span<T>` / unsafe helpers for high-throughput serialization.  
-7. **RefWrapper\<T\>** — Boxed reference wrapper for value types.  
-8. **SetOnce\<T\>** — Write-once latch that throws on second assignment.  
-9. **IReference** — Marker interface for reference-equality compared objects.
+1. **Authentication Validators** — Username, password, character name, and email validation rules (shared by LoginServer and account creation). NFKC normalization for case-insensitive comparisons.  
+2. **CircularBuffer\<T\>** — Thread-safe circular doubly-linked list with O(1) add/remove/pop/snapshot.  
+3. **Configuration** — INI-style `.cfg` file handler with environment variable overrides (`FISHMMO_CONFIG_*`), thread-safe via `ReaderWriterLockSlim`, case-insensitive keys, typed getters.  
+4. **FastActivator\<T\>** — Expression-tree compiled object factory (0–16 constructor args, faster than `Activator.CreateInstance`).  
+5. **MathHelper** — Mathematical constants: `HalfPI`, `Tau`.  
+6. **RefWrapper\<T\>** — Boxed reference wrapper for value types with implicit conversion.  
+7. **SetOnce\<T\>** — Thread-safe write-once latch with lock-free reads and double-checked locking.  
+8. **IReference** — Marker interface for reference-equality compared objects.
 
 ### Compression
 10. **StringCompression** — GZip compress/decompress for UTF-8 strings.  
@@ -346,12 +365,13 @@
 **The player-facing Unity client** (FishMMO.Client assembly, 169 .cs files).
 
 ### Networking & Connectivity
-1. **Multi-Server Connection Management** — LoginServer → WorldServer → SceneServer transitions with state tracking.
-2. **Reconnection with Exponential Backoff** — Automatic reconnect attempts with configurable backoff.  
-3. **Login-Server Discovery** — Happy-Eyeballs multi-mirror probing via configurable API hosts.  
-4. **ServerConnectionType State** — Tracks connection state: None, Login, ConnectingToWorld, World, Scene.  
+1. **Multi-Server Connection Management** — LoginServer → WorldServer → SceneServer transitions with state tracking via `ClientConnectionManager`.  
+2. **Reconnection with Exponential Backoff** — Automatic reconnect attempts with configurable backoff (base 5s × 2^attempt × jitter, max 60s, 10 attempts).  
+3. **Login-Server Discovery** — Happy-Eyeballs multi-mirror probing via configurable API hosts with staggered probes (0.25s apart), 55s TTL cache, and one-time connection token relay.  
+4. **ServerConnectionType State** — Tracks connection state: None, Login, World, Scene.  
 5. **Broadcast Sending** — Centralized FishNet broadcast dispatch from the Client MonoBehaviour.  
-6. **Death Dialog** — `UITKDeathDialog` with Respawn/Resurrect buttons. Handles `ResurrectOfferBroadcast` for dynamic button visibility.
+6. **WebTransport (QUIC/HTTP3) Transport** — All platforms use WebTransport via `Multipass`; NGINX L4 UDP stream proxy forwards raw QUIC to game servers.  
+7. **Death Dialog** — `UITKDeathDialog` with Respawn/Resurrect buttons. Handles `ResurrectOfferBroadcast` for dynamic button visibility.
 
 ### Authentication
 6. **SRP-6a Client Login Flow** — Full SRP-6a protocol: cookie challenge echo, key agreement, verify/proof, token-based reauth.  
@@ -379,11 +399,12 @@
 24. **UnityWebRequest Service** — Shared MonoBehaviour for HTTP requests with retry, timeout, progress callbacks, custom certificate handling.
 
 ### Security
-25. **TLS Certificate Pinning** — SHA-256(SPKI) base64 pinning via BouncyCastle for UnityWebRequest.  
+25. **TLS Certificate Pinning** — SHA-256(SPKI) base64 pinning via BouncyCastle for UnityWebRequest. Constant-time pin comparison. Release builds fail-closed when pins are not configured.  
 26. **StreamingAssets Pin Configuration** — Pins loaded from `client-security.json` with compile-time defaults.  
-27. **TOFU Mode** — Development/editor builds allow empty pins (trust-on-first-use).  
-28. **Build-Time Validation** — `IPreprocessBuildWithReport` blocks release builds without TLS pins.  
-29. **Dynamic Pin Update Scaffold** — Interface for out-of-band signed manifest updates (Ed25519/RSA-PSS).
+27. **TOFU Mode** — Development/editor builds allow empty pins (trust-on-first-use with loud warnings).  
+28. **Build-Time Validation** — `IPreprocessBuildWithReport` warns on release builds without TLS pins (at least 2 required).  
+29. **Dynamic Pin Update Scaffold** — `IPinUpdateSidecar` interface for out-of-band signed manifest updates with UTC validity windows.  
+30. **API Request Signing** — HMAC-SHA256 with `X-FishMMO-Client` header (v1.{ts}.{nonce}.{sig} format), 30s skew window, per-process nonce LRU cache.
 
 ### UI Toolkit (UITK) Panels — Login Flow
 30. **Loading Screen** — Addressable-loaded transition images with progress bar.  
@@ -480,7 +501,7 @@
 8. **Main Thread Queue** — Thread-safe main-thread action queue for marshalling async worker results to the Unity thread.  
 9. **Async Worker Queue** — Centralized bounded async work queue with backpressure and entity-keyed ordering (FIFO per key via consistent hashing).  
 10. **IngressGuard** — Per-connection, per-operation debounce and in-flight guard to prevent duplicate/replay/DoS attacks (ConcurrentDictionary-backed, bounded, periodic sweep).  
-11. **FishNet Network Wrapper** — Clean abstraction over FishNet NetworkManager: broadcast registration, transport config, authenticator attachment, coroutine hosting.  
+11. **FishNet Network Wrapper** — Clean abstraction over FishNet NetworkManager: broadcast registration, transport config (bind address/port/maxClients forwarded to each WebTransport child in Multipass), TLS certificate configuration, authenticator attachment, coroutine hosting.  
 12. **Server Type Selection** — Server type determined by command-line arg (`LOGIN`, `WORLD`, or `SCENE`).  
 13. **Address Resolution** — `ServerAddressProvider` resolves IPv4/IPv6 from transport with optional overrides.  
 14. **Physics Ticker** — Unity MonoBehaviour ticking a PhysicsScene at server fixed timestep (per-scene physics).  
@@ -727,17 +748,24 @@
 **ASP.NET Core web services** providing client-facing HTTP APIs.
 
 ### IPFetchASP.NET (Login Server Discovery)
-1. **Login Server Discovery API** — `/loginserver` endpoint returns the current login server address and port from the database.  
-2. **ClientGate** — Decompresses and validates the `X-FishMMO-Client` HMAC header, verifying request authenticity with timestamp (±300s) and nonce replay protection.
+1. **Login Server Discovery API** — `/loginserver` endpoint returns available login server ports from the database with a one-time connection token (SHA-256 hashed, 60s TTL) for real-IP recovery through the L4 UDP proxy.  
+2. **ClientGate** — Validates the `X-FishMMO-Client` HMAC-SHA256 header with multi-key rotation, 30s skew window, 20K-nonce LRU cache, and URL-decoded path traversal protection.  
+3. **Port Safety** — `WebServer:HttpPort` uses nullable `GetValue<int?>()` to prevent port-0 binding when config key is missing.  
+4. **CORS Headers** — `Access-Control-Allow-Origin: https://play.fishmmo.com` on API responses for cross-origin WebGL client access.
 
 ### PatcherASP.NET (Patch Delivery)
-3. **Latest Version Endpoint** — `/latest_version` returns current game version, up-to-date status, and patch availability info (SHA-256, size).  
-4. **Patch Download Endpoint** — `/{version}` serves patch ZIP files to clients.  
-5. **ClientGate** — Same HMAC request signing validation as IPFetch.
+5. **Latest Version Endpoint** — `/latest_version` returns current game version, up-to-date status, and patch availability info (SHA-256, size).  
+6. **Patch Download Endpoint** — `/{version}` serves patch ZIP files with range request support, `ReparsePoint` symlink rejection at serve time, and SHA-256 integrity verification.  
+7. **ClientGate** — Same HMAC request signing validation as IPFetch.  
+8. **Sliding-Window Rate Limiting** — Patch downloads limited to 6 requests/minute via sliding window (prevents fixed-window boundary burst).  
+9. **Symlink Protection** — `PatchVersionService` reindex skips `FileAttributes.ReparsePoint` files to prevent hash disclosure via symlinks.  
+10. **Semantic Versioning** — `VersionConfig` with full SemVer 2.0.0 parsing, comparison operators, and `IComparable<VersionConfig>`.
 
 ### WebGLServerASP.NET (WebGL Static Server)
-6. **WebGL Build Serving** — Serves the Unity WebGL build as static files (HTML, JS, WASM, assets).  
-7. **ClientGate** — Request validation.
+11. **WebGL Build Serving** — Serves Unity WebGL builds as static files (HTML, JS, WASM, `.unityweb`, `.data`) with correct MIME types and `X-Content-Type-Options: nosniff`.  
+12. **Response Compression** — `AddResponseCompression` middleware with `application/wasm` and `application/octet-stream` MIME types for bandwidth reduction on large WASM builds (20–50 MB).  
+13. **Cross-Origin Isolation** — CSP headers configured for `wasm-unsafe-eval` and WebTransport `connect-src` to `game.fishmmo.com:*`.  
+14. **ClientGate** — Request validation with same HMAC signing as IPFetch.
 
 ---
 

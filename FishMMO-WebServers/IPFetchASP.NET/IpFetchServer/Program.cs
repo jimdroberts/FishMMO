@@ -60,7 +60,9 @@ namespace FishMMO.WebServer
 					webBuilder.UseContentRoot(AppContext.BaseDirectory);
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
-						int port = context.Configuration.GetValue<int>("WebServer:HttpPort", 8080);
+						// Use nullable GetValue: if the key is missing, GetValue<int> returns 0
+							// (default(int)) which would bind Kestrel to a random OS port, not 8080.
+							int port = context.Configuration.GetValue<int?>("WebServer:HttpPort") ?? 8080;
 						options.ListenLocalhost(port);
 						// Hardening: cap request body for this metadata-only endpoint.
 						// /loginserver is GET-only; legitimate clients never upload anything.
@@ -76,6 +78,9 @@ namespace FishMMO.WebServer
 						services.AddSingleton(new NpgsqlDbConfiguration(context.Configuration));
 						services.AddSingleton<NpgsqlDbContextFactory>();
 						services.AddMemoryCache();
+
+							// Periodic cleanup of expired connection tokens (every 60s)
+							services.AddHostedService<TokenCleanupService>();
 						services.AddControllers()
 							.AddJsonOptions(options =>
 							{

@@ -9,8 +9,8 @@ namespace FishMMO.Database.Data
 		public readonly long Version;
 		public readonly long CharacterID;
 		public readonly int TemplateID;
-		public readonly float RemainingTime;
-		public readonly float TickTime;
+		public readonly double RemainingTime;
+		public readonly double TickTime;
 		public readonly int Stacks;
 		/// <summary>
 		/// Number of ticks that have fired for this buff instance (cumulative tick modifiers).
@@ -20,12 +20,12 @@ namespace FishMMO.Database.Data
 
 		long IVersioned<CharacterBuffData>.Version => Version;
 
-		public CharacterBuffData(long id, long characterID, int templateID, float remainingTime, float tickTime, int stacks, int tickCount)
+		public CharacterBuffData(long id, long characterID, int templateID, double remainingTime, double tickTime, int stacks, int tickCount)
 			: this(id, version: 0, characterID, templateID, remainingTime, tickTime, stacks, tickCount)
 		{
 		}
 
-		public CharacterBuffData(long id, long version, long characterID, int templateID, float remainingTime, float tickTime, int stacks, int tickCount)
+		public CharacterBuffData(long id, long version, long characterID, int templateID, double remainingTime, double tickTime, int stacks, int tickCount)
 		{
 			ID = id;
 			Version = version;

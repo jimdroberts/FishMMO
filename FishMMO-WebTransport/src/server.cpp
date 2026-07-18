@@ -5,6 +5,7 @@
 
 #include <time.h>
 #include "server.h"
+#include "http3.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,6 +20,60 @@ static void on_server_dgram_drain(void* ctx, wt_connection_id_t conn_id,
 
 static void fire_connect(wt_server_conn_t* sconn);
 static void fire_disconnect(wt_server_conn_t* sconn, int err);
+
+/* ── HTTP/3 Handshake Callbacks ─────────────────────────────── */
+
+static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
+                                const char* path, const char* authority)
+{
+    wt_server_conn_t* sconn = (wt_server_conn_t*)ctx;
+
+    wt_session_t* session = (wt_session_t*)calloc(1, sizeof(wt_session_t));
+    if (!session) {
+        MsQuic->ConnectionShutdown(quic_conn,
+            QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+        return;
+    }
+
+    int32_t r = wt_session_init(session, quic_conn, sconn->id);
+    if (r != WT_OK) {
+        WT_LOG_ERROR("Session init failed for client %llu (HTTP/3 WT)",
+                     (unsigned long long)sconn->id);
+        free(session);
+        MsQuic->ConnectionShutdown(quic_conn,
+            QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+        return;
+    }
+
+    atomic_ptr_store(&sconn->session, session);
+    session->parent_type = WT_PARENT_SERVER;
+    session->parent.server = sconn->owner;
+    wt_session_wire_callbacks(session);
+
+    WT_LOG_INFO("Client %llu WebTransport session established (path=%s)",
+                (unsigned long long)sconn->id, path ? path : "/");
+    fire_connect(sconn);
+}
+
+static void on_h3_error(void* ctx, int error_code, const char* message)
+{
+    wt_server_conn_t* sconn = (wt_server_conn_t*)ctx;
+    WT_LOG_ERROR("Client %llu HTTP/3 handshake failed: %s (code %d)",
+                 (unsigned long long)sconn->id,
+                 message ? message : "unknown", error_code);
+    /* Connection will be shut down by the error path */
+}
+
+/* ── Per-stream data for HTTP/3 protocol detection ──────────── */
+
+typedef struct {
+    HQUIC       quic_stream;
+    bool        is_first_stream;    /* first bidi stream from this peer */
+    uint8_t     first_byte;         /* first byte of stream data */
+    bool        first_byte_read;
+    uint8_t*    buffered_data;      /* data after first byte (for replay) */
+    uint32_t    buffered_len;
+} server_stream_detect_t;
 
 /* ═══════════════════════════════════════════════════════════════
  * INTERNAL API
@@ -50,16 +105,21 @@ wt_server_s* wt_server_alloc_impl(
     srv->bind_address[sizeof(srv->bind_address) - 1] = '\0';
 
     srv->port = port;
-    srv->max_clients = max_clients > 0 ? max_clients : WT_MAX_CLIENTS;
+    srv->max_clients = (max_clients > 0 && max_clients <= WT_MAX_CLIENTS)
+                       ? max_clients : WT_MAX_CLIENTS;
     memcpy(&srv->callbacks, callbacks, sizeof(*callbacks));
     srv->user_context = context;
 
     atomic_init(&srv->state, WT_SERVER_STOPPED);
     atomic_init(&srv->connection_count, 0);
     atomic_init(&srv->pending_shutdowns, 0);
+    atomic_init(&srv->pending_shutdown_head, 0);
+    atomic_init(&srv->pending_shutdown_tail, 0);
 
+    /* Allocate max_clients + 1 to account for index 0 being reserved
+     * (WT_CONNECTION_ID_NONE). Valid connection IDs are 1..max_clients. */
     srv->connections = (wt_server_conn_t*)calloc(
-        srv->max_clients, sizeof(wt_server_conn_t));
+        srv->max_clients + 1, sizeof(wt_server_conn_t));
     if (!srv->connections) { free(srv); return NULL; }
 
     wt_datagram_queue_init(&srv->dgram_queue);
@@ -71,15 +131,34 @@ void wt_server_free_impl(wt_server_s* server)
     if (!server) return;
     wt_server_stop_impl(server);
 
+    /* Null out the owner pointer on every connection slot BEFORE the
+     * spin-wait.  This guarantees that any late SHUTDOWN_COMPLETE
+     * callbacks (which may fire after the spin-wait timeout) will see
+     * sconn->owner==NULL and skip the pending_shutdowns decrement,
+     * preventing a UAF on the server struct.
+     *
+     * The sconn->owner field is only written during
+     * server_listener_cb (assign) and here (NULL).  This store
+     * is safe — the QUIC callback thread reads owner under
+     * atomic_load(&sconn->in_use) which has already been set to
+     * false by SHUTDOWN_COMPLETE (or will be before reading owner). */
+    if (server->connections) {
+        for (uint32_t i = 1; i <= server->max_clients; i++) {
+            server->connections[i].owner = NULL;
+        }
+    }
+
     /* Wait for pending SHUTDOWN_COMPLETE callbacks (bounded).
-     * 300 iterations * 10ms = 3 second max wait. */
+     * 300 iterations * 10ms = 3 second max wait.
+     * After nulling all owner pointers above, late callbacks are
+     * harmless no-ops — no UAF even if the timeout fires. */
     int retries = 300;
     while (atomic_load(&server->pending_shutdowns) > 0 && retries-- > 0) {
 #if defined(WT_PLATFORM_WINDOWS)
         Sleep(10);
 #else
         struct timespec ts = {0, 10000000}; /* 10ms */
-	        nanosleep(&ts, NULL);
+        nanosleep(&ts, NULL);
 #endif
     }
     if (retries < 0) {
@@ -91,7 +170,6 @@ void wt_server_free_impl(wt_server_s* server)
     free(server->connections);
     free(server);
 }
-
 int32_t wt_server_start_impl(wt_server_s* server)
 {
     if (!server) return WT_ERR_UNKNOWN;
@@ -210,7 +288,7 @@ void wt_server_stop_impl(wt_server_s* server)
                                          WT_SERVER_STOPPING))
         return;
 
-    for (uint32_t i = 1; i < server->max_clients; i++) {
+    for (uint32_t i = 1; i <= server->max_clients; i++) {
         if (atomic_load(&server->connections[i].in_use))
             wt_server_disconnect_impl(server, server->connections[i].id);
     }
@@ -238,16 +316,25 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
     if (!server || atomic_load(&server->state) != WT_SERVER_STARTED)
         return;
 
-    /* Process deferred session shutdowns for any connections.
-     * This runs on the application thread — same thread as send —
-     * guaranteeing no TOCTOU between session free and acquire. */
-    for (uint32_t i = 1; i < server->max_clients; i++) {
-        wt_server_conn_t* c = &server->connections[i];
-        if (c->pending_shutdown_session) {
-            wt_session_t* s = c->pending_shutdown_session;
-            c->pending_shutdown_session = NULL;
-            wt_session_shutdown(s);
+    /* Process deferred session shutdowns via O(1) queue drain.
+     * SHUTDOWN_COMPLETE callbacks enqueue connection IDs into
+     * pending_shutdown_queue. This poll path drains them on the
+     * application thread — same thread as send — guaranteeing
+     * no TOCTOU between session free and acquire. */
+    uint32_t head = atomic_load(&server->pending_shutdown_head);
+    uint32_t tail = atomic_load(&server->pending_shutdown_tail);
+    while (head != tail) {
+        wt_connection_id_t cid = server->pending_shutdown_queue[head % WT_MAX_CLIENTS];
+        if (cid > 0 && cid <= server->max_clients) {
+            wt_server_conn_t* c = &server->connections[cid];
+            if (c->pending_shutdown_session) {
+                wt_session_t* s = c->pending_shutdown_session;
+                c->pending_shutdown_session = NULL;
+                wt_session_shutdown(s);
+            }
         }
+        head++;
+        atomic_store(&server->pending_shutdown_head, head);
     }
 
     wt_datagram_queue_drain(&server->dgram_queue,
@@ -262,7 +349,7 @@ int32_t wt_server_send_stream_impl(
 
     if (conn_id == WT_BROADCAST_ALL) {
         int32_t worst = WT_OK;
-        for (uint32_t i = 1; i < server->max_clients; i++) {
+        for (uint32_t i = 1; i <= server->max_clients; i++) {
             wt_server_conn_t* c = &server->connections[i];
             if (!atomic_load(&c->in_use) ||
                 (wt_connection_state_t)atomic_load(&c->state) != WT_CONN_STATE_CONNECTED)
@@ -283,7 +370,7 @@ int32_t wt_server_send_stream_impl(
         return worst;
     }
 
-    if (conn_id == 0 || conn_id >= server->max_clients)
+    if (conn_id == 0 || conn_id > server->max_clients)
         return WT_ERR_NOT_FOUND;
 
     wt_server_conn_t* conn = &server->connections[conn_id];
@@ -317,7 +404,7 @@ int32_t wt_server_send_datagram_impl(
 
     if (conn_id == WT_BROADCAST_ALL) {
         int32_t worst = WT_OK;
-        for (uint32_t i = 1; i < server->max_clients; i++) {
+        for (uint32_t i = 1; i <= server->max_clients; i++) {
             wt_server_conn_t* c = &server->connections[i];
             if (!atomic_load(&c->in_use) ||
                 (wt_connection_state_t)atomic_load(&c->state) != WT_CONN_STATE_CONNECTED)
@@ -337,7 +424,7 @@ int32_t wt_server_send_datagram_impl(
         return worst;
     }
 
-    if (conn_id == 0 || conn_id >= server->max_clients)
+    if (conn_id == 0 || conn_id > server->max_clients)
         return WT_ERR_NOT_FOUND;
 
     wt_server_conn_t* conn = &server->connections[conn_id];
@@ -365,7 +452,7 @@ int32_t wt_server_send_datagram_impl(
 void wt_server_disconnect_impl(
     wt_server_s* server, wt_connection_id_t conn_id)
 {
-    if (!server || conn_id == 0 || conn_id >= server->max_clients)
+    if (!server || conn_id == 0 || conn_id > server->max_clients)
         return;
 
     wt_server_conn_t* conn = &server->connections[conn_id];
@@ -390,7 +477,7 @@ void wt_server_disconnect_impl(
 const char* wt_server_get_client_addr_impl(
     wt_server_s* server, wt_connection_id_t conn_id)
 {
-    if (!server || conn_id == 0 || conn_id >= server->max_clients)
+    if (!server || conn_id == 0 || conn_id > server->max_clients)
         return NULL;
     wt_server_conn_t* conn = &server->connections[conn_id];
     if (!atomic_load(&conn->in_use)) return NULL;
@@ -427,7 +514,7 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     wt_server_conn_t* conn = NULL;
     wt_connection_id_t conn_id = 0;
 
-    for (uint32_t i = 1; i < srv->max_clients; i++) {
+    for (uint32_t i = 1; i <= srv->max_clients; i++) {
         if (!atomic_load(&srv->connections[i].in_use)) {
             conn = &srv->connections[i];
             conn_id = i;
@@ -491,28 +578,6 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     case QUIC_CONNECTION_EVENT_CONNECTED: {
         atomic_store(&sconn->state, WT_CONN_STATE_CONNECTED);
 
-        wt_session_t* session = (wt_session_t*)calloc(1, sizeof(wt_session_t));
-        if (!session) {
-            MsQuic->ConnectionShutdown(conn,
-                QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
-            break;
-        }
-
-        int32_t r = wt_session_init(session, conn, sconn->id);
-        if (r != WT_OK) {
-            WT_LOG_ERROR("Session init failed for client %llu",
-                         (unsigned long long)sconn->id);
-            free(session);
-            MsQuic->ConnectionShutdown(conn,
-                QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
-            break;
-        }
-
-        atomic_ptr_store(&sconn->session, session);
-        session->parent_type = WT_PARENT_SERVER;
-        session->parent.server = sconn->owner;
-        wt_session_wire_callbacks(session);
-
         /* Remote address */
         QUIC_ADDR remote_addr;
         uint32_t addr_len = sizeof(remote_addr);
@@ -528,27 +593,89 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 
         WT_LOG_INFO("Client %llu connected from %s",
                     (unsigned long long)sconn->id, sconn->remote_addr);
-        fire_connect(sconn);
+
+        /* ── Protocol Detection via HTTP/3 Handshake ─────────
+         * Create an h3_session that automatically detects the client
+         * protocol (HTTP/3 WebTransport vs raw QUIC native) from the
+         * first byte of the first peer-initiated bidi stream.
+         *
+         *   - 0x00 → browser WebTransport client → HTTP/3 handshake
+         *   - ANY  → native C++ client → firewall connect immediately
+         *
+         * on_h3_session_ready fires when the WT session is established
+         * (either immediately for native clients after the first byte
+         *  check, or after HTTP/3 CONNECT for browser clients). */
+        sconn->h3_session = h3_session_create(
+            conn, true,  /* is_server */
+            on_h3_session_ready, on_h3_error, sconn);
+        if (!sconn->h3_session) {
+            /* Fall back to raw QUIC (backward compatible) */
+            WT_LOG_WARN("Failed to create HTTP/3 session for client %llu — falling back to raw QUIC",
+                        (unsigned long long)sconn->id);
+            wt_session_t* session = (wt_session_t*)calloc(1, sizeof(wt_session_t));
+            if (!session) {
+                MsQuic->ConnectionShutdown(conn,
+                    QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+                break;
+            }
+            int32_t r = wt_session_init(session, conn, sconn->id);
+            if (r != WT_OK) {
+                WT_LOG_ERROR("Session init failed for client %llu",
+                             (unsigned long long)sconn->id);
+                free(session);
+                MsQuic->ConnectionShutdown(conn,
+                    QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+                break;
+            }
+            atomic_ptr_store(&sconn->session, session);
+            session->parent_type = WT_PARENT_SERVER;
+            session->parent.server = sconn->owner;
+            wt_session_wire_callbacks(session);
+            fire_connect(sconn);
+        } else {
+            /* Copy allowed origins from server config for CORS validation.
+             * Empty allowed_origins = allow all (dev/testing default). */
+            if (sconn->owner && sconn->owner->allowed_origins[0]) {
+                strncpy(sconn->h3_session->allowed_origins,
+                        sconn->owner->allowed_origins,
+                        sizeof(sconn->h3_session->allowed_origins) - 1);
+                sconn->h3_session->allowed_origins[
+                    sizeof(sconn->h3_session->allowed_origins) - 1] = '\0';
+            }
+        }
+        /* When h3_session is created, the first PEER_STREAM_STARTED will
+         * trigger protocol detection. Session init is deferred until
+         * on_h3_session_ready fires. */
         break;
     }
 
     case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE: {
-        if (sconn->session) {
+        /* Atomic load — no non-atomic guard (avoids torn read on ARM). */
+        {
             wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&sconn->session);
             if (old_session) {
                 atomic_ptr_store(&sconn->session, NULL);
 
-            /* Defer shutdown to poll (application thread) to guarantee
-             * session free never races with in-flight sends. */
-            sconn->pending_shutdown_session = old_session;
+                /* Defer shutdown to poll (application thread) to guarantee
+                 * session free never races with in-flight sends. */
+                sconn->pending_shutdown_session = old_session;
             }
+        }
+
+        /* ── HTTP/3 Session Cleanup ──────────────────────────
+         * Free the h3_session if the handshake never completed.
+         * If h3_session->handshake_complete is true, the session was
+         * already transitioned to wt_session in on_h3_session_ready,
+         * and h3_session is safe to free (no pending streams). */
+        if (sconn->h3_session) {
+            h3_session_free(sconn->h3_session);
+            sconn->h3_session = NULL;
         }
 
         MsQuic->ConnectionClose(conn);
 
-        if (atomic_load(&sconn->in_use)) {
-            fire_disconnect(sconn, 0);
-
+        bool was_in_use = atomic_load(&sconn->in_use);
+        if (was_in_use) {
             if (sconn->owner) {
                 atomic_fetch_sub(&sconn->owner->connection_count, 1);
             }
@@ -557,38 +684,126 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             atomic_store(&sconn->state, WT_CONN_STATE_CLOSED);
         }
 
-        /* Signal completion LAST — after all sconn accesses.
-         * free_impl spin-waits on this reaching zero before freeing. */
+        /* Enqueue for O(1) poll drain — the poll thread processes
+         * pending_shutdown_session safely on the application thread. */
+        if (sconn->owner && sconn->pending_shutdown_session) {
+            uint32_t head = atomic_load(&sconn->owner->pending_shutdown_head);
+            uint32_t tail = atomic_fetch_add(
+                &sconn->owner->pending_shutdown_tail, 1);
+            if ((tail - head) >= WT_MAX_CLIENTS) {
+                WT_LOG_WARN("Pending shutdown queue overflow (tail %u, head %u)",
+                            tail, head);
+            } else {
+                sconn->owner->pending_shutdown_queue[
+                    tail % WT_MAX_CLIENTS] = sconn->id;
+            }
+        }
+
+        /* Signal completion BEFORE firing the disconnect callback.
+         * If the callback triggers wt_server_destroy → free_impl,
+         * pending_shutdowns==0 allows the spin-wait to exit cleanly
+         * rather than deadlocking.  sconn->owner is still valid here
+         * because free_impl waits for pending_shutdowns before freeing. */
         if (sconn->owner)
             atomic_fetch_sub(&sconn->owner->pending_shutdowns, 1);
+
+        /* Fire callback LAST — after all state changes are committed.
+         * The callback may enqueue work that calls back into the API;
+         * all invariants (in_use=false, state=CLOSED, pending_shutdowns
+         * decremented) are established before any re-entrant call.
+         * Only fire if the connection was actually in use (vs duplicate
+         * SHUTDOWN_COMPLETE for an already-closed connection). */
+        if (was_in_use)
+            fire_disconnect(sconn, 0);
         break;
     }
 
     case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED: {
-        if (sconn->session && sconn->session->stream_mgr) {
+        /* ── Protocol Detection: HTTP/3 vs Raw QUIC ──────────
+         * If h3_session exists (handshake not yet complete), pass the
+         * stream to it for protocol detection and HTTP/3 processing.
+         * The h3_session inspects the first byte of the first bidi stream
+         * to determine the client type, and calls on_h3_session_ready
+         * when the session is established. */
+        if (sconn->h3_session && !sconn->h3_session->handshake_complete) {
+            /* h3_session_accept_stream returns false for data streams
+             * that should go to wt_stream_manager. But during handshake,
+             * all streams go through HTTP/3 routing. */
+            h3_stream_ctx_t* out_sctx = NULL;
+            int hr = h3_server_handle_stream(
+                sconn->h3_session,
+                event->PEER_STREAM_STARTED.Stream,
+                &out_sctx);
+            if (hr == 0) {
+                /* HTTP/3 consumed the stream (control/request stream).
+                 * Data processing happens in the stream RECEIVE callback,
+                 * which calls h3_server_process_data. When the handshake
+                 * completes, on_h3_session_ready creates the wt_session.
+                 * We break here — the stream has been claimed by HTTP/3. */
+                break;
+            } else if (hr < 0) {
+                /* Handshake error — shut down */
+                MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
+                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+                break;
+            }
+            /* hr == 1: regular data stream detected (or native client),
+             * fall through to the wt_stream_manager path below. */
+        }
+
+        /* Acquire session refcount to prevent UAF — wt_session_shutdown
+         * on the poll thread may concurrently set stream_mgr=NULL and
+         * free it.  Holding a ref keeps the session (and its stream_mgr
+         * pointer) alive until we release. */
+        {
+            wt_session_t* session = (wt_session_t*)atomic_ptr_load(&sconn->session);
+            if (!session || !wt_session_acquire(session)) {
+                MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
+                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+                break;
+            }
+            /* Re-check that the session pointer hasn't changed and
+             * the stream_mgr is still valid AFTER acquiring. */
+            if (atomic_ptr_load(&sconn->session) != session ||
+                !session->stream_mgr) {
+                wt_session_release(session);
+                MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
+                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+                break;
+            }
             wt_stream_manager_accept_stream(
-                sconn->session->stream_mgr,
+                session->stream_mgr,
                 event->PEER_STREAM_STARTED.Stream);
-        } else {
-            /* Session already gone — close the orphaned stream */
-            MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
-                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-            MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+            wt_session_release(session);
         }
         break;
     }
 
     case QUIC_CONNECTION_EVENT_DATAGRAM_RECEIVED: {
-        if (!sconn->session || !sconn->owner) break;
-
+        /* Atomic load — avoid non-atomic read of session/owner pointers. */
+        if (!sconn->owner) break;
         {
+            wt_session_t* session = (wt_session_t*)atomic_ptr_load(&sconn->session);
+            if (!session) break;
+
+            static int dgram_drop_count = 0;
             const QUIC_BUFFER* buf = event->DATAGRAM_RECEIVED.Buffer;
             if (buf && buf->Length > 0 &&
                 buf->Length <= WT_DGRAM_MAX_SIZE) {
-                wt_datagram_queue_push(
-                    &sconn->owner->dgram_queue,
-                    sconn->id, buf->Buffer,
-                    (int32_t)buf->Length);
+                if (!wt_datagram_queue_push(
+                        &sconn->owner->dgram_queue,
+                        sconn->id, buf->Buffer,
+                        (int32_t)buf->Length)) {
+                    if (++dgram_drop_count % 100 == 1) {
+                        WT_LOG_WARN("Datagram queue full: %d drops so far", dgram_drop_count);
+                    }
+                }
+            } else if (buf && buf->Length > WT_DGRAM_MAX_SIZE) {
+                WT_LOG_WARN("Dropped oversized datagram (%u bytes) from client %llu",
+                            buf->Length, (unsigned long long)sconn->id);
             }
         }
         break;

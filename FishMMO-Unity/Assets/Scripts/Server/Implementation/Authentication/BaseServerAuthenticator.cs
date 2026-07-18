@@ -4,11 +4,15 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Auth.Core;
 using FishMMO.Auth.Implementation;
+using FishMMO.Server.Core.LoginServer;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -119,6 +123,9 @@ namespace FishMMO.Server.Implementation
 			DrainMainThreadQueue(drainAll: true);
 		}
 
+		/// <inheritdoc/>
+		public abstract IAccountManager<NetworkConnection> CreateAccountManager();
+
 		/// <summary>
 		/// Unity OnDestroy callback. Ensures async workers are stopped even if the owning
 		/// Server does not call <see cref="ShutdownWorkers"/> (e.g. abnormal teardown).
@@ -199,7 +206,8 @@ namespace FishMMO.Server.Implementation
 
 		#region FishNet Broadcast / Event Routing
 
-		/// <summary>Routes incoming ClientHandshake broadcast to the core handshake handler.</summary>
+		/// <summary>Routes incoming ClientHandshake broadcast to the core handshake handler
+		/// and processes the connection token for real-IP recovery.</summary>
 		internal void OnServerClientHandshakeReceived(NetworkConnection conn, ClientHandshake msg, Channel channel)
 		{
 			if (conn.IsAuthenticated)
@@ -207,7 +215,75 @@ namespace FishMMO.Server.Implementation
 				conn.Disconnect(true);
 				return;
 			}
-			Core?.OnHandshakeReceived(conn, msg.PublicKey, msg.Cookie, msg.MinVersion, msg.MaxVersion);
+
+			// Process connection token for real-IP recovery.
+			// When behind an L4 UDP proxy, conn.GetAddress() returns 127.0.0.1.
+			// The token bridges the real IP from the HTTP layer into the QUIC layer.
+			if (!string.IsNullOrEmpty(msg.ConnectionToken))
+			{
+				_ = ProcessConnectionTokenAsync(conn, msg.ConnectionToken);
+			}
+
+			Core?.OnHandshakeReceived(conn, msg.PublicKey, msg.Cookie, msg.ConnectionToken, msg.MinVersion, msg.MaxVersion);
+		}
+
+		/// <summary>
+		/// Validates a connection token against the database and stores the real IP
+		/// for rate-limiting and logging. Fire-and-forget — does not block the handshake.
+		/// </summary>
+		private async Task ProcessConnectionTokenAsync(NetworkConnection conn, string rawToken)
+		{
+				// Only process tokens on the Login Server. World/Scene servers
+				// do not have IAccountCreationSystemRuntimeData to store the result;
+				// the real IP is already in the account record from the Login phase.
+				if (Server?.DataContainerRegistry == null ||
+					!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
+				{
+					return;
+				}
+			try
+			{
+				// Hash the raw token the same way IPFetch did
+				using var sha256 = SHA256.Create();
+				var tokenHash = BitConverter.ToString(
+					sha256.ComputeHash(Encoding.UTF8.GetBytes(rawToken)))
+					.Replace("-", "").ToLowerInvariant();
+
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IConnectionTokenService>(out var svc))
+				{
+					await Log.Debug(LogPrefix, "IConnectionTokenService not registered — token skipped.");
+					return;
+				}
+
+				var result = await svc.ValidateAndConsumeAsync(tokenHash);
+				if (!result.IsSuccess || result.Data == null)
+				{
+					await Log.Debug(LogPrefix, $"Connection token not found or expired for connection {conn.ClientId}.");
+					return;
+				}
+
+				// Store real IP for rate limiting — overwrite the loopback address
+				StoreRealIpForConnection(conn.ClientId, result.Data);
+				await Log.Debug(LogPrefix, $"Real IP {result.Data} recovered for connection {conn.ClientId}.");
+			}
+			catch (Exception ex)
+			{
+				await Log.Warning(LogPrefix, $"Connection token processing failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Stores the real client IP for a connection so that rate-limiting and
+		/// logging use the actual address instead of the proxy's loopback IP.
+		/// </summary>
+		private void StoreRealIpForConnection(int clientId, string realIp)
+		{
+			if (Server?.DataContainerRegistry != null &&
+				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.ConnectionIpCache?.Upsert(clientId, realIp, DateTime.UtcNow);
+			}
 		}
 
 		/// <summary>Notifies the core when a remote connection stops so transient auth state can be purged.</summary>

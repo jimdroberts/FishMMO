@@ -1,5 +1,6 @@
-﻿namespace FishMMO_Utils
+namespace FishMMO_Dependencies
 {
-    // Building the Utils project copies the dependencies directly to your Plugins folder.
-    // Check the .csproj for FishMMO-Utils if you want to see the included dependencies.
+    // Building the Dependencies project copies NuGet package DLLs directly to the
+    // Unity Assets/Dependencies folder. See the .csproj post-build target for details.
+    // This project contains no runtime code — it exists solely as a NuGet aggregation point.
 }

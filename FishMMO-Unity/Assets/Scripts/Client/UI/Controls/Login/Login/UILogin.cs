@@ -145,7 +145,7 @@ namespace FishMMO.Client
 		/// or TOTP). Used to gate auth-result handling and prevent cross-talk with
 		/// UIRegister, which shares the same <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event.
 		/// </summary>
-		private bool _isAuthFlowActive;
+		private bool isAuthFlowActive;
 
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
@@ -153,7 +153,7 @@ namespace FishMMO.Client
 			// Without this guard, hidden panels would still react to auth results
 			// intended for the other panel (e.g., UILogin receiving AccountCreated
 			// during UIRegister's registration and force-disconnecting).
-			if (!_isAuthFlowActive) return;
+			if (!isAuthFlowActive) return;
 
 			switch (result)
 			{
@@ -433,8 +433,9 @@ namespace FishMMO.Client
 				Log.Warning("UILogin", e);
 				SetSignInLocked(false);
 			},
-			(servers) =>
+			(servers, token) =>
 			{
+					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
 				Connect("Connecting...", identifier, password);
 			}));
 		}
@@ -498,7 +499,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets locked state for signing in (enables/disables controls).
-		/// Also manages the <see cref="_isAuthFlowActive"/> flag: locking marks
+		/// Also manages the <see cref="isAuthFlowActive"/> flag: locking marks
 		/// the start of an auth flow; unlocking marks its termination. This flag
 		/// gates <see cref="Authenticator_OnClientAuthenticationResult"/> to prevent
 		/// cross-talk with UIRegister.
@@ -510,8 +511,8 @@ namespace FishMMO.Client
 			// This prevents hidden panels from reacting to auth results intended
 			// for the other panel (e.g., UILogin receiving AccountCreated during
 			// UIRegister's registration and force-disconnecting).
-			if (locked) _isAuthFlowActive = true;
-			else _isAuthFlowActive = false;
+			if (locked) isAuthFlowActive = true;
+			else isAuthFlowActive = false;
 
 			if (RegisterButton != null) RegisterButton.interactable = !locked;
 			if (SignInButton != null) SignInButton.interactable = !locked;

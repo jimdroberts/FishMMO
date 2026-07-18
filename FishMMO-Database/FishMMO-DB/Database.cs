@@ -151,14 +151,35 @@ namespace FishMMO.Database
 			const string interfaceNamespace = "FishMMO.Database.Npgsql.Services.Interfaces";
 
 			var assembly = typeof(NpgsqlDbContextFactory).Assembly;
-			var serviceInterfaces = assembly.GetTypes()
+
+			Type[] allTypes;
+			try
+			{
+				allTypes = assembly.GetTypes();
+			}
+			catch (ReflectionTypeLoadException ex)
+			{
+				foreach (var loaderEx in ex.LoaderExceptions)
+				{
+					if (loaderEx != null)
+					{
+						System.Diagnostics.Debug.WriteLine(loaderEx.ToString());
+					}
+				}
+				throw new DatabaseException(
+					"Failed to load types from assembly via reflection. See LoaderExceptions for details.",
+					ex,
+					errorCode: "REFLECTION_TYPE_LOAD_FAILURE");
+			}
+
+			var serviceInterfaces = allTypes
 				.Where(t => t.IsInterface
 					&& string.Equals(t.Namespace, interfaceNamespace, StringComparison.Ordinal)
 					&& t.Name.EndsWith("Service", StringComparison.Ordinal))
 				.OrderBy(t => t.FullName, StringComparer.Ordinal)
 				.ToArray();
 
-			var candidates = assembly.GetTypes()
+			var candidates = allTypes
 				.Where(t => t.IsClass
 					&& !t.IsAbstract
 					&& t.Namespace != null

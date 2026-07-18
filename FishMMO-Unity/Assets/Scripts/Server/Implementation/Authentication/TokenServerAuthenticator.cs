@@ -32,13 +32,13 @@ namespace FishMMO.Server.Implementation
 		[SerializeField] private float renewalTokenExpirationMinutes = 10f;
 
 		/// <summary>The token-specific core instance. Null until <see cref="InitializeCoreInstance"/> is called.</summary>
-		private TokenCore _core;
+		private TokenCore core;
 
 		/// <summary>
 		/// Lazily loaded 32-byte AES-256 KEK used to unwrap signing-key blobs returned by the DB.
 		/// Cached for the lifetime of the authenticator. <c>null</c> until first fetch attempt.
 		/// </summary>
-		private byte[] _signingKeyKek;
+		private volatile byte[] signingKeyKek;
 
 		/// <summary>
 		/// Loads (and caches) the deployment KEK. Returns <c>null</c> on failure and emits a
@@ -46,18 +46,18 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private byte[] TryGetSigningKeyKek()
 		{
-			if (this._signingKeyKek != null) return this._signingKeyKek;
+			if (this.signingKeyKek != null) return this.signingKeyKek;
 			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out byte[] kek, out string error))
 			{
 				_ = Log.Warning(LogPrefix, $"Signing-key KEK unavailable: {error}");
 				return null;
 			}
-			this._signingKeyKek = kek;
+			this.signingKeyKek = kek;
 			return kek;
 		}
 
 		/// <inheritdoc/>
-		protected override BaseAuthenticatorCore<NetworkConnection> Core => _core;
+		protected override BaseAuthenticatorCore<NetworkConnection> Core => core;
 
 		#region Lifecycle
 
@@ -68,8 +68,12 @@ namespace FishMMO.Server.Implementation
 				?? throw new InvalidOperationException(
 					$"{LogPrefix}: Server.AccountManager must implement ITokenAccountManager<NetworkConnection>. " +
 					$"Actual type: {Server.AccountManager?.GetType().FullName ?? "null"}.");
-			_core = new TokenCore(this, tam);
+			core = new TokenCore(this, tam);
 		}
+
+		/// <inheritdoc/>
+		public override IAccountManager<NetworkConnection> CreateAccountManager() =>
+			new TokenAccountManager();
 
 		/// <inheritdoc/>
 		protected override void RegisterProtocolHandlers(NetworkManager networkManager)
@@ -83,7 +87,7 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>Routes an incoming <see cref="TokenAuthBroadcast"/> to the core token authentication channel.</summary>
 		internal void OnServerTokenAuthBroadcastReceived(NetworkConnection conn, TokenAuthBroadcast msg, Channel channel)
-			=> _core?.OnTokenAuthReceived(conn, msg.Token, msg.Seq);
+			=> core?.OnTokenAuthReceived(conn, msg.Token, msg.Seq);
 
 		#endregion
 
@@ -288,20 +292,20 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Inner sealed implementation of <see cref="TokenAuthenticatorCore{TConnection}"/> bound to
-		/// <see cref="NetworkConnection"/>. All abstract callbacks route to <see cref="_outer"/>
+		/// <see cref="NetworkConnection"/>. All abstract callbacks route to <see cref="outer"/>
 		/// (the enclosing <see cref="TokenServerAuthenticator"/>), which provides FishNet broadcasts,
 		/// DB access, and event invocation.
 		/// </summary>
 		private sealed class TokenCore : TokenAuthenticatorCore<NetworkConnection>
 		{
 			/// <summary>The enclosing <see cref="TokenServerAuthenticator"/> instance that hosts this core.</summary>
-			private readonly TokenServerAuthenticator _outer;
+			private readonly TokenServerAuthenticator outer;
 
 			/// <summary>
 			/// Initializes the core with the enclosing authenticator and the token account manager.
 			/// </summary>
 			public TokenCore(TokenServerAuthenticator outer, ITokenAccountManager<NetworkConnection> accountManager)
-				: base(accountManager) => _outer = outer;
+				: base(accountManager) => this.outer = outer;
 
 			// ── BaseAuthenticatorCore abstracts ──────────────────────────────
 			/// <inheritdoc/>
@@ -311,16 +315,16 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override int GetConnectionClientId(NetworkConnection conn) => conn.ClientId;
 			/// <inheritdoc/>
-			protected override string ResolveRateLimitKey(NetworkConnection conn) => _outer.ResolveRateLimitKey(conn);
+			protected override string ResolveRateLimitKey(NetworkConnection conn) => outer.ResolveRateLimitKey(conn);
 
 			/// <inheritdoc/>
 			protected override void BroadcastCookieChallenge(NetworkConnection conn, byte[] cookie) =>
-				_outer.NetworkManager.ServerManager.Broadcast(conn,
+				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new ServerHandshake { Cookie = cookie }, false, Channel.Reliable);
 
 			/// <inheritdoc/>
 			protected override void BroadcastServerHandshake(NetworkConnection conn, byte[] key, ushort version) =>
-				_outer.NetworkManager.ServerManager.Broadcast(conn,
+				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new ServerHandshake { PublicKey = key, AgreedVersion = version }, false, Channel.Reliable);
 
 			/// <inheritdoc/>
@@ -334,36 +338,36 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override void OnAuthenticationResult(NetworkConnection conn, bool authenticated)
 			{
-				_outer.OnAuthentication(conn, authenticated);
-				_outer.InvokeClientAuthenticationResult(conn, authenticated);
+				outer.OnAuthentication(conn, authenticated);
+				outer.InvokeClientAuthenticationResult(conn, authenticated);
 			}
 
 			/// <inheritdoc/>
 			protected override void BroadcastAuthResult(NetworkConnection conn, ClientAuthenticationResult result, bool reliable) =>
-				_outer.NetworkManager.ServerManager.Broadcast(conn,
+				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new ClientAuthResultBroadcast { Result = result }, false,
 					reliable ? Channel.Reliable : Channel.Unreliable);
 
 			/// <inheritdoc/>
 			protected override void EnqueueMainThread(NetworkConnection conn, Action action) =>
-				_outer.EnqueueMainThreadAction(action);
+				outer.EnqueueMainThreadAction(action);
 
 			/// <inheritdoc/>
 			protected override Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult defaultResult, string username) =>
-				_outer.TryLoginAsync(defaultResult, username);
+				outer.TryLoginAsync(defaultResult, username);
 
 			// ── DB callbacks ─────────────────────────────────────────────────
 			/// <inheritdoc/>
 			protected override Task<byte[]> FetchSigningKeyAsync(long loginServerId, long signingKeyId) =>
-				_outer.FetchSigningKeyCoreAsync(loginServerId, signingKeyId);
+				outer.FetchSigningKeyCoreAsync(loginServerId, signingKeyId);
 
 			/// <inheritdoc/>
 			protected override Task<bool> CheckTokenRevocationAsync(string tokenHash) =>
-				_outer.CheckTokenRevocationCoreAsync(tokenHash);
+				outer.CheckTokenRevocationCoreAsync(tokenHash);
 
 			/// <inheritdoc/>
 			protected override Task OnTokenAuthSuccessAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId) =>
-				_outer.IssueRenewalTokenCoreAsync(conn, accountName, accessLevel, loginServerId);
+				outer.IssueRenewalTokenCoreAsync(conn, accountName, accessLevel, loginServerId);
 		}
 
 		#endregion

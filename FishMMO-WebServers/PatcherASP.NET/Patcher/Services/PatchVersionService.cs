@@ -191,6 +191,18 @@ public class PatchVersionService : IDisposable
 				}
 
 				var info = new FileInfo(fullPath);
+
+				// Reject symlinks / junctions / mount points.  Hashing a symlink
+				// would follow it and leak the target file's hash in the version
+				// metadata response (content oracle).  The PatchController already
+				// checks ReparsePoint at serve time, but we must also block it at
+				// index time to prevent hash disclosure.
+				if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+				{
+					Log.Warning("PatchVersionService", $"Skipping symlink/reparse-point: {fileName}");
+					continue;
+				}
+
 				string sha256;
 				try
 				{

@@ -12,6 +12,7 @@
 #include "webtransport_internal.h"
 #include "session.h"
 #include "datagram_queue.h"
+#include "http3.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +41,10 @@ typedef struct wt_client_s {
      * consumed by poll (application thread) to ensure session free
      * never races with concurrent sends. */
     wt_session_t*           pending_shutdown_session;
+
+    /* HTTP/3 handshake session (optional — only used when connecting
+     * to standard WebTransport servers). NULL for native raw-QUIC mode. */
+    h3_session_t*           h3_session;
 
     wt_datagram_queue_t     dgram_queue;
 } wt_client_s;

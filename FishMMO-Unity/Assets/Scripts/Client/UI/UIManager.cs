@@ -2,6 +2,7 @@
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using System.Runtime.CompilerServices;
+using UnityEngine.InputSystem.EnhancedTouch;
 
 namespace FishMMO.Client
 {
@@ -25,7 +26,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Reference to the current Client instance for dependency injection.
 		/// </summary>
-		private static Client _client;
+		private static Client s_client;
 
 		// ── UI Toolkit parallel registries ────────────────────────────────
 
@@ -44,7 +45,7 @@ namespace FishMMO.Client
 		/// <param name="client">Client instance to inject.</param>
 		internal static void SetClient(Client client)
 		{
-			_client = client;
+			s_client = client;
 
 			foreach (UIControl control in controls.Values)
 			{
@@ -117,7 +118,7 @@ namespace FishMMO.Client
 				characterControls.Add(characterControl.Name, characterControl);
 			}
 
-			control.SetClient(_client);
+			control.SetClient(s_client);
 
 			//Log.Debug("UIManager: Registered[" + control.Name + "]");
 			controls.Add(control.Name, control);
@@ -162,7 +163,7 @@ namespace FishMMO.Client
 				tkCharacterControls.Add(characterControl.Name, characterControl);
 			}
 
-			control.SetClient(_client);
+			control.SetClient(s_client);
 
 			tkControls.Add(control.Name, control);
 		}

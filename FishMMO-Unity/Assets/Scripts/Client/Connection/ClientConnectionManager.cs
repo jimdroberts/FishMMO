@@ -175,7 +175,17 @@ namespace FishMMO.Client
 				{
 					Log.Warning("ClientConnection", $"Timed out waiting for connection stop; forcing teardown.");
 					NetworkManager.ClientManager.StopConnection();
-					yield return null;
+					// Wait for the forced stop to complete before starting a new connection.
+					// Without this wait, StartConnection may fail because the transport
+					// is still in Stopping state.
+					float forcedDeadline = Time.realtimeSinceStartup + Mathf.Max(0.1f, ConnectionStopTimeoutSeconds);
+					while (ClientState != LocalConnectionState.Stopped && Time.realtimeSinceStartup < forcedDeadline)
+						yield return null;
+					if (ClientState != LocalConnectionState.Stopped)
+					{
+						Log.Error("ClientConnection", "Forced connection stop timed out; aborting connect.");
+						yield break;
+					}
 				}
 			}
 			if (forceDisconnect) { forceDisconnect = false; yield return null; }

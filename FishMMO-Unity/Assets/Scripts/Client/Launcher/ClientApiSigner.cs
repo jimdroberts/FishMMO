@@ -59,8 +59,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public static string BuildHeaderValue(string method, string url)
 		{
-			if (string.IsNullOrEmpty(method)) throw new ArgumentException("method", nameof(method));
-			if (string.IsNullOrEmpty(url)) throw new ArgumentException("url", nameof(url));
+			if (string.IsNullOrEmpty(method)) throw new ArgumentException("HTTP method must not be null or empty.", nameof(method));
+			if (string.IsNullOrEmpty(url)) throw new ArgumentException("URL must not be null or empty.", nameof(url));
 
 			string path = ExtractPath(url);
 			// Cient must apply the same path normalization the

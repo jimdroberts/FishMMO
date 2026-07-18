@@ -1,7 +1,7 @@
 {
   "components": ["postgresql", "fishmmo-db", "nginx", "letsencrypt", "firewall", "systemd-services"],
   "configureFirewall": true,
-  "firewallPorts": [80, 443],
+  "firewallPorts": [80, 443, "7770-7999/udp"],
   "registerSystemdServices": true,
   "validateAfterInstall": true
 }

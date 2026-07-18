@@ -198,5 +198,30 @@ namespace FishMMO.Auth.Implementation
 				MasterSecret = null;
 			}
 		}
+
+		/// <summary>
+		/// Creates a snapshot suitable for async worker processing.
+		/// Key material is shared (read-only after derivation); nonce contexts
+		/// are SHARED (not cloned) — <see cref="GcmNonceContext"/> is already
+		/// thread-safe via <see cref="Interlocked"/> for all counter operations.
+		/// Sharing ensures that all workers processing messages for the same
+		/// connection observe a single monotonic sequence space, preventing both
+		/// receive-sequence rejection and catastrophic send-nonce reuse.
+		/// </summary>
+		public ConnectionEncryptionData CloneForAsyncWorker()
+		{
+			var clone = new ConnectionEncryptionData(PublicKey!)
+			{
+				MasterSecret = MasterSecret,
+				ClientToServerKey = ClientToServerKey,
+				ServerToClientKey = ServerToClientKey,
+				AgreedVersion = AgreedVersion,
+				// Share nonce contexts — they are thread-safe.
+				// Never call Clear() on the clone; the original owns disposal.
+				SendNonceCtx = SendNonceCtx,
+				ReceiveNonceCtx = ReceiveNonceCtx,
+			};
+			return clone;
+		}
 	}
 }

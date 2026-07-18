@@ -503,8 +503,9 @@ namespace FishMMO.Client
 				Log.Warning("UITKLogin", e);
 				SetSignInLocked(false);
 			},
-			(servers) =>
+			(servers, token) =>
 			{
+					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
 				Connect("Connecting...", identifier, passwordText);
 			}));
 		}

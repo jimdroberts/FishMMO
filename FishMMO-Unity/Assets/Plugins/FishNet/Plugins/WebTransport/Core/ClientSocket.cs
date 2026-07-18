@@ -23,6 +23,18 @@ namespace FishNet.Transporting.WebTransport.Client
         private SafeClientHandle _clientHandle;
 #if UNITY_WEBGL && !UNITY_EDITOR
         private int _webglIndex = -1;
+        /// <summary>
+        /// Stored delegate instances for WebGL JS callbacks.
+        /// Must be stored as fields to prevent GC collection — the JavaScript
+        /// bridge holds references to these delegates and invokes them
+        /// asynchronously. If the GC collects them, the browser will crash
+        /// with an access violation on the next callback invocation.
+        /// </summary>
+        private Action<int> _webglOnOpen;
+        private Action<int> _webglOnClose;
+        private Action<int, IntPtr, int> _webglOnStream;
+        private Action<int, IntPtr, int> _webglOnDatagram;
+        private Action<int> _webglOnError;
 #endif
         /// <summary>
         /// Atomic guard to ensure StopConnection runs exactly once.
@@ -60,9 +72,14 @@ namespace FishNet.Transporting.WebTransport.Client
             base.SetConnectionState(LocalConnectionState.Starting, false);
 
             /* Reset stop guard to allow StopConnection on this new session.
-             * Drain any stale incoming events from a previous session first
-             * to prevent callbacks from referencing freed resources. */
-            while (_incomingEvents.TryDequeue(out _)) { }
+             * Drain any stale incoming events from a previous session first,
+             * INVOKING each action so that unmanaged memory (Marshal.AllocHGlobal)
+             * held by native callbacks is properly freed via their finally blocks.
+             * Discarding without invoking would leak native heap memory. */
+            while (_incomingEvents.TryDequeue(out Action act))
+            {
+                try { act?.Invoke(); } catch { }
+            }
             _stopGuard = 0;
 
             _port = port;
@@ -79,23 +96,29 @@ namespace FishNet.Transporting.WebTransport.Client
             string host = slashIdx >= 0 ? address.Substring(0, slashIdx) : address;
             string path = slashIdx >= 0 ? address.Substring(slashIdx) : "";
             string url = "https://" + host + ":" + port + path;
+
+            /* Store delegates as instance fields — the JS bridge holds references
+             * to these and invokes them asynchronously. If they were inline lambdas
+             * the GC could collect them before the JS callbacks fire, causing an
+             * access-violation crash in the browser. */
+            _webglOnOpen = (_) => { _incomingEvents.Enqueue(() => SetConnectionState(LocalConnectionState.Started, false)); };
+            _webglOnClose = (_) => { _incomingEvents.Enqueue(() => { UnityEngine.Debug.LogWarning("[WebTransport Client] WebGL connection closed."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
+            _webglOnStream = (_, dataPtr, length) => {
+                byte[] buf = new byte[length];
+                System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
+                _incomingEvents.Enqueue(() => Transport.HandleClientReceivedDataArgs(
+                    new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Reliable, Transport.Index)));
+            };
+            _webglOnDatagram = (_, dataPtr, length) => {
+                byte[] buf = new byte[length];
+                System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
+                _incomingEvents.Enqueue(() => Transport.HandleClientReceivedDataArgs(
+                    new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Unreliable, Transport.Index)));
+            };
+            _webglOnError = (_) => { _incomingEvents.Enqueue(() => { UnityEngine.Debug.LogError("[WebTransport Client] WebGL connection error."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
+
             _webglIndex = WebTransportJSLib.WTConnect(url,
-                (_) => { _incomingEvents.Enqueue(() => SetConnectionState(LocalConnectionState.Started, false)); },
-                (_) => { _incomingEvents.Enqueue(() => { SetConnectionState(LocalConnectionState.Stopped, false); }); },
-                (_, dataPtr, length) => {
-                    byte[] buf = new byte[length];
-                    System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
-                    _incomingEvents.Enqueue(() => Transport.HandleClientReceivedDataArgs(
-                        new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Reliable, Transport.Index)));
-                },
-                (_, dataPtr, length) => {
-                    byte[] buf = new byte[length];
-                    System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
-                    _incomingEvents.Enqueue(() => Transport.HandleClientReceivedDataArgs(
-                        new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Unreliable, Transport.Index)));
-                },
-                (_) => { _incomingEvents.Enqueue(() => SetConnectionState(LocalConnectionState.Stopped, false)); }
-            );
+                _webglOnOpen, _webglOnClose, _webglOnStream, _webglOnDatagram, _webglOnError);
             if (_webglIndex < 0)
             {
                 base.SetConnectionState(LocalConnectionState.Stopped, false);
@@ -157,8 +180,15 @@ namespace FishNet.Transporting.WebTransport.Client
                 return false;
             }
 
-            /* Drain stale incoming events before shutdown. */
-            while (_incomingEvents.TryDequeue(out _)) { }
+            /* Drain stale incoming events before shutdown.
+             * Invoke (not discard) each action so that unmanaged memory
+             * allocated in native callbacks is freed. The actions check
+             * connection state before processing — they will skip
+             * Transport callbacks since state is about to be Stopping. */
+            while (_incomingEvents.TryDequeue(out Action act))
+            {
+                try { act?.Invoke(); } catch { }
+            }
 
             base.SetConnectionState(LocalConnectionState.Stopping, false);
 
@@ -207,7 +237,7 @@ namespace FishNet.Transporting.WebTransport.Client
         {
             if (_clientHandle == null || _clientHandle.IsInvalid)
             {
-                ClearPacketQueue(ref _outgoing);
+                ClearPacketQueue(_outgoing);
                 return;
             }
 
@@ -237,7 +267,7 @@ namespace FishNet.Transporting.WebTransport.Client
         {
             if (base.GetConnectionState() != LocalConnectionState.Started)
             {
-                ClearPacketQueue(ref _outgoing);
+                ClearPacketQueue(_outgoing);
                 return;
             }
 
@@ -252,9 +282,9 @@ namespace FishNet.Transporting.WebTransport.Client
             for (int i = 0; i < count; i++)
             {
                 Packet outgoing = _outgoing.Dequeue();
-                bool ok;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
+                bool ok;
                 if (outgoing.Channel == 1)
                     ok = WebTransportJSLib.WTSendDatagram(_webglIndex, outgoing.Data, outgoing.Length);
                 else
@@ -268,7 +298,7 @@ namespace FishNet.Transporting.WebTransport.Client
                 else
                     result = WebTransportNative.wt_client_send_stream(_clientHandle, outgoing.Data, outgoing.Length);
                 if (result != 0)
-                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Send failed with code {result}");
+                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Send failed: {WebTransportNative.ErrorString(result)}");
 #endif
                 outgoing.Dispose();
             }
@@ -298,44 +328,76 @@ namespace FishNet.Transporting.WebTransport.Client
             _incomingEvents.Enqueue(() =>
             {
                 if (errorCode != 0)
-                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Disconnected with error code {errorCode}");
+                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Disconnected: {WebTransportNative.ErrorString(errorCode)}");
                 StopConnection();
             });
         }
 
         private void HandleNativeStreamData(IntPtr context, ulong streamId, IntPtr dataPtr, int length)
         {
-            // Copy data from native memory before queueing
-            byte[] buffer = new byte[length];
-            System.Runtime.InteropServices.Marshal.Copy(dataPtr, buffer, 0, length);
+            /* Copy data to unmanaged memory on the native callback thread.
+             * Managed allocations (new byte[]) on non-Unity-main threads can
+             * cause GC corruption on some Unity scripting backends. Using
+             * Marshal.AllocHGlobal avoids all managed allocations here; the
+             * byte[] allocation + Marshal.Copy happens on the main thread
+             * inside the queued action. */
+            IntPtr unmanagedCopy = System.Runtime.InteropServices.Marshal.AllocHGlobal(length);
+            unsafe
+            {
+                System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
+            }
 
             _incomingEvents.Enqueue(() =>
             {
-                if (base.GetConnectionState() != LocalConnectionState.Started)
-                    return;
+                try
+                {
+                    if (base.GetConnectionState() != LocalConnectionState.Started)
+                        return;
 
-                // Channel 0 = reliable (stream)
-                ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
-                Transport.HandleClientReceivedDataArgs(
-                    new ClientReceivedDataArgs(segment, Channel.Reliable, Transport.Index));
+                    byte[] buffer = new byte[length];
+                    System.Runtime.InteropServices.Marshal.Copy(unmanagedCopy, buffer, 0, length);
+
+                    // Channel 0 = reliable (stream)
+                    ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
+                    Transport.HandleClientReceivedDataArgs(
+                        new ClientReceivedDataArgs(segment, Channel.Reliable, Transport.Index));
+                }
+                finally
+                {
+                    System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
+                }
             });
         }
 
         private void HandleNativeDatagram(IntPtr context, IntPtr dataPtr, int length)
         {
-            // Copy data from native memory before queueing
-            byte[] buffer = new byte[length];
-            System.Runtime.InteropServices.Marshal.Copy(dataPtr, buffer, 0, length);
+            /* Copy data to unmanaged memory on the native callback thread.
+             * See HandleNativeStreamData for rationale. */
+            IntPtr unmanagedCopy = System.Runtime.InteropServices.Marshal.AllocHGlobal(length);
+            unsafe
+            {
+                System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
+            }
 
             _incomingEvents.Enqueue(() =>
             {
-                if (base.GetConnectionState() != LocalConnectionState.Started)
-                    return;
+                try
+                {
+                    if (base.GetConnectionState() != LocalConnectionState.Started)
+                        return;
 
-                // Channel 1 = unreliable (datagram)
-                ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
-                Transport.HandleClientReceivedDataArgs(
-                    new ClientReceivedDataArgs(segment, Channel.Unreliable, Transport.Index));
+                    byte[] buffer = new byte[length];
+                    System.Runtime.InteropServices.Marshal.Copy(unmanagedCopy, buffer, 0, length);
+
+                    // Channel 1 = unreliable (datagram)
+                    ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
+                    Transport.HandleClientReceivedDataArgs(
+                        new ClientReceivedDataArgs(segment, Channel.Unreliable, Transport.Index));
+                }
+                finally
+                {
+                    System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
+                }
             });
         }
 

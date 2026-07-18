@@ -898,18 +898,46 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (ex is ArgumentException argEx)
 			{
-				return (DatabaseErrorCodes.InvalidArgument, argEx.Message, false);
+				return (DatabaseErrorCodes.InvalidArgument, SanitizeExceptionMessage(argEx.Message), false);
 			}
 
 			if (ex is InvalidOperationException invEx)
 			{
-				return (DatabaseErrorCodes.InvalidOperation, invEx.Message, false);
+				return (DatabaseErrorCodes.InvalidOperation, SanitizeExceptionMessage(invEx.Message), false);
 			}
 
 			// Avoid leaking internal DB details (SQL text, schema names, constraint names, etc.).
 			// If the failure is likely transient, callers may choose to retry.
 			var isTransient = IsTransientDatabaseFailure(ex, sqlState);
 			return (DatabaseErrorCodes.DatabaseError, "A database error occurred.", isTransient);
+		}
+
+		/// <summary>
+		/// Strips parameter names and internal details from .NET exception messages to prevent
+		/// leaking implementation details (method parameter names, internal variable names) to
+		/// remote callers via <see cref="DatabaseResult.ErrorMessage" />.
+		/// <para>
+		/// Handles both .NET 5+ format (<c>(Parameter 'paramName')</c>) and .NET Framework format
+		/// (<c>Parameter name: paramName</c>), including the trailing actual-value line.
+		/// </para>
+		/// </summary>
+		private static string SanitizeExceptionMessage(string message)
+		{
+			if (string.IsNullOrEmpty(message))
+				return message;
+
+			// Strip .NET 5+ trailing parameter annotation: " (Parameter 'paramName')"
+			message = SanitizePatternRegex.Replace(message, string.Empty);
+
+			// Strip .NET Framework "Parameter name: xxx" and optional "Actual value was yyy." lines
+			int paramNameIdx = message.IndexOf("Parameter name: ", StringComparison.Ordinal);
+			if (paramNameIdx >= 0)
+			{
+				message = message.Substring(0, paramNameIdx).TrimEnd();
+			}
+
+			// Strip newline trailing from Framework format if present after stripping
+			return message.TrimEnd();
 		}
 
 		/// <summary>
@@ -1091,6 +1119,14 @@ namespace FishMMO.Database.Npgsql.Services
 
 		private static readonly Regex ParameterPlaceholderRegex =
 			new Regex(@"\{(\d+)\}", RegexOptions.Compiled);
+
+		/// <summary>
+		/// Matches the .NET 5+ trailing parameter annotation pattern appended to exception messages,
+		/// e.g. <c>"Value cannot be null. (Parameter 'name')"</c>. Stripping this prevents leaking
+		/// method parameter names to remote callers.
+		/// </summary>
+		private static readonly Regex SanitizePatternRegex =
+			new Regex(@"\s*\(Parameter\s+'[^']*'\)\s*$", RegexOptions.Compiled);
 
 		/// <summary>
 		/// Executes a raw SQL query that returns a single integer scalar value using ADO.NET,

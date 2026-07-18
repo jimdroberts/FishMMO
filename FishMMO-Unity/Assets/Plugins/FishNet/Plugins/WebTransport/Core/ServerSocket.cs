@@ -43,10 +43,6 @@ namespace FishNet.Transporting.WebTransport.Server
         /// Connection IDs to disconnect next iteration.
         /// </summary>
         private HashSet<int> _disconnectingNext = new HashSet<int>();
-        /// <summary>
-        /// Connection IDs to disconnect immediately.
-        /// </summary>
-        private List<int> _disconnectingNow = new List<int>();
         #endregion
 
         /// <summary>
@@ -102,8 +98,12 @@ namespace FishNet.Transporting.WebTransport.Server
 
         /// <summary>
         /// Starts the server — creates native listener and begins accepting connections.
+        /// QUIC ALWAYS requires TLS 1.3 — there is no unencrypted mode.
+        /// When <paramref name="useCustomCertificate"/> is true, the certificate and key
+        /// paths from the .cfg file are used (production). When false, a self-signed
+        /// development certificate is generated automatically (dev/testing only).
         /// </summary>
-        internal bool StartConnection(string bindAddress, ushort port, int maximumClients, bool useTls)
+        internal bool StartConnection(string bindAddress, ushort port, int maximumClients, bool useCustomCertificate)
         {
             if (base.GetConnectionState() != LocalConnectionState.Stopped)
                 return false;
@@ -112,6 +112,15 @@ namespace FishNet.Transporting.WebTransport.Server
 
             /* Reset stop guard for server restart support. */
             _stopGuard = 0;
+
+            /* Drain any stale incoming events from a previous server session,
+             * INVOKING each action so that unmanaged memory (Marshal.AllocHGlobal)
+             * held by native callbacks is properly freed via their finally blocks.
+             * Discarding without invoking would leak native heap memory. */
+            while (_incomingEvents.TryDequeue(out Action act))
+            {
+                try { act?.Invoke(); } catch { }
+            }
 
             WebTransportNative.EnsureInitialized();
 
@@ -130,8 +139,8 @@ namespace FishNet.Transporting.WebTransport.Server
 
             // Create native server
             _serverHandle = WebTransportNative.wt_server_create(
-                useTls ? _certificatePath : null,
-                useTls ? _privateKeyPath : null,
+                useCustomCertificate ? _certificatePath : null,
+                useCustomCertificate ? _privateKeyPath : null,
                 "h3",           // ALPN for HTTP/3
                 bindAddress,
                 port,
@@ -175,9 +184,15 @@ namespace FishNet.Transporting.WebTransport.Server
                 return false;
             }
 
-            /* Drain any stale incoming events before shutdown to prevent
-             * callbacks from referencing freed native resources. */
-            while (_incomingEvents.TryDequeue(out _)) { }
+            /* Drain stale incoming events before shutdown.
+             * Invoke (not discard) each action so that unmanaged memory
+             * allocated in native callbacks is freed. The actions check
+             * connection state before processing — they will skip
+             * Transport callbacks since state is about to be Stopping. */
+            while (_incomingEvents.TryDequeue(out Action act))
+            {
+                try { act?.Invoke(); } catch { }
+            }
 
             ResetQueues();
             base.SetConnectionState(LocalConnectionState.Stopping, true);
@@ -284,24 +299,18 @@ namespace FishNet.Transporting.WebTransport.Server
             _nextConnectionId = 1;
             base.ClearPacketQueue(_outgoing);
             _disconnectingNext.Clear();
-            _disconnectingNow.Clear();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DequeueDisconnects()
         {
-            int count = _disconnectingNow.Count;
-            if (count > 0)
-            {
-                for (int i = 0; i < count; i++)
-                    StopConnection(_disconnectingNow[i], true);
-                _disconnectingNow.Clear();
-            }
-
+            /* Process pending disconnects immediately. The HashSet indirection
+             * prevents collection-modified-during-enumeration issues that would
+             * occur if we disconnected directly during iteration over _clients. */
             if (_disconnectingNext.Count > 0)
             {
                 foreach (int cid in _disconnectingNext)
-                    _disconnectingNow.Add(cid);
+                    StopConnection(cid, true);
                 _disconnectingNext.Clear();
             }
         }
@@ -358,7 +367,7 @@ namespace FishNet.Transporting.WebTransport.Server
             if (result != 0)
             {
                 UnityEngine.Debug.LogWarning(
-                    $"[WebTransport Server] Send to {connectionId} failed with code {result}");
+                    $"[WebTransport Server] Send to {connectionId} failed: {WebTransportNative.ErrorString(result)}");
             }
         }
 
@@ -368,20 +377,56 @@ namespace FishNet.Transporting.WebTransport.Server
 
         private void HandleNativeConnect(IntPtr context, ulong nativeConnectionId, IntPtr remoteAddressPtr)
         {
-            string remoteAddr = remoteAddressPtr != IntPtr.Zero
-                ? (System.Runtime.InteropServices.Marshal.PtrToStringAnsi(remoteAddressPtr) ?? "unknown")
-                : "unknown";
+            /* Copy the remote address string to unmanaged memory on the native
+             * callback thread. Managed allocations (new string) on non-Unity-main
+             * threads can cause GC corruption on some Unity scripting backends
+             * (particularly IL2CPP). We copy the raw bytes with AllocHGlobal here,
+             * then marshal to a managed string on the main thread inside the queued
+             * action — the same pattern used by HandleNativeStreamData. */
+            int addrLen = 0;
+            IntPtr unmanagedAddr = IntPtr.Zero;
+            if (remoteAddressPtr != IntPtr.Zero)
+            {
+                // Find the null terminator length on the callback thread.
+                unsafe
+                {
+                    byte* p = (byte*)remoteAddressPtr;
+                    while (p[addrLen] != 0) addrLen++;
+                }
+                if (addrLen > 0)
+                {
+                    unmanagedAddr = System.Runtime.InteropServices.Marshal.AllocHGlobal(addrLen + 1);
+                    unsafe
+                    {
+                        System.Buffer.MemoryCopy((void*)remoteAddressPtr, (void*)unmanagedAddr, addrLen + 1, addrLen + 1);
+                    }
+                }
+            }
 
             _incomingEvents.Enqueue(() =>
             {
-                int fishNetId = _nextConnectionId++;
-                _clients.Add(fishNetId);
-                _idMapToNative[fishNetId] = nativeConnectionId;
-                _idMapFromNative[nativeConnectionId] = fishNetId;
-                _clientAddresses[fishNetId] = remoteAddr;
+                try
+                {
+                    string remoteAddr = "unknown";
+                    if (unmanagedAddr != IntPtr.Zero)
+                    {
+                        remoteAddr = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(unmanagedAddr, addrLen) ?? "unknown";
+                    }
 
-                Transport.HandleRemoteConnectionState(
-                    new RemoteConnectionStateArgs(RemoteConnectionState.Started, fishNetId, Transport.Index));
+                    int fishNetId = _nextConnectionId++;
+                    _clients.Add(fishNetId);
+                    _idMapToNative[fishNetId] = nativeConnectionId;
+                    _idMapFromNative[nativeConnectionId] = fishNetId;
+                    _clientAddresses[fishNetId] = remoteAddr;
+
+                    Transport.HandleRemoteConnectionState(
+                        new RemoteConnectionStateArgs(RemoteConnectionState.Started, fishNetId, Transport.Index));
+                }
+                finally
+                {
+                    if (unmanagedAddr != IntPtr.Zero)
+                        System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedAddr);
+                }
             });
         }
 
@@ -390,7 +435,7 @@ namespace FishNet.Transporting.WebTransport.Server
             _incomingEvents.Enqueue(() =>
             {
                 if (errorCode != 0)
-                    UnityEngine.Debug.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected with error code {errorCode}");
+                    UnityEngine.Debug.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected: {WebTransportNative.ErrorString(errorCode)}");
 
                 if (_idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
                 {
@@ -407,35 +452,69 @@ namespace FishNet.Transporting.WebTransport.Server
 
         private void HandleNativeStreamData(IntPtr context, ulong nativeConnectionId, ulong streamId, IntPtr dataPtr, int length)
         {
-            byte[] buffer = new byte[length];
-            System.Runtime.InteropServices.Marshal.Copy(dataPtr, buffer, 0, length);
+            /* Copy data to unmanaged memory on the native callback thread.
+             * Managed allocations (new byte[]) on non-Unity-main threads can
+             * cause GC corruption on some Unity scripting backends. Using
+             * Marshal.AllocHGlobal avoids all managed allocations here; the
+             * byte[] allocation + Marshal.Copy happens on the main thread
+             * inside the queued action. */
+            IntPtr unmanagedCopy = System.Runtime.InteropServices.Marshal.AllocHGlobal(length);
+            unsafe
+            {
+                System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
+            }
 
             _incomingEvents.Enqueue(() =>
             {
-                if (!_idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
-                    return;
+                try
+                {
+                    if (!_idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
+                        return;
 
-                // Channel 0 = reliable (stream)
-                ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
-                Transport.HandleServerReceivedDataArgs(
-                    new ServerReceivedDataArgs(segment, Channel.Reliable, fishNetId, Transport.Index));
+                    byte[] buffer = new byte[length];
+                    System.Runtime.InteropServices.Marshal.Copy(unmanagedCopy, buffer, 0, length);
+
+                    // Channel 0 = reliable (stream)
+                    ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
+                    Transport.HandleServerReceivedDataArgs(
+                        new ServerReceivedDataArgs(segment, Channel.Reliable, fishNetId, Transport.Index));
+                }
+                finally
+                {
+                    System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
+                }
             });
         }
 
         private void HandleNativeDatagram(IntPtr context, ulong nativeConnectionId, IntPtr dataPtr, int length)
         {
-            byte[] buffer = new byte[length];
-            System.Runtime.InteropServices.Marshal.Copy(dataPtr, buffer, 0, length);
+            /* Copy data to unmanaged memory on the native callback thread.
+             * See HandleNativeStreamData for rationale. */
+            IntPtr unmanagedCopy = System.Runtime.InteropServices.Marshal.AllocHGlobal(length);
+            unsafe
+            {
+                System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
+            }
 
             _incomingEvents.Enqueue(() =>
             {
-                if (!_idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
-                    return;
+                try
+                {
+                    if (!_idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
+                        return;
 
-                // Channel 1 = unreliable (datagram)
-                ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
-                Transport.HandleServerReceivedDataArgs(
-                    new ServerReceivedDataArgs(segment, Channel.Unreliable, fishNetId, Transport.Index));
+                    byte[] buffer = new byte[length];
+                    System.Runtime.InteropServices.Marshal.Copy(unmanagedCopy, buffer, 0, length);
+
+                    // Channel 1 = unreliable (datagram)
+                    ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
+                    Transport.HandleServerReceivedDataArgs(
+                        new ServerReceivedDataArgs(segment, Channel.Unreliable, fishNetId, Transport.Index));
+                }
+                finally
+                {
+                    System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
+                }
             });
         }
 

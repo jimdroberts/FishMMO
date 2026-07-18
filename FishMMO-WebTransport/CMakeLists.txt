@@ -54,6 +54,7 @@ set(WT_SOURCES
     src/session.cpp
     src/datagram_queue.cpp
     src/stream_manager.cpp
+    src/http3.cpp
 )
 
 set(WT_HEADERS
@@ -64,6 +65,7 @@ set(WT_HEADERS
     src/session.h
     src/datagram_queue.h
     src/stream_manager.h
+    src/http3.h
 )
 
 # ── Build library ─────────────────────────────────────────────
@@ -81,26 +83,30 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 # ── Platform-specific settings ────────────────────────────────
+# Output directly to the Unity project's plugin directory so no
+# manual copy step is needed after the build.
+set(UNITY_PLUGIN_DIR "${CMAKE_SOURCE_DIR}/../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins")
+
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         WT_PLATFORM_WINDOWS
         _CRT_SECURE_NO_WARNINGS
     )
     set_target_properties(${PROJECT_NAME} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/unity/windows_x86_64"
+        RUNTIME_OUTPUT_DIRECTORY "${UNITY_PLUGIN_DIR}/windows_x86_64"
         PREFIX ""
     )
 elseif(APPLE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE WT_PLATFORM_MACOS)
     set_target_properties(${PROJECT_NAME} PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/unity/mac_x86_64"
+        LIBRARY_OUTPUT_DIRECTORY "${UNITY_PLUGIN_DIR}/mac_x86_64"
         PREFIX "lib"
         SUFFIX ".dylib"
     )
 else()
     target_compile_definitions(${PROJECT_NAME} PRIVATE WT_PLATFORM_LINUX)
     set_target_properties(${PROJECT_NAME} PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/unity/linux_x86_64"
+        LIBRARY_OUTPUT_DIRECTORY "${UNITY_PLUGIN_DIR}/linux_x86_64"
         PREFIX "lib"
         SUFFIX ".so"
     )
@@ -125,7 +131,7 @@ install(TARGETS ${PROJECT_NAME}
 install(FILES src/webtransport_api.h DESTINATION include)
 
 # ── Tests (optional) ──────────────────────────────────────────
-if(WT_BUILD_TESTS)
+if(WT_BUILD_TESTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
     enable_testing()
     add_subdirectory(tests)
 endif()

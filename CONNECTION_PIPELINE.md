@@ -1,7 +1,7 @@
 # FishMMO Connection Pipeline
 
 > **Complete end-to-end connection flow** — from client launch through authentication, world entry, and gameplay.
-> Built on QUIC/WebTransport (UDP) via MsQuic, NGINX L4 stream proxy, and FishNet networking.
+> Built on QUIC/WebTransport (UDP) via MsQuic, NGINX L4 stream proxy, and FishNetworking.
 
 ---
 
@@ -597,12 +597,18 @@ stateDiagram-v2
 |---------|-------------|-----------|-----------|-----------------|
 | **Native client** | ✅ | ✅ | ✅ | N/A |
 | **Server** | ✅ | ✅ | ✅ | N/A |
-| **WebTransport (QUIC)** | ✅ (via C++ lib) | ✅ (via C++ lib) | ❌ (binary missing) | ⚠️ (see note) |
+| **WebTransport (QUIC)** | ✅ (via C++ lib) | ✅ (via C++ lib) | ❌ (binary missing) | ✅ (via browser WebTransport API + server HTTP/3) |
 | **TLS certificate pinning** | ✅ | ✅ | ✅ | N/A (browser handles) |
 | **API request signing** | ✅ | ✅ | ✅ | ✅ |
 | **IL2CPP scripting** | ✅ | ✅ | ✅ | ✅ (WASM) |
 
-> **WebGL note:** The C++ MsQuic server speaks raw QUIC streams, not W3C WebTransport (HTTP/3 Extended CONNECT). Browser WebTransport clients cannot connect directly. The CSP headers on `play.fishmmo.com` are configured for WebTransport (`connect-src ... https://game.fishmmo.com:*`), but the server-side protocol must be upgraded to support HTTP/3 WebTransport framing for full WebGL compatibility.
+> **WebGL note:** The C++ msquic server includes a full HTTP/3 WebTransport handshake implementation
+> in `src/http3.cpp`. The server auto-detects browser clients by inspecting the first byte of the
+> initial peer stream: `0x00` = HTTP/3 control stream (browser), any other byte = raw QUIC (native).
+> Browser WebTransport clients connect via `new WebTransport("https://game.fishmmo.com:{port}")`
+> and the server handles SETTINGS exchange, CONNECT validation with Origin CORS checking, and
+> WebTransport session establishment transparently. The CSP headers on `play.fishmmo.com` are
+> configured with `connect-src ... https://game.fishmmo.com:*` for cross-origin WebTransport.
 
 ---
 

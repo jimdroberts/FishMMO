@@ -27,41 +27,41 @@ namespace FishMMO.Server.Implementation
 		[SerializeField] private float tokenExpirationMinutes = 10f;
 
 		/// <summary>The SRP-specific core instance. Null until <see cref="InitializeCoreInstance"/> is called.</summary>
-		private ServerAuthenticatorCore _core;
+		private ServerAuthenticatorCore core;
 
 		/// <inheritdoc/>
-		protected override BaseAuthenticatorCore<NetworkConnection> Core => _core;
+		protected override BaseAuthenticatorCore<NetworkConnection> Core => core;
 
 		/// <summary>Backing field for <see cref="LoginServerId"/>.</summary>
-		private long _loginServerId;
+		private long loginServerId;
 		/// <summary>LoginServer database ID embedded in issued tokens.</summary>
 		public long LoginServerId
 		{
-			get => _loginServerId;
-			set { _loginServerId = value; if (_core != null) _core.LoginServerId = value; }
+			get => loginServerId;
+			set { loginServerId = value; if (core != null) core.LoginServerId = value; }
 		}
 
 		/// <summary>Backing field for <see cref="TokenSigningKeyId"/>.</summary>
-		private long _tokenSigningKeyId;
+		private long tokenSigningKeyId;
 		/// <summary>Database ID of the HMAC signing key used for issued tokens.</summary>
 		public long TokenSigningKeyId
 		{
-			get => _tokenSigningKeyId;
-			set { _tokenSigningKeyId = value; if (_core != null) _core.TokenSigningKeyId = value; }
+			get => tokenSigningKeyId;
+			set { tokenSigningKeyId = value; if (core != null) core.TokenSigningKeyId = value; }
 		}
 
 		/// <summary>HMAC signing key for token generation. Set by LoginServerSystem after workers start.</summary>
 		public byte[] TokenSigningKey
 		{
-			get => _core?.TokenSigningKey;
-			set { if (_core != null) _core.TokenSigningKey = value; }
+			get => core?.TokenSigningKey;
+			set { if (core != null) core.TokenSigningKey = value; }
 		}
 
 		/// <summary>AES-256 master key for TOTP secret decryption. Set by LoginServerSystem after workers start.</summary>
 		public byte[] TotpMasterKey
 		{
-			get => _core?.TotpMasterKey;
-			set { if (_core != null) _core.TotpMasterKey = value; }
+			get => core?.TotpMasterKey;
+			set { if (core != null) core.TotpMasterKey = value; }
 		}
 
 		#region Lifecycle
@@ -73,16 +73,20 @@ namespace FishMMO.Server.Implementation
 				?? throw new InvalidOperationException(
 					$"{LogPrefix}: Server.AccountManager must implement ISrpAccountManager<NetworkConnection>. " +
 					$"Actual type: {Server.AccountManager?.GetType().FullName ?? "null"}.");
-			_core = new ServerAuthenticatorCore(this, sam);
-			_core.LoginServerId = _loginServerId;
-			_core.TokenSigningKeyId = _tokenSigningKeyId;
-			_core.TokenExpirationMinutes = tokenExpirationMinutes;
+			core = new ServerAuthenticatorCore(this, sam);
+			core.LoginServerId = loginServerId;
+			core.TokenSigningKeyId = tokenSigningKeyId;
+			core.TokenExpirationMinutes = tokenExpirationMinutes;
 		}
+
+		/// <inheritdoc/>
+		public override IAccountManager<NetworkConnection> CreateAccountManager() =>
+			new SrpAccountManager();
 
 		/// <inheritdoc/>
 		protected override void RegisterProtocolHandlers(NetworkManager networkManager)
 		{
-			networkManager.ServerManager.RegisterBroadcast<SrpVerifyBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
+			networkManager.ServerManager.RegisterBroadcast<SrpVerifyRequestBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpProofBroadcast>(OnServerSrpProofBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<TwoFactorVerifyBroadcast>(OnServerTwoFactorVerifyBroadcastReceived, false);
 			// RevokeTokenBroadcast must be accepted from unauthenticated connections (the
@@ -91,23 +95,23 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>Calls <see cref="SrpAuthenticatorCore{TConnection}.TickRateLimits"/> every frame.</summary>
-		protected override void OnUpdate() => _core?.TickRateLimits();
+		protected override void OnUpdate() => core?.TickRateLimits();
 
 		#endregion
 
 		#region UDP Receiver Gates (routes to core)
 
-		/// <summary>Routes an incoming <see cref="SrpVerifyBroadcast"/> to the core SRP verify channel.</summary>
-		internal void OnServerSrpVerifyBroadcastReceived(NetworkConnection conn, SrpVerifyBroadcast msg, Channel channel)
-			=> _core?.OnSrpVerifyReceived(conn, msg.S, msg.PublicEphemeral, msg.Seq);
+		/// <summary>Routes an incoming <see cref="SrpVerifyRequestBroadcast"/> to the core SRP verify channel.</summary>
+		internal void OnServerSrpVerifyBroadcastReceived(NetworkConnection conn, SrpVerifyRequestBroadcast msg, Channel channel)
+			=> core?.OnSrpVerifyReceived(conn, msg.Username, msg.PublicEphemeral, msg.Seq);
 
 		/// <summary>Routes an incoming <see cref="SrpProofBroadcast"/> to the core SRP proof channel.</summary>
 		internal void OnServerSrpProofBroadcastReceived(NetworkConnection conn, SrpProofBroadcast msg, Channel channel)
-			=> _core?.OnSrpProofReceived(conn, msg.Proof, msg.Seq);
+			=> core?.OnSrpProofReceived(conn, msg.Proof, msg.Seq);
 
 		/// <summary>Routes an incoming <see cref="TwoFactorVerifyBroadcast"/> to the core TOTP verification handler.</summary>
 		internal void OnServerTwoFactorVerifyBroadcastReceived(NetworkConnection conn, TwoFactorVerifyBroadcast msg, Channel channel)
-			=> _core?.OnTwoFactorVerifyReceived(conn, msg.Code, msg.Seq);
+			=> core?.OnTwoFactorVerifyReceived(conn, msg.Code, msg.Seq);
 
 		/// <summary>
 		/// Handles an incoming <see cref="RevokeTokenBroadcast"/> from a client that is explicitly
@@ -233,7 +237,7 @@ namespace FishMMO.Server.Implementation
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
 				return;
-			var r = await svc.IssueAsync(tokenHash, username, _loginServerId, DateTime.UtcNow.AddMinutes(expirationMinutes));
+			var r = await svc.IssueAsync(tokenHash, username, loginServerId, DateTime.UtcNow.AddMinutes(expirationMinutes));
 			if (!r.IsSuccess)
 				await Log.Warning(LogPrefix, $"IssueAsync token DB error for '{username}': {r.ErrorCode} - {r.ErrorMessage}");
 		}
@@ -317,20 +321,20 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Inner sealed implementation of <see cref="SrpAuthenticatorCore{TConnection}"/> bound to
-		/// <see cref="NetworkConnection"/>. All abstract callbacks route to <see cref="_outer"/>
+		/// <see cref="NetworkConnection"/>. All abstract callbacks route to <see cref="outer"/>
 		/// (the enclosing <see cref="ServerAuthenticator"/>), which provides FishNet broadcasts,
 		/// DB access, and event invocation.
 		/// </summary>
 		private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
 		{
 			/// <summary>The enclosing <see cref="ServerAuthenticator"/> instance that hosts this core.</summary>
-			private readonly ServerAuthenticator _outer;
+			private readonly ServerAuthenticator outer;
 
 			/// <summary>
 			/// Initializes the core with the enclosing authenticator and the SRP account manager.
 			/// </summary>
 			public ServerAuthenticatorCore(ServerAuthenticator outer, ISrpAccountManager<NetworkConnection> accountManager)
-				: base(accountManager) => _outer = outer;
+				: base(accountManager) => this.outer = outer;
 
 			// ── BaseAuthenticatorCore abstracts ──────────────────────────────
 			/// <inheritdoc/>
@@ -340,16 +344,16 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override int GetConnectionClientId(NetworkConnection conn) => conn.ClientId;
 			/// <inheritdoc/>
-			protected override string ResolveRateLimitKey(NetworkConnection conn) => _outer.ResolveRateLimitKey(conn);
+			protected override string ResolveRateLimitKey(NetworkConnection conn) => outer.ResolveRateLimitKey(conn);
 
 			/// <inheritdoc/>
 			protected override void BroadcastCookieChallenge(NetworkConnection conn, byte[] cookie) =>
-				_outer.NetworkManager.ServerManager.Broadcast(conn,
+				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new ServerHandshake { Cookie = cookie }, false, Channel.Reliable);
 
 			/// <inheritdoc/>
 			protected override void BroadcastServerHandshake(NetworkConnection conn, byte[] key, ushort version) =>
-				_outer.NetworkManager.ServerManager.Broadcast(conn,
+				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new ServerHandshake { PublicKey = key, AgreedVersion = version }, false, Channel.Reliable);
 
 			/// <inheritdoc/>
@@ -360,8 +364,8 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override void OnAuthenticationResult(NetworkConnection conn, bool authenticated)
 			{
-				_outer.OnAuthentication(conn, authenticated);
-				_outer.InvokeClientAuthenticationResult(conn, authenticated);
+				outer.OnAuthentication(conn, authenticated);
+				outer.InvokeClientAuthenticationResult(conn, authenticated);
 			}
 
 			/// <inheritdoc/>
@@ -369,23 +373,23 @@ namespace FishMMO.Server.Implementation
 
 			/// <inheritdoc/>
 			protected override void BroadcastAuthResult(NetworkConnection conn, ClientAuthenticationResult result, bool reliable) =>
-				_outer.NetworkManager.ServerManager.Broadcast(conn,
+				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new ClientAuthResultBroadcast { Result = result }, false,
 					reliable ? Channel.Reliable : Channel.Unreliable);
 
 			/// <inheritdoc/>
 			protected override void BroadcastSrpVerifyResponse(NetworkConnection conn, byte[] encSalt, byte[] encServerEphemeral) =>
-				_outer.NetworkManager.ServerManager.Broadcast(conn,
-					new SrpVerifyBroadcast { S = encSalt, PublicEphemeral = encServerEphemeral }, false, Channel.Reliable);
+				outer.NetworkManager.ServerManager.Broadcast(conn,
+					new SrpVerifyResponseBroadcast { Salt = encSalt, PublicEphemeral = encServerEphemeral }, false, Channel.Reliable);
 
 			/// <inheritdoc/>
 			protected override void BroadcastSrpSuccess(NetworkConnection conn, byte[] encServerProof, ClientAuthenticationResult result, byte[] encToken) =>
-				_outer.NetworkManager.ServerManager.Broadcast(conn,
+				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new SrpSuccessBroadcast { Proof = encServerProof, Result = result, Token = encToken }, false, Channel.Reliable);
 
 			/// <inheritdoc/>
 			protected override void EnqueueMainThread(NetworkConnection conn, Action action) =>
-				_outer.EnqueueMainThreadAction(action);
+				outer.EnqueueMainThreadAction(action);
 
 			/// <inheritdoc/>
 			protected override bool IsAllowedUsername(string username) =>
@@ -397,32 +401,32 @@ namespace FishMMO.Server.Implementation
 
 			/// <inheritdoc/>
 			protected override Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult defaultResult, string username) =>
-				_outer.TryLoginAsync(defaultResult, username);
+				outer.TryLoginAsync(defaultResult, username);
 
 			// ── DB callbacks ─────────────────────────────────────────────────
 			/// <inheritdoc/>
 			protected override Task<SrpAccountLookupResult> FetchAccountForLoginAsync(string identifier, bool isEmail) =>
-				_outer.FetchAccountForLoginCoreAsync(identifier, isEmail);
+				outer.FetchAccountForLoginCoreAsync(identifier, isEmail);
 
 			/// <inheritdoc/>
 			protected override Task<bool> CheckIsOnlineAsync(string username) =>
-				_outer.CheckIsOnlineCoreAsync(username);
+				outer.CheckIsOnlineCoreAsync(username);
 
 			/// <inheritdoc/>
 			protected override Task<bool> CheckHasPendingKickAsync(string username) =>
-				_outer.CheckHasPendingKickCoreAsync(username);
+				outer.CheckHasPendingKickCoreAsync(username);
 
 			/// <inheritdoc/>
 			protected override Task PersistKickRequestAsync(string username) =>
-				_outer.PersistKickRequestCoreAsync(username);
+				outer.PersistKickRequestCoreAsync(username);
 
 			/// <inheritdoc/>
 			protected override Task PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes) =>
-				_outer.PersistTokenHashCoreAsync(username, tokenHash, expirationMinutes);
+				outer.PersistTokenHashCoreAsync(username, tokenHash, expirationMinutes);
 
 			/// <inheritdoc/>
 			protected override Task<bool> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey) =>
-				_outer.VerifyTotpCodeCoreAsync(username, totpCode, totpMasterKey);
+				outer.VerifyTotpCodeCoreAsync(username, totpCode, totpMasterKey);
 
 			/// <inheritdoc/>
 			protected override async Task<bool> TryResendVerificationEmailIfExpiredAsync(string username, DateTime? verifyCodeExpiresUtc)
@@ -433,13 +437,13 @@ namespace FishMMO.Server.Implementation
 				int newCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
 				DateTime newExpires = DateTime.UtcNow.AddHours(24);
 
-				if (_outer.Server?.Database?.ServiceRegistry == null) return false;
-				if (!_outer.Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService)) return false;
+				if (outer.Server?.Database?.ServiceRegistry == null) return false;
+				if (!outer.Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService)) return false;
 
 				var persistResult = await accountService.PersistVerifyCodeAsync(username, newCode, newExpires);
 				if (!persistResult.IsSuccess) return false;
 
-				if (_outer.Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
+				if (outer.Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService))
 				{
 					var dupCheck = await emailQueueService.HasPendingForUserAsync(username);
 					if (!dupCheck.IsSuccess || !dupCheck.Data)
@@ -447,12 +451,12 @@ namespace FishMMO.Server.Implementation
 						var accountResult = await accountService.FetchForLoginAsync(username, false);
 						string recipientEmail = accountResult.IsSuccess ? (accountResult.Data.Email ?? username) : username;
 						string subject = "FishMMO - Verify Your Account";
-						string body = _outer.BuildLoginVerificationEmailBody(username, newCode);
+						string body = outer.BuildLoginVerificationEmailBody(username, newCode);
 						await emailQueueService.EnqueueAsync(recipientEmail, username, subject, body);
 					}
 				}
 
-				await _outer.PersistVerificationEmailSentCoreAsync(username);
+				await outer.PersistVerificationEmailSentCoreAsync(username);
 				return true;
 			}
 		}

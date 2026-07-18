@@ -55,6 +55,7 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<AuthTokenEntity> AuthTokens { get; set; }
 		public DbSet<TwoFactorRecoveryCodeEntity> TwoFactorRecoveryCodes { get; set; }
 		public DbSet<EmailQueueEntity> EmailQueue { get; set; }
+		public DbSet<ConnectionTokenEntity> ConnectionTokens { get; set; }
 
 		public DbSet<CharacterEntity> Characters { get; set; }
 		public DbSet<CharacterAbilityEntity> CharacterAbilities { get; set; }
@@ -167,6 +168,13 @@ namespace FishMMO.Database.Npgsql
 
 				var timeCreatedProperty = entityType.FindProperty("TimeCreated");
 				if (timeCreatedProperty?.ClrType != typeof(DateTime))
+					continue;
+
+				// Skip properties that already have an explicit default value
+				// configured (e.g., QuestEntity sets DateTime.UnixEpoch).
+				// Conventions must not silently override explicit configuration.
+				if (timeCreatedProperty.GetDefaultValue() != null ||
+				    !string.IsNullOrWhiteSpace(timeCreatedProperty.GetDefaultValueSql()))
 					continue;
 
 				modelBuilder.Entity(clrType)

@@ -31,11 +31,11 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.CastTimeEnd)
 				.IsRequired()
-				.HasDefaultValue(0f);
+				.HasDefaultValue(0d);
 
 			builder.Property(e => e.CooldownEnd)
 				.IsRequired()
-				.HasDefaultValue(0f);
+				.HasDefaultValue(0d);
 
 			// Unique constraint: one skill hash per character
 			builder.HasIndex(e => new { e.CharacterID, e.Hash })

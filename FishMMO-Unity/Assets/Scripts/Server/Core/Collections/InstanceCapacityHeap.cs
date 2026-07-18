@@ -12,11 +12,11 @@ namespace FishMMO.Server.Core.Collections
 	/// </summary>
 	public struct InstanceCapacityHeap
 	{
-		private (int handle, int capacity)[] _heap;
-		private int _count;
+		private (int handle, int capacity)[] heap;
+		private int count;
 
 		/// <summary>Number of entries currently in the heap.</summary>
-		public int Count => _count;
+		public int Count => count;
 
 		/// <summary>
 		/// Creates a new heap with pre-allocated backing storage.
@@ -24,8 +24,8 @@ namespace FishMMO.Server.Core.Collections
 		/// <param name="capacity">Initial backing array size (avoids resizing when known).</param>
 		public InstanceCapacityHeap(int capacity)
 		{
-			_heap = new (int, int)[capacity > 0 ? capacity : 4];
-			_count = 0;
+			heap = new (int, int)[capacity > 0 ? capacity : 4];
+			count = 0;
 		}
 
 		/// <summary>
@@ -38,10 +38,10 @@ namespace FishMMO.Server.Core.Collections
 				return;
 			}
 
-			EnsureCapacity(_count + 1);
-			_heap[_count] = (handle, remainingCapacity);
-			SiftUp(_count);
-			_count++;
+			EnsureCapacity(count + 1);
+			heap[count] = (handle, remainingCapacity);
+			SiftUp(count);
+			count++;
 		}
 
 		/// <summary>
@@ -53,29 +53,29 @@ namespace FishMMO.Server.Core.Collections
 		/// <returns><c>true</c> if an instance was available; <c>false</c> if the heap is empty.</returns>
 		public bool TryAssignFromTop(out int handle)
 		{
-			if (_count == 0)
+			if (count == 0)
 			{
 				handle = 0;
 				return false;
 			}
 
-			handle = _heap[0].handle;
-			int newCap = _heap[0].capacity - 1;
+			handle = heap[0].handle;
+			int newCap = heap[0].capacity - 1;
 
 			if (newCap <= 0)
 			{
 				// Remove root: swap with last, shrink, sift down
-				_count--;
-				if (_count > 0)
+				count--;
+				if (count > 0)
 				{
-					_heap[0] = _heap[_count];
+					heap[0] = heap[count];
 					SiftDown(0);
 				}
 			}
 			else
 			{
 				// Decrease root capacity and sift down
-				_heap[0].capacity = newCap;
+				heap[0].capacity = newCap;
 				SiftDown(0);
 			}
 
@@ -87,7 +87,7 @@ namespace FishMMO.Server.Core.Collections
 			while (index > 0)
 			{
 				int parent = (index - 1) >> 1;
-				if (_heap[index].capacity <= _heap[parent].capacity)
+				if (heap[index].capacity <= heap[parent].capacity)
 				{
 					break;
 				}
@@ -104,11 +104,11 @@ namespace FishMMO.Server.Core.Collections
 				int right = left + 1;
 				int largest = index;
 
-				if (left < _count && _heap[left].capacity > _heap[largest].capacity)
+				if (left < count && heap[left].capacity > heap[largest].capacity)
 				{
 					largest = left;
 				}
-				if (right < _count && _heap[right].capacity > _heap[largest].capacity)
+				if (right < count && heap[right].capacity > heap[largest].capacity)
 				{
 					largest = right;
 				}
@@ -123,28 +123,28 @@ namespace FishMMO.Server.Core.Collections
 
 		private void Swap(int a, int b)
 		{
-			var tmp = _heap[a];
-			_heap[a] = _heap[b];
-			_heap[b] = tmp;
+			var tmp = heap[a];
+			heap[a] = heap[b];
+			heap[b] = tmp;
 		}
 
 		private void EnsureCapacity(int required)
 		{
-			if (_heap != null && _heap.Length >= required)
+			if (heap != null && heap.Length >= required)
 			{
 				return;
 			}
-			int newLen = _heap == null ? 4 : _heap.Length * 2;
+			int newLen = heap == null ? 4 : heap.Length * 2;
 			if (newLen < required)
 			{
 				newLen = required;
 			}
 			var newArr = new (int, int)[newLen];
-			if (_heap != null && _count > 0)
+			if (heap != null && count > 0)
 			{
-				System.Array.Copy(_heap, newArr, _count);
+				System.Array.Copy(heap, newArr, count);
 			}
-			_heap = newArr;
+			heap = newArr;
 		}
 	}
 }

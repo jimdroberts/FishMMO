@@ -59,7 +59,7 @@ namespace FishMMO.Auth.Core
 
 	/// <summary>
 	/// DTO for SRP verify step, containing salt/identifier and public ephemeral value.
-	/// Mirrors <c>SrpVerifyBroadcast</c>.
+	/// Mirrors <c>SrpVerifyRequestBroadcast</c>.
 	/// </summary>
 	public struct SrpVerifyDto
 	{

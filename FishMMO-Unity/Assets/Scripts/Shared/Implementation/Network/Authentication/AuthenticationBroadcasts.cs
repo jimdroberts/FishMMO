@@ -57,6 +57,13 @@ namespace FishMMO.Shared
 		public byte[] Cookie;
 
 		/// <summary>
+		/// One-time connection token from the IPFetch HTTP API. Used by the Login
+		/// Server to recover the real client IP that was lost through the L4 UDP proxy.
+		/// Null or empty for World/Scene server reconnections (token auth path).
+		/// </summary>
+		public string ConnectionToken;
+
+		/// <summary>
 		/// Minimum protocol version supported by this client.
 		/// </summary>
 		public ushort MinVersion;
@@ -94,17 +101,30 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Broadcast sent by the client to verify SRP authentication, containing salt and public ephemeral value.
+	/// Broadcast sent by the client to initiate SRP authentication (client→server only).
+	/// Carries the encrypted username/email and the client's SRP public ephemeral A.
 	/// </summary>
-	public struct SrpVerifyBroadcast : IBroadcast
+	public struct SrpVerifyRequestBroadcast : IBroadcast
 	{
-		/// <summary>SRP salt value (or encrypted username/email on client->server).</summary>
-		public byte[] S;
-		/// <summary>SRP public ephemeral value.</summary>
+		/// <summary>Encrypted username or email (AES-GCM).</summary>
+		public byte[] Username;
+		/// <summary>Encrypted SRP client public ephemeral A (AES-GCM).</summary>
 		public byte[] PublicEphemeral;
 
-		/// <summary>Explicit message sequence number (client->server).</summary>
+		/// <summary>Explicit message sequence number (client→server).</summary>
 		public uint Seq;
+	}
+
+	/// <summary>
+	/// Broadcast sent by the server in response to SRP verification (server→client only).
+	/// Carries the encrypted SRP salt s and the server's SRP public ephemeral B.
+	/// </summary>
+	public struct SrpVerifyResponseBroadcast : IBroadcast
+	{
+		/// <summary>Encrypted SRP salt s (AES-GCM).</summary>
+		public byte[] Salt;
+		/// <summary>Encrypted SRP server public ephemeral B (AES-GCM).</summary>
+		public byte[] PublicEphemeral;
 	}
 
 	/// <summary>
@@ -203,7 +223,15 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Explicit message sequence number (server->client).
-		/// The server derives: otpauthUri_seq = Seq - 1, recoveryCodes_seq = Seq.
+		///
+		/// NOTE: The client does NOT use Seq-1 / Seq derivation for these
+		/// two fields. Instead, it calls receiveNonceCtx.NextNonce() twice
+		/// sequentially — first for the OtpauthUri, then for the
+		/// RecoveryCodes.  Consequently, the server MUST send the URI
+		/// before the recovery codes (i.e. the order of the fields in the
+		/// struct defines the nonce order on the wire).  The Seq value
+		/// itself is only used for replay-window tracking, not for
+		/// computing per-field nonces.
 		/// </summary>
 		public uint Seq;
 	}

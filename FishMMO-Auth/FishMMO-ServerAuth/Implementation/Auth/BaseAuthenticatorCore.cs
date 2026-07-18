@@ -365,7 +365,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="cookie">Cookie echoed from a prior challenge, or null on first attempt.</param>
 		/// <param name="minVersion">Minimum protocol version supported by the client.</param>
 		/// <param name="maxVersion">Maximum protocol version supported by the client.</param>
-		public void OnHandshakeReceived(TConnection conn, byte[] publicKey, byte[] cookie, ushort minVersion, ushort maxVersion)
+		public void OnHandshakeReceived(TConnection conn, byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion)
 		{
 			if (IsConnectionAuthenticated(conn) ||
 				publicKey == null ||

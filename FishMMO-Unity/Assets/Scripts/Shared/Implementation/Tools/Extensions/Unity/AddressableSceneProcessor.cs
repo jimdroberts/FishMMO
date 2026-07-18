@@ -18,27 +18,27 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Maps scene handles to their async load operation handles.
 		/// </summary>
-		private readonly Dictionary<int, AsyncOperationHandle<SceneInstance>> _loadedScenesByHandle = new(4);
+		private readonly Dictionary<int, AsyncOperationHandle<SceneInstance>> loadedScenesByHandle = new(4);
 
 		/// <summary>
 		/// List of currently loaded scenes.
 		/// </summary>
-		private readonly List<Scene> _loadedScenes = new(4);
+		private readonly List<Scene> loadedScenes = new(4);
 
 		/// <summary>
 		/// List of async operations for scenes currently loading.
 		/// </summary>
-		private readonly List<AsyncOperationHandle<SceneInstance>> _loadingAsyncOperations = new(4);
+		private readonly List<AsyncOperationHandle<SceneInstance>> loadingAsyncOperations = new(4);
 
 		/// <summary>
 		/// The current async operation being processed (load or unload).
 		/// </summary>
-		private AsyncOperationHandle<SceneInstance> _currentAsyncOperation;
+		private AsyncOperationHandle<SceneInstance> currentAsyncOperation;
 
 		/// <summary>
 		/// The most recently loaded scene.
 		/// </summary>
-		private Scene _lastLoadedScene;
+		private Scene lastLoadedScene;
 
 		/// <summary>
 		/// Called at the start of a scene load queue. Resets processor state.
@@ -63,9 +63,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void ResetProcessor()
 		{
-			_currentAsyncOperation = default;
-			_lastLoadedScene = default;
-			_loadingAsyncOperations.Clear();
+			currentAsyncOperation = default;
+			lastLoadedScene = default;
+			loadingAsyncOperations.Clear();
 		}
 
 		/// <summary>
@@ -82,15 +82,15 @@ namespace FishMMO.Shared
 			}
 			//Log.Warning($"AddressableSceneProcessor Loading Scene: {sceneName}");
 			AsyncOperationHandle<SceneInstance> loadHandle = Addressables.LoadSceneAsync(sceneName, parameters, false);
-			_loadingAsyncOperations.Add(loadHandle);
-			_currentAsyncOperation = loadHandle;
+			loadingAsyncOperations.Add(loadHandle);
+			currentAsyncOperation = loadHandle;
 
 			loadHandle.Completed += (op) =>
 			{
 				if (op.Status == AsyncOperationStatus.Succeeded)
 				{
-					//Log.Warning($"AddressableSceneProcessor Loaded scene: {_currentAsyncOperation.Result.Scene.name}|{_currentAsyncOperation.Result.Scene.handle}");
-					AddLoadedScene(_currentAsyncOperation);
+					//Log.Warning($"AddressableSceneProcessor Loaded scene: {currentAsyncOperation.Result.Scene.name}|{currentAsyncOperation.Result.Scene.handle}");
+					AddLoadedScene(currentAsyncOperation);
 				}
 				else
 				{
@@ -105,7 +105,7 @@ namespace FishMMO.Shared
 		/// <param name="scene">The scene to unload.</param>
 		public override void BeginUnloadAsync(Scene scene)
 		{
-			if (!_loadedScenesByHandle.TryGetValue(scene.handle, out var loadHandle))
+			if (!loadedScenesByHandle.TryGetValue(scene.handle, out var loadHandle))
 			{
 				Log.Error("AddressableSceneProcessor", "Trying to unload a non addressable scene.");
 				return;
@@ -113,7 +113,7 @@ namespace FishMMO.Shared
 
 			//Log.Warning($"AddressableSceneProcessor Unloading Scene: {scene.name}|{scene.handle}");
 			AsyncOperationHandle<SceneInstance> unloadHandle = Addressables.UnloadSceneAsync(loadHandle, false);
-			_currentAsyncOperation = unloadHandle;
+			currentAsyncOperation = unloadHandle;
 
 			unloadHandle.Completed += (op) =>
 			{
@@ -123,8 +123,8 @@ namespace FishMMO.Shared
 
 					//Log.Warning($"AddressableSceneProcessor Unloaded Scene: {unloadedScene.name}|{unloadedScene.handle}");
 
-					_loadedScenes.Remove(unloadedScene);
-					_loadedScenesByHandle.Remove(unloadedScene.handle);
+					loadedScenes.Remove(unloadedScene);
+					loadedScenesByHandle.Remove(unloadedScene.handle);
 
 					// Try to release the load handle if it's still valid for some reason.
 					if (loadHandle.IsValid())
@@ -144,7 +144,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override bool IsPercentComplete()
 		{
-			if (_currentAsyncOperation.IsValid())
+			if (currentAsyncOperation.IsValid())
 			{
 				if (GetPercentComplete() < 1.0f)
 				{
@@ -159,18 +159,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override float GetPercentComplete()
 		{
-			return _currentAsyncOperation.IsValid() ? _currentAsyncOperation.PercentComplete : 1.0f;
+			return currentAsyncOperation.IsValid() ? currentAsyncOperation.PercentComplete : 1.0f;
 		}
 
 		/// <summary>
 		/// Gets the most recently loaded scene.
 		/// </summary>
-		public override Scene GetLastLoadedScene() => _lastLoadedScene;
+		public override Scene GetLastLoadedScene() => lastLoadedScene;
 
 		/// <summary>
 		/// Gets the list of currently loaded scenes.
 		/// </summary>
-		public override List<Scene> GetLoadedScenes() => _loadedScenes;
+		public override List<Scene> GetLoadedScenes() => loadedScenes;
 
 		/// <summary>
 		/// Adds a loaded scene to tracking collections after a successful load.
@@ -179,14 +179,14 @@ namespace FishMMO.Shared
 		public void AddLoadedScene(AsyncOperationHandle<SceneInstance> loadHandle)
 		{
 			Scene scene = loadHandle.Result.Scene;
-			if (_loadedScenesByHandle.ContainsKey(scene.handle))
+			if (loadedScenesByHandle.ContainsKey(scene.handle))
 			{
 				Log.Warning("AddressableSceneProcessor", "Already added scene with handle: " + scene.handle);
 				return;
 			}
-			_lastLoadedScene = scene;
-			_loadedScenes.Add(scene);
-			_loadedScenesByHandle.Add(scene.handle, loadHandle);
+			lastLoadedScene = scene;
+			loadedScenes.Add(scene);
+			loadedScenesByHandle.Add(scene.handle, loadHandle);
 		}
 
 		/// <summary>
@@ -194,7 +194,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void ActivateLoadedScenes()
 		{
-			foreach (var loadingAsyncOp in _loadingAsyncOperations)
+			foreach (var loadingAsyncOp in loadingAsyncOperations)
 			{
 				loadingAsyncOp.Result.ActivateAsync();
 			}
@@ -205,7 +205,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override IEnumerator AsyncsIsDone()
 		{
-			if (_loadingAsyncOperations == null || _loadingAsyncOperations.Count == 0)
+			if (loadingAsyncOperations == null || loadingAsyncOperations.Count == 0)
 			{
 				yield break;
 			}
@@ -216,7 +216,7 @@ namespace FishMMO.Shared
 			{
 				notDone = false;
 
-				foreach (AsyncOperationHandle<SceneInstance> ao in _loadingAsyncOperations)
+				foreach (AsyncOperationHandle<SceneInstance> ao in loadingAsyncOperations)
 				{
 					if (!ao.IsDone)
 					{

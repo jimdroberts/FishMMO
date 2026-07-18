@@ -75,7 +75,7 @@ namespace FishMMO.Client
 		/// Used to gate auth-result handling and prevent cross-talk with UILogin,
 		/// which shares the same <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event.
 		/// </summary>
-		private bool _isAuthFlowActive;
+		private bool isAuthFlowActive;
 
 		/// <summary>
 		/// Temporarily stores the username after account creation for verification code submission.
@@ -160,7 +160,7 @@ namespace FishMMO.Client
 			// Without this guard, hidden panels would still react to auth results
 			// intended for the other panel (e.g., UIRegister force-disconnecting
 			// on InvalidUsernameOrPassword during UILogin's login attempt).
-			if (!_isAuthFlowActive) return;
+			if (!isAuthFlowActive) return;
 
 			switch (result)
 			{
@@ -432,8 +432,9 @@ namespace FishMMO.Client
 				Log.Error("UIRegister", error);
 				SetFormLocked(false);
 			},
-			(servers) =>
+			(servers, token) =>
 			{
+				if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
 				pendingVerifyUsername = username;
 				Connect(username, password, email, age);
 			}));
@@ -477,8 +478,7 @@ namespace FishMMO.Client
 			}
 
 			StatusMessage.text = "Creating account...";
-			Client.LoginAuthenticator.SetLoginCredentials(username, password, true, email, age);
-			Client.ConnectToServer(serverPort);
+
 		}
 
 		/// <summary>
@@ -509,15 +509,15 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets the locked state of all form controls (enables/disables interactivity).
-		/// Also manages the <see cref="_isAuthFlowActive"/> flag: locking marks
+		/// Also manages the <see cref="isAuthFlowActive"/> flag: locking marks
 		/// the start of a registration flow; unlocking marks its termination.
 		/// </summary>
 		/// <param name="locked">True to lock (disable) controls, false to unlock.</param>
 		public void SetFormLocked(bool locked)
 		{
 			// Track auth-flow ownership: locking = start of flow, unlocking = end.
-			if (locked) _isAuthFlowActive = true;
-			else _isAuthFlowActive = false;
+			if (locked) isAuthFlowActive = true;
+			else isAuthFlowActive = false;
 
 			if (RegisterButton != null) RegisterButton.interactable = !locked;
 			if (QuitToLoginButton != null) QuitToLoginButton.interactable = !locked;

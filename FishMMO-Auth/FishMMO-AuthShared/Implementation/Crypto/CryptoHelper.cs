@@ -764,6 +764,22 @@ namespace FishMMO.Auth.Implementation
 			public bool ShouldRekey => (ulong)Interlocked.Read(ref counter) > uint.MaxValue * 9UL / 10;
 
 			/// <summary>
+			/// Creates an independent clone for async worker processing.
+			/// The clone has its own prefix copy and counter snapshot —
+			/// mutations on the clone do not affect the original and vice versa.
+			/// Both instances must be independently disposed.
+			/// </summary>
+			public GcmNonceContext Clone()
+			{
+				if (disposed) throw new ObjectDisposedException(nameof(GcmNonceContext));
+				var clone = new GcmNonceContext(prefix!, serverToClient);
+				// Snapshot the current counter so the clone continues from this point.
+				// Interlocked.Read ensures we see the latest value from all threads.
+				Interlocked.Exchange(ref clone.counter, Interlocked.Read(ref counter));
+				return clone;
+			}
+
+			/// <summary>
 			/// Zeros the session prefix, preventing further nonce generation.
 			/// </summary>
 			public void Dispose()
@@ -1355,10 +1371,10 @@ namespace FishMMO.Auth.Implementation
 
 				byte[] salt = GenerateKey(TotpKekSaltLength);
 				byte[] nonce = GenerateKey(GcmNonceLength);
-				byte[] kek = null;
-				byte[] ciphertext = null;
-				byte[] envelope = null;
-				byte[] aad = null;
+				byte[]? kek = null;
+				byte[]? ciphertext = null;
+				byte[]? envelope = null;
+				byte[]? aad = null;
 				try
 				{
 					kek = DeriveTotpKek(masterKek, username, kekVersion, salt);
@@ -1428,8 +1444,8 @@ namespace FishMMO.Auth.Implementation
 				byte[] ciphertext = new byte[envelope.Length - headerLen];
 				Buffer.BlockCopy(envelope, headerLen, ciphertext, 0, ciphertext.Length);
 
-				byte[] kek = null;
-				byte[] aad = null;
+				byte[]? kek = null;
+				byte[]? aad = null;
 				try
 				{
 					kek = DeriveTotpKek(masterKek, username, kekVersion, salt);
