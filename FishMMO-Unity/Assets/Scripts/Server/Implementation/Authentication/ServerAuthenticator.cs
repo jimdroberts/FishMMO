@@ -528,6 +528,5 @@ namespace FishMMO.Server.Implementation
 				if (oldTotp != null) CryptographicOperations.ZeroMemory(oldTotp);
 			}
 		}
-
 	}
 }

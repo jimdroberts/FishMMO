@@ -629,6 +629,83 @@ stateDiagram-v2
 
 ---
 
+## Server Initialization Order
+
+> **Complete 5-phase server startup** — from Unity scene load through bootstrap, launcher, server scene initialization, and runtime operation.
+> Full detail available in [`SERVER_INITIALIZATION_ORDER.md`](SERVER_INITIALIZATION_ORDER.md).
+
+The FishMMO server follows a hierarchical 5-phase initialization sequence:
+
+### Phase 1: MainBootstrap Scene Load
+
+| Step | Action |
+|------|--------|
+| 1.1 | Unity loads `MainBootstrap.unity` (first scene, `DontDestroyOnLoad`) |
+| 1.2 | `MainBootstrapSystem.Awake()` calls `StartBootstrap()` |
+| 1.3 | `OnPreload()` loads version.txt, sets `GameVersion`, registers quit/play-mode handlers, initializes the **Logging System** (console logger factory, logging.json config), then enqueues the next scene (`ServerLauncher` for server builds, `ClientPreboot` otherwise) |
+| 1.4 | `AddressableLoadProcessor.BeginProcessQueue()` loads the ServerLauncher scene additively |
+| 1.5 | On load completion, `OnCompleteProcessing()` finds `BootstrapSystem` components in loaded scenes and calls `StartBootstrap()` on each |
+
+### Phase 2: ServerLauncher Scene Load
+
+| Step | Action |
+|------|--------|
+| 2.1 | `ServerLauncher.unity` loaded additively by MainBootstrapSystem |
+| 2.2 | `ServerLauncher.StartBootstrap()` called by the bootstrap pipeline |
+| 2.3 | `OnPreload()` subscribes to addressable events, loads `TemplateTypeCache`, then determines which server scenes to load: **Editor** loads all from `BootList` (LoginServer, WorldServer, SceneServer); **Standalone** parses `args[1]` ("LOGIN" / "WORLD" / "SCENE") |
+| 2.4 | Server scenes are enqueued and loaded additively via `AddressableLoadProcessor` |
+
+### Phase 3: Server Scene(s) Load
+
+Each server scene (`LoginServer.unity`, `WorldServer.unity`, `SceneServer.unity`) contains a `NetworkManager`, a `Server` MonoBehaviour, and `ServerBehaviour` ScriptableObject assets.
+
+| Step | Action |
+|------|--------|
+| 3.1 | Scene loaded additively by ServerLauncher |
+| 3.2 | `Server.Start()` finds `NetworkManager`, creates `FileServerConfiguration` + `ServerEvents` + `CoreServer` + `FishNetNetworkWrapper` |
+| 3.3 | `StartCoroutine(NetHelper.FetchExternalIPAddress(...))` — async web request to discover the server's public IP |
+
+### Phase 4: Server Finalize Setup (`OnFinalizeSetup`)
+
+This is the critical initialization phase, running after the external IP is fetched:
+
+1. **Core Initialization** — `CoreServer.Initialize(remoteAddress, sceneName)`, creates `ServerAddressProvider`
+2. **Network Configuration** — `NetworkWrapper.ApplyTransportConfiguration()` sets FishNet transport addresses/ports; attaches authenticator and connection state handler
+3. **Account Management** — `AccountManager = new AccountManager()`
+4. **RuntimeDataContainer Discovery & Creation** — `DataContainerRegistry` scans `ServerBehaviours` for `[RequiresDataContainer]` attributes, deduplicates by type, groups by `InitializationPriority`, and creates container instances
+5. **DataContainer Initialization** — `DataContainerRegistry.InitializeAll(this)` — sets Server/ServerManager references, calls `container.InitializeOnce()`
+6. **ServerBehaviour Registration & Initialization** — `BehaviourRegistry.RegisterAllBehaviours()` — registers by concrete type and implemented interfaces, then calls `behaviour.InitializeOnce()` (behaviours can now access initialized containers, subscribe to broadcasts, register periodic callbacks)
+7. **Physics and Network Start** — `KinematicCharacterSystem.EnsureCreation()`, `NetworkWrapper.StartServer()` (FishNet `ServerManager.StartConnection()`), logs "Initialization Complete"
+
+### Phase 5: Runtime Operation
+
+- **`Server.LateUpdate()` every frame**: calculates deltaTime, updates all initialized `ServerBehaviours` via `OnLateUpdate(deltaTime)`, processes periodic callbacks (decrement timer, invoke action when elapsed)
+- **Client connections**: authenticator validates, character spawning/loading begins, behaviours handle broadcasts, containers store mutable state
+
+### Key Guarantees
+
+| Guarantee | Detail |
+|-----------|--------|
+| Containers before behaviours | `RuntimeDataContainers` are always initialized before `ServerBehaviours` — no race conditions |
+| Attribute-based discovery | Declare dependencies with `[RequiresDataContainer(typeof(...))]` — zero manual config, automatic deduplication |
+| Hierarchical bootstrap | MainBootstrap triggers ServerLauncher triggers Server Scene(s) — graceful additive scene loading |
+| Build-specific behavior | Editor loads all servers simultaneously; standalone uses command-line args; separate asset lists for WebGL |
+
+### Shutdown Sequence
+
+```
+Application wants to quit
+  → MainBootstrapSystem defers quit
+  → Graphics cleanup (release addressables)
+  → Log.Shutdown() (flush logs)
+  → Server.OnDestroy()
+  → DeinitializeAllBehaviours() (reverse order)
+  → DeinitializeAllDataContainers() (reverse order)
+  → Application.Quit()
+```
+
+---
+
 ## Key Constants
 
 | Constant | Value | Location |

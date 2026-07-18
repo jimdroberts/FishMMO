@@ -9,6 +9,7 @@ using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using UnityEngine.UIElements;
 
 namespace FishMMO.Shared
@@ -319,6 +320,8 @@ namespace FishMMO.Shared
 				pathSimInternalId.text = "(select an asset)";
 				pathSimClient.text = "—";
 				pathSimServer.text = "—";
+				if (pathSimClientCatalog != null) pathSimClientCatalog.text = "—";
+				if (pathSimServerCatalog != null) pathSimServerCatalog.text = "—";
 				return;
 			}
 
@@ -331,6 +334,8 @@ namespace FishMMO.Shared
 				pathSimInternalId.text = "(select an asset entry, not a group)";
 				pathSimClient.text = "—";
 				pathSimServer.text = "—";
+				if (pathSimClientCatalog != null) pathSimClientCatalog.text = "—";
+				if (pathSimServerCatalog != null) pathSimServerCatalog.text = "—";
 				return;
 			}
 
@@ -355,6 +360,20 @@ namespace FishMMO.Shared
 			pathSimClient.tooltip = clientPath;
 			pathSimServer.text = serverPath;
 			pathSimServer.tooltip = serverPath;
+
+			// Catalog paths — base URL + catalog.hash for each target
+			if (pathSimClientCatalog != null)
+			{
+				string clientCatalog = GetSimulatedClientBase() + "catalog.hash";
+				pathSimClientCatalog.text = clientCatalog;
+				pathSimClientCatalog.tooltip = clientCatalog;
+			}
+			if (pathSimServerCatalog != null)
+			{
+				string serverCatalog = GetSimulatedServerBase() + "catalog.hash";
+				pathSimServerCatalog.text = serverCatalog;
+				pathSimServerCatalog.tooltip = serverCatalog;
+			}
 		}
 
 		/// <summary>
@@ -415,9 +434,32 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// <summary>
+		/// Returns the simulated client base URL after loopback fallback
+		/// (mirrors DynamicAddressableLoadPathSystem.Awake client path).
+		/// </summary>
+		private static string GetSimulatedClientBase()
+		{
+			string baseUrl = DefaultClientBaseUrl;
+			if (DynamicAddressableLoadPathSystem.IsLoopbackPlaceholder(baseUrl))
+				baseUrl = "file://" + Application.streamingAssetsPath + "/aa/";
+			return baseUrl;
+		}
+
+		/// <summary>
+		/// Returns the simulated server base URL
+		/// (mirrors DynamicAddressableLoadPathSystem.Awake server path).
+		/// </summary>
+		private static string GetSimulatedServerBase()
+		{
+			return ServerBaseUrlPrefix + Application.streamingAssetsPath + ServerBaseUrlSuffix;
+		}
+
+		/// <summary>
 		/// Simulates the DynamicAddressableLoadPathSystem.InternalIdTransformFunc logic.
 		/// When simulateServer is true, replaces remote base URLs with file://StreamingAssets/ServerData/.
-		/// When false, replaces remote base URLs with the default client CDN URL.
+		/// When false, replaces remote base URLs with the default client CDN URL,
+		/// falling back to local StreamingAssets when the base is a loopback placeholder.
 		/// Local paths are returned as-is.
 		/// </summary>
 		/// <param name="internalId">The original InternalId to transform.</param>
@@ -432,24 +474,13 @@ namespace FishMMO.Shared
 				return internalId;
 			}
 
-			string baseUrl;
-			if (simulateServer)
-			{
-				baseUrl = ServerBaseUrlPrefix + Application.streamingAssetsPath + ServerBaseUrlSuffix;
-			}
-			else
-			{
-				baseUrl = DefaultClientBaseUrl;
-			}
+			string baseUrl = simulateServer ? GetSimulatedServerBase() : GetSimulatedClientBase();
 
-			// Extract relative path after the domain (same as DynamicAddressableLoadPathSystem)
-			int startIndex = internalId.IndexOf("://", StringComparison.Ordinal) + 3;
-			int thirdSlashIndex = internalId.IndexOf('/', startIndex);
-
-			if (thirdSlashIndex != -1)
+			// Use System.Uri for robust URL parsing (mirrors DynamicAddressableLoadPathSystem)
+			if (Uri.TryCreate(internalId, UriKind.Absolute, out var uri))
 			{
-				string relativePath = internalId.Substring(thirdSlashIndex + 1);
-				return baseUrl + relativePath;
+				string pathAndQuery = uri.PathAndQuery.TrimStart('/');
+				return string.IsNullOrEmpty(pathAndQuery) ? baseUrl : baseUrl + pathAndQuery;
 			}
 
 			return baseUrl;

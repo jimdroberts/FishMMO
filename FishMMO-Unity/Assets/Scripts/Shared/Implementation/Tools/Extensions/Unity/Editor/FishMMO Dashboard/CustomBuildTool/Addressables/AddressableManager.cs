@@ -35,6 +35,16 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 
 			Log.Info("Addressables", $"Configuring bundles for {(useUnityWebRequestForLocal ? "WebGL (UnityWebRequest)" : "Windows/Linux (LoadFromFileAsync)")}");
 
+			// All targets load content locally from StreamingAssets — content delivery
+			// is handled by the Updater, not by Addressables remote catalog.  Disable the
+			// remote catalog so no catalog_VERSION.hash is built, and skip the startup
+			// remote-catalog probe so browsers never request a non-existent remote catalog.
+			originalSettings.BuildRemoteCatalog = false;
+			originalSettings.DisableCatalogUpdateOnStartup = true;
+			Log.Info("Addressables",
+				"BuildRemoteCatalog=false, DisableCatalogUpdateOnStartup=true " +
+				"(local StreamingAssets only; content delivered by Updater).");
+
 			// Loop through each Addressable group and apply exclusion logic
 			foreach (var group in originalSettings.groups)
 			{
@@ -86,6 +96,11 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 
 				Log.Info("Addressables", $"{group.name} has been {(exclude ? "excluded" : "included")} from the build.");
 			}
+
+			// Flush schema changes to disk so BuildPlayerContent reads the correct
+			// per-target values. In-memory ScriptableObject modifications may not be
+			// visible if the Addressables pipeline internally reloads settings.
+			AssetDatabase.SaveAssets();
 
 			// Clean previous Addressables build safely
 			try
@@ -204,7 +219,25 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 				}
 			}
 
-			AssetDatabase.SaveAssets();
+			// Restore WebGL-safe schema defaults on disk for standalone builds.
+			// The schema .asset files in version control should always store
+			// CRC + UnityWebRequest enabled (the WebGL requirement). Standalone
+			// builds temporarily disable them above; restore them here so the
+			// working copy stays clean after the build.
+			if (!enableCrcForRemoteLoading)
+			{
+				foreach (var group in originalSettings.groups)
+				{
+					if (group == null) continue;
+					var schema = group.GetSchema<BundledAssetGroupSchema>();
+					if (schema == null) continue;
+					schema.UseAssetBundleCrc = true;
+					schema.UseAssetBundleCrcForCachedBundles = true;
+					schema.UseUnityWebRequestForLocalBundles = true;
+				}
+				AssetDatabase.SaveAssets();
+				Log.Info("Addressables", "Restored WebGL-safe schema defaults (CRC + UWR) after standalone build.");
+			}
 		}
 
 		/// <summary>

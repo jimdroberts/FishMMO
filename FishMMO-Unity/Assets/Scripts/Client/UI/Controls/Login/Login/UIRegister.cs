@@ -6,6 +6,7 @@ using FishMMO.Shared;
 using FishMMO.Auth.Core;
 using FishMMO.Logging;
 using System.IO;
+using System.Collections.Generic;
 
 namespace FishMMO.Client
 {
@@ -91,6 +92,25 @@ namespace FishMMO.Client
 		/// keeping it on disk is intentional — the user keeps it as a persistent backup.
 		/// </summary>
 		private string savedTwoFactorSetupPath;
+
+		/// <summary>
+		/// <summary>
+		/// Populates the age dropdown with options: index 0 = "Select your age",
+		/// index 1 = "13", index 2 = "14", ..., index 108 = "120".
+		/// Must be called before the dropdown is displayed so the user can select an age.
+		/// </summary>
+		public override void OnStarting()
+		{
+			if (AgeSelect == null) return;
+
+			AgeSelect.ClearOptions();
+			var options = new List<TMPro.TMP_Dropdown.OptionData>(109);
+			options.Add(new TMPro.TMP_Dropdown.OptionData("Select your age"));
+			for (int age = 13; age <= 120; age++)
+				options.Add(new TMPro.TMP_Dropdown.OptionData(age.ToString()));
+			AgeSelect.AddOptions(options);
+			AgeSelect.value = 0;
+		}
 
 		/// <summary>
 		/// Called when the client is set. Subscribes to connection and authentication events.
@@ -479,6 +499,8 @@ namespace FishMMO.Client
 
 			StatusMessage.text = "Creating account...";
 
+			Client.LoginAuthenticator.SetLoginCredentials(username, password, true, email, age);
+			Client.ConnectToServer(serverPort);
 		}
 
 		/// <summary>

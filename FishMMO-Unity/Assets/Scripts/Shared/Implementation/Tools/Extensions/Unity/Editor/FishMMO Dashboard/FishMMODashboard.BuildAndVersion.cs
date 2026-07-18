@@ -18,6 +18,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		private VersionConfig cachedVersionConfig;
 
+
+		// Build panel controls — stored so they can be disabled during background tasks.
+		private Button buildApplyPlatformButton;
+		private Button buildAddressablesButton;
+		private Button buildGameButton;
+		private Button buildUpdateLinkerButton;
+		private EnumField buildTypeField;
+		private EnumField osTargetField;
+		private EnumField envField;
 		// ────────────────────────────────────────────
 		//  BUILD PANEL
 		// ────────────────────────────────────────────
@@ -54,6 +63,7 @@ namespace FishMMO.Shared
 			VisualElement buildTypeSection = CreateConstantsSection("Build Type");
 
 			EnumField buildTypeField = new EnumField("Build Type", buildType);
+			this.buildTypeField = buildTypeField;
 			buildTypeField.style.marginBottom = 4;
 			buildTypeField.RegisterValueChangedCallback(evt =>
 			{
@@ -70,6 +80,7 @@ namespace FishMMO.Shared
 			VisualElement osSection = CreateConstantsSection("OS Target");
 
 			EnumField osField = new EnumField("OS Target", osTarget);
+			this.osTargetField = osField;
 			osField.style.marginBottom = 4;
 			osField.RegisterValueChangedCallback(evt =>
 			{
@@ -86,6 +97,7 @@ namespace FishMMO.Shared
 			VisualElement envSection = CreateConstantsSection("Environment");
 
 			EnumField envField = new EnumField("Working Environment", envState);
+			this.envField = envField;
 			envField.style.marginBottom = 4;
 			envField.RegisterValueChangedCallback(evt =>
 			{
@@ -155,6 +167,7 @@ namespace FishMMO.Shared
 			applyPlatformButton.style.borderTopRightRadius = 4;
 			applyPlatformButton.style.borderBottomLeftRadius = 4;
 			applyPlatformButton.style.borderBottomRightRadius = 4;
+			this.buildApplyPlatformButton = applyPlatformButton;
 			inspectorContent.Add(applyPlatformButton);
 
 			// ── Build Buttons ──
@@ -191,6 +204,7 @@ namespace FishMMO.Shared
 			buildAddressablesButton.style.borderTopRightRadius = 4;
 			buildAddressablesButton.style.borderBottomLeftRadius = 4;
 			buildAddressablesButton.style.borderBottomRightRadius = 4;
+			this.buildAddressablesButton = buildAddressablesButton;
 			buildButtonSection.Add(buildAddressablesButton);
 
 			Button buildGameButton = new Button(() =>
@@ -229,6 +243,7 @@ namespace FishMMO.Shared
 			buildGameButton.style.borderBottomRightRadius = 4;
 			buildGameButton.style.fontSize = 13;
 			buildGameButton.style.unityFontStyleAndWeight = FontStyle.Bold;
+			this.buildGameButton = buildGameButton;
 			buildButtonSection.Add(buildGameButton);
 
 			Button updateLinkerButton = new Button(() =>
@@ -239,6 +254,7 @@ namespace FishMMO.Shared
 			updateLinkerButton.text = "Update Linker";
 			updateLinkerButton.style.height = 24;
 			updateLinkerButton.style.marginTop = 4;
+			this.buildUpdateLinkerButton = updateLinkerButton;
 			buildButtonSection.Add(updateLinkerButton);
 
 			inspectorContent.Add(buildButtonSection);
@@ -255,9 +271,46 @@ namespace FishMMO.Shared
 			tasksContainer.schedule.Execute(() =>
 			{
 				RefreshBackgroundTasks(tasksContainer);
+				UpdateBuildControlStates();
 			}).Every(500);
 
 			inspectorContent.Add(tasksSection);
+
+			// Set initial control state so buttons reflect any active tasks
+			// immediately when the Build panel is first shown.
+			UpdateBuildControlStates();
+		}
+
+		/// <summary>
+		/// Returns true when Unity is running background tasks that should block
+		/// build operations (compilation, asset import, Progress API tasks, or
+		/// an active patcher operation).
+		/// </summary>
+		private bool IsBackgroundTaskActive()
+		{
+			if (EditorApplication.isCompiling) return true;
+			if (EditorApplication.isUpdating) return true;
+			if (patcherIsProcessing) return true;
+			try { return Progress.GetRunningProgressCount() > 0; }
+			catch { return false; }
+		}
+
+		/// <summary>
+		/// Enables or disables all build action controls based on background task state.
+		/// Called periodically and immediately after control creation so buttons
+		/// are greyed out before the user can click them during compilation etc.
+		/// </summary>
+		private void UpdateBuildControlStates()
+		{
+			bool blocked = IsBackgroundTaskActive();
+
+			buildApplyPlatformButton?.SetEnabled(!blocked);
+			buildAddressablesButton?.SetEnabled(!blocked);
+			buildGameButton?.SetEnabled(!blocked);
+			buildUpdateLinkerButton?.SetEnabled(!blocked);
+			buildTypeField?.SetEnabled(!blocked);
+			osTargetField?.SetEnabled(!blocked);
+			envField?.SetEnabled(!blocked);
 		}
 
 		/// <summary>

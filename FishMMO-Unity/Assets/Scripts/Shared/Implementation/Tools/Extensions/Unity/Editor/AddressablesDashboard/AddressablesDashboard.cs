@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using UnityEngine.UIElements;
 using UnityEditor.UIElements;
 
@@ -59,12 +60,21 @@ namespace FishMMO.Shared
 		private Label globalPathCatalog;
 		private Label globalPathClientBase;
 		private Label globalPathServerBase;
+		private Label globalPathServerCatalog;
+		private Label globalPathWorldScenesBuild;
+		private Label globalPathWorldScenesLoad;
+		private Label globalPathTemplatesBuild;
+		private Label globalPathTemplatesLoad;
+		private Label globalPathEditorStaging;
+		private Label globalPathEditorCatalog;
 
 		// Path Simulator (per-asset)
 		private Label pathSimBuild;
 		private Label pathSimInternalId;
 		private Label pathSimClient;
 		private Label pathSimServer;
+		private Label pathSimClientCatalog;
+		private Label pathSimServerCatalog;
 
 		// Dependency Viewer
 		private Label depViewerAsset;
@@ -175,14 +185,21 @@ namespace FishMMO.Shared
 			globalPathFoldout.style.marginTop = 4;
 			globalPathFoldout.style.marginBottom = 4;
 
-			globalPathProfile  = NewPathRow(globalPathFoldout, "Active Profile:");
+			globalPathProfile = NewPathRow(globalPathFoldout, "Active Profile:");
 			globalPathRemoteBuild = NewPathRow(globalPathFoldout, "Remote Build:");
-			globalPathRemoteLoad  = NewPathRow(globalPathFoldout, "Remote Load:");
-			globalPathLocalBuild  = NewPathRow(globalPathFoldout, "Local Build:");
-			globalPathLocalLoad   = NewPathRow(globalPathFoldout, "Local Load:");
-			globalPathCatalog     = NewPathRow(globalPathFoldout, "Catalog:");
-			globalPathClientBase  = NewPathRow(globalPathFoldout, "Runtime → Client:");
-			globalPathServerBase  = NewPathRow(globalPathFoldout, "Runtime → Server:");
+			globalPathRemoteLoad = NewPathRow(globalPathFoldout, "Remote Load:");
+			globalPathLocalBuild = NewPathRow(globalPathFoldout, "Local Build:");
+			globalPathLocalLoad = NewPathRow(globalPathFoldout, "Local Load:");
+			globalPathWorldScenesBuild = NewPathRow(globalPathFoldout, "WorldScenes Build:");
+			globalPathWorldScenesLoad = NewPathRow(globalPathFoldout, "WorldScenes Load:");
+			globalPathTemplatesBuild = NewPathRow(globalPathFoldout, "Templates Build:");
+			globalPathTemplatesLoad = NewPathRow(globalPathFoldout, "Templates Load:");
+			globalPathEditorStaging = NewPathRow(globalPathFoldout, "Editor → Staging:");
+			globalPathEditorCatalog = NewPathRow(globalPathFoldout, "Editor → Catalog:");
+			globalPathClientBase = NewPathRow(globalPathFoldout, "Client:");
+			globalPathCatalog = NewPathRow(globalPathFoldout, "Client → Catalog:");
+			globalPathServerBase = NewPathRow(globalPathFoldout, "Server:");
+			globalPathServerCatalog = NewPathRow(globalPathFoldout, "Server → Catalog:");
 
 			// Insert after the toolbar
 			var toolbar = rootVisualElement.Q<Toolbar>("toolbar");
@@ -194,6 +211,15 @@ namespace FishMMO.Shared
 			pathSimInternalId = rootVisualElement.Q<Label>("path-sim-internal-id");
 			pathSimClient = rootVisualElement.Q<Label>("path-sim-client");
 			pathSimServer = rootVisualElement.Q<Label>("path-sim-server");
+
+			// Add Client Catalog and Server Catalog rows programmatically
+			// after the existing UXML rows in the Path Simulator.
+			var pathSimulator = rootVisualElement.Q<VisualElement>("path-simulator");
+			if (pathSimulator != null)
+			{
+				pathSimClientCatalog = NewPathRow(pathSimulator, "Client → Catalog:");
+				pathSimServerCatalog = NewPathRow(pathSimulator, "Server → Catalog:");
+			}
 
 			// Dependency Viewer
 			depViewerAsset = rootVisualElement.Q<Label>("dep-viewer-asset");
@@ -308,18 +334,56 @@ namespace FishMMO.Shared
 
 			globalPathProfile.text = settings.activeProfileId;
 
-			globalPathRemoteBuild.text = ResolveProfilePath(settings, "Remote", "Build");
-			globalPathRemoteLoad.text  = ResolveProfilePath(settings, "Remote", "Load");
-			globalPathLocalBuild.text  = ResolveProfilePath(settings, "Local",  "Build");
-			globalPathLocalLoad.text   = ResolveProfilePath(settings, "Local",  "Load");
+			string remoteBuild = ResolveProfilePath(settings, "Remote", "Build");
+			string remoteLoad = ResolveProfilePath(settings, "Remote", "Load");
 
-			// Simulated catalog path for the current build target
-			string target = EditorUserBuildSettings.activeBuildTarget.ToString();
-			globalPathCatalog.text = ResolveProfilePath(settings, "Remote", "Load") + "/catalog_" + target + ".hash";
+			globalPathRemoteBuild.text = remoteBuild;
+			globalPathRemoteLoad.text = remoteLoad;
+			globalPathLocalBuild.text = ResolveProfilePath(settings, "Local", "Build");
+			globalPathLocalLoad.text = ResolveProfilePath(settings, "Local", "Load");
 
-			// Runtime rewrite bases (mirrors DynamicAddressableLoadPathSystem)
-			globalPathClientBase.text = DefaultClientBaseUrl;
-			globalPathServerBase.text = ServerBaseUrlPrefix + Application.streamingAssetsPath + ServerBaseUrlSuffix;
+			// ── Content Source Paths ──
+			// Resolved from the Addressables profile when available; fall
+			// back to well-known project paths when no profile variable matches.
+			globalPathWorldScenesBuild.text = ResolveProfilePath(settings, "WorldScene", "Build");
+			globalPathWorldScenesLoad.text = ResolveProfilePath(settings, "WorldScene", "Load");
+			globalPathTemplatesBuild.text = ResolveProfilePath(settings, "Template", "Build");
+			globalPathTemplatesLoad.text = ResolveProfilePath(settings, "Template", "Load");
+
+			// ── Editor Staging ──
+			// Addressables.RuntimePath points to where the Editor stages bundles
+			// during Play Mode and Build Addressables.  In the Editor this is
+			// Library/com.unity.addressables/aa/{Platform}/; in a player build
+			// it resolves to {StreamingAssets}/aa/.
+			string runtimePath = Addressables.RuntimePath.Replace('\\', '/').TrimEnd('/');
+			string editorStaging = "file://" + runtimePath + "/";
+			globalPathEditorStaging.text = editorStaging;
+			globalPathEditorCatalog.text = editorStaging + "catalog.hash";
+
+			// ── Runtime Load Paths ──
+			// Mirror DynamicAddressableLoadPathSystem.Awake logic.  When the
+			// profile's remote load URL is a loopback placeholder with no CDN
+			// override, the runtime falls back to local StreamingAssets/aa/.
+			// The platform subfolder (StandaloneLinux64, etc.) comes from the
+			// InternalId's relative path at transform time — not from the base.
+			string effectiveClientBase;
+			if (DynamicAddressableLoadPathSystem.IsLoopbackPlaceholder(remoteLoad))
+			{
+				effectiveClientBase = "file://" + Application.streamingAssetsPath.Replace('\\', '/') + "/aa/";
+			}
+			else
+			{
+				effectiveClientBase = remoteLoad;
+				if (!string.IsNullOrEmpty(effectiveClientBase) && !effectiveClientBase.EndsWith("/"))
+					effectiveClientBase += "/";
+			}
+
+			string serverBase = ServerBaseUrlPrefix + Application.streamingAssetsPath.Replace('\\', '/') + ServerBaseUrlSuffix;
+
+			globalPathClientBase.text = effectiveClientBase;
+			globalPathCatalog.text = effectiveClientBase + "catalog.hash";
+			globalPathServerBase.text = serverBase;
+			globalPathServerCatalog.text = serverBase + "catalog.hash";
 		}
 
 		/// <summary>
@@ -332,8 +396,9 @@ namespace FishMMO.Shared
 			foreach (var name in settings.profileSettings.GetVariableNames())
 			{
 				string lower = name.ToLowerInvariant();
+				bool hasRole = !string.IsNullOrEmpty(role);
 				if (lower.Contains(scope.ToLowerInvariant()) &&
-					lower.Contains(role.ToLowerInvariant()) &&
+					(!hasRole || lower.Contains(role.ToLowerInvariant())) &&
 					lower.Contains("path"))
 				{
 					string value = settings.profileSettings.GetValueByName(settings.activeProfileId, name);
