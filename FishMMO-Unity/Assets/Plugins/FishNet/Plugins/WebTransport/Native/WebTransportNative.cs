@@ -18,10 +18,10 @@ namespace FishNet.Transporting.WebTransport.Native
 		/// </summary>
 		protected override bool ReleaseHandle()
 		{
-	#if !UNITY_WEBGL || UNITY_EDITOR
+#if !UNITY_WEBGL || UNITY_EDITOR
 			if (!IsInvalid)
 				WebTransportNative.wt_server_destroy_impl(handle);
-	#endif
+#endif
 			return true;
 		}
 	}
@@ -38,10 +38,10 @@ namespace FishNet.Transporting.WebTransport.Native
 		/// </summary>
 		protected override bool ReleaseHandle()
 		{
-	#if !UNITY_WEBGL || UNITY_EDITOR
+#if !UNITY_WEBGL || UNITY_EDITOR
 			if (!IsInvalid)
 				WebTransportNative.wt_client_destroy_impl(handle);
-	#endif
+#endif
 			return true;
 		}
 	}
@@ -103,14 +103,14 @@ namespace FishNet.Transporting.WebTransport.Native
 	public static class WebTransportNative
 	{
 		// ── Error code constants (match webtransport_api.h) ──────
-		public const int WT_OK                 =  0;
-		public const int WT_ERR_UNKNOWN        = -1;
-		public const int WT_ERR_INVALID_STATE  = -2;
+		public const int WT_OK = 0;
+		public const int WT_ERR_UNKNOWN = -1;
+		public const int WT_ERR_INVALID_STATE = -2;
 		public const int WT_ERR_CONNECT_FAILED = -3;
-		public const int WT_ERR_TLS_FAILED     = -4;
-		public const int WT_ERR_SEND_FAILED    = -5;
-		public const int WT_ERR_BUFFER_FULL    = -6;
-		public const int WT_ERR_NOT_FOUND      = -7;
+		public const int WT_ERR_TLS_FAILED = -4;
+		public const int WT_ERR_SEND_FAILED = -5;
+		public const int WT_ERR_BUFFER_FULL = -6;
+		public const int WT_ERR_NOT_FOUND = -7;
 
 		/// <summary>
 		/// Returns a human-readable error string for a WebTransport error code.
@@ -119,7 +119,7 @@ namespace FishNet.Transporting.WebTransport.Native
 		/// </summary>
 		public static string ErrorString(int errorCode)
 		{
-	#if !UNITY_WEBGL || UNITY_EDITOR
+#if !UNITY_WEBGL || UNITY_EDITOR
 			try
 			{
 				IntPtr ptr = wt_error_string(errorCode);
@@ -131,18 +131,18 @@ namespace FishNet.Transporting.WebTransport.Native
 				}
 			}
 			catch { /* Fall through to constant-name lookup. */ }
-	#endif
+#endif
 			return errorCode switch
 			{
-				WT_OK                 => "OK",
-				WT_ERR_UNKNOWN        => "ERR_UNKNOWN",
-				WT_ERR_INVALID_STATE  => "ERR_INVALID_STATE",
+				WT_OK => "OK",
+				WT_ERR_UNKNOWN => "ERR_UNKNOWN",
+				WT_ERR_INVALID_STATE => "ERR_INVALID_STATE",
 				WT_ERR_CONNECT_FAILED => "ERR_CONNECT_FAILED",
-				WT_ERR_TLS_FAILED     => "ERR_TLS_FAILED",
-				WT_ERR_SEND_FAILED    => "ERR_SEND_FAILED",
-				WT_ERR_BUFFER_FULL    => "ERR_BUFFER_FULL",
-				WT_ERR_NOT_FOUND      => "ERR_NOT_FOUND",
-				_                     => $"Unknown ({errorCode})"
+				WT_ERR_TLS_FAILED => "ERR_TLS_FAILED",
+				WT_ERR_SEND_FAILED => "ERR_SEND_FAILED",
+				WT_ERR_BUFFER_FULL => "ERR_BUFFER_FULL",
+				WT_ERR_NOT_FOUND => "ERR_NOT_FOUND",
+				_ => $"Unknown ({errorCode})"
 			};
 		}
 
@@ -174,7 +174,7 @@ namespace FishNet.Transporting.WebTransport.Native
 			/* Double-check — another thread may have completed init while we waited for the guard. */
 			if (_initialized) { _initGuard = 0; return; }
 
-	#if !UNITY_WEBGL || UNITY_EDITOR
+#if !UNITY_WEBGL || UNITY_EDITOR
 			int result = wt_init();
 			if (result != 0)
 			{
@@ -182,7 +182,7 @@ namespace FishNet.Transporting.WebTransport.Native
 				_initGuard = 0;
 				return;
 			}
-	#endif
+#endif
 			_initialized = true;
 		}
 
@@ -190,23 +190,23 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static void Deinitialize()
 		{
 			if (!_initialized) return;
-	#if !UNITY_WEBGL || UNITY_EDITOR
+#if !UNITY_WEBGL || UNITY_EDITOR
 			wt_deinit();
-	#endif
+#endif
 			_initialized = false;
 			_initGuard = 0;
 		}
 
-	#if !UNITY_WEBGL || UNITY_EDITOR
+#if !UNITY_WEBGL || UNITY_EDITOR
 		private const string LIB = "fishmmo_webtransport";
 
-			// ── P/Invoke marshaling ───────────────────────────────
-			// LPUTF8Str marshals .NET strings as UTF-8 to the native
-			// library, which uses const char* (UTF-8) on all platforms.
-			// Supported in Unity 2021.2+.
-			// On Linux/macOS LPStr already maps to UTF-8; on Windows
-			// LPStr would map to the system ANSI code page, corrupting
-			// non-ASCII cert paths, ALPNs, and addresses.
+		// ── P/Invoke marshaling ───────────────────────────────
+		// LPUTF8Str marshals .NET strings as UTF-8 to the native
+		// library, which uses const char* (UTF-8) on all platforms.
+		// Supported in Unity 2021.2+.
+		// On Linux/macOS LPStr already maps to UTF-8; on Windows
+		// LPStr would map to the system ANSI code page, corrupting
+		// non-ASCII cert paths, ALPNs, and addresses.
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wt_server_create")]
 		public static extern SafeServerHandle wt_server_create(
@@ -313,7 +313,7 @@ namespace FishNet.Transporting.WebTransport.Native
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern IntPtr wt_version();
 
-	#else  // UNITY_WEBGL && !UNITY_EDITOR — stub implementations
+#else  // UNITY_WEBGL && !UNITY_EDITOR — stub implementations
 
 		public static SafeServerHandle wt_server_create(
 			string certificatePath, string privateKeyPath,
@@ -350,6 +350,6 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static void wt_deinit() { }
 		public static IntPtr wt_error_string(int errorCode) => IntPtr.Zero;
 		public static IntPtr wt_version() => IntPtr.Zero;
-	#endif
+#endif
 	}
 }
