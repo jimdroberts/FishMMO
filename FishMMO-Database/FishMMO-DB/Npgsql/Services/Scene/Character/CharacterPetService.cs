@@ -202,6 +202,30 @@ namespace FishMMO.Database.Npgsql.Services
 			var petsToUpdate = petList.Where(p => p.ID > 0).ToList();
 			var petsToInsert = petList.Where(p => p.ID == 0).ToList();
 
+			// Deduplicate across update and insert groups to prevent the same CharacterID
+			// from appearing in both, which would cause a double-update conflict.
+			// When a duplicate is found, keep the one with the higher Version.
+			if (petsToInsert.Count > 0 && petsToUpdate.Count > 0)
+			{
+				var insertLookup = petsToInsert.ToDictionary(p => p.CharacterID);
+				var updateLookup = petsToUpdate.ToDictionary(p => p.CharacterID);
+
+				var crossKeys = new HashSet<long>(insertLookup.Keys);
+				crossKeys.IntersectWith(updateLookup.Keys);
+
+				foreach (var characterId in crossKeys)
+				{
+					if (updateLookup[characterId].Version >= insertLookup[characterId].Version)
+					{
+						petsToInsert.Remove(insertLookup[characterId]);
+					}
+					else
+					{
+						petsToUpdate.Remove(updateLookup[characterId]);
+					}
+				}
+			}
+
 			// Prevent duplicate keys within the same batch from causing
 			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
 			if (petsToInsert.Count > 1)

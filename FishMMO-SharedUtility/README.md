@@ -69,7 +69,6 @@ FishMMO-SharedUtility/
 ├── Configuration.cs           # Hierarchical key/value config tree
 ├── FastActivator.cs           # Expression-tree compiled object factory
 ├── MathHelper.cs              # Vector/scalar/clamp helpers
-├── MemoryAccess.cs            # Unsafe span / pointer helpers
 ├── IReference.cs              # Reference-equality interface contract
 ├── RefWrapper.cs              # Boxed reference wrapper for value types
 ├── SetOnce.cs                 # Write-once latch with optional validator
@@ -99,11 +98,10 @@ All public types live in the `FishMMO.Shared` namespace.
 | Type | Responsibility |
 |------|----------------|
 | `Authentication` | Static validators for usernames, passwords, character names — the same rules used by the LoginServer and account-creation flows. |
-| `CircularBuffer<T>` | Fixed-capacity ring buffer with overwrite-on-full semantics. |
+| `CircularBuffer<T>` | Circular doubly-linked list — an unbounded, thread-safe container for reference types. |
 | `Configuration` | In-memory hierarchical config (`Node` tree) that can be loaded from key/value text files. |
 | `FastActivator<TResult>` | Compiled-expression factory — faster than `Activator.CreateInstance` and avoids reflection per-call. |
 | `MathHelper` | Numeric helpers (clamp, lerp, snapping). |
-| `MemoryAccess` | `Span<T>` / unsafe helpers for high-throughput serialization. |
 | `RefWrapper<T>` | Wraps a value type so reference-comparison works (used for parameter capture). |
 | `SetOnce<T>` | Latch that allows exactly one assignment; throws thereafter. |
 | `IReference` | Marker interface for objects compared by reference. |

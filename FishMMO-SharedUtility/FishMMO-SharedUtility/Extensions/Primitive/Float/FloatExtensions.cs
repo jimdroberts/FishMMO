@@ -53,6 +53,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int DigitCount(this float number)
 		{
+			if (float.IsNaN(number)) return 0;
+
 			float abs = MathF.Abs(number);
 			if (abs < 1.0f) return 1;
 

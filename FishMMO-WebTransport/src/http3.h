@@ -124,6 +124,7 @@ typedef struct h3_stream_ctx_s {
     uint32_t            recv_offset;
     uint32_t            recv_capacity;
     bool                is_request;     /* true if this is the CONNECT request stream */
+    struct h3_session_s* h3;            /* back-pointer to HTTP/3 session (for data processing) */
 } h3_stream_ctx_t;
 
 /* ── HTTP/3 Session ─────────────────────────────────────────── */

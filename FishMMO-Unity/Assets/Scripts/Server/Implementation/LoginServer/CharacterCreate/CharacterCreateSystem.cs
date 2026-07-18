@@ -38,7 +38,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Maximum allowed length for scene and spawner name fields from client messages.
 		/// </summary>
-		private const int MaxSceneFieldLength = 256;
+		[Tooltip("Max allowed length for scene and spawner name fields")]
+		[SerializeField] private int maxSceneFieldLength = 256;
 
 		/// <summary>
 		/// Maximum number of characters allowed per account.
@@ -180,8 +181,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Validate string field lengths to prevent oversized allocations.
-			if (string.IsNullOrWhiteSpace(msg.SceneName) || msg.SceneName.Length > MaxSceneFieldLength ||
-				string.IsNullOrWhiteSpace(msg.SpawnerName) || msg.SpawnerName.Length > MaxSceneFieldLength)
+			if (string.IsNullOrWhiteSpace(msg.SceneName) || msg.SceneName.Length > maxSceneFieldLength ||
+				string.IsNullOrWhiteSpace(msg.SpawnerName) || msg.SpawnerName.Length > maxSceneFieldLength)
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
 				return;
@@ -253,6 +254,61 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// so the async worker never touches Unity types.
 			string raceTemplateName = raceTemplate.Name;
 
+			// --- Extract spawn position data on the main thread ---
+			// worldSceneDetailsCache is a ScriptableObject; access it here rather
+			// than in the async worker to avoid Unity main-thread assertions.
+			if (worldSceneDetailsCache == null ||
+				worldSceneDetailsCache.Scenes == null ||
+				worldSceneDetailsCache.Scenes.Count < 1)
+			{
+				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+				{
+					Result = CharacterCreateResult.InvalidSpawn,
+				}, true, Channel.Reliable);
+				return;
+			}
+
+			if (!worldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails sceneDetails))
+			{
+				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+				{
+					Result = CharacterCreateResult.InvalidSpawn,
+				}, true, Channel.Reliable);
+				return;
+			}
+
+			if (!sceneDetails.InitialSpawnPositions.TryGetValue(msg.SpawnerName, out CharacterInitialSpawnPositionDetails spawnDetails))
+			{
+				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+				{
+					Result = CharacterCreateResult.InvalidSpawn,
+				}, true, Channel.Reliable);
+				return;
+			}
+
+			// Validate allowed race against spawn position (main thread).
+			bool raceAllowed = false;
+			foreach (RaceTemplate t in spawnDetails.AllowedRaces)
+			{
+				if (string.Equals(t.Name, raceTemplateName, StringComparison.Ordinal))
+				{
+					raceAllowed = true;
+					break;
+				}
+			}
+			if (!raceAllowed)
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			// Extract plain C# data from the ScriptableObject for the async worker.
+			var preparedSpawn = new PreparedSpawnDetails(
+				spawnDetails.SceneName,
+				spawnDetails.Position.x, spawnDetails.Position.y, spawnDetails.Position.z,
+				spawnDetails.Rotation.x, spawnDetails.Rotation.y, spawnDetails.Rotation.z, spawnDetails.Rotation.w
+			);
+
 			// --- Dispatch DTO construction + DB work to async ---
 			if (!TryBeginCreateRequest(conn))
 			{
@@ -266,6 +322,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (!TryEnqueueAsyncWork(() => ProcessCharacterCreateAsync(
 				conn, msg, accountName,
 				raceTemplateName,
+				preparedSpawn,
 				preparedAttributes, preparedFactions, preparedAbilities,
 				preparedInventory, preparedEquipment,
 				characterService, factionService, abilityService,
@@ -305,6 +362,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			CharacterCreateBroadcast msg,
 			string accountName,
 			string raceTemplateName,
+			PreparedSpawnDetails preparedSpawn,
 			List<PreparedAttributeEntry> preparedAttributes,
 			List<PreparedFactionEntry> preparedFactions,
 			List<PreparedAbilityEntry> preparedAbilities,
@@ -320,78 +378,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			try
 			{
-				// --- Validate spawn data (worldSceneDetailsCache is ScriptableObject data cached at startup) ---
-
-				if (worldSceneDetailsCache == null ||
-					worldSceneDetailsCache.Scenes == null ||
-					worldSceneDetailsCache.Scenes.Count < 1)
-				{
-					TryEnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
-							{
-								Result = CharacterCreateResult.InvalidSpawn,
-							}, true, Channel.Reliable);
-						}
-					});
-					return;
-				}
-
-				if (!worldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails details))
-				{
-					await Log.Debug("CharacterCreateSystem", "Unable to get World Scene Details.");
-					TryEnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
-							{
-								Result = CharacterCreateResult.InvalidSpawn,
-							}, true, Channel.Reliable);
-						}
-					});
-					return;
-				}
-
-				if (!details.InitialSpawnPositions.TryGetValue(msg.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
-				{
-					await Log.Debug("CharacterCreateSystem", "Unable to find initial spawn position for Spawner.");
-					TryEnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
-							{
-								Result = CharacterCreateResult.InvalidSpawn,
-							}, true, Channel.Reliable);
-						}
-					});
-					return;
-				}
-
-				// Validate allowed race against spawn position (immutable data)
-				bool validateAllowedRace = false;
-				foreach (RaceTemplate t in initialSpawnPosition.AllowedRaces)
-				{
-					if (string.Equals(t.Name, raceTemplateName, StringComparison.Ordinal))
-					{
-						validateAllowedRace = true;
-						break;
-					}
-				}
-				if (!validateAllowedRace)
-				{
-					TryEnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-						}
-					});
-					return;
-				}
+				// --- Spawn position data was pre-extracted on the main thread ---
+				// All ScriptableObject access (worldSceneDetailsCache, RaceTemplate lookups)
+				// was completed before dispatch. Use the prepared plain-C# data.
 
 				// --- Check character count limit ---
 
@@ -420,12 +409,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 					account: accountName,
 					selected: false,
 					worldServerID: 0,
-					sceneName: initialSpawnPosition.SceneName,
+					sceneName: preparedSpawn.SceneName,
 					sceneHandle: 0,
 					bindScene: msg.SceneName,
-					bindX: initialSpawnPosition.Position.x,
-					bindY: initialSpawnPosition.Position.y,
-					bindZ: initialSpawnPosition.Position.z,
+					bindX: preparedSpawn.PosX,
+					bindY: preparedSpawn.PosY,
+					bindZ: preparedSpawn.PosZ,
 					instanceID: 0,
 					instanceX: 0f,
 					instanceY: 0f,
@@ -436,13 +425,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 					instanceRotW: 0f,
 					raceID: msg.RaceTemplateID,
 					modelIndex: msg.ModelIndex,
-					x: initialSpawnPosition.Position.x,
-					y: initialSpawnPosition.Position.y,
-					z: initialSpawnPosition.Position.z,
-					rotX: initialSpawnPosition.Rotation.x,
-					rotY: initialSpawnPosition.Rotation.y,
-					rotZ: initialSpawnPosition.Rotation.z,
-					rotW: initialSpawnPosition.Rotation.w,
+					x: preparedSpawn.PosX,
+					y: preparedSpawn.PosY,
+					z: preparedSpawn.PosZ,
+					rotX: preparedSpawn.RotX,
+					rotY: preparedSpawn.RotY,
+					rotZ: preparedSpawn.RotZ,
+					rotW: preparedSpawn.RotW,
 					accessLevel: (byte)AccessLevel.Player,
 					online: false,
 					flags: 0,
@@ -1144,6 +1133,41 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				TemplateID = templateID;
 				Slot = slot;
+			}
+		}
+
+		/// <summary>
+		/// Prepared immutable spawn position data extracted on the main thread
+		/// so the async worker never touches Unity ScriptableObject types.
+		/// </summary>
+		private readonly struct PreparedSpawnDetails
+		{
+			/// <summary>The scene name to place the character in.</summary>
+			public readonly string SceneName;
+			/// <summary>Spawn position X.</summary>
+			public readonly float PosX;
+			/// <summary>Spawn position Y.</summary>
+			public readonly float PosY;
+			/// <summary>Spawn position Z.</summary>
+			public readonly float PosZ;
+			/// <summary>Spawn rotation X.</summary>
+			public readonly float RotX;
+			/// <summary>Spawn rotation Y.</summary>
+			public readonly float RotY;
+			/// <summary>Spawn rotation Z.</summary>
+			public readonly float RotZ;
+			/// <summary>Spawn rotation W.</summary>
+			public readonly float RotW;
+
+			/// <summary>
+			/// Initializes a new spawn details entry with position and rotation data.
+			/// </summary>
+			public PreparedSpawnDetails(string sceneName, float posX, float posY, float posZ,
+				float rotX, float rotY, float rotZ, float rotW)
+			{
+				SceneName = sceneName;
+				PosX = posX; PosY = posY; PosZ = posZ;
+				RotX = rotX; RotY = rotY; RotZ = rotZ; RotW = rotW;
 			}
 		}
 

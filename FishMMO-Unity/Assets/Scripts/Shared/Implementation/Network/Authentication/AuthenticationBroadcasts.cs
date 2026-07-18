@@ -188,10 +188,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct RenewTokenResponseBroadcast : IBroadcast
 	{
-		/// <summary>AES-GCM encrypted signed auth token (server-&gt;client).</summary>
+		/// <summary>AES-GCM encrypted signed auth token (server->client).</summary>
 		public byte[] Token;
 
-		/// <summary>Explicit message sequence number (server-&gt;client).</summary>
+		/// <summary>Explicit message sequence number (server->client).</summary>
 		public uint Seq;
 	}
 
@@ -213,12 +213,31 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Broadcast sent by the server after account creation containing encrypted TOTP
 	/// setup data (otpauth URI and recovery codes) for two-factor authentication.
+	///
+	/// <para>
+	/// WARNING: The nonce-derivation scheme on both client and server depends on C#
+	/// struct field declaration order matching FishNet serialization order.  The
+	/// server sends OtpauthUri first, then RecoveryCodes, and the client consumes
+	/// them in that exact sequence via <c>receiveNonceCtx.NextNonce()</c>.  If these
+	/// fields are reordered, the nonce streams desynchronize and TOTP silently breaks.
+	/// DO NOT reorder <see cref="OtpauthUri"/> and <see cref="RecoveryCodes"/>.
+	/// </para>
 	/// </summary>
 	public struct TwoFactorSetupBroadcast : IBroadcast
 	{
-		/// <summary>Encrypted otpauth:// URI for authenticator app setup (AES-GCM, server->client).</summary>
+		/// <summary>
+		/// Encrypted otpauth:// URI for authenticator app setup (AES-GCM, server->client).
+		///
+		/// WARNING: Declaration order IS the wire protocol (see struct remarks).
+		/// This field MUST remain declared before <see cref="RecoveryCodes"/>.
+		/// </summary>
 		public byte[] OtpauthUri;
-		/// <summary>Encrypted newline-delimited plaintext recovery codes (AES-GCM, server->client).</summary>
+		/// <summary>
+		/// Encrypted newline-delimited plaintext recovery codes (AES-GCM, server->client).
+		///
+		/// WARNING: Declaration order IS the wire protocol (see struct remarks).
+		/// This field MUST remain declared after <see cref="OtpauthUri"/>.
+		/// </summary>
 		public byte[] RecoveryCodes;
 
 		/// <summary>

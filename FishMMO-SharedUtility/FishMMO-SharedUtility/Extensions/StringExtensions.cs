@@ -9,8 +9,10 @@ namespace FishMMO.Shared
 	public static class StringExtensions
 	{
 		/// <summary>
-		/// Computes a deterministic 32-bit hash code for a string. 
+		/// Computes a deterministic 32-bit hash code for a string.
 		/// This remains consistent across different .NET versions, architectures, and app restarts.
+		/// Based on a djb2-like hash with two interleaved accumulators for improved distribution.
+		/// Consistent across .NET versions and processor architectures.
 		/// </summary>
 		/// <param name="text">The string to hash.</param>
 		/// <returns>A deterministic 32-bit integer hash code.</returns>

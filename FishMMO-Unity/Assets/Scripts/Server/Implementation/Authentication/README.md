@@ -113,7 +113,7 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `Bas
 - **Deferred online check** — Account online-status check is deferred until after SRP proof to prevent account-existence enumeration.
 - **RejectAndPurge unified failure handling** — All failure paths use a shared helper to atomically notify, disconnect, and purge, preventing information leakage through inconsistent error timing.
 - **Error indistinguishability** — Most failure paths disconnect without protocol-level detail, preventing oracle attacks.
-- **Connection IP caching** — `LastSeenCacheTracker<int, string>` with 120 s TTL avoids repeated address allocation on hot paths.
+- **Connection IP caching** — `LastSeenCacheTracker<int, string>` with 120 s TTL caches resolved IP strings to avoid repeated allocations on hot paths, and optionally stores real client IPs recovered from connection tokens (proxy deployments). Behind an L4 proxy, connection IP recovery requires the client to include a connection token validated via `IConnectionTokenService`; the recovered real IP is stored in the same cache for rate-limiting purposes.
 - **Token generation and issuance** — LoginServer generates HMAC-signed auth tokens with configurable expiration (default 10 min), encrypted with session keys, and persisted for revocation support.
 - **Token revocation** — World/Scene servers verify token revocation status via database hash lookup before granting access.
 - **Protocol version negotiation** — `CryptoHelper.NegotiateProtocolVersion` with version range binding in the ECDH transcript hash prevents downgrade attacks.

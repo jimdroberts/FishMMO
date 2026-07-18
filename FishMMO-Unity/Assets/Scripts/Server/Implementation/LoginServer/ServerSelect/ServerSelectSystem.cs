@@ -125,6 +125,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!TryBeginServerListRequest(conn))
 			{
+				SendEmptyServerList(conn);
 				return;
 			}
 

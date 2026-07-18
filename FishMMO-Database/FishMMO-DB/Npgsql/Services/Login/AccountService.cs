@@ -234,11 +234,14 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid account credentials.");
 			}
 
+			// Return generic error to prevent banned-account enumeration.
+			// Same message as null account above so attackers cannot distinguish
+			// a banned account from a non-existent one.
 			if ((AccessLevel)accountEntity.AccessLevel == AccessLevel.Banned)
 			{
 				return DatabaseResult<AccountData>.Failure(
 					DatabaseErrorCodes.Forbidden,
-					"This account has been banned.");
+					"Invalid account credentials.");
 			}
 
 			// Map Entity to DTO
@@ -310,6 +313,7 @@ namespace FishMMO.Database.Npgsql.Services
 				discordLinkCode: entity.DiscordLinkCode,
 				verified: entity.Verified,
 				verifyCode: entity.VerifyCode,
+				verifyCodeExpiresUtc: entity.VerifyCodeExpiresUtc,
 				verificationEmailSentAt: entity.VerificationEmailSentAt,
 				created: entity.TimeCreated,
 				lastLogin: entity.LastLogin

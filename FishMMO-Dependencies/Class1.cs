@@ -1,4 +1,4 @@
-namespace FishMMO_Dependencies
+namespace FishMMO.Dependencies
 {
     // Building the Dependencies project copies NuGet package DLLs directly to the
     // Unity Assets/Dependencies folder. See the .csproj post-build target for details.

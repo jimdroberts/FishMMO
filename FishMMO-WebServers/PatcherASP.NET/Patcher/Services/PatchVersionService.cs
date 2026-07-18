@@ -30,15 +30,27 @@ public class PatchVersionService : IDisposable
 	/// </summary>
 	public sealed record PatchEntry(string FromVersion, string ToVersion, string FullPath, long Size, string Sha256Hex);
 
+	/// <summary>
+	/// Debounce interval for reindexing after file system changes (default: 1 second).
+	/// Configured via <c>Patches:DebounceSeconds</c>.
+	/// </summary>
+	private readonly TimeSpan debounceInterval;
+
+	/// <summary>
+	/// File search pattern for patch files (default: "*.zip").
+	/// Configured via <c>Patches:SearchPattern</c>.
+	/// </summary>
+	private readonly string searchPattern;
+
 	// Indexed by "{from}-{to}" exactly as it appears in the file name (case-sensitive
 	// to match the on-disk name and our regex output). Reads use a swap-on-write
 	// pattern so live request threads see a consistent snapshot even while a
 	// reindex is in progress.
-	private volatile Dictionary<string, PatchEntry> _patches = new(StringComparer.Ordinal);
+	private volatile Dictionary<string, PatchEntry> patches = new(StringComparer.Ordinal);
 
-	private FileSystemWatcher? _watcher;
-	private readonly object _reindexLock = new();
-	private Timer? _debounceTimer;
+	private FileSystemWatcher? watcher;
+	private readonly object reindexLock = new();
+	private Timer? debounceTimer;
 
 	private static readonly Regex PatchFileNameRegex =
 		new Regex(@"^(\d{1,9}\.\d{1,9}\.\d{1,9}(?:\.[A-Za-z0-9\-]{1,32})?)-(\d{1,9}\.\d{1,9}\.\d{1,9}(?:\.[A-Za-z0-9\-]{1,32})?)\.zip$", RegexOptions.Compiled);
@@ -47,6 +59,12 @@ public class PatchVersionService : IDisposable
 	{
 		this.env = env;
 		this.config = config;
+
+		// Read configurable settings with defaults
+		int debounceSecs = config.GetValue<int?>("Patches:DebounceSeconds") ?? 1;
+		debounceInterval = TimeSpan.FromSeconds(Math.Max(debounceSecs, 1));
+		searchPattern = config.GetValue<string>("Patches:SearchPattern") ?? "*.zip";
+
 		InitializeLatestVersion();
 		StartWatcher();
 	}
@@ -57,20 +75,20 @@ public class PatchVersionService : IDisposable
 	/// </summary>
 	public PatchEntry? TryGetPatch(string fromVersion, string toVersion)
 	{
-		return _patches.TryGetValue($"{fromVersion}-{toVersion}", out var entry) ? entry : null;
+		return patches.TryGetValue($"{fromVersion}-{toVersion}", out var entry) ? entry : null;
 	}
 
 	/// <summary>
 	/// Starts a <see cref="FileSystemWatcher"/> over <see cref="PatchesRoot"/> so
 	/// patches dropped in after startup are picked up without a server restart.
-	/// Triggers are debounced (1s) to coalesce bursts during multi-file copies.
+	/// Triggers are debounced to coalesce bursts during multi-file copies.
 	/// </summary>
 	private void StartWatcher()
 	{
 		if (!Directory.Exists(PatchesRoot)) return;
 		try
 		{
-			_watcher = new FileSystemWatcher(PatchesRoot, "*.zip")
+			watcher = new FileSystemWatcher(PatchesRoot, searchPattern)
 			{
 				NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
 				IncludeSubdirectories = false,
@@ -78,10 +96,10 @@ public class PatchVersionService : IDisposable
 			};
 			FileSystemEventHandler onChange = (_, _) => ScheduleReindex();
 			RenamedEventHandler onRename = (_, _) => ScheduleReindex();
-			_watcher.Created += onChange;
-			_watcher.Changed += onChange;
-			_watcher.Deleted += onChange;
-			_watcher.Renamed += onRename;
+			watcher.Created += onChange;
+			watcher.Changed += onChange;
+			watcher.Deleted += onChange;
+			watcher.Renamed += onRename;
 			Log.Info("PatchVersionService", $"FileSystemWatcher started on '{PatchesRoot}'.");
 		}
 		catch (Exception ex)
@@ -95,12 +113,12 @@ public class PatchVersionService : IDisposable
 		// Use CompareExchange so two FileSystemWatcher callbacks racing on the very
 		// first event can never construct two Timers (and leak the loser). After the timer
 		// exists, the cheap Change() call is safe to race on — Timer.Change is thread-safe.
-		Timer? existing = _debounceTimer;
+		Timer? existing = debounceTimer;
 		if (existing == null)
 		{
 			var created = new Timer(_ =>
 			{
-				lock (_reindexLock)
+				lock (reindexLock)
 				{
 					try
 					{
@@ -113,20 +131,20 @@ public class PatchVersionService : IDisposable
 				}
 			}, null, Timeout.Infinite, Timeout.Infinite);
 
-			Timer? prior = Interlocked.CompareExchange(ref _debounceTimer, created, null);
+			Timer? prior = Interlocked.CompareExchange(ref debounceTimer, created, null);
 			if (prior != null)
 			{
 				// Lost the race; drop the duplicate.
 				created.Dispose();
 			}
 		}
-		_debounceTimer!.Change(TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+		debounceTimer!.Change(debounceInterval, Timeout.InfiniteTimeSpan);
 	}
 
 	public void Dispose()
 	{
-		_watcher?.Dispose();
-		_debounceTimer?.Dispose();
+		watcher?.Dispose();
+		debounceTimer?.Dispose();
 	}
 
 	private void InitializeLatestVersion()
@@ -159,7 +177,7 @@ public class PatchVersionService : IDisposable
 		{
 			VersionConfig? highestVersion = null;
 			// Build into a fresh map so a partial reindex never exposes a half-emptied
-			// view to concurrent readers. Swap onto _patches atomically when complete.
+			// view to concurrent readers. Swap onto patches atomically when complete.
 			var fresh = new Dictionary<string, PatchEntry>(StringComparer.Ordinal);
 
 			foreach (var filePath in Directory.EnumerateFiles(patchesPath, "*.zip", SearchOption.TopDirectoryOnly))
@@ -222,12 +240,12 @@ public class PatchVersionService : IDisposable
 					highestVersion = toVersion;
 				}
 
-				Log.Info("PatchVersionService", $"Indexed patch {fromString} -> {toString} ({info.Length} bytes, sha256={sha256.Substring(0, 12)}…)");
+				Log.Info("PatchVersionService", $"Indexed patch {fromString} -> {toString} ({info.Length} bytes, sha256={sha256.Substring(0, 12)}...)");
 			}
 
-			_patches = fresh; // atomic reference swap
+			patches = fresh; // atomic reference swap
 			LatestVersion = highestVersion?.FullVersion ?? "0.0.0";
-			Log.Info("PatchVersionService", $"Patch indexing complete. Latest version: {LatestVersion}. Total patches: {_patches.Count}.");
+			Log.Info("PatchVersionService", $"Patch indexing complete. Latest version: {LatestVersion}. Total patches: {patches.Count}.");
 		}
 		catch (Exception ex)
 		{

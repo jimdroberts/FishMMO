@@ -249,8 +249,9 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Ensures a connection is tracked in unauthenticated-state timing map.
-		/// Must be called inside <see cref="syncRoot"/> lock.
+		/// Adds <paramref name="connection"/> to the unauthenticated-state arrival-order tracker
+		/// so that stale handshakes can be expired by <see cref="SweepUnauthenticatedConnections"/>.
+		/// Must be called inside <see cref="syncRoot"/> lock — callers must ensure they hold the lock.
 		/// </summary>
 		protected void TrackUnauthenticatedConnection_NoLock(TConnection connection)
 		{
@@ -263,7 +264,9 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Removes a connection from unauthenticated tracking structures.
+		/// Removes <paramref name="connection"/> from the unauthenticated-state tracker.
+		/// Call when the connection advances to an authenticated state (SrpSuccess/Authenticated)
+		/// or when it is disconnected, to keep the sweep's scan bound tight.
 		/// Must be called inside <see cref="syncRoot"/> lock.
 		/// </summary>
 		protected void UntrackUnauthenticatedConnection_NoLock(TConnection connection)
@@ -277,7 +280,9 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Zeroes and removes encryption data for a single connection.
+		/// Calls <see cref="ConnectionEncryptionData.Clear"/> on the connection's encryption data,
+		/// zeroing AES session keys, then removes the entry from the dictionary.
+		/// Use when tearing down connection state (disconnect, sweep, failed auth).
 		/// Must be called inside <see cref="syncRoot"/> lock.
 		/// </summary>
 		protected void ClearAndRemoveEncryptionData_NoLock(TConnection connection)
@@ -289,9 +294,6 @@ namespace FishMMO.Auth.Implementation
 			}
 		}
 
-		/// <summary>
-		/// Zeroes all sensitive key material and clears all stored account and connection data.
-		/// </summary>
 		public void Clear()
 		{
 			lock (syncRoot)

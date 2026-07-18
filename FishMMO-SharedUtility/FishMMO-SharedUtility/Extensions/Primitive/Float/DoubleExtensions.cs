@@ -43,6 +43,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int DigitCount(this double number)
 		{
+			if (double.IsNaN(number)) return 0;
+
 			double abs = Math.Abs(number);
 
 			// Handle zero and fractions between -1 and 1

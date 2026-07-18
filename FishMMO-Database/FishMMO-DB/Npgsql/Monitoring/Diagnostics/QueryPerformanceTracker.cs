@@ -237,6 +237,9 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 
 		/// <summary>
 		/// Records standard metrics with sampling (includes percentiles).
+		/// Currently delegates to <see cref="RecordBasicMetrics"/>; differentiated behavior
+		/// (e.g., percentile tracking) can be added in the future. The distinction between
+		/// Standard, Detailed, and Full levels is sampling rate (controlled by <see cref="Configuration.SampleRate"/>).
 		/// </summary>
 		private void RecordStandardMetrics(string operationName, TimeSpan duration, bool success)
 		{
@@ -245,6 +248,9 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 
 		/// <summary>
 		/// Records detailed metrics with sampling.
+		/// Currently delegates to <see cref="RecordStandardMetrics"/>; differentiated behavior
+		/// (e.g., histogram bucketing) can be added in the future. The distinction between
+		/// Standard, Detailed, and Full levels is sampling rate (controlled by <see cref="Configuration.SampleRate"/>).
 		/// </summary>
 		private void RecordDetailedMetrics(string operationName, TimeSpan duration, bool success)
 		{
@@ -253,6 +259,9 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 
 		/// <summary>
 		/// Records full metrics without sampling.
+		/// Currently delegates to <see cref="RecordBasicMetrics"/>; differentiated behavior
+		/// (e.g., per-query tagging or full trace capture) can be added in the future. The distinction between
+		/// Standard, Detailed, and Full levels is sampling rate (controlled by <see cref="Configuration.SampleRate"/>).
 		/// </summary>
 		private void RecordFullMetrics(string operationName, TimeSpan duration, bool success)
 		{

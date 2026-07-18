@@ -498,13 +498,15 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				// Hard-delete temporary membership state (intentional).
+				var guildTableName = dbContext.GetTableName<CharacterGuildEntity>();
 				await dbContext.Database.ExecuteSqlRawAsync(
-					"DELETE FROM character_guild WHERE character_id = {0}",
+					$"DELETE FROM {guildTableName} WHERE character_id = {{0}}",
 					new object[] { characterId },
 					cancellationToken).ConfigureAwait(false);
 
+				var partyTableName = dbContext.GetTableName<CharacterPartyEntity>();
 				await dbContext.Database.ExecuteSqlRawAsync(
-					"DELETE FROM character_party WHERE character_id = {0}",
+					$"DELETE FROM {partyTableName} WHERE character_id = {{0}}",
 					new object[] { characterId },
 					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);

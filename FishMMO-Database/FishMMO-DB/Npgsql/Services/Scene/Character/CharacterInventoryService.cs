@@ -134,6 +134,13 @@ namespace FishMMO.Database.Npgsql.Services
 					"Empty or null items collection");
 			}
 
+			if (itemList.Any(i => i.Version <= 0))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"One or more inventory items had an invalid Version. Version must be greater than 0.");
+			}
+
 			// Prevent duplicate keys within the same batch from causing
 			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
 			if (itemList.Count > 1)
@@ -148,13 +155,6 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					itemList = deduped.Values.ToList();
 				}
-			}
-
-			if (itemList.Any(i => i.Version <= 0))
-			{
-				return DatabaseResult.Failure(
-					DatabaseErrorCodes.ValidationError,
-					"One or more inventory items had an invalid Version. Version must be greater than 0.");
 			}
 
 			return await ExecuteTransactionAsync(async dbContext =>

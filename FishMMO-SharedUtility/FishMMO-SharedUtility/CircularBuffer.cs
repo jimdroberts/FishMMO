@@ -10,14 +10,34 @@ namespace FishMMO.Shared
 	/// <typeparam name="T">Must be a reference type.</typeparam>
 	public class CircularBuffer<T> where T : class
 	{
-		private readonly object _lock = new object();
-		private int _count;
+		private readonly object syncLock = new object();
+		private int count;
 
+		/// <summary>
+		/// A node in the circular doubly-linked list. Exposed publicly so callers
+		/// can hold a reference for O(1) removal via <see cref="Remove"/>.
+		/// </summary>
 		public class Node
 		{
-			public Action? OnRemove;
+			/// <summary>
+			/// Optional callback invoked when this node is removed from its owning list.
+			/// Set at construction time via <see cref="Add"/>.
+			/// </summary>
+			public Action? OnRemove { get; set; }
+
+			/// <summary>
+			/// The value stored in this node.
+			/// </summary>
 			public T Value { get; set; }
+
+			/// <summary>
+			/// The next node in the circular list (never null when the node is linked).
+			/// </summary>
 			public Node? Next { get; set; }
+
+			/// <summary>
+			/// The previous node in the circular list (never null when the node is linked).
+			/// </summary>
 			public Node? Previous { get; set; }
 
 			public Node(T value, Action? onRemove)
@@ -40,12 +60,12 @@ namespace FishMMO.Shared
 
 		public Node? Head
 		{
-			get { lock (_lock) return head; }
+			get { lock (syncLock) return head; }
 		}
 
 		public Node? Tail
 		{
-			get { lock (_lock) return tail; }
+			get { lock (syncLock) return tail; }
 		}
 
 		/// <summary>
@@ -53,7 +73,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public int Count
 		{
-			get { lock (_lock) return _count; }
+			get { lock (syncLock) return count; }
 		}
 
 		/// <summary>
@@ -61,7 +81,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public Node Add(T item, Action<Node>? onAddCallback = null, Action? onRemoveCallback = null)
 		{
-			lock (_lock)
+			lock (syncLock)
 			{
 				Node newNode = new Node(item, onRemoveCallback);
 				onAddCallback?.Invoke(newNode);
@@ -82,19 +102,30 @@ namespace FishMMO.Shared
 					tail = newNode;
 				}
 
-				_count++;
+				count++;
 				return newNode;
 			}
 		}
 
 		/// <summary>
 		/// Removes a specific node from the circle and repairs the links.
+		/// Validates that the node belongs to this list before modifying links.
 		/// </summary>
 		public void Remove(Node? node)
 		{
-			lock (_lock)
+			lock (syncLock)
 			{
 				if (node == null || head == null) return;
+
+				// Validate that the node belongs to this list by walking from head.
+				bool belongs = false;
+				Node current = head;
+				do
+				{
+					if (current == node) { belongs = true; break; }
+					current = current.Next!;
+				} while (current != head);
+				if (!belongs) return;
 
 				node.OnRemove?.Invoke();
 
@@ -118,7 +149,7 @@ namespace FishMMO.Shared
 				}
 
 				node.Clear();
-				_count--;
+				count--;
 			}
 		}
 
@@ -127,12 +158,33 @@ namespace FishMMO.Shared
 		/// </summary>
 		public T? Pop()
 		{
-			lock (_lock)
+			lock (syncLock)
 			{
 				if (tail == null) return null;
 
-				T val = tail.Value;
-				Remove(tail); // Use the centralized Remove logic to ensure pointers and OnRemove are handled
+				Node node = tail;
+				T val = node.Value;
+
+				node.OnRemove?.Invoke();
+
+				if (head == tail)
+				{
+					// Only one node exists
+					head = null;
+					tail = null;
+				}
+				else
+				{
+					// Link neighbors to each other
+					node.Previous!.Next = node.Next;
+					node.Next!.Previous = node.Previous;
+
+					if (node == head) head = node.Next;
+					if (node == tail) tail = node.Previous;
+				}
+
+				node.Clear();
+				count--;
 				return val;
 			}
 		}
@@ -144,18 +196,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool Peek()
 		{
-			lock (_lock)
+			lock (syncLock)
 			{
-				return _count > 0;
+				return head != null;
 			}
 		}
 
 		/// <summary>
 		/// Returns true if the buffer has no nodes.
+		/// Uses the same underlying check as <see cref="Peek"/> for consistency.
 		/// </summary>
 		public bool Empty()
 		{
-			lock (_lock)
+			lock (syncLock)
 			{
 				return head == null;
 			}
@@ -166,7 +219,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Clear()
 		{
-			lock (_lock)
+			lock (syncLock)
 			{
 				// Walk the list clearing each node to invoke OnRemove callbacks
 				if (head != null)
@@ -183,7 +236,7 @@ namespace FishMMO.Shared
 
 				head = null;
 				tail = null;
-				_count = 0;
+				count = 0;
 			}
 		}
 
@@ -194,7 +247,7 @@ namespace FishMMO.Shared
 		public IEnumerable<T> GetValues()
 		{
 			List<T> snapshot;
-			lock (_lock)
+			lock (syncLock)
 			{
 				if (head == null)
 				{
@@ -202,9 +255,9 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					snapshot = new List<T>(_count);
+					snapshot = new List<T>(count);
 					Node current = head!;
-					for (int i = 0; i < _count; i++)
+					for (int i = 0; i < count; i++)
 					{
 						snapshot.Add(current.Value);
 						current = current.Next!;

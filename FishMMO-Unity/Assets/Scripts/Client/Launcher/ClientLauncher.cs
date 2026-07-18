@@ -117,11 +117,11 @@ namespace FishMMO.Client
 
 		#region INTERNAL STATE
 		/// <summary>
-		/// Guards against re-entering PlayButton_Connect while a connection is in progress.
+		/// Guards against re-entering PlayButtonConnect while a connection is in progress.
 		/// </summary>
 		private bool isConnecting = false;
 		/// <summary>
-		/// Guards against re-entering PlayButton_Launch while a launch is in progress.
+		/// Guards against re-entering PlayButtonLaunch while a launch is in progress.
 		/// </summary>
 		private bool isLaunching = false;
 		/// <summary>
@@ -234,7 +234,7 @@ namespace FishMMO.Client
 				{
 					HtmlText.text = htmlContent;
 #if !UNITY_EDITOR
-					PlayButton_Connect();
+					PlayButtonConnect();
 #else
 					SetLauncherState(LauncherState.ReadyToPlay);
 #endif
@@ -256,9 +256,9 @@ namespace FishMMO.Client
 			});
 #endif
 			string versionString = !string.IsNullOrEmpty(MainBootstrapSystem.GameVersion)
-			? MainBootstrapSystem.GameVersion
-			: "0.0.0-unknown";
-		Title.text = $"{Constants.Configuration.ProjectName} v{versionString}";
+				? MainBootstrapSystem.GameVersion
+				: "0.0.0-unknown";
+			Title.text = $"{Constants.Configuration.ProjectName} v{versionString}";
 			ProgressBarGroup.SetActive(false); // Ensure progress bar is hidden initially.
 		}
 
@@ -343,7 +343,7 @@ namespace FishMMO.Client
 					break;
 				case LauncherState.Connecting:
 					buttonText = UIText.StatusConnecting;
-					buttonAction = PlayButton_Connect;
+					buttonAction = PlayButtonConnect;
 					break;
 				case LauncherState.CheckingVersion:
 					buttonText = UIText.StatusCheckingVersion;
@@ -358,32 +358,32 @@ namespace FishMMO.Client
 				case LauncherState.ReadyToPlay:
 					buttonText = UIText.ButtonPlay;
 					isButtonInteractable = true;
-					buttonAction = PlayButton_Launch;
+					buttonAction = PlayButtonLaunch;
 					break;
 				case LauncherState.ClientAhead:
 					buttonText = UIText.StatusClientAhead;
 					isButtonInteractable = true; // Allow playing even if client is ahead.
-					buttonAction = PlayButton_Launch;
+					buttonAction = PlayButtonLaunch;
 					break;
 				case LauncherState.ConnectionFailed:
 					buttonText = UIText.StatusConnectionFailed;
 					isButtonInteractable = true;
-					buttonAction = PlayButton_Connect; // Allow retry.
+					buttonAction = PlayButtonConnect; // Allow retry.
 					break;
 				case LauncherState.VersionCheckFailed:
 					buttonText = UIText.StatusVersionCheckFailed;
 					isButtonInteractable = true;
-					buttonAction = PlayButton_Connect; // Allow retry.
+					buttonAction = PlayButtonConnect; // Allow retry.
 					break;
 				case LauncherState.PatchDownloadFailed:
 					buttonText = UIText.StatusPatchDownloadFailed;
 					isButtonInteractable = true;
-					buttonAction = PlayButton_Update; // Allow retry.
+					buttonAction = PlayButtonUpdate; // Allow retry.
 					break;
 				case LauncherState.UpdaterFailed:
 					buttonText = UIText.StatusUpdaterFailed;
 					isButtonInteractable = true;
-					buttonAction = PlayButton_Connect; // Default to connect for retry.
+					buttonAction = PlayButtonConnect; // Default to connect for retry.
 					break;
 				case LauncherState.LaunchFailed:
 					buttonText = UIText.StatusLaunchFailed;
@@ -391,7 +391,7 @@ namespace FishMMO.Client
 					// Allow the player to go back to the version-check/connect flow
 					// instead of retrying the same failing launch path. A failing
 					// scene load is often recoverable by re-downloading the patch.
-					buttonAction = PlayButton_Connect;
+					buttonAction = PlayButtonConnect;
 					break;
 				case LauncherState.VersionError:
 					buttonText = UIText.StatusVersionError;
@@ -399,12 +399,12 @@ namespace FishMMO.Client
 					// Previously unrecoverable — now allows retry. Version parse
 					// failures can be transient (e.g. malformed version.txt after
 					// a partial patch). Let the player retry the version check.
-					buttonAction = PlayButton_Connect;
+					buttonAction = PlayButtonConnect;
 					break;
 				default: // Fallback
 					buttonText = UIText.ButtonConnect;
 					isButtonInteractable = true;
-					buttonAction = PlayButton_Connect;
+					buttonAction = PlayButtonConnect;
 					break;
 			}
 
@@ -475,7 +475,7 @@ namespace FishMMO.Client
 		/// Initiates the connection process to check for game updates.
 		/// All requests go through the unified API gateway (Constants.Configuration.APIHost).
 		/// </summary>
-		public void PlayButton_Connect()
+		public void PlayButtonConnect()
 		{
 			if (isConnecting) return;
 			isConnecting = true;
@@ -486,7 +486,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Launches the client after all version checks and updates are complete.
 		/// </summary>
-		public void PlayButton_Launch()
+		public void PlayButtonLaunch()
 		{
 			if (isLaunching) return;
 			isLaunching = true;
@@ -548,7 +548,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Initiates the update process by attempting to download and apply the patch.
 		/// </summary>
-		public void PlayButton_Update()
+		public void PlayButtonUpdate()
 		{
 			SetLauncherState(LauncherState.DownloadingPatch);
 
@@ -670,7 +670,7 @@ namespace FishMMO.Client
 
 			selectedApiHost = successfulHost;
 			latestVersionString = serverVersion.ToString(); // Store for updater launch
-			expectedPatchSha256 = patchInfo.sha256; // May be null/empty when not provided.
+			expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
 			Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
 
 			VersionConfig clientVersion;
@@ -690,7 +690,7 @@ namespace FishMMO.Client
 			if (clientVersion < serverVersion)
 			{
 				isConnecting = false;
-				PlayButton_Update();
+				PlayButtonUpdate();
 			}
 			else if (clientVersion > serverVersion)
 			{
@@ -712,6 +712,12 @@ namespace FishMMO.Client
 		{
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
+#elif UNITY_WEBGL && !UNITY_EDITOR
+			// Application.Quit() is a no-op in WebGL.
+			// Application.ExternalEval was removed in Unity 2022+; use Application.Quit which
+			// is intentionally a no-op in WebGL (the browser tab stays open).
+			Application.Quit();
+			Log.Info("ClientLauncher", "WebGL quit requested.");
 #else
 			Application.Quit();
 #endif

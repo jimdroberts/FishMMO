@@ -2,6 +2,61 @@
  * @file session.h
  * @brief WebTransport session — manages QUIC streams (reliable)
  *        and datagrams (unreliable) for a single connection.
+ *
+ * ## Shutdown Sequence
+ *
+ * Session shutdown is a multi-step, cross-thread process that must
+ * guarantee no use-after-free of the session or its stream_manager.
+ *
+ * ### Refcount semantics
+ * - wt_session_init sets ref_count = 1 ("owner reference").
+ * - Each call to wt_session_acquire increments ref_count.
+ * - Each call to wt_session_release decrements ref_count.
+ * - When ref_count reaches 0 AND atomic_load(&released) is true,
+ *   the session is freed.
+ *
+ * ### Shutdown flow (initiated by wt_session_shutdown):
+ *
+ *   1. atomic_store(&released, true)
+ *      → Prevents NEW acquires from succeeding (acquire skips if
+ *        ref_count was 0, but the owner reference keeps it >= 1).
+ *
+ *   2. Wire mgr->on_all_streams_done to on_streams_done().
+ *      Set mgr->shutting_down = true.
+ *   3. Call wt_stream_manager_shutdown(mgr).
+ *      → Aborts all open streams. As each stream's SHUTDOWN_COMPLETE
+ *        fires, it decrements active_streams. When the last stream
+ *        completes, on_streams_done() is called.
+ *
+ *   4. atomic_store(&shutdown_complete, true)
+ *   5. Null session->stream_mgr (prevents dangling pointer).
+ *   6. If active_streams == 0 or streams_done_flag is set, free mgr.
+ *      Otherwise on_streams_done() will free it.
+ *
+ *   7. wt_session_release(session) — drops the owner reference.
+ *      If no in-flight sends hold a ref, session is freed now.
+ *
+ * ### The role of on_all_streams_done
+ * - Set during shutdown as mgr->on_all_streams_done.
+ * - Fires from SHUTDOWN_COMPLETE (stream_cb in stream_manager.cpp)
+ *   when active_streams drops to 0 and shutting_down is true.
+ * - Called on_streams_done() which checks shutdown_complete:
+ *   - If true: mgr was already freed, or try_free_mgr() wins the CAS.
+ *   - If false: sets streams_done_flag = true. Re-checks after store
+ *     to catch a concurrent shutdown_complete write.
+ *
+ * ### Relationship between active_streams, streams_done_flag, shutdown_complete
+ * - active_streams: number of streams in use. Decremented atomically.
+ * - streams_done_flag: set by on_streams_done when last stream finishes.
+ * - shutdown_complete: set by wt_session_shutdown after
+ *   wt_stream_manager_shutdown returns.
+ * - freed: CAS gate ensuring exactly one path (session_shutdown or
+ *   on_streams_done) calls free(mgr).
+ * - The race: session_shutdown sets shutdown_complete and checks
+ *   active_streams/streams_done_flag. on_streams_done sets
+ *   streams_done_flag and checks shutdown_complete. The CAS on
+ *   mgr->freed ensures whichever runs second sees the other's
+ *   state and does not double-free.
  */
 
 #ifndef WEBTRANSPORT_SESSION_H
@@ -36,6 +91,20 @@ typedef struct wt_session_s {
 } wt_session_t;
 
 /* ── API ────────────────────────────────────────────────────── */
+
+/**
+ * IMPORTANT THREADING REQUIREMENT
+ * ===============================
+ * All send functions (wt_session_send_stream, wt_session_send_datagram)
+ * AND wt_session_acquire / wt_session_release MUST be called from the
+ * same thread as the corresponding poll function (wt_server_poll_impl /
+ * wt_client_poll_impl).  Calling these from a different thread creates
+ * a use-after-free race: wt_session_shutdown (deferred to the poll
+ * thread) may free the session between the acquire and the send on
+ * the other thread.
+ *
+ * The poll thread owns session lifecycle; the send/acquire path must
+ * synchronise with it by running on the same thread. */
 
 int32_t wt_session_init(
     wt_session_t* session, HQUIC quic_conn, wt_connection_id_t conn_id);

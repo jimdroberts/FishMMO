@@ -157,6 +157,9 @@ typedef struct {
  * @param callbacks         Struct of callback function pointers.
  * @param context           Opaque user pointer passed to all callbacks.
  * @return Server handle, or NULL on failure.
+ *
+ * @thread_safety Safe to call from any thread. Must not be called
+ *                concurrently with wt_server_destroy on the same handle.
  */
 WT_API WT_SERVER wt_server_create(
     const char*                 certificate_path,
@@ -171,6 +174,9 @@ WT_API WT_SERVER wt_server_create(
 /**
  * Destroy the server and free all resources.
  * Disconnects all clients immediately.
+ *
+ * @thread_safety Safe to call from any thread, but must not be concurrent
+ *                with any other operation on the same server handle.
  */
 WT_API void wt_server_destroy(WT_SERVER server);
 
@@ -179,11 +185,17 @@ WT_API void wt_server_destroy(WT_SERVER server);
  * internal QUIC threads.
  *
  * @return WT_OK (0) on success, negative error code on failure.
+ *
+ * @thread_safety Safe to call from the application thread. Must not be
+ *                called concurrently with wt_server_stop.
  */
 WT_API int32_t wt_server_start(WT_SERVER server);
 
 /**
  * Stop accepting connections and disconnect all clients.
+ *
+ * @thread_safety Safe to call from the application thread. Must not be
+ *                called concurrently with wt_server_start or wt_server_poll.
  */
 WT_API void wt_server_stop(WT_SERVER server);
 
@@ -192,6 +204,9 @@ WT_API void wt_server_stop(WT_SERVER server);
  * Use WT_BROADCAST_ALL to send to all connected clients.
  *
  * @return WT_OK (0) on success, negative on failure.
+ *
+ * @thread_safety Safe to call from the application thread (same thread
+ *                that calls wt_server_poll). Not safe from QUIC callbacks.
  */
 WT_API int32_t wt_server_send_stream(
     WT_SERVER           server,
@@ -204,6 +219,9 @@ WT_API int32_t wt_server_send_stream(
  * Use WT_BROADCAST_ALL to send to all connected clients.
  *
  * @return WT_OK (0) on success, negative on failure.
+ *
+ * @thread_safety Safe to call from the application thread (same thread
+ *                that calls wt_server_poll). Not safe from QUIC callbacks.
  */
 WT_API int32_t wt_server_send_datagram(
     WT_SERVER           server,
@@ -213,6 +231,9 @@ WT_API int32_t wt_server_send_datagram(
 
 /**
  * Disconnect a specific client.
+ *
+ * @thread_safety Safe to call from the application thread. Not safe
+ *                from QUIC callbacks.
  */
 WT_API void wt_server_disconnect(
     WT_SERVER           server,
@@ -222,6 +243,9 @@ WT_API void wt_server_disconnect(
  * Get the remote address string for a connected client.
  * Returns a pointer to internal storage (valid until next call on this server).
  * Returns NULL if connection_id is not found.
+ *
+ * @thread_safety Safe to call from any thread during the server's lifetime.
+ *                Returns pointer to stable internal storage.
  */
 WT_API const char* wt_server_get_client_address(
     WT_SERVER           server,
@@ -229,11 +253,15 @@ WT_API const char* wt_server_get_client_address(
 
 /**
  * Get the number of currently connected clients.
+ *
+ * @thread_safety Safe to call from any thread (atomic read).
  */
 WT_API int32_t wt_server_get_client_count(WT_SERVER server);
 
 /**
  * Get the maximum number of clients this server was configured for.
+ *
+ * @thread_safety Safe to call from any thread (read-only constant).
  */
 WT_API int32_t wt_server_get_max_clients(WT_SERVER server);
 
@@ -243,6 +271,8 @@ WT_API int32_t wt_server_get_max_clients(WT_SERVER server);
  *   1 = Starting
  *   2 = Started
  *   3 = Stopping
+ *
+ * @thread_safety Safe to call from any thread (atomic read).
  */
 WT_API int32_t wt_server_get_state(WT_SERVER server);
 
@@ -256,6 +286,9 @@ WT_API int32_t wt_server_get_state(WT_SERVER server);
  * @param callbacks  Struct of callback function pointers.
  * @param context    Opaque user pointer passed to all callbacks.
  * @return Client handle, or NULL on failure.
+ *
+ * @thread_safety Safe to call from any thread. Must not be concurrent
+ *                with wt_client_destroy on the same handle.
  */
 WT_API WT_CLIENT wt_client_create(
     const wt_client_callbacks_t* callbacks,
@@ -263,6 +296,9 @@ WT_API WT_CLIENT wt_client_create(
 
 /**
  * Destroy the client and free all resources.
+ *
+ * @thread_safety Safe to call from any thread, but must not be concurrent
+ *                with any other operation on the same client handle.
  */
 WT_API void wt_client_destroy(WT_CLIENT client);
 
@@ -274,6 +310,9 @@ WT_API void wt_client_destroy(WT_CLIENT client);
  * @param port         UDP port to connect to.
  * @param use_tls      Non-zero to enable TLS (WebTransport requires TLS).
  * @return WT_OK (0) on success (connection started async), negative on failure.
+ *
+ * @thread_safety Safe to call from the application thread. Must not be
+ *                called concurrently with wt_client_disconnect.
  */
 WT_API int32_t wt_client_connect(
     WT_CLIENT       client,
@@ -284,6 +323,9 @@ WT_API int32_t wt_client_connect(
 
 /**
  * Disconnect from the server.
+ *
+ * @thread_safety Safe to call from the application thread. Must not be
+ *                called concurrently with wt_client_poll.
  */
 WT_API void wt_client_disconnect(WT_CLIENT client);
 
@@ -292,6 +334,9 @@ WT_API void wt_client_disconnect(WT_CLIENT client);
  * to process QUIC I/O and deliver callbacks.  Safe to call from any thread.
  *
  * @param timeout_us  Max microseconds to block (0 = non-blocking).
+ *
+ * @thread_safety Safe to call from any thread. Drains deferred session
+ *                shutdowns and datagram queues atomically.
  */
 WT_API void wt_client_poll(WT_CLIENT client, int32_t timeout_us);
 
@@ -303,6 +348,9 @@ WT_API void wt_client_poll(WT_CLIENT client, int32_t timeout_us);
  * guaranteeing safe cleanup of session resources on the application thread.
  *
  * @param timeout_us  Max microseconds to block (0 = non-blocking).
+ *
+ * @thread_safety Safe to call from any thread. Drains deferred session
+ *                shutdowns and datagram queues atomically.
  */
 WT_API void wt_server_poll(WT_SERVER server, int32_t timeout_us);
 
@@ -310,6 +358,9 @@ WT_API void wt_server_poll(WT_SERVER server, int32_t timeout_us);
  * Send reliable data (stream) to the server.
  *
  * @return WT_OK (0) on success, negative on failure.
+ *
+ * @thread_safety Safe to call from the application thread (same thread
+ *                that calls wt_client_poll). Not safe from QUIC callbacks.
  */
 WT_API int32_t wt_client_send_stream(
     WT_CLIENT       client,
@@ -320,6 +371,9 @@ WT_API int32_t wt_client_send_stream(
  * Send unreliable data (datagram) to the server.
  *
  * @return WT_OK (0) on success, negative on failure.
+ *
+ * @thread_safety Safe to call from the application thread (same thread
+ *                that calls wt_client_poll). Not safe from QUIC callbacks.
  */
 WT_API int32_t wt_client_send_datagram(
     WT_CLIENT       client,
@@ -328,12 +382,16 @@ WT_API int32_t wt_client_send_datagram(
 
 /**
  * Return non-zero if the client is currently connected.
+ *
+ * @thread_safety Safe to call from any thread (atomic read).
  */
 WT_API int32_t wt_client_is_connected(WT_CLIENT client);
 
 /**
  * Get the current MTU for the connection.
  * Returns the max datagram size usable without fragmentation.
+ *
+ * @thread_safety Safe to call from any thread (returns a constant).
  */
 WT_API int32_t wt_client_get_mtu(WT_CLIENT client);
 
@@ -343,12 +401,18 @@ WT_API int32_t wt_client_get_mtu(WT_CLIENT client);
  * Initialise the WebTransport library. Must be called once before
  * any server or client operations. Initialises the MsQuic API table.
  * @return WT_OK on success, negative error code on failure.
+ *
+ * @thread_safety Must be called once from any thread before any other
+ *                API function. Not thread-safe with itself (single-shot).
  */
 WT_API int32_t wt_init(void);
 
 /**
  * Shut down the WebTransport library. Call after all servers and
  * clients have been destroyed. Closes the MsQuic API table.
+ *
+ * @thread_safety Must be called after all servers and clients are
+ *                destroyed. Not thread-safe with itself or wt_init.
  */
 WT_API void wt_deinit(void);
 
@@ -356,11 +420,17 @@ WT_API void wt_deinit(void);
 
 /**
  * Get a human-readable error string for an error code.
+ *
+ * @thread_safety Safe to call from any thread. Returns pointer to
+ *                static constant string.
  */
 WT_API const char* wt_error_string(int32_t error_code);
 
 /**
  * Get library version string.
+ *
+ * @thread_safety Safe to call from any thread. Returns pointer to
+ *                static constant string.
  */
 WT_API const char* wt_version(void);
 

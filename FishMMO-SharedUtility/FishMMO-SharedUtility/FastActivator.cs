@@ -7,6 +7,12 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// A faster alternative to Activator.CreateInstance
+	///
+	/// The 17 constructor overloads (0 through 16 arguments) are intentionally
+	/// copy-pasted rather than unified behind IReadOnlyList&lt;object?&gt;. This
+	/// eliminates boxing/allocation of value-type arguments and avoids the
+	/// per-call array or list allocation that a params-style API would require,
+	/// keeping construction as close to raw &#x22;new&#x22; as possible.
 	/// </summary>
 	public static class FastActivator<TResult> where TResult : class
 	{

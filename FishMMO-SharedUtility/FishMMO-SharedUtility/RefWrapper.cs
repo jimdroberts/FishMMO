@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The wrapped value. Accessible directly for high-performance scenarios.
 		/// </summary>
-		public T Value;
+		public T Value { get; set; }
 
 		public RefWrapper(T value)
 		{

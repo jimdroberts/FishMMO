@@ -35,6 +35,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="connection">The originating network connection.</param>
 		/// <param name="encryptedClientProof">Encrypted client proof bytes.</param>
 		/// <param name="encryptionData">Per-connection encryption state for nonce derivation.</param>
+		/// <param name="seq">Broadcast sequence number for replay protection and nonce derivation.</param>
 		public SrpProofRequest(TConnection connection, byte[] encryptedClientProof,
 			ConnectionEncryptionData encryptionData, uint seq)
 		{

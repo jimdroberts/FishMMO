@@ -8,14 +8,14 @@ using FishMMO.Logging;
 /// </summary>
 public class VersionConfig : IComparable<VersionConfig?>
 {
-	public int Major = 0;
-	public int Minor = 0;
-	public int Patch = 0;
+	public int Major { get; set; } = 0;
+	public int Minor { get; set; } = 0;
+	public int Patch { get; set; } = 0;
 	/// <summary>
 	/// Optional pre-release identifier (e.g., "alpha" in 1.2.3.alpha).
 	/// Constrained to [A-Za-z0-9-] characters only; never contains path separators.
 	/// </summary>
-	public string PreRelease = "";
+	public string PreRelease { get; set; } = "";
 
 	public string FullVersion
 	{

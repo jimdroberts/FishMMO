@@ -244,6 +244,13 @@ namespace FishMMO.Database.Npgsql.Services
 					body: m.Message,
 					timeSent: m.TimeCreated,
 					read: false,
+					// ItemAttachmentTemplateID is used for the currency attachment field because
+					// the mail system stores item template IDs (which may represent currency-item
+					// types, e.g. gold coin templates) in CurrencyAttachment, while the seed for
+					// item randomization is stored in ItemAttachment. Both database column names
+					// (item_attachment_template_id, item_attachment_seed) and DTO parameter names
+					// (currencyAttachment, itemAttachment) use semantically distinct naming, but
+					// the int-to-int mapping is correct for the data they carry.
 					currencyAttachment: m.ItemAttachmentTemplateID,
 					itemAttachment: m.ItemAttachmentSeed
 				)).ToList();

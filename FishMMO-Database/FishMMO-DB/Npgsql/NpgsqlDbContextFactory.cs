@@ -170,6 +170,19 @@ namespace FishMMO.Database.Npgsql
 		/// Determines whether the provided <see cref="NpgsqlException"/> indicates connection pool exhaustion
 		/// or another connection-limit condition.
 		/// </summary>
+		/// <remarks>
+		/// FRAGILE STRING MATCHING: This method relies on matching exception message text to detect pool
+		/// exhaustion. The strings compared are tied to specific Npgsql internal error messages and may
+		/// change across versions.
+		///
+		/// Validated against: Npgsql 5.x, 6.x, 7.x, and 8.x (the message templates have been stable
+		/// across these releases). If upgrading Npgsql past 8.x, the strings in this method MUST be
+		/// reviewed for correctness — a missed pattern silently treats pool exhaustion as a generic
+		/// connection error, which degrades retry behavior and metrics accuracy.
+		///
+		/// The secondary <c>PostgresException.SqlState == "53300"</c> check (too_many_connections) is
+		/// a stable PostgreSQL protocol-level code and does NOT have the same version sensitivity.
+		/// </remarks>
 		/// <param name="exception">The <see cref="NpgsqlException"/> to inspect. Cannot be <c>null</c>.</param>
 		/// <returns><c>true</c> when the exception likely indicates pool exhaustion or connection limits; otherwise <c>false</c>.</returns>
 		private static bool IsPoolExhaustionException(NpgsqlException exception)

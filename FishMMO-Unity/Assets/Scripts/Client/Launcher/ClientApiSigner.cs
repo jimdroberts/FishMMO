@@ -63,7 +63,7 @@ namespace FishMMO.Client
 			if (string.IsNullOrEmpty(url)) throw new ArgumentException("URL must not be null or empty.", nameof(url));
 
 			string path = ExtractPath(url);
-			// Cient must apply the same path normalization the
+			// Client must apply the same path normalization the
 			// server gate uses (CanonicalizePath in ClientGate.cs) or the HMAC
 			// will not validate. Throwing here is preferable to silently signing
 			// a path the server will reject after the round trip.
@@ -141,6 +141,25 @@ namespace FishMMO.Client
 				if (seg.Equals("%2e%2e", StringComparison.OrdinalIgnoreCase)) return null;
 				if (seg.Equals("%2e.", StringComparison.OrdinalIgnoreCase)) return null;
 				if (seg.Equals(".%2e", StringComparison.OrdinalIgnoreCase)) return null;
+			}
+			// Additional check: URL-decode the path and re-check for traversal
+			// patterns.  This catches attempts to smuggle ".." or "."
+			// segments via URL-encoded path separators (e.g. %2F..%2F..)
+			// that the raw-path split above would not see because %2F is not
+			// a '/' character in the raw string.
+			// This check is performed IN ADDITION to the raw-path check, not
+			// instead of it, so that both attack vectors are covered.
+			string decodedPathOnly = Uri.UnescapeDataString(pathOnly);
+			if (!string.Equals(pathOnly, decodedPathOnly, StringComparison.Ordinal))
+			{
+				string[] decodedSegments = decodedPathOnly.Split('/');
+				for (int i = 0; i < decodedSegments.Length; i++)
+				{
+					if (decodedSegments[i] == ".." || decodedSegments[i] == ".")
+					{
+						return null;
+					}
+				}
 			}
 			while (pathOnly.IndexOf("//", StringComparison.Ordinal) >= 0)
 			{

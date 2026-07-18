@@ -10,16 +10,16 @@ namespace FishMMO.Database.Data
 		public readonly long CharacterID;
 		public readonly int TemplateID;
 		public readonly int Level;
-		public readonly float BuffTimeEnd;
+		public readonly double BuffTimeEnd;
 
 		long IVersioned<CharacterPetBuffData>.Version => Version;
 
-		public CharacterPetBuffData(long id, long characterID, int templateID, int level, float buffTimeEnd)
+		public CharacterPetBuffData(long id, long characterID, int templateID, int level, double buffTimeEnd)
 			: this(id, version: 0, characterID, templateID, level, buffTimeEnd)
 		{
 		}
 
-		public CharacterPetBuffData(long id, long version, long characterID, int templateID, int level, float buffTimeEnd)
+		public CharacterPetBuffData(long id, long version, long characterID, int templateID, int level, double buffTimeEnd)
 		{
 			ID = id;
 			Version = version;

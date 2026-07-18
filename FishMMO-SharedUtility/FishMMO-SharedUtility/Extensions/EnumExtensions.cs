@@ -15,7 +15,8 @@ namespace FishMMO.Shared
 		/// <returns>A cached array of all enum values.</returns>
 		public static T[] ToArray<T>() where T : Enum
 		{
-			return EnumCache<T>.Values;
+			// Return a copy of the cached array to prevent callers from mutating the shared cache.
+			return (T[])EnumCache<T>.Values.Clone();
 		}
 
 		/// <summary>

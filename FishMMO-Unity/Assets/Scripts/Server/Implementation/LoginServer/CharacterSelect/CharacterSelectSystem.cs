@@ -206,6 +206,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			if (conn.IsActive && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
+				// Account resolved successfully.
+				// Process character select below.
 				if (!TryBeginInFlightRequest(conn))
 				{
 					return;
@@ -380,7 +382,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCharacterSelectBroadcastReceived(NetworkConnection conn, CharacterSelectBroadcast msg, Channel channel)
 		{
-			if (conn.IsActive && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+			if (conn.IsActive)
 			{
 				if (!TryBeginInFlightRequest(conn))
 				{

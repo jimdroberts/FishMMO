@@ -2,12 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using Cysharp.Text;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Thread-safe key-value configuration store with file I/O, environment-variable
+	/// override support, and typed accessors. Each instance manages its own lock
+	/// so that multiple <see cref="Configuration"/> objects can be used independently
+	/// without cross-instance contention.
+	/// </summary>
 	public class Configuration
 	{
 		public const string DEFAULT_FILENAME = "Configuration";
@@ -24,12 +31,13 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Synchronizes access to the <see cref="settings"/> dictionary. ReaderWriterLockSlim is used
 		/// because reads vastly outnumber writes in typical usage.
+		/// Instance-level so multiple <see cref="Configuration"/> objects do not contend.
 		/// </summary>
-		private static readonly ReaderWriterLockSlim _settingsLock = new ReaderWriterLockSlim();
+		private readonly ReaderWriterLockSlim settingsLock = new ReaderWriterLockSlim();
 
 		/// <summary>
 		/// Stores the configuration settings as key-value pairs. Keys are treated case-insensitively using <see cref="StringComparer.OrdinalIgnoreCase"/>.
-		/// All access must be synchronized via <see cref="_settingsLock"/>.
+		/// All access must be synchronized via <see cref="settingsLock"/>.
 		/// </summary>
 		private Dictionary<string, string> settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -63,14 +71,14 @@ namespace FishMMO.Shared
 					return true;
 				}
 			}
-			_settingsLock.EnterReadLock();
+			settingsLock.EnterReadLock();
 			try
 			{
 				return settings.TryGetValue(name, out value);
 			}
 			finally
 			{
-				_settingsLock.ExitReadLock();
+				settingsLock.ExitReadLock();
 			}
 		}
 
@@ -112,7 +120,7 @@ namespace FishMMO.Shared
 				sb.Append(Path.Combine(DefaultFileDirectory, FileName + EXTENSION));
 				sb.AppendLine();
 
-				_settingsLock.EnterReadLock();
+				settingsLock.EnterReadLock();
 				try
 				{
 					if (settings.Count > 0)
@@ -134,7 +142,7 @@ namespace FishMMO.Shared
 				}
 				finally
 				{
-					_settingsLock.ExitReadLock();
+					settingsLock.ExitReadLock();
 				}
 				return sb.ToString();
 			}
@@ -154,19 +162,62 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			_settingsLock.EnterWriteLock();
-			try
+			if (other == this)
 			{
-				// Iterates through each key-value pair in the other configuration and assigns them to this configuration.
-				// This operation will overwrite any existing keys in 'this' configuration.
-				foreach (KeyValuePair<string, string> pair in other.settings)
+				// No-op when combining with self.
+				return;
+			}
+
+			// Acquire locks in a consistent order (by identity hash code) to prevent
+			// deadlock when two threads call a.Combine(b) and b.Combine(a) concurrently.
+			// Always copies FROM other TO this, regardless of lock acquisition order.
+			bool lockSelfFirst = RuntimeHelpers.GetHashCode(this) < RuntimeHelpers.GetHashCode(other);
+
+			if (lockSelfFirst)
+			{
+				this.settingsLock.EnterWriteLock();
+				try
 				{
-					settings[pair.Key] = pair.Value;
+					other.settingsLock.EnterReadLock();
+					try
+					{
+						foreach (KeyValuePair<string, string> pair in other.settings)
+						{
+							this.settings[pair.Key] = pair.Value;
+						}
+					}
+					finally
+					{
+						other.settingsLock.ExitReadLock();
+					}
+				}
+				finally
+				{
+					this.settingsLock.ExitWriteLock();
 				}
 			}
-			finally
+			else
 			{
-				_settingsLock.ExitWriteLock();
+				other.settingsLock.EnterReadLock();
+				try
+				{
+					this.settingsLock.EnterWriteLock();
+					try
+					{
+						foreach (KeyValuePair<string, string> pair in other.settings)
+						{
+							this.settings[pair.Key] = pair.Value;
+						}
+					}
+					finally
+					{
+						this.settingsLock.ExitWriteLock();
+					}
+				}
+				finally
+				{
+					other.settingsLock.ExitReadLock();
+				}
 			}
 		}
 
@@ -210,7 +261,7 @@ namespace FishMMO.Shared
 				using (FileStream fs = File.Open(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
 				using (StreamWriter sw = new StreamWriter(fs, new UTF8Encoding(false)))
 				{
-					_settingsLock.EnterReadLock();
+					settingsLock.EnterReadLock();
 					try
 					{
 						// Writes each key-value pair to the file in "key=value" format, followed by a new line.
@@ -221,7 +272,7 @@ namespace FishMMO.Shared
 					}
 					finally
 					{
-						_settingsLock.ExitReadLock();
+						settingsLock.ExitReadLock();
 					}
 				}
 			}
@@ -308,7 +359,7 @@ namespace FishMMO.Shared
 
 				// Synchronize the entire dictionary replacement under a single write lock
 				// to avoid nested locking with Set() and to keep the replacement atomic.
-				_settingsLock.EnterWriteLock();
+				settingsLock.EnterWriteLock();
 				try
 				{
 					// Clears all existing settings before populating with new ones from the file.
@@ -344,7 +395,7 @@ namespace FishMMO.Shared
 				}
 				finally
 				{
-					_settingsLock.ExitWriteLock();
+					settingsLock.ExitWriteLock();
 				}
 				return true;
 			}
@@ -381,14 +432,14 @@ namespace FishMMO.Shared
 			{
 				throw new ArgumentNullException(nameof(name), "Setting name cannot be null or empty.");
 			}
-			_settingsLock.EnterWriteLock();
+			settingsLock.EnterWriteLock();
 			try
 			{
 				settings[name] = value ?? string.Empty; // Assigns the value; if 'value' is null, it stores an empty string.
 			}
 			finally
 			{
-				_settingsLock.ExitWriteLock();
+				settingsLock.ExitWriteLock();
 			}
 		}
 
@@ -429,14 +480,14 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting exists; otherwise, false.</returns>
 		public bool Exists(string name)
 		{
-			_settingsLock.EnterReadLock();
+			settingsLock.EnterReadLock();
 			try
 			{
 				return settings.ContainsKey(name);
 			}
 			finally
 			{
-				_settingsLock.ExitReadLock();
+				settingsLock.ExitReadLock();
 			}
 		}
 
@@ -447,14 +498,14 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was successfully removed; otherwise, false if the setting was not found.</returns>
 		public bool Remove(string name)
 		{
-			_settingsLock.EnterWriteLock();
+			settingsLock.EnterWriteLock();
 			try
 			{
 				return settings.Remove(name);
 			}
 			finally
 			{
-				_settingsLock.ExitWriteLock();
+				settingsLock.ExitWriteLock();
 			}
 		}
 

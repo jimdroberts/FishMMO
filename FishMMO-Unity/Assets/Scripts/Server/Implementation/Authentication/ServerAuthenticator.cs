@@ -5,6 +5,7 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
+using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -455,6 +456,10 @@ namespace FishMMO.Server.Implementation
 						await emailQueueService.EnqueueAsync(recipientEmail, username, subject, body);
 					}
 				}
+				else
+				{
+					await Log.Warning(outer.LogPrefix, $"IEmailQueueService not registered -- verification email resend skipped for '{username}'.");
+				}
 
 				await outer.PersistVerificationEmailSentCoreAsync(username);
 				return true;
@@ -487,13 +492,41 @@ namespace FishMMO.Server.Implementation
 		{
 			return $@"<html><body style='font-family: Arial, sans-serif; color: #333;'>
 				<h2>FishMMO — Verification Code</h2>
-				<p>You recently attempted to log in to your FishMMO account <b>{username}</b>.</p>
+				<p>You recently attempted to log in to your FishMMO account <b>{System.Net.WebUtility.HtmlEncode(username)}</b>.</p>
 				<p>Your verification code is:</p>
 				<h1 style='font-size: 32px; letter-spacing: 4px; color: #2563eb;'>{verifyCode:D6}</h1>
 				<p>This code is valid for 24 hours. If you did not request this, you can safely ignore this email.</p>
 				<hr/>
 				<p style='font-size: 12px; color: #999;'>— The FishMMO Team</p>
 			</body></html>";
+		}
+
+		/// <summary>Lock for atomic signing-key rotation. Guards swap of TokenSigningKey, TokenSigningKeyId, and TotpMasterKey.</summary>
+		private readonly object signingKeySwapLock = new object();
+
+		/// <summary>
+		/// Atomically swaps the signing key, key ID, and TOTP master key on the core,
+		/// ensuring concurrent token-issuance reads always see a consistent tuple.
+		/// The prior key material is zeroed after the swap is visible.
+		/// </summary>
+		public void AtomicSwapSigningKey(byte[] newKey, long newKeyId, byte[] newTotpMasterKey)
+		{
+			lock (signingKeySwapLock)
+			{
+				byte[] oldKey = core?.TokenSigningKey;
+				byte[] oldTotp = core?.TotpMasterKey;
+
+				if (core != null)
+				{
+					core.TokenSigningKey = newKey;
+					core.TokenSigningKeyId = newKeyId;
+					core.TotpMasterKey = newTotpMasterKey;
+				}
+				tokenSigningKeyId = newKeyId;
+
+				if (oldKey != null) CryptographicOperations.ZeroMemory(oldKey);
+				if (oldTotp != null) CryptographicOperations.ZeroMemory(oldTotp);
+			}
 		}
 
 	}

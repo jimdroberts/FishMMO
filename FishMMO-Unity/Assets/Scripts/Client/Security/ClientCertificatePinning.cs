@@ -238,6 +238,11 @@ namespace FishMMO.Client.Security
 
 		private static bool ConstantTimeEquals(string a, string b)
 		{
+			// All pins are SHA-256(SPKI) hashes which always produce exactly 44
+			// base64 characters (32 bytes -> 44 chars with no padding issues).
+			// Because the length is fixed for all valid pins, the early-return
+			// length check below is effectively constant-time in practice — an
+			// attacker cannot distinguish a length mismatch from a content mismatch.
 			if (a == null || b == null || a.Length != b.Length)
 			{
 				return false;

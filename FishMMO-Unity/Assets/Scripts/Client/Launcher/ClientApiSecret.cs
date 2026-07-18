@@ -26,10 +26,23 @@ namespace FishMMO.Client
 	internal static class ClientApiSecret
 	{
 		/// <summary>
-		/// The shared secret. Long, opaque, and high-entropy. Replace before
-		/// public release; the value committed here is a placeholder so the
-		/// project compiles. The matching server-side value MUST be set via
-		/// the <c>FISHMMO_CLIENT_GATE_SECRET</c> environment variable.
+		/// The shared secret. Long, opaque, and high-entropy.
+		///
+		/// <para>
+		/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		/// WARNING: THIS IS A PLACEHOLDER. IT MUST BE REPLACED BEFORE SHIPPING.
+		/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		/// </para>
+		///
+		/// <para>
+		/// The value committed here is a well-known default so the project
+		/// compiles and can be tested in the editor / dev builds.  If you ship
+		/// a public binary with this default, every user will have the same
+		/// secret — recovery from the binary is trivial — and the gate provides
+		/// zero protection.  Rotate the secret by changing this literal AND
+		/// setting the matching server-side value via the
+		/// <c>FISHMMO_CLIENT_GATE_SECRET</c> environment variable.
+		/// </para>
 		/// </summary>
 		private const string SecretLiteral =
 			"FishMMO-default-client-gate-secret-replace-before-release-d8b1c4a6e7f23519";
@@ -38,8 +51,16 @@ namespace FishMMO.Client
 		static ClientApiSecret()
 		{
 			UnityEngine.Debug.LogError(
-				"[ClientApiSecret] The placeholder default secret is still in use in a release build. " +
-				"Set FISHMMO_CLIENT_GATE_SECRET to a unique value and update SecretLiteral before shipping.");
+				"[ClientApiSecret] *******************************************************\n" +
+				"[ClientApiSecret] *  SECURITY HOLD: The placeholder default secret is    *\n" +
+				"[ClientApiSecret] *  still in use in a release build.                    *\n" +
+				"[ClientApiSecret] *                                                      *\n" +
+				"[ClientApiSecret] *  Set FISHMMO_CLIENT_GATE_SECRET to a unique value    *\n" +
+				"[ClientApiSecret] *  AND update SecretLiteral before shipping.           *\n" +
+				"[ClientApiSecret] *                                                      *\n" +
+				"[ClientApiSecret] *  This binary's gate secret is PUBLIC and provides    *\n" +
+				"[ClientApiSecret] *  NO protection against general crawler traffic.      *\n" +
+				"[ClientApiSecret] *******************************************************");
 		}
 #endif
 

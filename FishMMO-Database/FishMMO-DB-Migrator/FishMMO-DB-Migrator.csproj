@@ -24,7 +24,7 @@
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />    </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\FishMMO-DB\FishMMO-DB.csproj" />
+      <ProjectReference Include="../FishMMO-DB/FishMMO-DB.csproj" />
     </ItemGroup>
 	
 	<!-- Define a custom property based on the existence of the marker file -->
@@ -33,7 +33,7 @@
 	</PropertyGroup>
 	
 	<PropertyGroup>
-		<IsEFBuild Condition="Exists('..\..\FishMMO-Installer.exe') Or Exists('..\..\FishMMO-Installer')">true</IsEFBuild>
+		<IsEFBuild Condition="Exists('../../FishMMO-Installer.exe') Or Exists('../../FishMMO-Installer')">true</IsEFBuild>
 	</PropertyGroup>
 	
 	<!-- Move the appsettings.json to the build directory. -->
@@ -41,7 +41,7 @@
 
 		<!-- Define the source directory based on the build configuration -->
 		<ItemGroup>
-			<SourceDir Include="..\..\FishMMO-Setup\Development\appsettings.Database.json" />
+			<SourceDir Include="../../FishMMO-Setup/Development/appsettings.Database.json" />
 		</ItemGroup>
 
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />

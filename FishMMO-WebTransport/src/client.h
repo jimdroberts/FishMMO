@@ -37,9 +37,12 @@ typedef struct wt_client_s {
 
     wt_session_t*           session;
 
-    /* Session pending deferred shutdown. Set by QUIC callback thread,
-     * consumed by poll (application thread) to ensure session free
-     * never races with concurrent sends. */
+    /* Session pending deferred shutdown. Set by QUIC callback thread
+     * (SHUTDOWN_COMPLETE), consumed by poll (application thread) to
+     * ensure session free never races with concurrent sends.
+     * MUST be accessed via atomic_ptr_load/atomic_ptr_store — written
+     * on the QUIC callback thread, read/written on the poll thread
+     * without a lock. */
     wt_session_t*           pending_shutdown_session;
 
     /* HTTP/3 handshake session (optional — only used when connecting

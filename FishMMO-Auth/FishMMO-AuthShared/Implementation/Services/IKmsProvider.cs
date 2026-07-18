@@ -35,16 +35,24 @@ namespace FishMMO.Auth.Implementation
 	/// </summary>
 	public sealed class LocalDeriveKmsProvider : IKmsProvider, IDisposable
 	{
-		private byte[]? _rootKey;
-		private readonly object _gate = new object();
+		/// <summary>
+		/// The root key material used for HMAC-SHA256 key derivation.
+		/// Null once disposed; all access must be under <see cref="gate"/>.
+		/// </summary>
+		private byte[]? rootKey;
+
+		/// <summary>
+		/// Synchronization gate protecting <see cref="rootKey"/> during derivation and disposal.
+		/// </summary>
+		private readonly object gate = new object();
 
 		public LocalDeriveKmsProvider(byte[] rootKey)
 		{
 			if (rootKey == null || rootKey.Length < 32)
 				throw new ArgumentException("Root key must be at least 32 bytes.", nameof(rootKey));
 
-			_rootKey = new byte[rootKey.Length];
-			Buffer.BlockCopy(rootKey, 0, _rootKey, 0, rootKey.Length);
+			this.rootKey = new byte[rootKey.Length];
+			Buffer.BlockCopy(rootKey, 0, this.rootKey, 0, rootKey.Length);
 		}
 
 		/// <inheritdoc/>
@@ -53,24 +61,24 @@ namespace FishMMO.Auth.Implementation
 			if (string.IsNullOrEmpty(context))
 				throw new ArgumentException("Context must be non-empty.", nameof(context));
 
-			lock (_gate)
+			lock (gate)
 			{
-				if (_rootKey == null)
+				if (rootKey == null)
 					throw new ObjectDisposedException(nameof(LocalDeriveKmsProvider));
 
-				using var kdf = new HMACSHA256(_rootKey);
+				using var kdf = new HMACSHA256(rootKey);
 				return kdf.ComputeHash(Encoding.UTF8.GetBytes(context));
 			}
 		}
 
 		public void Dispose()
 		{
-			lock (_gate)
+			lock (gate)
 			{
-				if (_rootKey != null)
+				if (rootKey != null)
 				{
-					CryptographicOperations.ZeroMemory(_rootKey);
-					_rootKey = null;
+					CryptographicOperations.ZeroMemory(rootKey);
+					rootKey = null;
 				}
 			}
 		}
@@ -89,7 +97,7 @@ namespace FishMMO.Auth.Implementation
 	public static class ProcessHardening
 	{
 		// prctl(2): PR_SET_DUMPABLE = 4
-		private const int PR_SET_DUMPABLE = 4;
+		private const int PrSetDumpable = 4;
 
 		[DllImport("libc", EntryPoint = "prctl", SetLastError = true)]
 		private static extern int prctl(int option, ulong arg2, ulong arg3, ulong arg4, ulong arg5);
@@ -109,7 +117,7 @@ namespace FishMMO.Auth.Implementation
 
 			try
 			{
-				int rc = prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
+				int rc = prctl(PrSetDumpable, 0, 0, 0, 0);
 				if (rc == 0)
 				{
 					status = "PR_SET_DUMPABLE=0 applied.";

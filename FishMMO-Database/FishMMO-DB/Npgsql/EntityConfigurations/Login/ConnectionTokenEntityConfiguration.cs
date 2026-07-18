@@ -2,7 +2,7 @@ using FishMMO.Database.Npgsql.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace FishMMO.Database.Npgsql.EntityConfigurations.Login
+namespace FishMMO.Database.Npgsql.Entities
 {
 	public class ConnectionTokenEntityConfiguration : IEntityTypeConfiguration<ConnectionTokenEntity>
 	{

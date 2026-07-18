@@ -212,11 +212,13 @@ namespace FishMMO.Database
 		/// <param name="isSuccess">Whether the operation succeeded.</param>
 		/// <param name="errorCode">The error code (null if succeeded).</param>
 		/// <param name="errorMessage">The error message (null if succeeded).</param>
-		public void Deconstruct(out bool isSuccess, out string? errorCode, out string? errorMessage)
+		/// <param name="isTransient">Whether the error is transient.</param>
+		public void Deconstruct(out bool isSuccess, out string? errorCode, out string? errorMessage, out bool isTransient)
 		{
 			isSuccess = IsSuccess;
 			errorCode = ErrorCode;
 			errorMessage = ErrorMessage;
+			isTransient = IsTransient;
 		}
 
 		/// <summary>

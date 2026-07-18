@@ -10,6 +10,31 @@
  * QPACK: Uses the full static table (RFC 9204 Appendix A, all 99
  * entries). No dynamic table support — sufficient for WebTransport
  * handshakes and common browser headers.
+ *
+ * ## HTTP/3 Handshake State Machine
+ *
+ * ### Server-side transitions
+ *
+ *   H3_SRV_WAIT_CONTROL_STREAM  --[PEER_STREAM_STARTED, first stream]--> H3_SRV_GOT_SETTINGS
+ *   H3_SRV_GOT_SETTINGS         --[stream RECEIVE, type byte == 0x00]------
+ *     detect client as HTTP/3, send server SETTINGS                    --> H3_SRV_WAIT_CONNECT
+ *   H3_SRV_WAIT_CONNECT         --[stream RECEIVE, HEADERS frame]---------
+ *     parse CONNECT request, validate :method/:protocol/:origin        --> H3_SRV_ESTABLISHED  (or H3_SRV_ERROR)
+ *   H3_SRV_WAIT_CONTROL_STREAM  --[first byte != 0x00]------------------
+ *     detect raw QUIC (native client), complete immediately            --> H3_SRV_ESTABLISHED
+ *
+ * ### Client-side transitions
+ *
+ *   H3_CLI_SENDING_SETTINGS  --[send control stream + SETTINGS, send CONNECT]--> H3_CLI_WAIT_RESPONSE
+ *   H3_CLI_WAIT_RESPONSE     --[receive HEADERS :status 200]------------------> H3_CLI_ESTABLISHED
+ *   H3_CLI_WAIT_RESPONSE     --[error or timeout]-----------------------------> H3_CLI_ERROR
+ *
+ * ### Data flow
+ *
+ *   PEER_STREAM_STARTED  ─→ h3_server_handle_stream()  ──→ assign stream role
+ *   stream RECEIVE       ─→ h3_stream_cb()             ──→ buffer data
+ *                         ─→ h3_server_process_data()  ──→ parse frames
+ *                         ─→ h3->on_ready()             ──→ create wt_session
  */
 
 #include "http3.h"
@@ -187,6 +212,178 @@ static const qpack_entry_t kQpackStatic[] = {
 
 #define QPACK_STATIC_SIZE (sizeof(kQpackStatic) / sizeof(kQpackStatic[0]))
 
+/* ═══════════════════════════════════════════════════════════════
+ * HPACK / QPACK Huffman Code Table (RFC 7541 Appendix B / RFC 9204 Appendix B)
+ * ═══════════════════════════════════════════════════════════════
+ * Static Huffman code table for decoding HPACK/QPACK header field
+ * compression. Two parallel arrays indexed by symbol (0-255):
+ *
+ *   kHuffCode[sym] = canonical Huffman code (right-padded, i.e. the
+ *                    code occupies the most significant bits of the
+ *                    kHuffLen[sym]-bit value).
+ *   kHuffLen[sym]  = code length in bits.
+ *
+ * The WebTransport handshake uses only ASCII symbols (32-126 are the
+ * common printable range). Symbols 128-255 (extended/control) are
+ * included for full spec conformance.
+ */
+
+/* Code lengths in bits */
+static const uint8_t kHuffLen[256] = {
+   13, 23, 28, 28, 28, 28, 28, 28, 28, 24, 30, 28, 28, 30, 28, 28,  /*  0-15 */
+   28, 28, 28, 28, 28, 28, 30, 28, 28, 28, 28, 28, 28, 28, 28, 28,  /* 16-31 */
+    6, 10, 10, 12, 13,  6,  8, 11, 10, 10,  8, 11,  8,  6,  6,  6,  /* 32-47 */
+    5,  5,  5,  6,  6,  6,  6,  6,  6,  6,  7,  8, 15,  6, 12, 10,  /* 48-63 */
+   13,  6,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  /* 64-79 */
+    7,  7,  7,  7,  7,  7,  7,  7,  8,  7,  8, 13, 19, 13,  6, 13,  /* 80-95 */
+   19,  6,  6,  6,  6,  6,  6,  6,  6,  7,  6,  6,  6,  6,  6,  6,  /* 96-111 */
+    6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  7,  /*112-127 */
+   19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,  /*128-143 */
+   19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,  /*144-159 */
+   19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,  /*160-175 */
+   19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,  /*176-191 */
+   20, 20, 20, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21,  /*192-207 */
+   22, 22, 22, 22, 22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 23,  /*208-223 */
+   24, 24, 24, 24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 25,  /*224-239 */
+   26, 26, 26, 26, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 27, 27   /*240-255 */
+};
+
+/* Huffman codes (right-padded MSB-aligned, one per symbol 0-255) */
+static const uint32_t kHuffCode[256] = {
+    0x1ff8,     0x7fffd8,   0xfffffe2,  0xfffffe3,  /*  0- 3 */
+    0xfffffe4,  0xfffffe5,  0xfffffe6,  0xfffffe7,  /*  4- 7 */
+    0xfffffe8,  0xffffea,   0x3ffffffc, 0xfffffe9,  /*  8-11 */
+    0xfffffea,  0x3ffffffd, 0xfffffeb,  0xfffffec,  /* 12-15 */
+    0xfffffed,  0xfffffee,  0xfffffef,  0xffffff0,  /* 16-19 */
+    0xffffff1,  0xffffff2,  0x3ffffffe, 0xffffff3,  /* 20-23 */
+    0xffffff4,  0xffffff5,  0xffffff6,  0xffffff7,  /* 24-27 */
+    0xffffff8,  0xffffff9,  0xffffffa,  0xffffffb,  /* 28-31 */
+    0x14,       0x3f8,      0x3f9,      0xffa,      /* 32-35 */
+    0x1ff9,     0x15,       0xf8,       0x7fa,      /* 36-39 */
+    0x3fa,      0x3fb,      0xf9,       0x7fb,      /* 40-43 */
+    0xfa,       0x16,       0x17,       0x18,       /* 44-47 */
+    0x00,       0x01,       0x02,       0x19,       /* 48-51 */
+    0x1a,       0x1b,       0x1c,       0x1d,       /* 52-55 */
+    0x1e,       0x1f,       0x5c,       0xfb,       /* 56-59 */
+    0x7ffc,     0x20,       0xffb,      0x3fc,      /* 60-63 */
+    0x1ffa,     0x21,       0x5d,       0x5e,       /* 64-67 */
+    0x5f,       0x60,       0x61,       0x62,       /* 68-71 */
+    0x63,       0x64,       0x65,       0x66,       /* 72-75 */
+    0x67,       0x68,       0x69,       0x6a,       /* 76-79 */
+    0x6b,       0x6c,       0x6d,       0x6e,       /* 80-83 */
+    0x6f,       0x70,       0x71,       0x72,       /* 84-87 */
+    0xfc,       0x73,       0xfd,       0x1ffb,     /* 88-91 */
+    0x7ffc0,    0x3ffd,     0x22,       0x1ffc,     /* 92-95 */
+    0x7ffc1,    0x23,       0x24,       0x25,       /* 96-99 */
+    0x26,       0x27,       0x28,       0x29,       /*100-103 */
+    0x2a,       0x7b,       0x2b,       0x2c,       /*104-107 */
+    0x2d,       0x2e,       0x2f,       0x30,       /*108-111 */
+    0x31,       0x32,       0x33,       0x34,       /*112-115 */
+    0x35,       0x36,       0x37,       0x38,       /*116-119 */
+    0x39,       0x3a,       0x3b,       0x3c,       /*120-123 */
+    0x3d,       0x3e,       0x3f,       0x7c,       /*124-127 */
+    0x7ffc2,    0x7ffc3,    0x7ffc4,    0x7ffc5,    /*128-131 */
+    0x7ffc6,    0x7ffc7,    0x7ffc8,    0x7ffc9,    /*132-135 */
+    0x7ffca,    0x7ffcb,    0x7ffcc,    0x7ffcd,    /*136-139 */
+    0x7ffce,    0x7ffcf,    0x7ffd0,    0x7ffd1,    /*140-143 */
+    0x7ffd2,    0x7ffd3,    0x7ffd4,    0x7ffd5,    /*144-147 */
+    0x7ffd6,    0x7ffd7,    0x7ffd8,    0x7ffd9,    /*148-151 */
+    0x7ffda,    0x7ffdb,    0x7ffdc,    0x7ffdd,    /*152-155 */
+    0x7ffde,    0x7ffdf,    0x7ffe0,    0x7ffe1,    /*156-159 */
+    0x7ffe2,    0x7ffe3,    0x7ffe4,    0x7ffe5,    /*160-163 */
+    0x7ffe6,    0x7ffe7,    0x7ffe8,    0x7ffe9,    /*164-167 */
+    0x7ffea,    0x7ffeb,    0x7ffec,    0x7ffed,    /*168-171 */
+    0x7ffee,    0x7ffef,    0x7fff0,    0x7fff1,    /*172-175 */
+    0x7fff2,    0x7fff3,    0x7fff4,    0x7fff5,    /*176-179 */
+    0x7fff6,    0x7fff7,    0x7fff8,    0x7fff9,    /*180-183 */
+    0x7fffa,    0x7fffb,    0x7fffc,    0x7fffd,    /*184-187 */
+    0x7fffe,    0x7ffff,    0x80000,    0x80001,    /*188-191 */
+    0x3ffe0,    0x3ffe1,    0x3ffe2,    0x3ffe3,    /*192-195 */
+    0x3ffe4,    0x3ffe5,    0x3ffe6,    0x3ffe7,    /*196-199 */
+    0x1ffdc,    0x1ffdd,    0x1ffde,    0x1ffdf,    /*200-203 */
+    0x1ffe0,    0x1ffe1,    0x1ffe2,    0x1ffe3,    /*204-207 */
+    0xfff0,     0xfff1,     0xfff2,     0xfff3,     /*208-211 */
+    0xfff4,     0xfff5,     0xfff6,     0xfff7,     /*212-215 */
+    0x7ffe0,    0x7ffe1,    0x7ffe2,    0x7ffe3,    /*216-219 */
+    0x7ffe4,    0x7ffe5,    0x7ffe6,    0x7ffe7,    /*220-223 */
+    0x3ffe8,    0x3ffe9,    0x3ffea,    0x3ffeb,    /*224-227 */
+    0x3ffec,    0x3ffed,    0x3ffee,    0x3ffef,    /*228-231 */
+    0x3fff0,    0x3fff1,    0x3fff2,    0x3fff3,    /*232-235 */
+    0x3fff4,    0x3fff5,    0x3fff6,    0x3fff7,    /*236-239 */
+    0x1fffc,    0x1fffd,    0x1fffe,    0x1ffff,    /*240-243 */
+    0x20000,    0x20001,    0x20002,    0x20003,    /*244-247 */
+    0x10000,    0x10001,    0x10002,    0x10003,    /*248-251 */
+    0x10004,    0x10005,    0x10006,    0x10007     /*252-255 */
+};
+
+/**
+ * Decode a Huffman-encoded string per RFC 7541 Section 5.2.
+ *
+ * Scans the encoded bytes, builds a bit buffer, and matches codes
+ * from the static HPACK Huffman table. Verifies EOS padding (all 1's)
+ * at the end of the encoded string.
+ *
+ * @param input           Encoded bytes (Huffman-coded).
+ * @param input_len       Number of encoded bytes.
+ * @param output          Buffer for decoded output.
+ * @param output_capacity Size of output buffer.
+ * @return Number of decoded bytes, or -1 on error (invalid code or
+ *         padding, output overflow).
+ */
+static int huffman_decode(const uint8_t* input, size_t input_len,
+                          uint8_t* output, size_t output_capacity)
+{
+    uint64_t buf = 0;       /* bit accumulator (MSB-aligned) */
+    int bits = 0;            /* number of valid bits in buf */
+    size_t out_pos = 0;
+
+    for (size_t i = 0; i < input_len; i++) {
+        /* Shift in 8 more bits */
+        buf = (buf << 8) | input[i];
+        bits += 8;
+
+        /* Emit decoded symbols while we have enough bits to match */
+        while (bits >= 5) {  /* minimum code length is 5 bits */
+            bool matched = false;
+            for (int sym = 0; sym < 256; sym++) {
+                uint8_t code_len = kHuffLen[sym];
+                if (code_len > bits) continue;
+
+                /* Extract the top 'code_len' bits */
+                uint32_t top = (uint32_t)(buf >> (bits - code_len));
+                if (top == kHuffCode[sym]) {
+                    if (out_pos >= output_capacity) return -1;
+                    output[out_pos++] = (uint8_t)sym;
+                    bits -= code_len;
+                    /* Keep only the remaining lower bits */
+                    if (bits > 0)
+                        buf = buf & ((1ULL << bits) - 1);
+                    else
+                        buf = 0;
+                    matched = true;
+                    break;  /* restart matching from the shortest code */
+                }
+            }
+            /* No symbol matched with the current bit pattern;
+             * need more input bits. */
+            if (!matched) break;
+        }
+    }
+
+    /* ── Padding check ────────────────────────────────────────
+     * RFC 7541 Section 5.2: The encoded string is padded at the
+     * end with 1-bits (the EOS symbol prefix). Any remaining bits
+     * in the buffer MUST be all 1's. */
+    if (bits > 0) {
+        uint64_t mask = (1ULL << bits) - 1;
+        if ((buf & mask) != mask) {
+            return -1;  /* Invalid padding */
+        }
+    }
+
+    return (int)out_pos;
+}
+
 static const char* qpack_static_name(uint64_t idx, uint8_t* out_len)
 {
     if (idx >= QPACK_STATIC_SIZE) return NULL;
@@ -315,9 +512,20 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
     if (consumed + vlen > buf_len) return -1;
     if (vlen >= sizeof(out->value)) return -1;
 
-    memcpy(out->value, buf + consumed, (size_t)vlen);
-    out->value[vlen] = '\0';
-    out->value_len = (uint16_t)vlen;
+    /* Decode Huffman-encoded value or copy raw bytes */
+    if (huffman) {
+        uint8_t decoded[sizeof(out->value)];
+        int decoded_len = huffman_decode(buf + consumed, (size_t)vlen,
+                                          decoded, sizeof(decoded));
+        if (decoded_len < 0) return -1;
+        memcpy(out->value, decoded, (size_t)decoded_len);
+        out->value[decoded_len] = '\0';
+        out->value_len = (uint16_t)decoded_len;
+    } else {
+        memcpy(out->value, buf + consumed, (size_t)vlen);
+        out->value[vlen] = '\0';
+        out->value_len = (uint16_t)vlen;
+    }
     consumed += (uint8_t)vlen;
 
     return consumed;
@@ -526,6 +734,11 @@ static QUIC_STREAM_CALLBACK_HANDLER k_h3_stream_handler = h3_stream_cb;
 /* Forward declaration for buffered-data processing during shutdown */
 typedef int (*h3_data_processor_fn)(h3_stream_ctx_t* sctx);
 
+/* Forward declaration — h3_server_process_data is defined later and
+ * called from h3_stream_cb when the stream has a back-pointer to the
+ * HTTP/3 session. */
+int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
+
 static QUIC_STATUS QUIC_API
 h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 {
@@ -560,24 +773,29 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                    bufs[i].Buffer, bufs[i].Length);
             sctx->recv_offset += bufs[i].Length;
         }
+
+        /* Process buffered data for HTTP/3 handshake detection
+         * and state machine advancement. If the handshake completes
+         * synchronously, h3_server_process_data calls h3->on_ready
+         * which creates the wt_session. */
+        if (sctx->h3) {
+            h3_server_process_data(sctx->h3, sctx);
+        }
         return QUIC_STATUS_SUCCESS;
     }
 
     case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN: {
         /* Stream data complete (peer sent FIN).
          * Process any buffered data that arrived in prior RECEIVE
-         * events but hasn't been consumed yet. The data processor
-         * callback (set by the handshake state machine) will parse
-         * the buffered frames and advance the handshake.
-         *
-         * Previously this was a no-op return QUIC_STATUS_SUCCESS,
-         * which caused handshake data in the last RECEIVE event
-         * (arriving with FIN) to be silently dropped. */
+         * events but hasn't been consumed yet. This handles the case
+         * where the HTTP/3 handshake frames arrive in the same stream
+         * event as the FIN — without this call, the last chunk of
+         * handshake data would remain buffered and unprocessed,
+         * causing the handshake to hang indefinitely. */
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
-            /* The data processor is dispatched via the handshake
-             * integration layer. We signal completeness by leaving
-             * the buffered data intact — the next call to
-             * h3_server_process_data will see the full buffer. */
+            if (sctx->h3) {
+                h3_server_process_data(sctx->h3, sctx);
+            }
         }
         return QUIC_STATUS_SUCCESS;
     }
@@ -806,6 +1024,33 @@ h3_session_t* h3_session_create(
 void h3_session_free(h3_session_t* h3)
 {
     if (!h3) return;
+
+    /* Shut down tracked control streams to trigger SHUTDOWN_COMPLETE
+     * which frees their per-stream contexts (allocated by
+     * h3_stream_ctx_create). */
+    if (h3->server_control_stream) {
+        MsQuic->StreamShutdown(h3->server_control_stream,
+                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+        h3->server_control_stream = NULL;
+    }
+    if (h3->client_control_stream) {
+        MsQuic->StreamShutdown(h3->client_control_stream,
+                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+        h3->client_control_stream = NULL;
+    }
+
+    /* KNOWN LIMITATION: h3_stream_ctx_t objects created for data
+     * streams that reference this h3_session (sctx->h3 == h3) are
+     * NOT freed here.  The h3_session does not maintain a list of
+     * all created stream contexts, so they cannot be iterated.
+     *
+     * In normal use the caller only calls h3_session_free from a
+     * QUIC SHUTDOWN_COMPLETE callback, by which point all streams
+     * on the connection have already completed and their sctx has
+     * been freed.  If h3_session_free is called from an error path
+     * while data streams are still alive, those sctx objects will
+     * leak.  Callers should avoid this by quiescing all streams
+     * before freeing the session. */
     free(h3);
 }
 
@@ -956,6 +1201,7 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
     /* Create stream context for buffered read */
     h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream);
     if (!sctx) return -1;
+    sctx->h3 = h3;  /* back-pointer for stream callback to call h3_server_process_data */
     *out_sctx = sctx;
 
     if (h3->server_state == H3_SRV_WAIT_CONTROL_STREAM) {

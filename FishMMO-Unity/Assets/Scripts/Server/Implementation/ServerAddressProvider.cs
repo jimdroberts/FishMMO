@@ -41,12 +41,16 @@ namespace FishMMO.Server.Implementation
 		{
 			if (transport != null)
 			{
-				address = new ServerAddress()
+				string bindAddress = transport.GetServerBindAddress(IPAddressType.IPv4);
+				if (!string.IsNullOrWhiteSpace(bindAddress))
 				{
-					Address = transport.GetServerBindAddress(IPAddressType.IPv4),
-					Port = transport.GetPort(),
-				};
-				return true;
+					address = new ServerAddress()
+					{
+						Address = bindAddress,
+						Port = transport.GetPort(),
+					};
+					return true;
+				}
 			}
 			address = default;
 			return false;
@@ -61,12 +65,16 @@ namespace FishMMO.Server.Implementation
 		{
 			if (transport != null)
 			{
-				address = new ServerAddress()
+				string bindAddress = transport.GetServerBindAddress(IPAddressType.IPv6);
+				if (!string.IsNullOrWhiteSpace(bindAddress))
 				{
-					Address = transport.GetServerBindAddress(IPAddressType.IPv6),
-					Port = transport.GetPort(),
-				};
-				return true;
+					address = new ServerAddress()
+					{
+						Address = bindAddress,
+						Port = transport.GetPort(),
+					};
+					return true;
+				}
 			}
 			address = default;
 			return false;
@@ -84,7 +92,7 @@ namespace FishMMO.Server.Implementation
 				address = new ServerAddress()
 				{
 					Address = addressOverride,
-					Port = portOverride,
+					Port = portOverride > 0 ? portOverride : (transport != null ? transport.GetPort() : (ushort)0),
 				};
 				return true;
 			}

@@ -1,3 +1,16 @@
+/*
+ * DatabaseHealthService — Reserved for future Unity integration.
+ *
+ * This file is entirely commented out because the Unity-side server build
+ * does not currently include a DatabaseHealthService MonoBehaviour.
+ * The implementation is preserved here to avoid losing the design work and
+ * to serve as a reference when Unity-side database health monitoring is needed.
+ *
+ * To activate: remove the enclosing /* ... *&#47; block and ensure all referenced
+ * types (HealthCheckResult, PoolHealthResult, etc.) are accessible from the
+ * FishMMO-Database assembly when built for Unity.
+ */
+
 /*using System;
 using UnityEngine;
 using FishMMO.Database;

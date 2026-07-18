@@ -24,7 +24,7 @@ public class LoginServerController : ControllerBase
 	/// concurrent requests on a cold cache would each spawn a DbContext + query (cache
 	/// stampede), which is exactly the failure mode the cache exists to prevent.
 	/// </summary>
-	private static readonly SemaphoreSlim s_loginServersLoadGate = new SemaphoreSlim(1, 1);
+	private static readonly SemaphoreSlim loginServersLoadGate = new SemaphoreSlim(1, 1);
 
 	/// <summary>
 	/// Initializes a new instance of the <see cref="LoginServerController"/> class.
@@ -64,7 +64,7 @@ public class LoginServerController : ControllerBase
 			// Single-flight DB load to avoid cache stampede. The first thread that
 			// enters the gate populates the cache; later threads find the cached value on
 			// re-check and skip the DB hit entirely.
-			await s_loginServersLoadGate.WaitAsync(HttpContext.RequestAborted);
+			await loginServersLoadGate.WaitAsync(HttpContext.RequestAborted);
 			try
 			{
 				if (!memoryCache.TryGetValue(cacheKey, out loginServerPorts))
@@ -102,7 +102,7 @@ public class LoginServerController : ControllerBase
 			}
 			finally
 			{
-				s_loginServersLoadGate.Release();
+				loginServersLoadGate.Release();
 			}
 		}
 		else

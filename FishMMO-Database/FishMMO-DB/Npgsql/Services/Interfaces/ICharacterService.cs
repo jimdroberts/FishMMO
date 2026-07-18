@@ -62,20 +62,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<long>> CreateCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Sets the selected character for an account atomically. Deselects all other characters for the account.
-		/// </summary>
-		/// <param name="account">The account name.</param>
-		/// <param name="characterId">The character ID to select.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// Uses a single atomic UPDATE with conditional logic: SET selected = (id = characterId).
-		/// This ensures all characters for the account are updated in one operation without race conditions.
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
-		/// </remarks>
-		/// <summary>
 		/// Fetches a character by name with an optional selected filter.
 		/// </summary>
 		/// <param name="characterName">The character name.</param>
@@ -106,6 +92,21 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// A <see cref="DatabaseResult{T}"/> containing the character data, or null if not found.
 		/// </returns>
 		Task<DatabaseResult<CharacterData?>> FetchByAccountAsync(string accountName, bool? selected, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Sets the selected character for an account atomically. Deselects all other characters for the account.
+		/// </summary>
+		/// <param name="account">The account name.</param>
+		/// <param name="characterId">The character ID to select.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Uses a single atomic UPDATE with conditional logic: SET selected = (id = characterId).
+		/// This ensures all characters for the account are updated in one operation without race conditions.
+		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// </remarks>
 
 		Task<DatabaseResult> SetSelectedAsync(string account, long characterId, CancellationToken cancellationToken = default);
 

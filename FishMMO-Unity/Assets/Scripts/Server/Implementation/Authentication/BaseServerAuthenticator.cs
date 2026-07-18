@@ -233,11 +233,14 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private async Task ProcessConnectionTokenAsync(NetworkConnection conn, string rawToken)
 		{
+				// Snapshot Server before any await to prevent nullification during
+				// execution (the property setter may be called from another thread).
+				var server = Server;
 				// Only process tokens on the Login Server. World/Scene servers
 				// do not have IAccountCreationSystemRuntimeData to store the result;
 				// the real IP is already in the account record from the Login phase.
-				if (Server?.DataContainerRegistry == null ||
-					!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
+				if (server?.DataContainerRegistry == null ||
+					!server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
 				{
 					return;
 				}
@@ -249,8 +252,8 @@ namespace FishMMO.Server.Implementation
 					sha256.ComputeHash(Encoding.UTF8.GetBytes(rawToken)))
 					.Replace("-", "").ToLowerInvariant();
 
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<IConnectionTokenService>(out var svc))
+				if (server?.Database?.ServiceRegistry == null ||
+					!server.Database.ServiceRegistry.TryGet<IConnectionTokenService>(out var svc))
 				{
 					await Log.Debug(LogPrefix, "IConnectionTokenService not registered — token skipped.");
 					return;

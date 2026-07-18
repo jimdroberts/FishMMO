@@ -118,6 +118,19 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Scope-exit token returned by <see cref="Enter"/>.
 		/// </summary>
+		/// <remarks>
+		/// IMPORTANT: This token MUST be disposed when the scope is exited (typically via a <c>using</c>
+		/// declaration or statement). Failure to dispose will leave the <see cref="AsyncLocal{ScopeState}"/>
+		/// in a corrupted state, causing all subsequent database operations in the same async flow to
+		/// incorrectly believe they are executing inside an ambient scope. This can lead to:
+		/// <list type="bullet">
+		///   <item><description>Write operations silently reusing stale DbContext instances</description></item>
+		///   <item><description>Retry logic being skipped inside what appears to be an ambient scope</description></item>
+		///   <item><description>Transaction state corruption when a disposed context is unexpectedly reused</description></item>
+		/// </list>
+		/// The <see cref="BaseService{TEntity}"/> methods always wrap their scope entry in a <c>using</c>
+		/// block. Manual callers of <see cref="Enter"/> or <see cref="EnterReadOnly"/> must do the same.
+		/// </remarks>
 		public readonly struct ScopeToken : IDisposable
 		{
 			/// <inheritdoc />

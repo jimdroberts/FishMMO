@@ -3,6 +3,7 @@
  * @brief WebTransport QUIC server implementation using msquic.
  */
 
+#include <atomic>
 #include <time.h>
 #include "server.h"
 #include "http3.h"
@@ -323,13 +324,18 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
      * no TOCTOU between session free and acquire. */
     uint32_t head = atomic_load(&server->pending_shutdown_head);
     uint32_t tail = atomic_load(&server->pending_shutdown_tail);
+    /* Acquire fence: paired with release fence in SHUTDOWN_COMPLETE.
+     * Ensures that the producer's array writes are visible before we
+     * read them on weakly-ordered architectures (ARM).  Without this,
+     * the consumer could see an updated tail but stale array data. */
+    atomic_thread_fence(std::memory_order_acquire);
     while (head != tail) {
         wt_connection_id_t cid = server->pending_shutdown_queue[head % WT_MAX_CLIENTS];
         if (cid > 0 && cid <= server->max_clients) {
             wt_server_conn_t* c = &server->connections[cid];
             if (c->pending_shutdown_session) {
-                wt_session_t* s = c->pending_shutdown_session;
-                c->pending_shutdown_session = NULL;
+                wt_session_t* s = (wt_session_t*)atomic_ptr_load(&c->pending_shutdown_session);
+                atomic_ptr_store(&c->pending_shutdown_session, NULL);
                 wt_session_shutdown(s);
             }
         }
@@ -657,8 +663,10 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                 atomic_ptr_store(&sconn->session, NULL);
 
                 /* Defer shutdown to poll (application thread) to guarantee
-                 * session free never races with in-flight sends. */
-                sconn->pending_shutdown_session = old_session;
+                 * session free never races with in-flight sends.
+                 * Use atomic_ptr_store because the poll thread reads this
+                 * field without a lock. */
+                atomic_ptr_store(&sconn->pending_shutdown_session, old_session);
             }
         }
 
@@ -691,11 +699,19 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             uint32_t tail = atomic_fetch_add(
                 &sconn->owner->pending_shutdown_tail, 1);
             if ((tail - head) >= WT_MAX_CLIENTS) {
-                WT_LOG_WARN("Pending shutdown queue overflow (tail %u, head %u)",
-                            tail, head);
+                WT_LOG_WARN("Pending shutdown queue overflow — dropping connection %llu (tail %u, head %u, pending %u)",
+                            (unsigned long long)sconn->id, tail, head,
+                            (unsigned)(tail - head));
             } else {
                 sconn->owner->pending_shutdown_queue[
                     tail % WT_MAX_CLIENTS] = sconn->id;
+                /* Release fence: paired with acquire fence in
+                 * wt_server_poll_impl.  The array write happens
+                 * AFTER the atomic_fetch_add that published tail;
+                 * on weakly-ordered architectures (ARM) the
+                 * consumer could observe the new tail before the
+                 * array write is visible without this fence. */
+                atomic_thread_fence(std::memory_order_release);
             }
         }
 
@@ -789,7 +805,7 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             wt_session_t* session = (wt_session_t*)atomic_ptr_load(&sconn->session);
             if (!session) break;
 
-            static int dgram_drop_count = 0;
+            static atomic_int dgram_drop_count = 0;
             const QUIC_BUFFER* buf = event->DATAGRAM_RECEIVED.Buffer;
             if (buf && buf->Length > 0 &&
                 buf->Length <= WT_DGRAM_MAX_SIZE) {
@@ -797,8 +813,9 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                         &sconn->owner->dgram_queue,
                         sconn->id, buf->Buffer,
                         (int32_t)buf->Length)) {
-                    if (++dgram_drop_count % 100 == 1) {
-                        WT_LOG_WARN("Datagram queue full: %d drops so far", dgram_drop_count);
+                    int prev = atomic_fetch_add(&dgram_drop_count, 1);
+                    if (prev % 100 == 0) {
+                        WT_LOG_WARN("Datagram queue full: %d drops so far", prev + 1);
                     }
                 }
             } else if (buf && buf->Length > WT_DGRAM_MAX_SIZE) {

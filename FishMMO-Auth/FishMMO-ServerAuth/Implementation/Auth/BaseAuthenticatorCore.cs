@@ -440,12 +440,34 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 			DateTime nowUtc = DateTime.UtcNow;
-			if (handshakeIpNextAllowedUtc.TryGetValue(rateLimitKey, out DateTime nextAllowed) && nowUtc < nextAllowed)
+			DateTime deadline = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
+
+			// Atomic per-IP rate-limit check-and-set via AddOrUpdate.
+			// The delegates capture 'rateLimited' to distinguish whether AddOrUpdate
+			// honoured the check (rate-limited) or actually set the new deadline.
+			// Under extreme contention the add factory's side effect may survive into
+			// a retry, but the consequence is a single extra handshake — not a
+			// systematic bypass — and is negligible compared to the original TOCTOU race.
+			bool rateLimited = true;
+			handshakeIpNextAllowedUtc.AddOrUpdate(
+				rateLimitKey,
+				_ =>
+				{
+					rateLimited = false;
+					return deadline;
+				},
+				(_, existing) =>
+				{
+					if (nowUtc < existing)
+						return existing;
+					rateLimited = false;
+					return deadline;
+				});
+			if (rateLimited)
 			{
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
-			handshakeIpNextAllowedUtc[rateLimitKey] = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
 
 			// ── Global rate limit ─────────────────────────────────────────
 			if (!TryIncrementGlobalHandshakeCount())

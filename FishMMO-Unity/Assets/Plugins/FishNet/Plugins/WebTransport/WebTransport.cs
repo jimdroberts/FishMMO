@@ -7,6 +7,17 @@ using UnityEngine;
 
 namespace FishNet.Transporting.WebTransport
 {
+	/// <summary>
+	/// WebTransport (QUIC/HTTP3) transport for FishMMO.
+	///
+	/// <para>Platform matrix:</para>
+	/// <list type="table">
+	///   <listheader><term>Platform</term><description>Backend</description></listheader>
+	///   <item><term>Windows/Linux/macOS (standalone)</term><description>Native C library via P/Invoke (fishmmo_webtransport / msquic)</description></item>
+	///   <item><term>WebGL (browser build)</term><description>Browser WebTransport API via JavaScript interop (WebTransport.jslib)</description></item>
+	///   <item><term>Unity Editor (any host OS)</term><description>Native C library loaded from the current platform's plugin — QUIC testing without a full build</description></item>
+	/// </list>
+	/// </summary>
 	/// <remarks>
 	/// Architecture: WebTransport is designed to work with or without NGINX.
 	/// WebTransport runs over HTTP/3 (QUIC), which requires TLS 1.3 natively.
@@ -44,6 +55,20 @@ namespace FishNet.Transporting.WebTransport
 
 		/// <summary>TLS private key PEM path. Set at startup from .cfg file.</summary>
 		private string privateKeyPath = "";
+
+		/// <summary>
+		/// Server-side idle timeout in seconds. If no data is received within this window,
+		/// the server considers the client disconnected.
+		/// </summary>
+		[SerializeField]
+		private float serverTimeout = 120f;
+
+		/// <summary>
+		/// Client-side idle timeout in seconds. If no data is received within this window,
+		/// the client considers the server disconnected.
+		/// </summary>
+		[SerializeField]
+		private float clientTimeout = 20f;
 		#endregion
 
 		#region Private
@@ -137,7 +162,7 @@ namespace FishNet.Transporting.WebTransport
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
-			SanitizeChannel(ref channelId);
+			sanitizeChannel(ref channelId);
 			if (channelId == 1 && segment.Count > mtu)
 			{
 				base.NetworkManager.LogWarning(
@@ -150,7 +175,7 @@ namespace FishNet.Transporting.WebTransport
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public override void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
-			SanitizeChannel(ref channelId);
+			sanitizeChannel(ref channelId);
 			if (channelId == 1 && segment.Count > mtu)
 			{
 				base.NetworkManager.LogWarning(
@@ -180,10 +205,11 @@ namespace FishNet.Transporting.WebTransport
 
 		/// <summary>
 		/// How long in seconds until either the server or client socket must go without data before timeout.
+		/// Values are configurable in the Unity inspector via <see cref="serverTimeout"/> and <see cref="clientTimeout"/>.
 		/// </summary>
 		public override float GetTimeout(bool asServer)
 		{
-			return asServer ? 120f : 20f;
+			return asServer ? serverTimeout : clientTimeout;
 		}
 
 		/// <summary>
@@ -202,7 +228,10 @@ namespace FishNet.Transporting.WebTransport
 			if (serverSocket.GetConnectionState() != LocalConnectionState.Stopped)
 				base.NetworkManager.LogWarning($"Cannot set maximum clients when server is running.");
 			else
+			{
 				this.maximumClients = value;
+				serverSocket.SetMaximumClients(value);
+			}
 		}
 
 		/// <summary>
@@ -258,22 +287,22 @@ namespace FishNet.Transporting.WebTransport
 		public override bool StartConnection(bool server)
 		{
 			if (server)
-				return StartServer();
+				return startServer();
 			else
-				return StartClient(clientAddress);
+				return startClient(clientAddress);
 		}
 
 		public override bool StopConnection(bool server)
 		{
 			if (server)
-				return StopServer();
+				return stopServer();
 			else
-				return StopClient();
+				return stopClient();
 		}
 
 		public override bool StopConnection(int connectionId, bool immediately)
 		{
-			return StopClient(connectionId, immediately);
+			return stopRemoteConnection(connectionId, immediately);
 		}
 
 		public override void Shutdown()
@@ -285,35 +314,34 @@ namespace FishNet.Transporting.WebTransport
 #endif
 		}
 
-		private bool StartServer()
+		private bool startServer()
 		{
 			serverSocket.Initialize(this, mtu, certificatePath, privateKeyPath);
 			return serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);
 		}
 
-		private bool StopServer()
+		private bool stopServer()
 		{
 			return serverSocket.StopConnection();
 		}
 
-		private bool StartClient(string address)
+		private bool startClient(string address)
 		{
 			clientSocket.Initialize(this, mtu);
 			return clientSocket.StartConnection(address, port, useTls: true);
 		}
 
-		private bool StopClient()
+		private bool stopClient()
 		{
 			return clientSocket.StopConnection();
 		}
 
 		/// <summary>
 		/// Stops a server connection for the given connection ID.
-		/// Despite the "StopClient" name required by the transport interface,
-		/// this method delegates to <c>serverSocket.StopConnection</c> because FishNet
+		/// Delegates to <c>serverSocket.StopConnection</c> because the transport
 		/// passes <c>connectionId</c> overloads here for server-side disconnections.
 		/// </summary>
-		private bool StopClient(int connectionId, bool immediately)
+		private bool stopRemoteConnection(int connectionId, bool immediately)
 		{
 			return serverSocket.StopConnection(connectionId, immediately);
 		}
@@ -324,7 +352,7 @@ namespace FishNet.Transporting.WebTransport
 		/// If channelId is invalid then channelId becomes forced to reliable.
 		/// WebTransport uses stream=reliable (0), datagram=unreliable (1).
 		/// </summary>
-		private void SanitizeChannel(ref byte channelId)
+		private void sanitizeChannel(ref byte channelId)
 		{
 			if (channelId >= TransportManager.CHANNEL_COUNT)
 			{

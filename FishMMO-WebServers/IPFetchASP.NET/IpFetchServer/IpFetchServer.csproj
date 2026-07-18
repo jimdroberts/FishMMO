@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
     <ProjectReference Include="..\..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
+    <ProjectReference Include="..\..\FishMMO-WebShared\FishMMO-WebShared.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Shared logging configuration from FishMMO-Setup (no rename needed). -->

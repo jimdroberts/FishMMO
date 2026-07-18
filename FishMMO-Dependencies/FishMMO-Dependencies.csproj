@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.1</TargetFramework>
-		<RootNamespace>FishMMO_Dependencies</RootNamespace>
+		<RootNamespace>FishMMO.Dependencies</RootNamespace>
 		<Nullable>enable</Nullable>
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 	</PropertyGroup>
@@ -54,15 +54,36 @@
 	</ItemGroup>
 
 	<Target Name="CopyDependenciesToUnity" AfterTargets="Build">
-		<!-- Copy built DLLs to the Unity project's Assets/Dependencies folder. -->
+		<!--
+			Copy built DLLs to the Unity project's Assets/Dependencies folder.
+			NOTE: Stale DLLs from removed NuGet packages are NOT automatically cleaned up.
+			If you remove a package, manually delete its .dll(s) from the Unity Assets/Dependencies folder.
+		-->
 		<PropertyGroup>
 			<!-- Forward-slash paths work on all platforms (Linux, macOS, Windows). -->
 			<TargetDir>../FishMMO-Unity/Assets/Dependencies</TargetDir>
 		</PropertyGroup>
 
 		<ItemGroup>
-			<SourceDir Include="bin\$(Configuration)\**\*.dll" Exclude="bin\$(Configuration)\**\Microsoft.CSharp.dll;bin\$(Configuration)\**\System.Collections.Concurrent.dll;bin\$(Configuration)\**\System.Linq.dll;bin\$(Configuration)\**\System.Text.RegularExpressions.dll;bin\$(Configuration)\**\System.Security.Cryptography.Primitives.dll" />
+			<!--
+				Include all DLLs from the NuGet restore output directory.
+				Exclude well-known system assemblies that are part of Unity's runtime,
+				and exclude test/satellite assemblies that should not ship with the game.
+			-->
+			<SourceDir
+			    Include="bin\$(Configuration)\**\*.dll"
+			    Exclude="
+			        bin\$(Configuration)\**\Microsoft.CSharp.dll;
+			        bin\$(Configuration)\**\System.Collections.Concurrent.dll;
+			        bin\$(Configuration)\**\System.Linq.dll;
+			        bin\$(Configuration)\**\System.Text.RegularExpressions.dll;
+			        bin\$(Configuration)\**\System.Security.Cryptography.Primitives.dll;
+			        **\*.Test.dll;
+			        **\*.Tests.dll;
+			        **\xunit.*.dll;
+			        **\nunit.*.dll" />
 		</ItemGroup>
+
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>
 </Project>

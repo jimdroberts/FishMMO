@@ -115,9 +115,13 @@ namespace FishMMO.Client
 					UnityWebRequestAsyncOperation operation = request.SendWebRequest();
 					while (!operation.isDone)
 					{
+						// NOTE: OnProgress may fire twice at 100% - once when the loop
+						// polls progress on the final frame and once after the loop ends.
+						// Callers should handle duplicate 100% notifications gracefully.
 						config.OnProgress?.Invoke(request, operation.progress);
 						yield return null;
 					}
+					// Progress may fire at 100% here again; see note above.
 					config.OnProgress?.Invoke(request, operation.progress);
 
 					if (request.result == UnityWebRequest.Result.Success)

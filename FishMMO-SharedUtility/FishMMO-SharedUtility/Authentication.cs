@@ -20,7 +20,7 @@ namespace FishMMO.Shared
 			$"Invalid character name. Names must be between {CharacterNameMinLength} and {CharacterNameMaxLength} characters (Letters and single spaces only).";
 
 		public static readonly string InvalidGuildNameError =
-			$"Invalid guild name. Guild name must be between {GuildNameMinLength} and {MaxGuildNameLength} characters.";
+			$"Invalid guild name. Guild name must be between {GuildNameMinLength} and {GuildNameMaxLength} characters.";
 		#endregion
 
 		#region Constraints
@@ -31,7 +31,7 @@ namespace FishMMO.Shared
 		public const int CharacterNameMinLength = 3;
 		public const int CharacterNameMaxLength = 24; // Reduced slightly for UI/Label consistency
 		public const int GuildNameMinLength = 3;
-		public const int MaxGuildNameLength = 32; // Standard MMO guild length
+		public const int GuildNameMaxLength = 32; // Standard MMO guild length
 		#endregion
 
 		#region Regular Expressions
@@ -86,7 +86,7 @@ namespace FishMMO.Shared
 		public static bool IsAllowedGuildName(string guildName) =>
 			!string.IsNullOrWhiteSpace(guildName) &&
 			guildName.Length >= GuildNameMinLength &&
-			guildName.Length <= MaxGuildNameLength &&
+			guildName.Length <= GuildNameMaxLength &&
 			GuildNameRegex.IsMatch(guildName);
 
 		/// <summary>

@@ -13,6 +13,13 @@ namespace FishMMO.Database.Data
 		public readonly string AccountName;
 		public readonly long WorldServerID;
 		public readonly long SceneServerID;
+		/// <summary>
+		/// Chat channel identifier.
+		/// NOTE: Raw <see cref="byte"/> is used instead of an enum type for direct database
+		/// compatibility. EF Core would require a value converter for enum mapping, adding
+		/// complexity with no benefit since the channel value is persisted as a small integer
+		/// column and rarely needs business logic branching in the data layer.
+		/// </summary>
 		public readonly byte Channel;
 		public readonly string Message;
 		public readonly DateTime ServerReceivedTime;

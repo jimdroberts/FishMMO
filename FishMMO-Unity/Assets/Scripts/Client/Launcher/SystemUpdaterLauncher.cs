@@ -2,6 +2,7 @@ using FishMMO.Logging;
 using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Threading;
 using UnityEngine;
 using FishMMO.Shared;
 
@@ -51,6 +52,11 @@ namespace FishMMO.Client
 			DataReceivedEventHandler outputHandler = null;
 			DataReceivedEventHandler errorHandler = null;
 
+			// Capture the Unity main-thread SynchronizationContext so log calls
+			// from Process output/error handlers (which fire on background threads)
+			// are marshalled back to the main thread.
+			SynchronizationContext unityContext = SynchronizationContext.Current;
+
 			try
 			{
 				// Prepare process start info with required arguments and settings
@@ -68,13 +74,23 @@ namespace FishMMO.Client
 
 				// Subscribe to output and error events for logging.
 				// Store handler references so they can be detached in the finally block.
+				// Marshal log calls to the main thread via Unity SynchronizationContext
+				// because Process event handlers fire on background threads.
 				outputHandler = (sender, args) =>
 				{
-					if (!string.IsNullOrEmpty(args.Data)) Log.Debug("UpdaterOutput", args.Data);
+					if (!string.IsNullOrEmpty(args.Data))
+					{
+						string msg = args.Data;
+						unityContext.Post(_ => Log.Debug("UpdaterOutput", msg), null);
+					}
 				};
 				errorHandler = (sender, args) =>
 				{
-					if (!string.IsNullOrEmpty(args.Data)) Log.Error("UpdaterError", args.Data);
+					if (!string.IsNullOrEmpty(args.Data))
+					{
+						string msg = args.Data;
+						unityContext.Post(_ => Log.Error("UpdaterError", msg), null);
+					}
 				};
 				process.OutputDataReceived += outputHandler;
 				process.ErrorDataReceived += errorHandler;

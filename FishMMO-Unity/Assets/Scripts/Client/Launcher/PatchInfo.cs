@@ -25,12 +25,12 @@ namespace FishMMO.Client
 		/// Lowercase hexadecimal SHA-256 of the patch zip the server will return for
 		/// the supplied client version, or null/empty if no patch info was returned.
 		/// </summary>
-		public string sha256;
+		public string Sha256;
 
 		/// <summary>
 		/// Size in bytes of the patch zip the server will return for the supplied
 		/// client version, or 0 if not provided.
 		/// </summary>
-		public long size;
+		public long Size;
 	}
 }

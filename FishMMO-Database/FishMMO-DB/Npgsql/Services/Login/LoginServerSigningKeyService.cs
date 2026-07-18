@@ -38,18 +38,23 @@ namespace FishMMO.Database.Npgsql.Services
 					.FirstOrDefault(k => k.ID == signingKeyId));
 #pragma warning restore CS8619
 
-		public LoginServerSigningKeyService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
+		/// <summary>
+		/// Verification overlap window (in days) during which rotated-out keys are still kept in
+		/// the table so in-flight tokens signed before rotation can be validated. The value is
+		/// injected at construction time and defaults to 7 days.
+		/// </summary>
+		public int KeyOverlapWindowDays { get; }
+
+		public LoginServerSigningKeyService(INpgsqlDbContextFactory dbContextFactory)
+			: this(dbContextFactory, 7)
 		{
 		}
 
-		/// <summary>
-		/// Verification overlap window (in days) during which rotated-out keys are still kept in
-		/// the table so in-flight tokens signed before rotation can be validated. Set once at
-		/// application startup before any LoginServer rotation occurs; defaults to 7 days. The
-		/// value is read at every <see cref="DeleteAsync"/> call so a process can adjust it
-		/// without requiring DI changes.
-		/// </summary>
-		public static int KeyOverlapWindowDays { get; set; } = 7;
+		public LoginServerSigningKeyService(INpgsqlDbContextFactory dbContextFactory, int keyOverlapWindowDays)
+			: base(dbContextFactory)
+		{
+			KeyOverlapWindowDays = keyOverlapWindowDays > 0 ? keyOverlapWindowDays : throw new ArgumentOutOfRangeException(nameof(keyOverlapWindowDays), "Key overlap window must be greater than 0.");
+		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<LoginServerSigningKeyData>> UpsertAsync(
@@ -193,16 +198,15 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					overlapDays = 0;
 				}
-				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+				await dbContext.Database.ExecuteSqlRawAsync(
 					$"DELETE FROM {TableName} WHERE login_server_id = {{0}} AND is_active = false AND rotated_at_utc IS NOT NULL AND rotated_at_utc < (CURRENT_TIMESTAMP - ({{1}} * INTERVAL '1 day'))",
 					new object[] { loginServerId, overlapDays },
 					cancellationToken)
 					.ConfigureAwait(false);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("LoginServerSigningKey", loginServerId.ToString());
-				}
+				// Having no keys to prune is a valid state — there may be no rotated keys to clean up.
+				// The operation is always considered successful from the caller's perspective;
+				// zero affected rows simply means there was nothing to clean.
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

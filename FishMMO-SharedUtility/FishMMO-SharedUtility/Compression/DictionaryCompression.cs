@@ -59,9 +59,9 @@ namespace FishMMO.Shared
 					}
 				}
 			}
-			catch
+			catch (System.Exception ex)
 			{
-				// In an MMO, you'd likely want to log this error via your logging system
+				System.Console.WriteLine($"Error reading dictionary from GZip file: {ex.Message}");
 				return new Dictionary<long, string>();
 			}
 		}

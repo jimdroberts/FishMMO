@@ -17,6 +17,15 @@ namespace FishMMO.Auth.Implementation
 	/// </summary>
 	public abstract class ClientAuthenticatorCore
 	{
+		#region Constants
+
+		/// <summary>Minimum allowed username length (inclusive).</summary>
+		private const int UsernameMinLength = 3;
+		/// <summary>Maximum allowed username length (inclusive).</summary>
+		private const int UsernameMaxLength = 32;
+
+		#endregion
+
 		#region Fields
 
 		/// <summary>Ephemeral X25519 keypair for ECDH key agreement. Zeroed after use or on cleanup.</summary>
@@ -274,13 +283,15 @@ namespace FishMMO.Auth.Implementation
 					ClearKeyMaterial();
 					Disconnect();
 				}
+				srpData?.Clear();
+				srpData = null;
 				return;
 			}
 
 			// Credential pre-validation
-			if (string.IsNullOrEmpty(this.username) || this.username.Length < 3 || this.username.Length > 32)
+			if (string.IsNullOrEmpty(this.username) || this.username.Length < UsernameMinLength || this.username.Length > UsernameMaxLength)
 			{
-				_ = Log.Warning(LogPrefix, "Username is empty or outside allowed length (3-32 characters).");
+				_ = Log.Warning(LogPrefix, $"Username is empty or outside allowed length ({UsernameMinLength}-{UsernameMaxLength} characters).");
 				ClearKeyMaterial();
 				Disconnect();
 				return;

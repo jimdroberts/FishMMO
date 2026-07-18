@@ -81,9 +81,14 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ulong GetPercentOf(this ulong number, ulong percent)
 		{
-			// Note: If (number * percent) exceeds ulong.MaxValue, this will wrap. 
-			// In an MMO, usually ulong represents XP or Currency where such massive numbers 
-			// multiplied by percent are rare, but be aware of the limit.
+			// Guard against overflow: if number * percent would exceed ulong.MaxValue,
+			// use division-first approach to avoid silent wrap-around.
+			if (number > ulong.MaxValue / percent)
+			{
+				// Avoid overflow by dividing first, then multiplying, then rounding.
+				// Precision is lost but the alternative is silent wrap-around.
+				return (number / 100UL) * percent;
+			}
 			return (number * percent + 50UL) / 100UL;
 		}
 	}

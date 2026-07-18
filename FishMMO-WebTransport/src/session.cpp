@@ -139,16 +139,19 @@ void wt_session_shutdown(wt_session_t* session)
 
         atomic_store(&mgr->shutdown_complete, true);
 
+        /* NULL the mgr pointer BEFORE the potential free. If another thread
+         * dereferences session->stream_mgr between free and NULL, that's a
+         * use-after-free. Nulling first eliminates the window entirely. */
+        session->stream_mgr = NULL;
+
         /* Free if no streams active or callback already fired. CAS ensures
-         * exactly one of session_shutdown or on_streams_done wins the free. */
+         * exactly one of session_shutdown or on_streams_done wins the free.
+         * on_streams_done holds its own mgr reference (done_ctx), so it is
+         * safe to free mgr via its original pointer here. */
         if (atomic_load(&mgr->active_streams) == 0 ||
             atomic_load(&mgr->streams_done_flag)) {
             try_free_mgr(mgr);
         }
-        /* Always null the pointer — if we didn't free mgr, on_streams_done
-         * will free it via its done_ctx reference. Leaving a dangling pointer
-         * here would allow sends to access freed memory. */
-        session->stream_mgr = NULL;
     }
     session->quic_conn = NULL;
 

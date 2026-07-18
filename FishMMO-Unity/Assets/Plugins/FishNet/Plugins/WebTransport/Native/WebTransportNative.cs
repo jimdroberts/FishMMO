@@ -150,51 +150,54 @@ namespace FishNet.Transporting.WebTransport.Native
 		/// Thread-safe init guard. 0 = not initialized, 1 = initializing/in progress.
 		/// Prevents double-init races when called from multiple threads.
 		/// </summary>
-		private static int _initGuard = 0;
-		private static volatile bool _initialized = false;
+		private static int initGuard = 0;
+		private static int deinitGuard = 0;
+		private static volatile bool initialized = false;
 
-		public static bool IsInitialized => _initialized;
+		public static bool IsInitialized => initialized;
 
 		/// <summary>Ensure wt_init() is called exactly once before any native operations.</summary>
 		public static void EnsureInitialized()
 		{
-			if (_initialized) return;
+			if (initialized) return;
 
 			/* Only one thread proceeds past this guard. */
-			if (System.Threading.Interlocked.CompareExchange(ref _initGuard, 1, 0) != 0)
+			if (System.Threading.Interlocked.CompareExchange(ref initGuard, 1, 0) != 0)
 			{
 				/* Another thread is initializing — yield with bounded timeout (~500ms Linux, up to ~3s Windows).
 				 * MsQuic DLL loading / entropy gathering can take a moment on some systems.
 				 * Using Thread.Sleep(2) avoids burning CPU, unlike a spin-wait. */
-				for (int i = 0; i < 250 && !_initialized; i++)
+				for (int i = 0; i < 250 && !initialized; i++)
 					System.Threading.Thread.Sleep(2);
 				/* Timed out — caller will get an error from the native operation; they can retry next frame. */
 				return;
 			}
 			/* Double-check — another thread may have completed init while we waited for the guard. */
-			if (_initialized) { _initGuard = 0; return; }
+			if (initialized) { initGuard = 0; return; }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
 			int result = wt_init();
 			if (result != 0)
 			{
 				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {ErrorString(result)}");
-				_initGuard = 0;
+				initGuard = 0;
 				return;
 			}
 #endif
-			_initialized = true;
+			initialized = true;
+				initGuard = 0; // reset so Deinitialize()+EnsureInitialized() works for restarts
 		}
 
 		/// <summary>Call wt_deinit() and reset state. Safe to call even if not initialized.</summary>
 		public static void Deinitialize()
 		{
-			if (!_initialized) return;
+			if (System.Threading.Interlocked.CompareExchange(ref deinitGuard, 1, 0) != 0) return;
+			if (!initialized) { deinitGuard = 0; return; }
 #if !UNITY_WEBGL || UNITY_EDITOR
 			wt_deinit();
 #endif
-			_initialized = false;
-			_initGuard = 0;
+			initialized = false;
+			deinitGuard = 0; // reset for subsequent cycles
 		}
 
 #if !UNITY_WEBGL || UNITY_EDITOR

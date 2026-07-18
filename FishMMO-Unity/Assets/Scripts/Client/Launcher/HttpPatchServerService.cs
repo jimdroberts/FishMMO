@@ -99,8 +99,8 @@ namespace FishMMO.Client
 						{
 							UpToDate = versionFetch.up_to_date,
 							PatchAvailable = versionFetch.patch_available,
-							sha256 = versionFetch.sha256,
-							size = versionFetch.size,
+							Sha256 = versionFetch.sha256,
+							Size = versionFetch.size,
 						};
 						onComplete?.Invoke(serverVersion, info);
 					}
@@ -139,6 +139,16 @@ namespace FishMMO.Client
 				onError?.Invoke("PatchServerService not initialized due to missing WebRequestService.");
 				yield break;
 			}
+
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+			// Release builds: refuse to download without a SHA-256 integrity check.
+			// This prevents shipping a corrupted or tampered patch to end users.
+			if (string.IsNullOrEmpty(expectedSha256))
+			{
+				onError?.Invoke("Release build requires a SHA-256 checksum for patch download integrity. The server did not provide one.");
+				yield break;
+			}
+#endif
 
 			Dictionary<string, string> headers = new Dictionary<string, string>();
 			// Sign patch download requests so the public web gateway accepts them.

@@ -263,12 +263,14 @@ void wt_client_poll_impl(wt_client_s* client, int32_t timeout_us)
     /* Process deferred session shutdown (set by QUIC callback thread).
      * This runs on the application thread — same thread as send —
      * guaranteeing no TOCTOU race between session free and acquire. */
-    if (client->pending_shutdown_session) {
-        wt_session_t* s = client->pending_shutdown_session;
-        client->pending_shutdown_session = NULL;
-        wt_session_shutdown(s);
-        /* wt_session_shutdown releases the owner reference — session
-         * is freed here if no in-flight sends hold a ref. */
+    {
+        wt_session_t* s = (wt_session_t*)atomic_ptr_load(&client->pending_shutdown_session);
+        if (s) {
+            atomic_ptr_store(&client->pending_shutdown_session, NULL);
+            wt_session_shutdown(s);
+            /* wt_session_shutdown releases the owner reference — session
+             * is freed here if no in-flight sends hold a ref. */
+        }
     }
 
     wt_datagram_queue_drain(&client->dgram_queue,
@@ -423,8 +425,10 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 
                 /* Defer shutdown to poll (application thread) to guarantee
                  * session free never races with in-flight sends. The poll
-                 * thread is the same thread that calls send, so no TOCTOU. */
-                cli->pending_shutdown_session = old_session;
+                 * thread is the same thread that calls send, so no TOCTOU.
+                 * Use atomic_ptr_store because the poll thread reads this
+                 * field without a lock. */
+                atomic_ptr_store(&cli->pending_shutdown_session, old_session);
             }
         }
 
@@ -503,15 +507,16 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             wt_session_t* session = (wt_session_t*)atomic_ptr_load(&cli->session);
             if (!session) break;
 
-            static int dgram_drop_count = 0;
+            static atomic_int dgram_drop_count = 0;
             const QUIC_BUFFER* buf = event->DATAGRAM_RECEIVED.Buffer;
             if (buf && buf->Length > 0 &&
                 buf->Length <= WT_DGRAM_MAX_SIZE) {
                 if (!wt_datagram_queue_push(
                         &cli->dgram_queue, 0, buf->Buffer,
                         (int32_t)buf->Length)) {
-                    if (++dgram_drop_count % 100 == 1) {
-                        WT_LOG_WARN("Datagram queue full: %d drops so far", dgram_drop_count);
+                    int prev = atomic_fetch_add(&dgram_drop_count, 1);
+                    if (prev % 100 == 0) {
+                        WT_LOG_WARN("Datagram queue full: %d drops so far", prev + 1);
                     }
                 }
             }

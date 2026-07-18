@@ -18,7 +18,7 @@ namespace FishMMO.Auth.Implementation
 		/// Domain separator prepended to cookie HMAC input to prevent cross-purpose
 		/// key reuse if the same HMAC key were accidentally shared with another subsystem.
 		/// </summary>
-		private static readonly byte[] CookieDomainSeparator = Encoding.ASCII.GetBytes("fishmmo-cookie-v1:");
+		private static readonly byte[] cookieDomainSeparator = Encoding.ASCII.GetBytes("fishmmo-cookie-v1:");
 
 		/// <summary>
 		/// Time bucket width in seconds for stateless handshake cookies.
@@ -40,14 +40,14 @@ namespace FishMMO.Auth.Implementation
 		/// Labels are version-neutral — separation is provided by the protocol version
 		/// and <see cref="CryptoSuiteId"/> already bound into the transcript hash.
 		/// </summary>
-		private static readonly byte[] ServerFinishedLabel = Encoding.ASCII.GetBytes("fishmmo finished s");
+		private static readonly byte[] serverFinishedLabel = Encoding.ASCII.GetBytes("fishmmo finished s");
 
 		/// <summary>
 		/// Domain label for client key confirmation HMAC.
 		/// Labels are version-neutral — separation is provided by the protocol version
 		/// and <see cref="CryptoSuiteId"/> already bound into the transcript hash.
 		/// </summary>
-		private static readonly byte[] ClientFinishedLabel = Encoding.ASCII.GetBytes("fishmmo finished c");
+		private static readonly byte[] clientFinishedLabel = Encoding.ASCII.GetBytes("fishmmo finished c");
 
 		#region Cookie
 
@@ -98,12 +98,12 @@ namespace FishMMO.Auth.Implementation
 
 			byte[] ipBytes = string.IsNullOrEmpty(remoteIp) ? Array.Empty<byte>() : Encoding.ASCII.GetBytes(remoteIp);
 			bool hasConnId = connectionId >= 0;
-			int dataLen = CookieDomainSeparator.Length + 4 + 2 + ipBytes.Length + 1 + (hasConnId ? 4 : 0) + clientPublicKey.Length;
+			int dataLen = cookieDomainSeparator.Length + 4 + 2 + ipBytes.Length + 1 + (hasConnId ? 4 : 0) + clientPublicKey.Length;
 			byte[] data = new byte[dataLen];
 			int offset = 0;
 
-			Buffer.BlockCopy(CookieDomainSeparator, 0, data, offset, CookieDomainSeparator.Length);
-			offset += CookieDomainSeparator.Length;
+			Buffer.BlockCopy(cookieDomainSeparator, 0, data, offset, cookieDomainSeparator.Length);
+			offset += cookieDomainSeparator.Length;
 
 			data[offset++] = (byte)(timeBucket >> 24);
 			data[offset++] = (byte)(timeBucket >> 16);
@@ -286,7 +286,7 @@ namespace FishMMO.Auth.Implementation
 
 			using var serverKeyPair = new CryptoHelper.X25519EphemeralKeyPair();
 
-			byte[] transcriptHash = ComputeTranscriptHash(
+			byte[] transcriptHash = computeTranscriptHash(
 				clientPublicKey, serverKeyPair.PublicKey,
 				clientMinVersion, clientMaxVersion, agreedVersion);
 
@@ -298,8 +298,8 @@ namespace FishMMO.Auth.Implementation
 					var sessionKeys = CryptoHelper.DeriveSessionKeys(sharedSecret, transcriptHash);
 
 					// Compute key confirmation MACs before zeroing transcript.
-					byte[] serverConf = ComputeKeyConfirmation(sessionKeys.ServerToClientKey, ServerFinishedLabel, transcriptHash);
-					byte[] expectedClientConf = ComputeKeyConfirmation(sessionKeys.ClientToServerKey, ClientFinishedLabel, transcriptHash);
+					byte[] serverConf = computeKeyConfirmation(sessionKeys.ServerToClientKey, serverFinishedLabel, transcriptHash);
+					byte[] expectedClientConf = computeKeyConfirmation(sessionKeys.ClientToServerKey, clientFinishedLabel, transcriptHash);
 
 					// Copy public key before the using block disposes the keypair.
 					byte[] serverPubKeyCopy = new byte[serverKeyPair.PublicKey.Length];
@@ -380,7 +380,7 @@ namespace FishMMO.Auth.Implementation
 			if (clientKeyPair == null)
 				return new ClientKeyAgreementResult { Success = false };
 
-			byte[] transcriptHash = ComputeTranscriptHash(
+			byte[] transcriptHash = computeTranscriptHash(
 				clientKeyPair.PublicKey, serverPublicKey,
 				clientMinVersion, clientMaxVersion, serverAgreedVersion);
 
@@ -392,8 +392,8 @@ namespace FishMMO.Auth.Implementation
 					var sessionKeys = CryptoHelper.DeriveSessionKeys(sharedSecret, transcriptHash);
 
 					// Compute key confirmation MACs before zeroing transcript.
-					byte[] clientConf = ComputeKeyConfirmation(sessionKeys.ClientToServerKey, ClientFinishedLabel, transcriptHash);
-					byte[] expectedServerConf = ComputeKeyConfirmation(sessionKeys.ServerToClientKey, ServerFinishedLabel, transcriptHash);
+					byte[] clientConf = computeKeyConfirmation(sessionKeys.ClientToServerKey, clientFinishedLabel, transcriptHash);
+					byte[] expectedServerConf = computeKeyConfirmation(sessionKeys.ServerToClientKey, serverFinishedLabel, transcriptHash);
 
 					return new ClientKeyAgreementResult
 					{
@@ -427,7 +427,7 @@ namespace FishMMO.Auth.Implementation
 		/// The crypto suite ID binds the choice of primitives into the transcript,
 		/// enabling algorithm agility without a full protocol version bump.
 		/// </summary>
-		private static byte[] ComputeTranscriptHash(
+		private static byte[] computeTranscriptHash(
 			byte[] clientPublicKey,
 			byte[] serverPublicKey,
 			ushort clientMinVersion,
@@ -460,7 +460,7 @@ namespace FishMMO.Auth.Implementation
 		/// Used by both sides to prove they derived the same session keys (similar to
 		/// TLS Finished / Noise Protocol key confirmation).
 		/// </summary>
-		private static byte[] ComputeKeyConfirmation(byte[] sessionKey, byte[] label, byte[] transcriptHash)
+		private static byte[] computeKeyConfirmation(byte[] sessionKey, byte[] label, byte[] transcriptHash)
 		{
 			byte[] data = new byte[label.Length + transcriptHash.Length];
 			Buffer.BlockCopy(label, 0, data, 0, label.Length);

@@ -113,6 +113,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Task<DatabaseResult<LoginServerData>> registerTask = Task.Run(() =>
 				loginServerService.PersistAsync(name, server.Address, server.Port));
 
+			// Block the main thread intentionally during startup: Unity's SynchronizationContext
+			// would deadlock if we awaited directly, so we use Task.Run to escape it and Wait()
+			// to block synchronously. The 30s timeout prevents an indefinite hang if the DB is unreachable.
 			if (!registerTask.Wait(dbRegistrationTimeoutMs))
 			{
 				Log.Error("LoginServerSystem", $"Login server DB registration timed out after {dbRegistrationTimeoutMs}ms");
@@ -144,8 +147,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// without also possessing the KEK, which is provisioned out-of-band.
 			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out signingKeyKek, out string kekError))
 			{
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 				Log.Warning("LoginServerSystem", $"Signing-key KEK not provisioned — persisting raw HMAC key. {kekError}");
 				signingKeyKek = null;
+#else
+				Log.Error("LoginServerSystem", $"Signing-key KEK is REQUIRED in production. {kekError}");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+#endif
 			}
 
 			byte[] wrappedHmacKey = signingKeyKek != null ? KeyEnvelope.Wrap(signingKeyKek, hmacKey, SigningKeyKekProvider.BuildAad(runtimeData.ID)) : hmacKey;
@@ -153,6 +161,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Task<DatabaseResult<LoginServerSigningKeyData>> keyTask = Task.Run(() =>
 				signingKeyService.UpsertAsync(runtimeData.ID, wrappedHmacKey));
 
+			// Block the main thread intentionally during startup (see comment above).
 			if (!keyTask.Wait(dbRegistrationTimeoutMs))
 			{
 				Log.Error("LoginServerSystem", $"HMAC signing key persistence timed out after {dbRegistrationTimeoutMs}ms");
@@ -369,11 +378,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
 				{
-					// Reference-typed property assignments are atomic; ordering: assign key first so any
-					// concurrent reader that sees the new ID also sees the matching key.
-					authenticator.TokenSigningKey = newHmacKey;
-					authenticator.TokenSigningKeyId = keyResult.Data.ID;
-					authenticator.TotpMasterKey = newTotpMasterKey;
+					// Use atomic swap so concurrent token-issuance always sees a consistent
+					// (key, keyId, totpMasterKey) tuple. Prior key material is zeroed inside.
+					authenticator.AtomicSwapSigningKey(newHmacKey, keyResult.Data.ID, newTotpMasterKey);
 
 					if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem) &&
 						accountSystem is AccountCreationSystem concreteAccountSystem)

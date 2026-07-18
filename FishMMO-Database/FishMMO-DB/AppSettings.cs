@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
 
 namespace FishMMO.Database
@@ -43,13 +43,15 @@ namespace FishMMO.Database
 
 		/// <summary>
 		/// Gets or sets the database username.
+		/// Default is empty to cause fail-fast errors if not configured.
 		/// </summary>
-		public string Username { get; set; } = "user";
+		public string Username { get; set; } = string.Empty;
 
 		/// <summary>
 		/// Gets or sets the database password.
+		/// Default is empty to cause fail-fast errors if not configured.
 		/// </summary>
-		public string Password { get; set; } = "pass";
+		public string Password { get; set; } = string.Empty;
 
 		/// <summary>
 		/// Gets or sets the command timeout in seconds.

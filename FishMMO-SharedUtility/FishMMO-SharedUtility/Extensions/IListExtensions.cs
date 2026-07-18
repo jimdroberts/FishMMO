@@ -48,7 +48,7 @@ namespace FishMMO.Shared
 				// Select a random index from 0 to i inclusive
 				int j = Instance.Next(0, i + 1);
 
-				// Deterministic swap
+				// Fisher-Yates shuffle using thread-local Random. Each element is swapped with a randomly selected element from the remaining unshuffled portion.
 				T temp = list[j];
 				list[j] = list[i];
 				list[i] = temp;

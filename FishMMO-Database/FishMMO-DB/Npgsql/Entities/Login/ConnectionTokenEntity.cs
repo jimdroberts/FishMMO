@@ -14,10 +14,15 @@ namespace FishMMO.Database.Npgsql.Entities
 	///   3. Login Server looks up the hash, extracts the real IP, deletes the row.
 	///   4. Expired rows are cleaned up by a periodic background job.
 	/// </summary>
-	public class ConnectionTokenEntity
+	public class ConnectionTokenEntity : IVersionedEntity
 	{
 		/// <summary>Auto-increment primary key.</summary>
 		public long ID { get; set; }
+
+		/// <summary>
+		/// Application-level concurrency token. Incremented on every write to detect stale updates.
+		/// </summary>
+		public long Version { get; set; }
 
 		/// <summary>
 		/// SHA-256 hash of the raw token (lowercase hex, 64 chars).

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using FishMMO.Database.Exceptions;
 using Npgsql;
@@ -113,7 +114,7 @@ namespace FishMMO.Database.Npgsql
 			return new NpgsqlConnectionStringBuilder
 			{
 				Host = s.Host,
-				Port = int.TryParse(s.Port, out int port) && port > 0 ? port : 5432,
+				Port = ResolvePort(s.Port),
 				Database = s.Database,
 				Username = s.Username,
 				Password = s.Password,
@@ -145,6 +146,16 @@ namespace FishMMO.Database.Npgsql
 					$"Invalid configuration value for '{settingPath}': '{value}'. Value must be greater than or equal to {minInclusive}.",
 					errorCode: "INVALID_CONFIGURATION");
 			}
+		}
+
+		private static int ResolvePort(string portValue)
+		{
+			if (int.TryParse(portValue, out int port) && port > 0)
+			{
+				return port;
+			}
+			Debug.WriteLine($"[FishMMO-DB] Port configuration '{portValue}' is invalid or missing; defaulting to 5432.");
+			return 5432;
 		}
 	}
 }

@@ -22,28 +22,32 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	public class WorldServerAuthenticator : TokenServerAuthenticator
 	{
 		/// <summary>
-		/// Debounce window for TryLoginAsync per account.
+		/// Debounce window in seconds for TryLoginAsync per account.
 		/// </summary>
-		private static readonly TimeSpan LoginAttemptDebounceWindow = TimeSpan.FromSeconds(1.0);
+		[Tooltip("Debounce window in seconds for TryLoginAsync per account")]
+		[SerializeField] private float loginAttemptDebounceSeconds = 1.0f;
 
 		/// <summary>
 		/// Maximum entries to scan per sweep cycle.
 		/// </summary>
-		private const int SweepMaxScan = 128;
+		[Tooltip("Maximum entries to scan per auth sweep cycle")]
+		[SerializeField] private int sweepMaxScan = 128;
 
 		/// <summary>
 		/// Maximum entries to remove per sweep cycle.
 		/// </summary>
-		private const int SweepMaxRemove = 64;
+		[Tooltip("Maximum entries to remove per auth sweep cycle")]
+		[SerializeField] private int sweepMaxRemove = 64;
 
 		/// <summary>
-		/// Window during which a recently admitted username still counts against the
+		/// Window in seconds during which a recently admitted username still counts against the
 		/// <see cref="MaxPlayers"/> cap, even if the DB-derived <c>ConnectionCount</c>
 		/// has not yet been refreshed by <c>UpdateConnectionCountAsync</c>.
 		/// Closes the read-then-admit race where N concurrent token authentications
 		/// all observe the same pre-refresh count and slip past the cap together.
 		/// </summary>
-		private static readonly TimeSpan RecentAdmissionWindow = TimeSpan.FromSeconds(30.0);
+		[Tooltip("Seconds for recent-admission window that bounds burst-admission race")]
+		[SerializeField] private float recentAdmissionWindowSeconds = 30.0f;
 
 		/// <summary>
 		/// Tracks last TryLoginAsync attempt time per account for rate limiting.
@@ -55,7 +59,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 		/// <summary>
 		/// Per-account "recently admitted" timestamps, used to bound the burst-admission
-		/// race window described on <see cref="RecentAdmissionWindow"/>. Periodically swept.
+		/// race window described on <see cref="TimeSpan.FromSeconds(recentAdmissionWindowSeconds)"/>. Periodically swept.
 		/// </summary>
 		private readonly ConcurrentDictionary<string, DateTime> recentAdmissionsByAccount =
 			new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
@@ -90,7 +94,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Rate-limit TryLoginAsync per account to prevent repeated expensive DB calls.
-			if (!loginAttemptByAccount.TryBegin(username, DateTime.UtcNow, LoginAttemptDebounceWindow))
+			if (!loginAttemptByAccount.TryBegin(username, DateTime.UtcNow, TimeSpan.FromSeconds(loginAttemptDebounceSeconds)))
 			{
 				await Log.Warning("WorldServerAuthenticator", $"Rate-limited TryLoginAsync for account '{username}'");
 				return ClientAuthenticationResult.ServerBusy;
@@ -151,12 +155,19 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 		/// <summary>
 		/// Returns the number of distinct usernames admitted within the last
-		/// <see cref="RecentAdmissionWindow"/>. Inline sweep — the map is small and this
+		/// <see cref="TimeSpan.FromSeconds(recentAdmissionWindowSeconds)"/>. Inline sweep — the map is small and this
 		/// method is called once per <see cref="TryLoginAsync"/>, which is rate-limited.
+		///
+		/// <para><b>Snapshot semantics:</b> Iterating a <see cref="ConcurrentDictionary{TKey,TValue}"/>
+		/// produces a point-in-time snapshot. Entries that expire (fall below the cutoff)
+		/// <i>after</i> the snapshot is taken will be missed until the next sweep. This is
+		/// acceptable because the admission window is a best-effort guard against burst admissions;
+		/// a transient over-admission is bounded by the sweep rate and corrected on the next call.
+		/// The conservative direction (under-admit) is enforced by the DB-derived <c>ConnectionCount</c>.</para>
 		/// </summary>
 		private int CountRecentAdmissions(DateTime now)
 		{
-			DateTime cutoff = now - RecentAdmissionWindow;
+			DateTime cutoff = now - TimeSpan.FromSeconds(recentAdmissionWindowSeconds);
 			int count = 0;
 			foreach (var kvp in recentAdmissionsByAccount)
 			{
@@ -178,15 +189,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		protected override void OnAuthSweep()
 		{
 			base.OnAuthSweep();
-			loginAttemptByAccount.SweepExpired(DateTime.UtcNow, SweepMaxScan, SweepMaxRemove);
+			loginAttemptByAccount.SweepExpired(DateTime.UtcNow, sweepMaxScan, sweepMaxRemove);
 
 			// Bounded sweep of the recent-admission map. Keeps the dictionary from
 			// retaining stale entries across server uptime even if no new logins arrive.
-			DateTime cutoff = DateTime.UtcNow - RecentAdmissionWindow;
+			DateTime cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(recentAdmissionWindowSeconds);
 			int scanned = 0;
 			foreach (var kvp in recentAdmissionsByAccount)
 			{
-				if (++scanned > SweepMaxScan) break;
+				if (++scanned > sweepMaxScan) break;
 				if (kvp.Value < cutoff)
 				{
 					recentAdmissionsByAccount.TryRemove(kvp.Key, out _);

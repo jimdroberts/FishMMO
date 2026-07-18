@@ -66,12 +66,24 @@ namespace FishMMO.Client
 		private string cachedConnectionToken;
 		/// <summary>
 		/// Time-to-live in seconds for the cached login server address list.
+		/// This value MUST be less than the server's connection token TTL (typically 60s)
+		/// to ensure we never serve a stale list with an expired token from a previous
+		/// <see cref="IPFetch"/> response. If the cache outlives the token the server
+		/// will reject the handshake.
 		/// </summary>
-		public float LoginServerCacheTtlSeconds = 55f; // Must be less than the 60s connection token TTL
+		public float LoginServerCacheTtlSeconds = 55f;
 		/// <summary>
 		/// Timeout in seconds for each login server probe request.
 		/// </summary>
 		public int LoginServerRequestTimeoutSeconds = 10;
+
+		/// <summary>
+		/// Delay in seconds between staggering login server probe requests.
+		/// Spreading probes out gives slower hosts time to respond before
+		/// the next candidate is tried.
+		/// </summary>
+		[SerializeField]
+		private float probeStaggerInterval = 0.25f;
 
 		// ── Scene preloading ────────────────────────────────────────────
 
@@ -284,10 +296,10 @@ namespace FishMMO.Client
 
 		// ── Public API ──────────────────────────────────────────────────
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		/// <summary>
 		/// Exits the application (play mode in editor, Application.Quit in builds, or WebGL key-hijack path).
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Quit()
 		{
 #if UNITY_EDITOR
@@ -305,9 +317,9 @@ namespace FishMMO.Client
 		/// <param name="forceDisconnect">If true, forces an immediate disconnection.</param>
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
-			StopAllCoroutines();
 			fogManager?.Stop();
 			AddressableLoadProcessor.UnloadSceneByLabelAsync(WorldPreloadScenes);
+			StopAllCoroutines(); // after unload has been initiated so the async operation isn't cancelled
 			UnloadWorldScenes();
 			if (forceDisconnect) Connection?.ForceDisconnect();
 			LoginAuthenticator?.RevokeAndClearAuthToken();
@@ -330,11 +342,16 @@ namespace FishMMO.Client
 		{
 			Connection?.ConnectToServer(Constants.Configuration.GameHost, port, isWorldServer);
 		}
+		/// <summary>
+		/// Checks whether the client connection is ready (authenticated by default).
+		/// </summary>
+		/// <param name="requireAuth">If true, the connection must be authenticated to be considered ready.</param>
+		/// <returns>True if the connection is ready; otherwise, false.</returns>
 		public bool IsConnectionReady(bool requireAuth = true) => Connection?.IsConnectionReady(requireAuth) ?? false;
 
-		/// <summary>Backward-compatible overload accepting LocalConnectionState.</summary>
 		/// <summary>
 		/// Checks whether the client connection is in the specified state and ready.
+		/// Backward-compatible overload accepting LocalConnectionState.
 		/// </summary>
 		/// <param name="state">The connection state to check for.</param>
 		/// <param name="requireAuth">If true, the connection must be authenticated to be considered ready.</param>
@@ -342,27 +359,25 @@ namespace FishMMO.Client
 		public bool IsConnectionReady(LocalConnectionState state, bool requireAuth = false) =>
 			(Connection?.ClientState == state) && IsConnectionReady(requireAuth);
 
-		/// <summary>Forwarded to <see cref="ClientConnectionManager.ForceDisconnect"/>.</summary>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		/// <summary>
 		/// Forces an immediate disconnection from the current server.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ForceDisconnect() => Connection?.ForceDisconnect();
 
-		/// <summary>Forwarded to <see cref="ClientConnectionManager.CancelReconnect"/>.</summary>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		/// <summary>
 		/// Cancels any active reconnection attempt.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ReconnectCancel() => Connection?.CancelReconnect();
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		/// <summary>
 		/// Sends a network broadcast to the server on the specified channel.
 		/// </summary>
 		/// <typeparam name="T">The broadcast message type.</typeparam>
 		/// <param name="broadcast">The broadcast message to send.</param>
 		/// <param name="channel">The network channel to use (default Reliable).</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Broadcast<T>(T broadcast, Channel channel = Channel.Reliable) where T : struct, IBroadcast
 			=> NetworkManager.ClientManager.Broadcast(broadcast, channel);
 
@@ -394,7 +409,7 @@ namespace FishMMO.Client
 			}
 			var candidates = ApiHostResolver.GetCandidates();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
-			const float stagger = 0.25f;
+			float stagger = probeStaggerInterval;
 			var pending = new List<PendingProbe>(candidates.Count);
 			float lastStart = float.NegativeInfinity;
 			int next = 0; string lastErr = null; List<ushort> winner = null;
@@ -562,10 +577,11 @@ namespace FishMMO.Client
 		// ── App lifecycle ───────────────────────────────────────────────
 
 		/// <summary>
-		/// Unity OnApplicationPause. Revokes the auth token when the application is paused.
+		/// Unity OnApplicationPause. Does NOT revoke the auth token — revoking on pause
+		/// kills WebGL tab blur / mobile sessions. Only revoke on explicit quit or logout.
 		/// </summary>
 		/// <param name="paused">True if the application is being paused.</param>
-		void OnApplicationPause(bool paused) { if (paused) try { LoginAuthenticator?.RevokeAndClearAuthToken(); } catch { } }
+		void OnApplicationPause(bool paused) { /* Auth token preserved across pause/unpause cycle. */ }
 		/// <summary>
 		/// Unity OnApplicationQuit. Revokes the auth token when the application exits.
 		/// </summary>

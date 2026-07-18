@@ -208,7 +208,13 @@ void wt_stream_manager_init(
 #if defined(WT_PLATFORM_WINDOWS)
     InitializeCriticalSection(&mgr->streams_lock);
 #else
-    pthread_mutex_init(&mgr->streams_lock, NULL);
+    {
+        pthread_mutexattr_t attr;
+        pthread_mutexattr_init(&attr);
+        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+        pthread_mutex_init(&mgr->streams_lock, &attr);
+        pthread_mutexattr_destroy(&attr);
+    }
 #endif
 
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
@@ -260,17 +266,37 @@ int32_t wt_stream_manager_send(
     }
     if (slot < 0) { sm_unlock(mgr); return WT_ERR_BUFFER_FULL; }
 
-    /* Reserve the slot immediately so accept doesn't grab it. */
-    wt_stream_id_t stream_id = mgr->next_id++;
-    if (stream_id == 0) stream_id = mgr->next_id++;
-    /* Overflow guard: skip 0 (reserved) and IDs already in the slot table.
-     * wt_stream_id_t is uint64_t — overflow requires ~584K years at 1M streams/s.
-     * This check exists for formal correctness only. */
-    if (stream_id == 0) stream_id = mgr->next_id++;
-    if (stream_id == 0) stream_id = 1; mgr->next_id = (mgr->next_id == 0) ? 1 : mgr->next_id;
+    /* Reserve the slot immediately so accept doesn't grab it.
+     * Increment active_streams while under the lock so that the count
+     * is consistent with the reserved slot — shutdown logic checks
+     * active_streams against streams_done_flag to decide whether to
+     * free the mgr. Moving the increment here (vs. after StreamOpen)
+     * prevents a theoretical underflow if SHUTDOWN_COMPLETE raced
+     * between StreamOpen and the old increment. */
+	/* Generate unique stream ID. next_id is uint64_t — in practice
+	 * this never wraps (~584K years at 1M streams/s). On the off
+	 * chance it wraps to 0 (reserved), scan the active stream slots
+	 * for an unused ID.  We hold the lock so the slot table is stable. */
+	wt_stream_id_t stream_id = mgr->next_id++;
+	if (stream_id == 0) {
+	    stream_id = 1;
+	    mgr->next_id = WT_MAX_STREAMS + 2;  /* skip scan range for future allocs */
+	    for (;;) {
+	        bool conflict = false;
+	        for (int i = 0; i < WT_MAX_STREAMS; i++) {
+	            if (mgr->streams[i].in_use && mgr->streams[i].id == stream_id) {
+	                conflict = true;
+	                break;
+	            }
+	        }
+	        if (!conflict) break;
+	        if (++stream_id == 0) stream_id = 1;  /* still skip 0 */
+	    }
+	}
     mgr->streams[slot].id = stream_id;
     mgr->streams[slot].in_use = true;
     mgr->streams[slot].send_closed = false;
+    atomic_fetch_add(&mgr->active_streams, 1);
     /* quic_stream set below after StreamOpen; SHUTDOWN_COMPLETE will
      * see in_use=true but quic_stream=NULL and skip cleanup — that's
      * fine because we haven't opened the stream yet. */
@@ -284,10 +310,11 @@ int32_t wt_stream_manager_send(
         &quic_stream);
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("StreamOpen failed: 0x%x", status);
-        /* Release the reserved slot. */
+        /* Release the reserved slot and undo the active_streams increment. */
         sm_lock(mgr);
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].id = 0;
+        atomic_fetch_sub(&mgr->active_streams, 1);
         sm_unlock(mgr);
         return WT_ERR_SEND_FAILED;
     }
@@ -298,6 +325,7 @@ int32_t wt_stream_manager_send(
         sm_lock(mgr);
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].id = 0;
+        atomic_fetch_sub(&mgr->active_streams, 1);
         sm_unlock(mgr);
         return WT_ERR_BUFFER_FULL;
     }
@@ -305,10 +333,10 @@ int32_t wt_stream_manager_send(
     sctx->stream_id = stream_id;
     sctx->quic_stream = quic_stream;
 
-    /* Record quic_stream under lock so SHUTDOWN_COMPLETE can find the slot. */
+    /* Record quic_stream under lock so SHUTDOWN_COMPLETE can find the slot.
+     * active_streams was already incremented at slot-reservation time. */
     sm_lock(mgr);
     mgr->streams[slot].quic_stream = quic_stream;
-    atomic_fetch_add(&mgr->active_streams, 1);
     sm_unlock(mgr);
 
     MsQuic->SetCallbackHandler(quic_stream,
@@ -379,14 +407,26 @@ void wt_stream_manager_accept_stream(
     }
 
     /* Reserve the slot immediately, unlock before alloc + MsQuic calls. */
+    /* Generate unique stream ID. next_id is uint64_t — in practice
+     * this never wraps (~584K years at 1M streams/s). On the off
+     * chance it wraps to 0 (reserved), scan the active stream slots
+     * for an unused ID.  We hold the lock so the slot table is stable. */
     wt_stream_id_t stream_id = mgr->next_id++;
-    if (stream_id == 0) stream_id = mgr->next_id++;
-    /* Overflow guard: skip 0 (reserved) and IDs already in the slot table.
-     * wt_stream_id_t is uint64_t — overflow requires ~584K years at 1M streams/s.
-     * This check exists for formal correctness only. */
-    if (stream_id == 0) stream_id = mgr->next_id++;
-    if (stream_id == 0) stream_id = 1; mgr->next_id = (mgr->next_id == 0) ? 1 : mgr->next_id;
-    mgr->streams[slot].id = stream_id;
+    if (stream_id == 0) {
+        stream_id = 1;
+        mgr->next_id = WT_MAX_STREAMS + 2;  /* skip scan range for future allocs */
+        for (;;) {
+            bool conflict = false;
+            for (int i = 0; i < WT_MAX_STREAMS; i++) {
+                if (mgr->streams[i].in_use && mgr->streams[i].id == stream_id) {
+                    conflict = true;
+                    break;
+                }
+            }
+            if (!conflict) break;
+            if (++stream_id == 0) stream_id = 1;  /* still skip 0 */
+        }
+    }
     mgr->streams[slot].quic_stream = quic_stream;
     mgr->streams[slot].in_use = true;
     atomic_fetch_add(&mgr->active_streams, 1);

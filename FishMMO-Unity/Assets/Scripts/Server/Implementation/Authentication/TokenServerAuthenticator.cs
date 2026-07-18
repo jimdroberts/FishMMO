@@ -39,21 +39,32 @@ namespace FishMMO.Server.Implementation
 		/// Cached for the lifetime of the authenticator. <c>null</c> until first fetch attempt.
 		/// </summary>
 		private volatile byte[] signingKeyKek;
+		/// <summary>
+		/// Lock object for thread-safe lazy initialization of <see cref="signingKeyKek"/>.
+		/// </summary>
+		private readonly object signingKeyKekLock = new object();
 
 		/// <summary>
 		/// Loads (and caches) the deployment KEK. Returns <c>null</c> on failure and emits a
 		/// warning log; callers must fail closed.
+		/// Uses double-checked locking for thread safety: the outer null check avoids the
+		/// lock cost on the hot path; the inner null check under the lock ensures only one
+		/// thread calls <see cref="SigningKeyKekProvider.TryLoad"/>.
 		/// </summary>
 		private byte[] TryGetSigningKeyKek()
 		{
 			if (this.signingKeyKek != null) return this.signingKeyKek;
-			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out byte[] kek, out string error))
+			lock (signingKeyKekLock)
 			{
-				_ = Log.Warning(LogPrefix, $"Signing-key KEK unavailable: {error}");
-				return null;
+				if (this.signingKeyKek != null) return this.signingKeyKek;
+				if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out byte[] kek, out string error))
+				{
+					_ = Log.Warning(LogPrefix, $"Signing-key KEK unavailable: {error}");
+					return null;
+				}
+				this.signingKeyKek = kek;
+				return kek;
 			}
-			this.signingKeyKek = kek;
-			return kek;
 		}
 
 		/// <inheritdoc/>

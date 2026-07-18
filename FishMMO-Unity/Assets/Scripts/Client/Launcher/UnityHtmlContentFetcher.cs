@@ -58,6 +58,11 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Maximum recursion depth when converting HTML nodes to TMP text to prevent stack overflow from deeply nested input.
+		/// </summary>
+		private const int MaxRecursionDepth = 100;
+
+		/// <summary>
 		/// Fetches HTML from a URL, extracts content from a div, and processes it into TMP rich text.
 		/// </summary>
 		/// <param name="url">The URL to fetch HTML from.</param>
@@ -129,6 +134,8 @@ namespace FishMMO.Client
 				scriptOrStyle.Remove();
 			}
 
+			// NOTE: divClass comes from an Inspector field (not user input), so XPath injection is not a concern here.
+			// If this method is ever called with attacker-controlled input, parameterize the XPath.
 			HtmlNode divNode = htmlDoc.DocumentNode.SelectSingleNode($"//div[contains(@class, '{divClass}')]");
 			if (divNode != null)
 			{
@@ -153,8 +160,13 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="node">The HTML node to convert.</param>
 		/// <returns>Converted TMP rich text string.</returns>
-		private string ConvertHtmlNodeToTmpText(HtmlNode node)
+		private string ConvertHtmlNodeToTmpText(HtmlNode node, int depth = 0)
 		{
+			if (depth > MaxRecursionDepth)
+			{
+				Log.Warning("UnityHtmlContentFetcher", $"Maximum recursion depth ({MaxRecursionDepth}) exceeded. Truncating HTML conversion.");
+				return string.Empty;
+			}
 			StringBuilder sb = new StringBuilder();
 
 			if (node.NodeType == HtmlNodeType.Text)
@@ -255,7 +267,7 @@ namespace FishMMO.Client
 
 			foreach (HtmlNode child in node.ChildNodes)
 			{
-				sb.Append(ConvertHtmlNodeToTmpText(child));
+				sb.Append(ConvertHtmlNodeToTmpText(child, depth + 1));
 			}
 
 			sb.Append(tmpTagClose);

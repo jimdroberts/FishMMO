@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -11,9 +12,11 @@ namespace FishMMO.Shared
 	public class ServerAddresses
 	{
 		/// <summary>List of available server addresses (internal use).</summary>
-		public List<ServerAddress> Addresses;
+		[field: SerializeField]
+		public List<ServerAddress> Addresses { get; set; }
 		/// <summary>List of available server ports (client use).</summary>
-		public List<ushort> Ports;
+		[field: SerializeField]
+		public List<ushort> Ports { get; set; }
 		/// <summary>
 		/// One-time connection token issued by IPFetch. The client echoes this
 		/// in the first ClientHandshake so the Login Server can recover the

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace FishNet.Transporting.WebTransport
 {
@@ -14,6 +15,14 @@ namespace FishNet.Transporting.WebTransport
 	/// </summary>
 	public abstract class CommonSocket
 	{
+		/// <summary>
+		/// Maximum allowed packet size for incoming data (streams).
+		/// Packets exceeding this size are rejected for security reasons.
+		/// 65536 bytes (64 KB) is generous for game data while preventing
+		/// runaway allocations from a malicious or buggy peer.
+		/// </summary>
+		protected const int MaxPacketSize = 65536;
+
 		#region Public
 		/// <summary>
 		/// Current ConnectionState.
@@ -23,6 +32,7 @@ namespace FishNet.Transporting.WebTransport
 		/// <summary>
 		/// Returns the current ConnectionState.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal LocalConnectionState GetConnectionState()
 		{
 			return connectionState;
@@ -38,9 +48,9 @@ namespace FishNet.Transporting.WebTransport
 
 			this.connectionState = connectionState;
 			if (asServer)
-				Transport.HandleServerConnectionState(new ServerConnectionStateArgs(connectionState, Transport.Index));
+				transport.HandleServerConnectionState(new ServerConnectionStateArgs(connectionState, transport.Index));
 			else
-				Transport.HandleClientConnectionState(new ClientConnectionStateArgs(connectionState, Transport.Index));
+				transport.HandleClientConnectionState(new ClientConnectionStateArgs(connectionState, transport.Index));
 		}
 		#endregion
 
@@ -48,13 +58,17 @@ namespace FishNet.Transporting.WebTransport
 		/// <summary>
 		/// Transport controlling this socket.
 		/// </summary>
-		protected Transport Transport = null;
+		protected Transport transport = null;
 		#endregion
 
 		/// <summary>
-		/// Sends data to the given connection.  Queues for deferred send during IterateOutgoing.
-		/// connectionId of -1 on server means broadcast to all.
+		/// Queues a packet for deferred sending during the next IterateOutgoing call.
 		/// </summary>
+		/// <param name="queue">The outgoing packet queue to enqueue to.</param>
+		/// <param name="channelId">The channel: 0 = reliable (stream), 1 = unreliable (datagram).</param>
+		/// <param name="segment">The data segment to send.</param>
+		/// <param name="connectionId">The target connection ID, or -1 for broadcast on the server.</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void Send(Queue<Packet> queue, byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
 			if (GetConnectionState() != LocalConnectionState.Started)
@@ -65,8 +79,11 @@ namespace FishNet.Transporting.WebTransport
 		}
 
 		/// <summary>
-		/// Clears a queue of Packets, returning their backing buffers to the pool.
+		/// Dequeues and disposes all packets in the given queue, returning their
+		/// backing buffers to the <see cref="ByteArrayPool"/>.
 		/// </summary>
+		/// <param name="queue">The queue to drain and dispose.</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void ClearPacketQueue(Queue<Packet> queue)
 		{
 			int count = queue.Count;

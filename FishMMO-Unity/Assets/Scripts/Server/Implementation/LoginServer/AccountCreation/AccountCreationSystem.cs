@@ -106,6 +106,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Lazily-constructed SMTP sender. Null until first email queue sweep.
 		/// </summary>
 		private ISmtpService smtpService;
+	/// <summary>
+	/// Lock for thread-safe lazy initialization of <see cref="smtpService"/>.
+	/// </summary>
+	private readonly object smtpServiceLock = new object();
+
 
 		/// <summary>
 		/// Injectable SMTP service. When set externally (e.g. by LoginServerSystem during
@@ -593,6 +598,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				try
 				{
+					#region Decrypt
 					// Decrypt credentials on worker thread using explicit sequence numbers provided by client.
 					// Design note — String heap retention: After decrypting into byte arrays (which are
 					// zeroed in finally/catch blocks), the byte data must be converted to .NET strings
@@ -676,7 +682,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 						});
 						return;
 					}
+				#endregion
 
+				#region Validate
 					string username;
 					string email;
 					int age;
@@ -814,6 +822,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 						return;
 					}
 
+					#endregion
+
+					#region Persist & PostCreate
 					// Database operation via registry-resolved service (BaseService handles context lifecycle)
 					DatabaseResult dbResult = await accountService.PersistAsync(username, salt, verifier, email, age);
 
@@ -828,11 +839,30 @@ namespace FishMMO.Server.Implementation.LoginServer
 							// Clear failure tracker on success
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
 
-							// Development mode: skip 2FA and email verification.
-							// Account is created, immediately verified, and has no TOTP requirement.
+							// Determine whether to auto-verify (skip 2FA/email).
+							// Controlled by a compile-time guard AND a runtime AutoVerifyAccounts config flag.
+							// Account is created, immediately verified, and has no TOTP requirement when enabled.
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-							result = ClientAuthenticationResult.AccountVerified;
+							// In development builds, check the runtime AutoVerifyAccounts config.
+							// Default to true when the config key is absent (dev convention).
+							bool shouldAutoVerify = false;
+							if (Server.Configuration.TryGetString("AutoVerifyAccounts", out string autoVerifyStr))
+							{
+								bool.TryParse(autoVerifyStr, out shouldAutoVerify);
+							}
+							else
+							{
+								shouldAutoVerify = true;
+							}
 #else
+							bool shouldAutoVerify = false;
+#endif
+							if (shouldAutoVerify)
+							{
+								result = ClientAuthenticationResult.AccountVerified;
+							}
+							else
+							{
 							// Release mode: full 2FA setup + verification code delivered in-band.
 							// Generate and store a verification code.
 							int verifyCode = RandomNumberGenerator.GetInt32(100000, 1000000);
@@ -966,7 +996,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 									await Log.Error("AccountCreationSystem", $"2FA setup failed for {username} (account created without 2FA): {tfaEx}");
 								}
 							}
-#endif
+							}
 						}
 						else
 						{
@@ -1020,6 +1050,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 			}
 
+			#endregion
+
+			#region Response
 			// Marshal response back to main thread - FishNet Broadcast is not thread-safe
 			ClientAuthenticationResult capturedResult = result;
 			NetworkConnection capturedConn = request.Connection;
@@ -1033,6 +1066,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 			});
 		}
+		#endregion
 
 		/// <summary>
 		/// Drains the main-thread response queue each frame and performs periodic maintenance.
@@ -1061,11 +1095,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server?.Database?.ServiceRegistry == null) return;
 			if (!Server.Database.ServiceRegistry.TryGet<IEmailQueueService>(out var emailQueueService)) return;
 
-			// Lazily construct the SMTP service from server configuration.
-			// It is not a DB service, so it is not in the Npgsql service registry.
-			if (smtpService == null && Server.Configuration != null)
+			// Thread-safe lazy construction of the SMTP service from server configuration.
+			// Uses double-checked locking to ensure only one instance is created.
+			if (smtpService == null)
 			{
-				smtpService = new FishMMO.Server.Implementation.Smtp.SmtpService(Server.Configuration);
+				lock (smtpServiceLock)
+				{
+					if (smtpService == null && Server.Configuration != null)
+					{
+						smtpService = new FishMMO.Server.Implementation.Smtp.SmtpService(Server.Configuration);
+					}
+				}
 			}
 			if (smtpService == null) return;
 
@@ -1718,7 +1758,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private static string BuildVerificationEmailBody(string username, int verifyCode)
 		{
 			return $@"<html><body style='font-family: Arial, sans-serif; color: #333;'>
-				<h2>Welcome to FishMMO, {username}!</h2>
+				<h2>Welcome to FishMMO, {System.Net.WebUtility.HtmlEncode(username)}!</h2>
 				<p>Thank you for creating an account. To complete your registration,
 				please use the following verification code:</p>
 				<h1 style='font-size: 32px; letter-spacing: 4px; color: #2563eb;'>{verifyCode:D6}</h1>

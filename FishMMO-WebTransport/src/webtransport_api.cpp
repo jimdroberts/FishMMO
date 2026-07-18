@@ -47,18 +47,27 @@ WT_API int32_t wt_init(void)
 
 WT_API void wt_deinit(void)
 {
-    if (!atomic_load(&g_initialised)) return;
+    /* Single-entry gate: use atomic CAS to ensure only ONE thread
+     * proceeds into deinit.  The first call that CAS's g_initialised
+     * from true to false wins; all subsequent calls (concurrent or
+     * after deinit completes) see false and return immediately.
+     *
+     * In the winning thread we transition g_initialised to false
+     * atomically as part of the gate — new API callers that check
+     * the guard AFTER the CAS will bail out early.
+     *
+     * ACCEPTED LIMITATION: Threads that entered an API function
+     * *before* this CAS may still be in-flight with a reference to
+     * the MsQuic API table.  Closing MsQuic beneath them is unsafe.
+     * The library is designed for controlled shutdown: call
+     * wt_deinit() only after all worker threads have been joined
+     * and no API invocations remain in-flight. */
+    {
+        atomic_bool expected = 1;
+        if (!atomic_compare_exchange_strong(&g_initialised, &expected, 0))
+            return;
+    }
 
-    /* Clear the guard FIRST (release-store). New API calls will see
-     * g_initialised==false and return early. In-flight calls that
-     * already passed the guard before this store will still see a
-     * valid MsQuic table (we haven't nulled it yet) and complete
-     * safely. The acquire-load in all API entry points pairs with
-     * this release-store, ensuring correct happens-before ordering. */
-    atomic_store(&g_initialised, false);
-
-    /* Close the MsQuic API table to release library resources.
-     * This is the counterpart to MsQuicOpen2() called in wt_init(). */
     if (MsQuic) {
         MsQuicClose(MsQuic);
     }

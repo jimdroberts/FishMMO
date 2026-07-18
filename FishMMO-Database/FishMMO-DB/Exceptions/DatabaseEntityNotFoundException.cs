@@ -27,7 +27,7 @@ namespace FishMMO.Database.Exceptions
 			: base(
 				safeMessage: $"The requested {entityType?.ToLowerInvariant() ?? "item"} was not found.",
 				detailedMessage: $"Entity of type '{entityType}' with identifier '{identifier}' was not found.",
-				errorCode: "DB_NOT_FOUND")
+				errorCode: DatabaseErrorCodes.NotFound)
 		{
 			EntityType = entityType ?? "unknown";
 			Identifier = identifier ?? "unknown";
@@ -43,7 +43,7 @@ namespace FishMMO.Database.Exceptions
 			: base(
 				safeMessage: safeMessage ?? "The requested item was not found.",
 				detailedMessage: $"Entity of type '{entityType}' with identifier '{identifier}' was not found.",
-				errorCode: "DB_NOT_FOUND")
+				errorCode: DatabaseErrorCodes.NotFound)
 		{
 			EntityType = entityType ?? "unknown";
 			Identifier = identifier ?? "unknown";

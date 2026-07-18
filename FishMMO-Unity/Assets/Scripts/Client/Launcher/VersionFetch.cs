@@ -4,6 +4,10 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Structure to parse the JSON response from the /latest_version endpoint.
+	///
+	/// NOTE: The fields below use snake_case naming as a deliberate JSON contract
+	/// exception. JsonUtility.FromJson maps directly to these field names; renaming
+	/// them to PascalCase would break deserialization of the server response.
 	/// </summary>
 	[Serializable]
 	public struct VersionFetch

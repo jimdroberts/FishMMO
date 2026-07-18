@@ -29,8 +29,11 @@ typedef struct {
     atomic_bool             in_use;           /* atomic — set from two threads */
     struct wt_server_s*     owner;            /* back-pointer to parent server */
 
-    /* Session pending deferred shutdown. Set by QUIC callback thread,
-     * consumed by poll (application thread). */
+    /* Session pending deferred shutdown. Set by QUIC callback thread
+     * (SHUTDOWN_COMPLETE), consumed by poll (application thread).
+     * MUST be accessed via atomic_ptr_load/atomic_ptr_store — written
+     * on the QUIC callback thread, read/written on the poll thread
+     * without a lock. */
     wt_session_t*           pending_shutdown_session;
 
     /* HTTP/3 handshake session. Created on CONNECTED, freed when

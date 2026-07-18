@@ -25,7 +25,7 @@ namespace FishMMO.Auth.Implementation
 		/// Prevents timing-based account enumeration. The salt is AES-GCM encrypted
 		/// before transmission (if applicable), so reuse is unobservable on the wire.
 		/// </summary>
-		private static readonly Lazy<(string Salt, string Verifier)> FakeSrpTuple =
+		private static readonly Lazy<(string Salt, string Verifier)> fakeSrpTuple =
 			new Lazy<(string, string)>(() =>
 			{
 				var client = new SrpClient(SrpParameters.Create2048<SHA512>());
@@ -42,7 +42,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>Tuple of (Salt, Verifier) strings.</returns>
 		public static (string Salt, string Verifier) GetStaticFakeData()
 		{
-			return FakeSrpTuple.Value;
+			return fakeSrpTuple.Value;
 		}
 
 		/// <summary>

@@ -9,9 +9,22 @@ namespace FishNet.Transporting.WebTransport
 	/// </summary>
 	internal struct Packet
 	{
+		/// <summary>
+		/// The connection ID of the sender (server) or target (client).
+		/// -1 on the server means broadcast to all clients.
+		/// </summary>
 		public readonly int ConnectionId;
+		/// <summary>
+		/// The packet data buffer, leased from <see cref="ByteArrayPool"/>.
+		/// </summary>
 		public byte[] Data;
+		/// <summary>
+		/// The number of valid bytes in <see cref="Data"/>.
+		/// </summary>
 		public int Length;
+		/// <summary>
+		/// The channel: 0 = reliable (stream), 1 = unreliable (datagram).
+		/// </summary>
 		public readonly byte Channel;
 		/// <summary>
 		/// Guard against double-dispose. Dispose sets this to false

@@ -14,7 +14,7 @@
   <!-- Copy the built DLL to the Unity project Dependencies folder. -->
   <Target Name="CopyToUnityDependencies" AfterTargets="Build">
     <PropertyGroup>
-      <TargetDir>..\..\FishMMO-Unity\Assets\Dependencies</TargetDir>
+      <TargetDir>../../FishMMO-Unity/Assets/Dependencies</TargetDir>
       <BuildConfiguration>Debug</BuildConfiguration>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)' == 'Release'">

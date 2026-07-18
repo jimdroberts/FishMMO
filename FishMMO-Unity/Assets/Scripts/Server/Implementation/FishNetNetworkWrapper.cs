@@ -73,14 +73,12 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Coroutine that waits for the server connection to be ready before proceeding.
+		/// Waits until <see cref="NetworkManager.IsServerStarted"/> is true, then completes.
 		/// </summary>
 		/// <returns>IEnumerator for coroutine.</returns>
 		private System.Collections.IEnumerator OnAwaitingConnectionReady()
 		{
-			// WaitUntil yields once per frame and resumes immediately when the
-			// server start flag flips (no 500ms polling delay).
 			yield return new WaitUntil(() => NetworkManager.IsServerStarted);
-			yield return null;
 		}
 
 		/// <summary>
@@ -112,12 +110,19 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Applies transport configuration values from <see cref="IServerConfiguration"/>.
-		/// </summary>
 		/// <summary>
 		/// Applies transport configuration values from <see cref="IServerConfiguration"/>.
 		/// WebTransport (QUIC/HTTP3) for all platforms. Each game server terminates its
 		/// own TLS — NGINX forwards raw UDP at Layer 4.
+		///
+		/// <para>Certificate path defaults by platform (overridable via config):</para>
+		/// <list type="table">
+		///   <listheader><term>Platform</term><description>Default cert path</description></listheader>
+		///   <item><term>Linux</term><description><c>/etc/fishmmo/certs/fullchain.pem</c></description></item>
+		///   <item><term>Windows</term><description><c>C:\ProgramData\FishMMO\certs\fullchain.pem</c></description></item>
+		///   <item><term>macOS</term><description><c>/usr/local/share/fishmmo/certs/fullchain.pem</c></description></item>
+		///   <item><term>Other</term><description><c>certs/fullchain.pem</c> (relative to working directory)</description></item>
+		/// </list>
 		/// </summary>
 		public void ApplyTransportConfiguration()
 		{
@@ -234,7 +239,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Unsubscribes from server connection state changes.
 		/// </summary>
-		/// <param name="handler"></param>
+		/// <param name="handler">The handler to unsubscribe from connection state changes.</param>
 		public void UnregisterServerConnectionStateEventHandler(Action<ServerConnectionStateArgs> handler)
 		{
 			NetworkManager.ServerManager.OnServerConnectionState -= handler;

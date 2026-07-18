@@ -1100,8 +1100,8 @@ namespace FishMMO.Database.Npgsql.Services
 				return;
 			}
 
-			var upsertStatement = sql.Trim();
-			upsertStatement = upsertStatement.TrimEnd(';');
+			var upsertStatement = sql.TrimEnd(';');
+			upsertStatement = upsertStatement.Trim();
 
 			var countSql = $@"WITH upserted AS (
 				{upsertStatement}

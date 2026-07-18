@@ -249,6 +249,7 @@ namespace FishMMO.Client
 		/// <param name="networkManager">The network manager instance.</param>
 		public override void InitializeOnce(NetworkManager networkManager)
 		{
+			if (initialized) return;
 			base.InitializeOnce(networkManager);
 			core = new LoginAuthenticatorCore(this);
 			this.networkManager = networkManager;

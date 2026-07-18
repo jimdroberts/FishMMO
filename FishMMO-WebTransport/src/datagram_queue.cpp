@@ -11,7 +11,7 @@
   #define wt_mutex_unlock(m)  LeaveCriticalSection(m)
   #define wt_mutex_destroy(m) DeleteCriticalSection(m)
 #else
-  #define wt_mutex_init(m)    pthread_mutex_init(m, NULL)
+  #define wt_mutex_init(m)    do { pthread_mutexattr_t _a; pthread_mutexattr_init(&_a); pthread_mutexattr_settype(&_a, PTHREAD_MUTEX_RECURSIVE); pthread_mutex_init(m, &_a); pthread_mutexattr_destroy(&_a); } while(0)
   #define wt_mutex_lock(m)    pthread_mutex_lock(m)
   #define wt_mutex_unlock(m)  pthread_mutex_unlock(m)
   #define wt_mutex_destroy(m) pthread_mutex_destroy(m)

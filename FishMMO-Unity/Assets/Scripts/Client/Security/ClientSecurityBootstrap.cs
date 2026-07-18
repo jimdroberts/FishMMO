@@ -71,6 +71,14 @@ namespace FishMMO.Client.Security
 					ClientCertificatePinning.Configure(pins, allowOnEmpty);
 					Log.Debug(LogChannel,
 						$"Loaded {pins.Count} pin(s) from StreamingAssets/{ConfigFileName}.");
+
+					// Warn if pins are empty and allowOnEmpty is false in a release build.
+					if (pins.Count == 0 && !allowOnEmpty && !UnityEngine.Debug.isDebugBuild)
+					{
+						Log.Error(LogChannel,
+							"StreamingAssets/" + ConfigFileName + " has allowOnEmpty=false but no pins configured. " +
+							"Every HTTPS API call will be rejected. Add at least one SPKI pin to the config.");
+					}
 					return;
 				}
 			}

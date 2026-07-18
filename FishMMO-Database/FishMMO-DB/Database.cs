@@ -18,7 +18,7 @@ namespace FishMMO.Database
 	/// This class initializes the database context factory, discovers and registers concrete service
 	/// implementations, and exposes monitoring points to the host application.
 	/// </summary>
-	public sealed class Database : IDatabase
+	public sealed class Database : IDatabase, IAsyncDisposable
 	{
 		/// <inheritdoc/>
 		/// <remarks>
@@ -130,10 +130,36 @@ namespace FishMMO.Database
 		/// <summary>
 		/// Discovers and registers Npgsql service implementations by reflection.
 		///
-		/// The method finds all service interfaces in the namespace
-		/// <c>FishMMO.Database.Npgsql.Services.Interfaces</c> and pairs them with a single concrete
-		/// implementation in <c>FishMMO.Database.Npgsql.Services</c>. Each implementation is constructed
-		/// with the provided <see cref="INpgsqlDbContextFactory"/> and registered into the registry.
+		/// CONVENTION
+		/// ----------
+		/// All service interfaces in <c>FishMMO.Database.Npgsql.Services.Interfaces</c> whose name ends
+		/// in "Service" are automatically paired with exactly one concrete implementation in
+		/// <c>FishMMO.Database.Npgsql.Services</c> (or a sub-namespace). Each implementation must have a
+		/// public constructor accepting <see cref="INpgsqlDbContextFactory"/>. The instance is registered
+		/// for every interface it implements.
+		///
+		/// TRADEOFFS
+		/// ---------
+		/// + Adding a new table/service requires only creating the interface and implementation files;
+		///   no manual wiring in a DI module or builder method.
+		/// - Reflection-based construction obscures dependency injection failures until runtime.
+		/// - If an interface matches multiple implementations (or none), the system throws at startup,
+		///   which can be confusing if the naming convention is not followed precisely.
+		/// - The interface namespace filter means interfaces outside <c>Services.Interfaces</c> are
+		///   silently skipped.
+		///
+		/// DEBUGGING REGISTRATION ISSUES
+		/// -----------------------------
+		/// 1. Check that the service interface's namespace is exactly
+		///    <c>FishMMO.Database.Npgsql.Services.Interfaces</c> and its name ends with "Service".
+		/// 2. Verify the concrete class is in <c>FishMMO.Database.Npgsql.Services</c> (or a sub-namespace
+		///    starting with that prefix) and is not abstract.
+		/// 3. Ensure the concrete class has a public constructor that takes a single
+		///    <see cref="INpgsqlDbContextFactory"/> parameter.
+		/// 4. If a <see cref="ReflectionTypeLoadException"/> occurs, the loader exceptions are written
+		///    to <see cref="System.Console.Error"/>; check the server logs.
+		/// 5. If the service still isn't registered, temporarily add a breakpoint in this method to
+		///    inspect <c>serviceInterfaces</c> and <c>candidates</c> arrays.
 		/// </summary>
 		/// <param name="registry">The registry to populate. Cannot be <c>null</c>.</param>
 		/// <param name="dbContextFactory">Factory instance to pass to service constructors. Cannot be <c>null</c>.</param>
@@ -163,7 +189,7 @@ namespace FishMMO.Database
 				{
 					if (loaderEx != null)
 					{
-						System.Diagnostics.Debug.WriteLine(loaderEx.ToString());
+						Console.Error.WriteLine(loaderEx.ToString());
 					}
 				}
 				throw new DatabaseException(
@@ -274,6 +300,16 @@ namespace FishMMO.Database
 		public Task ShutdownAsync(CancellationToken cancellationToken = default)
 		{
 			return DbContextFactory.ShutdownAsync(cancellationToken);
+		}
+
+		/// <summary>
+		/// Disposes the database orchestrator asynchronously.
+		/// Delegates to <see cref="ShutdownAsync"/> for graceful cleanup.
+		/// </summary>
+		public async ValueTask DisposeAsync()
+		{
+			await ShutdownAsync().ConfigureAwait(false);
+			GC.SuppressFinalize(this);
 		}
 	}
 }

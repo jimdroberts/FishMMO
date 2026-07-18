@@ -271,7 +271,7 @@ namespace FishMMO.Auth.Implementation
 
 				try
 				{
-					return DeriveX25519SharedSecret(privateKey!, peerPublicKey, handshakeTranscriptHash);
+					return deriveX25519SharedSecret(privateKey!, peerPublicKey, handshakeTranscriptHash);
 				}
 				finally
 				{
@@ -306,7 +306,7 @@ namespace FishMMO.Auth.Implementation
 		/// Internal: Generate X25519 keypair (private/public).
 		/// Prefer <see cref="X25519EphemeralKeyPair"/> which enforces private key zeroization.
 		/// </summary>
-		private static void GenerateX25519Keypair(out byte[] privateKey, out byte[] publicKey)
+		private static void generateX25519Keypair(out byte[] privateKey, out byte[] publicKey)
 		{
 			privateKey = new byte[32];
 			publicKey = new byte[32];
@@ -326,7 +326,7 @@ namespace FishMMO.Auth.Implementation
 		/// <para>This is the low-level primitive used by <see cref="X25519EphemeralKeyPair.DeriveSharedSecret"/>.
 		/// External callers should use the ephemeral keypair wrapper which enforces private key zeroization.</para>
 		/// </remarks>
-		private static byte[] DeriveX25519SharedSecret(byte[] ourPrivateKey, byte[] peerPublicKey, byte[] handshakeTranscriptHash)
+		private static byte[] deriveX25519SharedSecret(byte[] ourPrivateKey, byte[] peerPublicKey, byte[] handshakeTranscriptHash)
 		{
 			if (ourPrivateKey == null) throw new ArgumentNullException(nameof(ourPrivateKey));
 			if (peerPublicKey == null) throw new ArgumentNullException(nameof(peerPublicKey));
@@ -384,9 +384,9 @@ namespace FishMMO.Auth.Implementation
 		{
 			if (publicKey == null || publicKey.Length != 32) return false;
 			int matchAccumulator = 0;
-			for (int i = 0; i < SmallOrderX25519Points.Length; i++)
+			for (int i = 0; i < smallOrderX25519Points.Length; i++)
 			{
-				byte[] bad = SmallOrderX25519Points[i];
+				byte[] bad = smallOrderX25519Points[i];
 				int diff = 0;
 				for (int j = 0; j < 32; j++)
 					diff |= publicKey[j] ^ bad[j];
@@ -400,7 +400,7 @@ namespace FishMMO.Auth.Implementation
 		// high-bit-set forms are listed because the high bit is masked by every
 		// conforming X25519 implementation, making both byte-patterns yield the
 		// same curve point.
-		private static readonly byte[][] SmallOrderX25519Points = new byte[][]
+		private static readonly byte[][] smallOrderX25519Points = new byte[][]
 		{
 			// 0 (point at infinity)
 			new byte[32],
@@ -450,6 +450,7 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
+		/// Convenience wrapper around <see cref="CryptographicOperations.ZeroMemory"/> for code clarity.
 		/// Zeroes all bytes in the given key material.
 		/// Call on disconnect, logout, or rekey to destroy sensitive key material.
 		/// Null arrays are safely ignored.
@@ -570,6 +571,7 @@ namespace FishMMO.Auth.Implementation
 			AccountVerify = 0x0A, // client->server
 			TwoFactorSetup = 0x0B, // server->client (2FA setup data after registration)
 			TwoFactorVerify = 0x0C, // client->server (TOTP code during login)
+			TokenTransfer = 0x0D, // server->client (encrypted token payload)
 		}
 
 		/// <summary>
@@ -1278,13 +1280,13 @@ namespace FishMMO.Auth.Implementation
 			/// can be tuned without breaking existing stored hashes; <see cref="VerifyRecoveryCode"/>
 			/// transparently accepts the legacy "salt:hash" format at the original 100_000 iterations.
 			/// </summary>
-			private const int Pbkdf2Iterations = 600_000;
+			private const int pbkdf2Iterations = 600_000;
 
 			/// <summary>Legacy PBKDF2 iteration count for verifying hashes written before H2.</summary>
-			private const int Pbkdf2IterationsLegacy = 100_000;
+			private const int pbkdf2IterationsLegacy = 100_000;
 
 			/// <summary>Versioned envelope prefix written by <see cref="HashRecoveryCode"/>.</summary>
-			private const string RecoveryCodeEnvelopeV2Prefix = "v2:";
+			private const string recoveryCodeEnvelopeV2Prefix = "v2:";
 
 			/// <summary>
 			/// PBKDF2 salt length in bytes.
@@ -1551,10 +1553,10 @@ namespace FishMMO.Auth.Implementation
 				byte[] salt = GenerateKey(Pbkdf2SaltLength);
 				byte[] codeBytes = Encoding.UTF8.GetBytes(normalizedAccount + "|" + normalizedCode);
 
-				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
+				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, pbkdf2Iterations, HashAlgorithmName.SHA256))
 				{
 					byte[] hash = pbkdf2.GetBytes(Pbkdf2HashLength);
-					string result = RecoveryCodeEnvelopeV2Prefix + Pbkdf2Iterations.ToString(System.Globalization.CultureInfo.InvariantCulture)
+					string result = recoveryCodeEnvelopeV2Prefix + pbkdf2Iterations.ToString(System.Globalization.CultureInfo.InvariantCulture)
 						+ ":" + Convert.ToBase64String(salt) + ":" + Convert.ToBase64String(hash);
 					CryptographicOperations.ZeroMemory(salt);
 					CryptographicOperations.ZeroMemory(hash);
@@ -1577,7 +1579,7 @@ namespace FishMMO.Auth.Implementation
 				if (string.IsNullOrEmpty(submitted) || string.IsNullOrEmpty(storedHash))
 					return false;
 
-				bool isV2 = storedHash.StartsWith(RecoveryCodeEnvelopeV2Prefix, StringComparison.Ordinal);
+				bool isV2 = storedHash.StartsWith(recoveryCodeEnvelopeV2Prefix, StringComparison.Ordinal);
 				string[] parts;
 				int iterations;
 				string saltBase64;
@@ -1585,9 +1587,9 @@ namespace FishMMO.Auth.Implementation
 
 				if (isV2)
 				{
-					parts = storedHash.Substring(RecoveryCodeEnvelopeV2Prefix.Length).Split(':');
+					parts = storedHash.Substring(recoveryCodeEnvelopeV2Prefix.Length).Split(':');
 					if (parts.Length != 3) return false;
-					if (!int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out iterations) || iterations < Pbkdf2IterationsLegacy)
+					if (!int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out iterations) || iterations < pbkdf2IterationsLegacy)
 						return false;
 					saltBase64 = parts[1];
 					hashBase64 = parts[2];
@@ -1596,7 +1598,7 @@ namespace FishMMO.Auth.Implementation
 				{
 					parts = storedHash.Split(':');
 					if (parts.Length != 2) return false;
-					iterations = Pbkdf2IterationsLegacy;
+					iterations = pbkdf2IterationsLegacy;
 					saltBase64 = parts[0];
 					hashBase64 = parts[1];
 				}

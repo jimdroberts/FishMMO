@@ -89,8 +89,8 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				base.Dispose();
 				Disposed?.Invoke(this, EventArgs.Empty);
+				base.Dispose();
 			}
 		}
 
@@ -98,8 +98,8 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				await base.DisposeAsync().ConfigureAwait(false);
 				Disposed?.Invoke(this, EventArgs.Empty);
+				await base.DisposeAsync().ConfigureAwait(false);
 			}
 		}
 

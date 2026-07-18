@@ -31,12 +31,14 @@ namespace FishMMO.Server.Implementation
 		/// Optional override for the server's bind address.
 		/// </summary>
 		[Header("Overrides")]
-		public string AddressOverride;
+		[field: SerializeField]
+		public string AddressOverride { get; set; }
 
 		/// <summary>
 		/// Optional override for the server's bind port.
 		/// </summary>
-		public ushort PortOverride;
+		[field: SerializeField]
+		public ushort PortOverride { get; set; }
 
 		/// <summary>
 		/// Gets the core server logic instance.
@@ -198,7 +200,7 @@ namespace FishMMO.Server.Implementation
 		}
 
 		private int setupFinalized = 0;
-	private Coroutine externalIpTimeoutCoroutine;
+		private Coroutine externalIpTimeoutCoroutine;
 
 		/// <summary>
 		/// Finalizes server setup after fetching the external IP address.
@@ -222,6 +224,26 @@ namespace FishMMO.Server.Implementation
 
 			if (string.IsNullOrWhiteSpace(remoteAddress))
 				throw new UnityException("Server: Failed to retrieve Remote IP Address.");
+
+			// When the external IP fetch returns 127.0.0.1 (timeout fallback or local-only
+			// deployment), prefer the explicitly configured address from the server config.
+			// This prevents a production server from registering 127.0.0.1 as its public IP.
+			if (remoteAddress == "127.0.0.1" || remoteAddress == "localhost")
+			{
+				string configuredAddress = Configuration.GetString("Address", null);
+				if (!string.IsNullOrWhiteSpace(configuredAddress) && configuredAddress != "127.0.0.1" && configuredAddress != "localhost")
+				{
+					remoteAddress = configuredAddress;
+					Log.Debug("Server", $"Using configured Address \'{remoteAddress}\' instead of loopback fallback.");
+				}
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+				else
+				{
+					Log.Warning("Server", "External IP is 127.0.0.1 in production. Set \'Address\' in the server config " +
+						"or AddressOverride on the Server component to register a public-facing address.");
+				}
+#endif
+			}
 
 			CoreServer.Initialize(remoteAddress, gameObject.scene.name);
 
@@ -415,19 +437,25 @@ namespace FishMMO.Server.Implementation
 
 			periodicCallbacks.Clear();
 
-			DeinitializeAllBehaviours();
-			UnregisterAllBehaviours();
+			// 1. Stop accepting new connections first — prevents new clients from starting
+			//    auth handshakes after workers have already been signalled to shut down.
+			NetworkWrapper?.StopServer();
 
-			DeinitializeAllDataContainers();
-			UnregisterAllDataContainers();
-
-			// Shutdown authenticator workers before stopping the server.
+			// 2. Shutdown authenticator workers so no in-flight auth operations remain
+			//    before server behaviours are deinitialized.
 			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator authenticator)
 			{
 				authenticator.ShutdownWorkers();
 			}
 
-			NetworkWrapper?.StopServer();
+			// 3. Deinitialize server behaviours — this is safe only after the network is
+			//    stopped and workers have completed, ensuring no callbacks reference
+			//    partially-destroyed components.
+			DeinitializeAllBehaviours();
+			UnregisterAllBehaviours();
+
+			DeinitializeAllDataContainers();
+			UnregisterAllDataContainers();
 			Database?.Shutdown();
 			Database = null;
 			CoreServer?.Deinitialize();

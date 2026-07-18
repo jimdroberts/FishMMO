@@ -88,8 +88,13 @@ namespace FishMMO.Auth.Implementation
 				rawTokenForHashing = rawToken;
 				return EncryptTokenForSend(rawToken, encryptionData);
 			}
-			catch
+			catch (CryptographicException)
 			{
+				// Encryption failure is expected when keys are exhausted or misconfigured.
+				// Zero the raw token to prevent key material from leaking, then return null
+				// so the caller can fall back to a fresh authentication flow.
+				// Only CryptographicException is caught because ArgumentException /
+				// ObjectDisposedException indicate a programming error that should propagate.
 				CryptographicOperations.ZeroMemory(rawToken);
 				rawTokenForHashing = null;
 				return null;
@@ -97,7 +102,7 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Encrypts a raw token for transmission using AES-GCM with SrpSuccess AAD type.
+		/// Encrypts a raw token for transmission using AES-GCM with TokenTransfer AAD type.
 		/// </summary>
 		/// <param name="rawToken">Raw token bytes.</param>
 		/// <param name="encryptionData">Connection encryption state.</param>
@@ -107,7 +112,7 @@ namespace FishMMO.Auth.Implementation
 			uint tokenSeq = encryptionData.NextSendSequence();
 			byte[] tokenNonce = encryptionData.BuildSendNonce(tokenSeq);
 			byte[] tokenAad = new byte[CryptoHelper.AadLength];
-			CryptoHelper.WriteAad(tokenAad, (byte)CryptoHelper.AuthMessageType.SrpSuccess, encryptionData.AgreedVersion, tokenSeq);
+			CryptoHelper.WriteAad(tokenAad, (byte)CryptoHelper.AuthMessageType.TokenTransfer, encryptionData.AgreedVersion, tokenSeq);
 			return CryptoHelper.EncryptAES(encryptionData.ServerToClientKey!, tokenNonce, rawToken, tokenAad);
 		}
 

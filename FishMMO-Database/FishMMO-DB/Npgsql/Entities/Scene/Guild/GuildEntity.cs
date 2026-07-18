@@ -6,12 +6,17 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// <summary>
 	/// Database entity representing a guild.
 	/// </summary>
-	public class GuildEntity
+	public class GuildEntity : IVersionedEntity
 	{
 		/// <summary>
 		/// Primary key.
 		/// </summary>
 		public long ID { get; set; }
+
+		/// <summary>
+		/// Application-level concurrency token. Incremented on every write to detect stale updates.
+		/// </summary>
+		public long Version { get; set; }
 
 		/// <summary>
 		/// Display name.

@@ -1,6 +1,41 @@
 /**
  * @file stream_manager.h
  * @brief Manages QUIC streams for reliable data (FishNet channel 0).
+ *
+ * ## Locking Protocol
+ *
+ * ### Mutex: streams_lock
+ * Protects the streams[] slot array and all per-slot fields (id, in_use,
+ * quic_stream, send_closed, recv_closed). The lock is RECURSIVE so that
+ * a single thread can safely re-enter locked regions (e.g. when a
+ * synchronous MsQuic callback fires while the lock is held).
+ *
+ * ### Fields NOT protected by streams_lock:
+ * - quic_conn, conn_id, on_stream_data, callback_ctx, on_all_streams_done,
+ *   done_ctx: set once during init, read-only thereafter.
+ * - active_streams, total_recv_bytes, streams_done_flag, shutdown_complete,
+ *   freed, shutting_down: atomic variables, no lock needed for individual
+ *   reads/writes. However, multi-field decisions (e.g. check active_streams
+ *   and then access streams[] under the same lock) require the lock.
+ *
+ * ### Functions called WITH lock held:
+ * - Any code reading/writing streams[].in_use, streams[].id,
+ *   streams[].quic_stream, streams[].send_closed, streams[].recv_closed.
+ * - wt_stream_manager_send: slot reservation and release.
+ * - wt_stream_manager_accept_stream: slot reservation.
+ * - stream_cb (PEER_SEND_SHUTDOWN, SHUTDOWN_COMPLETE): slot lookup and
+ *   cleanup.
+ *
+ * ### Functions called WITHOUT lock held:
+ * - MsQuic StreamOpen, StreamStart, StreamSend, StreamShutdown, StreamClose.
+ * - Callbacks to user-provided on_stream_data.
+ *
+ * ### Lock ordering:
+ * - streams_lock is a leaf lock — never acquire any other lock while
+ *   holding it.
+ * - Do NOT call MsQuic stream functions while holding streams_lock,
+ *   because MsQuic may call back into stream_cb synchronously, which
+ *   would re-acquire streams_lock (recursive mutex makes this safe).
  */
 
 #ifndef WEBTRANSPORT_STREAM_MANAGER_H
@@ -11,7 +46,9 @@
 /* Platform mutex for streams[] array synchronisation.
  * stream_manager_send runs on the application thread while
  * stream callbacks (accept, SHUTDOWN_COMPLETE) fire on QUIC
- * worker threads — the shared streams[] array needs a lock. */
+ * worker threads — the shared streams[] array needs a lock.
+ * The mutex is RECURSIVE so that a synchronous MsQuic callback
+ * re-entering the lock does not deadlock. */
 #if defined(WT_PLATFORM_WINDOWS)
   #include <windows.h>
 #else
@@ -32,7 +69,7 @@ typedef struct wt_stream_entry_s {
 
 typedef struct wt_stream_manager_s {
     wt_stream_entry_t   streams[WT_MAX_STREAMS];
-    uint32_t            next_id;
+    uint64_t            next_id;        /* uint64_t — overflow impossible in practice */
     HQUIC               quic_conn;
     atomic_uint         active_streams;
     atomic_bool         shutting_down;

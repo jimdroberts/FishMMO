@@ -148,6 +148,30 @@ namespace FishMMO.Database.Npgsql.Services
 			var newItems = list.Where(a => a.ID <= 0).ToList();
 			var existingItems = list.Where(a => a.ID > 0).ToList();
 
+			// Deduplicate across new and existing groups to prevent the same (CharacterID, TemplateID)
+			// pair from appearing in both, which would cause a double-update conflict.
+			// When a duplicate is found, keep the one with the higher Version.
+			if (newItems.Count > 0 && existingItems.Count > 0)
+			{
+				var newItemLookup = newItems.ToDictionary(a => (a.CharacterID, a.TemplateID));
+				var existingItemLookup = existingItems.ToDictionary(a => (a.CharacterID, a.TemplateID));
+
+				var crossKeys = new HashSet<(long CharacterID, int TemplateID)>(newItemLookup.Keys);
+				crossKeys.IntersectWith(existingItemLookup.Keys);
+
+				foreach (var key in crossKeys)
+				{
+					if (existingItemLookup[key].Version >= newItemLookup[key].Version)
+					{
+						newItems.Remove(newItemLookup[key]);
+					}
+					else
+					{
+						existingItems.Remove(existingItemLookup[key]);
+					}
+				}
+			}
+
 			// Prevent duplicate keys within the same batch from causing
 			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
 			if (newItems.Count > 1)
