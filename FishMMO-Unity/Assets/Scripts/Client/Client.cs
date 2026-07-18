@@ -356,8 +356,16 @@ namespace FishMMO.Client
 		/// <param name="state">The connection state to check for.</param>
 		/// <param name="requireAuth">If true, the connection must be authenticated to be considered ready.</param>
 		/// <returns>True if the connection is in the specified state and ready; otherwise, false.</returns>
-		public bool IsConnectionReady(LocalConnectionState state, bool requireAuth = false) =>
-			(Connection?.ClientState == state) && IsConnectionReady(requireAuth);
+		public bool IsConnectionReady(LocalConnectionState state, bool requireAuth = false)
+		{
+			if (Connection == null || Connection.ClientState != state)
+				return false;
+
+			// State match alone is sufficient when auth is not required (e.g. checking
+			// for Stopped before calling ConnectToServer).  When the caller also needs
+			// authentication we delegate to the manager, which itself enforces Started.
+			return !requireAuth || Connection.IsConnectionReady(requireAuthentication: true);
+		}
 
 		/// <summary>
 		/// Forces an immediate disconnection from the current server.

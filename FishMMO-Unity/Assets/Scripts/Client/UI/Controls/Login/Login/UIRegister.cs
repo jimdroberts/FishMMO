@@ -311,6 +311,19 @@ namespace FishMMO.Client
 						}
 					});
 			}
+			else
+			{
+				// UIDialogBox unavailable — force-cleanup so the form does not hang.
+				Log.Warning("UIRegister", "UIDialogBox not found for 2FA setup. Cleaning up.");
+				pendingVerifyUsername = null;
+				DeleteSavedTwoFactorSetupFile();
+				Client.ForceDisconnect();
+				SetFormLocked(false);
+				if (UIManager.TryGet("UILogin", out UILogin uiLogin))
+				{
+					uiLogin.Show();
+				}
+			}
 		}
 
 		/// <summary>

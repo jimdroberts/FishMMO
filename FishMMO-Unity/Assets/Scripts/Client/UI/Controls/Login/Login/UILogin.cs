@@ -322,6 +322,7 @@ namespace FishMMO.Client
 				uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
 			}
 			Client.ForceDisconnect();
+			SetSignInLocked(false);
 		}
 
 		/// <summary>
