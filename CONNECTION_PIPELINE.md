@@ -553,7 +553,7 @@ sequenceDiagram
 ├─────────────────────────────────────────────┤
 │         SESSION LAYER                        │
 │  QUIC Streams + Datagrams                    │
-│  Stream Manager (1024 concurrent streams)    │
+│  Stream Manager (4096 concurrent streams)    │
 │  Reliable: Bidi stream + FIN                 │
 │  Unreliable: Datagram                        │
 ├─────────────────────────────────────────────┤
@@ -817,7 +817,7 @@ Application wants to quit
 | `LoginServerCacheTtlSeconds` | 55s | `Client.cs` |
 | `MaxReconnectAttempts` | 10 | `ClientConnectionManager.cs` |
 | `MaxReconnectDelay` | 60s | `ClientConnectionManager.cs` |
-| `WT_MAX_STREAMS` | 1024 | `webtransport_internal.h` |
+| `WT_MAX_STREAMS` | 4096 | `webtransport_internal.h` |
 | `WT_MAX_CLIENTS` | 4000 (configurable) | `.cfg` files |
 
 ---

@@ -504,17 +504,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (worldResult.IsSuccess && worldResult.Data != null)
 				{
-					var worldServerList = new List<WorldServerDetails>(worldResult.Data.Count);
-					foreach (WorldServerData data in worldResult.Data)
+					WorldServerDetails[] worldServerList = new WorldServerDetails[worldResult.Data.Count];
+					for (int i = 0; i < worldResult.Data.Count; i++)
 					{
-						worldServerList.Add(new WorldServerDetails()
+						WorldServerData data = worldResult.Data[i];
+						worldServerList[i] = new WorldServerDetails()
 						{
 							Name = data.Name,
-							LastPulse = data.LastPulse,
+							LastPulse = new DateTimeOffset(data.LastPulse, TimeSpan.Zero),
 							Port = data.Port,
 							CharacterCount = data.CharacterCount,
 							Locked = data.Locked,
-						});
+						};
 					}
 
 					// Marshal response back to main thread - FishNet Broadcast is not thread-safe
@@ -641,7 +642,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					Server.NetworkWrapper.Broadcast(conn, new ServerListBroadcast()
 					{
-						Servers = new List<WorldServerDetails>(),
+						Servers = Array.Empty<WorldServerDetails>(),
 					}, true, Channel.Reliable);
 				}
 			});

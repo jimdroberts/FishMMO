@@ -61,18 +61,61 @@ namespace FishMMO.Server.Implementation
 			set { tokenSigningKeyId = value; if (core != null) core.TokenSigningKeyId = value; }
 		}
 
+		/// <summary>Backing field for <see cref="TokenSigningKey"/>. Used when <see cref="core"/> is not yet created.</summary>
+		private byte[] tokenSigningKeyBacking;
+		/// <summary>Backing field for <see cref="TotpMasterKey"/>. Used when <see cref="core"/> is not yet created.</summary>
+		private byte[] totpMasterKeyBacking;
+
 		/// <summary>HMAC signing key for token generation. Set by LoginServerSystem after workers start.</summary>
 		public byte[] TokenSigningKey
 		{
-			get => core?.TokenSigningKey;
-			set { if (core != null) core.TokenSigningKey = value; }
+			get => core?.TokenSigningKey ?? tokenSigningKeyBacking;
+			set
+			{
+				if (core != null)
+				{
+					if (value != null)
+					{
+						byte[] copy = new byte[value.Length];
+						Buffer.BlockCopy(value, 0, copy, 0, value.Length);
+						core.TokenSigningKey = copy;
+					}
+					else
+					{
+						core.TokenSigningKey = null;
+					}
+				}
+				else
+				{
+					tokenSigningKeyBacking = value;
+				}
+			}
 		}
 
 		/// <summary>AES-256 master key for TOTP secret decryption. Set by LoginServerSystem after workers start.</summary>
 		public byte[] TotpMasterKey
 		{
-			get => core?.TotpMasterKey;
-			set { if (core != null) core.TotpMasterKey = value; }
+			get => core?.TotpMasterKey ?? totpMasterKeyBacking;
+			set
+			{
+				if (core != null)
+				{
+					if (value != null)
+					{
+						byte[] copy = new byte[value.Length];
+						Buffer.BlockCopy(value, 0, copy, 0, value.Length);
+						core.TotpMasterKey = copy;
+					}
+					else
+					{
+						core.TotpMasterKey = null;
+					}
+				}
+				else
+				{
+					totpMasterKeyBacking = value;
+				}
+			}
 		}
 
 		#region Lifecycle
@@ -88,6 +131,23 @@ namespace FishMMO.Server.Implementation
 			core.LoginServerId = loginServerId;
 			core.TokenSigningKeyId = tokenSigningKeyId;
 			core.TokenExpirationMinutes = tokenExpirationMinutes;
+
+			// Apply cached key material that was set before the core was created,
+			// then release the cache references so callers observe the core values.
+			if (tokenSigningKeyBacking != null)
+			{
+				byte[] copy = new byte[tokenSigningKeyBacking.Length];
+				Buffer.BlockCopy(tokenSigningKeyBacking, 0, copy, 0, copy.Length);
+				core.TokenSigningKey = copy;
+				tokenSigningKeyBacking = null;
+			}
+			if (totpMasterKeyBacking != null)
+			{
+				byte[] copy = new byte[totpMasterKeyBacking.Length];
+				Buffer.BlockCopy(totpMasterKeyBacking, 0, copy, 0, copy.Length);
+				core.TotpMasterKey = copy;
+				totpMasterKeyBacking = null;
+			}
 		}
 
 		/// <inheritdoc/>
@@ -538,9 +598,19 @@ namespace FishMMO.Server.Implementation
 
 				if (core != null)
 				{
-					core.TokenSigningKey = newKey;
+					// Copy the incoming key arrays so the caller's references remain
+					// independent. This prevents a shared-reference scenario where the
+					// caller (e.g. RotateSigningKeyAsync) holds the same array reference
+					// and passes it to another consumer (e.g. AccountCreationSystem), and
+					// a subsequent ZeroMemory on one reference zeroes data the other needs.
+					byte[] signingKeyCopy = newKey != null ? new byte[newKey.Length] : null;
+					if (signingKeyCopy != null) Buffer.BlockCopy(newKey, 0, signingKeyCopy, 0, signingKeyCopy.Length);
+					byte[] totpCopy = newTotpMasterKey != null ? new byte[newTotpMasterKey.Length] : null;
+					if (totpCopy != null) Buffer.BlockCopy(newTotpMasterKey, 0, totpCopy, 0, totpCopy.Length);
+
+					core.TokenSigningKey = signingKeyCopy;
 					core.TokenSigningKeyId = newKeyId;
-					core.TotpMasterKey = newTotpMasterKey;
+					core.TotpMasterKey = totpCopy;
 				}
 				tokenSigningKeyId = newKeyId;
 

@@ -267,7 +267,7 @@ namespace FishMMO.Client
 			{
 				DestroyServerList();
 
-				for (int i = 0; i < msg.Servers.Count; ++i)
+				for (int i = 0; i < msg.Servers.Length; ++i)
 				{
 					CreateServerRow(msg.Servers[i]);
 				}

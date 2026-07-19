@@ -111,19 +111,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> SetSelectedAsync(string account, long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Sets the online status for a character atomically.
-		/// </summary>
-		/// <param name="characterId">The character ID.</param>
-		/// <param name="online">The online status to set.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
-		/// </returns>
-		/// <remarks>
-		/// Uses atomic UPDATE without loading the entity. Updates last_saved timestamp automatically.
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
-		/// </remarks>
-		/// <summary>
 		/// Attempts to claim ownership of a character session (Offline → Online).
 		/// </summary>
 		/// <remarks>

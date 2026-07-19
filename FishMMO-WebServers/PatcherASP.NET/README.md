@@ -17,7 +17,7 @@
 
 ## Overview
 
-ASP.NET Core patch delivery server for FishMMO clients. Determines the latest available patch version by scanning the patch directory on startup, then serves versioned `.zip` patch files to clients that are behind the current version. Access is gated to FishMMO clients only via custom middleware.
+ASP.NET Core patch delivery server for FishMMO clients. Determines the latest available patch version by scanning the patch directory on startup (with FileSystemWatcher hot-reload), then serves versioned `.zip` patch files to clients that are behind the current version. Access is gated through `ClientGate` HMAC-signed request validation middleware shared across all FishMMO web services.
 
 Designed to run behind NGINX as a reverse proxy (via `api.fishmmo.com`). NGINX terminates SSL and forwards requests over plain HTTP to Kestrel on localhost.
 
@@ -45,39 +45,42 @@ Unity Client
 |  NGINX  |  <- SSL termination, X-Forwarded-For/Proto
 +----+----+
      | HTTP (localhost:8090)
-+----v--------------------------------------+
-|  Kestrel (Patcher)                       |
-|  +-- ForwardedHeaders middleware         |
-|  +-- CORS (AllowXFishMMO)                |
-|  +-- UnityOnlyMiddleware                 |
-|  +-- PatchController                     |
-|       +-- PatchVersionService            |
-|            +-- VersionConfig parser      |
-|       +-- Patches/ directory (zips)      |
-+-------------------------------------------+
++----v-----------------------------------------+
+|  Kestrel (Patcher)                          |
+|  +-- ForwardedHeaders middleware            |
+|  +-- CORS (AllowXFishMMO)                   |
+|  +-- ClientGate (HMAC request signing)      |
+|  +-- Rate Limiting (two-tier)               |
+|  +-- PatchController                        |
+|       +-- PatchVersionService               |
+|            +-- VersionConfig parser         |
+|            +-- FileSystemWatcher            |
+|       +-- Patches/ directory (zips)         |
++----------------------------------------------+
 ```
 
 ## Directory Structure
 
 ```
 Patcher/
-+-- Program.cs                      # Host builder, Kestrel config, middleware pipeline
-+-- Controllers/
-|   +-- PatchController.cs          # GET /latest_version, GET /{version}
-+-- Services/
-|   +-- PatchVersionService.cs      # Startup patch directory scanner, latest version tracker
-+-- VersionConfig.cs                # SemVer parser with pre-release support and comparison operators
-+-- UnityOnlyMiddleware.cs          # Rejects requests without X-FishMMO: Client header
-+-- appsettings.json                # Port, patch directory
+├── Program.cs                      # Host builder, Kestrel config, middleware pipeline
+├── Controllers/
+│   └── PatchController.cs          # GET /latest_version, GET /{version}
+├── Services/
+│   └── PatchVersionService.cs      # Startup patch directory scanner, SHA-256 indexing, FileSystemWatcher
+├── VersionConfig.cs                # SemVer parser with pre-release support and comparison operators
+├── appsettings.json                # Port, patch directory configuration
+└── (ClientGate is in FishMMO-WebShared/)
 ```
 
 ## Middleware Pipeline
 
-1. **`UseForwardedHeaders`** - trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
-2. **`UseCors("AllowXFishMMO")`** - allows any origin with `X-FishMMO` header.
-3. **`UnityOnlyMiddleware`** - checks `X-FishMMO` header equals `"Client"`. Returns 403 if missing/invalid.
-4. **`UseRouting`** - standard ASP.NET routing.
-5. **`MapControllers`** - maps attribute-routed controller endpoints.
+1. **`UseForwardedHeaders`** — trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
+2. **`UseCors("AllowXFishMMO")`** — allows cross-origin requests from `play.fishmmo.com`.
+3. **`UseFishMMOClientGate`** — validates `X-FishMMO-Client` HMAC-signed header (shared `ClientGate` middleware from FishMMO-WebShared).
+4. **`UseRateLimiter`** — two-tier: token bucket (10 req/s, 30 burst) for metadata endpoints; sliding window (6 permits/60s) for patch downloads.
+5. **`UseRouting` + `MapControllers`** — standard ASP.NET routing.
+6. **`MapHealthChecks`** — `/healthz` endpoint with patch version status.
 
 ## Endpoints
 
@@ -160,11 +163,12 @@ Examples:
 
 ## Security
 
-- **UnityOnlyMiddleware** rejects all requests without `X-FishMMO: Client` header.
-- **CORS policy** (`AllowXFishMMO`) restricts allowed headers to `X-FishMMO`.
+- **ClientGate** validates HMAC-SHA256 request signatures with timestamp and nonce replay protection.
+- **CORS policy** (`AllowXFishMMO`) restricts cross-origin access to `play.fishmmo.com`.
 - **ForwardedHeaders** ensures correct client IP logging when behind NGINX.
-- Kestrel binds to **localhost only** - not directly accessible from the internet.
-- Patch files are streamed with async `FileStream` to avoid memory pressure on large patches.
+- **Rate limiting** (two-tier: metadata + download) prevents abuse.
+- Kestrel binds to **localhost only** — not directly accessible from the internet.
+- Patch files are served with `FileOptions.SequentialScan`, ETag support (conditional GET), and path traversal defense at both index-time and serve-time.
 
 ## External Dependencies
 

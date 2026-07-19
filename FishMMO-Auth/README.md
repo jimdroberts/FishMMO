@@ -18,31 +18,41 @@ A transport-agnostic .NET authentication library for FishMMO that provides secur
 - [License](#license)
 
 ## Overview
-`FishMMO-Auth` targets `netstandard2.1` with nullable reference types enabled and is organized into two major areas:
 
-**Core** — protocol contracts with no implementation dependencies:
-- `Core/Collections` — bounded concurrent collections used by the auth cores: `ArrivalOrderTracker<TKey>` (insertion-ordered TTL tracker), `ExpiringKeyTracker<TKey>` (debounce/rate-limit tracker), and `LastSeenCacheTracker<TKey, TValue>` (LRU-style last-seen cache).
-- `Core/DTOs/AuthenticationDTOs.cs` — engine-independent structs mirroring network broadcast payloads.
-- `Core/Enums` — `AccessLevel`, `AuthState`, and `ClientAuthenticationResult`.
-- `Core/Interfaces` — `IAccountManager<TConnection>` for auth-state transitions, `ISrpAccountManager<TConnection>` for SRP session storage, and `ITokenAccountManager<TConnection>` for token-authenticated connection registration.
+FishMMO-Auth is organized into three `netstandard2.1` projects (all with `<Nullable>enable</Nullable>`), each building to a separate DLL:
 
-**Implementation** — concrete cryptographic helpers and ready-to-subclass authenticator cores:
-- `Implementation/Auth/BaseAuthenticatorCore<TConnection>` — abstract engine-independent base for all server authenticators. Handles the X25519 ECDH cookie-challenge/handshake pipeline, stale-auth TTL sweeps, per-IP and global handshake rate limiting, and connection auth-state tracking. Subclass by implementing the abstract transport callbacks.
-- `Implementation/Auth/SrpAuthenticatorCore<TConnection>` — LoginServer authenticator. Extends `BaseAuthenticatorCore` with bounded-channel SRP verify/proof workers, TOTP two-factor authentication, kick-request debouncing, per-IP/per-account rate limiting, and auth token issuance. Subclass to supply database operations and transport broadcasts.
-- `Implementation/Auth/TokenAuthenticatorCore<TConnection>` — World/Scene server authenticator. Extends `BaseAuthenticatorCore` with a bounded-channel token auth worker that decrypts, verifies, and revocation-checks client-supplied tokens. Subclass to supply the signing-key lookup and revocation check.
-- `Implementation/Auth/ClientAuthenticatorCore` — client-side auth state machine. Implements the full SRP-6a + X25519 ECDH client flow including cookie challenge echo, key agreement, token auth (World/Scene), SRP verify/proof, TOTP, and key material cleanup. Subclass to supply transport broadcasts and application-layer callbacks.
-- `Implementation/Services/HandshakeService.cs` — X25519 ECDH key agreement, stateless HMAC cookie challenge/verification, protocol version negotiation, IP normalization, and key confirmation MACs.
-- `Implementation/Services/SrpService.cs` — encrypted SRP field handling, registration encryption, TOTP payload encryption/decryption, fake-salt derivation, and account verification payload encryption.
-- `Implementation/Services/TokenService.cs` — token build/hash/encrypt/decrypt/verify pipeline.
-- `Implementation/Crypto/CryptoHelper.cs` — cryptographic backbone: HKDF, AES-GCM, HMAC-SHA256/SHA512, nonce contexts, X25519 ephemeral keypairs, and 2FA utilities.
-- `Implementation/Connection` — `ConnectionEncryptionData` (per-connection session keys + nonce state + auth-state machine) and `AccountData` (post-authentication account binding).
-- `Implementation/SRP` — `ClientSrpData` and `ServerSrpData` wrapping the SRP-6a library with sensitive-field cleanup.
-- `Implementation/Requests` — `SrpVerifyRequest<TConnection>` and `SrpProofRequest<TConnection>` — lightweight immutable tickets enqueued to async workers.
+### FishMMO-AuthShared
+The shared core — protocol contracts, cryptographic services, and handshake support used by both client and server.
+
+- **DTOs, Enums, and Interfaces** — `AuthenticationDTOs`, `AccessLevel`/`AuthState`/`ClientAuthenticationResult`, and the core interfaces used by the authenticator cores.
+- **ConnectionEncryptionData** — Per-connection session keys, nonce contexts, and auth-state tracking.
+- **CryptoHelper** — Cryptographic backbone: HKDF, AES-GCM, HMAC-SHA256/SHA512, nonce contexts, X25519 ephemeral keypairs, and 2FA utilities.
+- **HandshakeService** — X25519 ECDH key agreement, stateless HMAC cookie challenge/verification, protocol version negotiation, IP normalization, and key confirmation MACs.
+- **SrpService** — encrypted SRP field handling, registration encryption, TOTP payload encryption/decryption, fake-salt derivation, and account verification payload encryption.
+- **TokenService** — token build/hash/encrypt/decrypt/verify pipeline.
+- **ClientSrpData** — Client-side SRP-6a session state with sensitive-field cleanup.
+
+### FishMMO-ClientAuth
+The client-side authenticator, with a single public class:
+- **ClientAuthenticatorCore** — Full client-side auth state machine. Implements the complete SRP-6a + X25519 ECDH client flow including cookie challenge echo, key agreement, token auth (World/Scene), SRP verify/proof, TOTP, and key material cleanup. Subclass to supply transport broadcasts and application-layer callbacks.
+
+### FishMMO-ServerAuth
+The server-side authenticator infrastructure — engine-independent cores, collections, account managers, and request types.
+
+- **Bounded Concurrent Collections** — `ArrivalOrderTracker<TKey>` (insertion-ordered TTL tracker), `ExpiringKeyTracker<TKey>` (debounce/rate-limit tracker), and `LastSeenCacheTracker<TKey, TValue>` (LRU-style last-seen cache).
+- **Account Manager Interfaces** — `IAccountManager<TConnection>` for auth-state transitions, `ISrpAccountManager<TConnection>` for SRP session storage, and `ITokenAccountManager<TConnection>` for token-authenticated connection registration.
+- **BaseAuthenticatorCore\<TConnection\>** — Abstract engine-independent base for all server authenticators. Handles the X25519 ECDH cookie-challenge/handshake pipeline, stale-auth TTL sweeps, per-IP and global handshake rate limiting, and connection auth-state tracking. Subclass by implementing the abstract transport callbacks.
+- **SrpAuthenticatorCore\<TConnection\>** — LoginServer authenticator. Extends `BaseAuthenticatorCore` with bounded-channel SRP verify/proof workers, TOTP two-factor authentication, kick-request debouncing, per-IP/per-account rate limiting, and auth token issuance. Subclass to supply database operations and transport broadcasts.
+- **TokenAuthenticatorCore\<TConnection\>** — World/Scene server authenticator. Extends `BaseAuthenticatorCore` with a bounded-channel token auth worker that decrypts, verifies, and revocation-checks client-supplied tokens. Subclass to supply the signing-key lookup and revocation check.
+- **Account Managers** — Concrete `AccountManager`, `SrpAccountManager`, and `TokenAccountManager` for per-connection encryption data and SRP/token session storage.
+- **AccountData** — Post-authentication account binding (username, access level).
+- **ServerSrpData** — Server-side SRP-6a session state with sensitive-field cleanup.
+- **SrpVerifyRequest\<TConnection\>** and **SrpProofRequest\<TConnection\>** — Lightweight immutable tickets enqueued to async workers.
 
 ## Supported Platforms
 - .NET Standard `2.1` consumers.
 - Linux, Windows, and macOS runtimes capable of running .NET Standard 2.1 libraries.
-- Unity integration is supported through the post-build copy target that places `FishMMO-Auth.dll` into `FishMMO-Unity/Assets/Dependencies`.
+- Unity integration is supported through the post-build copy targets that place `FishMMO-AuthShared.dll`, `FishMMO-ClientAuth.dll`, and `FishMMO-ServerAuth.dll` into `FishMMO-Unity/Assets/Dependencies`.
 
 ## Features / Capabilities / Security Features
 ### Engine-independent authenticator cores:
@@ -111,19 +121,21 @@ External packages used:
 From repository root:
 
 ```bash
-dotnet restore
-dotnet build FishMMO-Auth.slnx -c Debug
+dotnet restore FishMMO-Auth/FishMMO-Auth.slnx
+dotnet build FishMMO-Auth/FishMMO-Auth.slnx -c Debug
 ```
 
-Build the library project directly:
+Build the individual library projects:
 
 ```bash
-dotnet build FishMMO-Auth/FishMMO-Auth.csproj -c Release
+dotnet build FishMMO-Auth/FishMMO-AuthShared/FishMMO-AuthShared.csproj -c Release
+dotnet build FishMMO-Auth/FishMMO-ClientAuth/FishMMO-ClientAuth.csproj -c Release
+dotnet build FishMMO-Auth/FishMMO-ServerAuth/FishMMO-ServerAuth.csproj -c Release
 ```
 
 Notes:
-- The project has a post-build target (`CopyToUnityDependencies`) that copies `FishMMO-Auth.dll` into `../FishMMO-Unity/Assets/Dependencies`.
-- If the Unity path does not exist in your local layout, adjust or disable that target in `FishMMO-Auth/FishMMO-Auth.csproj`.
+- Each project has a post-build target (`CopyToUnityDependencies`) that copies its DLL (`FishMMO-AuthShared.dll`, `FishMMO-ClientAuth.dll`, or `FishMMO-ServerAuth.dll`) into `../FishMMO-Unity/Assets/Dependencies`.
+- If the Unity path does not exist in your local layout, adjust or disable the target in the corresponding `.csproj`.
 
 ## Quick Start Guides
 ### 1) Server-Side SRP Login (subclassing SrpAuthenticatorCore)
@@ -354,43 +366,61 @@ flowchart TD
 ## Project Structure
 ```text
 FishMMO-Auth/
-  FishMMO-Auth.csproj          — netstandard2.1, Nullable=enable
-  Core/
-    Collections/
-      ArrivalOrderTracker.cs   — insertion-order key tracker (LinkedList + Dictionary)
-      ExpiringKeyTracker.cs    — TTL debounce / rate-limit tracker
-      LastSeenCacheTracker.cs  — last-seen LRU cache with TTL sweep
-    DTOs/
-      AuthenticationDTOs.cs    — engine-independent broadcast payload structs
-    Enums/
-      AccessLevel.cs
-      AuthState.cs
-      ClientAuthenticationResult.cs
-    Interfaces/
-      IAccountManager.cs       — auth-state transitions + encryption data
-      ISrpAccountManager.cs    — SRP session storage and sweep
-      ITokenAccountManager.cs  — token-authenticated connection registration
-  Implementation/
-    Auth/
-      BaseAuthenticatorCore.cs   — abstract server base: handshake, cookie, TTL sweeps, rate limits
-      SrpAuthenticatorCore.cs    — LoginServer SRP + TOTP + token issuance core
-      TokenAuthenticatorCore.cs  — World/Scene token auth core
-      ClientAuthenticatorCore.cs — client-side auth state machine
-    Connection/
-      AccountData.cs             — post-auth account binding (username, access level)
-      ConnectionEncryptionData.cs — per-connection session keys, nonce contexts, auth state
-    Crypto/
-      CryptoHelper.cs            — HKDF, AES-GCM, HMAC, X25519 keypairs, nonce contexts, 2FA
-    Requests/
-      SrpProofRequest.cs         — immutable SRP proof worker ticket
-      SrpVerifyRequest.cs        — immutable SRP verify worker ticket
-    Services/
-      HandshakeService.cs        — X25519 key agreement, cookie challenge, IP normalization
-      SrpService.cs              — SRP payload encryption/decryption, fake-salt derivation
-      TokenService.cs            — token build/hash/encrypt/decrypt/verify pipeline
-    SRP/
-      ClientSrpData.cs           — client SRP-6a session state with cleanup
-      ServerSrpData.cs           — server SRP-6a session state with cleanup
+  FishMMO-Auth.slnx                              — Solution file (3 projects)
+  FishMMO-AuthShared/                            — Shared core (netstandard2.1)
+    FishMMO-AuthShared.csproj                    — Depends on SharedUtility + Logger
+    Core/
+      DTOs/AuthenticationDTOs.cs                 — Engine-independent broadcast payload structs
+      Enums/
+        AccessLevel.cs
+        AuthState.cs
+        ClientAuthenticationResult.cs
+    Implementation/
+      Connection/ConnectionEncryptionData.cs     — Per-connection session keys, nonces, auth state
+      Crypto/
+        CryptoHelper.cs                          — HKDF, AES-GCM, HMAC, X25519, nonces, 2FA
+        KeyEnvelope.cs                           — AEAD-wrapped key envelope
+      Services/
+        HandshakeService.cs                      — X25519 key agreement, cookie challenge, IP norm
+        IKmsProvider.cs                          — Key management service interface
+        SrpService.cs                            — SRP payload encryption, fake-salt derivation
+        TokenService.cs                          — Token build/hash/encrypt/decrypt/verify
+      SRP/
+        ClientSrpData.cs                         — Client SRP-6a session state with cleanup
+
+  FishMMO-ClientAuth/                            — Client auth (netstandard2.1)
+    FishMMO-ClientAuth.csproj                    — Depends on AuthShared
+    Implementation/
+      Auth/
+        ClientAuthenticatorCore.cs               — Full client-side auth state machine
+
+  FishMMO-ServerAuth/                            — Server auth (netstandard2.1)
+    FishMMO-ServerAuth.csproj                    — Depends on AuthShared + srp + Channels
+    Core/
+      Collections/
+        ArrivalOrderTracker.cs                   — Insertion-order TTL tracker (LinkedList + Dict)
+        ExpiringKeyTracker.cs                    — TTL debounce / rate-limit tracker
+        LastSeenCacheTracker.cs                  — Last-seen LRU cache with TTL sweep
+      Interfaces/
+        IAccountManager.cs                       — Auth-state transitions + encryption data
+        ISrpAccountManager.cs                    — SRP session storage and sweep
+        ITokenAccountManager.cs                  — Token-authenticated connection registration
+    Implementation/
+      Account/
+        AccountManager.cs                        — Per-connection encryption data store
+        SrpAccountManager.cs                     — SRP session store
+        TokenAccountManager.cs                   — Token-authenticated connection store
+      Auth/
+        BaseAuthenticatorCore.cs                 — Abstract server base: handshake, cookie, sweeps
+        SrpAuthenticatorCore.cs                  — LoginServer SRP + TOTP + token issuance core
+        TokenAuthenticatorCore.cs                — World/Scene token auth core
+      Connection/
+        AccountData.cs                           — Post-auth account binding (username, access)
+      Requests/
+        SrpProofRequest.cs                       — Immutable SRP proof worker ticket
+        SrpVerifyRequest.cs                      — Immutable SRP verify worker ticket
+      SRP/
+        ServerSrpData.cs                         — Server SRP-6a session state with cleanup
 ```
 
 ## License

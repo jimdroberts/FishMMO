@@ -1275,15 +1275,6 @@ namespace FishMMO.Auth.Implementation
 		protected abstract void BroadcastSrpSuccess(TConnection conn, byte[] encryptedServerProof, ClientAuthenticationResult result, byte[]? encryptedToken);
 
 		/// <summary>
-		/// Enqueues an action to be executed on the main/UI thread.
-		/// Implementations using Unity must marshal all network API calls (Broadcast, Disconnect) via this method.
-		/// Non-Unity implementations may execute immediately or use their own dispatcher.
-		/// </summary>
-		/// <param name="conn">The connection context (for lifetime checking).</param>
-		/// <param name="action">The action to enqueue.</param>
-		protected abstract void EnqueueMainThread(TConnection conn, Action action);
-
-		/// <summary>
 		/// Validates a username against the allowed username rules.
 		/// Delegates to <c>Authentication.IsAllowedUsername</c> (FishMMO-SharedUtility).
 		/// </summary>

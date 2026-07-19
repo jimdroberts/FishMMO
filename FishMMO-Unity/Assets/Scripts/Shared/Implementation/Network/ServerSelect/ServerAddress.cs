@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 		/// but is lost through the L4 UDP proxy.
 		/// </summary>
 		[field: SerializeField]
-		public string ConnectionToken;
+		public string ConnectionToken { get; set; }
 	}
 
 	/// <summary>

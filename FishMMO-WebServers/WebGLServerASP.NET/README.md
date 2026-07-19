@@ -17,7 +17,7 @@
 
 ## Overview
 
-ASP.NET Core static file server purpose-built for serving Unity WebGL builds to browsers. Serves all content from `wwwroot/`, supports HTTP range requests for efficient streaming of large `.wasm`/`.data` files, and applies permissive CORS headers for cross-origin WebGL loading.
+ASP.NET Core static file server purpose-built for serving Unity WebGL builds to browsers. Serves all content from the configured content root (set via `WebClient:ContentRootPath` in appsettings), supports HTTP range requests for efficient streaming of large `.wasm`/`.data` files, and applies security headers (COOP/COEP/CSP) required for Unity 6 WebGL multi-threading (SharedArrayBuffer).
 
 Designed to run behind NGINX as a reverse proxy (via `play.fishmmo.com`). NGINX terminates SSL and forwards requests over plain HTTP to Kestrel on localhost.
 
@@ -66,68 +66,33 @@ Browser
 
 ```
 WebGLServer/
-+-- Program.cs                      # Host builder, Kestrel config, middleware pipeline
-+-- RangeRequestMiddleware.cs       # HTTP range request handler for partial content delivery
--- appsettings.json                # Port configuration
-+-- wwwroot/                        # Unity WebGL build output (static files served from here)
-    +-- index.html
-    +-- Build/
-    |   +-- *.wasm
-    |   +-- *.data
-    |   +-- *.js
-    +-- TemplateData/
+├── Program.cs                      # Host builder, Kestrel config, middleware pipeline
+├── appsettings.json                # Port and content root configuration
+└── (WebGL build output)            # Unity WebGL build placed in configured content root
 ```
+
+The content root path is configured via `WebClient:ContentRootPath` in appsettings. For production, the Unity WebGL build output is placed in this directory. The `wwwroot/` convention is not used — the path is explicitly configured.
 
 ## Middleware Pipeline
 
-1. **`UseForwardedHeaders`** - trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
-2. **`UseCors("AllowAllOrigins")`** - allows any origin, method, and header (required for WebGL cross-origin requests).
-3. **`UseDefaultFiles`** - serves `index.html` for root requests.
-4. **`UseStaticFiles`** - serves files from `wwwroot/` with default content type mappings.
-5. **`RangeRequestMiddleware`** - handles HTTP `Range` header for partial content delivery.
-6. **`UseRouting` + `MapControllers`** - standard ASP.NET routing (for any future API endpoints).
+1. **`UseForwardedHeaders`** — trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
+2. **`UseCors`** — allows cross-origin requests from `play.fishmmo.com` (required for WebGL).
+3. **`UseDefaultFiles`** — serves `index.html` for root requests.
+4. **`UseStaticFiles`** — serves files from the configured content root with custom MIME type mappings (`.wasm`, `.unityweb`, `.bundle`, `.bin`, `.data`, `.hash`, `.webmanifest`).
+5. **`UseResponseCompression`** — compresses wasm/octet-stream/gzip MIME types.
+6. **`UseRouting` + `MapControllers`** — standard ASP.NET routing (for health checks and future API endpoints).
+
+**Note:** The legacy `RangeRequestMiddleware` and `UnityOnlyMiddleware` referenced in older documentation no longer exist. ASP.NET Core's built-in `UseStaticFiles` handles range requests natively. The `ClientGate` HMAC middleware used by IPFetch/Patcher is intentionally absent here — browsers cannot add custom headers to static resource requests.
 
 ## Key Components
 
-### `RangeRequestMiddleware`
+### `Program.cs`
 
-Custom middleware that handles HTTP range requests for efficient streaming of large WebGL assets:
+Configures Kestrel (localhost-only binding, port 8000), response compression, security headers (COOP/COEP/CSP for SharedArrayBuffer), and the static file pipeline. Custom MIME type mappings are registered for WebGL-specific extensions.
 
-**Behavior:**
-1. Resolves requested path to a file in `wwwroot/`.
-2. Sets `Accept-Ranges: bytes` response header.
-3. If `Range` header is present (e.g., `bytes=0-1023`):
-   - Parses start/end byte positions.
-   - Returns `206 Partial Content` with `Content-Range` header.
-   - Streams only the requested byte range.
-4. If no `Range` header: serves full file with appropriate content type.
+### Security Headers
 
-**Supported Content Types:**
-
-| Extension | Content-Type |
-|-----------|-------------|
-| `.html` | `text/html` |
-| `.js` | `application/javascript` |
-| `.json` | `application/json` |
-| `.wasm` | `application/wasm` |
-| `.css` | `text/css` |
-| `.png` | `image/png` |
-| `.jpg` | `image/jpeg` |
-| `.gif` | `image/gif` |
-| `.unityweb` | `application/octet-stream` |
-| `.bin` | `application/octet-stream` |
-| `.bundle` | `application/octet-stream` |
-| `.hash` | `text/plain` |
-| Other | `application/octet-stream` |
-
-**Error Handling:**
-
-| Code | Condition |
-|------|-----------|
-| 200 | Full file served |
-| 206 | Partial content (range request) |
-| 404 | File not found |
-| 416 | Range not satisfiable (out of bounds) |
+The server applies COOP (`same-origin`), COEP (`require-corp`), and a comprehensive CSP to enable Unity 6 WebGL multi-threading via `SharedArrayBuffer`. These headers are essential for modern Unity WebGL builds.
 
 ## Configuration
 

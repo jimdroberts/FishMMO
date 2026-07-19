@@ -17,7 +17,7 @@
 
 ## Overview
 
-ASP.NET Core Web API that provides login server IP address discovery for FishMMO clients. Unity clients query this service to obtain the list of active login servers before connecting. The server reads login server records from PostgreSQL, caches results in memory, and gates access through a custom middleware that rejects non-FishMMO requests.
+ASP.NET Core Web API that provides login server IP address discovery for FishMMO clients. Unity clients query this service to obtain the list of active login servers before connecting. The server reads login server records from PostgreSQL, caches results in memory, issues one-time connection tokens for real-IP recovery, and gates access through `ClientGate` HMAC-signed request validation middleware shared across all FishMMO web services.
 
 Designed to run behind NGINX as a reverse proxy (via `api.fishmmo.com`). NGINX terminates SSL and forwards requests over plain HTTP to Kestrel on localhost.
 
@@ -45,45 +45,49 @@ Unity Client
 |  NGINX  |  <- SSL termination, X-Forwarded-For/Proto
 +----+----+
      | HTTP (localhost:8080)
-+----v------------------------------------+
-|  Kestrel (IPFetchServer)               |
-|  +-- ForwardedHeaders middleware       |
-|  +-- CORS (AllowXFishMMO)              |
-|  +-- UnityOnlyMiddleware               |
-|  +-- LoginServerController             |
-|       +-- PostgreSQL (via Npgsql)      |
-|       +-- MemoryCache (300s TTL)       |
-+-----------------------------------------+
++----v---------------------------------------+
+|  Kestrel (IPFetchServer)                  |
+|  +-- ForwardedHeaders middleware          |
+|  +-- CORS (AllowXFishMMO)                 |
+|  +-- ClientGate (HMAC request signing)    |
+|  +-- Rate Limiting (token bucket)         |
+|  +-- LoginServerController                |
+|       +-- PostgreSQL (via EF Core)        |
+|       +-- MemoryCache (60s TTL + jitter)  |
+|       +-- ConnectionTokenService (DB)     |
++--------------------------------------------+
 ```
 
 ## Directory Structure
 
 ```
 IpFetchServer/
-+-- Program.cs                      # Host builder, Kestrel config, middleware pipeline
-+-- Controllers/
-|   +-- LoginServerController.cs    # GET /loginserver - returns login server list
-+-- UnityOnlyMiddleware.cs          # Rejects requests without X-FishMMO: Client header
-+-- appsettings.json                # Port, connection string configuration
-
+├── Program.cs                      # Host builder, Kestrel config, middleware pipeline
+├── Controllers/
+│   └── LoginServerController.cs    # GET /loginserver — returns login server list + connection token
+├── TokenCleanupService.cs          # Background service: deletes expired connection tokens
+├── appsettings.json                # Port, connection string, rate limiting configuration
+└── (ClientGate is in FishMMO-WebShared/)
 ```
 
 ## Middleware Pipeline
 
-1. **`UseForwardedHeaders`** - trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
-2. **`UseCors("AllowXFishMMO")`** - allows any origin with `X-FishMMO` header.
-3. **`UnityOnlyMiddleware`** - checks `X-FishMMO` header equals `"Client"`. Returns 403 if missing/invalid.
-4. **`UseRouting` + `UseAuthorization`** - standard ASP.NET routing.
-5. **`MapControllers`** - maps attribute-routed controller endpoints.
+1. **`UseForwardedHeaders`** — trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
+2. **`UseCors("AllowXFishMMO")`** — allows cross-origin requests from `play.fishmmo.com`.
+3. **`UseFishMMOClientGate`** — validates `X-FishMMO-Client` HMAC-signed header (shared `ClientGate` middleware from FishMMO-WebShared). Rejects requests with invalid/missing/replayed signatures.
+4. **`UseRateLimiter`** — token-bucket rate limiting (10 req/s replenishment, 30 burst).
+5. **`UseRouting` + `MapControllers`** — standard ASP.NET routing.
+6. **`MapHealthChecks`** — `/healthz` endpoint with DB connectivity check.
 
 ## Key Components
 
 | Component | Responsibility |
 |---|---|
-| `LoginServerController` | Single-endpoint controller backing `GET /loginserver`. Reads from EF Core `NpgsqlDbContext.LoginServers` and serializes `{ Address, Port }` records. |
-| `UnityOnlyMiddleware` | Rejects requests that do not carry `X-FishMMO: Client`. Returns `403` for non-Unity callers. |
-| `IMemoryCache` (built-in) | 300-second TTL cache that absorbs the read-heavy traffic from clients between rare DB updates. |
-| `NpgsqlDbContextFactory` | EF Core context factory used per-request to avoid scoped-context concurrency issues. |
+| `LoginServerController` | Single-endpoint controller backing `GET /loginserver`. Reads active login servers from PostgreSQL via EF Core, returns `{ Ports, ConnectionToken }` envelope. Uses `SemaphoreSlim(1,1)` single-flight cache-stampede protection with 60s TTL + 0-10s random jitter. |
+| `ClientGate` (FishMMO-WebShared) | HMAC-SHA256 request signing validation with timestamp (±300s window) and nonce LRU replay protection. Shared across IPFetch, Patcher, and WebGL servers. |
+| `TokenCleanupService` | `BackgroundService` that runs every 60 seconds deleting expired connection tokens from the database via raw SQL. |
+| `IMemoryCache` (built-in) | 60-second TTL cache with jitter to prevent thundering-herd on cache expiry. Won't cache empty results. |
+| `ConnectionTokenService` | Issues CSPRNG 32-byte connection tokens (SHA-256 hashed in DB, 60s TTL) for real-IP recovery at the QUIC layer. |
 
 ## Endpoints
 
@@ -151,10 +155,12 @@ export WebServer__HttpPort=8080
 
 ## Security
 
-- **UnityOnlyMiddleware** rejects all requests that do not include `X-FishMMO: Client` header.
-- **CORS policy** (`AllowXFishMMO`) restricts allowed headers to `X-FishMMO`.
+- **ClientGate** validates HMAC-SHA256 request signatures with timestamp and nonce replay protection.
+- **CORS policy** (`AllowXFishMMO`) restricts cross-origin access to `play.fishmmo.com`.
 - **ForwardedHeaders** ensures correct client IP logging when behind NGINX.
-- Kestrel binds to **localhost only** - not directly accessible from the internet.
+- **Rate limiting** (token bucket: 10 req/s, 30 burst) prevents DDoS.
+- Kestrel binds to **localhost only** — not directly accessible from the internet.
+- Connection tokens are CSPRNG-generated, SHA-256 hashed before DB storage, and expire after 60 seconds.
 
 ## External Dependencies
 

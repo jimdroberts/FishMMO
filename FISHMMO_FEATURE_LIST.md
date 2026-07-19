@@ -1,6 +1,6 @@
 # FishMMO — Complete Feature List
 
-> Generated 2026-06-26 from the FishMMO-Dev monorepo. Updated 2026-07-17.  
+> Generated 2026-06-26 from the FishMMO-Dev monorepo. Updated 2026-07-19.  
 > Built on Unity 6.3 LTS, FishNet, PostgreSQL, .NET 8.0, WebTransport (QUIC/HTTP3).
 
 ---
@@ -362,7 +362,7 @@
 
 ## FishMMO-Unity — Client
 
-**The player-facing Unity client** (FishMMO.Client assembly, 169 .cs files).
+**The player-facing Unity client** (FishMMO.Client assembly, 172 .cs files).
 
 ### Networking & Connectivity
 1. **Multi-Server Connection Management** — LoginServer → WorldServer → SceneServer transitions with state tracking via `ClientConnectionManager`.  
@@ -488,7 +488,7 @@
 
 ## FishMMO-Unity — Server
 
-**The headless server** (FishMMO.Server assembly, 207 .cs files). Three server types — Login, World, Scene — launched from one GameServer executable.
+**The headless server** (FishMMO.Server assembly, 210 .cs files). Three server types — Login, World, Scene — launched from one GameServer executable.
 
 ### Core Server Infrastructure
 1. **Server Composition Root** — `Server` MonoBehaviour orchestrates CoreServer, Database, NetworkWrapper, AddressProvider, AccountManager, BehaviourRegistry, DataContainerRegistry.  
@@ -565,7 +565,7 @@
 
 ## FishMMO-Unity — Shared
 
-**The shared entity and logic layer** (FishMMO.Shared assembly, 560 .cs files). Used by both client and server, containing all entity definitions, the ECA trigger system, templates, network broadcasts, and prediction pipeline.
+**The shared entity and logic layer** (FishMMO.Shared assembly, 579 .cs files). Used by both client and server, containing all entity definitions, the ECA trigger system, templates, network broadcasts, and prediction pipeline.
 
 ### Character System
 1. **ICharacter / IPlayerCharacter Interfaces** — Root character contracts: ID, name, transform, collider, network object, prediction manager, observers, flags, behaviours, triggers.  

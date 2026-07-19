@@ -429,9 +429,10 @@ namespace FishMMO.Auth.Implementation
 					{
 						_ = Log.Warning(LogPrefix, string.Format("Game version mismatch: client=\"{0}\", server=\"{1}\"", gameVersion, ExpectedGameVersion));
 						BroadcastAuthResult(conn, ClientAuthenticationResult.VersionMismatch, reliable: true);
-						// Small delay to let the transport flush the reliable broadcast before disconnecting
-						Thread.Sleep(1);
-						DisconnectConnection(conn, graceful: true);
+						// Defer disconnect to the main thread so the reliable broadcast is
+						// sent before the connection is torn down. The transport's reliable
+						// channel guarantees delivery ordering, so no blocking sleep is needed.
+						EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: true));
 						return;
 					}
 				}
@@ -714,6 +715,15 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="conn">The connection to disconnect.</param>
 		/// <param name="graceful">If true, attempt a graceful close; otherwise force-close immediately.</param>
 		protected abstract void DisconnectConnection(TConnection conn, bool graceful);
+
+		/// <summary>
+		/// Enqueues an action to be executed on the main/UI thread.
+		/// Implementations using Unity must marshal all network API calls (Broadcast, Disconnect) via this method.
+		/// Non-Unity implementations may execute immediately or use their own dispatcher.
+		/// </summary>
+		/// <param name="conn">The connection context (for lifetime checking).</param>
+		/// <param name="action">The action to enqueue.</param>
+		protected abstract void EnqueueMainThread(TConnection conn, Action action);
 
 		/// <summary>
 		/// Broadcasts an authentication result to a single connection.

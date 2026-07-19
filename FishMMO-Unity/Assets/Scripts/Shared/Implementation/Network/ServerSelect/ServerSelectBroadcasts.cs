@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -18,17 +17,18 @@ namespace FishMMO.Shared
 	public struct ServerListBroadcast : IBroadcast
 	{
 		/// <summary>
-		/// List of available world servers. Each entry is a <see cref="WorldServerDetails"/>
+		/// Array of available world servers. Each entry is a <see cref="WorldServerDetails"/>
 		/// defined in the <c>FishMMO.Shared</c> namespace at
 		/// <see cref="WorldServerDetails"/> (file: Network/WorldServerDetails.cs).
 		///
-		/// WARNING: FishNet serializes this list by iterating over it.
-		/// Any modifications (add/remove/clear) during serialization cause
-		/// undefined behavior (e.g. corrupt packets or crashes). The server
-		/// MUST copy the list before sending whenever it might be mutated
-		/// concurrently by another thread.
+		/// A fixed-size array avoids the concurrent-modification hazard of a
+		/// <see cref="System.Collections.Generic.List{T}"/> during FishNet
+		/// serialization (which iterates the collection on the network thread).
+		/// The array is safe for read-only iteration even when the underlying
+		/// data is being replaced on another thread; the server replaces the
+		/// entire array rather than mutating entries in place.
 		/// </summary>
-		public List<WorldServerDetails> Servers;
+		public WorldServerDetails[] Servers;
 	}
 	/// <summary>
 	/// Broadcast for connecting to a world scene server.

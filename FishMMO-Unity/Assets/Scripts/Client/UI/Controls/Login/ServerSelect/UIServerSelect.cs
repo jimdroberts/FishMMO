@@ -187,7 +187,7 @@ namespace FishMMO.Client
 				DestroyServerList();
 
 				serverList = new List<ServerDetailsButton>();
-				for (int i = 0; i < msg.Servers.Count; ++i)
+				for (int i = 0; i < msg.Servers.Length; ++i)
 				{
 					ServerDetailsButton newServer = Instantiate(ServerButtonPrefab, ServerParent);
 					newServer.Initialize(msg.Servers[i]);

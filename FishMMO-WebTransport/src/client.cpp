@@ -368,36 +368,16 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * reference implementations). It is NULL for native-to-native
          * connections. */
         if (cli->h3_session) {
-            /* ── HIGH: HTTP/3 Client Handshake Incomplete ─────────
+            /* ── HTTP/3 Client Handshake ─────────────────────────────
+             * The CONNECT request stream now uses h3_client_stream_cb
+             * (defined in http3.cpp) which handles RECEIVE events and
+             * buffers the server's 200 OK response.  h3_client_process_data
+             * parses the HEADERS frame, extracts :status, and on 200 OK
+             * transitions to H3_CLI_ESTABLISHED and fires the on_ready
+             * callback to create the wt_session.
              *
-             * TODO: The client-side HTTP/3 WebTransport handshake is
-             * INCOMPLETE. It sends SETTINGS and CONNECT via
-             * h3_client_connect (using h3_send_only_stream_cb), but
-             * h3_send_only_stream_cb does NOT handle RECEIVE events.
-             * This means the client never processes the server's 200 OK
-             * response.  Without this step, the handshake never
-             * transitions past H3_CLI_WAIT_RESPONSE, and the
-             * WebTransport session is never established.
-             *
-             * What needs to be implemented for browser WebTransport
-             * clients to use native_client_connect:
-             *
-             *   1. Replace h3_send_only_stream_cb on the CONNECT
-             *      request stream with a callback that handles RECEIVE.
-             *   2. In that callback, parse the incoming HEADERS frame
-             *      and extract the :status pseudo-header.
-             *   3. On 200 OK, transition to H3_CLI_ESTABLISHED and
-             *      create the wt_session (similar to the server-side
-             *      on_h3_session_ready pattern).
-             *   4. On error or timeout, transition to H3_CLI_ERROR.
-             *
-             * Until this is done, h3_client_connect is a one-way
-             * message sender. The native C++ client does not use the
-             * HTTP/3 path (h3_session is NULL for native connections),
-             * so this does not affect current native-only operation.
-             *
-             * Start HTTP/3 handshake — sends SETTINGS and CONNECT.
-             * on_ready callback creates wt_session when complete. */
+             * See h3_client_connect (http3.cpp) for the request stream
+             * setup, and h3_client_process_data for the response parsing. */
             int32_t hr = h3_client_connect(cli->h3_session, "/", cli->server_name);
             if (hr != 0) {
                 WT_LOG_ERROR("HTTP/3 client handshake start failed");

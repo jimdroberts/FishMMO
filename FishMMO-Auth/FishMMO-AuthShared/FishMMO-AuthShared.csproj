@@ -21,12 +21,9 @@
   <!-- Copy the built DLL to the Unity project Dependencies folder. -->
   <Target Name="CopyToUnityDependencies" AfterTargets="Build">
     <PropertyGroup>
-      <UnityDepsDir>..\..\FishMMO-Unity\Assets\Dependencies</UnityDepsDir>
+      <UnityDepsDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../FishMMO-Unity/Assets/Dependencies'))</UnityDepsDir>
     </PropertyGroup>
-    <ItemGroup>
-      <AuthDll Include="bin\$(Configuration)\**\FishMMO-AuthShared.dll" />
-    </ItemGroup>
-    <Copy SourceFiles="@(AuthDll)" DestinationFolder="$(UnityDepsDir)" />
+    <Copy SourceFiles="$(OutputPath)FishMMO-AuthShared.dll" DestinationFolder="$(UnityDepsDir)" SkipUnchangedFiles="false" />
   </Target>
 
 </Project>

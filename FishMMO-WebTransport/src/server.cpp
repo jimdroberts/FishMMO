@@ -120,17 +120,6 @@ static void on_h3_error(void* ctx, int error_code, const char* message)
     /* Connection will be shut down by the error path */
 }
 
-/* ── Per-stream data for HTTP/3 protocol detection ──────────── */
-
-typedef struct {
-    HQUIC       quic_stream;
-    bool        is_first_stream;    /* first bidi stream from this peer */
-    uint8_t     first_byte;         /* first byte of stream data */
-    bool        first_byte_read;
-    uint8_t*    buffered_data;      /* data after first byte (for replay) */
-    uint32_t    buffered_len;
-} server_stream_detect_t;
-
 /* ═══════════════════════════════════════════════════════════════
  * INTERNAL API
  * ═══════════════════════════════════════════════════════════════ */

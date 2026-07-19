@@ -8,7 +8,9 @@
  * Protects the streams[] slot array and all per-slot fields (id, in_use,
  * quic_stream, send_closed, recv_closed). The lock is RECURSIVE so that
  * a single thread can safely re-enter locked regions (e.g. when a
- * synchronous MsQuic callback fires while the lock is held).
+ * synchronous MsQuic callback fires while the lock is held). On Linux
+ * this is PTHREAD_MUTEX_RECURSIVE; on Windows a CRITICAL_SECTION is
+ * wrapped with manual thread-ID + recursion-count tracking.
  *
  * ### Fields NOT protected by streams_lock:
  * - quic_conn, conn_id, on_stream_data, callback_ctx, on_all_streams_done,
@@ -99,7 +101,13 @@ typedef struct wt_stream_manager_s {
      * (QUIC thread) both read/write the slot array and
      * must be serialised. */
 #if defined(WT_PLATFORM_WINDOWS)
-    CRITICAL_SECTION    streams_lock;
+    /* CRITICAL_SECTION is NOT recursive; manual recursion tracking
+     * provides the same behaviour as PTHREAD_MUTEX_RECURSIVE on Linux.
+     * streams_lock_owner holds the GetCurrentThreadId() of the owning
+     * thread (0 = unlocked); streams_lock_rec is the recursion count. */
+    CRITICAL_SECTION    streams_lock_cs;
+    DWORD               streams_lock_owner;
+    int                 streams_lock_rec;
 #else
     pthread_mutex_t     streams_lock;
 #endif

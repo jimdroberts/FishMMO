@@ -383,14 +383,6 @@ namespace FishMMO.Auth.Implementation
 		/// Broadcasts a generic auth result to the client.
 		/// </summary>
 		/// <summary>
-		/// Enqueues an action to be executed on the main/UI thread.
-		/// Unity implementations must use this to marshal network API calls.
-		/// </summary>
-		/// <param name="conn">The connection context (for lifetime checking).</param>
-		/// <param name="action">The action to enqueue.</param>
-		protected abstract void EnqueueMainThread(TConnection conn, Action action);
-
-		/// <summary>
 		/// Fetches the HMAC signing key for the given login server ID from the database.
 		/// Returns null if the key is not found, too short, or a database error occurred;
 		/// the caller will substitute a random dummy key for timing equalization when null is returned.

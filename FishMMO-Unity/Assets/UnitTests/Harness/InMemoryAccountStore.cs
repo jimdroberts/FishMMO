@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using FishMMO.Auth.Core;
+
+#nullable enable
 using SecureRemotePassword;
 
 namespace FishMMO.UnitTests.Harness

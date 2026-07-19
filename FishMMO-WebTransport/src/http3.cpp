@@ -756,6 +756,14 @@ typedef int (*h3_data_processor_fn)(h3_stream_ctx_t* sctx);
  * HTTP/3 session. */
 int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
 
+/* Forward declaration — unlinks a stream context from the session list */
+static void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx);
+
+/* Forward declaration — h3_client_process_data is defined later and
+ * called from h3_client_stream_cb when the client receives the server's
+ * response on the CONNECT request stream. */
+int h3_client_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
+
 static QUIC_STATUS QUIC_API
 h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 {
@@ -823,6 +831,7 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
     case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE:
+        if (sctx->h3) h3_stream_ctx_unlink(sctx);
         free(sctx->recv_buf);
         free(sctx);
         MsQuic->StreamClose(stream);
@@ -833,15 +842,40 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
     }
 }
 
-static h3_stream_ctx_t* h3_stream_ctx_create(HQUIC stream)
+static h3_stream_ctx_t* h3_stream_ctx_create(HQUIC stream, h3_session_t* h3)
 {
     h3_stream_ctx_t* sctx = (h3_stream_ctx_t*)calloc(1, sizeof(*sctx));
     if (!sctx) return NULL;
     sctx->quic_stream = stream;
     sctx->stream_type = -1;
+    sctx->h3 = h3;
     MsQuic->SetCallbackHandler(stream,
                                 (void*)(uintptr_t)k_h3_stream_handler, sctx);
+    /* Link into the session's stream context list for cleanup tracking */
+    if (h3) {
+        sctx->next = h3->stream_ctx_list;
+        h3->stream_ctx_list = sctx;
+    }
     return sctx;
+}
+
+/* ── Unlink a stream context from the session's tracking list ─────
+ * Called from SHUTDOWN_COMPLETE / PEER_SEND_ABORTED when a stream
+ * context is freed through the normal callback chain.  Removes the
+ * entry from the singly-linked list by pointer-to-pointer walk. */
+static void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx)
+{
+    if (!sctx || !sctx->h3) return;
+    h3_session_t* h3 = sctx->h3;
+    h3_stream_ctx_t** pp = &h3->stream_ctx_list;
+    while (*pp) {
+        if (*pp == sctx) {
+            *pp = sctx->next;
+            sctx->next = NULL;
+            return;
+        }
+        pp = &(*pp)->next;
+    }
 }
 
 /* ── Send-only control-stream callback ──────────────────────────
@@ -866,6 +900,85 @@ h3_send_only_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         break;
     }
     return QUIC_STATUS_SUCCESS;
+}
+
+/**
+ * Stream callback for the client's CONNECT request stream during the
+ * HTTP/3 WebTransport handshake.
+ *
+ * Unlike h3_send_only_stream_cb, this callback handles RECEIVE events:
+ * it buffers the server's response data and calls h3_client_process_data
+ * to parse the HEADERS frame and detect :status (200 = success).
+ */
+static QUIC_STATUS QUIC_API
+h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
+{
+    h3_stream_ctx_t* sctx = (h3_stream_ctx_t*)ctx;
+
+    switch (event->Type) {
+    case QUIC_STREAM_EVENT_RECEIVE: {
+        const QUIC_BUFFER* bufs = event->RECEIVE.Buffers;
+        uint32_t count = event->RECEIVE.BufferCount;
+        uint32_t total = event->RECEIVE.TotalBufferLength;
+
+        if (total == 0) return QUIC_STATUS_SUCCESS;
+
+        /* Cap at 64KB for HTTP/3 frames */
+        if (sctx->recv_offset + total > 65536) {
+            MsQuic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+            return QUIC_STATUS_ABORTED;
+        }
+
+        uint32_t needed = sctx->recv_offset + total;
+        if (needed > sctx->recv_capacity) {
+            uint32_t new_cap = sctx->recv_capacity ? sctx->recv_capacity * 2 : 4096;
+            if (new_cap < needed) new_cap = needed;
+            uint8_t* newbuf = (uint8_t*)realloc(sctx->recv_buf, new_cap);
+            if (!newbuf) return QUIC_STATUS_OUT_OF_MEMORY;
+            sctx->recv_buf = newbuf;
+            sctx->recv_capacity = new_cap;
+        }
+
+        for (uint32_t i = 0; i < count; i++) {
+            memcpy(sctx->recv_buf + sctx->recv_offset,
+                   bufs[i].Buffer, bufs[i].Length);
+            sctx->recv_offset += bufs[i].Length;
+        }
+
+        /* Process buffered data for client HTTP/3 handshake */
+        if (sctx->h3) {
+            h3_client_process_data(sctx->h3, sctx);
+        }
+        return QUIC_STATUS_SUCCESS;
+    }
+
+    case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN: {
+        /* Process any buffered data that hasn't been consumed yet.
+         * This handles the case where the 200 OK data arrives in the
+         * same stream event as the FIN from the server. */
+        if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
+            if (sctx->h3) {
+                h3_client_process_data(sctx->h3, sctx);
+            }
+        }
+        return QUIC_STATUS_SUCCESS;
+    }
+
+    case QUIC_STREAM_EVENT_SEND_COMPLETE:
+        free(event->SEND_COMPLETE.ClientContext);
+        return QUIC_STATUS_SUCCESS;
+
+    case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
+    case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE:
+        if (sctx->h3) h3_stream_ctx_unlink(sctx);
+        free(sctx->recv_buf);
+        free(sctx);
+        MsQuic->StreamClose(stream);
+        return QUIC_STATUS_SUCCESS;
+
+    default:
+        return QUIC_STATUS_SUCCESS;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1044,7 +1157,9 @@ void h3_session_free(h3_session_t* h3)
 
     /* Shut down tracked control streams to trigger SHUTDOWN_COMPLETE
      * which frees their per-stream contexts (allocated by
-     * h3_stream_ctx_create). */
+     * h3_stream_ctx_create).  These control streams use
+     * h3_send_only_stream_cb (no h3_stream_ctx_t), so the shutdown
+     * is purely for QUIC resource cleanup. */
     if (h3->server_control_stream) {
         MsQuic->StreamShutdown(h3->server_control_stream,
                                 QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
@@ -1056,18 +1171,19 @@ void h3_session_free(h3_session_t* h3)
         h3->client_control_stream = NULL;
     }
 
-    /* KNOWN LIMITATION: h3_stream_ctx_t objects created for data
-     * streams that reference this h3_session (sctx->h3 == h3) are
-     * NOT freed here.  The h3_session does not maintain a list of
-     * all created stream contexts, so they cannot be iterated.
-     *
-     * In normal use the caller only calls h3_session_free from a
-     * QUIC SHUTDOWN_COMPLETE callback, by which point all streams
-     * on the connection have already completed and their sctx has
-     * been freed.  If h3_session_free is called from an error path
-     * while data streams are still alive, those sctx objects will
-     * leak.  Callers should avoid this by quiescing all streams
-     * before freeing the session. */
+    /* Free all tracked h3_stream_ctx_t objects still on the list.
+     * Stream contexts that have already been freed through the normal
+     * callback chain (SHUTDOWN_COMPLETE) were unlinked by
+     * h3_stream_ctx_unlink and are not in this list. */
+    h3_stream_ctx_t* sctx = h3->stream_ctx_list;
+    while (sctx) {
+        h3_stream_ctx_t* next = sctx->next;
+        free(sctx->recv_buf);
+        free(sctx);
+        sctx = next;
+    }
+    h3->stream_ctx_list = NULL;
+
     free(h3);
 }
 
@@ -1087,7 +1203,7 @@ bool h3_session_accept_stream(h3_session_t* h3, HQUIC stream)
      * can inspect the data.  The callback will determine if this
      * is HTTP/3 or native and dispatch accordingly. */
 
-    h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream);
+    h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, NULL);
     if (!sctx) {
         if (h3->on_error)
             h3->on_error(h3->callback_ctx, -1, "Stream ctx alloc failed");
@@ -1153,40 +1269,78 @@ int32_t h3_client_connect(h3_session_t* h3,
 
     h3->client_control_stream = ctrl_stream;
 
-    /* 2. Open request stream, send CONNECT */
-    HQUIC req_stream = NULL;
-    st = MsQuic->StreamOpen(h3->quic_conn,
-        QUIC_STREAM_OPEN_FLAG_NONE, h3_send_only_stream_cb, NULL, &req_stream);
-    if (QUIC_FAILED(st)) return -1;
+    /* 2. Save path and authority for the on_ready callback */
+    if (path)
+        strncpy(h3->request_path, path, sizeof(h3->request_path) - 1);
+    if (authority)
+        strncpy(h3->request_authority, authority, sizeof(h3->request_authority) - 1);
 
-    st = MsQuic->StreamStart(req_stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
-    if (QUIC_FAILED(st)) {
-        MsQuic->StreamClose(req_stream);
-        return -1;
-    }
-
-    uint8_t req_data[2048];
-    int req_len = h3_write_headers(req_data, sizeof(req_data),
-                                    0, "CONNECT", path, authority);
-    if (req_len <= 0) {
-        MsQuic->StreamClose(req_stream);
-        return -1;
-    }
-
-    uint8_t* req_copy = (uint8_t*)malloc((size_t)req_len);
-    if (!req_copy) { MsQuic->StreamClose(req_stream); return -1; }
-    memcpy(req_copy, req_data, (size_t)req_len);
-
+    /* 3. Open CONNECT request stream with a RECEIVE-capable callback.
+     *    h3_send_only_stream_cb does NOT handle RECEIVE events — the
+     *    server's 200 OK response would be silently dropped.  We use
+     *    h3_client_stream_cb which buffers incoming data and calls
+     *    h3_client_process_data to parse the :status response. */
     {
-        QUIC_BUFFER buf;
-        buf.Buffer = req_copy;
-        buf.Length = (uint32_t)req_len;
-        st = MsQuic->StreamSend(req_stream, &buf, 1,
-                                 QUIC_SEND_FLAG_FIN, req_copy);
+        h3_stream_ctx_t* sctx = (h3_stream_ctx_t*)calloc(1, sizeof(*sctx));
+        if (!sctx) return -1;
+        sctx->quic_stream = NULL;
+        sctx->stream_type = 0;
+        sctx->is_request = true;
+        sctx->h3 = h3;
+
+        HQUIC req_stream = NULL;
+        st = MsQuic->StreamOpen(h3->quic_conn,
+            QUIC_STREAM_OPEN_FLAG_NONE, h3_client_stream_cb, sctx, &req_stream);
         if (QUIC_FAILED(st)) {
-            free(req_copy);
+            free(sctx);
+            return -1;
+        }
+        sctx->quic_stream = req_stream;
+
+        /* Link into session's stream context list for cleanup.
+         * This ensures the context is freed by h3_session_free if
+         * the connection shuts down before the handshake completes. */
+        sctx->next = h3->stream_ctx_list;
+        h3->stream_ctx_list = sctx;
+
+        st = MsQuic->StreamStart(req_stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
+        if (QUIC_FAILED(st)) {
+            h3_stream_ctx_unlink(sctx);
+            free(sctx->recv_buf);
+            free(sctx);
             MsQuic->StreamClose(req_stream);
             return -1;
+        }
+
+        uint8_t req_data[2048];
+        int req_len = h3_write_headers(req_data, sizeof(req_data),
+                                        0, "CONNECT", path, authority);
+        if (req_len <= 0) {
+            MsQuic->StreamShutdown(req_stream,
+                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+            return -1;
+        }
+
+        uint8_t* req_copy = (uint8_t*)malloc((size_t)req_len);
+        if (!req_copy) {
+            MsQuic->StreamShutdown(req_stream,
+                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+            return -1;
+        }
+        memcpy(req_copy, req_data, (size_t)req_len);
+
+        {
+            QUIC_BUFFER buf;
+            buf.Buffer = req_copy;
+            buf.Length = (uint32_t)req_len;
+            st = MsQuic->StreamSend(req_stream, &buf, 1,
+                                     QUIC_SEND_FLAG_FIN, req_copy);
+            if (QUIC_FAILED(st)) {
+                free(req_copy);
+                MsQuic->StreamShutdown(req_stream,
+                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                return -1;
+            }
         }
     }
 
@@ -1224,9 +1378,8 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
     }
 
     /* Create stream context for buffered read */
-    h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream);
+    h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, h3);
     if (!sctx) return -1;
-    sctx->h3 = h3;  /* back-pointer for stream callback to call h3_server_process_data */
     *out_sctx = sctx;
 
     if (h3->server_state == H3_SRV_WAIT_CONTROL_STREAM) {
@@ -1427,11 +1580,15 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                 int rej_len = h3_write_headers(
                                                     rej, sizeof(rej), 403, NULL, NULL, NULL);
                                                 if (rej_len > 0) {
-                                                    QUIC_BUFFER buf;
-                                                    buf.Buffer = rej;
-                                                    buf.Length = (uint32_t)rej_len;
-                                                    MsQuic->StreamSend(sctx->quic_stream, &buf, 1,
-                                                        QUIC_SEND_FLAG_FIN, NULL);
+                                                    uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
+                                                    if (rej_copy) {
+                                                        memcpy(rej_copy, rej, (size_t)rej_len);
+                                                        QUIC_BUFFER buf;
+                                                        buf.Buffer = rej_copy;
+                                                        buf.Length = (uint32_t)rej_len;
+                                                        MsQuic->StreamSend(sctx->quic_stream, &buf, 1,
+                                                            QUIC_SEND_FLAG_FIN, rej_copy);
+                                                    }
                                                 }
                                                 return -1;  /* origin rejected */
                                             }
@@ -1501,6 +1658,111 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
     }
 
     return 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Client Response Handler
+ * ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Process data received on the client's CONNECT request stream.
+ * Parses the server's HEADERS response to detect the :status
+ * pseudo-header that confirms (or rejects) the WebTransport session.
+ *
+ * Called from h3_client_stream_cb RECEIVE and PEER_SEND_SHUTDOWN.
+ *
+ * On 200: transitions to H3_CLI_ESTABLISHED and fires on_ready.
+ * On non-200 or error: transitions to H3_CLI_ERROR and fires on_error.
+ *
+ * @return 0 = still handshaking (waiting for more data)
+ *         1 = handshake complete (200 OK, on_ready fired)
+ *        -1 = handshake failed (on_error fired)
+ */
+int h3_client_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
+{
+    /* Don't process if handshake already completed or failed */
+    if (h3->client_state == H3_CLI_ESTABLISHED ||
+        h3->client_state == H3_CLI_ERROR)
+        return 0;
+
+    if (sctx->recv_offset == 0) return 0;
+
+    /* Parse the HEADERS frame from the buffered data */
+    size_t pos = 0;
+    uint64_t ftype, flen;
+    uint8_t tb, lb;
+
+    /* Decode frame type varint */
+    if (varint_decode(sctx->recv_buf + pos,
+                      sctx->recv_offset - pos,
+                      &ftype, &tb) < 0)
+        return 0; /* Not enough data for frame type */
+    pos += tb;
+
+    /* Decode frame length varint */
+    if (varint_decode(sctx->recv_buf + pos,
+                      sctx->recv_offset - pos,
+                      &flen, &lb) < 0)
+        return 0; /* Not enough data for frame length */
+    pos += lb;
+
+    /* Check if the full frame payload is available */
+    if (pos + flen > sctx->recv_offset)
+        return 0; /* Frame payload not yet complete */
+
+    /* Only HEADERS frames carry the :status we need.
+     * Other frame types (e.g. DATA) are not expected on the
+     * CONNECT response stream during the handshake. */
+    if (ftype != H3_FRAME_HEADERS)
+        return 0;
+
+    /* Parse the QPACK-encoded header fields */
+    h3_parsed_headers_t phdr;
+    memset(&phdr, 0, sizeof(phdr));
+
+    if (!h3_parse_headers(sctx->recv_buf + pos, flen, &phdr)) {
+        WT_LOG_ERROR("Failed to parse server HEADERS response");
+        h3->client_state = H3_CLI_ERROR;
+        if (h3->on_error)
+            h3->on_error(h3->callback_ctx, -1,
+                         "Failed to parse server HEADERS response");
+        return -1;
+    }
+
+    /* The :status pseudo-header is required in every response.
+     * If missing, the response is malformed. */
+    if (phdr.status[0] == '\0') {
+        WT_LOG_ERROR("No :status in server response");
+        h3->client_state = H3_CLI_ERROR;
+        if (h3->on_error)
+            h3->on_error(h3->callback_ctx, -1,
+                         "No :status in server response");
+        return -1;
+    }
+
+    int status = atoi(phdr.status);
+    if (status == 200) {
+        /* WebTransport session established! */
+        WT_LOG_INFO("HTTP/3 WebTransport handshake complete (200 OK)");
+
+        h3->handshake_complete = true;
+        h3->client_state = H3_CLI_ESTABLISHED;
+
+        if (h3->on_ready) {
+            h3->on_ready(h3->callback_ctx, h3->quic_conn,
+                         h3->request_path, h3->request_authority);
+        }
+        return 1;
+
+    } else {
+        /* Server rejected the CONNECT request */
+        WT_LOG_ERROR("Server rejected WebTransport CONNECT: status %d", status);
+        h3->client_state = H3_CLI_ERROR;
+        if (h3->on_error)
+            h3->on_error(h3->callback_ctx, status,
+                         "Server rejected WebTransport CONNECT");
+        return -1;
+    }
 }
 
 #if 0

@@ -87,7 +87,7 @@ static void try_free_mgr(wt_stream_manager_t* mgr)
     int expected = 0;
     if (atomic_compare_exchange_strong(&mgr->freed, &expected, 1)) {
 #if defined(WT_PLATFORM_WINDOWS)
-        DeleteCriticalSection(&mgr->streams_lock);
+        DeleteCriticalSection(&mgr->streams_lock_cs);
 #else
         pthread_mutex_destroy(&mgr->streams_lock);
 #endif

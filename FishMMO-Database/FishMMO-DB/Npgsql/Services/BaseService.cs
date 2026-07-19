@@ -262,6 +262,9 @@ namespace FishMMO.Database.Npgsql.Services
 			return outcome == ExceptionOutcome.Transient && attempt < RetryPolicy.MaxRetries;
 		}
 
+		private static readonly Random _jitterRng = new Random();
+		private static readonly object _jitterLock = new object();
+
 		private TimeSpan GetRetryDelay(int attempt)
 		{
 			if (attempt <= 0)
@@ -271,9 +274,14 @@ namespace FishMMO.Database.Npgsql.Services
 
 			// Linear backoff (BaseDelay * attempt) with small jitter to reduce thundering herd retries.
 			// For exponential backoff, use: BaseDelay * 2^(attempt-1).
-			// Random.Shared is not available on netstandard2.1; use a thread-safe RNG API.
+			// RandomNumberGenerator.GetInt32 was introduced in .NET 6 and is not available on netstandard2.1.
+			// Use lock-protected System.Random instead (jitter is non-cryptographic and infrequent).
 			int maxJitter = RetryPolicy.MaxJitterMs > 0 ? RetryPolicy.MaxJitterMs : 1;
-			var jitterMs = RandomNumberGenerator.GetInt32(0, maxJitter);
+			int jitterMs;
+			lock (_jitterLock)
+			{
+				jitterMs = _jitterRng.Next(0, maxJitter);
+			}
 			return TimeSpan.FromMilliseconds((RetryPolicy.BaseDelayMs * attempt) + jitterMs);
 		}
 

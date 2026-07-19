@@ -133,6 +133,10 @@ namespace FishMMO.Server.Implementation
 			ushort port = config.GetUShort("Port", 7777);
 			int maxClients = config.GetInt("MaximumClients", 100);
 
+			// IPv6 dual-stack support: when enabled, binds both IPv4 and IPv6 on the same port.
+			bool enableIPv6 = string.Equals(config.GetString("EnableIPv6", "false"), "true", StringComparison.OrdinalIgnoreCase);
+			string ipv6Address = config.GetString("IPv6Address", "::1");
+
 			// WebTransport: each game server terminates QUIC/TLS with PEM certificates.
 			// Certificate paths come from the server .cfg file — configurable per platform,
 			// per deployment (Linux, Windows, macOS) and per certificate source
@@ -155,6 +159,10 @@ namespace FishMMO.Server.Implementation
 					if (t is WebTransport wt)
 					{
 						wt.SetServerBindAddress(address, IPAddressType.IPv4);
+						if (enableIPv6)
+						{
+							wt.SetServerBindAddress(ipv6Address, IPAddressType.IPv6);
+						}
 						wt.SetPort(port);
 						wt.SetMaximumClients(maxClients);
 						ConfigureWebTransport(wt);
@@ -168,6 +176,10 @@ namespace FishMMO.Server.Implementation
 			{
 				// No Multipass — configure the transport directly.
 				transport.SetServerBindAddress(address, IPAddressType.IPv4);
+				if (enableIPv6)
+				{
+					transport.SetServerBindAddress(ipv6Address, IPAddressType.IPv6);
+				}
 				transport.SetPort(port);
 				transport.SetMaximumClients(maxClients);
 				ConfigureWebTransport(wt);

@@ -71,17 +71,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> DeleteAsync(long serverId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Fetches a world server registration by ID.
-		/// Retrieves full server data including name, address, port, character count, locked status, and last pulse.
-		/// </summary>
-		/// <param name="serverId">Server ID to retrieve.</param>
-		/// <param name="cancellationToken">Cancellation token for async operation.</param>
-		/// <returns>DatabaseResult containing WorldServerData if found; DatabaseEntityNotFoundException if not found.</returns>
-		/// <remarks>
-		/// <para><b>Operation:</b> LINQ query with AsNoTracking for read-only retrieval.</para>
-		/// <para><b>Execution Strategy:</b> BaseService handles retries and centralized exception mapping; explicit transactions are used only when a write requires multiple database statements.</para>
-		/// </remarks>
-		/// <summary>
 		/// Fetches active world servers that have pulsed within the timeout window.
 		/// Filters servers by last_pulse timestamp to return only servers that are currently online.
 		/// </summary>

@@ -117,12 +117,24 @@ namespace FishNet.Transporting.WebTransport.Client
             webglOnOpen = (_) => { incomingEvents.Enqueue(() => SetConnectionState(LocalConnectionState.Started, false)); };
             webglOnClose = (_) => { incomingEvents.Enqueue(() => { UnityEngine.Debug.LogWarning("[WebTransport Client] WebGL connection closed."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
             webglOnStream = (_, dataPtr, length) => {
+                /* Security: reject invalid or oversized packets before allocating managed memory. */
+                if (length <= 0 || length > MaxPacketSize)
+                {
+                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
+                    return;
+                }
                 byte[] buf = new byte[length];
                 System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
                 incomingEvents.Enqueue(() => transport.HandleClientReceivedDataArgs(
                     new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Reliable, transport.Index)));
             };
             webglOnDatagram = (_, dataPtr, length) => {
+                /* Security: reject invalid or oversized datagrams. */
+                if (length <= 0 || length > mtu)
+                {
+                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
+                    return;
+                }
                 byte[] buf = new byte[length];
                 System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
                 incomingEvents.Enqueue(() => transport.HandleClientReceivedDataArgs(

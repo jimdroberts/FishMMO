@@ -161,17 +161,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 
 				// Map database DTOs to network broadcast type
-				var worldServerList = new List<WorldServerDetails>(dbResult.Data.Count);
-				foreach (WorldServerData data in dbResult.Data)
+				WorldServerDetails[] worldServerList = new WorldServerDetails[dbResult.Data.Count];
+				for (int i = 0; i < dbResult.Data.Count; i++)
 				{
-					worldServerList.Add(new WorldServerDetails()
+					WorldServerData data = dbResult.Data[i];
+					worldServerList[i] = new WorldServerDetails()
 					{
 						Name = data.Name,
-						LastPulse = data.LastPulse,
+						LastPulse = new DateTimeOffset(data.LastPulse, TimeSpan.Zero),
 						Port = data.Port,
 						CharacterCount = data.CharacterCount,
 						Locked = data.Locked,
-					});
+					};
 				}
 
 				// Marshal response back to main thread - FishNet Broadcast is not thread-safe
@@ -238,7 +239,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					Server.NetworkWrapper.Broadcast(conn, new ServerListBroadcast()
 					{
-						Servers = new List<WorldServerDetails>(),
+						Servers = Array.Empty<WorldServerDetails>(),
 					}, true, Channel.Reliable);
 				}
 			});

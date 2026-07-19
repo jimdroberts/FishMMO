@@ -99,35 +99,35 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				var now = DateTime.UtcNow;
-				var sql = $@"INSERT INTO {TableName}
-					(character_id, slot, version, type, reference_id, time_created, deleted, time_deleted)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, FALSE, NULL)
-					ON CONFLICT (character_id, slot)
-					DO UPDATE SET
-						type = EXCLUDED.type,
-						reference_id = EXCLUDED.reference_id,
-						deleted = FALSE,
-						time_deleted = NULL,
-						version = EXCLUDED.version
-					WHERE
-						EXCLUDED.version > {TableName}.version
-					RETURNING id, version, character_id, type, slot, reference_id, time_created, deleted, time_deleted";
+				var sql = $@"
+					WITH upserted AS (
+						INSERT INTO {TableName}
+							(character_id, slot, version, type, reference_id, time_created, deleted, time_deleted)
+						VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, FALSE, NULL)
+						ON CONFLICT (character_id, slot)
+						DO UPDATE SET
+							type = EXCLUDED.type,
+							reference_id = EXCLUDED.reference_id,
+							deleted = FALSE,
+							time_deleted = NULL,
+							version = EXCLUDED.version
+						WHERE
+							EXCLUDED.version > {TableName}.version
+						RETURNING id
+					)
+					SELECT COALESCE((SELECT id FROM upserted LIMIT 1), 0)::bigint AS value";
 
-				long upsertedId;
-				try
-				{
-					upsertedId = await ExecuteReturningAsync(
+				var id = await ExecuteScalarLongAsync(
 						dbContext,
 						sql,
 						new object[] { hotkey.CharacterID, hotkey.Slot, hotkey.Version, (int)hotkey.Type, hotkey.ReferenceID, now },
-						reader => reader.GetInt64(0),
 						cancellationToken).ConfigureAwait(false);
-				}
-				catch (DatabaseException ex) when (ex.ErrorCode == DatabaseErrorCodes.DatabaseError)
+
+				if (id <= 0)
 				{
 					throw new StaleStateException("Hotkey was rejected due to a stale Version.");
 				}
-				return upsertedId;
+				return id;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}

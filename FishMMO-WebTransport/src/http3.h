@@ -125,6 +125,7 @@ typedef struct h3_stream_ctx_s {
     uint32_t            recv_capacity;
     bool                is_request;     /* true if this is the CONNECT request stream */
     struct h3_session_s* h3;            /* back-pointer to HTTP/3 session (for data processing) */
+    struct h3_stream_ctx_s* next;       /* linked list for session cleanup */
 } h3_stream_ctx_t;
 
 /* ── HTTP/3 Session ─────────────────────────────────────────── */
@@ -159,6 +160,11 @@ typedef struct h3_session_s {
      * Freed after replay -- never accessed by h3 after consumption.
      */
     void*               native_stream_ctx;  /* h3_stream_ctx_t* */
+
+    /* Linked list of active stream context objects.
+     * Freed during h3_session_free to prevent leaks from
+     * streams that outlive the HTTP/3 session teardown. */
+    struct h3_stream_ctx_s* stream_ctx_list;
 
     /* Link to parent (for cleanup during teardown) */
     /* Allowed origins for CORS (comma-separated, empty = allow all) */
@@ -244,6 +250,16 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
  *        -1  = error
  */
 int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
+
+/**
+ * Client-side: process received data on the CONNECT request stream.
+ * Called from the stream RECEIVE callback during the HTTP/3 handshake.
+ *
+ * @return 0  = still handshaking
+ *         1  = handshake complete (on_ready called)
+ *        -1  = error
+ */
+int h3_client_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
 
 #ifdef __cplusplus
 }

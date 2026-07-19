@@ -592,7 +592,7 @@ The FishMMO Dashboard provides a comprehensive build interface:
 | **Development** | `127.0.0.1` (loopback) | Local testing — all servers on the same machine |
 | **Release** | Configurable via `.cfg` files | Production deployment — default is `127.0.0.1` (behind NGINX); change to server's network IP only if NGINX is on a separate machine |
 
-The build process copies the appropriate `.cfg` and `appsettings.json` files from `FishMMO-Setup/Development/` or `FishMMO-Setup/Release/` into the build output.
+The build process copies the appropriate `.cfg` and `appsettings.json` files from `FishMMO-Setup/Development/` or `FishMMO-Setup/Production/` into the build output.
 
 > **Important:** Build Addressables first, then build client/server. The client and server depend on the Addressable bundles produced in the first step.
 
@@ -653,7 +653,7 @@ public static class Configuration
 
 ### Server Configuration Files
 
-Each server type reads a `.cfg` file from its working directory. Templates are in `FishMMO-Setup/Development/` and `FishMMO-Setup/Release/`.
+Each server type reads a `.cfg` file from its working directory. Templates are in `FishMMO-Setup/Development/` and `FishMMO-Setup/Production/`.
 
 #### LoginServer.cfg
 
@@ -706,7 +706,7 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 
 > **Certificate paths are required on every game server.** `CertificatePath` and `PrivateKeyPath` must point to valid PEM files on each server. NGINX cannot terminate QUIC TLS — it only forwards raw UDP. If certificates are missing, the server will fail to start or clients will be unable to connect. See [TLS Certificate Setup for Game Servers](#tls-certificate-setup-for-game-servers).
 
-> **Production:** Edit the `Release/` templates before building. Each SceneServer needs a unique port if running multiple instances (e.g., 7790, 7791, 7792...).
+> **Production:** Edit the `Production/` templates before building. Each SceneServer needs a unique port if running multiple instances (e.g., 7790, 7791, 7792...).
 
 > **About the bind address:** All server `.cfg` templates default to `Address=127.0.0.1` — servers listen on loopback and NGINX forwards public traffic to them via `proxy_pass`. This keeps backend servers off the public network. Only change `Address` if the server runs on a different machine than NGINX; in that case, set it to the machine's network-facing IP and update the corresponding NGINX upstream or stream config to point to that IP.
 
@@ -802,7 +802,7 @@ FishMMO-Setup/
 │   ├── install-config.quickstart.json         # Minimal dev install template
 │   ├── install-config.web.json               # Web server install template
 │   ├── LoginServer.cfg / WorldServer.cfg / SceneServer.cfg
-├── Release/                                  # Production configurations
+├── Production/                                # Production configurations
 │   ├── appsettings.json                      # Unity server Npgsql
 │   ├── appsettings.IpFetchServer.Production.json  # Prod overrides (empty — must set env vars)
 │   ├── LoginServer.cfg / WorldServer.cfg / SceneServer.cfg
@@ -827,7 +827,7 @@ FishMMO-Setup/
 }
 ```
 
-**Release Npgsql example** ([`Release/appsettings.json`](FishMMO-Setup/Release/appsettings.json)):
+**Production Npgsql example** ([`Production/appsettings.json`](FishMMO-Setup/Production/appsettings.json)):
 
 ```json
 {

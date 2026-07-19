@@ -6,13 +6,41 @@
 #include "stream_manager.h"
 #include <stdlib.h>
 
-/* ── Mutex helpers (same conventions as datagram_queue) ──────── */
+/* ── Mutex helpers ────────────────────────────────────────────── */
 #if defined(WT_PLATFORM_WINDOWS)
-  #define sm_lock(mgr)    EnterCriticalSection(&(mgr)->streams_lock)
-  #define sm_unlock(mgr)  LeaveCriticalSection(&(mgr)->streams_lock)
-#else
+
+/* Manual recursive lock using CRITICAL_SECTION + thread tracking.
+ * Windows CRITICAL_SECTION is NOT recursive; this wrapper provides
+ * the same behaviour as PTHREAD_MUTEX_RECURSIVE on Linux so that a
+ * synchronous MsQuic callback re-entering the lock does not deadlock. */
+static void sm_lock_fn(wt_stream_manager_t* mgr)
+{
+    DWORD tid = GetCurrentThreadId();
+    if (mgr->streams_lock_owner == tid) {
+        mgr->streams_lock_rec++;
+        return;
+    }
+    EnterCriticalSection(&mgr->streams_lock_cs);
+    mgr->streams_lock_owner = tid;
+    mgr->streams_lock_rec = 1;
+}
+
+static void sm_unlock_fn(wt_stream_manager_t* mgr)
+{
+    if (--mgr->streams_lock_rec == 0) {
+        mgr->streams_lock_owner = 0;
+        LeaveCriticalSection(&mgr->streams_lock_cs);
+    }
+}
+
+#define sm_lock(mgr)    sm_lock_fn(mgr)
+#define sm_unlock(mgr)  sm_unlock_fn(mgr)
+
+#else /* Linux / macOS */
+
   #define sm_lock(mgr)    pthread_mutex_lock(&(mgr)->streams_lock)
   #define sm_unlock(mgr)  pthread_mutex_unlock(&(mgr)->streams_lock)
+
 #endif
 
 /* ── Per-stream context (attached to each QUIC stream) ──────── */
@@ -206,7 +234,9 @@ void wt_stream_manager_init(
     atomic_init(&mgr->total_recv_bytes, 0);
 
 #if defined(WT_PLATFORM_WINDOWS)
-    InitializeCriticalSection(&mgr->streams_lock);
+    InitializeCriticalSection(&mgr->streams_lock_cs);
+    mgr->streams_lock_owner = 0;
+    mgr->streams_lock_rec = 0;
 #else
     {
         pthread_mutexattr_t attr;
