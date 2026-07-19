@@ -38,7 +38,7 @@ Designed to run behind NGINX as a reverse proxy (via `play.fishmmo.com`). NGINX 
 | Requirement | Version |
 |---|---|
 | .NET SDK | 8.0+ |
-| Unity WebGL build | Output placed into `wwwroot/` |
+| Unity WebGL build | Output placed into configured content root |
 | NGINX | Recommended for production |
 
 ## Architecture
@@ -56,9 +56,8 @@ Browser
 |  +-- ForwardedHeaders middleware          |
 |  +-- CORS (AllowAllOrigins)               |
 |  +-- UseDefaultFiles + UseStaticFiles     |
-|  +-- RangeRequestMiddleware               |
+|  +-- UseResponseCompression               |
 |  +-- MapControllers                       |
-|       +-- wwwroot/ (WebGL build)          |
 +--------------------------------------------+
 ```
 
@@ -120,7 +119,7 @@ The server applies COOP (`same-origin`), COEP (`require-corp`), and a comprehens
 ## Deployment
 
 1. Build the Unity WebGL project.
-2. Copy the build output into `wwwroot/`.
+2. Copy the build output into the configured content root path.
 3. Start the server:
    ```bash
    dotnet run --project WebGLServer/WebGLServer.csproj
@@ -134,7 +133,7 @@ The server applies COOP (`same-origin`), COEP (`require-corp`), and a comprehens
 ## Requirements
 
 - .NET 8.0 SDK or later
-- Unity WebGL build output in `wwwroot/`
+- Unity WebGL build output placed in configured content root
 - NGINX reverse proxy (recommended for production)
 
 ## Flow Diagram
@@ -147,15 +146,10 @@ flowchart LR
         Kestrel --> Fwd[ForwardedHeaders]
         Fwd --> Cors[CORS AllowAllOrigins]
         Cors --> Defaults[UseDefaultFiles index.html]
-        Defaults --> Static[UseStaticFiles wwwroot/]
-        Static --> Range[RangeRequestMiddleware]
-        Range -->|no Range header| Full[200 full file]
-        Range -->|Range present| Partial[206 partial content]
-        Range -->|missing| NF[404]
-        Range -->|out of bounds| OOB[416]
+        Defaults --> Static[UseStaticFiles\n(range requests natively supported)]
+        Static -->|file found| OK[200 full / 206 partial]
+        Static -->|not found| NF[404]
     end
-    Full --> Browser
-    Partial --> Browser
+    OK --> Browser
     NF --> Browser
-    OOB --> Browser
 ```

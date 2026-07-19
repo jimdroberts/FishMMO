@@ -316,7 +316,7 @@
 ### Server Configuration (.cfg files)
 8. **LoginServer.cfg** — ServerName, MaximumClients (4000), Address (127.0.0.1 via nginx), Port (7770), TLS certificate paths, SMTP config (with `UseSsl` per-environment).  
 9. **WorldServer.cfg** — Port 7780, same TLS cert paths.  
-10. **SceneServer.cfg** — Port 7790+, StaleSceneTimeout (5s), same TLS cert paths.  
+10. **SceneServer.cfg** — Port 7790+, StaleSceneTimeout (5 minutes), same TLS cert paths.  
 11. **AutoVerifyAccounts** — `true` in Development (local SMTP), `false` in Release (email verification required).  
 
 ### Deploy Hooks
@@ -765,7 +765,7 @@
 11. **WebGL Build Serving** — Serves Unity WebGL builds as static files (HTML, JS, WASM, `.unityweb`, `.data`) with correct MIME types and `X-Content-Type-Options: nosniff`.  
 12. **Response Compression** — `AddResponseCompression` middleware with `application/wasm` and `application/octet-stream` MIME types for bandwidth reduction on large WASM builds (20–50 MB).  
 13. **Cross-Origin Isolation** — CSP headers configured for `wasm-unsafe-eval` and WebTransport `connect-src` to `game.fishmmo.com:*`.  
-14. **ClientGate** — Request validation with same HMAC signing as IPFetch.
+14. **ClientGate** — Intentionally absent. Browsers cannot add custom headers to static resource requests, so HMAC request signing is not possible for WebGL. Rate limiting and CORS provide the security boundary.
 
 ---
 

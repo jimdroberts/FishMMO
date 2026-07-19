@@ -95,7 +95,7 @@ IpFetchServer/
 
 Returns JSON array of active login servers with `Address` and `Port` fields.
 
-**Caching:** Results are cached in `IMemoryCache` for 300 seconds (5 minutes). Cache miss triggers a PostgreSQL query via `NpgsqlDbContext.LoginServers`.
+**Caching:** Results are cached in `IMemoryCache` for 60 seconds with 0–10s random jitter to prevent thundering-herd on cache expiry. Won't cache empty results. Cache miss triggers a PostgreSQL query.
 
 **Response Codes:**
 
@@ -183,8 +183,8 @@ flowchart LR
     subgraph Server[IPFetchServer]
         Kestrel --> Fwd[ForwardedHeaders]
         Fwd --> Cors[CORS AllowXFishMMO]
-        Cors --> Unity["UnityOnlyMiddleware - requires X-FishMMO: Client"]
-        Unity --> Ctrl[LoginServerController]
+        Cors --> Gate[ClientGate]
+        Gate --> Ctrl[LoginServerController]
         Ctrl -->|"cache hit (300s TTL)"| Cache[IMemoryCache]
         Ctrl -->|cache miss| EF[EF Core / Npgsql]
         EF --> DB[("PostgreSQL LoginServers table")]

@@ -87,7 +87,21 @@ namespace FishMMO.Server.Implementation
 				}
 				else
 				{
-					tokenSigningKeyBacking = value;
+					if (tokenSigningKeyBacking != null)
+					{
+						CryptographicOperations.ZeroMemory(tokenSigningKeyBacking);
+					}
+
+					if (value != null)
+					{
+						byte[] copy = new byte[value.Length];
+						Buffer.BlockCopy(value, 0, copy, 0, value.Length);
+						tokenSigningKeyBacking = copy;
+					}
+					else
+					{
+						tokenSigningKeyBacking = null;
+					}
 				}
 			}
 		}
@@ -113,7 +127,21 @@ namespace FishMMO.Server.Implementation
 				}
 				else
 				{
-					totpMasterKeyBacking = value;
+					if (totpMasterKeyBacking != null)
+					{
+						CryptographicOperations.ZeroMemory(totpMasterKeyBacking);
+					}
+
+					if (value != null)
+					{
+						byte[] copy = new byte[value.Length];
+						Buffer.BlockCopy(value, 0, copy, 0, value.Length);
+						totpMasterKeyBacking = copy;
+					}
+					else
+					{
+						totpMasterKeyBacking = null;
+					}
 				}
 			}
 		}
@@ -139,6 +167,7 @@ namespace FishMMO.Server.Implementation
 				byte[] copy = new byte[tokenSigningKeyBacking.Length];
 				Buffer.BlockCopy(tokenSigningKeyBacking, 0, copy, 0, copy.Length);
 				core.TokenSigningKey = copy;
+				CryptographicOperations.ZeroMemory(tokenSigningKeyBacking);
 				tokenSigningKeyBacking = null;
 			}
 			if (totpMasterKeyBacking != null)
@@ -146,6 +175,7 @@ namespace FishMMO.Server.Implementation
 				byte[] copy = new byte[totpMasterKeyBacking.Length];
 				Buffer.BlockCopy(totpMasterKeyBacking, 0, copy, 0, copy.Length);
 				core.TotpMasterKey = copy;
+				CryptographicOperations.ZeroMemory(totpMasterKeyBacking);
 				totpMasterKeyBacking = null;
 			}
 		}
@@ -587,15 +617,13 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Atomically swaps the signing key, key ID, and TOTP master key on the core,
 		/// ensuring concurrent token-issuance reads always see a consistent tuple.
-		/// The prior key material is zeroed after the swap is visible.
+		/// Old key arrays are left for GC; they are NOT zeroed here because a concurrent
+		/// reader thread may hold a reference to them. Zeroing occurs during server shutdown only.
 		/// </summary>
 		public void AtomicSwapSigningKey(byte[] newKey, long newKeyId, byte[] newTotpMasterKey)
 		{
 			lock (signingKeySwapLock)
 			{
-				byte[] oldKey = core?.TokenSigningKey;
-				byte[] oldTotp = core?.TotpMasterKey;
-
 				if (core != null)
 				{
 					// Copy the incoming key arrays so the caller's references remain
@@ -614,8 +642,10 @@ namespace FishMMO.Server.Implementation
 				}
 				tokenSigningKeyId = newKeyId;
 
-				if (oldKey != null) CryptographicOperations.ZeroMemory(oldKey);
-				if (oldTotp != null) CryptographicOperations.ZeroMemory(oldTotp);
+				// NOTE: Old key arrays are NOT zeroed here because a concurrent reader
+				// thread may hold a reference to them (obtained before the lock).
+				// Zeroing would corrupt in-flight auth operations. The old arrays will
+				// be reclaimed by GC; keys are zeroed during server shutdown only.
 			}
 		}
 	}

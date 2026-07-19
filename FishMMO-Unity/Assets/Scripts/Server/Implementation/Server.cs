@@ -141,14 +141,14 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Flag indicating whether the server has already performed shutdown.
 		/// </summary>
-		private bool hasShutdown = false;
+		private int hasShutdownFlag = 0;
 
 		/// <summary>
 		/// Unity Start method. Initializes and composes all server components.
 		/// </summary>
 		void Start()
 		{
-			hasShutdown = false;
+			hasShutdownFlag = 0;
 			Log.Debug("Server", "Server is starting...");
 
 			NetworkManager networkManager = FindFirstObjectByType<NetworkManager>();
@@ -192,7 +192,7 @@ namespace FishMMO.Server.Implementation
 		private System.Collections.IEnumerator ExternalIpFetchTimeout(System.Action<string> onDone)
 		{
 			yield return new WaitForSeconds(ExternalIpFetchTimeoutSeconds);
-			if (!hasShutdown)
+			if (hasShutdownFlag == 0)
 			{
 				Log.Warning("Server", $"External IP fetch timed out after {ExternalIpFetchTimeoutSeconds}s; falling back to loopback.");
 				usedFallbackAddress = true;
@@ -452,10 +452,9 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void PerformShutdown()
 		{
-			if (hasShutdown) return;
-			hasShutdown = true;
+			if (System.Threading.Interlocked.CompareExchange(ref hasShutdownFlag, 1, 0) != 0) return;
 
-			periodicCallbacks.Clear();
+				periodicCallbacks.Clear();
 
 			// 1. Signal worker cancellation FIRST — in-flight auth operations can
 			//    finish broadcasting before the transport is stopped.

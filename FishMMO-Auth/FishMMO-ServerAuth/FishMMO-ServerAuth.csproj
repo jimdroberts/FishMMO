@@ -21,7 +21,7 @@
     <PropertyGroup>
       <UnityDepsDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../FishMMO-Unity/Assets/Dependencies'))</UnityDepsDir>
     </PropertyGroup>
-    <Copy SourceFiles="$(OutputPath)FishMMO-ServerAuth.dll" DestinationFolder="$(UnityDepsDir)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(UnityDepsDir)" />
   </Target>
 
 </Project>
