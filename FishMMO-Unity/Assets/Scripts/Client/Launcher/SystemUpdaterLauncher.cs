@@ -19,7 +19,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Interval in seconds between process-exit polls.
 		/// </summary>
-		private const float PollIntervalSeconds = 0.5f;
+		private const float pollIntervalSeconds = 0.5f;
 
 		/// <summary>
 		/// Maximum total time the launcher will wait for the updater process to exit.
@@ -27,7 +27,7 @@ namespace FishMMO.Client
 		/// should complete well within this window. If the updater hasn't exited by
 		/// this deadline, the launcher force-kills it and reports failure.
 		/// </summary>
-		private const float UpdaterTimeoutSeconds = 300f;
+		private const float updaterTimeoutSeconds = 300f;
 
 		/// <summary>
 		/// Launches the updater executable and polls for process exit via a coroutine,
@@ -133,9 +133,9 @@ namespace FishMMO.Client
 			float startTime = Time.realtimeSinceStartup;
 			while (!process.HasExited)
 			{
-				if (Time.realtimeSinceStartup - startTime > UpdaterTimeoutSeconds)
+				if (Time.realtimeSinceStartup - startTime > updaterTimeoutSeconds)
 				{
-					Log.Critical("Updater", $"Updater process timed out after {UpdaterTimeoutSeconds}s. Force-killing.");
+					Log.Critical("Updater", $"Updater process timed out after {updaterTimeoutSeconds}s. Force-killing.");
 					try
 					{
 						process.Kill();
@@ -152,10 +152,10 @@ namespace FishMMO.Client
 						process.ErrorDataReceived -= errorHandler;
 						process.Dispose();
 					}
-					onError?.Invoke($"Updater process timed out after {UpdaterTimeoutSeconds} seconds. The patch may be corrupted or the system is under heavy load.");
+					onError?.Invoke($"Updater process timed out after {updaterTimeoutSeconds} seconds. The patch may be corrupted or the system is under heavy load.");
 					yield break;
 				}
-				yield return new WaitForSeconds(PollIntervalSeconds);
+				yield return new WaitForSeconds(pollIntervalSeconds);
 			}
 
 			// WaitForExit ensures the process handle is fully updated before reading ExitCode.

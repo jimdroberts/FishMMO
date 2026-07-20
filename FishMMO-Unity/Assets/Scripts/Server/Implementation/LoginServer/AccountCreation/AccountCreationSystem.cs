@@ -916,11 +916,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 										if (!totpSecretResult.IsSuccess)
 										{
 											await Log.Warning("AccountCreationSystem", $"PersistTotpSecretAsync DB error for user '{username}': {totpSecretResult.ErrorCode} - {totpSecretResult.ErrorMessage}");
+											// Do NOT enable TOTP when the secret failed to persist.
+											// An account with totp_enabled=true but no valid secret is
+											// permanently locked out — VerifyTotpCodeCoreAsync checks
+											// IsNullOrEmpty(TotpSecret) and returns false.
 										}
-										DatabaseResult totpEnabledResult = await accountService.PersistTotpEnabledAsync(username, true);
-										if (!totpEnabledResult.IsSuccess)
+										else
 										{
-											await Log.Warning("AccountCreationSystem", $"PersistTotpEnabledAsync DB error for user '{username}': {totpEnabledResult.ErrorCode} - {totpEnabledResult.ErrorMessage}");
+											DatabaseResult totpEnabledResult = await accountService.PersistTotpEnabledAsync(username, true);
+											if (!totpEnabledResult.IsSuccess)
+											{
+												await Log.Warning("AccountCreationSystem", $"PersistTotpEnabledAsync DB error for user '{username}': {totpEnabledResult.ErrorCode} - {totpEnabledResult.ErrorMessage}");
+											}
 										}
 									// Generate and hash recovery codes (best-effort).
 									// TOTP setup proceeds even if recovery code persistence fails —

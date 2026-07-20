@@ -97,9 +97,13 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
         /* Free the orphaned h3 stream context and its buffer.
          * The stream's callback has been replaced by the stream_manager,
          * so h3_stream_cb will never fire again for this stream.
-         * h3_session_free does not track individual stream contexts
-         * (see KNOWN LIMITATION in h3_session_free), so we must
-         * clean up here. */
+         *
+         * CRITICAL: Unlink from the session's stream_ctx_list BEFORE
+         * freeing.  h3_stream_ctx_create() added this sctx to the list
+         * and h3_session_free() iterates the list to free remaining
+         * contexts.  Without the unlink, h3_session_free would
+         * double-free this pointer. */
+        h3_stream_ctx_unlink(nsctx);
         free(nsctx->recv_buf);
         nsctx->recv_buf = NULL;
         nsctx->recv_offset = 0;

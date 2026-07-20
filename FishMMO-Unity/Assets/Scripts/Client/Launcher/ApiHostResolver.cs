@@ -23,13 +23,13 @@ namespace FishMMO.Client
 	/// </summary>
 	internal static class ApiHostResolver
 	{
-		private const string LogChannel = "ApiHostResolver";
+		private const string logChannel = "ApiHostResolver";
 
 		/// <summary>
 		/// Maximum length of any single candidate URL accepted by the resolver.
 		/// A generous cap; legitimate hosts are tens of characters.
 		/// </summary>
-		private const int MaxCandidateLength = 512;
+		private const int maxCandidateLength = 512;
 
 		/// <summary>
 		/// Sanitizes an APIHost candidate for safe inclusion in log lines. Strips
@@ -102,9 +102,9 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				if (trimmed.Length > MaxCandidateLength)
+				if (trimmed.Length > maxCandidateLength)
 				{
-					_ = Log.Warning(LogChannel, $"Rejected APIHost candidate (length>{MaxCandidateLength}): {SanitizeForLog(trimmed)}");
+					_ = Log.Warning(logChannel, $"Rejected APIHost candidate (length>{maxCandidateLength}): {SanitizeForLog(trimmed)}");
 					continue;
 				}
 				if (!trimmed.EndsWith("/", StringComparison.Ordinal))
@@ -150,7 +150,7 @@ namespace FishMMO.Client
 		{
 			if (!Uri.TryCreate(candidate, UriKind.Absolute, out Uri uri))
 			{
-				_ = Log.Warning(LogChannel, $"Rejected APIHost candidate (not an absolute URI): {SanitizeForLog(candidate)}");
+				_ = Log.Warning(logChannel, $"Rejected APIHost candidate (not an absolute URI): {SanitizeForLog(candidate)}");
 				return false;
 			}
 
@@ -160,7 +160,7 @@ namespace FishMMO.Client
 			bool isHttps = string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
 			if (!isHttp && !isHttps)
 			{
-				_ = Log.Warning(LogChannel, $"Rejected APIHost candidate (scheme must be https): {SanitizeForLog(candidate)}");
+				_ = Log.Warning(logChannel, $"Rejected APIHost candidate (scheme must be https): {SanitizeForLog(candidate)}");
 				return false;
 			}
 
@@ -173,11 +173,11 @@ namespace FishMMO.Client
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 				if (!IsLoopback(uri))
 				{
-					_ = Log.Warning(LogChannel, $"Rejected APIHost candidate (http only allowed for loopback in DEV builds): {SanitizeForLog(candidate)}");
+					_ = Log.Warning(logChannel, $"Rejected APIHost candidate (http only allowed for loopback in DEV builds): {SanitizeForLog(candidate)}");
 					return false;
 				}
 #else
-				_ = Log.Warning(LogChannel, $"Rejected APIHost candidate (http scheme not allowed in release builds): {SanitizeForLog(candidate)}");
+				_ = Log.Warning(logChannel, $"Rejected APIHost candidate (http scheme not allowed in release builds): {SanitizeForLog(candidate)}");
 				return false;
 #endif
 			}
@@ -186,7 +186,7 @@ namespace FishMMO.Client
 			// to confuse log readers ("https://api.fishmmo.com@evil.example/").
 			if (!string.IsNullOrEmpty(uri.UserInfo))
 			{
-				_ = Log.Warning(LogChannel, $"Rejected APIHost candidate (userinfo not permitted): {SanitizeForLog(candidate)}");
+				_ = Log.Warning(logChannel, $"Rejected APIHost candidate (userinfo not permitted): {SanitizeForLog(candidate)}");
 				return false;
 			}
 
@@ -200,7 +200,7 @@ namespace FishMMO.Client
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
 			if (IsPrivateOrReservedIpLiteral(uri))
 			{
-				_ = Log.Warning(LogChannel, $"Rejected APIHost candidate (private/loopback IP literal not permitted in release builds): {SanitizeForLog(candidate)}");
+				_ = Log.Warning(logChannel, $"Rejected APIHost candidate (private/loopback IP literal not permitted in release builds): {SanitizeForLog(candidate)}");
 				return false;
 			}
 #endif

@@ -17,7 +17,7 @@ namespace FishMMO.Client
 	/// server, NOT from this header.
 	/// </para>
 	/// <para>
-	/// To rotate the secret: change <see cref="SecretLiteral"/> and rebuild
+	/// To rotate the secret: change <see cref="secretLiteral"/> and rebuild
 	/// the client at the same time as the matching server-side configuration
 	/// (env var <c>FISHMMO_CLIENT_GATE_SECRET</c>). There is no rolling
 	/// upgrade window — by design, mismatched clients get a hard 401.
@@ -44,7 +44,7 @@ namespace FishMMO.Client
 		/// <c>FISHMMO_CLIENT_GATE_SECRET</c> environment variable.
 		/// </para>
 		/// </summary>
-		private const string SecretLiteral =
+		private const string secretLiteral =
 			"FishMMO-default-client-gate-secret-replace-before-release-d8b1c4a6e7f23519";
 
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
@@ -62,7 +62,7 @@ namespace FishMMO.Client
 				"[ClientApiSecret] *  still in use in a release build.                    *\n" +
 				"[ClientApiSecret] *                                                      *\n" +
 				"[ClientApiSecret] *  Set FISHMMO_CLIENT_GATE_SECRET to a unique value    *\n" +
-				"[ClientApiSecret] *  AND update SecretLiteral before shipping.           *\n" +
+				"[ClientApiSecret] *  AND update secretLiteral before shipping.           *\n" +
 				"[ClientApiSecret] *                                                      *\n" +
 				"[ClientApiSecret] *  This binary's gate secret is PUBLIC and provides    *\n" +
 				"[ClientApiSecret] *  NO protection against general crawler traffic.      *\n" +
@@ -80,7 +80,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public static byte[] GetBytes()
 		{
-			return Encoding.UTF8.GetBytes(SecretLiteral);
+			return Encoding.UTF8.GetBytes(secretLiteral);
 		}
 	}
 }

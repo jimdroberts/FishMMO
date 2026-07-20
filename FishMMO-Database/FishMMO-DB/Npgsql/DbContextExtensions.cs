@@ -15,7 +15,7 @@ namespace FishMMO.Database.Npgsql
 		/// Compiled regex for validating unquoted PostgreSQL identifiers.
 		/// Must start with lowercase letter or underscore, followed by lowercase letters, digits, or underscores.
 		/// </summary>
-		private static readonly Regex ValidIdentifierRegex = new Regex(
+		private static readonly Regex validIdentifierRegex = new Regex(
 			"^[a-z_][a-z0-9_]*$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -31,7 +31,7 @@ namespace FishMMO.Database.Npgsql
 			public string? Schema { get; }
 		}
 
-		private static readonly ConcurrentDictionary<Type, TableInfo> TableInfoCache = new ConcurrentDictionary<Type, TableInfo>();
+		private static readonly ConcurrentDictionary<Type, TableInfo> tableInfoCache = new ConcurrentDictionary<Type, TableInfo>();
 
 		/// <summary>
 		/// Gets the fully qualified table name (schema.table_name) for the specified entity type.
@@ -56,7 +56,7 @@ namespace FishMMO.Database.Npgsql
 				throw new ArgumentNullException(nameof(context));
 			}
 
-			var tableInfo = TableInfoCache.GetOrAdd(typeof(TEntity), _ =>
+			var tableInfo = tableInfoCache.GetOrAdd(typeof(TEntity), _ =>
 			{
 				var entityType = context.Model.FindEntityType(typeof(TEntity));
 				if (entityType == null)
@@ -109,7 +109,7 @@ namespace FishMMO.Database.Npgsql
 				return false;
 			}
 
-			return ValidIdentifierRegex.IsMatch(identifier);
+			return validIdentifierRegex.IsMatch(identifier);
 		}
 	}
 }

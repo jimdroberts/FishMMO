@@ -26,7 +26,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Reference to the current Client instance for dependency injection.
 		/// </summary>
-		private static Client s_client;
+		private static Client client;
 
 		// ── UI Toolkit parallel registries ────────────────────────────────
 
@@ -43,9 +43,9 @@ namespace FishMMO.Client
 		/// Injects the Client instance into all registered controls for network/UI interaction.
 		/// </summary>
 		/// <param name="client">Client instance to inject.</param>
-		internal static void SetClient(Client client)
+		internal static void SetClient(Client value)
 		{
-			s_client = client;
+			UIManager.client = value;
 
 			foreach (UIControl control in controls.Values)
 			{
@@ -118,7 +118,7 @@ namespace FishMMO.Client
 				characterControls.Add(characterControl.Name, characterControl);
 			}
 
-			control.SetClient(s_client);
+			control.SetClient(client);
 
 			//Log.Debug("UIManager: Registered[" + control.Name + "]");
 			controls.Add(control.Name, control);
@@ -163,7 +163,7 @@ namespace FishMMO.Client
 				tkCharacterControls.Add(characterControl.Name, characterControl);
 			}
 
-			control.SetClient(s_client);
+			control.SetClient(client);
 
 			tkControls.Add(control.Name, control);
 		}

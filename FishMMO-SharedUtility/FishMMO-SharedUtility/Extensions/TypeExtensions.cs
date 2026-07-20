@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 		/// Caches compiled delegates for default constructors. 
 		/// ConcurrentDictionary provides lock-free reads for high-frequency access.
 		/// </summary>
-		private static readonly ConcurrentDictionary<Type, Func<object?>> ConstructorCache =
+		private static readonly ConcurrentDictionary<Type, Func<object?>> constructorCache =
 			new ConcurrentDictionary<Type, Func<object?>>();
 
 		/// <summary>
@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 			if (type == null) return null;
 
 			// GetOrAdd is thread-safe and more efficient than manual locking for this use case
-			return ConstructorCache.GetOrAdd(type, t =>
+			return constructorCache.GetOrAdd(type, t =>
 			{
 				if (t.IsAbstract || t.IsInterface)
 				{

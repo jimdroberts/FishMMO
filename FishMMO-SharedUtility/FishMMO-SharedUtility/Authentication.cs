@@ -37,58 +37,58 @@ namespace FishMMO.Shared
 
 		#region Regular Expressions
 		// Emails: Standard RFC-adjacent validation
-		private static readonly Regex EmailUsernameRegex = new Regex(
+		private static readonly Regex emailUsernameRegex = new Regex(
 			@"^(?=.{3,320}$)[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?@[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Usernames: Alphanumeric and underscores
-		private static readonly Regex UsernameRegex = new Regex(
+		private static readonly Regex usernameRegex = new Regex(
 			@"^[a-zA-Z0-9_]+$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Passwords: Allow special characters (!@#$%^ etc) for better security
 		// Removed the restricted alphanumeric-only rule to encourage stronger passwords
-		private static readonly Regex PasswordRegex = new Regex(
+		private static readonly Regex passwordRegex = new Regex(
 			@"^[a-zA-Z0-9!@#$%^&*()_+=\-\[\]{}|;:',.<>?]+$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Character Names: Starts with letter, allows single spaces between names (e.g. "Aragorn of Arnor")
-		private static readonly Regex CharacterNameRegex = new Regex(
+		private static readonly Regex characterNameRegex = new Regex(
 			@"^[A-Za-z]+(?: [A-Za-z]+)*$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Guild Names: Similar to character names but allows more segments
-		private static readonly Regex GuildNameRegex = new Regex(
+		private static readonly Regex guildNameRegex = new Regex(
 			@"^[A-Za-z0-9]+(?: [A-Za-z0-9]+)*$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 		#endregion
 
 		public static bool IsAllowedEmailUsername(string email) =>
-			!string.IsNullOrWhiteSpace(email) && EmailUsernameRegex.IsMatch(email);
+			!string.IsNullOrWhiteSpace(email) && emailUsernameRegex.IsMatch(email);
 
 		public static bool IsAllowedUsername(string accountName) =>
 			!string.IsNullOrWhiteSpace(accountName) &&
 			accountName.Length >= AccountNameMinLength &&
 			accountName.Length <= AccountNameMaxLength &&
-			UsernameRegex.IsMatch(accountName);
+			usernameRegex.IsMatch(accountName);
 
 		public static bool IsAllowedPassword(string accountPassword) =>
 			!string.IsNullOrWhiteSpace(accountPassword) &&
 			accountPassword.Length >= AccountPasswordMinLength &&
 			accountPassword.Length <= AccountPasswordMaxLength &&
-			PasswordRegex.IsMatch(accountPassword);
+			passwordRegex.IsMatch(accountPassword);
 
 		public static bool IsAllowedCharacterName(string characterName) =>
 			!string.IsNullOrWhiteSpace(characterName) &&
 			characterName.Length >= CharacterNameMinLength &&
 			characterName.Length <= CharacterNameMaxLength &&
-			CharacterNameRegex.IsMatch(characterName);
+			characterNameRegex.IsMatch(characterName);
 
 		public static bool IsAllowedGuildName(string guildName) =>
 			!string.IsNullOrWhiteSpace(guildName) &&
 			guildName.Length >= GuildNameMinLength &&
 			guildName.Length <= GuildNameMaxLength &&
-			GuildNameRegex.IsMatch(guildName);
+			guildNameRegex.IsMatch(guildName);
 
 		/// <summary>
 		/// Produces the canonical lookup form of an account name for case-insensitive comparisons

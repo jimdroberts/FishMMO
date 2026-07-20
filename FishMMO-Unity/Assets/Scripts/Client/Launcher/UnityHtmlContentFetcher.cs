@@ -60,7 +60,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Maximum recursion depth when converting HTML nodes to TMP text to prevent stack overflow from deeply nested input.
 		/// </summary>
-		private const int MaxRecursionDepth = 100;
+		private const int maxRecursionDepth = 100;
 
 		/// <summary>
 		/// Fetches HTML from a URL, extracts content from a div, and processes it into TMP rich text.
@@ -162,9 +162,9 @@ namespace FishMMO.Client
 		/// <returns>Converted TMP rich text string.</returns>
 		private string ConvertHtmlNodeToTmpText(HtmlNode node, int depth = 0)
 		{
-			if (depth > MaxRecursionDepth)
+			if (depth > maxRecursionDepth)
 			{
-				Log.Warning("UnityHtmlContentFetcher", $"Maximum recursion depth ({MaxRecursionDepth}) exceeded. Truncating HTML conversion.");
+				Log.Warning("UnityHtmlContentFetcher", $"Maximum recursion depth ({maxRecursionDepth}) exceeded. Truncating HTML conversion.");
 				return string.Empty;
 			}
 			StringBuilder sb = new StringBuilder();

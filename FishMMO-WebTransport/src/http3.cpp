@@ -420,22 +420,19 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
     bool name_from_static = false;
 
     if ((first & 0xC0) == 0x00) {
-        /* Indexed field line (static table).
-         * 00Txxxxx = static table index with T bit.
-         * The full field name+value comes from the static table. */
+        /* Indexed field line (static table).  Per RFC 9204 §4.3.1,
+         * the entire field (name AND value) comes from the static
+         * table.  Only the varint-encoded index is on the wire —
+         * there is NO value following the index.  Return immediately
+         * to prevent the value reader (line 496) from consuming
+         * subsequent bytes as a non-existent wire value. */
         uint8_t nbytes;
         uint64_t idx;
         if (varint_decode(buf, buf_len, &idx, &nbytes) < 0) return -1;
         if (idx >= QPACK_STATIC_SIZE) return -1;
-        /* For indexed entries the name is from the static table.
-         * The value is also encoded in the static table (we don't
-         * store values separately — for the WebTransport handshake
-         * we only need name resolution for pseudo-headers). */
         out->name_len = kQpackStatic[idx].name_len;
         memcpy(out->name, kQpackStatic[idx].name, out->name_len);
-        /* No value from static table entries — caller must handle */
-        consumed = nbytes;
-        name_from_static = true;
+        return (int)nbytes;
     }
     else if ((first & 0xC0) == 0x40) {
         /* Literal with name reference (static table: 01 prefix) */
@@ -757,7 +754,7 @@ typedef int (*h3_data_processor_fn)(h3_stream_ctx_t* sctx);
 int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
 
 /* Forward declaration — unlinks a stream context from the session list */
-static void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx);
+void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx);
 
 /* Forward declaration — h3_client_process_data is defined later and
  * called from h3_client_stream_cb when the client receives the server's
@@ -863,7 +860,7 @@ static h3_stream_ctx_t* h3_stream_ctx_create(HQUIC stream, h3_session_t* h3)
  * Called from SHUTDOWN_COMPLETE / PEER_SEND_ABORTED when a stream
  * context is freed through the normal callback chain.  Removes the
  * entry from the singly-linked list by pointer-to-pointer walk. */
-static void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx)
+void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx)
 {
     if (!sctx || !sctx->h3) return;
     h3_session_t* h3 = sctx->h3;
@@ -872,6 +869,7 @@ static void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx)
         if (*pp == sctx) {
             *pp = sctx->next;
             sctx->next = NULL;
+            sctx->h3 = NULL;
             return;
         }
         pp = &(*pp)->next;
@@ -1050,21 +1048,13 @@ static bool h3_parse_headers(const uint8_t* data, uint64_t data_len,
     uint64_t parsed = 0;
 
     while (parsed < data_len) {
-        uint64_t field_len;
-        uint8_t flen_bytes;
-
-        /* Each field section is prefixed with its length */
-        if (varint_decode(data + parsed, data_len - parsed,
-                         &field_len, &flen_bytes) < 0)
-            return false;
-        parsed += flen_bytes;
-
-        if (parsed + field_len > data_len) return false;
-
-        /* Try to parse a single field line */
+        /* QPACK field lines are self-delimiting — there is NO per-field
+         * length prefix on the wire (RFC 9204). Each call to
+         * qpack_parse_field consumes one complete field line and returns
+         * the number of bytes consumed. */
         h3_header_t hdr;
         int consumed = qpack_parse_field(data + parsed,
-                                          (size_t)(data_len - parsed), &hdr);
+                                         (size_t)(data_len - parsed), &hdr);
         if (consumed < 0) {
             /* Unsupported encoding — advance past this byte and retry.
              * This handles fields with encodings we don't support
@@ -1479,6 +1469,28 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
             return 0;
         }
         else {
+            /* NOT a control stream. If we're already in HTTP/3 mode
+             * (control stream was processed and we're waiting for a
+             * CONNECT request), route through CONNECT validation at
+             * line 1518 instead of the raw/native fallback.
+             * Without this check, any browser WebTransport CONNECT
+             * request bypasses all security validation (CORS origin
+             * check, :method, :protocol, :authority). */
+            if (h3->server_state >= H3_SRV_WAIT_CONNECT) {
+                sctx->stream_type = H3_STREAM_REQUEST;
+                sctx->is_request = true;
+                /* Parse the HEADERS frame on this stream.
+                 * h3_server_process_data will be called again after
+                 * more data arrives on this stream, and the CONNECT
+                 * validation path at line 1518 will handle it. */
+                if (sctx->recv_offset > 0) {
+                    size_t pos = 0;
+                    h3_parse_frames(sctx->recv_buf, sctx->recv_offset,
+                                    &pos, NULL, NULL);
+                }
+                return 0;
+            }
+
             /* Raw/native protocol detected — not HTTP/3.
              * Signal to the caller to proceed with wt_session. */
             sctx->stream_type = -2; /* mark as raw */

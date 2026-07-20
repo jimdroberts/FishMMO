@@ -17,7 +17,7 @@ namespace FishMMO.Auth.Implementation
 	/// </remarks>
 	public class ServerSrpData
 	{
-		private const string SrpProofFailed = "Srp failed to generate proof.";
+		private const string srpProofFailed = "Srp failed to generate proof.";
 
 		/// <summary>
 		/// Gets the username associated with the SRP session.
@@ -93,7 +93,7 @@ namespace FishMMO.Auth.Implementation
 			}
 			catch (SecurityException)
 			{
-				serverProof = SrpProofFailed;
+				serverProof = srpProofFailed;
 				return false;
 			}
 		}

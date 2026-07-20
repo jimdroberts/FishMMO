@@ -262,8 +262,8 @@ namespace FishMMO.Database.Npgsql.Services
 			return outcome == ExceptionOutcome.Transient && attempt < RetryPolicy.MaxRetries;
 		}
 
-		private static readonly Random _jitterRng = new Random();
-		private static readonly object _jitterLock = new object();
+		private static readonly Random jitterRng = new Random();
+		private static readonly object jitterLock = new object();
 
 		private TimeSpan GetRetryDelay(int attempt)
 		{
@@ -278,9 +278,9 @@ namespace FishMMO.Database.Npgsql.Services
 			// Use lock-protected System.Random instead (jitter is non-cryptographic and infrequent).
 			int maxJitter = RetryPolicy.MaxJitterMs > 0 ? RetryPolicy.MaxJitterMs : 1;
 			int jitterMs;
-			lock (_jitterLock)
+			lock (jitterLock)
 			{
-				jitterMs = _jitterRng.Next(0, maxJitter);
+				jitterMs = jitterRng.Next(0, maxJitter);
 			}
 			return TimeSpan.FromMilliseconds((RetryPolicy.BaseDelayMs * attempt) + jitterMs);
 		}

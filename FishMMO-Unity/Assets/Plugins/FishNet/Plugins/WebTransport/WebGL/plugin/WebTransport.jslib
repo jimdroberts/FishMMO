@@ -79,6 +79,11 @@ var FishWebTransport = {
                             if (sr.done) { streamReader.releaseLock(); return; }
                             var data = new Uint8Array(sr.value);
                             var ptr = _malloc(data.length);
+                            if (!ptr) {
+                                console.warn('[FishWT] malloc failed for stream data (' + data.length + ' bytes), dropping');
+                                streamReader.releaseLock();
+                                return;
+                            }
                             HEAPU8.set(data, ptr);
                             FishWebTransport._dynCall('viii', session.onStream, [session._index, ptr, data.length]);
                             _free(ptr);
@@ -134,6 +139,11 @@ var FishWebTransport = {
                     session._dgramDoneRetries = 0;  /* reset on successful read */
                     var data = new Uint8Array(result.value);
                     var ptr = _malloc(data.length);
+                    if (!ptr) {
+                        console.warn('[FishWT] malloc failed for datagram (' + data.length + ' bytes), dropping');
+                        pump();
+                        return;
+                    }
                     HEAPU8.set(data, ptr);
                     FishWebTransport._dynCall('viii', session.onDatagram, [session._index, ptr, data.length]);
                     _free(ptr);
@@ -259,10 +269,11 @@ mergeInto(LibraryManager.library, {
             session.wt.createBidirectionalStream().then(function(stream) {
                 var writer = stream.writable.getWriter();
                 writer.write(data).then(function() {
-                    writer.close();
+                    return writer.close();
+                }).then(function() {
                     session._pendingStreams--;
                 }).catch(function(e) {
-                    console.warn('[FishWT] stream close: ' + e.message);
+                    console.warn('[FishWT] stream send/close error: ' + e.message);
                     session._pendingStreams--;
                 });
             }).catch(function(err) {
@@ -284,13 +295,19 @@ mergeInto(LibraryManager.library, {
 
         var data = new Uint8Array(HEAPU8.slice(dataPtr, dataPtr + length));
         try {
-            /* Check for closed/errored writer before reusing */
+            /* Check for closed/errored writer before reusing.
+             * WritableStreamDefaultWriter.closed is a Promise (always truthy),
+             * so we cannot test it as a boolean.  Use desiredSize === null
+             * instead — it is null when the stream is errored or closed. */
             if (session._dgramWriter) {
                 try {
-                    if (session._dgramWriter.closed) {
-                        session._dgramWriter = null;  /* won't releaseLock on closed writer */
+                    if (session._dgramWriter.desiredSize === null) {
+                        try { session._dgramWriter.releaseLock(); } catch (_) {}
+                        session._dgramWriter = null;
                     }
-                } catch (_) {}
+                } catch (_) {
+                    session._dgramWriter = null;
+                }
             }
             if (!session._dgramWriter) {
                 session._dgramWriter = session.wt.datagrams.writable.getWriter();

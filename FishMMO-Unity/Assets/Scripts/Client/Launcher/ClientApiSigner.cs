@@ -29,8 +29,8 @@ namespace FishMMO.Client
 	/// </summary>
 	internal static class ClientApiSigner
 	{
-		private const string HeaderName = "X-FishMMO-Client";
-		private const string Version = "v1";
+		private const string headerName = "X-FishMMO-Client";
+		private const string version = "v1";
 
 		/// <summary>
 		/// Computes the gate header for the given HTTP method + absolute URL
@@ -46,13 +46,13 @@ namespace FishMMO.Client
 			string value = BuildHeaderValue(method, url);
 			if (headers != null)
 			{
-				headers[HeaderName] = value;
+				headers[headerName] = value;
 			}
 			return value;
 		}
 
 		/// <summary>The header name to set on the outgoing request.</summary>
-		public static string HeaderKey => HeaderName;
+		public static string HeaderKey => headerName;
 
 		/// <summary>
 		/// Builds the signed header value without mutating any caller state.
@@ -73,7 +73,7 @@ namespace FishMMO.Client
 			string nonce = GenerateNonce();
 			string methodUpper = method.ToUpperInvariant();
 
-			string canonical = Version + "\n" + methodUpper + "\n" + canonicalPath + "\n" + ts.ToString() + "\n" + nonce;
+			string canonical = version + "\n" + methodUpper + "\n" + canonicalPath + "\n" + ts.ToString() + "\n" + nonce;
 			byte[] secret = ClientApiSecret.GetBytes();
 			byte[] mac;
 			using (HMACSHA256 hmac = new HMACSHA256(secret))
@@ -85,7 +85,7 @@ namespace FishMMO.Client
 			// The underlying constant still lives in the loaded assembly image regardless.
 			CryptographicOperations.ZeroMemory(secret);
 
-			return Version + "." + ts.ToString() + "." + nonce + "." + ToBase64Url(mac);
+			return version + "." + ts.ToString() + "." + nonce + "." + ToBase64Url(mac);
 		}
 
 		/// <summary>

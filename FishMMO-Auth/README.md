@@ -1,7 +1,7 @@
 # FishMMO-Auth
 
 ## Short description:
-A transport-agnostic .NET authentication library for FishMMO that provides secure handshake, SRP-6a login, token issuance/validation, TOTP two-factor authentication, and ready-to-subclass engine-independent authenticator cores for both server and client.
+A set of three transport-agnostic .NET authentication libraries (AuthShared, ClientAuth, ServerAuth) for FishMMO that provide secure handshake, SRP-6a login, token issuance/validation, TOTP two-factor authentication, and ready-to-subclass engine-independent authenticator cores for both server and client.
 
 ## Table of Contents
 - [Overview](#overview)

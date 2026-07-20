@@ -46,6 +46,7 @@ extern "C" {
 #define H3_STREAM_PUSH          0x01
 #define H3_STREAM_QPACK_ENCODER 0x02
 #define H3_STREAM_QPACK_DECODER 0x03
+#define H3_STREAM_REQUEST       0x04  /* CONNECT request stream */
 
 /* ── HTTP/3 Frame Types ─────────────────────────────────────── */
 
@@ -260,6 +261,14 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
  *        -1  = error
  */
 int h3_client_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
+
+/**
+ * Unlink a stream context from the session's tracking list.
+ * Must be called BEFORE manually freeing an h3_stream_ctx_t that was
+ * added to the session's stream_ctx_list by h3_stream_ctx_create().
+ * Safe to call with NULL — no-op.
+ */
+void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx);
 
 #ifdef __cplusplus
 }

@@ -29,9 +29,9 @@ namespace FishMMO.Client.Security
 	/// </summary>
 	public static class ClientCertificatePinning
 	{
-		private const string LogChannel = "ClientCertificatePinning";
+		private const string logChannel = "ClientCertificatePinning";
 
-		private static readonly object Sync = new object();
+		private static readonly object sync = new object();
 		private static HashSet<string> pins = new HashSet<string>(StringComparer.Ordinal);
 		private static bool allowOnEmptyPins;
 
@@ -53,7 +53,7 @@ namespace FishMMO.Client.Security
 		{
 			get
 			{
-				lock (Sync)
+				lock (sync)
 				{
 					return pins.Count > 0;
 				}
@@ -87,13 +87,13 @@ namespace FishMMO.Client.Security
 				}
 			}
 
-			lock (Sync)
+			lock (sync)
 			{
 				pins = rebuilt;
 				allowOnEmptyPins = allowOnEmpty;
 			}
 
-			Log.Debug(LogChannel, $"Configured {rebuilt.Count} TLS pin(s); allowOnEmpty={allowOnEmpty}.");
+			Log.Debug(logChannel, $"Configured {rebuilt.Count} TLS pin(s); allowOnEmpty={allowOnEmpty}.");
 		}
 
 		/// <summary>
@@ -110,7 +110,7 @@ namespace FishMMO.Client.Security
 		{
 			if (certificateDer == null || certificateDer.Length == 0)
 			{
-				Log.Warning(LogChannel, "Rejecting empty certificate payload.");
+				Log.Warning(logChannel, "Rejecting empty certificate payload.");
 				return false;
 			}
 
@@ -121,13 +121,13 @@ namespace FishMMO.Client.Security
 			}
 			catch (Exception ex)
 			{
-				Log.Warning(LogChannel, $"Failed to parse leaf certificate: {ex.Message}");
+				Log.Warning(logChannel, $"Failed to parse leaf certificate: {ex.Message}");
 				return false;
 			}
 
 			if (cert == null)
 			{
-				Log.Warning(LogChannel, "BouncyCastle returned a null certificate.");
+				Log.Warning(logChannel, "BouncyCastle returned a null certificate.");
 				return false;
 			}
 
@@ -136,7 +136,7 @@ namespace FishMMO.Client.Security
 			if (nowUtc < cert.NotBefore.ToUniversalTime() ||
 				nowUtc > cert.NotAfter.ToUniversalTime())
 			{
-				Log.Warning(LogChannel,
+				Log.Warning(logChannel,
 					$"Certificate outside validity window ({cert.NotBefore:o} → {cert.NotAfter:o}).");
 				return false;
 			}
@@ -148,13 +148,13 @@ namespace FishMMO.Client.Security
 			}
 			catch (Exception ex)
 			{
-				Log.Warning(LogChannel, $"Failed to compute SPKI hash: {ex.Message}");
+				Log.Warning(logChannel, $"Failed to compute SPKI hash: {ex.Message}");
 				return false;
 			}
 
 			HashSet<string> snapshot;
 			bool allowEmpty;
-			lock (Sync)
+			lock (sync)
 			{
 				snapshot = pins;
 				allowEmpty = allowOnEmptyPins;
@@ -169,19 +169,19 @@ namespace FishMMO.Client.Security
 					// once the operator has acknowledged the misconfiguration.
 					if (System.Threading.Interlocked.Exchange(ref tofuAcceptanceLogged, 1) == 0)
 					{
-						Log.Error(LogChannel,
+						Log.Error(logChannel,
 							"TLS pin set is empty — falling back to temporal-validity-only validation. " +
 							$"First accepted SPKI={spkiPin}. This is a MITM-vulnerable configuration; " +
 							"populate StreamingAssets/client-security.json with the production pins.");
 					}
 					else
 					{
-						Log.Warning(LogChannel,
+						Log.Warning(logChannel,
 							$"No pins configured; accepting on temporal validity only. SPKI={spkiPin}.");
 					}
 					return true;
 				}
-				Log.Error(LogChannel,
+				Log.Error(logChannel,
 					$"Rejecting certificate: no pins configured. Observed SPKI={spkiPin}. " +
 					"Call ClientCertificatePinning.Configure(...) during bootstrap.");
 				return false;
@@ -192,7 +192,7 @@ namespace FishMMO.Client.Security
 				return true;
 			}
 
-			Log.Warning(LogChannel,
+			Log.Warning(logChannel,
 				$"Pin mismatch. Observed SPKI={spkiPin}; expected one of [{string.Join(", ", snapshot)}].");
 			return false;
 		}

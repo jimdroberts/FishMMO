@@ -21,12 +21,12 @@ namespace FishMMO.Database.Npgsql
 		/// <summary>
 		/// Maximum time in milliseconds to wait for active contexts during disposal.
 		/// </summary>
-		private const int DisposeWaitTimeoutMs = 5000;
+		private const int disposeWaitTimeoutMs = 5000;
 
 		/// <summary>
 		/// Interval in milliseconds between polls when waiting for contexts to complete.
 		/// </summary>
-		private const int ShutdownPollIntervalMs = 50;
+		private const int shutdownPollIntervalMs = 50;
 
 		private int disposed;
 		private int shutdown;
@@ -267,7 +267,7 @@ namespace FishMMO.Database.Npgsql
 					return false;
 				}
 
-				await Task.Delay(ShutdownPollIntervalMs, cancellationToken).ConfigureAwait(false);
+				await Task.Delay(shutdownPollIntervalMs, cancellationToken).ConfigureAwait(false);
 			}
 
 			return true;
@@ -309,9 +309,9 @@ namespace FishMMO.Database.Npgsql
 			// Wait briefly for active contexts to complete (consistent with ShutdownGracefullyAsync behavior)
 			var elapsed = Stopwatch.StartNew();
 
-			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < DisposeWaitTimeoutMs)
+			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < disposeWaitTimeoutMs)
 			{
-				Thread.Sleep(ShutdownPollIntervalMs);
+				Thread.Sleep(shutdownPollIntervalMs);
 			}
 
 			performanceTracker.Dispose();
@@ -353,9 +353,9 @@ namespace FishMMO.Database.Npgsql
 
 			var elapsed = Stopwatch.StartNew();
 
-			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < DisposeWaitTimeoutMs)
+			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < disposeWaitTimeoutMs)
 			{
-				await Task.Delay(ShutdownPollIntervalMs).ConfigureAwait(false);
+				await Task.Delay(shutdownPollIntervalMs).ConfigureAwait(false);
 			}
 
 			performanceTracker.Dispose();

@@ -91,14 +91,13 @@ namespace FishMMO.Client
 			CoroutineRunner.Start(OnAwaitingConnectionReady(address, port, isWorldServer));
 		}
 
-		/// <summary>Attempts an immediate reconnect with exponential backoff + jitter.</summary>
-	public void TryReconnect()
-		{
-			// Compute and store the backoff delay. Update() decrements this each frame.
-			// Only proceed with the reconnect when the timer has elapsed (nextReconnect <= 0).
-			this.nextReconnect = ComputeReconnectDelay(ReconnectsAttempted);
-			if (this.nextReconnect > 0)
-				return;
+		/// <summary>Attempts a reconnect. The backoff delay is set in
+		/// <see cref="OnClientConnectionState"/> when the connection stops and counted
+		/// down in <see cref="Update"/>. This method is called by Update() when the
+		/// timer expires — it must NOT reset the delay or the reconnect will never fire.
+		/// </summary>
+		public void TryReconnect()
+			{
 			if (ReconnectsAttempted < MaxReconnectAttempts)
 			{
 				if (!string.IsNullOrEmpty(lastWorldAddress) && lastWorldPort != 0)
@@ -163,8 +162,13 @@ namespace FishMMO.Client
 					{
 						nextReconnect = ComputeReconnectDelay(ReconnectsAttempted);
 						OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
+						// Preserve CurrentConnectionType so CanReconnect
+						// returns true for subsequent retry attempts.
 					}
-					CurrentConnectionType = ServerConnectionType.None;
+					else
+					{
+						CurrentConnectionType = ServerConnectionType.None;
+					}
 					break;
 				case LocalConnectionState.Started:
 					OnConnectionSuccessful?.Invoke();

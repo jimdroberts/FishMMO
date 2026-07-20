@@ -24,10 +24,10 @@ namespace FishMMO.Auth.Implementation
 	/// </remarks>
 	public class ClientSrpData
 	{
-		private const string SrpSessionNull = "Srp session is null.";
-		private const string SrpSuccess = "Srp Successfully verified session.";
-		private const string SrpProofFailed = "Srp failed to generate proof.";
-		private const string SrpVerifyFailed = "Srp failed to verify session.";
+		private const string srpSessionNull = "Srp session is null.";
+		private const string srpSuccess = "Srp Successfully verified session.";
+		private const string srpProofFailed = "Srp failed to generate proof.";
+		private const string srpVerifyFailed = "Srp failed to verify session.";
 
 		/// <summary>
 		/// The SRP client instance used for authentication operations.
@@ -107,7 +107,7 @@ namespace FishMMO.Auth.Implementation
 			}
 			catch (SecurityException)
 			{
-				proof = SrpProofFailed;
+				proof = srpProofFailed;
 				return false;
 			}
 		}
@@ -122,19 +122,19 @@ namespace FishMMO.Auth.Implementation
 		{
 			if (Session == null)
 			{
-				result = SrpSessionNull;
+				result = srpSessionNull;
 				return false;
 			}
 			try
 			{
 				// Verifies the session using the client's ephemeral public value, session, and server proof.
 				SrpClient!.VerifySession(ClientEphemeral!.Public, Session, serverProof);
-				result = SrpSuccess;
+				result = srpSuccess;
 				return true;
 			}
 			catch (SecurityException)
 			{
-				result = SrpVerifyFailed;
+				result = srpVerifyFailed;
 				return false;
 			}
 		}

@@ -172,7 +172,7 @@ namespace FishMMO.Server.Implementation
 			StartCoroutine(NetHelper.FetchExternalIPAddress(OnFinalizeSetup));
 
 			// Guard against indefinite hang if the external IP service is unreachable.
-			// Falls back to loopback after ExternalIpFetchTimeoutSeconds so the server
+			// Falls back to loopback after externalIpFetchTimeoutSeconds so the server
 			// can start accepting local connections.
 			externalIpTimeoutCoroutine = StartCoroutine(ExternalIpFetchTimeout(OnFinalizeSetup));
 		}
@@ -182,19 +182,19 @@ namespace FishMMO.Server.Implementation
 		/// back to loopback. Prevents the server from hanging indefinitely at startup
 		/// when the IP-check service is unreachable.
 		/// </summary>
-		private const float ExternalIpFetchTimeoutSeconds = 30f;
+		private const float externalIpFetchTimeoutSeconds = 30f;
 
 		/// <summary>
 		/// Coroutine that fires <paramref name="onDone"/> with the loopback fallback
 		/// address if the external IP fetch does not complete within
-		/// <see cref="ExternalIpFetchTimeoutSeconds"/>.
+		/// <see cref="externalIpFetchTimeoutSeconds"/>.
 		/// </summary>
 		private System.Collections.IEnumerator ExternalIpFetchTimeout(System.Action<string> onDone)
 		{
-			yield return new WaitForSeconds(ExternalIpFetchTimeoutSeconds);
+			yield return new WaitForSeconds(externalIpFetchTimeoutSeconds);
 			if (hasShutdownFlag == 0)
 			{
-				Log.Warning("Server", $"External IP fetch timed out after {ExternalIpFetchTimeoutSeconds}s; falling back to loopback.");
+				Log.Warning("Server", $"External IP fetch timed out after {externalIpFetchTimeoutSeconds}s; falling back to loopback.");
 				usedFallbackAddress = true;
 				onDone("127.0.0.1");
 			}
