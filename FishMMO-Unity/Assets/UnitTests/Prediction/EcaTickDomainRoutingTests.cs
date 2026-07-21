@@ -10,9 +10,7 @@ using NUnit.Framework;
 using UnityEngine;
 using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
-#if !UNITY_SERVER
 using TMPro;
-#endif
 
 namespace FishMMO.UnitTests
 {
@@ -393,10 +391,12 @@ namespace FishMMO.UnitTests
 			public bool IsSpawned => true;
 			public int Flags { get; set; }
 
+		public TextMeshPro CharacterNameLabel { get; set; }
+		public TextMeshPro CharacterGuildLabel { get; set; }
+
+		public Transform MeshRoot => null;
+
 #if !UNITY_SERVER
-			public Transform MeshRoot => null;
-			public TextMeshPro CharacterNameLabel { get; set; }
-			public TextMeshPro CharacterGuildLabel { get; set; }
 			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
 			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender) { }
 #endif

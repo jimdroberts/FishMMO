@@ -15,11 +15,12 @@ namespace FishMMO.Server.Implementation
 	/// <summary>
 	/// Wraps FishNet NetworkManager with a clean abstraction for server orchestration.
 	/// </summary>
-	public class FishNetNetworkWrapper : INetworkManagerWrapper
+	public class FishNetNetworkWrapper : INetworkManagerWrapper, IDisposable
 	{
 		private readonly IServerConfiguration config;
 		private readonly MonoBehaviour coroutineHost;
 		private Coroutine awaitingConnectionCoroutine;
+		private bool certificatesValid;
 
 		/// <summary>
 		/// Gets the network manager wrapper instance.
@@ -68,6 +69,15 @@ namespace FishMMO.Server.Implementation
 				}
 
 				NetworkManager.ServerManager.StopConnection(true);
+			}
+		}
+
+		public void Dispose()
+		{
+			if (awaitingConnectionCoroutine != null && coroutineHost != null)
+			{
+				coroutineHost.StopCoroutine(awaitingConnectionCoroutine);
+				awaitingConnectionCoroutine = null;
 			}
 		}
 
@@ -170,7 +180,8 @@ namespace FishMMO.Server.Implementation
 						}
 						wt.SetPort(port);
 						wt.SetMaximumClients(maxClients);
-						ConfigureWebTransport(wt);
+						if (certificatesValid)
+							ConfigureWebTransport(wt);
 						configured = true;
 					}
 				}
@@ -187,7 +198,8 @@ namespace FishMMO.Server.Implementation
 				}
 				transport.SetPort(port);
 				transport.SetMaximumClients(maxClients);
-				ConfigureWebTransport(wt);
+				if (certificatesValid)
+					ConfigureWebTransport(wt);
 			}
 		}
 
@@ -195,6 +207,42 @@ namespace FishMMO.Server.Implementation
 		{
 			// Certificate paths from .cfg file — fully configurable per deployment.
 			// Falls back to platform defaults if not specified in config.
+			// Environment variables FISHMMO_CERT_PATH and FISHMMO_KEY_PATH take
+			// precedence over config, allowing Docker and CI deployments to inject
+			// paths without modifying configuration files.
+			string envCertPath = System.Environment.GetEnvironmentVariable("FISHMMO_CERT_PATH");
+			string envKeyPath  = System.Environment.GetEnvironmentVariable("FISHMMO_KEY_PATH");
+
+			string certPath;
+			string keyPath;
+			if (!string.IsNullOrWhiteSpace(envCertPath) && !string.IsNullOrWhiteSpace(envKeyPath))
+			{
+				certPath = envCertPath;
+				keyPath  = envKeyPath;
+
+				if (!System.IO.File.Exists(certPath))
+				{
+					Log.Error("FishNetNetworkWrapper", $"Certificate file not found (from env): {certPath}");
+					certificatesValid = false;
+					return;
+				}
+				if (!System.IO.File.Exists(keyPath))
+				{
+					Log.Error("FishNetNetworkWrapper", $"Private key file not found (from env): {keyPath}");
+					certificatesValid = false;
+					return;
+				}
+
+				wt.SetCertificatePath(certPath);
+				wt.SetPrivateKeyPath(keyPath);
+
+				Log.Debug("FishNetNetworkWrapper",
+					$"WebTransport configured: cert={certPath}, key={keyPath}");
+				certificatesValid = true;
+				return;
+			}
+
+			// No env vars set — fall back to config / platform defaults.
 #if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
 			string defaultCertPath = "/etc/fishmmo/certs/fullchain.pem";
 			string defaultKeyPath  = "/etc/fishmmo/certs/privkey.pem";
@@ -208,20 +256,29 @@ namespace FishMMO.Server.Implementation
 			string defaultCertPath = "certs/fullchain.pem";
 			string defaultKeyPath  = "certs/privkey.pem";
 #endif
-			string certPath = config.GetString("CertificatePath", defaultCertPath);
-			string keyPath  = config.GetString("PrivateKeyPath", defaultKeyPath);
+			certPath = config.GetString("CertificatePath", defaultCertPath);
+			keyPath  = config.GetString("PrivateKeyPath", defaultKeyPath);
 
 			// Validate certificate files exist before passing paths to native.
 			if (!System.IO.File.Exists(certPath))
-				throw new System.IO.FileNotFoundException($"Certificate file not found: {certPath}");
+			{
+				Log.Error("FishNetNetworkWrapper", $"Certificate file not found: {certPath}. WebTransport will be skipped.");
+				certificatesValid = false;
+				return;
+			}
 			if (!System.IO.File.Exists(keyPath))
-				throw new System.IO.FileNotFoundException($"Private key file not found: {keyPath}");
+			{
+				Log.Error("FishNetNetworkWrapper", $"Private key file not found: {keyPath}. WebTransport will be skipped.");
+				certificatesValid = false;
+				return;
+			}
 
 			wt.SetCertificatePath(certPath);
 			wt.SetPrivateKeyPath(keyPath);
 
 			Log.Debug("FishNetNetworkWrapper",
 				$"WebTransport configured: cert={certPath}, key={keyPath}");
+			certificatesValid = true;
 		}
 
 		/// <summary>

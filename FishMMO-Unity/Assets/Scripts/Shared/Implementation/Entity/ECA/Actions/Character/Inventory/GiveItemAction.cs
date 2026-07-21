@@ -43,18 +43,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Assign a unique ID from the server's ID allocator before creating the item.
-			// Items without unique IDs risk database primary-key collisions and are not
-			// persisted correctly.
-			long itemID = playerCharacter.IDAllocator?.Next() ?? 0;
-			if (itemID <= 0)
-			{
-				Log.Warning("GiveItemAction", "Unable to allocate item ID; skipping item grant.");
-				return;
-			}
-
-			int seed = itemID > 0 ? (int)(itemID & 0x7FFFFFFF) : 0;
-			Item item = new Item(itemID, seed, ItemTemplate, (uint)Amount);
+			Item item = new Item(ItemTemplate, (uint)Amount);
 			inventoryController.TryAddItem(item, out _);
 #endif
 		}

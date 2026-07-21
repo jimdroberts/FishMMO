@@ -38,7 +38,6 @@ namespace FishMMO.Client
 					{
 						PetNameLabel.text = petController.Pet.GameObject.name;
 
-#if !UNITY_SERVER
 						if (petController.Pet.CharacterNameLabel != null)
 						{
 							petController.Pet.CharacterGuildLabel.gameObject.SetActive(true);
@@ -47,7 +46,6 @@ namespace FishMMO.Client
 						{
 							petController.Pet.CharacterGuildLabel.gameObject.SetActive(true);
 						}
-#endif
 					}
 					if (petController.Pet.TryGet(out ICharacterAttributeController attributeController) &&
 						PetHealth != null)
@@ -101,7 +99,6 @@ namespace FishMMO.Client
 			{
 				PetNameLabel.text = pet.GameObject.name;
 
-#if !UNITY_SERVER
 				if (pet.CharacterNameLabel != null)
 				{
 					pet.CharacterNameLabel.gameObject.SetActive(true);
@@ -110,7 +107,6 @@ namespace FishMMO.Client
 				{
 					pet.CharacterGuildLabel.gameObject.SetActive(true);
 				}
-#endif
 			}
 			if (pet.TryGet(out ICharacterAttributeController attributeController) &&
 				PetHealth != null)

@@ -80,7 +80,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Current connection state of the server.
 		/// </summary>
-		private ConnectionState serverState;
+		private volatile ConnectionState serverState;
 
 		/// <summary>
 		/// Gets the current connection state of the server.
@@ -212,18 +212,6 @@ namespace FishMMO.Server.Implementation
 		private bool usedFallbackAddress = false;
 
 		/// <summary>
-		/// Returns true if <paramref name="address"/> is a loopback address,
-		/// covering 127.0.0.1, ::1, 127.0.1.1, localhost, and all other variants
-		/// that IPAddress.IsLoopback detects — not just the two magic strings.
-		/// </summary>
-		private static bool IsLoopbackAddress(string address)
-		{
-			if (string.IsNullOrWhiteSpace(address)) return false;
-			if (string.Equals(address, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
-			return System.Net.IPAddress.TryParse(address, out var ip) && System.Net.IPAddress.IsLoopback(ip);
-		}
-
-		/// <summary>
 		/// Finalizes server setup after fetching the external IP address.
 		/// </summary>
 		/// <param name="remoteAddress">The external remote address of the server.</param>
@@ -264,7 +252,7 @@ namespace FishMMO.Server.Implementation
 			// This prevents a production server from registering loopback as its public IP.
 			// Uses IPAddress.TryParse + IsLoopback to catch all loopback variants,
 			// not just the two magic strings "127.0.0.1" and "localhost".
-			if (IsLoopbackAddress(remoteAddress))
+			if (NetHelper.IsLoopbackAddress(remoteAddress))
 			{
 				string configuredAddress = Configuration.GetString("Address", null);
 				if (!string.IsNullOrWhiteSpace(configuredAddress) && configuredAddress != "127.0.0.1" && configuredAddress != "localhost")
@@ -480,8 +468,8 @@ namespace FishMMO.Server.Implementation
 				authenticator.ShutdownWorkers();
 			}
 
-			// 2. Start coroutine-based drain — polls for worker teardown, then
-			//    stops transport and tears down remaining subsystems.
+			// 2. Start coroutine-based drain — polls for worker teardown before
+			//    proceeding to steps 3 and 4 (transport stop and subsystem teardown).
 			//    Avoids Thread.Sleep() blocking the Unity main thread.
 			StartCoroutine(DrainWorkersAndFinishShutdown());
 		}

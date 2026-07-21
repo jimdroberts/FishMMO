@@ -196,7 +196,6 @@ namespace FishMMO.Client
 					{
 						return;
 					}
-#if !UNITY_SERVER
 					if (character.CharacterNameLabel != null)
 					{
 						character.CharacterNameLabel.gameObject.SetActive(false);
@@ -205,7 +204,6 @@ namespace FishMMO.Client
 					{
 						character.CharacterGuildLabel.gameObject.SetActive(false);
 					}
-#endif
 				}
 			}
 
@@ -337,7 +335,6 @@ namespace FishMMO.Client
 			// Enable the character name labels
 			if (character != null)
 			{
-#if !UNITY_SERVER
 				if (Character.TryGet(out IFactionController factionController) &&
 					character.TryGet(out IFactionController targetFactionController))
 				{
@@ -353,7 +350,6 @@ namespace FishMMO.Client
 				{
 					character.CharacterGuildLabel.gameObject.SetActive(true);
 				}
-#endif
 			}
 			else if (interactable != null) // Otherwise display an overhead title for interactables
 			{

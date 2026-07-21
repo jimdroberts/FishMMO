@@ -278,6 +278,21 @@ namespace FishMMO.Server.Implementation
 			// Process connection token for real-IP recovery.
 			// When behind an L4 UDP proxy, conn.GetAddress() returns 127.0.0.1.
 			// The token bridges the real IP from the HTTP layer into the QUIC layer.
+			//
+			// NOTE: Fire-and-forget by design. Awaiting ProcessConnectionTokenAsync
+			// would block the handshake on DB latency for every connection, adding
+			// unnecessary RTT and reducing throughput under load.
+			//
+			// The compensating controls for this fire-and-forget design are:
+			//   1. Rate limiting may briefly use the proxy IP (127.0.0.1) for the
+			//      first packet until the token resolves the real IP. This is
+			//      acceptable because the token is bound to a short TTL and the
+			//      connection ID is unique to each handshake, preventing a proxy-IP
+			//      collision from allowing abuse.
+			//   2. useConnectionIdForRateLimit=true (configured on this authenticator)
+			//      keys rate limits against the FishNet ClientId instead of the
+			//      remote IP. This is the recommended setting when all clients are
+			//      behind a trusted reverse proxy, eliminating the window entirely.
 			if (!string.IsNullOrEmpty(msg.ConnectionToken))
 			{
 				_ = ProcessConnectionTokenAsync(conn, msg.ConnectionToken);

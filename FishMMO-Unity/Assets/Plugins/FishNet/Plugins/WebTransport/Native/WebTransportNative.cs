@@ -245,6 +245,10 @@ namespace FishNet.Transporting.WebTransport.Native
 		}
 
 #if !UNITY_WEBGL || UNITY_EDITOR
+		// Native binary availability (as of 2026-07):
+		//   linux_x86_64:  ✅ libfishmmo_webtransport.so
+		//   windows_x86_64: ❌ fishmmo_webtransport.dll (build with build_windows.ps1)
+		//   mac_x86_64:     ❌ libfishmmo_webtransport.dylib (build with build_macos.sh)
 		private const string LIB = "fishmmo_webtransport";
 
 		// ── P/Invoke marshaling ───────────────────────────────

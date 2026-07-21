@@ -352,11 +352,8 @@ namespace FishMMO.Client
 
 #if !UNITY_EDITOR
 			// Set screen resolution for non-editor builds
-			Screen.SetResolution(this.DefaultScreenWidth, this.DefaultScreenHeight, FullScreenMode.Windowed, new RefreshRate()
-			{
-				numerator = 60,
-				denominator = 1,
-			});
+			try { Screen.SetResolution(this.DefaultScreenWidth, this.DefaultScreenHeight, FullScreenMode.Windowed, Screen.currentResolution.refreshRateRatio); }
+			catch { Screen.SetResolution(this.DefaultScreenWidth, this.DefaultScreenHeight, FullScreenMode.Windowed, new RefreshRate() { numerator = 60, denominator = 1 }); }
 #endif
 			string versionString = !string.IsNullOrEmpty(MainBootstrapSystem.GameVersion)
 				? MainBootstrapSystem.GameVersion

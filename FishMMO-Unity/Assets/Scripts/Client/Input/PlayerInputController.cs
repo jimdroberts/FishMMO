@@ -16,7 +16,6 @@ namespace FishMMO.Client
 	/// </summary>
 	public class PlayerInputController : MonoBehaviour
 	{
-#if !UNITY_SERVER
 		// ── Static mouse-mode & global input state ─────────────────────────
 
 		/// <summary>
@@ -487,35 +486,33 @@ namespace FishMMO.Client
 
 			IPlayerCharacter capturedTarget = targetPlayer;
 
-			List<(string label, Action callback)> entries = new List<(string label, Action callback)>()
+			var entries = new List<(string label, Action callback)>();
+			entries.Add(("Inspect", new Action(() =>
 			{
-				("Inspect", () =>
+				if (UIManager.TryGet("UIInspect", out UIInspect uiInspect))
 				{
-					if (UIManager.TryGet("UIInspect", out UIInspect uiInspect))
-					{
-						uiInspect.Inspect(capturedTarget);
-					}
-				}),
-				("Add Friend", () =>
+					uiInspect.Inspect(capturedTarget);
+				}
+			})));
+			entries.Add(("Add Friend", new Action(() =>
+			{
+				Client.Broadcast(new FriendAddNewBroadcast()
 				{
-					Client.Broadcast(new FriendAddNewBroadcast()
-					{
-						CharacterID = targetCharacterID,
-					}, Channel.Reliable);
-				}),
-				("Invite to Party", () =>
+					CharacterID = targetCharacterID,
+				}, Channel.Reliable);
+			})));
+			entries.Add(("Invite to Party", new Action(() =>
+			{
+				Client.Broadcast(new PartyInviteBroadcast()
 				{
-					Client.Broadcast(new PartyInviteBroadcast()
-					{
-						InviterCharacterID = Character.ID,
-						TargetCharacterID = targetCharacterID,
-					}, Channel.Reliable);
-				}),
-				("Trade", () =>
-				{
-					Log.Debug("PlayerInputController", "Trade is not yet implemented.");
-				}),
-			};
+					InviterCharacterID = Character.ID,
+					TargetCharacterID = targetCharacterID,
+				}, Channel.Reliable);
+			})));
+			entries.Add(("Trade", new Action(() =>
+			{
+				Log.Debug("PlayerInputController", "Trade is not yet implemented.");
+			})));
 
 			contextMenu.Open(entries);
 		}
@@ -720,6 +717,5 @@ namespace FishMMO.Client
 				&& !string.IsNullOrEmpty(json))
 				Controls.LoadBindingOverridesFromJson(json);
 		}
-#endif
 	}
 }

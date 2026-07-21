@@ -229,6 +229,8 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Returns the current login identifier (username or email) if still set.
 		/// Returns null after credentials are cleared (post-SRP proof or disconnect).
+		/// Note: .NET strings are immutable and cannot be zeroed, so the identifier
+		/// remains in managed memory until garbage collected.
 		/// </summary>
 		public string PendingLoginIdentifier => core?.PendingLoginIdentifier;
 

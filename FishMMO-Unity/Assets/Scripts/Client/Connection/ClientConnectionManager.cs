@@ -3,6 +3,7 @@ using System.Collections;
 using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Logging;
+using FishMMO.Shared;
 using UnityEngine;
 
 namespace FishMMO.Client
@@ -101,7 +102,7 @@ namespace FishMMO.Client
 			CoroutineRunner.Start(OnAwaitingConnectionReady(address, port, isWorldServer));
 		}
 
-		/// <summary>Attempts a reconnect. The backoff delay is set in
+		/// <summary>Attempts a reconnect with exponential backoff. The backoff delay is set in
 		/// <see cref="OnClientConnectionState"/> when the connection stops and counted
 		/// down in <see cref="Update"/>. This method is called by Update() when the
 		/// timer expires — it must NOT reset the delay or the reconnect will never fire.
@@ -125,7 +126,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Cancels pending reconnect and fires OnReconnectFailed immediately.</summary>
-	public void CancelReconnect() { OnReconnectFailed?.Invoke(); }
+	public void CancelReconnect() { ReconnectsAttempted = 0; nextReconnect = -1; OnReconnectFailed?.Invoke(); }
 
 		/// <summary>Forces the connection closed and prevents auto-reconnect until reset.</summary>
 	public void ForceDisconnect()
@@ -137,6 +138,7 @@ namespace FishMMO.Client
 		/// <summary>Resets all reconnect state: attempt count, connection type, stored address.</summary>
 	public void ResetReconnectState()
 		{
+			forceDisconnect = false;
 			ReconnectsAttempted = 0; nextReconnect = -1;
 			CurrentConnectionType = ServerConnectionType.None;
 			lastWorldAddress = ""; lastWorldPort = 0;
@@ -207,6 +209,7 @@ namespace FishMMO.Client
 					if (ClientState != LocalConnectionState.Stopped)
 					{
 						Log.Error("ClientConnection", "Forced connection stop timed out; aborting connect.");
+						forceDisconnect = false;
 						System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 						yield break;
 					}
@@ -230,21 +233,4 @@ namespace FishMMO.Client
 		}
 	}
 
-	/// <summary>Minimal MonoBehaviour for running coroutines from non-MonoBehaviour classes.</summary>
-	internal class CoroutineRunner : MonoBehaviour
-	{
-		private static CoroutineRunner instance;
-		/// <summary>Starts a coroutine on a persistent hidden GameObject (created on first call).</summary>
-		/// <param name="routine">The coroutine to start.</param>
-		public static void Start(IEnumerator routine)
-		{
-			if (instance == null)
-			{
-				var go = new GameObject("CoroutineRunner") { hideFlags = HideFlags.HideAndDontSave };
-				DontDestroyOnLoad(go);
-				instance = go.AddComponent<CoroutineRunner>();
-			}
-			instance.StartCoroutine(routine);
-		}
-	}
 }

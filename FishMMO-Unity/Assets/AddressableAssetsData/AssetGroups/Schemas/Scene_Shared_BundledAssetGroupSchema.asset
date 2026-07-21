@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Scene_Shared_BundledAssetGroupSchema
   m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema
   m_Group: {fileID: 11400000, guid: 1f533a41c54f946d18968c769e1c5533, type: 2}
+  m_SchemaIsEnabled: 1
   m_InternalBundleIdMode: 1
   m_Compression: 1
   m_IncludeAddressInCatalog: 1

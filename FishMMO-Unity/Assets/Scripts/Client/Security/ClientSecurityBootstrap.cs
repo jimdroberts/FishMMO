@@ -35,6 +35,10 @@ namespace FishMMO.Client.Security
 		/// Compile-time fallback pins (base64 SHA-256(SPKI)). Populate these
 		/// with the SPKI hashes of <c>api.fishmmo.com</c> + at least one backup
 		/// key before shipping a release build.
+		/// To generate pins for production:
+		///   1. Get the server's TLS certificate (PEM format)
+		///   2. Call ClientCertificatePinning.ComputeSpkiSha256Base64(certDerBytes)
+		///   3. Add at least 2 pins (active + backup key) for rotation support
 		/// </summary>
 		private static readonly string[] defaultPins = Array.Empty<string>();
 
@@ -71,9 +75,9 @@ namespace FishMMO.Client.Security
 			// (WebGL).  We defer to a coroutine-driven non-blocking load instead, and
 			// fall through to compile-time defaults synchronously only if the coroutine
 			// helper is unavailable.
-			if (CoroutineHelper.IsAvailable)
+			if (true)
 			{
-				CoroutineHelper.Start(LoadFromStreamingAssetsCoroutine());
+				CoroutineRunner.Start(LoadFromStreamingAssetsCoroutine());
 				// The coroutine handles both success and failure paths itself
 				// (falling through to compile-time defaults on failure).
 				// Without this early return, the empty defaultPins would be
@@ -221,32 +225,5 @@ namespace FishMMO.Client.Security
 		/// not directly filesystem-accessible (Android, WebGL) to load pin config
 		/// asynchronously via UnityWebRequest without blocking the main thread.
 		/// </summary>
-		private class CoroutineHelper : MonoBehaviour
-		{
-			private static CoroutineHelper instance;
-
-			/// <summary>
-			/// Returns true if the coroutine helper can be created (always true on
-			/// Unity standalone / mobile / WebGL player builds).
-			/// </summary>
-			public static bool IsAvailable => true;
-
-			/// <summary>
-			/// Starts a coroutine on a persistent hidden GameObject.
-			/// </summary>
-			public static void Start(System.Collections.IEnumerator routine)
-			{
-				if (instance == null)
-				{
-					var go = new GameObject("ClientSecurityBootstrap-CoroutineHelper")
-					{
-						hideFlags = HideFlags.HideAndDontSave
-					};
-					GameObject.DontDestroyOnLoad(go);
-					instance = go.AddComponent<CoroutineHelper>();
-				}
-				instance.StartCoroutine(routine);
-			}
-		}
 	}
 }

@@ -18,6 +18,12 @@ QUIC/HTTP3 transport for FishMMO via FishNet.
 - **Channel 0 (Reliable)**: WebTransport bidirectional streams
 - **Channel 1 (Unreliable)**: QUIC DATAGRAM frames
 
+## Production Deployment
+
+- **NGINX L4 UDP proxy** fronts all game servers in production. Clients connect to the NGINX public endpoint, which forwards raw UDP to the correct backend game server on loopback. This allows multiple game server processes to share a single public port and provides a clean layer-4 boundary.
+- **TLS termination** is handled at each game server process (not at NGINX). Each game server loads its own certificate and private key, terminating the QUIC/TLS session directly. NGINX operates as a plain UDP load balancer without decrypting the traffic.
+- **Configuration** per-server TLS settings (CertificatePath, PrivateKeyPath) are set in the server `.cfg` files (see below).
+
 ## Configuration
 
 All transport settings are configured via server `.cfg` files:

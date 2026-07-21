@@ -3,9 +3,7 @@ using UnityEngine;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Managing.Predicting;
-#if !UNITY_SERVER
 using TMPro;
-#endif
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -98,16 +96,16 @@ namespace FishMMO.Shared
 			return Flags.IsFlagged(flags);
 		}
 
-#if !UNITY_SERVER
-		/// <inheritdoc/>
-		public Transform MeshRoot => null;
-
 		/// <inheritdoc/>
 		public TextMeshPro CharacterNameLabel { get; set; }
 
 		/// <inheritdoc/>
 		public TextMeshPro CharacterGuildLabel { get; set; }
 
+		/// <inheritdoc/>
+		public Transform MeshRoot => null;
+
+#if !UNITY_SERVER
 		/// <inheritdoc/>
 		public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
 

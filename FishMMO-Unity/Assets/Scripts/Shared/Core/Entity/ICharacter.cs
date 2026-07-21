@@ -3,9 +3,7 @@ using UnityEngine;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Managing.Predicting;
-#if !UNITY_SERVER
 using TMPro;
-#endif
 
 namespace FishMMO.Shared.Core
 {
@@ -80,11 +78,6 @@ namespace FishMMO.Shared.Core
 		/// <returns>True if the flags are enabled; otherwise, false.</returns>
 		bool IsFlagged(CharacterFlags flags);
 
-#if !UNITY_SERVER
-		/// <summary>
-		/// The root transform for the character's mesh/model hierarchy.
-		/// </summary>
-		Transform MeshRoot { get; }
 		/// <summary>
 		/// The label displaying the character's name above their model.
 		/// </summary>
@@ -93,6 +86,13 @@ namespace FishMMO.Shared.Core
 		/// The label displaying the character's guild above their model.
 		/// </summary>
 		TextMeshPro CharacterGuildLabel { get; set; }
+
+		/// <summary>
+		/// The root transform for the character's mesh/model hierarchy.
+		/// </summary>
+		Transform MeshRoot { get; }
+
+#if !UNITY_SERVER
 		/// <summary>
 		/// Instantiates the character's race model prefab at the specified index and attaches it to the mesh root.
 		/// </summary>

@@ -65,6 +65,12 @@ namespace FishNet.Transporting.WebTransport.Server
 		private SafeServerHandle serverHandle;
 
 		/// <summary>
+		/// Maximum number of queued incoming events to prevent native heap exhaustion
+		/// from a flood of incoming packets.
+		/// </summary>
+		private const int MaxIncomingEvents = 10000;
+
+		/// <summary>
 		/// Thread-safe queue for events arriving from native callbacks.
 		/// Drained on the Unity main thread during IterateIncoming.
 		/// </summary>
@@ -473,6 +479,14 @@ namespace FishNet.Transporting.WebTransport.Server
 				}
 			}
 
+			if (this.incomingEvents.Count >= MaxIncomingEvents)
+			{
+				transport.NetworkManager?.LogWarning("[WebTransport Server] Incoming event queue full; dropping connect event.");
+				if (unmanagedAddr != IntPtr.Zero)
+					System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedAddr);
+				return;
+			}
+
 			this.incomingEvents.Enqueue(() =>
 			{
 				try
@@ -517,6 +531,12 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <param name="errorCode">Zero for clean disconnect; negative for error.</param>
 		private void HandleNativeDisconnect(IntPtr context, ulong nativeConnectionId, int errorCode)
 		{
+			if (this.incomingEvents.Count >= MaxIncomingEvents)
+			{
+				transport.NetworkManager?.LogWarning("[WebTransport Server] Incoming event queue full; dropping disconnect event.");
+				return;
+			}
+
 			this.incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
@@ -566,6 +586,13 @@ namespace FishNet.Transporting.WebTransport.Server
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
 
+			if (this.incomingEvents.Count >= MaxIncomingEvents)
+			{
+				transport.NetworkManager?.LogWarning("[WebTransport Server] Incoming event queue full; dropping stream data.");
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
+				return;
+			}
+
 			this.incomingEvents.Enqueue(() =>
 			{
 				try
@@ -613,6 +640,13 @@ namespace FishNet.Transporting.WebTransport.Server
 			unsafe
 			{
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
+			}
+
+			if (this.incomingEvents.Count >= MaxIncomingEvents)
+			{
+				transport.NetworkManager?.LogWarning("[WebTransport Server] Incoming event queue full; dropping datagram data.");
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
+				return;
 			}
 
 			this.incomingEvents.Enqueue(() =>

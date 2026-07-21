@@ -1,13 +1,15 @@
 using UnityEngine.Networking;
 using System;
 using System.Collections;
+using System.Net;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// A static utility class providing network-related helper methods, such as fetching the external IP address.
-	/// IP address and hostname validation is delegated to the <see cref="Authentication.IsAddressValid(string)"/> method.
+	/// A static utility class providing network-related helper methods, such as fetching the external IP address
+	/// and validating loopback addresses. IP address and hostname validation is delegated to the
+	/// <see cref="Authentication.IsAddressValid(string)"/> method.
 	/// </summary>
 	public static class NetHelper
 	{
@@ -66,7 +68,22 @@ namespace FishMMO.Shared
 						onError?.Invoke("NetHelper: Received string is not a valid IP address format.");
 					}
 				}
-			}
+
+		}
+		}
+
+		/// <summary>
+		/// Returns true if <paramref name="address"/> is a loopback address,
+		/// covering 127.0.0.1, ::1, localhost, and all other variants
+		/// that <see cref="IPAddress.IsLoopback"/> detects.
+		/// </summary>
+		/// <param name="address">The address string to check.</param>
+		/// <returns>True if the address is a loopback address.</returns>
+		public static bool IsLoopbackAddress(string address)
+		{
+			if (string.IsNullOrWhiteSpace(address)) return false;
+			if (string.Equals(address, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
+			return IPAddress.TryParse(address, out var ip) && IPAddress.IsLoopback(ip);
 		}
 	}
 }

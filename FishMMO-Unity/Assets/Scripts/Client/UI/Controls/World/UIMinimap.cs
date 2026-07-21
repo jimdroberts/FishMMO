@@ -61,7 +61,6 @@ namespace FishMMO.Client
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
-#if !UNITY_SERVER
 			if (Character == null || Character.MeshRoot == null)
 			{
 				Log.Warning("UIMinimap", "Character or Character.MeshRoot is null on OnPostSetCharacter.");
@@ -73,7 +72,6 @@ namespace FishMMO.Client
 			newPosition.y = 1000.0f;
 
 			MinimapCamera.transform.position = newPosition;
-#endif
 		}
 
 		/// <summary>
@@ -89,7 +87,6 @@ namespace FishMMO.Client
 		/// </summary>
 		void LateUpdate()
 		{
-#if !UNITY_SERVER
 			if (Character == null || Character.MeshRoot == null || MinimapCamera == null)
 			{
 				return;
@@ -100,7 +97,6 @@ namespace FishMMO.Client
 			newPosition.y = 1000.0f;
 
 			MinimapCamera.transform.position = newPosition;
-#endif
 		}
 
 		/// <summary>

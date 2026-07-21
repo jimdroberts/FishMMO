@@ -49,6 +49,12 @@ namespace FishNet.Transporting.WebTransport.Client
 		private int stopGuard = 0;
 
 		/// <summary>
+		/// Maximum number of queued incoming events to prevent native heap exhaustion
+		/// from a flood of incoming packets.
+		/// </summary>
+		private const int MaxIncomingEvents = 10000;
+
+		/// <summary>
 		/// Thread-safe queue for events arriving from native callbacks.
 		/// Drained on the Unity main thread during IterateIncoming.
 		/// </summary>
@@ -362,6 +368,11 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// <param name="context">User-supplied context pointer.</param>
 		private void HandleNativeConnect(IntPtr context)
 		{
+			if (incomingEvents.Count >= MaxIncomingEvents)
+			{
+				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping connect event.");
+				return;
+			}
 			incomingEvents.Enqueue(() =>
 			{
 				base.SetConnectionState(LocalConnectionState.Started, false);
@@ -377,10 +388,15 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// <param name="errorCode">Zero for clean disconnect; negative for error.</param>
 		private void HandleNativeDisconnect(IntPtr context, int errorCode)
 		{
+			if (incomingEvents.Count >= MaxIncomingEvents)
+			{
+				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping disconnect event.");
+				return;
+			}
 			incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
-					LogTransportWarning($"[WebTransport Client] Disconnected: {WebTransportNative.ErrorString(errorCode)}");
+					LogTransportWarning("[WebTransport Client] Disconnected: " + WebTransportNative.ErrorString(errorCode));
 				StopConnection();
 			});
 		}
@@ -413,6 +429,13 @@ namespace FishNet.Transporting.WebTransport.Client
 			unsafe
 			{
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
+			}
+			
+			if (incomingEvents.Count >= MaxIncomingEvents)
+			{
+				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping stream data.");
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
+				return;
 			}
 			
 			incomingEvents.Enqueue(() =>
@@ -459,6 +482,13 @@ namespace FishNet.Transporting.WebTransport.Client
 			unsafe
 			{
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
+			}
+			
+			if (incomingEvents.Count >= MaxIncomingEvents)
+			{
+				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping datagram data.");
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
+				return;
 			}
 			
 			incomingEvents.Enqueue(() =>

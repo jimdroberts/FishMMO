@@ -1,14 +1,23 @@
 /*
- * DatabaseHealthService — Reserved for future Unity integration.
+ * DatabaseHealthService — Reference implementation for future Unity integration.
  *
- * This file is entirely commented out because the Unity-side server build
- * does not currently include a DatabaseHealthService MonoBehaviour.
- * The implementation is preserved here to avoid losing the design work and
- * to serve as a reference when Unity-side database health monitoring is needed.
+ * STATUS: Intentionally commented out. This file lives in the FishMMO-Database
+ * .NET Standard 2.1 project which CANNOT reference UnityEngine.dll
+ * (MonoBehaviour, [SerializeField], Debug, etc. are Unity-only APIs).
  *
- * To activate: remove the enclosing /* ... *&#47; block and ensure all referenced
- * types (HealthCheckResult, PoolHealthResult, etc.) are accessible from the
- * FishMMO-Database assembly when built for Unity.
+ * When Unity-side database health monitoring is needed:
+ *   1. Move this file to the Unity project:
+ *      Assets/Scripts/Server/Implementation/DatabaseHealthService.cs
+ *   2. Remove the enclosing comment block
+ *   3. Ensure FishMMO-Database assembly is referenced by the Unity server asmdef
+ *
+ * The FishMMO-Database library already includes the full health monitoring
+ * infrastructure (DatabaseHealthMonitor, PoolHealthResult, MetricsSummary, etc.)
+ * accessible via IDatabase.HealthMonitor and IDatabase.MetricsTracker.
+ * This MonoBehaviour is a Unity-specific bridge that invokes those APIs on
+ * Unity's main thread via InvokeRepeating for inspector-visible status.
+ *
+ * Do NOT delete this file — it contains complete, reviewed production code.
  */
 
 /*using System;

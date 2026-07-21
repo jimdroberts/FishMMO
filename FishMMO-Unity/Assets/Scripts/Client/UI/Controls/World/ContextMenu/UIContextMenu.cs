@@ -143,7 +143,6 @@ namespace FishMMO.Client
 			return newButton;
 		}
 
-#if !UNITY_SERVER
 		/// <summary>
 		/// Closes the context menu when clicking outside of it.
 		/// </summary>
@@ -161,6 +160,5 @@ namespace FishMMO.Client
 				Hide();
 			}
 		}
-#endif
 	}
 }

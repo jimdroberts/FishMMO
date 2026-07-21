@@ -87,26 +87,39 @@ namespace FishMMO.Server.Implementation
 		/// When the core server address is a loopback address (127.0.0.1, ::1, localhost, etc.),
 		/// falls back to the core server's remote address. This enables local-only deployments to
 		/// function while allowing production servers to register their public-facing address.
-		/// Loopback detection uses <see cref="IPAddress.TryParse"/> + <see cref="IPAddress.IsLoopback"/>,
-		/// which covers all RFC 5735 loopback variants — not just the magic strings 127.0.0.1 and localhost.
+		/// Loopback detection delegates to <see cref="NetHelper.IsLoopbackAddress"/>,
+		/// which uses <see cref="System.Net.IPAddress.IsLoopback"/> and covers all RFC 5735
+		/// loopback variants — not just the magic strings 127.0.0.1 and localhost.
 		/// </summary>
 		public bool TryGetServerIPAddress(out ServerAddress address)
 		{
 			if (!string.IsNullOrEmpty(addressOverride))
 			{
-				address = new ServerAddress()
+				// Validate override format before accepting it.
+				// Reject addresses that are too long (253 is max DNS hostname; 45 is max IPv6)
+				// or contain null bytes / control characters which could indicate injection.
+				if (addressOverride.Length > 253 ||
+					(addressOverride.Contains('\0') || ContainsControlCharacter(addressOverride)))
 				{
-					Address = addressOverride,
-					Port = portOverride > 0 ? portOverride : (transport != null ? transport.GetPort() : (ushort)0),
-				};
-				return true;
+					_ = FishMMO.Logging.Log.Warning("ServerAddressProvider",
+						$"Invalid address override '{addressOverride}' (length={addressOverride.Length}); falling through to transport address.");
+				}
+				else
+				{
+					address = new ServerAddress()
+					{
+						Address = addressOverride,
+						Port = portOverride > 0 ? portOverride : (transport != null ? transport.GetPort() : (ushort)0),
+					};
+					return true;
+				}
 			}
 
 			if (transport != null)
 			{
 				string actualAddress = "127.0.0.1";
 				if (!string.IsNullOrWhiteSpace(coreServerAddress) &&
-					!IsLoopbackAddress(coreServerAddress))
+					!NetHelper.IsLoopbackAddress(coreServerAddress))
 				{
 					actualAddress = coreServerAddress;
 				}
@@ -127,15 +140,20 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Returns true if <paramref name="address"/> is a loopback address,
-		/// covering 127.0.0.1, ::1, 127.0.1.1, localhost, and all other variants
-		/// that IPAddress.IsLoopback detects — not just the two magic strings.
+		/// Returns true if <paramref name="value"/> contains any ASCII control
+		/// character (U+0000 through U+001F), indicating a potentially malformed
+		/// or injected address string.
 		/// </summary>
-		private static bool IsLoopbackAddress(string address)
+		private static bool ContainsControlCharacter(string value)
 		{
-			if (string.IsNullOrWhiteSpace(address)) return false;
-			if (string.Equals(address, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
-			return IPAddress.TryParse(address, out var ip) && IPAddress.IsLoopback(ip);
+			for (int i = 0; i < value.Length; i++)
+			{
+				if (value[i] < 0x20)
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 }

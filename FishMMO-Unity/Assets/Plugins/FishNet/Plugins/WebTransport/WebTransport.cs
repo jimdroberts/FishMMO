@@ -37,7 +37,7 @@ namespace FishNet.Transporting.WebTransport
 	{
 		#region Configuration
 		/// <summary>QUIC minimum MTU (RFC 9000 §14).</summary>
-		private const int Mtu = 1200;
+		private const int MTU = 1200;
 
 		/// <summary>Server bind address. Set at startup from .cfg file.</summary>
 		private string serverBindAddress = "127.0.0.1";
@@ -169,10 +169,10 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
 			SanitizeChannel(ref channelId);
-			if (channelId == 1 && segment.Count > Mtu)
+			if (channelId == 1 && segment.Count > MTU)
 			{
 				base.NetworkManager.LogWarning(
-					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {Mtu}. Dropping.");
+					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {MTU}. Dropping.");
 				return;
 			}
 			this.clientSocket.SendToServer(channelId, segment);
@@ -182,10 +182,10 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
 			SanitizeChannel(ref channelId);
-			if (channelId == 1 && segment.Count > Mtu)
+			if (channelId == 1 && segment.Count > MTU)
 			{
 				base.NetworkManager.LogWarning(
-					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {Mtu}. Dropping.");
+					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {MTU}. Dropping.");
 				return;
 			}
 			this.serverSocket.SendToClient(channelId, segment, connectionId);
@@ -346,7 +346,11 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startServer()
 		{
-			this.serverSocket.Initialize(this, Mtu, certificatePath, privateKeyPath);
+			#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+				base.NetworkManager.LogError("[WebTransport] macOS standalone is not supported. Use Unity Editor on macOS or build from Windows/Linux. See FishMMO-WebTransport/README.md for manual build instructions.");
+				return false;
+			#endif
+			this.serverSocket.Initialize(this, MTU, certificatePath, privateKeyPath);
 			// ALPN (Application-Layer Protocol Negotiation) is hardcoded to "h3" for HTTP/3 (WebTransport) in
 			// ServerSocket.DefaultAlpn. Override via ServerSocket.Alpn before calling StartConnection if needed.
 			return this.serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);
@@ -359,7 +363,11 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startClient(string address)
 		{
-			this.clientSocket.Initialize(this, Mtu);
+			#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+				base.NetworkManager.LogError("[WebTransport] macOS standalone is not supported. Use Unity Editor on macOS or build from Windows/Linux. See FishMMO-WebTransport/README.md for manual build instructions.");
+				return false;
+			#endif
+			this.clientSocket.Initialize(this, MTU);
 			return this.clientSocket.StartConnection(address, port, useTls: true);
 		}
 
@@ -398,7 +406,7 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override int GetMTU(byte channel)
 		{
-			return Mtu;
+			return MTU;
 		}
 		#endregion
 

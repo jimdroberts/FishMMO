@@ -58,7 +58,6 @@ namespace FishMMO.Shared
 		public KCCPlayer KCCPlayer { get; private set; }
 		#endregion
 
-#if !UNITY_SERVER
 		/// <summary>
 		/// The camera used for equipment view (e.g., inspecting gear).
 		/// </summary>
@@ -68,7 +67,6 @@ namespace FishMMO.Shared
 		/// Gets or sets the equipment view camera.
 		/// </summary>
 		public Camera EquipmentViewCamera { get { return this.equipmentViewCamera; } set { this.equipmentViewCamera = value; } }
-#endif
 		/// <summary>
 		/// The character's display name (use this instead of GameObject.name).
 		/// </summary>

@@ -4,7 +4,6 @@ namespace FishMMO.Client
 {
 	public sealed class Billboard : MonoBehaviour
 	{
-#if !UNITY_SERVER
 		/// <summary>
 		/// Reference to the camera used for billboarding. The object's rotation matches this camera.
 		/// </summary>
@@ -59,6 +58,5 @@ namespace FishMMO.Client
 			Camera = target;
 			Transform = Camera == null ? null : Camera.transform;
 		}
-#endif
 	}
 }

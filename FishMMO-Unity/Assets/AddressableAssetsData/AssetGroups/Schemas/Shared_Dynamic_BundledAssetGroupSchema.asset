@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Shared_Dynamic_BundledAssetGroupSchema
   m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema
   m_Group: {fileID: 11400000, guid: 6c426359434945466a7204d09b26fa5b, type: 2}
+  m_SchemaIsEnabled: 1
   m_InternalBundleIdMode: 1
   m_Compression: 1
   m_IncludeAddressInCatalog: 1

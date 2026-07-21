@@ -1,7 +1,5 @@
 using FishMMO.Shared.Core;
-#if !UNITY_SERVER
 using UnityEngine;
-#endif
 
 namespace FishMMO.Shared
 {
@@ -15,12 +13,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private string title = "Dungeon";
 
-#if !UNITY_SERVER
 		/// <summary>
 		/// The image representing the dungeon entrance in the UI (client only).
 		/// </summary>
 		public Sprite DungeonImage;
-#endif
 
 		/// <summary>
 		/// The name of the dungeon associated with this entrance.

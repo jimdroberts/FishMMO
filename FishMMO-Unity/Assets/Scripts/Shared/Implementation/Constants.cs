@@ -136,9 +136,13 @@ namespace FishMMO.Shared
 			/// Root path for bootstrap scene assets.
 			///
 			/// <para>
-			/// NOTE: Currently identical to <see cref="ScenePath"/> by design. Both bootstrap and regular
-			/// scenes live under the same root tree. If the bootstrap scenes are ever moved to a separate
-			/// directory, update this value independently of <see cref="ScenePath"/>.
+			/// Kept as a separate constant alongside the otherwise-identical <see cref="ScenePath"/>
+			/// for API clarity (bootstrap vs. gameplay scenes are conceptually distinct) and so that
+			/// bootstrap scenes can be moved to a different root without breaking every reference.
+			/// Currently both resolve to <c>"Assets/Scenes/"</c> by design — all scenes share one
+			/// directory tree. If bootstrap scenes are ever relocated, update this value independently
+			/// of <see cref="ScenePath"/>; all references (dashboard, build tool, editor shortcuts)
+			/// will pick it up automatically.
 			/// </para>
 			/// </summary>
 			public static readonly string BootstrapScenePath = "Assets/Scenes/";

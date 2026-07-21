@@ -55,16 +55,16 @@ namespace FishMMO.Client
 		/// Cached list of login server addresses discovered via API host probing.
 		/// </summary>
 		[SerializeField]
-		private List<ushort> loginServerAddresses;
+		private List<ushort> loginServerPorts;
 		/// <summary>
 		/// Cached list of login server addresses discovered via API host probing.
 		/// </summary>
-		public List<ushort> LoginServerAddresses => loginServerAddresses;
+		public List<ushort> LoginServerPorts => loginServerPorts;
 		/// <summary>
 		/// UTC timestamp of the last successful login server address fetch.
 		/// Uses DateTime.UtcNow instead of Time.realtimeSinceStartup to survive scene reloads.
 		/// </summary>
-		private DateTime loginServerAddressesFetchedAt = DateTime.MinValue;
+		private DateTime loginServerPortsFetchedAt = DateTime.MinValue;
 		/// <summary>
 		/// Cached connection token from the last successful IPFetch response.
 		/// </summary>
@@ -250,7 +250,6 @@ namespace FishMMO.Client
 			this.fogManager = new ClientFogManager(this);
 			this.fogManager.Initialize();
 
-#if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload += OnCharacterReadPayload;
 			IPlayerCharacter.OnStartLocalClient += OnCharacterStartLocal;
 			IPlayerCharacter.OnStopLocalClient += OnCharacterStopLocal;
@@ -258,7 +257,6 @@ namespace FishMMO.Client
 			Pet.OnReadID += OnPetReadId;
 			this.regionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
 			DisplayRegionNameAction.OnDisplay2DLabel += OnRegionNameDisplay;
-#endif
 		}
 
 		/// <summary>
@@ -277,7 +275,6 @@ namespace FishMMO.Client
 #if !UNITY_EDITOR
 			try { Configuration.GlobalSettings.Save(); } catch (Exception ex) { Log.Warning("Client", $"Settings save failed: {ex.Message}"); }
 #endif
-#if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload -= OnCharacterReadPayload;
 			IPlayerCharacter.OnStartLocalClient -= OnCharacterStartLocal;
 			IPlayerCharacter.OnStopLocalClient -= OnCharacterStopLocal;
@@ -285,7 +282,6 @@ namespace FishMMO.Client
 			Pet.OnReadID -= OnPetReadId;
 			if (this.regionNameLabel != null) { Destroy(this.regionNameLabel.gameObject); this.regionNameLabel = null; }
 			DisplayRegionNameAction.OnDisplay2DLabel -= OnRegionNameDisplay;
-#endif
 			this.audioListener = null;
 			this.combatDisplay?.Shutdown();
 			this.fogManager?.Shutdown();
@@ -461,7 +457,7 @@ namespace FishMMO.Client
 		/// <returns>True if an address was available; otherwise, false.</returns>
 		public bool TryGetRandomLoginServerPort(out ushort port)
 		{
-			if (this.loginServerAddresses != null && this.loginServerAddresses.Count > 0) { port = this.loginServerAddresses.GetRandom(); return true; }
+			if (this.loginServerPorts != null && this.loginServerPorts.Count > 0) { port = this.loginServerPorts.GetRandom(); return true; }
 			port = default; return false;
 		}
 
@@ -473,10 +469,10 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>, string> onDone)
 		{
-			if (this.loginServerAddresses != null && this.loginServerAddresses.Count > 0)
+			if (this.loginServerPorts != null && this.loginServerPorts.Count > 0)
 			{
-				double age = (DateTime.UtcNow - this.loginServerAddressesFetchedAt).TotalSeconds;
-				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerAddresses, this.cachedConnectionToken); yield break; }
+				double age = Math.Max(0.0, (DateTime.UtcNow - this.loginServerPortsFetchedAt).TotalSeconds);
+				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerPorts, this.cachedConnectionToken); yield break; }
 			}
 			var candidates = ApiHostResolver.GetCandidates();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
@@ -526,7 +522,7 @@ namespace FishMMO.Client
 					if (!any && next >= candidates.Count) break;
 					yield return null;
 				}
-				if (winner != null) { this.loginServerAddresses = winner; this.loginServerAddressesFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, this.cachedConnectionToken); }
+				if (winner != null) { this.loginServerPorts = winner; this.loginServerPortsFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, this.cachedConnectionToken); }
 				else onFail?.Invoke(lastErr ?? "Failed to reach any APIHost.");
 			}
 			finally
@@ -654,6 +650,7 @@ namespace FishMMO.Client
 			Log.Error("Client", stackTrace);
 			if (Connection?.ClientState == LocalConnectionState.Stopped) return;
 			if (string.IsNullOrEmpty(stackTrace) || !IsNetworkStack(stackTrace)) return;
+			try { loginAuthenticator?.RevokeAndClearAuthToken(); } catch { }
 			Connection?.ForceDisconnect();
 		}
 		/// <summary>
@@ -678,7 +675,6 @@ namespace FishMMO.Client
 
 		// ── Character / guild / pet / region handlers ──────────────────
 
-#if !UNITY_SERVER
 		/// <summary>
 		/// Called when a character payload is received. Sets the character's name and updates the name label.
 		/// </summary>
@@ -762,6 +758,5 @@ namespace FishMMO.Client
 		{
 			if (this.regionNameLabel != null) { this.regionNameLabel.gameObject.SetActive(true); this.regionNameLabel.Initialize(text, style, font, size, color, life, fade, up, offset); }
 		}
-#endif
 	}
 }

@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using FishMMO.Auth.Core;
 using KinematicCharacterController;
 using UnityEngine;
-#if !UNITY_SERVER
 using TMPro;
-#endif
 
 namespace FishMMO.Shared.Core
 {
@@ -155,12 +153,10 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		KCCPlayer KCCPlayer { get; }
 
-#if !UNITY_SERVER
 		/// <summary>
 		/// The camera used for equipment view (e.g., inspecting gear).
 		/// </summary>
 		Camera EquipmentViewCamera { get; set; }
-#endif
 
 		/// <summary>
 		/// The last chat message sent by the character.

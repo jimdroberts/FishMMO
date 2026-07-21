@@ -66,6 +66,20 @@
 		<PackageReference Include="Otp.NET" Version="1.4.1" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<!--
+			Project references to FishMMO sub-libraries. These are built as part of
+			FishMMO-Dependencies and copied to Unity's Assets/Dependencies folder by
+			the CopyDependenciesToUnity target. Keep these in sync with the projects
+			that produce DLLs consumed by Unity.
+		-->
+		<ProjectReference Include="..\FishMMO-Auth\FishMMO-AuthShared\FishMMO-AuthShared.csproj" />
+		<ProjectReference Include="..\FishMMO-Auth\FishMMO-ClientAuth\FishMMO-ClientAuth.csproj" />
+		<ProjectReference Include="..\FishMMO-Auth\FishMMO-ServerAuth\FishMMO-ServerAuth.csproj" />
+		<ProjectReference Include="..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
+		<ProjectReference Include="..\FishMMO-SharedUtility\FishMMO-SharedUtility\FishMMO-SharedUtility.csproj" />
+	</ItemGroup>
+
 	<Target Name="RemoveStaleDependencies" BeforeTargets="CopyDependenciesToUnity">
 		<!--
 			Remove all existing DLLs from the Unity Assets/Dependencies folder before

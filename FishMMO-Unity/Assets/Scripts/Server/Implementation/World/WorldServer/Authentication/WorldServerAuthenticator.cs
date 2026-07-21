@@ -200,6 +200,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Bounded sweep of the recent-admission map. Keeps the dictionary from
 			// retaining stale entries across server uptime even if no new logins arrive.
+			// NOTE: TryRemove during foreach is safe because ConcurrentDictionary
+			// iteration produces a point-in-time snapshot and tolerates concurrent
+			// removals. See CountRecentAdmissions for the full rationale.
 			DateTime cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(recentAdmissionWindowSeconds);
 			int scanned = 0;
 			foreach (var kvp in recentAdmissionsByAccount)

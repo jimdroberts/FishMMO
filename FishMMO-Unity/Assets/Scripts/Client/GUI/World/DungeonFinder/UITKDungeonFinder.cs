@@ -1,4 +1,3 @@
-#if !UNITY_SERVER
 using UnityEngine.UIElements;
 using FishNet.Transporting;
 using FishMMO.Shared;
@@ -137,4 +136,3 @@ namespace FishMMO.Client
 		}
 	}
 }
-#endif

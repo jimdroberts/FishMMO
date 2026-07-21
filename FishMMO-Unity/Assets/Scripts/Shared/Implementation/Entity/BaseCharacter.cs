@@ -4,8 +4,8 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-#if !UNITY_SERVER
 using TMPro;
+#if !UNITY_SERVER
 using FishNet.Component.Animating;
 #endif
 using FishMMO.Logging;
@@ -111,13 +111,6 @@ namespace FishMMO.Shared
 			return Flags.IsFlagged(flags);
 		}
 
-#if !UNITY_SERVER
-		[SerializeField]
-		private Transform meshRoot;
-		/// <summary>
-		/// The root transform for the character's mesh/model hierarchy.
-		/// </summary>
-		public Transform MeshRoot { get { return this.meshRoot; } }
 		[SerializeField]
 		private TextMeshPro characterNameLabel;
 		/// <summary>
@@ -131,6 +124,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		public TextMeshPro CharacterGuildLabel { get { return this.characterGuildLabel; } set { this.characterGuildLabel = value; } }
 
+		[SerializeField]
+		private Transform meshRoot;
+		/// <summary>
+		/// The root transform for the character's mesh/model hierarchy.
+		/// </summary>
+		public Transform MeshRoot { get { return this.meshRoot; } }
+
+#if !UNITY_SERVER
 		/// <summary>
 		/// Instantiates the character's race model prefab at the specified index and attaches it to the mesh root.
 		/// Removes any previous child models except for labels and special points.
