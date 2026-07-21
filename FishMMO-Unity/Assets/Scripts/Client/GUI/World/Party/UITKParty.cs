@@ -463,6 +463,7 @@ namespace FishMMO.Client
 						Client.Broadcast(new PartyChangeRankBroadcast()
 						{
 							CharacterID = id,
+							Rank = PartyRank.Leader,
 						}, Channel.Reliable);
 					});
 					uiDropdown.AddButton("Kick", () =>

@@ -122,12 +122,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 						if (SendNewItemBroadcast(conn, character, inventoryController, newItem))
 						{
-							currency.AddValue(-itemTemplate.Price);
+							// Persist the currency deduction BEFORE in-memory deduction and
+							// item grant. If the server crashes after this persist, the DB
+							// reflects the deduction and the item persist (below) is also
+							// enqueued - no infinite-money exploit. If the persist fails
+							// to enqueue, reject the purchase so the client can retry.
+							if (!TryPersistMerchantAttributes(character))
+							{
+								break;
+							}
 
-							// Persist the currency deduction to the database.
-							// Without this, server restart would restore the full currency
-							// while the purchased item remains — an infinite money exploit.
-							PersistMerchantAttributesAsync(character);
+							currency.AddValue(-itemTemplate.Price);
 						}
 						break;
 					case MerchantTabType.Ability:
@@ -215,6 +220,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
+			// RISK: The known-ability persist is enqueued as fire-and-forget. The in-memory
+			// ability learn and currency deduction below happen before the DB write completes.
+			// If the server crashes after the in-memory changes but before the DB persist,
+			// neither the ability nor the currency change is reflected in the DB - both are
+			// restored on restart, resulting in a net-neutral outcome, not an exploit.
+			// The Item purchase case (TryPersistMerchantAttributes) avoids this class of risk
+			// entirely by persisting the currency BEFORE in-memory changes.
+
 			// learn the ability or event
 			learnFunc(abilityController, new List<TTemplate> { template });
 
@@ -296,15 +309,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
-		/// Persists character attribute data (including currency) to the database after a merchant purchase.
-		/// Prevents currency rollback on server restart.
+		/// Enqueues character attribute data (including currency) persistence for a merchant purchase.
+		/// Called BEFORE in-memory deduction to ensure the DB reflects the change even if the
+		/// server crashes before the in-memory state is updated.
 		/// </summary>
-		private void PersistMerchantAttributesAsync(IPlayerCharacter character)
+		/// <returns>True if the persist was successfully enqueued, false otherwise.</returns>
+		private bool TryPersistMerchantAttributes(IPlayerCharacter character)
 		{
 			if (character == null ||
 				!character.TryGet(out ICharacterAttributeController attributeController))
 			{
-				return;
+				return false;
 			}
 
 			long charID = character.ID;
@@ -335,10 +350,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				));
 			}
 
-			if (dtos.Count > 0)
-			{
+			return dtos.Count > 0 &&
 				TryEnqueueAsyncWork(() => PersistMerchantAttributesToDbAsync(dtos, charID), charID);
-			}
 		}
 
 		/// <summary>

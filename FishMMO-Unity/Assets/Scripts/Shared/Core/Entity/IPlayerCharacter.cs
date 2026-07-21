@@ -18,18 +18,38 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Event triggered when a payload is read for this player character.
 		/// </summary>
+		/// <remarks>
+		/// <b>Memory leak risk:</b> Static events hold strong references to all subscribers.
+		/// Callers MUST unsubscribe via <c>-=</c> when no longer needed (e.g., OnDestroy, OnStopClient)
+		/// or the subscriber and its entire closure chain will never be garbage collected.
+		/// </remarks>
 		static Action<IPlayerCharacter> OnReadPayload;
 		/// <summary>
 		/// Event triggered when the local client starts for this player character.
 		/// </summary>
+		/// <remarks>
+		/// <b>Memory leak risk:</b> Static events hold strong references to all subscribers.
+		/// Callers MUST unsubscribe via <c>-=</c> when no longer needed (e.g., OnDestroy, OnStopClient)
+		/// or the subscriber and its entire closure chain will never be garbage collected.
+		/// </remarks>
 		static Action<IPlayerCharacter> OnStartLocalClient;
 		/// <summary>
 		/// Event triggered when the local client stops for this player character.
 		/// </summary>
+		/// <remarks>
+		/// <b>Memory leak risk:</b> Static events hold strong references to all subscribers.
+		/// Callers MUST unsubscribe via <c>-=</c> when no longer needed (e.g., OnDestroy, OnStopClient)
+		/// or the subscriber and its entire closure chain will never be garbage collected.
+		/// </remarks>
 		static Action<IPlayerCharacter> OnStopLocalClient;
 		/// <summary>
 		/// Event triggered when this player character teleports.
 		/// </summary>
+		/// <remarks>
+		/// <b>Memory leak risk:</b> Static events hold strong references to all subscribers.
+		/// Callers MUST unsubscribe via <c>-=</c> when no longer needed (e.g., OnDestroy, OnStopClient)
+		/// or the subscriber and its entire closure chain will never be garbage collected.
+		/// </remarks>
 		static Action<IPlayerCharacter> OnTeleport;
 
 		/// <summary>
@@ -157,6 +177,14 @@ namespace FishMMO.Shared.Core
 		/// Server-side anti-spam: when below 1.0 the message is silently dropped.
 		/// </summary>
 		double ChatTokens { get; set; }
+		/// <summary>
+		/// Indicates whether ChatTokens is in its initial "filled to capacity" state (i.e. no token
+		/// refill has been applied since construction/reset). When true, the first token refill
+		/// should fill to bucket capacity instead of incrementing from a stale starting value.
+		/// Replaces the previous sentinel of <c>double.MaxValue</c> which overflowed to Infinity
+		/// on the first add operation.
+		/// </summary>
+		bool IsChatTokensFull { get; set; }
 		/// <summary>
 		/// UTC ticks of the last token bucket refill.
 		/// Used to calculate how many tokens to add based on elapsed time.

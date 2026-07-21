@@ -140,7 +140,12 @@ namespace FishNet.Transporting.WebTransport.Server
 				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.Message}"); }
 			}
 
-			WebTransportNative.EnsureInitialized();
+			if (!WebTransportNative.EnsureInitialized())
+			{
+				transport.NetworkManager?.LogError("[WebTransport Server] Native library initialization failed. Server cannot start.");
+				base.SetConnectionState(LocalConnectionState.Stopped, true);
+				return false;
+			}
 
 			this.port = port;
 			this.maximumClients = maximumClients;

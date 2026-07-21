@@ -101,11 +101,13 @@ typedef struct wt_stream_manager_s {
      * (QUIC thread) both read/write the slot array and
      * must be serialised. */
 #if defined(WT_PLATFORM_WINDOWS)
-    /* CRITICAL_SECTION IS recursive by default on Windows (a thread that
-     * owns the section can enter it again without blocking). However, the
-     * manual recursion tracking (streams_lock_owner + streams_lock_rec)
-     * provides the same explicit behaviour as PTHREAD_MUTEX_RECURSIVE on
-     * Linux, without relying on the implicit Windows recursion count. */
+    /* CRITICAL_SECTION is NOT recursive on Windows — unlike the Linux
+     * PTHREAD_MUTEX_RECURSIVE, a thread that already owns the section
+     * will DEADLOCK if it tries to enter again.  The manual recursion
+     * tracking (streams_lock_owner + streams_lock_rec) below implements
+     * the same re-entrant behaviour using thread-ID + recursion count,
+     * so that a synchronous MsQuic callback re-entering the lock does
+     * not deadlock.  See sm_lock_fn / sm_unlock_fn in stream_manager.cpp. */
     CRITICAL_SECTION    streams_lock_cs;
     DWORD               streams_lock_owner;
     int                 streams_lock_rec;

@@ -26,8 +26,11 @@ static atomic_bool g_initialised = false;
 
 WT_API int32_t wt_init(void)
 {
+    /* Fast path — check the once-flag before opening MsQuic. */
     if (atomic_load(&g_initialised)) return WT_OK;
 
+    /* Open the MsQuic API table before the CAS gate so that whichever
+     * thread wins the race already has a valid pointer ready. */
     const QUIC_API_TABLE* api = NULL;
     QUIC_STATUS status = MsQuicOpen2(&api);
     if (QUIC_FAILED(status)) {
@@ -35,13 +38,22 @@ WT_API int32_t wt_init(void)
         return WT_ERR_UNKNOWN;
     }
 
-    MsQuic = api;
-    /* release-store: MsQuic write must be visible before g_initialised.
-     * Paired with acquire-load in every API entry point. */
-    /* Release-store: paired with acquire-load in API guards.
-     * Ensures MsQuic is visible before g_initialised. */
-    atomic_store(&g_initialised, true);
-    WT_LOG_INFO("WebTransport library initialised (msquic %s)", wt_version());
+    /* CAS-based once guard: only the first thread that CAS's
+     * g_initialised from false to true proceeds to set MsQuic and log.
+     * All other threads that passed the initial load check will hit the
+     * CAS, see that another thread already set the flag, discard their
+     * copy of the API table, and return. */
+    atomic_bool expected = false;
+    if (atomic_compare_exchange_strong(&g_initialised, &expected, true)) {
+        MsQuic = api;
+        /* Release-store: paired with acquire-load in API entry guards.
+         * Ensures MsQuic is visible before g_initialised. */
+        WT_LOG_INFO("WebTransport library initialised (msquic %s)", wt_version());
+        return WT_OK;
+    }
+
+    /* Another thread beat us to the initialisation — discard our copy. */
+    MsQuicClose(api);
     return WT_OK;
 }
 

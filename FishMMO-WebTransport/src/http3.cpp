@@ -1296,9 +1296,12 @@ int32_t h3_client_connect(h3_session_t* h3,
         st = MsQuic->StreamStart(req_stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
         if (QUIC_FAILED(st)) {
             h3_stream_ctx_unlink(sctx);
+            /* StreamClose before free: the stream callback may reference sctx
+             * as context.  Closing the stream first prevents a use-after-free
+             * if MsQuic fires SHUTDOWN_COMPLETE synchronously. */
+            MsQuic->StreamClose(req_stream);
             free(sctx->recv_buf);
             free(sctx);
-            MsQuic->StreamClose(req_stream);
             return -1;
         }
 

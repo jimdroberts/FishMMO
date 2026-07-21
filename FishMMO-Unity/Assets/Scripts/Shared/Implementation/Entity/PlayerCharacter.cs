@@ -13,6 +13,13 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Represents a player-controlled character in the game world, with inventory, abilities, and networked state.
 	/// Implements IPlayerCharacter and extends BaseCharacter with player-specific logic, hotkeys, and event-driven behaviour.
+	///
+	/// <para><b>Coupling note:</b> This class uses 19 <see cref="RequireComponent"/> attributes, creating strong
+	/// coupling between <see cref="PlayerCharacter"/> and its component dependencies. All required components
+	/// are tightly bound to this class and cannot be removed/replaced without modifying this declaration block.
+	/// If a more modular composition approach is desired in the future (e.g., optional components registered
+	/// at runtime), this set of RequireComponent attributes would need to be refactored into a dynamic
+	/// registration system.</para>
 	/// </summary>
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(TargetController))]
@@ -172,6 +179,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public double ChatTokens { get; set; }
 		/// <summary>
+		/// Indicates whether ChatTokens is in its initial "filled to capacity" state (no refill applied yet).
+		/// Used instead of <c>double.MaxValue</c> as a sentinel to avoid overflow to Infinity on first add.
+		/// </summary>
+		public bool IsChatTokensFull { get; set; }
+		/// <summary>
 		/// UTC ticks of the last token bucket refill.
 		/// </summary>
 		public long ChatTokenLastRefillTicks { get; set; }
@@ -206,7 +218,8 @@ namespace FishMMO.Shared
 			// Initialize chat and interaction timers to current UTC time.
 			long nowTicks = DateTime.UtcNow.Ticks;
 			NextChatMessageTicks = nowTicks;
-			ChatTokens = double.MaxValue; // Filled to max; server overrides with actual capacity on first message.
+			ChatTokens = 0;
+			IsChatTokensFull = true; // Filled to max; server overrides with actual capacity on first message.
 			ChatTokenLastRefillTicks = nowTicks;
 			NextInteractTime = DateTime.UtcNow;
 		}
@@ -222,6 +235,7 @@ namespace FishMMO.Shared
 				HotkeyData data = new HotkeyData()
 				{
 					Slot = i,
+					ReferenceID = HotkeyData.UnsetReferenceID,
 				};
 				Hotkeys.Add(data);
 			}
@@ -344,7 +358,8 @@ namespace FishMMO.Shared
 			LastChatMessage = "";
 			long nowTicks = DateTime.UtcNow.Ticks;
 			NextChatMessageTicks = nowTicks;
-			ChatTokens = double.MaxValue;
+			ChatTokens = 0;
+			IsChatTokensFull = true;
 			ChatTokenLastRefillTicks = nowTicks;
 			NextInteractTime = DateTime.UtcNow;
 			InstanceSceneName = null;

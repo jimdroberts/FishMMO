@@ -88,6 +88,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				playerCharacter.Hotkeys.Add(new HotkeyData()
 				{
 					Slot = i,
+					ReferenceID = HotkeyData.UnsetReferenceID,
 				});
 			}
 		}

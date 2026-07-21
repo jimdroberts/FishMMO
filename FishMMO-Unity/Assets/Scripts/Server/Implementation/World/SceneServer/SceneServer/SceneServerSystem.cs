@@ -422,8 +422,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (sceneDetails.StalePulse)
 							{
 								double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
-								if (Server.Configuration.TryGetInt("StaleSceneTimeout", out int result) &&
-									timeSinceLastExit < result)
+
+								// Resolve the stale scene timeout from config with a safe default.
+								// When the config key is missing, TryGetInt returns false and
+								// leaves result at 0 — without a default, ALL stale scenes would
+								// be unloaded immediately (every scene is stale > 0 minutes).
+								if (!Server.Configuration.TryGetInt("StaleSceneTimeout", out int staleSceneTimeoutMinutes))
+								{
+									staleSceneTimeoutMinutes = 60;
+									Log.Warning("SceneServerSystem", "Configuration key 'StaleSceneTimeout' not found. Using default of 60 minutes.");
+								}
+
+								if (timeSinceLastExit < staleSceneTimeoutMinutes)
 								{
 									Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
 									runtimeData.ScenePulseDataBuffer.Add((sceneDetails.Handle, sceneDetails.CharacterCount));
@@ -744,6 +754,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle), runtimeData.ID))
 				{
 					Log.Warning("SceneServerSystem", $"Failed to enqueue async SetSceneReady: Scene={scene.name}:{scene.handle}. Firing directly.");
+					// Fire-and-forget is safe here: SetSceneReadyAsync has its own
+					// try-catch with error logging (see method body). The task is
+					// discarded with _ = to suppress the compiler warning; any DB
+					// or network failure will be logged internally without crashing
+					// the scene-load callback.
 					_ = SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle);
 				}
 			}

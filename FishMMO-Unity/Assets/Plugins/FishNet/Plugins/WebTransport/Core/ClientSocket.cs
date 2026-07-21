@@ -324,10 +324,10 @@ namespace FishNet.Transporting.WebTransport.Client
 
 #if UNITY_WEBGL && !UNITY_EDITOR
                 bool ok;
-                if (outgoing.Channel == 1)
-                    ok = WebTransportJSLib.WTSendDatagram(webglIndex, outgoing.Data, outgoing.Length);
+                if (pkt.Channel == 1)
+                    ok = WebTransportJSLib.WTSendDatagram(webglIndex, pkt.Data, pkt.Length);
                 else
-                    ok = WebTransportJSLib.WTSendStream(webglIndex, outgoing.Data, outgoing.Length);
+                    ok = WebTransportJSLib.WTSendStream(webglIndex, pkt.Data, pkt.Length);
                 if (!ok)
                     LogTransportWarning("[WebTransport Client] Send failed (WebGL)");
 #else

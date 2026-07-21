@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -65,8 +65,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static byte GetPercentOf(this byte number, int percent)
 		{
-			// Use int to prevent overflow during calculation (255 * 100 exceeds byte.Max)
-			int result = (number * percent + 50) / 100;
+			// Use long to prevent overflow during calculation (255 * int.MaxValue exceeds int.MaxValue)
+			long result = ((long)number * percent + 50) / 100;
 			return (byte)(result > 255 ? 255 : result);
 		}
 	}

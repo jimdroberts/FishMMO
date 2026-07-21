@@ -27,16 +27,19 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class ChatHelper
 	{
+		/// <summary>Prefix prepended to all chat error/control codes to prevent collision with player messages.</summary>
+		private const string CHAT_CODE_PREFIX = "FISHMMO_";
+
 		/// <summary>Error code for when the target is already in a guild.</summary>
-		public const string GUILD_ERROR_TARGET_IN_GUILD = "$&(|)";
+		public const string GUILD_ERROR_TARGET_IN_GUILD = CHAT_CODE_PREFIX + "GUILD_ERROR_TARGET_IN_GUILD";
 		/// <summary>Error code for when the target is already in a party.</summary>
-		public const string PARTY_ERROR_TARGET_IN_PARTY = "$*(|)";
+		public const string PARTY_ERROR_TARGET_IN_PARTY = CHAT_CODE_PREFIX + "PARTY_ERROR_TARGET_IN_PARTY";
 		/// <summary>Code for relayed tell messages.</summary>
-		public const string TELL_RELAYED = "$(|)";
+		public const string TELL_RELAYED = CHAT_CODE_PREFIX + "TELL_RELAYED";
 		/// <summary>Error code for sending a tell message to oneself.</summary>
-		public const string TELL_ERROR_MESSAGE_SELF = "$(<)";
+		public const string TELL_ERROR_MESSAGE_SELF = CHAT_CODE_PREFIX + "TELL_ERROR_MESSAGE_SELF";
 		/// <summary>Error code for when the target is offline.</summary>
-		public const string TARGET_OFFLINE = "$(_)";
+		public const string TARGET_OFFLINE = CHAT_CODE_PREFIX + "TARGET_OFFLINE";
 
 		#region Regex
 		// Regex patterns for Unity Rich Text tags. Used to sanitize chat messages by removing formatting.
@@ -268,7 +271,9 @@ namespace FishMMO.Shared
 				return "";
 			}
 			string word = text.Substring(0, firstSpace);
-			trimmed = text.Substring(firstSpace, text.Length - firstSpace).Trim();
+			// firstSpace + 1 skips the space character; using firstSpace alone would
+			// include the leading space in the result, masked only by the subsequent .Trim().
+			trimmed = text.Substring(firstSpace + 1).Trim();
 			return word;
 		}
 
@@ -279,7 +284,19 @@ namespace FishMMO.Shared
 		/// <returns>Sanitized message with formatting removed.</returns>
 		public static string Sanitize(string message)
 		{
-			return Regex.Replace(message, CombinedRTTPattern, "", RegexOptions.None, TimeSpan.FromSeconds(1));
+			try
+			{
+				return Regex.Replace(message, CombinedRTTPattern, "", RegexOptions.None, TimeSpan.FromSeconds(1));
+			}
+			catch (RegexMatchTimeoutException)
+			{
+				// On timeout, return a truncated plain-text fallback to avoid
+				// blocking the chat pipeline on pathological input.
+				const int MaxSafeLength = 256;
+				return message != null && message.Length > MaxSafeLength
+					? message.Substring(0, MaxSafeLength) + "..."
+					: message ?? "";
+			}
 		}
 	}
 }

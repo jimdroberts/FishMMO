@@ -179,9 +179,11 @@ namespace FishNet.Transporting.WebTransport.Native
 		/// WebTransport.Shutdown). Calling them concurrently would violate the expected
 		/// lifecycle and may produce undefined behavior in the native library.
 		/// </remarks>
-		public static void EnsureInitialized()
+			/// <returns><c>true</c> if the native library was successfully initialized (or was already initialized);
+			/// <c>false</c> if initialization failed (caller should gracefully degrade / retry later).</returns>
+		public static bool EnsureInitialized()
 		{
-			if (initialized) return;
+			if (initialized) return true;
 
 			/* Only one thread proceeds past this guard. */
 			if (System.Threading.Interlocked.CompareExchange(ref initGuard, 1, 0) != 0)
@@ -192,10 +194,10 @@ namespace FishNet.Transporting.WebTransport.Native
 				for (int i = 0; i < 250 && !initialized; i++)
 					System.Threading.Thread.Sleep(2);
 				/* Timed out — caller will get an error from the native operation; they can retry next frame. */
-				return;
+				return initialized;
 			}
 			/* Double-check — another thread may have completed init while we waited for the guard. */
-			if (initialized) { initGuard = 0; return; }
+			if (initialized) { initGuard = 0; return true; }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
 			int result = wt_init();
@@ -203,11 +205,12 @@ namespace FishNet.Transporting.WebTransport.Native
 			{
 				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {ErrorString(result)}");
 				initGuard = 0;
-				return;
+				return false;
 			}
 #endif
 			initialized = true;
 				initGuard = 0; // reset so Deinitialize()+EnsureInitialized() works for restarts
+			return true;
 		}
 
 		/// <summary>Call wt_deinit() and reset state. Safe to call even if not initialized.</summary>
@@ -225,6 +228,15 @@ namespace FishNet.Transporting.WebTransport.Native
 			// Set the deinitialized flag BEFORE calling wt_deinit() so that any
 			// SafeHandle finalizer that fires concurrently will see the flag and
 			// skip its P/Invoke — preventing use-after-free on msquic state.
+			//
+			// TOCTOU note: There is a narrow time-of-check-to-time-of-use window between
+			// IsLibraryDeinitialized = true and wt_deinit() completing. If a SafeHandle
+			// finalizer fires during wt_deinit(), it will see the flag as true and skip
+			// its native destroy call — which is safe. The flag must be set BEFORE
+			// wt_deinit() because after deinit completes, the msquic state is gone and
+			// any P/Invoke from a finalizer would be a use-after-free. Setting the flag
+			// first guarantees that every finalizer observes the shutdown regardless
+			// of when it runs.
 			IsLibraryDeinitialized = true;
 			wt_deinit();
 #endif

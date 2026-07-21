@@ -212,7 +212,6 @@ namespace FishMMO.Server.Implementation
 		private bool usedFallbackAddress = false;
 
 		/// <summary>
-		/// <summary>
 		/// Returns true if <paramref name="address"/> is a loopback address,
 		/// covering 127.0.0.1, ::1, 127.0.1.1, localhost, and all other variants
 		/// that IPAddress.IsLoopback detects — not just the two magic strings.

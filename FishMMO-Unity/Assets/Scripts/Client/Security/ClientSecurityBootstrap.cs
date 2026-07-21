@@ -74,9 +74,11 @@ namespace FishMMO.Client.Security
 			if (CoroutineHelper.IsAvailable)
 			{
 				CoroutineHelper.Start(LoadFromStreamingAssetsCoroutine());
-				// Fall through to synchronous defaults below — the coroutine will
-				// call ClientCertificatePinning.Configure() a second time with the
-				// loaded pins once the UnityWebRequest completes.
+				// The coroutine handles both success and failure paths itself
+				// (falling through to compile-time defaults on failure).
+				// Without this early return, the empty defaultPins would be
+				// applied below, weakening pinning until the async load completes.
+				return;
 			}
 #else
 			try

@@ -16,6 +16,9 @@ namespace FishMMO.Shared
 		/// <summary>Template ID representing the character's race.</summary>
 		public int RaceTemplateID;
 		/// <summary>Template IDs of equipped items indexed by slot (see <see cref="ItemSlot"/>). Null when equipment data is unavailable.</summary>
+		/// <remarks>FishNet requires a custom serializer for Dictionary{int,int}. If this type is sent over
+		/// the network, register a custom serializer via <c>NetworkManager.Serializer.RegisterSerializerType</c>
+		/// or change this field to an array of key-value pair structs for native FishNet serialization.</remarks>
 		public Dictionary<int, int> EquippedItems;
 	}
 }

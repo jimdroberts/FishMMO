@@ -8,6 +8,8 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct ChatBroadcast : IBroadcast
 	{
+		/// <summary>Maximum allowed length for the <see cref="Text"/> field in characters.</summary>
+		public const int MaxTextLength = 128;
 		/// <summary>Channel where the message is sent (e.g., global, party, guild).</summary>
 		public ChatChannel Channel;
 		/// <summary>Unique ID of the sender character.</summary>

@@ -129,7 +129,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Shuts down async workers, disposes resources, and drains the main-thread queue.
 		/// </summary>
-		public void ShutdownWorkers()
+		public virtual void ShutdownWorkers()
 		{
 			Core?.ShutdownWorkers();
 			workerCts?.Cancel();
@@ -259,6 +259,17 @@ namespace FishMMO.Server.Implementation
 		internal void OnServerClientHandshakeReceived(NetworkConnection conn, ClientHandshake msg, Channel channel)
 		{
 			if (conn.IsAuthenticated)
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
+			// Validate field sizes before forwarding to the core handler.
+			// Reject oversized payloads on the network thread before any allocation or crypto work.
+			if (msg.PublicKey == null || msg.PublicKey.Length > AuthSizeLimits.MaxPublicKeySize ||
+				(msg.Cookie != null && msg.Cookie.Length > AuthSizeLimits.MaxCookieSize) ||
+				(msg.ConnectionToken != null && msg.ConnectionToken.Length > AuthSizeLimits.MaxConnectionTokenLength) ||
+				(msg.GameVersion != null && msg.GameVersion.Length > AuthSizeLimits.MaxGameVersionLength))
 			{
 				conn.Disconnect(true);
 				return;

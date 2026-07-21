@@ -5,6 +5,7 @@ using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 using FishMMO.Database;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -259,12 +260,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				// Resolve recipient by name — requires a character lookup service.
-				// For now, we pass 0 as recipientID; the service validates internally.
-				// A future enhancement can resolve the recipient name to ID here.
+				// Resolve recipient by name: look up the character ID from the database.
+				// This prevents sending mail to non-existent characters and ensures the
+				// recipientID passed to SendAsync is correct.
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					await Log.Warning("InteractableSystem", $"SendMailAsync: ICharacterService not available, cannot resolve recipient '{recipientName}'.");
+					return;
+				}
+
+				DatabaseResult<CharacterData?> recipientResult = await characterService.FetchAsync(recipientName);
+				if (!recipientResult.IsSuccess || recipientResult.Data == null)
+				{
+					await Log.Warning("InteractableSystem", $"SendMailAsync: Recipient '{recipientName}' not found (SenderID={senderID}).");
+					return;
+				}
+
+				long recipientID = recipientResult.Data.Value.ID;
+
 				DatabaseResult result = await mailService.SendAsync(
 					senderID,
-					0, // recipientID — service should resolve by name or this needs a character lookup
+					recipientID,
 					subject,
 					body,
 					0, // itemAttachmentTemplateID

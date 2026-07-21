@@ -87,11 +87,13 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// Broadcast for changing a member's rank within a party.
-	/// Contains the character ID whose rank is changing.
+	/// Contains the character ID and the new rank.
 	/// </summary>
 	public struct PartyChangeRankBroadcast : IBroadcast
 	{
 		/// <summary>Character ID of the party member whose rank is changing.</summary>
 		public long CharacterID;
+		/// <summary>New rank to assign to the member.</summary>
+		public PartyRank Rank;
 	}
 }

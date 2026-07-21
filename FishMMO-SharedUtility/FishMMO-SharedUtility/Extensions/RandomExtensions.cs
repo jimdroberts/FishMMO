@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
@@ -37,17 +37,31 @@ namespace FishMMO.Shared
 			// Using ulong for range to handle the full span of long.MinValue to long.MaxValue
 			ulong range = (ulong)(max - min);
 
+			// When range covers all possible ulong values, modulo would bias
+			// the result because ulong.MaxValue % ulong.MaxValue == 0, making
+			// the limit equal ulong.MaxValue (never rejecting) while mapping
+			// both 0 and ulong.MaxValue to the same bucket. Handle this edge
+			// case directly by rejecting ulong.MaxValue before the add + cast.
+			ulong rand;
+			if (range == ulong.MaxValue)
+			{
+				do
+				{
+					rand = random.NextULong();
+				} while (rand == ulong.MaxValue);
+				return (long)rand + min;
+			}
+
 			// Calculate limit for rejection sampling to ensure perfectly uniform distribution
 			// This prevents certain numbers from appearing slightly more often than others
 			ulong limit = ulong.MaxValue - (ulong.MaxValue % range);
 
-			ulong result;
 			do
 			{
-				result = random.NextULong();
-			} while (result >= limit);
+				rand = random.NextULong();
+			} while (rand >= limit);
 
-			return (long)(result % range) + min;
+			return (long)(rand % range) + min;
 		}
 	}
 }

@@ -515,14 +515,13 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             wt_session_t* session = (wt_session_t*)atomic_ptr_load(&cli->session);
             if (!session) break;
 
-            static atomic_int dgram_drop_count = 0;
             const QUIC_BUFFER* buf = event->DATAGRAM_RECEIVED.Buffer;
             if (buf && buf->Length > 0 &&
                 buf->Length <= WT_DGRAM_MAX_SIZE) {
                 if (!wt_datagram_queue_push(
                         &cli->dgram_queue, 0, buf->Buffer,
                         (int32_t)buf->Length)) {
-                    int prev = atomic_fetch_add(&dgram_drop_count, 1);
+                    int prev = atomic_fetch_add(&cli->dgram_drop_count, 1);
                     if (prev % 100 == 0) {
                         WT_LOG_WARN("Datagram queue full: %d drops so far", prev + 1);
                     }

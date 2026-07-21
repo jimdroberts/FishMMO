@@ -195,8 +195,15 @@ namespace FishMMO.Server.Implementation
 			networkManager.ServerManager.RegisterBroadcast<RevokeTokenBroadcast>(OnServerRevokeTokenBroadcastReceived, false);
 		}
 
-		/// <summary>Calls <see cref="SrpAuthenticatorCore{TConnection}.TickRateLimits"/> every frame.</summary>
-		protected override void OnUpdate() => core?.TickRateLimits();
+		/// <summary>Calls <see cref="SrpAuthenticatorCore{TConnection}.TickRateLimits"/> every frame.
+		/// Also sweeps expired entries from <see cref="revokeRateLimiter"/> to prevent unbounded growth.</summary>
+		protected override void OnUpdate()
+		{
+			core?.TickRateLimits();
+			// Sweep expired entries from the per-IP revoke rate limiter to prevent
+			// unbounded memory growth under sustained token-revoke traffic.
+			revokeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
+		}
 
 		#endregion
 
@@ -617,9 +624,19 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Atomically swaps the signing key, key ID, and TOTP master key on the core,
 		/// ensuring concurrent token-issuance reads always see a consistent tuple.
-		/// Old key arrays are left for GC; they are NOT zeroed here because a concurrent
-		/// reader thread may hold a reference to them. Zeroing occurs during server shutdown only.
 		/// </summary>
+		/// <remarks>
+		/// <para><b>Key material lifetime:</b> Old key arrays are intentionally NOT zeroed
+		/// by this method because a concurrent reader thread may hold a reference to them
+		/// (obtained before the lock). Calling <see cref="CryptographicOperations.ZeroMemory"/>
+		/// here would corrupt in-flight auth operations that are still using the old key
+		/// material. The old arrays will be reclaimed by the garbage collector.</para>
+		/// <para>All key material is zeroed during server shutdown via
+		/// <see cref="BaseAuthenticatorCore{TConnection}.ShutdownWorkers"/>. Any arrays held
+		/// exclusively by the core are cleared at that point. If a subclass holds additional
+		/// references (e.g. backings set before the core existed), it must zero them itself
+		/// in its shutdown path.</para>
+		/// </remarks>
 		public void AtomicSwapSigningKey(byte[] newKey, long newKeyId, byte[] newTotpMasterKey)
 		{
 			lock (signingKeySwapLock)
@@ -641,11 +658,6 @@ namespace FishMMO.Server.Implementation
 					core.TotpMasterKey = totpCopy;
 				}
 				tokenSigningKeyId = newKeyId;
-
-				// NOTE: Old key arrays are NOT zeroed here because a concurrent reader
-				// thread may hold a reference to them (obtained before the lock).
-				// Zeroing would corrupt in-flight auth operations. The old arrays will
-				// be reclaimed by GC; keys are zeroed during server shutdown only.
 			}
 		}
 	}

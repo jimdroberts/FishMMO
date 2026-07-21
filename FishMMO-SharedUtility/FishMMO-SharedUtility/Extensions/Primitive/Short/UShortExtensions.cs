@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
@@ -72,8 +72,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ushort GetPercentOf(this ushort number, ushort percent)
 		{
-			// Use int for intermediate calculation to avoid overflow (65535 * 100 exceeds ushort)
-			int result = (number * percent + 50) / 100;
+			// Use long for intermediate calculation to avoid overflow (65535 * 65535 exceeds int.MaxValue)
+			long result = ((long)number * percent + 50) / 100;
 			return (ushort)(result > 65535 ? 65535 : result);
 		}
 	}

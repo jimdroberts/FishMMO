@@ -50,6 +50,11 @@ typedef struct wt_client_s {
     h3_session_t*           h3_session;
 
     wt_datagram_queue_t     dgram_queue;
+
+    /* Per-connection datagram drop counter.  Reset to 0 by calloc at
+     * client creation.  Used to rate-limit queue-full warnings without
+     * a global counter that bleeds across connections. */
+    atomic_int              dgram_drop_count;
 } wt_client_s;
 
 /* ── Internal API ──────────────────────────────────────────── */

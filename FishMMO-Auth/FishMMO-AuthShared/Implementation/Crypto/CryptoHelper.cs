@@ -1190,6 +1190,10 @@ namespace FishMMO.Auth.Implementation
 				CryptographicOperations.ZeroMemory(computed);
 			}
 			CryptographicOperations.ZeroMemory(signature);
+			// NOTE: signature is zeroed above before the HMAC validity check below.
+			// This ensures the copy is destroyed even on the early return path when
+			// !hmacValid. The signedToken buffer itself is a caller-owned reference
+			// and is not zeroed here.
 
 			if (!hmacValid)
 				return false;
@@ -1572,6 +1576,19 @@ namespace FishMMO.Auth.Implementation
 			/// the v2 envelope ("v2:&lt;iters&gt;:salt:hash" — account-bound) and the legacy
 			/// ("salt:hash" — not account-bound, 100_000 iterations) format.
 			/// </summary>
+			/// <remarks>
+			/// <para><b>WARNING: Legacy format cross-account reuse.</b> The legacy "salt:hash" format
+			/// hashes only the plaintext recovery code with a per-code salt, without binding to the
+			/// account identifier. This means the same recovery code (or two codes that happen to
+			/// produce the same PBKDF2 output with different salts) could, in a pathological
+			/// collision scenario, be verified against an unintended account's stored hash.
+			/// The v2 envelope mitigates this by incorporating the account ID into the PBKDF2 input
+			/// (via <c>accountId + "|" + normalizedCode</c>), making each hash account-specific.</para>
+			/// <para>All newly-generated recovery codes use the v2 envelope. The legacy parser is
+			/// retained only for backward-compatible verification of hashes written before the v2
+			/// migration. Consider rotating any remaining legacy hashes to v2 during a maintenance
+			/// window to eliminate this class of risk entirely.</para>
+			/// </remarks>
 			/// <param name="accountId">Account identifier. Used only when verifying v2 hashes.</param>
 			/// <param name="submitted">Plaintext recovery code submitted by the user.</param>
 			/// <param name="storedHash">Stored hash in v2 or legacy envelope format.</param>

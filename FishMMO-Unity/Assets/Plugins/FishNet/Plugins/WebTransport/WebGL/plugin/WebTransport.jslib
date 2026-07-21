@@ -55,6 +55,7 @@ var FishWebTransport = {
 
             function pump() {
                 reader.read().then(function(result) {
+                    if (session._closed) { try { reader.releaseLock(); } catch (_) {} return; }
                     if (result.done) {
                         /* Streams closed — guard against infinite restart loop.
                          * If the ReadableStream stays done across restarts
@@ -76,6 +77,7 @@ var FishWebTransport = {
                     var streamReader = stream.readable.getReader();
                     function readStream() {
                         streamReader.read().then(function(sr) {
+                            if (session._closed) { try { streamReader.releaseLock(); } catch (_) {} return; }
                             if (sr.done) { streamReader.releaseLock(); return; }
                             var data = new Uint8Array(sr.value);
                             var ptr = _malloc(data.length);
@@ -123,6 +125,7 @@ var FishWebTransport = {
 
             function pump() {
                 reader.read().then(function(result) {
+                    if (session._closed) { try { reader.releaseLock(); } catch (_) {} return; }
                     if (result.done) {
                         /* Guard against infinite restart loop (same pattern
                          * as _readBidiStreams above). */
@@ -271,19 +274,19 @@ mergeInto(LibraryManager.library, {
                 writer.write(data).then(function() {
                     return writer.close();
                 }).then(function() {
-                    session._pendingStreams--;
+                    session._pendingStreams = Math.max(0, session._pendingStreams - 1);
                 }).catch(function(e) {
                     console.warn('[FishWT] stream send/close error: ' + e.message);
-                    session._pendingStreams--;
+                    session._pendingStreams = Math.max(0, session._pendingStreams - 1);
                 });
             }).catch(function(err) {
                 console.warn('[FishWT] SendStream: ' + err.message);
-                session._pendingStreams--;
+                session._pendingStreams = Math.max(0, session._pendingStreams - 1);
             });
             return true;
         } catch (e) {
             console.error('[FishWT] SendStream: ' + e.message);
-            session._pendingStreams--;
+            session._pendingStreams = Math.max(0, session._pendingStreams - 1);
             return false;
         }
     },
@@ -335,11 +338,14 @@ mergeInto(LibraryManager.library, {
 
     WTDisconnect: function(index) {
         var session = FishWebTransport._get(index);
-        if (session && session.wt) {
-            try {
-                session.wt.close({closeCode: 0, reason: 'Client disconnect'});
-            } catch (e) {
-                console.warn('[FishWT] close error: ' + e.message);
+        if (session) {
+            session._closed = true;
+            if (session.wt) {
+                try {
+                    session.wt.close({closeCode: 0, reason: 'Client disconnect'});
+                } catch (e) {
+                    console.warn('[FishWT] close error: ' + e.message);
+                }
             }
         }
         FishWebTransport._remove(index);

@@ -41,6 +41,11 @@ typedef struct {
      * If h3_session is non-NULL and handshake_complete is false,
      * incoming streams are routed through HTTP/3 protocol detection. */
     h3_session_t*           h3_session;
+
+    /* Per-connection datagram drop counter.  Reset to 0 by calloc at
+     * connection creation.  Used to rate-limit queue-full warnings
+     * without a global counter that bleeds across connections. */
+    atomic_int              dgram_drop_count;
 } wt_server_conn_t;
 
 /* ── Server structure ───────────────────────────────────────── */

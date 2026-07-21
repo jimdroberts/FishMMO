@@ -507,11 +507,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Global hourly account-creation cap. Applied
 			// AFTER the per-IP rate-limit and BEFORE enqueue so an attacker
-			// rotating IPs still pays the per-IP delay AND consumes from a
-			// shared global budget. Failures here are reported as QueueFull
+			// rotating IPs still pays the per-IP delay. A check-only gate
+			// prevents accepting requests when the budget is already exhausted;
+			// the actual budget slot is consumed on successful account creation
+			// so that failed requests (duplicate username, validation, DB errors)
+			// do not deplete the shared cap. Failures here are reported as QueueFull
 			// (which maps to ServerBusy on the wire) to avoid disclosing the
 			// existence/threshold of the global cap to a probing attacker.
-			if (!TryConsumeGlobalCreationBudget(nowUtc))
+			if (!TryCheckGlobalCreationBudget(nowUtc))
 			{
 				return EnqueueResult.QueueFull;
 			}
@@ -526,13 +529,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Atomically reserves one slot from the rolling
-		/// hourly global account-creation budget. Returns false if the budget
-		/// for the current hour is exhausted. A bucket identifier set to -1
-		/// (initial / disabled) is treated as "always allow" so the cap can be
-		/// hot-disabled by zeroing <see cref="maxGlobalAccountCreationsPerHour"/>.
+		/// Checks whether the rolling hourly global account-creation budget has been exhausted
+		/// without consuming a slot. The actual consumption happens on successful creation
+		/// (<see cref="IncrementGlobalCreationCount"/>) so that failed requests do not
+		/// deplete the budget.
 		/// </summary>
-		private bool TryConsumeGlobalCreationBudget(DateTime nowUtc)
+		private bool TryCheckGlobalCreationBudget(DateTime nowUtc)
 		{
 			int cap = maxGlobalAccountCreationsPerHour;
 			if (cap <= 0)
@@ -545,15 +547,34 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				if (globalCreationsCurrentHourBucket != currentBucket)
 				{
+					// New hour bucket — always allow at check time; the consumer will reset.
+					return true;
+				}
+				return globalCreationsCurrentHourCount < cap;
+			}
+		}
+
+		/// <summary>
+		/// Atomically consumes one slot from the rolling hourly global account-creation budget.
+		/// Must only be called after the account has been successfully persisted.
+		/// </summary>
+		private void IncrementGlobalCreationCount(DateTime nowUtc)
+		{
+			int cap = maxGlobalAccountCreationsPerHour;
+			if (cap <= 0)
+			{
+				return; // Cap disabled by configuration.
+			}
+
+			long currentBucket = (long)(nowUtc - DateTime.UnixEpoch).TotalHours;
+			lock (globalCreationsCounterLock)
+			{
+				if (globalCreationsCurrentHourBucket != currentBucket)
+				{
 					globalCreationsCurrentHourBucket = currentBucket;
 					globalCreationsCurrentHourCount = 0;
 				}
-				if (globalCreationsCurrentHourCount >= cap)
-				{
-					return false;
-				}
 				globalCreationsCurrentHourCount++;
-				return true;
 			}
 		}
 
@@ -836,6 +857,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							result = ClientAuthenticationResult.AccountCreated;
 							runtimeData.IncrementProcessed();
+							// Consume one slot from the global hourly creation budget.
+							// This runs AFTER successful persistence so failed requests
+							// (duplicate username, validation errors, DB faults) do not
+							// deplete the shared budget — an attacker cannot exhaust the
+							// cap by sending bad registrations.
+							IncrementGlobalCreationCount(DateTime.UtcNow);
 							// Clear failure tracker on success
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
 

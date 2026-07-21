@@ -26,6 +26,12 @@ namespace FishMMO.Shared
 		/// <param name="minimum">The lower bound.</param>
 		/// <param name="maximum">The upper bound.</param>
 		/// <returns>The clamped value.</returns>
+		/// <remarks>
+		/// <b>NaN behavior:</b> IEEE 754 comparisons involving NaN always return false,
+		/// so <see cref="double.NaN"/> passes through this clamp unmodified.
+		/// If NaN should be replaced with <paramref name="minimum"/>, call
+		/// <c>double.IsNaN()</c> before clamping.
+		/// </remarks>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static double Clamp(this double number, double minimum, double maximum)
 		{

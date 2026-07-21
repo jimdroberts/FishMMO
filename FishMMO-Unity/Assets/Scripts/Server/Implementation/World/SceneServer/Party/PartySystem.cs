@@ -1595,12 +1595,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				// Validate the requested rank — only Leader promotion is supported for parties.
+				if (msg.Rank != PartyRank.Leader)
+				{
+					return;
+				}
+
 				// Capture immutable data for the async path
 				long partyID = partyController.ID;
 				long leaderCharacterID = partyController.Character.ID;
 				long targetMemberID = msg.CharacterID;
+				PartyRank newRank = msg.Rank;
 
-				deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID), guardKey, leaderCharacterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID, newRank), guardKey, leaderCharacterID);
 				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
@@ -1618,8 +1625,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="partyID">Party identifier containing both members.</param>
 		/// <param name="leaderCharacterID">Current leader character identifier.</param>
 		/// <param name="targetMemberID">Target member character identifier.</param>
+		/// <param name="newRank">New rank for the target member.</param>
 		/// <returns>Asynchronous rank-change task.</returns>
-		private async Task ChangePartyRankAsync(long partyID, long leaderCharacterID, long targetMemberID)
+		private async Task ChangePartyRankAsync(long partyID, long leaderCharacterID, long targetMemberID, PartyRank newRank)
 		{
 			try
 			{
@@ -1655,8 +1663,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Promote the target to leader FIRST so the party is never left leaderless.
-				DatabaseResult promoteResult = await charPartyService.UpdateRankAsync(targetMemberID, partyID, (byte)PartyRank.Leader, targetData.Version + 1);
+				// Promote the target to the requested rank FIRST so the party is never left leaderless.
+				DatabaseResult promoteResult = await charPartyService.UpdateRankAsync(targetMemberID, partyID, (byte)newRank, targetData.Version + 1);
 				if (!promoteResult.IsSuccess)
 				{
 					return;

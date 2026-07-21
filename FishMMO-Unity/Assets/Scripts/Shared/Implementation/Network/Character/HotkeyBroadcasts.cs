@@ -11,8 +11,16 @@ namespace FishMMO.Shared
 		public byte Type;
 		/// <summary>Slot index where the hotkey is assigned.</summary>
 		public int Slot;
-		/// <summary>Reference ID for the hotkey target (e.g., ability or item ID). Defaults to -1 if unset.</summary>
-		public long ReferenceID; // Defaults to 0; set to -1 explicitly when "unset" is needed.
+		/// <summary>Reference ID for the hotkey target (e.g., ability or item ID).</summary>
+		/// <remarks>
+		/// Use <see cref="UnsetReferenceID"/> (-1) when the hotkey slot is empty.
+		/// The C# default (0) is a valid ID; code that checks for "unset" MUST
+		/// compare against <see cref="UnsetReferenceID"/>, not zero.
+		/// </remarks>
+		public long ReferenceID;
+
+		/// <summary>Sentinel value indicating an unset/empty hotkey slot.</summary>
+		public const long UnsetReferenceID = -1;
 	}
 
 	/// <summary>

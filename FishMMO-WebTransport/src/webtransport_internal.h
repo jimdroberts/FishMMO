@@ -47,9 +47,9 @@ typedef int atomic_bool;    /* always 4 bytes — consistent struct layout acros
   #define atomic_fetch_add(p, v)  (_InterlockedExchangeAdd((long*)(p), (long)(v)))
   #define atomic_fetch_sub(p, v)  (_InterlockedExchangeAdd((long*)(p), -(long)(v)))
   /* Helper: C11-style CAS — updates *expected to current value on failure.
-   * Cannot use statement expressions (GCC extension) for portability;
-   * instead delegate to an inline function (C++ only, matches our usage). */
-  #ifdef __cplusplus
+   * Returns 1 on success (swap performed), 0 on failure.
+   * Used by both C++ and C paths via the macro wrapper below.
+   * MSVC __inline is available in both C and C++ modes. */
   static __inline int _wt_cas_strong(volatile long *p, long *expected, long desired) {
       long cur = _InterlockedCompareExchange(p, desired, *expected);
       if (cur == *expected) return 1;
@@ -58,13 +58,6 @@ typedef int atomic_bool;    /* always 4 bytes — consistent struct layout acros
   }
   #define atomic_compare_exchange_strong(p, expected, desired) \
       _wt_cas_strong((volatile long*)(p), (long*)(expected), (long)(desired))
-  #else
-  /* Fallback for pure C: best-effort CAS (does NOT update *expected).
-   * All current call sites in this codebase are C++ and use the inline
-   * function above. */
-  #define atomic_compare_exchange_strong(p, expected, desired) \
-      (_InterlockedCompareExchange((long*)(p), (long)(desired), (long)(*(expected))) == (long)(*(expected)))
-  #endif
 #else
   #define atomic_init(p, v)       (*(p) = (v))
   #define atomic_load(p)          __atomic_load_n(p, __ATOMIC_SEQ_CST)

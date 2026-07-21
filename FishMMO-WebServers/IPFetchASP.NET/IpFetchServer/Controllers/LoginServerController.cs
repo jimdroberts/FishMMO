@@ -59,7 +59,7 @@ public class LoginServerController : ControllerBase
 			return TimeSpan.FromSeconds(60) + TimeSpan.FromMilliseconds(jitterMs);
 		}
 
-		if (!memoryCache.TryGetValue(cacheKey, out ushort[] loginServerPorts))
+		if (!memoryCache.TryGetValue(cacheKey, out int[] loginServerPorts))
 		{
 			// Single-flight DB load to avoid cache stampede. The first thread that
 			// enters the gate populates the cache; later threads find the cached value on

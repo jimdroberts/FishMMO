@@ -20,6 +20,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Clamps the float value to the specified inclusive minimum and maximum range.
 		/// </summary>
+		/// <remarks>
+		/// <b>NaN behavior:</b> IEEE 754 comparisons involving NaN always return false,
+		/// so <see cref="float.NaN"/> passes through this clamp unmodified.
+		/// If NaN should be replaced with <paramref name="minimum"/>, call
+		/// <c>float.IsNaN()</c> before clamping.
+		/// </remarks>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static float Clamp(this float number, float minimum, float maximum)
 		{

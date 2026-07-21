@@ -62,16 +62,7 @@ extern "C" {
 
 #define H3_SETTINGS_DATAGRAM    0x33  /* RFC 9114 §7.2.4 — HTTP/3 DATAGRAM support */
 
-/* ── QPACK Static Table Reference Helpers ───────────────────── */
-
-#define QPACK_INDEX_AUTHORITY   0   /* :authority */
-#define QPACK_INDEX_PATH        1   /* :path */
-#define QPACK_INDEX_AGE         2   /* age */
-#define QPACK_INDEX_METHOD      3   /* :method */
-#define QPACK_INDEX_STATUS      5   /* :status */
-/* Index 4  = :path (but :path is 1 in QPACK) — see RFC 9204 §A */
-
-/* QPACK encoding prefixes */
+/* ── QPACK encoding prefixes ─────────────────────────────────── */
 #define QPACK_INDEXED_STATIC    0xC0  /* 11xxxxxx — indexed static table entry */
 #define QPACK_LITERAL_NAME_REF  0x50  /* 0101xxxx — literal with static name ref */
 

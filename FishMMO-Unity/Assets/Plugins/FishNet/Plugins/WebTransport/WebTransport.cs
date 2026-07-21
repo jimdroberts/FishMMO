@@ -46,6 +46,11 @@ namespace FishNet.Transporting.WebTransport
 		private ushort port;
 
 		/// <summary>Max concurrent clients. Set at startup from .cfg file.</summary>
+		/// <remarks>
+		/// Note: This value is forwarded to <see cref="Server.ServerSocket.SetMaximumClients"/> on start.
+		/// Both this field and the equivalent field in ServerSocket store the same limit.
+		/// <c>GetMaximumClients()</c> reads from ServerSocket, not this field.
+		/// </remarks>
 		private int maximumClients = 100;
 
 		/// <summary>Client connect hostname. Set at startup from Constants.GameHost.</summary>
@@ -205,6 +210,17 @@ namespace FishNet.Transporting.WebTransport
 		}
 
 		/// <summary>
+		/// Sets the ALPN (Application-Layer Protocol Negotiation) string for QUIC.
+		/// Defaults to "h3" for HTTP/3 (WebTransport). Some proxy deployments
+		/// may require "wq" (WebTransport over QUIC without HTTP/3 framing).
+		/// Only takes effect before the server is started.
+		/// </summary>
+		public void SetAlpn(string alpn)
+		{
+			this.serverSocket.Alpn = alpn;
+		}
+
+		/// <summary>
 		/// How long in seconds until either the server or client socket must go without data before timeout.
 		/// Values are configurable in the Unity inspector via <see cref="serverTimeout"/> and <see cref="clientTimeout"/>.
 		/// </summary>
@@ -331,6 +347,8 @@ namespace FishNet.Transporting.WebTransport
 		private bool startServer()
 		{
 			this.serverSocket.Initialize(this, Mtu, certificatePath, privateKeyPath);
+			// ALPN (Application-Layer Protocol Negotiation) is hardcoded to "h3" for HTTP/3 (WebTransport) in
+			// ServerSocket.DefaultAlpn. Override via ServerSocket.Alpn before calling StartConnection if needed.
 			return this.serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);
 		}
 

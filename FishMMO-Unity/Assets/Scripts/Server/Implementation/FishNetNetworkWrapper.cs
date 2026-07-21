@@ -123,12 +123,10 @@ namespace FishMMO.Server.Implementation
 		///   <item><term>macOS</term><description><c>/usr/local/share/fishmmo/certs/fullchain.pem</c></description></item>
 		///   <item><term>Other</term><description><c>certs/fullchain.pem</c> (relative to working directory)</description></item>
 		/// </list>
-		/// </summary>
-		/// <summary>
-		/// Applies transport configuration. When <paramref name="addressOverride"/> or
-		/// <paramref name="portOverride"/> are supplied they take precedence over the
-		/// .cfg file values, allowing the Server component's Inspector overrides to
-		/// control the actual transport bind address and port.
+		/// When <paramref name="addressOverride"/> or <paramref name="portOverride"/>
+		/// are supplied they take precedence over the .cfg file values, allowing the
+		/// Server component's Inspector overrides to control the actual transport bind
+		/// address and port.
 		/// </summary>
 		public void ApplyTransportConfiguration(string addressOverride = null, ushort? portOverride = null)
 		{

@@ -67,6 +67,40 @@ namespace FishMMO.Server.Implementation
 			}
 		}
 
+
+		/// <summary>
+		/// Unwraps a signing key blob using the deployment KEK. Returns <c>null</c> on any
+		/// failure (missing KEK for a wrapped key, AEAD authentication failure, or key too short).
+		/// The returned array must be zeroed by the caller when no longer needed.
+		/// </summary>
+		/// <remarks>
+		/// Extracted to eliminate duplicated logic between <see cref="FetchSigningKeyCoreAsync"/>
+		/// and <see cref="FetchCurrentSigningKeyCoreAsync"/>.
+		/// </remarks>
+		/// <param name="wrappedKey">The AES-256-GCM envelope (or plain key if not wrapped).</param>
+		/// <param name="loginServerId">Owning LoginServer ID, bound into AAD for AEAD authentication.</param>
+		/// <returns>The unwrapped (or pass-through plain) key bytes, or <c>null</c> on failure.</returns>
+		private byte[] UnwrapSigningKeyInternal(byte[] wrappedKey, long loginServerId)
+		{
+			byte[] kek = TryGetSigningKeyKek();
+			if (kek == null)
+			{
+				if (KeyEnvelope.LooksWrapped(wrappedKey))
+					return null;
+				return wrappedKey;
+			}
+
+			byte[] unwrapped = KeyEnvelope.Unwrap(kek, wrappedKey, SigningKeyKekProvider.BuildAad(loginServerId));
+			if (unwrapped == null)
+				return null;
+
+			if (unwrapped.Length < CryptoHelper.HmacKeyLength)
+			{
+				CryptographicOperations.ZeroMemory(unwrapped);
+				return null;
+			}
+			return unwrapped;
+		}
 		/// <inheritdoc/>
 		protected override BaseAuthenticatorCore<NetworkConnection> Core => core;
 
@@ -85,6 +119,19 @@ namespace FishMMO.Server.Implementation
 		/// <inheritdoc/>
 		public override IAccountManager<NetworkConnection> CreateAccountManager() =>
 			new TokenAccountManager();
+
+		/// <summary>
+		/// Shuts down async workers and zeroes the cached signing-key KEK.
+		/// </summary>
+		public override void ShutdownWorkers()
+		{
+			if (signingKeyKek != null)
+			{
+				CryptographicOperations.ZeroMemory(signingKeyKek);
+				signingKeyKek = null;
+			}
+			base.ShutdownWorkers();
+		}
 
 		/// <inheritdoc/>
 		protected override void RegisterProtocolHandlers(NetworkManager networkManager)
@@ -131,38 +178,10 @@ namespace FishMMO.Server.Implementation
 				return null;
 			}
 
-			// HmacKey is an AES-256-GCM envelope keyed on the deployment KEK with AAD bound
-			// to the owning LoginServer id. Unwrap and fail closed on any tag/AAD/structural error.
-			byte[] kek = TryGetSigningKeyKek();
-			byte[] unwrapped;
-			// If no KEK is configured, the key must be stored in the clear (not wrapped).
-			// If it looks wrapped but we have no KEK, fail closed -- we cannot safely unwrap it.
-			// Otherwise, use the raw stored key directly.
-			if (kek == null)
+			byte[] unwrapped = UnwrapSigningKeyInternal(result.Data.HmacKey, loginServerId);
+			if (unwrapped == null)
 			{
-				if (KeyEnvelope.LooksWrapped(result.Data.HmacKey))
-				{
-					await Log.Warning(LogPrefix, $"Signing key is wrapped but no KEK configured.");
-					return null;
-				}
-				unwrapped = result.Data.HmacKey;
-			}
-			// KEK is available: unwrap the AES-256-GCM envelope. The AAD is bound to the
-			// owning LoginServer id, preventing a key blob from being replayed across servers.
-			else
-			{
-				unwrapped = KeyEnvelope.Unwrap(kek, result.Data.HmacKey, SigningKeyKekProvider.BuildAad(loginServerId));
-				if (unwrapped == null)
-				{
-					await Log.Warning(LogPrefix, $"Signing key failed AEAD unwrap.");
-					return null;
-				}
-			}
-
-			if (unwrapped.Length < CryptoHelper.HmacKeyLength)
-			{
-				CryptographicOperations.ZeroMemory(unwrapped);
-				await Log.Warning(LogPrefix, $"Signing key too short for LoginServer {loginServerId}.");
+				await Log.Warning(LogPrefix, $"Failed to unwrap signing key {signingKeyId} for LoginServer {loginServerId}.");
 				return null;
 			}
 
@@ -188,36 +207,10 @@ namespace FishMMO.Server.Implementation
 				return (null, 0);
 			}
 
-			byte[] kek = TryGetSigningKeyKek();
-			byte[] unwrapped;
-			// If no KEK is configured, the key must be stored in the clear (not wrapped).
-			// If it looks wrapped but we have no KEK, fail closed -- we cannot safely unwrap it.
-			// Otherwise, use the raw stored key directly.
-			if (kek == null)
+			byte[] unwrapped = UnwrapSigningKeyInternal(result.Data.HmacKey, loginServerId);
+			if (unwrapped == null)
 			{
-				if (KeyEnvelope.LooksWrapped(result.Data.HmacKey))
-				{
-					await Log.Warning(LogPrefix, $"Current signing key is wrapped but no KEK configured.");
-					return (null, 0);
-				}
-				unwrapped = result.Data.HmacKey;
-			}
-			// KEK is available: unwrap the AES-256-GCM envelope. The AAD is bound to the
-			// owning LoginServer id, preventing a key blob from being replayed across servers.
-			else
-			{
-				unwrapped = KeyEnvelope.Unwrap(kek, result.Data.HmacKey, SigningKeyKekProvider.BuildAad(loginServerId));
-				if (unwrapped == null)
-				{
-					await Log.Warning(LogPrefix, $"Current signing key failed AEAD unwrap.");
-					return (null, 0);
-				}
-			}
-
-			if (unwrapped.Length < CryptoHelper.HmacKeyLength)
-			{
-				CryptographicOperations.ZeroMemory(unwrapped);
-				await Log.Warning(LogPrefix, $"Current signing key too short for LoginServer {loginServerId}.");
+				await Log.Warning(LogPrefix, $"Failed to unwrap current signing key for LoginServer {loginServerId}.");
 				return (null, 0);
 			}
 

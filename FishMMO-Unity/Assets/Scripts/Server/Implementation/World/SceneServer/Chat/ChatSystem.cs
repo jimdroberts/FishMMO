@@ -578,10 +578,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				double elapsedSeconds = (receivedTicks - sender.ChatTokenLastRefillTicks) / (double)TimeSpan.TicksPerSecond;
 				if (elapsedSeconds > 0)
 				{
-					sender.ChatTokens += elapsedSeconds * chatTokenRefillRate;
-					if (sender.ChatTokens > chatTokenBucketCapacity)
+					if (sender.IsChatTokensFull)
 					{
 						sender.ChatTokens = chatTokenBucketCapacity;
+						sender.IsChatTokensFull = false;
+					}
+					else
+					{
+						sender.ChatTokens += elapsedSeconds * chatTokenRefillRate;
+						if (sender.ChatTokens > chatTokenBucketCapacity)
+						{
+							sender.ChatTokens = chatTokenBucketCapacity;
+						}
 					}
 					sender.ChatTokenLastRefillTicks = receivedTicks;
 				}

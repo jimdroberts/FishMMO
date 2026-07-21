@@ -260,9 +260,16 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
      * outside the lock. StreamShutdown can fire SHUTDOWN_COMPLETE
      * synchronously, which also acquires the lock — deadlock if
      * we held the lock across the MsQuic call. */
-    HQUIC pending[WT_MAX_STREAMS];
-    int pending_count = 0;
+    /* Heap allocation — WT_MAX_STREAMS (4096) HQUIC handles is ~32 KB on
+     * 64-bit.  A stack allocation of this size risks overflow on constrained
+     * systems (embedded, small stacks in QUIC callback threads). */
+    HQUIC* pending = (HQUIC*)malloc(sizeof(HQUIC) * (size_t)WT_MAX_STREAMS);
+    if (!pending) {
+        return;  /* Can't collect handles — skip shutdown. Leaks streams but
+                  * avoids stack overflow; better a leak than a crash. */
+    }
 
+    int pending_count = 0;
     sm_lock(mgr);
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
         if (mgr->streams[i].in_use && mgr->streams[i].quic_stream) {
@@ -280,6 +287,7 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
          * here because shutdown_complete is not yet set. Safe to
          * continue iterating. */
     }
+    free(pending);
 }
 
 int32_t wt_stream_manager_send(

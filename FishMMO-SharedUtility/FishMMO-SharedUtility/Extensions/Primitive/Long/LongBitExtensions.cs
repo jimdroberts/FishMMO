@@ -99,5 +99,19 @@ namespace FishMMO.Shared
 				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
 			flag ^= (1L << bitPosition);
 		}
+
+		/// <summary>
+		/// Reverses the state of the specified generic bit position (1 becomes 0, 0 becomes 1).
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void ToggleBit<T>(this ref long flag, T bitPosition) where T : unmanaged, Enum
+		{
+			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(long))
+				throw new ArgumentException($"Enum type {typeof(T).Name} is not long-backed. Only long-backed enums are supported.");
+			long pos = Unsafe.As<T, long>(ref bitPosition);
+			if (pos < 0 || pos > 63)
+				throw new ArgumentOutOfRangeException(nameof(bitPosition), "Bit position must be between 0 and 63.");
+			flag ^= (1L << (int)pos);
+		}
 	}
 }

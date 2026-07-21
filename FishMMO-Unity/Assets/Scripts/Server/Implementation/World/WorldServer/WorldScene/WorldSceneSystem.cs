@@ -348,7 +348,6 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					}
 				}
 			}
-			runtimeData.NextWaitQueueUpdate = runtimeData.WaitQueueRateSeconds;
 		}
 
 		/// <summary>
@@ -773,9 +772,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (!skipDebounce && !TryBeginInstanceLookup(accountName))
 			{
+				// Re-queue: instance lookup was rate-limited. The connection was
+				// already removed from the queue above; re-add it so the next
+				// processing cycle picks it up.
+				TryEnqueueMainThread(() =>
+				{
+					if (conn != null && conn.IsActive &&
+						Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var md))
+					{
+						AddToQueue(conn, 0L, md.WaitingInstanceConnections, md.InstanceConnectionScenes);
+					}
+				});
 				return;
 			}
 
+			try
+			{
 			// Get the selected character data (single-row fetch, includes flags and instance info)
 			var charResult = await charService.FetchByAccountAsync(accountName, selected: true);
 			if (!charResult.IsSuccess || !charResult.Data.HasValue)
@@ -862,6 +874,23 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				// Unknown or terminal scene status — fall back to world scene
 				await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
+			}
+			}
+			catch (Exception ex)
+			{
+				// Re-queue on unexpected async failure. The connection was removed
+				// from the instance queue before async work began. If anything
+				// throws during processing, re-add to the queue so the connection
+				// is not orphaned and will be retried on the next cycle.
+				await Log.Error("WorldSceneSystem", $"ProcessInstanceConnectionAsync error for {accountName}: {ex}");
+				TryEnqueueMainThread(() =>
+				{
+					if (conn != null && conn.IsActive &&
+						Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var md))
+					{
+						AddToQueue(conn, 0L, md.WaitingInstanceConnections, md.InstanceConnectionScenes);
+					}
+				});
 			}
 		}
 

@@ -168,7 +168,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					worldServerList[i] = new WorldServerDetails()
 					{
 						Name = data.Name,
-						LastPulse = data.LastPulse,
+						LastPulseUtcTicks = data.LastPulse.Ticks,
 						Port = (ushort)data.Port,
 						CharacterCount = data.CharacterCount,
 						Locked = data.Locked,

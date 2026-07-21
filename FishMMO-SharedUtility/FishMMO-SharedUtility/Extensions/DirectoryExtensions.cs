@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 //using FishMMO.Logging;
@@ -30,7 +30,7 @@ namespace FishMMO.Shared
 					{
 						// Skip configuration files
 						if (!string.IsNullOrWhiteSpace(extension) &&
-							!file.EndsWith(extension))
+							!file.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
 						{
 							continue;
 						}

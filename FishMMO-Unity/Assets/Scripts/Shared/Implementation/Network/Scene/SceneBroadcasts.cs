@@ -75,6 +75,12 @@ namespace FishMMO.Shared
 	/// Broadcast for selecting a specific scene channel.
 	/// Contains the selected channel address.
 	/// </summary>
+	/// <remarks>
+	/// <b>Bandwidth note:</b> This broadcast sends the full <see cref="ChannelAddress"/> struct
+	/// (port, scene name, character count, etc.) when only <c>SceneHandle</c> (int) is needed
+	/// to identify the target. If bandwidth becomes a concern, consider replacing with a
+	/// leaner struct containing only <c>int SceneHandle</c>.
+	/// </remarks>
 	public struct SceneChannelSelectBroadcast : IBroadcast
 	{
 		/// <summary>Selected channel address for the scene.</summary>
@@ -93,6 +99,11 @@ namespace FishMMO.Shared
 	/// Broadcast sent by the server when it cannot process a gameplay request because the
 	/// async work queue is full. The client should display a transient "Server Busy" notification.
 	/// </summary>
+	/// <remarks>
+	/// <b>Enhancement note:</b> This broadcast currently carries no metadata (empty payload).
+	/// Consider adding <c>RetryAfterSeconds</c> (int) and <c>QueuePosition</c> (int) fields
+	/// so the client can show a meaningful countdown and queue status to the user.
+	/// </remarks>
 	public struct ServerBusyBroadcast : IBroadcast
 	{
 	}

@@ -11,18 +11,15 @@ namespace FishMMO.Shared
 		/// <summary>Name of the world server.</summary>
 		public string Name;
 		/// <summary>
-		/// Timestamp of the last server heartbeat or status update (UTC).
-		///
+		/// Timestamp of the last server heartbeat in UTC ticks.
 		/// <para>
-		/// <b>IMPORTANT:</b> Callers MUST supply values produced by
-		/// <see cref="DateTime.UtcNow"/>.  The serialized form does not
-		/// preserve <see cref="DateTimeKind"/> metadata — comparisons
-		/// across different time zones silently produce incorrect results
-		/// if a non-UTC value is stored here.  <c>DateTimeOffset</c>
-		/// was considered but FishNet does not support serializing it.
+		/// Stored as <see cref="long"/> (ticks) rather than <see cref="DateTime"/>
+		/// because FishNet does not preserve <see cref="DateTimeKind"/> metadata
+		/// during serialization.  Ticks are always UTC — convert with
+		/// <c>new DateTime(ticks, DateTimeKind.Utc)</c>.
 		/// </para>
 		/// </summary>
-		public DateTime LastPulse;
+		public long LastPulseUtcTicks;
 		/// <summary>Port number for the server.</summary>
 		public ushort Port;
 		/// <summary>Number of characters currently on the server.</summary>

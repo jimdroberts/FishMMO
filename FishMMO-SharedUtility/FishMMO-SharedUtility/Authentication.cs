@@ -133,9 +133,24 @@ namespace FishMMO.Shared
 
 			// Strip Port (e.g. :7770) - Handle IPv6 carefully (they use colons)
 			int colonIndex = host.LastIndexOf(':');
-			if (colonIndex >= 0 && !IPAddress.TryParse(host, out _))
+			if (colonIndex >= 0)
 			{
-				host = host.Substring(0, colonIndex);
+				// For bracketed IPv6 addresses (e.g. [::1]:7770), the colon
+				// after the closing bracket is the port separator, while
+				// colons inside the brackets are part of the address.
+				if (host.StartsWith("[") && colonIndex > 0)
+				{
+					int closingBracket = host.LastIndexOf(']');
+					if (closingBracket >= 0 && closingBracket < colonIndex)
+					{
+						// Colon is after the closing bracket -- strip the port
+						host = host.Substring(0, colonIndex);
+					}
+				}
+				else if (!IPAddress.TryParse(host, out _))
+				{
+					host = host.Substring(0, colonIndex);
+				}
 			}
 
 			UriHostNameType hostNameType = Uri.CheckHostName(host);

@@ -718,9 +718,19 @@ namespace FishMMO.Auth.Implementation
 				// useful information to the legitimate owner anyway).
 				bool isUnverified = false;
 
-				if (!lookupResult.IsSuccess)
+					// Guard: fakeSaltKey must have been initialized by InitializeWorkersCore.
+					// If it is null, the server was started without calling InitializeWorkers,
+					// which is a fatal configuration error.
+					if (fakeSaltKey == null)
+					{
+						throw new InvalidOperationException(
+							"fakeSaltKey is null \u2014 InitializeWorkersCore was not called before processing SRP verify requests. " +
+							"This is a fatal configuration error. Ensure the authenticator's InitializeWorkers is called during server startup.");
+					}
+
+					if (!lookupResult.IsSuccess)
 				{
-					salt = SrpService.DerivePerUsernameFakeSalt(username!, fakeSaltKey!);
+					salt = SrpService.DerivePerUsernameFakeSalt(username!, fakeSaltKey);
 					verifier = SrpService.GetStaticFakeData().Verifier;
 					accessLevel = AccessLevel.Player;
 					await Log.Debug(LogPrefix, $"Using fake SRP state for non-existent account '{username}'.");
@@ -735,7 +745,7 @@ namespace FishMMO.Auth.Implementation
 							// fake state: revealing "this *email* exists in the system"
 							// is a stronger privacy leak than the same fact about a
 							// username, since emails are reused across services.
-							salt = SrpService.DerivePerUsernameFakeSalt(username!, fakeSaltKey!);
+							salt = SrpService.DerivePerUsernameFakeSalt(username!, fakeSaltKey);
 							verifier = SrpService.GetStaticFakeData().Verifier;
 							accessLevel = AccessLevel.Player;
 							await Log.Debug(LogPrefix, "Using fake SRP state for unverified email-based login.");

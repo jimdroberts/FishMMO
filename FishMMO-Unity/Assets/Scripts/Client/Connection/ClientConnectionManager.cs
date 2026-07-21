@@ -171,9 +171,9 @@ namespace FishMMO.Client
 					if (!forceDisconnect && CanReconnect)
 					{
 						nextReconnect = ComputeReconnectDelay(ReconnectsAttempted);
-						OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
-						// Preserve CurrentConnectionType so CanReconnect
-						// returns true for subsequent retry attempts.
+						// OnReconnectAttempt is intentionally NOT fired here — it fires
+						// once in TryReconnect() when the actual reconnect begins, so
+						// consumers don't receive duplicate events per cycle.
 					}
 					else
 					{
@@ -212,22 +212,20 @@ namespace FishMMO.Client
 					}
 				}
 			}
-			// Release the in-flight guard only after confirming no force-disconnect
-			// is pending.  Releasing before the check would allow a concurrent
-			// ConnectToServer call to acquire the guard and start a new connection
-			// while a disconnect is still in flight.
+			// Release the in-flight guard only after StartConnection has been called
+			// (force-disconnect path above releases early and exits because we don't
+			// want to start).  Releasing before StartConnection would allow a concurrent
+			// ConnectToServer call to acquire the guard and start a second connection
+			// while the first is still being set up.
 			if (forceDisconnect)
 			{
 				forceDisconnect = false;
 				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 				yield return null;
 			}
-			else
-			{
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-			}
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
 			NetworkManager.ClientManager.StartConnection(address, port);
+			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 			yield return null;
 		}
 	}

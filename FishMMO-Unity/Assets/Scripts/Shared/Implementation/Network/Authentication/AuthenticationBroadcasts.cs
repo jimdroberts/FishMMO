@@ -23,6 +23,38 @@ namespace FishMMO.Shared
 	/// </para>
 
 	/// <summary>
+	/// Size limits for authentication broadcast fields.
+	/// Used by server-side validation to reject oversized payloads before any crypto work.
+	/// </summary>
+	public static class AuthSizeLimits
+	{
+		/// <summary>
+		/// Maximum allowed size in bytes for the client's X25519 public key.
+		/// X25519 keys are 32 bytes; limit is 64 to allow for future algorithm changes.
+		/// </summary>
+		public const int MaxPublicKeySize = 64;
+
+		/// <summary>
+		/// Maximum allowed size in bytes for the stateless cookie in ClientHandshake.
+		/// </summary>
+		public const int MaxCookieSize = 128;
+
+		/// <summary>
+		/// Maximum allowed length for the ConnectionToken string in ClientHandshake.
+		/// </summary>
+		public const int MaxConnectionTokenLength = 512;
+
+		/// <summary>
+		/// Maximum allowed length for the GameVersion string in ClientHandshake.
+		/// </summary>
+		public const int MaxGameVersionLength = 64;
+		/// <summary>
+		/// Maximum allowed size in bytes for any single encrypted field in CreateAccountBroadcast.
+		/// </summary>
+		public const int CreateAccountMaxFieldSize = 2048;
+	}
+
+	/// <summary>
 	/// Broadcast sent by the client during an explicit logout to ask the LoginServer to
 	/// revoke its currently-held auth token before its TTL expires. The token is sent
 	/// as the raw HMAC-signed bytes the LoginServer originally issued (and which the
@@ -151,6 +183,11 @@ namespace FishMMO.Shared
 		public byte[] Salt;
 		/// <summary>Encrypted SRP server public ephemeral B (AES-GCM).</summary>
 		public byte[] PublicEphemeral;
+
+		/// <summary>Explicit message sequence number (server→client).
+		/// Echoed from the corresponding <see cref="SrpVerifyRequestBroadcast.Seq"/>
+		/// so the client can correlate the response with its request.</summary>
+		public uint Seq;
 	}
 
 	/// <summary>
@@ -249,6 +286,12 @@ namespace FishMMO.Shared
 	/// DO NOT reorder <see cref="OtpauthUri"/> and <see cref="RecoveryCodes"/>.
 	/// </para>
 	/// </summary>
+	/// <para><b>WARNING: Wire-protocol-dependent field order.</b>
+	/// FishNet serializes struct fields in declaration order. The
+	/// <see cref="LayoutKind.Sequential"/> attribute is REQUIRED to guarantee that
+	/// <see cref="OtpauthUri"/> is serialized before <see cref="RecoveryCodes"/>.
+	/// Reordering these fields will silently corrupt the nonce-derivation stream,
+	/// breaking TOTP setup for all users. DO NOT remove or change this attribute.</para>
 	[StructLayout(LayoutKind.Sequential)]
 	public struct TwoFactorSetupBroadcast : IBroadcast
 	{

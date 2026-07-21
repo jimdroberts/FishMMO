@@ -67,7 +67,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Implicit conversion operator for easier usage in logic.
-		/// Returns <c>default(T)</c> if the wrapper is null or value is not yet set.
+		/// Returns <c>default(T)</c> if the wrapper is null.
+		/// Throws <see cref="InvalidOperationException"/> if the value is not yet set.
 		/// </summary>
 		public static implicit operator T?(SetOnce<T>? convert)
 		{

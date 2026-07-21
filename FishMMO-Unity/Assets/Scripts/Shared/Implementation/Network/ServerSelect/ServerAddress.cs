@@ -13,10 +13,10 @@ namespace FishMMO.Shared
 	{
 		/// <summary>List of available server addresses (internal use).</summary>
 		[field: SerializeField]
-		public List<ServerAddress> Addresses { get; set; }
+		public List<ServerAddress> Addresses { get; set; } = new List<ServerAddress>();
 		/// <summary>List of available server ports (client use).</summary>
 		[field: SerializeField]
-		public List<ushort> Ports { get; set; }
+		public List<ushort> Ports { get; set; } = new List<ushort>();
 		/// <summary>
 		/// One-time connection token issued by IPFetch. The client echoes this
 		/// in the first ClientHandshake so the Login Server can recover the
