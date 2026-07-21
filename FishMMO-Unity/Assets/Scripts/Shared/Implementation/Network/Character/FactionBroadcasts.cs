@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -22,7 +21,7 @@ namespace FishMMO.Shared
 	public struct FactionUpdateMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of faction updates to apply.</summary>
-		public List<FactionUpdateBroadcast> Factions;
+		public FactionUpdateBroadcast[] Factions;
 	}
 
 	/// <summary>
@@ -33,6 +32,6 @@ namespace FishMMO.Shared
 		/// <summary>Target character ID to apply updates to.</summary>
 		public long CharacterID;
 		/// <summary>List of faction updates to apply to the target character.</summary>
-		public List<FactionUpdateBroadcast> Factions;
+		public FactionUpdateBroadcast[] Factions;
 	}
 }

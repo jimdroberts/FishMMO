@@ -151,7 +151,9 @@ versioning — they should NOT reference `FishMMO-Dependencies.dll` directly.
 3. Run `dotnet build FishMMO-Dependencies/FishMMO-Dependencies.csproj -c Release`.
 4. Re-open Unity; verify the assembly resolves under `Assets/Dependencies/`.
 5. If a previously copied DLL has been **removed** from the package list, delete
-   it manually from `Assets/Dependencies/` — the build does not prune.
+   it manually from `Assets/Dependencies/` or let the build prune it automatically
+   — the csproj uses `RemoveStaleDependencies` which removes DLLs that are no
+   longer produced by the build output.
 
 > **Tip:** When changing major versions of Npgsql / EF Core, also update the
 > matching references in `FishMMO-DB.csproj` and the WebServer projects so all

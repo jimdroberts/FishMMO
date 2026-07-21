@@ -920,7 +920,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnClientScenesUnloadedBroadcastReceived(NetworkConnection conn, ClientScenesUnloadedBroadcast msg, Channel channel)
 		{
-			if (msg.UnloadedScenes == null || msg.UnloadedScenes.Count == 0)
+			if (msg.UnloadedScenes == null || msg.UnloadedScenes.Length == 0)
 			{
 				Log.Debug("CharacterSystem", "No unloaded scenes received.");
 				return;

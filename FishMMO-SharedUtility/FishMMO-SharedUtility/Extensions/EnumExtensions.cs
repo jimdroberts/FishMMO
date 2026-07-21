@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace FishMMO.Shared
 {
@@ -7,25 +7,34 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class EnumExtensions
 	{
-		/// <summary>
-		/// Returns an array of all values of the specified enum type.
-		/// Uses an internal cache to avoid expensive reflection and array allocation on subsequent calls.
-		/// </summary>
-		/// <typeparam name="T">The enum type.</typeparam>
-		/// <returns>A cached array of all enum values.</returns>
-		public static T[] ToArray<T>() where T : Enum
-		{
-			// Return a copy of the cached array to prevent callers from mutating the shared cache.
-			return (T[])EnumCache<T>.Values.Clone();
-		}
+		private static readonly object cacheLock = new object();
+		private static Array? lastValues;
+		private static Type? lastEnumType;
 
 		/// <summary>
-		/// Internal cache to store enum values. Static constructors in generic classes 
-		/// run once per unique type T.
+		/// Returns an array of all values of the specified enum type.
+		/// Uses an internal cache to avoid expensive reflection on subsequent calls.
+		///
+		/// NOTE: A new clone is returned on each call so callers cannot mutate the cached copy.
+		/// The cache is invalidated when the enum type changes between calls.
 		/// </summary>
-		private static class EnumCache<T> where T : Enum
+		/// <typeparam name="T">The enum type.</typeparam>
+		/// <returns>A copied array of all enum values.</returns>
+		public static T[] ToArray<T>() where T : Enum
 		{
-			public static readonly T[] Values = (T[])Enum.GetValues(typeof(T));
+			lock (cacheLock)
+			{
+				Type currentType = typeof(T);
+				if (lastEnumType == currentType && lastValues != null)
+				{
+					// Return a clone of the cached array to prevent callers from mutating the shared cache.
+					return (T[])lastValues.Clone();
+				}
+
+				lastValues = Enum.GetValues(currentType);
+				lastEnumType = currentType;
+				return (T[])lastValues.Clone();
+			}
 		}
 	}
 }

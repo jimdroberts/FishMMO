@@ -107,6 +107,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				try
 				{
+					// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL: We use Task.Run to escape
+					// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
+					// At this point the server is shutting down, so blocking the main thread momentarily
+					// is acceptable and prevents the DB cleanup from being silently dropped.
 					Task.Run(() => worldServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
 				}
 				catch (Exception ex)
@@ -137,7 +141,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (Server.Configuration.TryGetString("ServerName", out string name))
 			{
-				// Task.Run avoids deadlock from Unity's SynchronizationContext when blocking on async during init
+				// Task.Run avoids deadlock from Unity's SynchronizationContext when blocking on async during init.
+				// BLOCKING THE MAIN THREAD IS INTENTIONAL: Unity's SynchronizationContext captures the main thread.
+				// If we awaited directly, any continuation that needs the main thread would deadlock. We use
+				// Task.Run to escape the SynchronizationContext, then GetAwaiter().GetResult() to block synchronously.
 				DatabaseResult<(long ServerId, WorldServerData ServerData)> result = Task.Run(() =>
 					worldServerService.PersistAsync(name, serverAddress, port, characterCount, data.IsLocked))
 					.GetAwaiter().GetResult();

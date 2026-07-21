@@ -345,6 +345,15 @@ namespace FishMMO.Auth.Implementation
 		/// Sweeps the kick-request debounce and auth rate-limit trackers.
 		/// Call from the hosting environment's per-tick update alongside <see cref="BaseAuthenticatorCore{TConnection}.Tick"/>.
 		/// </summary>
+		/// <inheritdoc/>
+		public override bool IsWorkerIdle =>
+			(verifyChannel?.Reader.Completion.IsCompleted ?? true) &&
+			(proofChannel?.Reader.Completion.IsCompleted ?? true);
+
+		/// <summary>
+		/// Sweeps the kick-request debounce and auth rate-limit trackers.
+		/// Call from the hosting environment's per-tick update alongside <see cref="BaseAuthenticatorCore{TConnection}.Tick"/>.
+		/// </summary>
 		public void TickRateLimits()
 		{
 			DateTime now = DateTime.UtcNow;
@@ -849,7 +858,7 @@ namespace FishMMO.Auth.Implementation
 			// Phase 1: Read AccountData under the lock to get the SrpData reference.
 			// We must NOT call GetProof() inside the lock — that method performs
 			// 2048-bit modular exponentiation (CPU-bound, ~2-10ms). Holding the
-			// global syncRoot during that time blocks ALL other connections from
+			// global SyncRoot during that time blocks ALL other connections from
 			// registering encryption data, advancing auth state, or disconnecting.
 			ServerSrpData? srpDataSnapshot = null;
 			if (!AccountManager.GetConnectionAccountData(conn, out AccountData? accountData) ||

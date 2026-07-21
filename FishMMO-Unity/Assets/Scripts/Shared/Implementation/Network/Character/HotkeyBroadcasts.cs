@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -6,14 +5,14 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Data structure representing a hotkey assignment for a character.
 	/// </summary>
-	public class HotkeyData
+	public struct HotkeyData
 	{
 		/// <summary>Type of the hotkey (e.g., ability, item).</summary>
 		public byte Type;
 		/// <summary>Slot index where the hotkey is assigned.</summary>
 		public int Slot;
 		/// <summary>Reference ID for the hotkey target (e.g., ability or item ID). Defaults to -1 if unset.</summary>
-		public long ReferenceID = -1;
+		public long ReferenceID; // Defaults to 0; set to -1 explicitly when "unset" is needed.
 	}
 
 	/// <summary>
@@ -33,6 +32,6 @@ namespace FishMMO.Shared
 	public struct HotkeySetMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of hotkey assignments to set.</summary>
-		public List<HotkeySetBroadcast> Hotkeys;
+		public HotkeySetBroadcast[] Hotkeys;
 	}
 }

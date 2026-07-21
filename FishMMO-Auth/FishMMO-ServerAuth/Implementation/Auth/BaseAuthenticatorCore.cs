@@ -58,7 +58,7 @@ namespace FishMMO.Auth.Implementation
 		/// <see cref="authOriginalStartByClientId"/>, and <see cref="authConnectionByClientId"/>.
 		/// All access to these three dictionaries must acquire this lock first.
 		/// Never acquired while holding <see cref="handshakeCountGate"/> or
-		/// <c>AccountManager.syncRoot</c> — disconnect/cleanup calls that need those
+		/// <c>AccountManager.SyncRoot</c> — disconnect/cleanup calls that need those
 		/// locks are performed outside the critical section.
 		/// </summary>
 		private readonly object ttlGate = new object();
@@ -199,6 +199,13 @@ namespace FishMMO.Auth.Implementation
 			ResetGlobalHandshakeWindowIfExpired();
 			OnTick();
 		}
+
+		/// <summary>
+		/// Returns true when no async worker operations are in-flight.
+		/// Subclasses with bounded-channel workers should override to check
+		/// channel emptiness. Default returns true.
+		/// </summary>
+		public virtual bool IsWorkerIdle => true;
 
 		/// <summary>
 		/// Override for subclass-specific per-tick logic (e.g., additional periodic sweeps).

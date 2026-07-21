@@ -66,7 +66,7 @@ namespace FishMMO.Database.Npgsql.Services
 						TimeCreated = reader.GetDateTime(2),
 						LastPulse = reader.GetDateTime(3),
 						Address = reader.GetString(4),
-						Port = (ushort)reader.GetInt32(5),
+						Port = reader.GetInt32(5),
 						CharacterCount = reader.GetInt32(6),
 						Locked = reader.GetBoolean(7),
 					},

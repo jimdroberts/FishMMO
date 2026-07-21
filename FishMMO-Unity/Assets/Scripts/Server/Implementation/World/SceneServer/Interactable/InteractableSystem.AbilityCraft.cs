@@ -96,13 +96,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (msg.Events != null)
 				{
 					// Defense-in-depth: cap event list size to prevent processing oversized payloads.
-					if (msg.Events.Count > maxAbilityCraftEvents)
+					if (msg.Events.Length > maxAbilityCraftEvents)
 					{
 						return;
 					}
 
 					HashSet<int> validatedEvents = new HashSet<int>();
-					for (int i = 0; i < msg.Events.Count; ++i)
+					for (int i = 0; i < msg.Events.Length; ++i)
 					{
 						int id = msg.Events[i];
 						if (validatedEvents.Contains(id))
@@ -141,7 +141,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				Ability newAbility = LearnAbility(abilityController, mainAbility, msg.Events);
+				Ability newAbility = LearnAbility(abilityController, mainAbility, new List<int>(msg.Events));
 				if (newAbility != null)
 				{
 					currency.AddValue(-price);

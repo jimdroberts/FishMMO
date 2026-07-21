@@ -23,7 +23,10 @@ namespace FishMMO.Client
 		/// <summary>Number of reconnect attempts made since the last successful connection.</summary>
 	public byte ReconnectsAttempted { get; private set; }
 		private float nextReconnect;
-		private bool forceDisconnect;
+		/// <summary>In-flight connection guard. Prevents concurrent ConnectToServer calls from starting duplicate coroutines.</summary>
+		private int connectingGuard = 0;
+		/// <summary>Thread-safe disconnect flag. Volatile for visibility across transport-worker callbacks.</summary>
+		private volatile bool forceDisconnect;
 		private string lastWorldAddress = "";
 		private ushort lastWorldPort;
 
@@ -75,15 +78,22 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>Initiates a connection. Waits for existing connection to stop if needed.</summary>
-	/// <param name="address">Server IP or hostname.</param>
-	/// <param name="port">Server port.</param>
-	/// <param name="isWorldServer">If true, stores address for reconnection logic.</param>
-	public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
+		/// <summary>Initiates a connection. Guards against concurrent calls via CAS.</summary>
+		/// <param name="address">Server IP or hostname.</param>
+		/// <param name="port">Server port.</param>
+		/// <param name="isWorldServer">If true, stores address for reconnection logic.</param>
+		public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
 		{
 			if (string.IsNullOrWhiteSpace(address))
 			{
 				Log.Error("ClientConnection", "ConnectToServer: address is null or empty.");
+				return;
+			}
+			// In-flight guard: prevent double-invocation from starting two
+			// concurrent coroutines that would both call StartConnection().
+			if (System.Threading.Interlocked.CompareExchange(ref connectingGuard, 1, 0) != 0)
+			{
+				Log.Warning("ClientConnection", "ConnectToServer already in progress; ignoring duplicate call.");
 				return;
 			}
 			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
@@ -197,11 +207,25 @@ namespace FishMMO.Client
 					if (ClientState != LocalConnectionState.Stopped)
 					{
 						Log.Error("ClientConnection", "Forced connection stop timed out; aborting connect.");
+						System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 						yield break;
 					}
 				}
 			}
-			if (forceDisconnect) { forceDisconnect = false; yield return null; }
+			// Release the in-flight guard only after confirming no force-disconnect
+			// is pending.  Releasing before the check would allow a concurrent
+			// ConnectToServer call to acquire the guard and start a new connection
+			// while a disconnect is still in flight.
+			if (forceDisconnect)
+			{
+				forceDisconnect = false;
+				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				yield return null;
+			}
+			else
+			{
+				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+			}
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
 			NetworkManager.ClientManager.StartConnection(address, port);
 			yield return null;

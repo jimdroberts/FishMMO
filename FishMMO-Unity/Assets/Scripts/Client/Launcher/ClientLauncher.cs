@@ -24,55 +24,115 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The background image of the launcher UI.
 		/// </summary>
-		public Image Background;
+		[SerializeField]
+		private Image background;
+		/// <summary>
+		/// The background image of the launcher UI.
+		/// </summary>
+		public Image Background => background;
 		/// <summary>
 		/// The title text of the launcher UI.
 		/// </summary>
-		public TMP_Text Title;
+		[SerializeField]
+		private TMP_Text title;
+		/// <summary>
+		/// The title text of the launcher UI.
+		/// </summary>
+		public TMP_Text Title => title;
 		/// <summary>
 		/// The HTML view GameObject for displaying news or other content.
 		/// </summary>
-		public GameObject HTMLView;
+		[SerializeField]
+		private GameObject htmlView;
+		/// <summary>
+		/// The HTML view GameObject for displaying news or other content.
+		/// </summary>
+		public GameObject HTMLView => htmlView;
 		/// <summary>
 		/// The group GameObject containing the progress bar UI.
 		/// </summary>
-		public GameObject ProgressBarGroup;
+		[SerializeField]
+		private GameObject progressBarGroup;
+		/// <summary>
+		/// The group GameObject containing the progress bar UI.
+		/// </summary>
+		public GameObject ProgressBarGroup => progressBarGroup;
 		/// <summary>
 		/// The progress slider UI element.
 		/// </summary>
-		public Slider ProgressSlider;
+		[SerializeField]
+		private Slider progressSlider;
+		/// <summary>
+		/// The progress slider UI element.
+		/// </summary>
+		public Slider ProgressSlider => progressSlider;
 		/// <summary>
 		/// The progress text UI element. Also used as a status/error message display
 		/// so the player can see what went wrong, not just the button label.
 		/// </summary>
-		public TMP_Text ProgressText;
+		[SerializeField]
+		private TMP_Text progressText;
+		/// <summary>
+		/// The progress text UI element.
+		/// </summary>
+		public TMP_Text ProgressText => progressText;
 		/// <summary>
 		/// The quit button UI element.
 		/// </summary>
-		public Button QuitButton;
+		[SerializeField]
+		private Button quitButton;
+		/// <summary>
+		/// The quit button UI element.
+		/// </summary>
+		public Button QuitButton => quitButton;
 		/// <summary>
 		/// The play button UI element.
 		/// </summary>
-		public Button PlayButton;
+		[SerializeField]
+		private Button playButton;
+		/// <summary>
+		/// The play button UI element.
+		/// </summary>
+		public Button PlayButton => playButton;
 		/// <summary>
 		/// The play button text UI element.
 		/// </summary>
-		public TMP_Text PlayButtonText;
+		[SerializeField]
+		private TMP_Text playButtonText;
+		/// <summary>
+		/// The play button text UI element.
+		/// </summary>
+		public TMP_Text PlayButtonText => playButtonText;
 		/// <summary>
 		/// The text UI element for displaying HTML content.
 		/// </summary>
-		public TMP_Text HtmlText;
+		[SerializeField]
+		private TMP_Text htmlText;
+		/// <summary>
+		/// The text UI element for displaying HTML content.
+		/// </summary>
+		public TMP_Text HtmlText => htmlText;
 		/// <summary>
 		/// The handler for clickable links in the HTML text.
 		/// </summary>
-		public TMPro_TextLinkHandler HtmlTextLinkHandler;
+		[SerializeField]
+		private TMPro_TextLinkHandler htmlTextLinkHandler;
+		/// <summary>
+		/// The handler for clickable links in the HTML text.
+		/// </summary>
+		public TMPro_TextLinkHandler HtmlTextLinkHandler => htmlTextLinkHandler;
 		/// <summary>
 		/// Optional status text element for displaying error/status messages to the user.
 		/// When assigned, the launcher writes human-readable feedback here so players
 		/// can see what went wrong without needing access to the log file.
 		/// When null, the ProgressText element is used as a fallback.
 		/// </summary>
-		public TMP_Text StatusText;
+		[SerializeField]
+		private TMP_Text statusText;
+		/// <summary>
+		/// Optional status text element for displaying error/status messages to the user.
+		/// </summary>
+		public TMP_Text StatusText => statusText;
 		#endregion
 
 		#region CONFIGURATION
@@ -80,19 +140,39 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The URL to fetch HTML news content from.
 		/// </summary>
-		public string HtmlViewURL = "https://www.fishmmo.com/docs/introduction.html";
+		[SerializeField]
+		private string htmlViewURL = "https://www.fishmmo.com/docs/introduction.html";
+		/// <summary>
+		/// The URL to fetch HTML news content from.
+		/// </summary>
+		public string HtmlViewURL => htmlViewURL;
 		/// <summary>
 		/// The class name of the div to extract from the HTML content.
 		/// </summary>
-		public string DivClass = "content";
+		[SerializeField]
+		private string divClass = "content";
+		/// <summary>
+		/// The class name of the div to extract from the HTML content.
+		/// </summary>
+		public string DivClass => divClass;
 		/// <summary>
 		/// The default screen width for the launcher window.
 		/// </summary>
-		public int DefaultScreenWidth = 1024;
+		[SerializeField]
+		private int defaultScreenWidth = 1024;
+		/// <summary>
+		/// The default screen width for the launcher window.
+		/// </summary>
+		public int DefaultScreenWidth => defaultScreenWidth;
 		/// <summary>
 		/// The default screen height for the launcher window.
 		/// </summary>
-		public int DefaultScreenHeight = 768;
+		[SerializeField]
+		private int defaultScreenHeight = 768;
+		/// <summary>
+		/// The default screen height for the launcher window.
+		/// </summary>
+		public int DefaultScreenHeight => defaultScreenHeight;
 		/// <summary>
 		/// Timeout in seconds for the addressable scene load watchdog.
 		/// If the scene load takes longer than this, the Play button is re-enabled so the player can retry.
@@ -107,15 +187,30 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Service for handling Unity web requests.
 		/// </summary>
-		public UnityWebRequestService UnityWebRequestService;
+		[SerializeField]
+		private UnityWebRequestService unityWebRequestService;
+		/// <summary>
+		/// Service for handling Unity web requests.
+		/// </summary>
+		public UnityWebRequestService UnityWebRequestService => unityWebRequestService;
 		/// <summary>
 		/// Service for fetching and processing HTML content.
 		/// </summary>
-		public UnityHtmlContentFetcher HtmlContentFetcher;
+		[SerializeField]
+		private UnityHtmlContentFetcher htmlContentFetcher;
+		/// <summary>
+		/// Service for fetching and processing HTML content.
+		/// </summary>
+		public UnityHtmlContentFetcher HtmlContentFetcher => htmlContentFetcher;
 		/// <summary>
 		/// Service for patch server communication and patch management.
 		/// </summary>
-		public HttpPatchServerService PatchServerService;
+		[SerializeField]
+		private HttpPatchServerService patchServerService;
+		/// <summary>
+		/// Service for patch server communication and patch management.
+		/// </summary>
+		public HttpPatchServerService PatchServerService => patchServerService;
 		/// <summary>
 		/// The updater launcher used to start the external updater process.
 		/// </summary>
@@ -207,19 +302,19 @@ namespace FishMMO.Client
 		private void Awake()
 		{
 			// SystemUpdaterLauncher is a plain C# class, directly instantiate it
-			updaterLauncher = new SystemUpdaterLauncher();
+			this.updaterLauncher = new SystemUpdaterLauncher();
 
 			// Basic null checks for dependencies
-			if (UnityWebRequestService == null || HtmlContentFetcher == null || PatchServerService == null || updaterLauncher == null)
+			if (this.unityWebRequestService == null || this.htmlContentFetcher == null || this.patchServerService == null || this.updaterLauncher == null)
 			{
 				Log.Error("ClientLauncher", "One or more required service dependencies are not assigned in the Inspector or are missing!");
-				if (PlayButtonText != null)
+				if (this.PlayButtonText != null)
 				{
-					PlayButtonText.text = "Fatal Error";
+					this.PlayButtonText.text = "Fatal Error";
 				}
-				if (PlayButton != null)
+				if (this.PlayButton != null)
 				{
-					PlayButton.interactable = false;
+					this.PlayButton.interactable = false;
 				}
 				enabled = false; // Disable this script if dependencies aren't met
 				return;
@@ -228,19 +323,19 @@ namespace FishMMO.Client
 			// or confirm it's not null here. For example, within UnityHtmlContentFetcher and HttpPatchServerService,
 			// they will check if their WebRequestService field is assigned.
 
-			if (HtmlTextLinkHandler != null)
+			if (this.HtmlTextLinkHandler != null)
 			{
-				HtmlTextLinkHandler.OnLinkClicked += HandleHtmlLinkClicked;
+				this.HtmlTextLinkHandler.OnLinkClicked += HandleHtmlLinkClicked;
 			}
 
 			SetLauncherState(LauncherState.LoadingNews);
 			// Delegate HTML fetching to the dedicated service
-			StartCoroutine(HtmlContentFetcher.FetchAndProcessHtml(
-				HtmlViewURL,
-				DivClass,
+			StartCoroutine(this.htmlContentFetcher.FetchAndProcessHtml(
+				this.HtmlViewURL,
+				this.DivClass,
 				onHtmlReady: (htmlContent) =>
 				{
-					HtmlText.text = htmlContent;
+					this.HtmlText.text = htmlContent;
 #if !UNITY_EDITOR
 					PlayButtonConnect();
 #else
@@ -253,11 +348,11 @@ namespace FishMMO.Client
 				}));
 
 			// Construct the full path to the updater executable
-			updaterPath = Path.Combine(Constants.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
+			this.updaterPath = Path.Combine(Constants.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
 
 #if !UNITY_EDITOR
 			// Set screen resolution for non-editor builds
-			Screen.SetResolution(DefaultScreenWidth, DefaultScreenHeight, FullScreenMode.Windowed, new RefreshRate()
+			Screen.SetResolution(this.DefaultScreenWidth, this.DefaultScreenHeight, FullScreenMode.Windowed, new RefreshRate()
 			{
 				numerator = 60,
 				denominator = 1,
@@ -266,8 +361,8 @@ namespace FishMMO.Client
 			string versionString = !string.IsNullOrEmpty(MainBootstrapSystem.GameVersion)
 				? MainBootstrapSystem.GameVersion
 				: "0.0.0-unknown";
-			Title.text = $"{Constants.Configuration.ProjectName} v{versionString}";
-			ProgressBarGroup.SetActive(false); // Ensure progress bar is hidden initially.
+			this.Title.text = $"{Constants.Configuration.ProjectName} v{versionString}";
+			this.ProgressBarGroup.SetActive(false); // Ensure progress bar is hidden initially.
 		}
 
 		/// <summary>
@@ -275,9 +370,9 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnDestroy()
 		{
-			if (HtmlTextLinkHandler != null)
+			if (this.HtmlTextLinkHandler != null)
 			{
-				HtmlTextLinkHandler.OnLinkClicked -= HandleHtmlLinkClicked;
+				this.HtmlTextLinkHandler.OnLinkClicked -= HandleHtmlLinkClicked;
 			}
 		}
 		#endregion
@@ -307,7 +402,7 @@ namespace FishMMO.Client
 			}
 
 			// Player-facing display.
-			TMP_Text target = StatusText != null ? StatusText : ProgressText;
+			TMP_Text target = this.StatusText != null ? this.StatusText : this.ProgressText;
 			if (target != null)
 			{
 				target.text = message;
@@ -321,7 +416,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ClearStatus()
 		{
-			TMP_Text target = StatusText != null ? StatusText : ProgressText;
+			TMP_Text target = this.StatusText != null ? this.StatusText : this.ProgressText;
 			if (target != null)
 			{
 				target.text = string.Empty;
@@ -336,15 +431,15 @@ namespace FishMMO.Client
 		/// <param name="errorDetail">Optional human-readable error detail displayed to the player.</param>
 		private void SetLauncherState(LauncherState newState, string errorDetail = null)
 		{
-			currentLauncherState = newState;
-			PlayButton.onClick.RemoveAllListeners(); // Always clear to ensure only one listener.
+			this.currentLauncherState = newState;
+			this.PlayButton.onClick.RemoveAllListeners(); // Always clear to ensure only one listener.
 
 			bool isButtonInteractable = false;
 			string buttonText = "";
 			Action buttonAction = null;
 			bool progressBarVisible = false;
 
-			switch (currentLauncherState)
+			switch (this.currentLauncherState)
 			{
 				case LauncherState.LoadingNews:
 					buttonText = UIText.StatusLoadingNews;
@@ -421,9 +516,9 @@ namespace FishMMO.Client
 					break;
 			}
 
-			PlayButtonText.text = buttonText;
-			PlayButton.interactable = isButtonInteractable;
-			ProgressBarGroup.SetActive(progressBarVisible);
+			this.PlayButtonText.text = buttonText;
+			this.PlayButton.interactable = isButtonInteractable;
+			this.ProgressBarGroup.SetActive(progressBarVisible);
 
 			// Display error/status detail to the player when available.
 			if (!string.IsNullOrEmpty(errorDetail))
@@ -437,7 +532,7 @@ namespace FishMMO.Client
 
 			if (buttonAction != null)
 			{
-				PlayButton.onClick.AddListener(() => buttonAction.Invoke());
+				this.PlayButton.onClick.AddListener(() => buttonAction.Invoke());
 			}
 		}
 
@@ -490,8 +585,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public void PlayButtonConnect()
 		{
-			if (isConnecting) return;
-			isConnecting = true;
+			if (this.isConnecting) return;
+			this.isConnecting = true;
 			SetLauncherState(LauncherState.Connecting);
 			StartCoroutine(GetLatestVersion());
 		}
@@ -501,12 +596,12 @@ namespace FishMMO.Client
 		/// </summary>
 		public void PlayButtonLaunch()
 		{
-			if (isLaunching) return;
-			isLaunching = true;
+			if (this.isLaunching) return;
+			this.isLaunching = true;
 			SetLauncherState(LauncherState.ReadyToPlay);
-			if (PlayButton != null)
+			if (this.PlayButton != null)
 			{
-				PlayButton.interactable = false;
+				this.PlayButton.interactable = false;
 			}
 
 			AddressableLoadProcessor.EnqueueLoad(new AddressableSceneLoadData("ClientPostboot", OnPostbootSceneLoaded));
@@ -516,7 +611,7 @@ namespace FishMMO.Client
 			}
 			catch (UnityException ex)
 			{
-				isLaunching = false;
+				this.isLaunching = false;
 				SetLauncherState(LauncherState.LaunchFailed,
 					$"Failed to load game scene: {ex.Message}. Check that Addressable bundles are built.");
 				return;
@@ -536,8 +631,8 @@ namespace FishMMO.Client
 		/// </summary>
 		private System.Collections.IEnumerator LaunchWatchdog()
 		{
-			yield return new WaitForSeconds(launchWatchdogTimeoutSeconds);
-			isLaunching = false;
+			yield return new WaitForSeconds(this.launchWatchdogTimeoutSeconds);
+			this.isLaunching = false;
 			SetLauncherState(LauncherState.LaunchFailed,
 				"Scene load timed out. Check that Addressable bundles are built and up to date.");
 		}
@@ -571,23 +666,23 @@ namespace FishMMO.Client
 			// download corresponds to the version we were told about. Fall back to the
 			// hard-coded default only if no candidate has been selected yet (shouldn't
 			// happen in normal flow because Update is gated by a successful version check).
-			string patchApiHost = !string.IsNullOrEmpty(selectedApiHost)
-				? selectedApiHost
+			string patchApiHost = !string.IsNullOrEmpty(this.selectedApiHost)
+				? this.selectedApiHost
 				: Constants.Configuration.APIHost;
 
 			// Delegate patch download to patch server service
-			StartCoroutine(PatchServerService.DownloadPatch(
+			StartCoroutine(this.patchServerService.DownloadPatch(
 				$"{patchApiHost}{MainBootstrapSystem.GameVersion}",
 				tempFilePath,
-				expectedPatchSha256,
+				this.expectedPatchSha256,
 				onComplete: () =>
 				{
 					SetLauncherState(LauncherState.ApplyingPatch, "Applying patch to game files. This may take a few minutes.");
 					// Delegate updater launch to updater launcher service
-					StartCoroutine(updaterLauncher.LaunchUpdater(
-						updaterPath,
+					StartCoroutine(this.updaterLauncher.LaunchUpdater(
+						this.updaterPath,
 						MainBootstrapSystem.GameVersion,
-						latestVersionString,
+						this.latestVersionString,
 						onComplete: () => {
 						// Clean up temp patch file after successful update.
 						if (File.Exists(tempFilePath))
@@ -615,8 +710,8 @@ namespace FishMMO.Client
 				},
 				onProgress: (progress, progressString) =>
 				{
-					ProgressSlider.value = progress;
-					ProgressText.text = progressString;
+					this.ProgressSlider.value = progress;
+					this.ProgressText.text = progressString;
 				}));
 		}
 
@@ -627,13 +722,13 @@ namespace FishMMO.Client
 		private IEnumerator GetLatestVersion()
 		{
 			SetLauncherState(LauncherState.CheckingVersion);
-			isConnecting = true;
+			this.isConnecting = true;
 
 			List<string> candidates = ApiHostResolver.GetCandidates();
 			if (candidates.Count == 0)
 			{
 				SetLauncherState(LauncherState.VersionCheckFailed, "No API host configured. Check Constants.cs Configuration.APIHost.");
-				isConnecting = false;
+				this.isConnecting = false;
 				yield break;
 			}
 
@@ -649,7 +744,7 @@ namespace FishMMO.Client
 				bool callbackFired = false;
 				string attemptError = null;
 
-				yield return StartCoroutine(PatchServerService.GetLatestVersion(
+				yield return StartCoroutine(this.patchServerService.GetLatestVersion(
 					host,
 					MainBootstrapSystem.GameVersion,
 					onComplete: (sv, info) =>
@@ -677,13 +772,13 @@ namespace FishMMO.Client
 			{
 				SetLauncherState(LauncherState.VersionCheckFailed,
 					lastError ?? "All API hosts failed. Check your internet connection and firewall.");
-				isConnecting = false;
+				this.isConnecting = false;
 				yield break;
 			}
 
-			selectedApiHost = successfulHost;
-			latestVersionString = serverVersion.ToString(); // Store for updater launch
-			expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
+			this.selectedApiHost = successfulHost;
+			this.latestVersionString = serverVersion.ToString(); // Store for updater launch
+			this.expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
 			Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
 
 			VersionConfig clientVersion;
@@ -695,26 +790,26 @@ namespace FishMMO.Client
 			{
 				SetLauncherState(LauncherState.VersionError,
 					$"Client version '{MainBootstrapSystem.GameVersion}' is not valid. Reinstall or delete version.txt.");
-				isConnecting = false;
+				this.isConnecting = false;
 				yield break;
 			}
 
 			// Compare client and server versions to determine the appropriate action.
 			if (clientVersion < serverVersion)
 			{
-				isConnecting = false;
+				this.isConnecting = false;
 				PlayButtonUpdate();
 			}
 			else if (clientVersion > serverVersion)
 			{
 				Log.Warning("ClientLauncher", string.Format(UIText.LogDebugClientVersionAhead, MainBootstrapSystem.GameVersion, latestVersionString));
 				SetLauncherState(LauncherState.ClientAhead);
-				isConnecting = false;
+				this.isConnecting = false;
 			}
 			else
 			{
 				SetLauncherState(LauncherState.ReadyToPlay);
-				isConnecting = false;
+				this.isConnecting = false;
 			}
 		}
 

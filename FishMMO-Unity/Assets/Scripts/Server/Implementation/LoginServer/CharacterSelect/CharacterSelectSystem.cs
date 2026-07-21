@@ -181,7 +181,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					{
 						Server.NetworkWrapper.Broadcast(conn, new CharacterListBroadcast()
 						{
-							Characters = characterList,
+							Characters = characterList.ToArray(),
 						}, true, Channel.Reliable);
 					}
 				});
@@ -512,7 +512,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							Name = data.Name,
 							LastPulse = data.LastPulse,
-							Port = data.Port,
+							Port = (ushort)data.Port,
 							CharacterCount = data.CharacterCount,
 							Locked = data.Locked,
 						};
@@ -661,7 +661,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					Server.NetworkWrapper.Broadcast(conn, new CharacterListBroadcast()
 					{
-						Characters = new List<CharacterDetails>(),
+						Characters = System.Array.Empty<CharacterDetails>(),
 					}, true, Channel.Reliable);
 				}
 			});

@@ -358,7 +358,7 @@ namespace FishMMO.Client
 			{
 				InteractableID = lastInteractableID,
 				TemplateID = main.ID,
-				Events = eventIds,
+				Events = eventIds.ToArray(),
 			};
 
 			Client.Broadcast(abilityAddBroadcast, Channel.Reliable);

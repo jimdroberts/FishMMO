@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -24,7 +23,7 @@ namespace FishMMO.Shared
 	public struct QuestUpdateMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of individual quest updates.</summary>
-		public List<QuestUpdateBroadcast> Quests;
+		public QuestUpdateBroadcast[] Quests;
 	}
 
 	/// <summary>
@@ -45,7 +44,7 @@ namespace FishMMO.Shared
 		public long InteractableID;
 
 		/// <summary>CachedScriptableObject IDs of the available QuestTemplates.</summary>
-		public List<int> TemplateIDs;
+		public int[] TemplateIDs;
 	}
 
 	/// <summary>

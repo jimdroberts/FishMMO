@@ -137,11 +137,11 @@ namespace FishMMO.Shared
 		/// <summary>The darkGrey predefined color constant.</summary>
 		public static readonly TinyColor darkGrey = new TinyColor(64, 64, 64, 255);    // Primary
 		/// <summary>The lightGrey predefined color constant.</summary>
-		public static readonly TinyColor lightGrey = new TinyColor(192, 192, 192, 255);  // Text
+		public static readonly TinyColor lightGrey = new TinyColor(211, 211, 211, 255);  // Text
 		/// <summary>The charcoal predefined color constant.</summary>
 		public static readonly TinyColor charcoal = new TinyColor(34, 34, 34, 255);    // Secondary
 		/// <summary>The bloodRed predefined color constant.</summary>
-		public static readonly TinyColor bloodRed = new TinyColor(128, 0, 0, 255);    // Highlights
+		public static readonly TinyColor bloodRed = new TinyColor(178, 34, 34, 255);    // Highlights
 		/// <summary>The maroon predefined color constant.</summary>
 		public static readonly TinyColor maroon = new TinyColor(128, 0, 0, 255);    // Complementary to Blood Red
 		/// <summary>The olive predefined color constant.</summary>

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -20,7 +19,7 @@ namespace FishMMO.Shared
 	public struct KnownAbilityAddMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of known abilities to add.</summary>
-		public List<KnownAbilityAddBroadcast> Abilities;
+		public KnownAbilityAddBroadcast[] Abilities;
 	}
 
 	/// <summary>
@@ -40,7 +39,7 @@ namespace FishMMO.Shared
 	public struct KnownAbilityEventAddMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of known ability events to add.</summary>
-		public List<KnownAbilityEventAddBroadcast> AbilityEvents;
+		public KnownAbilityEventAddBroadcast[] AbilityEvents;
 	}
 
 	/// <summary>
@@ -54,7 +53,7 @@ namespace FishMMO.Shared
 		/// <summary>Template ID of the ability.</summary>
 		public int TemplateID;
 		/// <summary>List of event IDs associated with the ability.</summary>
-		public List<int> Events;
+		public int[] Events;
 	}
 
 	/// <summary>
@@ -64,6 +63,6 @@ namespace FishMMO.Shared
 	public struct AbilityAddMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of abilities to add.</summary>
-		public List<AbilityAddBroadcast> Abilities;
+		public AbilityAddBroadcast[] Abilities;
 	}
 }

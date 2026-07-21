@@ -115,9 +115,42 @@ All functions return `WT_OK` (0) on success or a negative error code.
 | **Windows x86_64** | ✅ | Native CMake on Windows (`build_windows.ps1`) or Zig cross-compile from Linux (`./build_windows_cross.sh`) |
 | **macOS x86_64** | ✅ | Native CMake on Mac (`./build_macos.sh`) |
 
+> **⚠️ Deployment-time build required.** Native binaries are **not** checked into the
+> repository (they are gitignored). The C++ project must be compiled directly on each
+> deployment server before starting the game server. Each platform's binary links
+> against the locally-installed OpenSSL and msquic libraries — pre-built binaries
+> from a different machine may have ABI incompatibilities.
+>
+> **Pre-built binaries:** Only the Linux x86_64 binary (`libfishmmo_webtransport.so`)
+> is pre-built for development convenience. All other platforms — macOS, Windows, and
+> even Linux for production — MUST compile the WebTransport C++ project before running.
+> Do not rely on pre-built binaries for production deployments.
+>
+> **Stripping for production:** On Linux, use `strip` to reduce binary size and remove
+> debug symbols before deployment:
+> ```bash
+> strip --strip-debug libfishmmo_webtransport.so
+> ```
+> This typically halves the binary size with no functional impact.
+>
+> **Quick reference for deployment builds:**
+> ```bash
+> # Linux server (most common) — compile before first run
+> cd FishMMO-WebTransport && ./build_linux.sh
+>
+> # Windows server — compile before first run
+> powershell -File build_windows.ps1
+>
+> # macOS (client-only, no server support) — compile before first run
+> ./build_macos.sh
+> ```
+>
+> The build outputs directly into the Unity plugin directory at
+> `../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/{platform}/`.
+
 Built libraries are gitignored — they live in the Unity plugins directory
 (`../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/{platform}/`)
-and are rebuilt per-deployment. |
+and must be rebuilt per-deployment.
 
 ## Project Structure
 

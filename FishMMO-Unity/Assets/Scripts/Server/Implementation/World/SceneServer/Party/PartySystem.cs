@@ -524,7 +524,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 						PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
 						{
-							Members = addBroadcasts,
+							Members = addBroadcasts.ToArray(),
 						};
 
 						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
@@ -1453,20 +1453,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				if (msg.MemberID < 1)
+				if (msg.CharacterID < 1)
 				{
 					return;
 				}
 
 				// Prevent party leaders from kicking themselves.
-				if (msg.MemberID == partyController.Character.ID)
+				if (msg.CharacterID == partyController.Character.ID)
 				{
 					return;
 				}
 
 				// Capture immutable data for the async path
 				long partyID = partyController.ID;
-				long memberID = msg.MemberID;
+				long memberID = msg.CharacterID;
 				long characterID = partyController.Character.ID;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => RemovePartyMemberAsync(partyID, memberID, characterID), guardKey, characterID);
@@ -1584,13 +1584,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				if (msg.MemberID < 1)
+				if (msg.CharacterID < 1)
 				{
 					return;
 				}
 
 				// we can't promote ourself
-				if (msg.MemberID == partyController.Character.ID)
+				if (msg.CharacterID == partyController.Character.ID)
 				{
 					return;
 				}
@@ -1598,7 +1598,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Capture immutable data for the async path
 				long partyID = partyController.ID;
 				long leaderCharacterID = partyController.Character.ID;
-				long targetMemberID = msg.MemberID;
+				long targetMemberID = msg.CharacterID;
 
 				deferGuardRelease = TryEnqueueIngressWork(() => ChangePartyRankAsync(partyID, leaderCharacterID, targetMemberID), guardKey, leaderCharacterID);
 				if (!deferGuardRelease) SendServerBusy(conn);

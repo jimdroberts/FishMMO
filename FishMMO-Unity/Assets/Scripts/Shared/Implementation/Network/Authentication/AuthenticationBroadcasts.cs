@@ -4,6 +4,24 @@ using FishMMO.Auth.Core;
 
 namespace FishMMO.Shared
 {
+	/// <para>
+	/// <b>Byte Array Ownership Contract:</b> All <c>byte[]</c> fields on broadcast
+	/// structs in this file contain cryptographically sensitive data (public keys,
+	/// salts, verifiers, proofs, tokens). FishNet serializes these broadcasts on
+	/// its network thread. Callers MUST NOT mutate or zeroize any byte array after
+	/// assigning it to a broadcast struct field until the send operation has fully
+	/// completed. The recommended pattern is:
+	/// <list type="number">
+	/// <item>Create the byte array.</item>
+	/// <item>Assign it to the broadcast struct field.</item>
+	/// <item>Call the appropriate FishNet send method.</item>
+	/// <item>Zeroize the source array via <c>CryptographicOperations.ZeroMemory</c>.</item>
+	/// </list>
+	/// For the avoidance of doubt: these structs do <b>not</b> defensively copy
+	/// byte arrays in constructors — they store the caller's reference directly
+	/// for zero-allocation performance on hot auth paths.
+	/// </para>
+
 	/// <summary>
 	/// Broadcast sent by the client during an explicit logout to ask the LoginServer to
 	/// revoke its currently-held auth token before its TTL expires. The token is sent

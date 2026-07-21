@@ -50,7 +50,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Applies transport configuration values from <see cref="IServerConfiguration"/>.
 		/// </summary>
-		void ApplyTransportConfiguration();
+		void ApplyTransportConfiguration(string addressOverride = null, ushort? portOverride = null);
 
 		/// <summary>
 		/// Registers a broadcast handler for the given type.

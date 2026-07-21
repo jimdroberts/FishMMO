@@ -47,7 +47,7 @@ namespace FishMMO.Shared
 			{
 				InteractableID = data.Interactable.ID,
 				TemplateID = container.Template.ID,
-				Items = slotData,
+				Items = slotData.ToArray(),
 			});
 
 			if (container.AchievementTemplate != null &&

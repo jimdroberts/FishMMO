@@ -79,7 +79,7 @@ namespace FishMMO.Server.Core
 		/// </summary>
 		/// <param name="serverTypeName">The name of the server type.</param>
 		/// <returns>The corresponding <see cref="ServerType"/> enum value.</returns>
-		private static ServerType GetServerType(string serverTypeName)
+		internal static ServerType GetServerType(string serverTypeName)
 		{
 			string upper = serverTypeName.ToUpperInvariant();
 			if (upper.StartsWith("LOGIN"))

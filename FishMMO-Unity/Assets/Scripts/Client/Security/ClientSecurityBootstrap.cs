@@ -64,6 +64,21 @@ namespace FishMMO.Client.Security
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
 		private static void Initialize()
 		{
+#if UNITY_ANDROID && !UNITY_EDITOR
+			// On Android, streaming assets are inside the APK/AAB and must be loaded
+			// via UnityWebRequest, which requires main-thread yielding.  A blocking
+			// spin-wait here would cause an ANR (Android) or browser-fetch deadlock
+			// (WebGL).  We defer to a coroutine-driven non-blocking load instead, and
+			// fall through to compile-time defaults synchronously only if the coroutine
+			// helper is unavailable.
+			if (CoroutineHelper.IsAvailable)
+			{
+				CoroutineHelper.Start(LoadFromStreamingAssetsCoroutine());
+				// Fall through to synchronous defaults below — the coroutine will
+				// call ClientCertificatePinning.Configure() a second time with the
+				// loaded pins once the UnityWebRequest completes.
+			}
+#else
 			try
 			{
 				if (TryLoadFromStreamingAssets(out var pins, out var allowOnEmpty))
@@ -88,6 +103,7 @@ namespace FishMMO.Client.Security
 					$"Failed to load {configFileName} from StreamingAssets: {ex.Message}. " +
 					"Falling back to compile-time defaults.");
 			}
+#endif
 
 			ClientCertificatePinning.Configure(defaultPins, DefaultAllowOnEmpty);
 			if (defaultPins.Length == 0)
@@ -119,47 +135,56 @@ namespace FishMMO.Client.Security
 			}
 		}
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+		/// <summary>
+		/// Non-blocking coroutine that loads client-security.json via UnityWebRequest
+		/// on platforms where streaming assets are not directly filesystem-accessible.
+		/// On completion, calls <see cref="ClientCertificatePinning.Configure"/> with
+		/// the loaded pins, or falls through to the compile-time defaults on failure.
+		/// </summary>
+		private static System.Collections.IEnumerator LoadFromStreamingAssetsCoroutine()
+		{
+			string path = System.IO.Path.Combine(Application.streamingAssetsPath, configFileName);
+			using (var request = UnityEngine.Networking.UnityWebRequest.Get(path))
+			{
+				var op = request.SendWebRequest();
+				yield return op;
+				if (request.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
+				{
+					string json = request.downloadHandler.text;
+					var parsed = JsonUtility.FromJson<PinConfigPayload>(json);
+					if (parsed != null)
+					{
+						var pins = new List<string>();
+						if (parsed.pins != null)
+							pins.AddRange(parsed.pins);
+						ClientCertificatePinning.Configure(pins, parsed.allowOnEmpty);
+						Log.Debug(logChannel,
+							$"Loaded {pins.Count} pin(s) from StreamingAssets/{configFileName}.");
+						yield break;
+					}
+				}
+			}
+			// Fall through — configure with compile-time defaults.
+			ClientCertificatePinning.Configure(defaultPins, DefaultAllowOnEmpty);
+			Log.Warning(logChannel,
+				$"Failed to load {configFileName} from StreamingAssets via UnityWebRequest; using compile-time defaults.");
+		}
+#endif
+
+		/// <summary>
+		/// Synchronously loads client-security.json from the filesystem.  Only
+		/// called on platforms where <see cref="Application.streamingAssetsPath"/>
+		/// is directly filesystem-accessible (Editor, standalone desktop builds).
+		/// On Android, the async coroutine path in <see cref="LoadFromStreamingAssetsCoroutine"/>
+		/// is used instead to avoid main-thread blocking.
+		/// </summary>
 		private static bool TryLoadFromStreamingAssets(out List<string> pins, out bool allowOnEmpty)
 		{
 			pins = null;
 			allowOnEmpty = DefaultAllowOnEmpty;
 
 			string path = Path.Combine(Application.streamingAssetsPath, configFileName);
-#if UNITY_ANDROID && !UNITY_EDITOR
-			// On Android, StreamingAssets lives inside the .apk/.aab and cannot be
-			// accessed via File.Exists / File.ReadAllText. Use UnityWebRequest to
-			// fetch the config at runtime, or (preferred) ship pins via defaultPins[]
-			// compiled into the build. We attempt the UnityWebRequest path here;
-			// if it fails, we fall through to compile-time defaults.
-			try
-			{
-				using (var request = UnityEngine.Networking.UnityWebRequest.Get(path))
-				{
-					var op = request.SendWebRequest();
-					// Blocking wait is acceptable here — this runs once during
-					// BeforeSceneLoad, before any game logic starts.
-					while (!op.isDone) { }
-					if (request.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
-					{
-						string json = request.downloadHandler.text;
-						var parsed = JsonUtility.FromJson<PinConfigPayload>(json);
-						if (parsed != null)
-						{
-							pins = new List<string>();
-							if (parsed.pins != null)
-								pins.AddRange(parsed.pins);
-							allowOnEmpty = parsed.allowOnEmpty;
-							return true;
-						}
-					}
-				}
-			}
-			catch (Exception)
-			{
-				// Fall through to compile-time defaults.
-			}
-			return false;
-#else
 			if (!File.Exists(path))
 			{
 				return false;
@@ -179,7 +204,6 @@ namespace FishMMO.Client.Security
 			}
 			allowOnEmpty = parsed.allowOnEmpty;
 			return true;
-#endif
 		}
 
 		[Serializable]
@@ -187,6 +211,40 @@ namespace FishMMO.Client.Security
 		{
 			public string[] pins;
 			public bool allowOnEmpty;
+		}
+
+		/// <summary>
+		/// Minimal MonoBehaviour for running coroutines from a static context.
+		/// Used on platforms where <see cref="Application.streamingAssetsPath"/> is
+		/// not directly filesystem-accessible (Android, WebGL) to load pin config
+		/// asynchronously via UnityWebRequest without blocking the main thread.
+		/// </summary>
+		private class CoroutineHelper : MonoBehaviour
+		{
+			private static CoroutineHelper instance;
+
+			/// <summary>
+			/// Returns true if the coroutine helper can be created (always true on
+			/// Unity standalone / mobile / WebGL player builds).
+			/// </summary>
+			public static bool IsAvailable => true;
+
+			/// <summary>
+			/// Starts a coroutine on a persistent hidden GameObject.
+			/// </summary>
+			public static void Start(System.Collections.IEnumerator routine)
+			{
+				if (instance == null)
+				{
+					var go = new GameObject("ClientSecurityBootstrap-CoroutineHelper")
+					{
+						hideFlags = HideFlags.HideAndDontSave
+					};
+					GameObject.DontDestroyOnLoad(go);
+					instance = go.AddComponent<CoroutineHelper>();
+				}
+				instance.StartCoroutine(routine);
+			}
 		}
 	}
 }

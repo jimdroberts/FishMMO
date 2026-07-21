@@ -30,7 +30,7 @@ namespace FishMMO.Shared
 
 		private readonly int instanceId;
 
-		private CultureInfo cultureInfo = CultureInfo.InvariantCulture;
+		private readonly CultureInfo cultureInfo = CultureInfo.InvariantCulture;
 
 		/// <summary>
 		/// Synchronizes access to the <see cref="settings"/> dictionary. ReaderWriterLockSlim is used
@@ -43,7 +43,7 @@ namespace FishMMO.Shared
 		/// Stores the configuration settings as key-value pairs. Keys are treated case-insensitively using <see cref="StringComparer.OrdinalIgnoreCase"/>.
 		/// All access must be synchronized via <see cref="settingsLock"/>.
 		/// </summary>
-		private Dictionary<string, string> settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		private Dictionary<string, string> settings = new Dictionary<string, string>(100, StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Gets the default directory where configuration files are saved and loaded. This value is set during construction.
@@ -62,6 +62,14 @@ namespace FishMMO.Shared
 		/// in-memory config dictionary. This allows operators to override
 		/// sensitive values (DB passwords, signing keys, etc.) without
 		/// committing them to disk.
+		///
+		/// LIMITATION: Dots, colons, and dashes in setting names are all converted
+		/// to underscores for environment variable lookup. This means keys like
+		/// "Database.Password", "Database:Password", and "Database-Password" all
+		/// map to the same env var FISHMMO_CONFIG_DATABASE_PASSWORD, creating an
+		/// ambiguity. Workarounds include: (a) choosing a single delimiter and
+		/// enforcing it in naming conventions, or (b) encoding the original key
+		/// in a side-channel value.
 		/// </summary>
 		private bool TryResolveRawValue(string name, out string value)
 		{
@@ -78,7 +86,7 @@ namespace FishMMO.Shared
 			settingsLock.EnterReadLock();
 			try
 			{
-				return settings.TryGetValue(name, out value);
+				return this.settings.TryGetValue(name, out value);
 			}
 			finally
 			{
@@ -128,10 +136,10 @@ namespace FishMMO.Shared
 				settingsLock.EnterReadLock();
 				try
 				{
-					if (settings.Count > 0)
+					if (this.settings.Count > 0)
 					{
 						sb.AppendLine("Settings:");
-						foreach (KeyValuePair<string, string> setting in settings)
+						foreach (KeyValuePair<string, string> setting in this.settings)
 						{
 							sb.Append("  "); // Adds indentation for better readability of the output.
 							sb.Append(setting.Key);
@@ -261,24 +269,27 @@ namespace FishMMO.Shared
 					Directory.CreateDirectory(fileDirectory);
 				}
 
-				// Opens/creates the file for writing, truncating if it already exists, and ensures exclusive access.
-				// Uses StreamWriter with UTF8 encoding without a Byte Order Mark (BOM) for cleaner text files.
-				using (FileStream fs = File.Open(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
-				using (StreamWriter sw = new StreamWriter(fs, new UTF8Encoding(false)))
+				// Acquire the read lock BEFORE opening the file to prevent a TOCTOU race
+				// where another thread mutates the dictionary between the file-open and
+				// the lock acquisition, causing the written snapshot to be inconsistent.
+				settingsLock.EnterReadLock();
+				try
 				{
-					settingsLock.EnterReadLock();
-					try
+					// Opens/creates the file for writing, truncating if it already exists, and ensures exclusive access.
+					// Uses StreamWriter with UTF8 encoding without a Byte Order Mark (BOM) for cleaner text files.
+					using (FileStream fs = File.Open(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
+					using (StreamWriter sw = new StreamWriter(fs, new UTF8Encoding(false)))
 					{
 						// Writes each key-value pair to the file in "key=value" format, followed by a new line.
-						foreach (KeyValuePair<string, string> pair in settings)
+						foreach (KeyValuePair<string, string> pair in this.settings)
 						{
 							sw.WriteLine($"{pair.Key}={pair.Value}");
 						}
 					}
-					finally
-					{
-						settingsLock.ExitReadLock();
-					}
+				}
+				finally
+				{
+					settingsLock.ExitReadLock();
 				}
 			}
 			// Catches specific exceptions related to file access permissions.
@@ -366,7 +377,7 @@ namespace FishMMO.Shared
 				try
 				{
 					// Clears all existing settings before populating with new ones from the file.
-					settings.Clear();
+					this.settings.Clear();
 
 					// Splits the entire file content into individual lines, removing any empty lines.
 					string[] lines = unsplit.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
@@ -387,7 +398,7 @@ namespace FishMMO.Shared
 						{
 							// Sets the configuration entry by writing directly to the dictionary under the write lock
 							// instead of calling Set(), to avoid nested lock acquisition.
-							settings[pair[0].Trim()] = pair[1].Trim();
+							this.settings[pair[0].Trim()] = pair[1].Trim();
 						}
 						else
 						{
@@ -438,7 +449,7 @@ namespace FishMMO.Shared
 			settingsLock.EnterWriteLock();
 			try
 			{
-				settings[name] = value ?? string.Empty; // Assigns the value; if 'value' is null, it stores an empty string.
+				this.settings[name] = value ?? string.Empty; // Assigns the value; if 'value' is null, it stores an empty string.
 			}
 			finally
 			{
@@ -473,7 +484,7 @@ namespace FishMMO.Shared
 		/// <param name="value">The double value to set.</param>
 		public void Set(string name, double value)
 		{
-			Set(name, value.ToString("R", cultureInfo));
+			Set(name, value.ToString("R", this.cultureInfo));
 		}
 
 		/// <summary>
@@ -486,7 +497,7 @@ namespace FishMMO.Shared
 			settingsLock.EnterReadLock();
 			try
 			{
-				return settings.ContainsKey(name);
+				return this.settings.ContainsKey(name);
 			}
 			finally
 			{
@@ -504,7 +515,7 @@ namespace FishMMO.Shared
 			settingsLock.EnterWriteLock();
 			try
 			{
-				return settings.Remove(name);
+				return this.settings.Remove(name);
 			}
 			finally
 			{
@@ -532,7 +543,7 @@ namespace FishMMO.Shared
 			{
 				try
 				{
-					result = (T)Convert.ChangeType(settingValue, typeof(T), cultureInfo); // Attempts to convert using invariant culture.
+					result = (T)Convert.ChangeType(settingValue, typeof(T), this.cultureInfo); // Attempts to convert using invariant culture.
 					return true;
 				}
 				catch (InvalidCastException)
@@ -601,7 +612,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return byte.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return byte.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -620,7 +631,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return sbyte.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return sbyte.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -639,7 +650,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return short.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return short.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -658,7 +669,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return ushort.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return ushort.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -677,7 +688,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return int.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return int.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -696,7 +707,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return uint.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return uint.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -715,7 +726,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return long.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return long.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -734,7 +745,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return ulong.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return ulong.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -771,7 +782,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return float.TryParse(setting, NumberStyles.Any, cultureInfo, out result);
+				return float.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
 			}
 			result = defaultValue;
 			return false;
@@ -790,7 +801,7 @@ namespace FishMMO.Shared
 		{
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return double.TryParse(setting, NumberStyles.Any, cultureInfo.NumberFormat, out result);
+				return double.TryParse(setting, NumberStyles.Any, this.cultureInfo.NumberFormat, out result);
 			}
 			result = defaultValue;
 			return false;

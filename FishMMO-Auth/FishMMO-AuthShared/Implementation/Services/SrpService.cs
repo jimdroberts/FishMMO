@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using FishMMO.Auth.Core;
@@ -496,7 +497,7 @@ namespace FishMMO.Auth.Implementation
 			out uint verifierSeq)
 		{
 			byte[] emailBytes = Encoding.UTF8.GetBytes(email ?? "");
-			byte[] ageBytes = Encoding.UTF8.GetBytes(age.ToString());
+			byte[] ageBytes = Encoding.UTF8.GetBytes(age.ToString(CultureInfo.InvariantCulture));
 			byte[] saltBytes = Encoding.UTF8.GetBytes(salt);
 			byte[] verifierBytes = Encoding.UTF8.GetBytes(verifier);
 
@@ -629,7 +630,7 @@ namespace FishMMO.Auth.Implementation
 
 				otpauthUri = CryptoHelper.StrictUtf8.GetString(decryptedUri);
 				string codesStr = CryptoHelper.StrictUtf8.GetString(decryptedCodes);
-				recoveryCodes = codesStr.Split('\n');
+				recoveryCodes = codesStr.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 			}
 			catch (DecoderFallbackException)
 			{

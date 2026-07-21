@@ -20,7 +20,7 @@ namespace FishMMO.Auth.Implementation
 		/// Synchronization object for all dictionary access.
 		/// Subclasses must acquire this lock before accessing any protected field.
 		/// </summary>
-		protected readonly object syncRoot = new object();
+		protected readonly object SyncRoot = new object();
 
 		/// <summary>
 		/// Maps each connection to its encryption data (public key, symmetric key, session prefix, and counters).
@@ -64,7 +64,7 @@ namespace FishMMO.Auth.Implementation
 		public bool TryAddConnectionEncryptionData(TConnection connection, byte[] publicKey)
 		{
 			var data = new ConnectionEncryptionData(publicKey);
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				if (connectionEncryptionEntries.ContainsKey(connection))
 					return false;
@@ -94,7 +94,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if found; otherwise, <c>false</c>.</returns>
 		public bool GetConnectionEncryptionData(TConnection connection, out ConnectionEncryptionData encryptionData)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				return connectionEncryptionEntries.TryGetValue(connection, out encryptionData);
 			}
@@ -106,7 +106,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="connection">The network connection.</param>
 		public void RemoveConnectionAccount(TConnection connection)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				ClearAndRemoveEncryptionData_NoLock(connection);
 
@@ -134,7 +134,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if found; otherwise, <c>false</c>.</returns>
 		public bool GetConnectionAccountData(TConnection connection, out AccountData accountData)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				return connectionAccountData.TryGetValue(connection, out accountData);
 			}
@@ -148,7 +148,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if found; otherwise, <c>false</c>.</returns>
 		public bool GetAccountNameByConnection(TConnection connection, out string accountName)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				return connectionAccounts.TryGetValue(connection, out accountName);
 			}
@@ -162,7 +162,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if found; otherwise, <c>false</c>.</returns>
 		public bool GetConnectionByAccountName(string accountName, out TConnection connection)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				return accountConnections.TryGetValue(accountName, out connection);
 			}
@@ -191,7 +191,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if the state was advanced and the callback (if any) succeeded.</returns>
 		public bool TryAdvanceAuthState(TConnection connection, AuthState required, AuthState next, Func<AccountData, bool>? onSuccess)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				if (!connectionAccountData.TryGetValue(connection, out AccountData accountData)
 					|| accountData == null
@@ -224,7 +224,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if the connection has exactly the given state; otherwise, <c>false</c>.</returns>
 		public bool HasAuthState(TConnection connection, AuthState state)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				return connectionAccountData.TryGetValue(connection, out AccountData accountData)
 					&& accountData != null
@@ -240,7 +240,7 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if auth is in progress (state &gt; Handshake); otherwise, <c>false</c>.</returns>
 		public bool IsAuthInProgress(TConnection connection)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				return connectionAccountData.TryGetValue(connection, out AccountData accountData)
 					&& accountData != null
@@ -251,7 +251,7 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// Adds <paramref name="connection"/> to the unauthenticated-state arrival-order tracker
 		/// so that stale handshakes can be expired by <see cref="SweepUnauthenticatedConnections"/>.
-		/// Must be called inside <see cref="syncRoot"/> lock — callers must ensure they hold the lock.
+		/// Must be called inside <see cref="SyncRoot"/> lock — callers must ensure they hold the lock.
 		/// </summary>
 		protected void TrackUnauthenticatedConnection_NoLock(TConnection connection)
 		{
@@ -267,7 +267,7 @@ namespace FishMMO.Auth.Implementation
 		/// Removes <paramref name="connection"/> from the unauthenticated-state tracker.
 		/// Call when the connection advances to an authenticated state (SrpSuccess/Authenticated)
 		/// or when it is disconnected, to keep the sweep's scan bound tight.
-		/// Must be called inside <see cref="syncRoot"/> lock.
+		/// Must be called inside <see cref="SyncRoot"/> lock.
 		/// </summary>
 		protected void UntrackUnauthenticatedConnection_NoLock(TConnection connection)
 		{
@@ -283,7 +283,7 @@ namespace FishMMO.Auth.Implementation
 		/// Calls <see cref="ConnectionEncryptionData.Clear"/> on the connection's encryption data,
 		/// zeroing AES session keys, then removes the entry from the dictionary.
 		/// Use when tearing down connection state (disconnect, sweep, failed auth).
-		/// Must be called inside <see cref="syncRoot"/> lock.
+		/// Must be called inside <see cref="SyncRoot"/> lock.
 		/// </summary>
 		protected void ClearAndRemoveEncryptionData_NoLock(TConnection connection)
 		{
@@ -296,7 +296,7 @@ namespace FishMMO.Auth.Implementation
 
 		public void Clear()
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				foreach (ConnectionEncryptionData encData in connectionEncryptionEntries.Values)
 				{

@@ -119,7 +119,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						}
 						Server.NetworkWrapper.Broadcast(conn, new MailListBroadcast()
 						{
-							Entries = new List<MailEntryData>(),
+							Entries = System.Array.Empty<MailEntryData>(),
 						}, true, Channel.Reliable);
 					});
 					return;
@@ -149,7 +149,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 					Server.NetworkWrapper.Broadcast(conn, new MailListBroadcast()
 					{
-						Entries = entries,
+						Entries = entries.ToArray(),
 					}, true, Channel.Reliable);
 				});
 			}

@@ -87,7 +87,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			for (int i = 0; i < msg.Quests.Count; i++)
+			for (int i = 0; i < msg.Quests.Length; i++)
 			{
 				OnClientQuestUpdateReceived(msg.Quests[i], channel);
 			}

@@ -28,9 +28,9 @@ namespace FishMMO.Shared
 		/// Checks if the specified generic bit position is set.
 		/// Use this for Enums representing bit indices.
 		/// </summary>
-		/// <typeparam name="T">A struct type (ideally an Enum).</typeparam>
+		/// <typeparam name="T">An enum type backed by int.</typeparam>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static bool IsFlagged<T>(this int flag, T bitPosition) where T : struct
+		public static bool IsFlagged<T>(this int flag, T bitPosition) where T : unmanaged, Enum
 		{
 			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(int))
 				throw new ArgumentException($"Enum type {typeof(T).Name} is not int-backed. Only int-backed enums are supported.");
@@ -55,7 +55,7 @@ namespace FishMMO.Shared
 		/// Sets the specified generic bit position to 0 (off).
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void DisableBit<T>(this ref int flag, T bitPosition) where T : struct
+		public static void DisableBit<T>(this ref int flag, T bitPosition) where T : unmanaged, Enum
 		{
 			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(int))
 				throw new ArgumentException($"Enum type {typeof(T).Name} is not int-backed. Only int-backed enums are supported.");
@@ -80,7 +80,7 @@ namespace FishMMO.Shared
 		/// Sets the specified generic bit position to 1 (on).
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void EnableBit<T>(this ref int flag, T bitPosition) where T : struct
+		public static void EnableBit<T>(this ref int flag, T bitPosition) where T : unmanaged, Enum
 		{
 			if (System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != sizeof(int))
 				throw new ArgumentException($"Enum type {typeof(T).Name} is not int-backed. Only int-backed enums are supported.");

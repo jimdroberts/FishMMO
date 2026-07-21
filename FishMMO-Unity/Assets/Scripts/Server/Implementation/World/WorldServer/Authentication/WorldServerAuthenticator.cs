@@ -164,6 +164,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// acceptable because the admission window is a best-effort guard against burst admissions;
 		/// a transient over-admission is bounded by the sweep rate and corrected on the next call.
 		/// The conservative direction (under-admit) is enforced by the DB-derived <c>ConnectionCount</c>.</para>
+		///
+		/// <para><b>Inline sweep correctness:</b> Calling <see cref="ConcurrentDictionary{TKey,TValue}.TryRemove"/>
+		/// during <c>foreach</c> enumeration is safe because <c>ConcurrentDictionary</c> iteration tolerates
+		/// concurrent additions and removals (it snapshots keys and does not throw). Removing expired entries
+		/// inline avoids allocating a separate collection of keys to purge, at the cost of slightly enlarged
+		/// dictionary size between sweeps. The <see cref="OnAuthSweep"/> method provides a bounded fallback
+		/// sweep for entries that expire between <c>CountRecentAdmissions</c> calls.</para>
 		/// </summary>
 		private int CountRecentAdmissions(DateTime now)
 		{

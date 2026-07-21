@@ -1,5 +1,4 @@
 using FishNet.Broadcast;
-using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -31,7 +30,7 @@ namespace FishMMO.Shared
 	public struct FriendAddMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of friends to add.</summary>
-		public List<FriendAddBroadcast> Friends;
+		public FriendAddBroadcast[] Friends;
 	}
 
 	/// <summary>

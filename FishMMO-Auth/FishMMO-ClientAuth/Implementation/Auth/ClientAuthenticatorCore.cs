@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Threading;
 using SecureRemotePassword;
 using FishMMO.Auth.Core;
 using FishMMO.Logging;
@@ -51,24 +52,21 @@ namespace FishMMO.Auth.Implementation
 
 		/// <summary>
 		/// Guard to ignore duplicate SRP verify messages.
-		/// <para>Thread-safety: single-threaded by FishNet convention — all incoming
-		/// message handlers run on the Unity main thread. If a transport implementation
-		/// delivers messages on a worker thread, this guard must be replaced with an
-		/// atomic compare-and-swap or lock.</para>
+		/// <para>Thread-safety: uses <see cref="Interlocked.CompareExchange"/> for atomic test-and-set.</para>
 		/// </summary>
-		private volatile bool srpVerifyProcessed;
+		private int srpVerifyProcessed;
 
 		/// <summary>
 		/// Guard to ignore duplicate SRP success messages.
-		/// <para>Thread-safety: same single-threaded convention as <see cref="srpVerifyProcessed"/>.</para>
+		/// <para>Thread-safety: uses <see cref="Interlocked.CompareExchange"/> for atomic test-and-set.</para>
 		/// </summary>
-		private volatile bool srpSuccessProcessed;
+		private int srpSuccessProcessed;
 
 		/// <summary>
 		/// Guard to prevent echoing the cookie challenge more than once per connection.
-		/// <para>Thread-safety: same single-threaded convention as <see cref="srpVerifyProcessed"/>.</para>
+		/// <para>Thread-safety: uses <see cref="Interlocked.CompareExchange"/> for atomic test-and-set.</para>
 		/// </summary>
-		private volatile bool cookieEchoed;
+		private int cookieEchoed;
 
 		/// <summary>Signed auth token from the LoginServer. Persists across connections; used for World/Scene auth.</summary>
 		private byte[]? storedAuthToken;
@@ -163,9 +161,9 @@ namespace FishMMO.Auth.Implementation
 		public void OnConnected(string? connectionToken = null)
 		{
 			ephemeralKeyPair = new CryptoHelper.X25519EphemeralKeyPair();
-			srpVerifyProcessed = false;
-			srpSuccessProcessed = false;
-			cookieEchoed = false;
+			srpVerifyProcessed = 0;
+			srpSuccessProcessed = 0;
+			cookieEchoed = 0;
 
 			SendClientHandshake(
 				ephemeralKeyPair.PublicKey,
@@ -218,8 +216,7 @@ namespace FishMMO.Auth.Implementation
 					Disconnect();
 					return;
 				}
-				if (cookieEchoed) return;
-				cookieEchoed = true;
+				if (Interlocked.CompareExchange(ref cookieEchoed, 1, 0) != 0) return;
 				SendClientHandshake(
 					ephemeralKeyPair.PublicKey,
 					cookie,
@@ -399,7 +396,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="encryptedServerEphemeral">Encrypted server public ephemeral from server.</param>
 		public void OnSrpVerifyResponseReceived(byte[] encryptedSalt, byte[] encryptedServerEphemeral)
 		{
-			if (srpData == null || srpVerifyProcessed) return;
+			if (srpData == null || Interlocked.CompareExchange(ref srpVerifyProcessed, 1, 0) != 0) return;
 
 			if (receiveNonceCtx == null || serverToClientKey == null ||
 				sendNonceCtx == null || clientToServerKey == null)
@@ -450,7 +447,6 @@ namespace FishMMO.Auth.Implementation
 				}
 
 				SendSrpProof(encryptedProof, seqProof);
-				srpVerifyProcessed = true;
 			}
 			else
 			{
@@ -471,7 +467,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="encryptedToken">Encrypted auth token (null if not a LoginSuccess).</param>
 		public void OnSrpSuccessReceived(byte[] encryptedServerProof, ClientAuthenticationResult result, byte[] encryptedToken)
 		{
-			if (srpData == null || srpSuccessProcessed) return;
+			if (srpData == null || Interlocked.CompareExchange(ref srpSuccessProcessed, 1, 0) != 0) return;
 
 			if (receiveNonceCtx == null || serverToClientKey == null)
 			{
@@ -500,7 +496,6 @@ namespace FishMMO.Auth.Implementation
 
 			if (srpData.Verify(proof, out string _))
 			{
-				srpSuccessProcessed = true;
 
 				if (result == ClientAuthenticationResult.LoginSuccess &&
 					encryptedToken != null && encryptedToken.Length > 0)

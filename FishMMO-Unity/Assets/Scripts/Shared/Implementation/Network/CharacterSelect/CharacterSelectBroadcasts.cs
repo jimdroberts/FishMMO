@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -18,7 +17,7 @@ namespace FishMMO.Shared
 	public struct CharacterListBroadcast : IBroadcast
 	{
 		/// <summary>List of character details for selection.</summary>
-		public List<CharacterDetails> Characters;
+		public CharacterDetails[] Characters;
 	}
 
 	/// <summary>

@@ -49,7 +49,7 @@ namespace FishMMO.Auth.Implementation
 													  salt,
 													  verifier);
 
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				if (!connectionAccountData.TryGetValue(connection, out AccountData accountData)
 					|| accountData == null
@@ -91,7 +91,7 @@ namespace FishMMO.Auth.Implementation
 				return 0;
 			}
 
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				if (unauthenticatedTracker.Count == 0)
 				{
@@ -161,7 +161,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="connection">The connection whose SRP state will be cleared.</param>
 		public void ClearSrpState(TConnection connection)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				if (connectionAccountData.TryGetValue(connection, out AccountData accountData) && accountData != null)
 				{

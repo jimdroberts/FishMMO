@@ -32,23 +32,23 @@ namespace FishMMO.Server.Implementation
 		private int maxMainThreadActionsPerFrame = 100;
 
 		/// <summary>
-		/// The server kick request update pump rate limit in seconds.
+		/// Gets or sets the server kick request update pump rate limit in seconds.
 		/// </summary>
 		[Tooltip("The server kick request update pump rate limit in seconds.")]
 		[SerializeField]
-		public float updatePumpRate = 5.0f;
+		private float updatePumpRate = 5.0f;
 		/// <summary>
 		/// Maximum number of kick requests to fetch per poll.
 		/// </summary>
 		[SerializeField]
-		public int updateFetchCount = 100;
+		private int updateFetchCount = 100;
 
 		/// <summary>
-		/// The server kick request update pump rate limit in seconds.
+		/// Gets or sets the server kick request update pump rate limit in seconds.
 		/// </summary>
 		public float UpdatePumpRate { get { return updatePumpRate; } set { updatePumpRate = value; } }
 		/// <summary>
-		/// Maximum number of kick requests to fetch per poll.
+		/// Gets or sets the maximum number of kick requests to fetch per poll.
 		/// </summary>
 		public int UpdateFetchCount { get { return updateFetchCount; } set { updateFetchCount = value; } }
 

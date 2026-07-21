@@ -244,6 +244,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the items match, false otherwise.</returns>
 		public bool IsMatch(Item other)
 		{
+			// Parenthesized for clarity: && binds before ||.
 			return Template.ID == other.Template.ID &&
 					(IsGenerated && other.IsGenerated && Generator.Seed == other.Generator.Seed ||
 					!IsGenerated && !other.IsGenerated);

@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 
 namespace FishMMO.Shared
 {
@@ -16,8 +17,9 @@ namespace FishMMO.Shared
 		private static Random? localRandom;
 
 		/// <summary>
-		/// Gets a thread-safe Random instance for the current thread. 
+		/// Gets a thread-safe Random instance for the current thread.
 		/// Initializes a new instance if one does not exist for the calling thread.
+		/// Uses a cryptographically random seed for better distribution across threads.
 		/// </summary>
 		private static Random Instance
 		{
@@ -25,8 +27,14 @@ namespace FishMMO.Shared
 			{
 				if (localRandom == null)
 				{
-					// Seed with a combination of high-precision time and a new Guid hash
-					localRandom = new Random(Guid.NewGuid().GetHashCode());
+					// Use RandomNumberGenerator to get a full 4-byte seed instead of
+					// relying on Guid.NewGuid().GetHashCode() which only uses 4 bytes
+					// from a GUID and may produce correlated seeds across rapid
+					// consecutive calls on different threads.
+					Span<byte> seedBytes = stackalloc byte[4];
+					RandomNumberGenerator.Fill(seedBytes);
+					int seed = BitConverter.ToInt32(seedBytes);
+					localRandom = new Random(seed);
 				}
 				return localRandom;
 			}

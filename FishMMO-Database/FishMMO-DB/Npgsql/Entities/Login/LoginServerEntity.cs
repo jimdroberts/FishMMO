@@ -14,7 +14,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public DateTime LastPulse { get; set; }
 		/// <summary>Network address of the login server.</summary>
 		public string Address { get; set; }
-		/// <summary>Network port of the login server.</summary>
-		public ushort Port { get; set; }
+		/// <summary>Server port number. Must be in the valid port range 0-65535.</summary>
+		[System.ComponentModel.DataAnnotations.Range(0, 65535)]
+		public int Port { get; set; }
 	}
 }

@@ -59,6 +59,7 @@ namespace FishNet.Transporting.WebTransport.WebGL
 #else
 	/// <summary>
 	/// Stub implementations for non-WebGL platforms.
+	/// Logs a warning and returns a failure sentinel instead of throwing.
 	/// </summary>
 	internal static class WebTransportJSLib
 	{
@@ -70,27 +71,31 @@ namespace FishNet.Transporting.WebTransport.WebGL
 			Action<int, IntPtr, int> onDatagram,
 			Action<int> onError)
 		{
-			throw new NotSupportedException("WebTransportJSLib is only available in WebGL builds.");
+			UnityEngine.Debug.LogWarning("[WebTransport] WebTransportJSLib is only available in WebGL builds.");
+			return -1;
 		}
 
 		internal static bool WTSendStream(int index, byte[] data, int length)
 		{
-			throw new NotSupportedException("WebTransportJSLib is only available in WebGL builds.");
+			UnityEngine.Debug.LogWarning("[WebTransport] WebTransportJSLib is only available in WebGL builds.");
+			return false;
 		}
 
 		internal static bool WTSendDatagram(int index, byte[] data, int length)
 		{
-			throw new NotSupportedException("WebTransportJSLib is only available in WebGL builds.");
+			UnityEngine.Debug.LogWarning("[WebTransport] WebTransportJSLib is only available in WebGL builds.");
+			return false;
 		}
 
 		internal static void WTDisconnect(int index)
 		{
-			throw new NotSupportedException("WebTransportJSLib is only available in WebGL builds.");
+			UnityEngine.Debug.LogWarning("[WebTransport] WebTransportJSLib is only available in WebGL builds.");
 		}
 
 		internal static bool WTIsConnected(int index)
 		{
-			throw new NotSupportedException("WebTransportJSLib is only available in WebGL builds.");
+			UnityEngine.Debug.LogWarning("[WebTransport] WebTransportJSLib is only available in WebGL builds.");
+			return false;
 		}
 	}
 #endif

@@ -12,14 +12,15 @@ namespace FishNet.Transporting.WebTransport.Native
 
 		/// <summary>
 		/// Releases the native server handle. This method MAY be invoked on the
-		/// GC finalizer thread (not just Dispose). The underlying native destroy
-		/// function (wt_server_destroy_impl) MUST be thread-safe and must not
-		/// depend on managed state or a specific COM apartment.
+		/// GC finalizer thread (not just Dispose). The <see cref="WebTransportNative.IsLibraryDeinitialized"/>
+		/// guard prevents calling into the native library after <c>wt_deinit()</c>
+		/// has torn down msquic state — a race that would otherwise produce
+		/// undefined behaviour (access violation / double-free).
 		/// </summary>
 		protected override bool ReleaseHandle()
 		{
 #if !UNITY_WEBGL || UNITY_EDITOR
-			if (!IsInvalid)
+			if (!IsInvalid && !WebTransportNative.IsLibraryDeinitialized)
 				WebTransportNative.wt_server_destroy_impl(handle);
 #endif
 			return true;
@@ -32,14 +33,15 @@ namespace FishNet.Transporting.WebTransport.Native
 
 		/// <summary>
 		/// Releases the native client handle. This method MAY be invoked on the
-		/// GC finalizer thread (not just Dispose). The underlying native destroy
-		/// function (wt_client_destroy_impl) MUST be thread-safe and must not
-		/// depend on managed state or a specific COM apartment.
+		/// GC finalizer thread (not just Dispose). The <see cref="WebTransportNative.IsLibraryDeinitialized"/>
+		/// guard prevents calling into the native library after <c>wt_deinit()</c>
+		/// has torn down msquic state — a race that would otherwise produce
+		/// undefined behaviour (access violation / double-free).
 		/// </summary>
 		protected override bool ReleaseHandle()
 		{
 #if !UNITY_WEBGL || UNITY_EDITOR
-			if (!IsInvalid)
+			if (!IsInvalid && !WebTransportNative.IsLibraryDeinitialized)
 				WebTransportNative.wt_client_destroy_impl(handle);
 #endif
 			return true;
@@ -125,12 +127,15 @@ namespace FishNet.Transporting.WebTransport.Native
 				IntPtr ptr = wt_error_string(errorCode);
 				if (ptr != IntPtr.Zero)
 				{
-					string native = Marshal.PtrToStringAnsi(ptr);
+					string native = Marshal.PtrToStringUTF8(ptr);
 					if (!string.IsNullOrEmpty(native))
 						return $"{native} (code {errorCode})";
 				}
 			}
-			catch { /* Fall through to constant-name lookup. */ }
+			catch (Exception ex)
+			{
+				UnityEngine.Debug.LogWarning($"[WebTransport] ErrorString exception: {ex.Message}");
+			}
 #endif
 			return errorCode switch
 			{
@@ -153,6 +158,14 @@ namespace FishNet.Transporting.WebTransport.Native
 		private static int initGuard = 0;
 		private static int deinitGuard = 0;
 		private static volatile bool initialized = false;
+		/// <summary>
+		/// Set to true immediately before <c>wt_deinit()</c> is called.
+		/// Read by <see cref="SafeServerHandle.ReleaseHandle"/> and
+		/// <see cref="SafeClientHandle.ReleaseHandle"/> (which may run on the GC
+		/// finalizer thread) to suppress native destroy calls after the library
+		/// has been torn down.
+		/// </summary>
+		internal static volatile bool IsLibraryDeinitialized = false;
 
 		public static bool IsInitialized => initialized;
 
@@ -209,6 +222,10 @@ namespace FishNet.Transporting.WebTransport.Native
 			if (System.Threading.Interlocked.CompareExchange(ref deinitGuard, 1, 0) != 0) return;
 			if (!initialized) { deinitGuard = 0; return; }
 #if !UNITY_WEBGL || UNITY_EDITOR
+			// Set the deinitialized flag BEFORE calling wt_deinit() so that any
+			// SafeHandle finalizer that fires concurrently will see the flag and
+			// skip its P/Invoke — preventing use-after-free on msquic state.
+			IsLibraryDeinitialized = true;
 			wt_deinit();
 #endif
 			initialized = false;
@@ -248,33 +265,92 @@ namespace FishNet.Transporting.WebTransport.Native
 			}
 		}
 
+		/// <summary>
+		/// Starts the WebTransport server, beginning to accept client connections.
+		/// </summary>
+		/// <param name="server">The server handle created by <see cref="wt_server_create"/>.</param>
+		/// <returns>0 on success, or a negative error code on failure.</returns>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_server_start(SafeServerHandle server);
 
+		/// <summary>
+		/// Stops the WebTransport server, closing all active connections.
+		/// </summary>
+		/// <param name="server">The server handle to stop.</param>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern void wt_server_stop(SafeServerHandle server);
 
+		/// <summary>
+		/// Polls the server for pending events (new connections, disconnections, received data).
+		/// Must be called regularly from the main thread.
+		/// </summary>
+		/// <param name="server">The server handle to poll.</param>
+		/// <param name="timeoutUs">Poll timeout in microseconds. 0 means no wait (non-blocking).</param>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern void wt_server_poll(SafeServerHandle server, int timeoutUs);
 
+		/// <summary>
+		/// Sends reliable data to a connected client over a QUIC stream.
+		/// </summary>
+		/// <param name="server">The server handle.</param>
+		/// <param name="connectionId">The native connection ID of the target client.</param>
+		/// <param name="data">The byte array of data to send.</param>
+		/// <param name="length">The number of bytes to send.</param>
+		/// <returns>0 on success, or a negative error code on failure.</returns>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_server_send_stream(SafeServerHandle server, ulong connectionId, byte[] data, int length);
 
+		/// <summary>
+		/// Sends unreliable data to a connected client over a QUIC DATAGRAM frame.
+		/// </summary>
+		/// <param name="server">The server handle.</param>
+		/// <param name="connectionId">The native connection ID of the target client.</param>
+		/// <param name="data">The byte array of data to send.</param>
+		/// <param name="length">The number of bytes to send.</param>
+		/// <returns>0 on success, or a negative error code on failure.</returns>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_server_send_datagram(SafeServerHandle server, ulong connectionId, byte[] data, int length);
 
+		/// <summary>
+		/// Disconnects a specific client from the server.
+		/// </summary>
+		/// <param name="server">The server handle.</param>
+		/// <param name="connectionId">The native connection ID of the client to disconnect.</param>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern void wt_server_disconnect(SafeServerHandle server, ulong connectionId);
 
+		/// <summary>
+		/// Gets the remote address string for a connected client.
+		/// The returned pointer references internal storage within the server's connection struct.
+		/// The string must be marshaled immediately (no free is required).
+		/// </summary>
+		/// <param name="server">The server handle.</param>
+		/// <param name="connectionId">The native connection ID of the client.</param>
+		/// <returns>A pointer to a null-terminated UTF-8 string, or <see cref="IntPtr.Zero"/> if not found.</returns>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern IntPtr wt_server_get_client_address(SafeServerHandle server, ulong connectionId);
 
+		/// <summary>
+		/// Gets the current number of connected clients.
+		/// </summary>
+		/// <param name="server">The server handle.</param>
+		/// <returns>The number of connected clients.</returns>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_server_get_client_count(SafeServerHandle server);
 
+		/// <summary>
+		/// Gets the configured maximum number of clients for this server.
+		/// </summary>
+		/// <param name="server">The server handle.</param>
+		/// <returns>The maximum number of clients.</returns>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_server_get_max_clients(SafeServerHandle server);
 
+		/// <summary>
+		/// Gets the current server state.
+		/// </summary>
+		/// <param name="server">The server handle.</param>
+		/// <returns>An integer representing the server state (0 = stopped, 1 = started, etc.).</returns>
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_server_get_state(SafeServerHandle server);
 

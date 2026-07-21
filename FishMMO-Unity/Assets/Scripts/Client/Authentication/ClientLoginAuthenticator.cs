@@ -303,13 +303,6 @@ namespace FishMMO.Client
 		/// <param name="password">The password.</param>
 		/// <param name="register">True to register a new account; false to login.</param>
 		/// <param name="email">The email address for multi-factor identification.</param>
-		/// <summary>
-		/// Stores the client game version to be sent during the handshake.
-		/// Must be called before connecting to a server.
-		/// </summary>
-		/// <param name="version">Game version string (e.g. "0.1.0").</param>
-		public void SetGameVersion(string version) => core.SetGameVersion(version);
-
 		/// <param name="age">The age for multi-factor identification.</param>
 		/// <returns><c>true</c> if credentials were accepted; <c>false</c> if rejected.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

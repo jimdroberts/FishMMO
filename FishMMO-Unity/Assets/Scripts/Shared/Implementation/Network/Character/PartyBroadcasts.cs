@@ -1,5 +1,4 @@
 using FishNet.Broadcast;
-using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -65,7 +64,7 @@ namespace FishMMO.Shared
 	public struct PartyAddMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of members to add to the party.</summary>
-		public List<PartyAddBroadcast> Members;
+		public PartyAddBroadcast[] Members;
 	}
 
 	/// <summary>
@@ -78,21 +77,21 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// Broadcast for removing a member from a party.
-	/// Contains the member ID to be removed.
+	/// Contains the character ID to be removed.
 	/// </summary>
 	public struct PartyRemoveBroadcast : IBroadcast
 	{
-		/// <summary>Member ID of the party member to remove.</summary>
-		public long MemberID;
+		/// <summary>Character ID of the party member to remove.</summary>
+		public long CharacterID;
 	}
 
 	/// <summary>
 	/// Broadcast for changing a member's rank within a party.
-	/// Contains the member ID whose rank is changing.
+	/// Contains the character ID whose rank is changing.
 	/// </summary>
 	public struct PartyChangeRankBroadcast : IBroadcast
 	{
-		/// <summary>Member ID of the party member whose rank is changing.</summary>
-		public long MemberID;
+		/// <summary>Character ID of the party member whose rank is changing.</summary>
+		public long CharacterID;
 	}
 }

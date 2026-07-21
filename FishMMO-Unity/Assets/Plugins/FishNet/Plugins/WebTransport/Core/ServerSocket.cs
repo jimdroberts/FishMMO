@@ -1,3 +1,4 @@
+using FishNet.Managing;
 using FishNet.Transporting.WebTransport.Native;
 using System;
 using System.Collections.Concurrent;
@@ -19,7 +20,7 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// </summary>
 		internal RemoteConnectionState GetConnectionState(int connectionId)
 		{
-			RemoteConnectionState state = clients.Contains(connectionId)
+			RemoteConnectionState state = this.clients.Contains(connectionId)
 				? RemoteConnectionState.Started
 				: RemoteConnectionState.Stopped;
 			return state;
@@ -70,6 +71,18 @@ namespace FishNet.Transporting.WebTransport.Server
 		private ConcurrentQueue<Action> incomingEvents = new ConcurrentQueue<Action>();
 
 		/// <summary>
+		/// ALPN (Application-Layer Protocol Negotiation) string for QUIC.
+		/// Defaults to "h3" for HTTP/3 (WebTransport). Can be overridden
+		/// before StartConnection to use a custom ALPN.
+		/// </summary>
+		private string alpn = "h3";
+		/// <summary>
+		/// Gets or sets the ALPN (Application-Layer Protocol Negotiation) string.
+		/// Setting to null resets to the default "h3".
+		/// </summary>
+		public string Alpn { get => alpn; set => alpn = value ?? "h3"; }
+
+		/// <summary>
 		/// Atomic guard to ensure StopConnection runs exactly once,
 		/// even if called from both a native callback and user code.
 		/// </summary>
@@ -97,8 +110,8 @@ namespace FishNet.Transporting.WebTransport.Server
 		{
 			base.transport = t;
 			this.mtu = mtuValue;
-			certificatePath = certPath ?? "";
-			privateKeyPath = keyPath ?? "";
+			this.certificatePath = certPath ?? "";
+			this.privateKeyPath = keyPath ?? "";
 		}
 
 		/// <summary>
@@ -116,54 +129,54 @@ namespace FishNet.Transporting.WebTransport.Server
 			base.SetConnectionState(LocalConnectionState.Starting, true);
 
 			/* Reset stop guard for server restart support. */
-			stopGuard = 0;
+			this.stopGuard = 0;
 
 			/* Drain any stale incoming events from a previous server session,
              * INVOKING each action so that unmanaged memory (Marshal.AllocHGlobal)
              * held by native callbacks is properly freed via their finally blocks.
              * Discarding without invoking would leak native heap memory. */
-			while (incomingEvents.TryDequeue(out Action act))
+			while (this.incomingEvents.TryDequeue(out Action act))
 			{
-				try { act?.Invoke(); } catch (System.Exception ex) { UnityEngine.Debug.LogWarning($"[WebTransport Server] Drain exception: {ex.Message}"); }
+				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.Message}"); }
 			}
 
 			WebTransportNative.EnsureInitialized();
 
 			this.port = port;
 			this.maximumClients = maximumClients;
-			resetQueues();
+			ResetQueues();
 
 			// Pin callback delegates
-			pinnedCallbacks = new NativeCallbacks.ServerCallbacks
+			this.pinnedCallbacks = new NativeCallbacks.ServerCallbacks
 			{
-				OnConnect = new NativeCallbacks.ServerConnectDelegate(handleNativeConnect),
-				OnDisconnect = new NativeCallbacks.ServerDisconnectDelegate(handleNativeDisconnect),
-				OnStreamData = new NativeCallbacks.ServerStreamDataDelegate(handleNativeStreamData),
-				OnDatagram = new NativeCallbacks.ServerDatagramDelegate(handleNativeDatagram),
+				OnConnect = new NativeCallbacks.ServerConnectDelegate(HandleNativeConnect),
+				OnDisconnect = new NativeCallbacks.ServerDisconnectDelegate(HandleNativeDisconnect),
+				OnStreamData = new NativeCallbacks.ServerStreamDataDelegate(HandleNativeStreamData),
+				OnDatagram = new NativeCallbacks.ServerDatagramDelegate(HandleNativeDatagram),
 			};
 
 			// Create native server
-			serverHandle = WebTransportNative.wt_server_create(
-				useCustomCertificate ? certificatePath : null,
-				useCustomCertificate ? privateKeyPath : null,
-				"h3",           // ALPN for HTTP/3
+			this.serverHandle = WebTransportNative.wt_server_create(
+				useCustomCertificate ? this.certificatePath : null,
+				useCustomCertificate ? this.privateKeyPath : null,
+				this.alpn,           // ALPN for HTTP/3
 				bindAddress,
 				port,
 				(uint)maximumClients,
-				ref pinnedCallbacks,
+				ref this.pinnedCallbacks,
 				IntPtr.Zero);
 
-			if (serverHandle == null || serverHandle.IsInvalid)
+			if (this.serverHandle == null || this.serverHandle.IsInvalid)
 			{
 				base.SetConnectionState(LocalConnectionState.Stopped, true);
 				return false;
 			}
 
-			int result = WebTransportNative.wt_server_start(serverHandle);
+			int result = WebTransportNative.wt_server_start(this.serverHandle);
 			if (result != 0)
 			{
-				WebTransportNative.wt_server_destroy(serverHandle);
-				serverHandle = null;
+				WebTransportNative.wt_server_destroy(this.serverHandle);
+				this.serverHandle = null;
 				base.SetConnectionState(LocalConnectionState.Stopped, true);
 				return false;
 			}
@@ -173,19 +186,19 @@ namespace FishNet.Transporting.WebTransport.Server
 		}
 
 		/// <summary>
-		/// Stops the server and disconnects all clients.
+		/// Stops the server and disconnects all this.clients.
 		/// </summary>
 		internal bool StopConnection()
 		{
 			/* Atomic guard — ensure StopConnection runs exactly once. */
-			if (System.Threading.Interlocked.CompareExchange(ref stopGuard, 1, 0) != 0)
+			if (System.Threading.Interlocked.CompareExchange(ref this.stopGuard, 1, 0) != 0)
 				return false;
 
-			if (serverHandle == null || serverHandle.IsInvalid ||
+			if (this.serverHandle == null || this.serverHandle.IsInvalid ||
 				base.GetConnectionState() == LocalConnectionState.Stopped ||
 				base.GetConnectionState() == LocalConnectionState.Stopping)
 			{
-				stopGuard = 0;
+				this.stopGuard = 0;
 				return false;
 			}
 
@@ -194,17 +207,17 @@ namespace FishNet.Transporting.WebTransport.Server
              * allocated in native callbacks is freed. The actions check
              * connection state before processing — they will skip
              * Transport callbacks since state is about to be Stopping. */
-			while (incomingEvents.TryDequeue(out Action act))
+			while (this.incomingEvents.TryDequeue(out Action act))
 			{
-				try { act?.Invoke(); } catch (System.Exception ex) { UnityEngine.Debug.LogWarning($"[WebTransport Server] Drain exception: {ex.Message}"); }
+				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.Message}"); }
 			}
 
-			resetQueues();
+			ResetQueues();
 			base.SetConnectionState(LocalConnectionState.Stopping, true);
 
-			WebTransportNative.wt_server_stop(serverHandle);
-			WebTransportNative.wt_server_destroy(serverHandle);
-			serverHandle = null;
+			WebTransportNative.wt_server_stop(this.serverHandle);
+			WebTransportNative.wt_server_destroy(this.serverHandle);
+			this.serverHandle = null;
 
 			base.SetConnectionState(LocalConnectionState.Stopped, true);
 			return true;
@@ -215,14 +228,14 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// </summary>
 		internal bool StopConnection(int connectionId, bool immediately)
 		{
-			if (serverHandle == null || serverHandle.IsInvalid ||
+			if (this.serverHandle == null || this.serverHandle.IsInvalid ||
 				base.GetConnectionState() != LocalConnectionState.Started)
 				return false;
 
 			if (!immediately)
-				disconnectingNext.Add(connectionId);
-			else if (idMapToNative.TryGetValue(connectionId, out ulong nativeId))
-				WebTransportNative.wt_server_disconnect(serverHandle, nativeId);
+				this.disconnectingNext.Add(connectionId);
+			else if (this.idMapToNative.TryGetValue(connectionId, out ulong nativeId))
+				WebTransportNative.wt_server_disconnect(this.serverHandle, nativeId);
 
 			return true;
 		}
@@ -247,13 +260,13 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// </returns>
 		internal string GetConnectionAddress(int connectionId)
 		{
-			if (serverHandle == null || serverHandle.IsInvalid)
+			if (this.serverHandle == null || this.serverHandle.IsInvalid)
 				return string.Empty;
 
-			if (idMapToNative.TryGetValue(connectionId, out ulong nativeId))
+			if (this.idMapToNative.TryGetValue(connectionId, out ulong nativeId))
 			{
 				IntPtr addrPtr = WebTransportNative.wt_server_get_client_address(
-					serverHandle, nativeId);
+					this.serverHandle, nativeId);
 				if (addrPtr != IntPtr.Zero)
 					return System.Runtime.InteropServices.Marshal.PtrToStringAnsi(addrPtr) ?? string.Empty;
 			}
@@ -268,14 +281,14 @@ namespace FishNet.Transporting.WebTransport.Server
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void IterateIncoming()
 		{
-			if (serverHandle == null || serverHandle.IsInvalid)
+			if (this.serverHandle == null || this.serverHandle.IsInvalid)
 				return;
 
-			WebTransportNative.wt_server_poll(serverHandle, 0);
+			WebTransportNative.wt_server_poll(this.serverHandle, 0);
 
-			while (incomingEvents.TryDequeue(out Action act))
+			while (this.incomingEvents.TryDequeue(out Action act))
 			{
-				try { act?.Invoke(); } catch (Exception e) { UnityEngine.Debug.LogException(e); }
+				try { act?.Invoke(); } catch (Exception e) { transport.NetworkManager?.LogError(e.ToString()); }
 			}
 		}
 
@@ -285,11 +298,11 @@ namespace FishNet.Transporting.WebTransport.Server
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void IterateOutgoing()
 		{
-			if (serverHandle == null || serverHandle.IsInvalid)
+			if (this.serverHandle == null || this.serverHandle.IsInvalid)
 				return;
 
-			dequeueOutgoing();
-			dequeueDisconnects();
+			DequeueOutgoing();
+			DequeueDisconnects();
 		}
 
 		/// <summary>
@@ -299,20 +312,20 @@ namespace FishNet.Transporting.WebTransport.Server
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
-			Send(outgoing, channelId, segment, connectionId);
+			Send(this.outgoing, channelId, segment, connectionId);
 		}
 
 		/// <summary>
-		/// Returns the configured maximum number of clients.
+		/// Returns the configured maximum number of this.clients.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal int GetMaximumClients()
 		{
-			return maximumClients;
+			return this.maximumClients;
 		}
 
 		/// <summary>
-		/// Sets the configured maximum number of clients.
+		/// Sets the configured maximum number of this.clients.
 		/// Only takes effect if the server is not currently running.
 		/// </summary>
 		internal void SetMaximumClients(int value)
@@ -323,93 +336,93 @@ namespace FishNet.Transporting.WebTransport.Server
 			 * resource exhaustion from unbounded input. */
 			if (value < 1 || value > 100000)
 			{
-				UnityEngine.Debug.LogWarning(
+				transport.NetworkManager?.LogWarning(
 					$"[WebTransport Server] SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {System.Math.Clamp(value, 1, 100000)}.");
 				value = System.Math.Clamp(value, 1, 100000);
 			}
-			maximumClients = value;
+			this.maximumClients = value;
 		}
 
 		#region Private Helpers
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private void resetQueues()
+		private void ResetQueues()
 		{
-			clients.Clear();
-			idMapToNative.Clear();
-			idMapFromNative.Clear();
-			clientAddresses.Clear();
-			nextConnectionId = 1;
-			base.ClearPacketQueue(outgoing);
-			disconnectingNext.Clear();
+			this.clients.Clear();
+			this.idMapToNative.Clear();
+			this.idMapFromNative.Clear();
+			this.clientAddresses.Clear();
+			this.nextConnectionId = 1;
+			base.ClearPacketQueue(this.outgoing);
+			this.disconnectingNext.Clear();
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private void dequeueDisconnects()
+		private void DequeueDisconnects()
 		{
 			/* Process pending disconnects immediately. The HashSet indirection
              * prevents collection-modified-during-enumeration issues that would
-             * occur if we disconnected directly during iteration over clients. */
-			if (disconnectingNext.Count > 0)
+             * occur if we disconnected directly during iteration over this.clients. */
+			if (this.disconnectingNext.Count > 0)
 			{
-				foreach (int cid in disconnectingNext)
+				foreach (int cid in this.disconnectingNext)
 					StopConnection(cid, true);
-				disconnectingNext.Clear();
+				this.disconnectingNext.Clear();
 			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private void dequeueOutgoing()
+		private void DequeueOutgoing()
 		{
 			if (base.GetConnectionState() != LocalConnectionState.Started ||
-				serverHandle == null || serverHandle.IsInvalid)
+				this.serverHandle == null || this.serverHandle.IsInvalid)
 			{
-				base.ClearPacketQueue(outgoing);
+				base.ClearPacketQueue(this.outgoing);
 				return;
 			}
 
-			int count = outgoing.Count;
+			int count = this.outgoing.Count;
 			for (int i = 0; i < count; i++)
 			{
-				Packet outgoing = this.outgoing.Dequeue();
-				int connectionId = outgoing.ConnectionId;
+				Packet pkt = this.outgoing.Dequeue();
+				int connectionId = pkt.ConnectionId;
 
 				if (connectionId == -1) // Broadcast
 				{
-					foreach (int cid in clients)
+					foreach (int cid in this.clients)
 					{
-						sendPacketToClient(outgoing, cid);
+						SendPacketToClient(pkt, cid);
 					}
 				}
 				else // Unicast
 				{
-					sendPacketToClient(outgoing, connectionId);
+					SendPacketToClient(pkt, connectionId);
 				}
 
-				outgoing.Dispose();
+				pkt.Dispose();
 			}
 		}
 
-		private void sendPacketToClient(Packet packet, int connectionId)
+		private void SendPacketToClient(Packet packet, int connectionId)
 		{
-			if (!idMapToNative.TryGetValue(connectionId, out ulong nativeId))
+			if (!this.idMapToNative.TryGetValue(connectionId, out ulong nativeId))
 				return;
 
 			int result;
 			if (packet.Channel == 1) // Unreliable → datagram
 			{
 				result = WebTransportNative.wt_server_send_datagram(
-					serverHandle, nativeId, packet.Data, packet.Length);
+					this.serverHandle, nativeId, packet.Data, packet.Length);
 			}
 			else // Reliable → stream
 			{
 				result = WebTransportNative.wt_server_send_stream(
-					serverHandle, nativeId, packet.Data, packet.Length);
+					this.serverHandle, nativeId, packet.Data, packet.Length);
 			}
 
 			if (result != 0)
 			{
-				UnityEngine.Debug.LogWarning(
+				transport.NetworkManager?.LogWarning(
 					$"[WebTransport Server] Send to {connectionId} failed: {WebTransportNative.ErrorString(result)}");
 			}
 		}
@@ -426,7 +439,7 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <param name="context">User-supplied context pointer.</param>
 		/// <param name="nativeConnectionId">The native connection ID assigned by msquic.</param>
 		/// <param name="remoteAddressPtr">Pointer to a null-terminated UTF-8 string of the remote address.</param>
-		private void handleNativeConnect(IntPtr context, ulong nativeConnectionId, IntPtr remoteAddressPtr)
+		private void HandleNativeConnect(IntPtr context, ulong nativeConnectionId, IntPtr remoteAddressPtr)
 		{
 			/* Copy the remote address string to unmanaged memory on the native
              * callback thread. Managed allocations (new string) on non-Unity-main
@@ -455,7 +468,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				}
 			}
 
-			incomingEvents.Enqueue(() =>
+			this.incomingEvents.Enqueue(() =>
 			{
 				try
 				{
@@ -465,8 +478,15 @@ namespace FishNet.Transporting.WebTransport.Server
 						remoteAddr = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(unmanagedAddr, addrLen) ?? "unknown";
 					}
 
-					int fishNetId = nextConnectionId++;
-					clients.Add(fishNetId);
+					int fishNetId = this.nextConnectionId++;
+					/* Overflow protection: wrap to 1 if the counter
+					 * overflows past int.MaxValue or wraps to zero. */
+					if (fishNetId <= 0)
+					{
+						fishNetId = 1;
+						this.nextConnectionId = 2;
+					}
+					this.clients.Add(fishNetId);
 					idMapToNative[fishNetId] = nativeConnectionId;
 					idMapFromNative[nativeConnectionId] = fishNetId;
 					clientAddresses[fishNetId] = remoteAddr;
@@ -490,19 +510,19 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <param name="context">User-supplied context pointer.</param>
 		/// <param name="nativeConnectionId">The native connection ID that disconnected.</param>
 		/// <param name="errorCode">Zero for clean disconnect; negative for error.</param>
-		private void handleNativeDisconnect(IntPtr context, ulong nativeConnectionId, int errorCode)
+		private void HandleNativeDisconnect(IntPtr context, ulong nativeConnectionId, int errorCode)
 		{
-			incomingEvents.Enqueue(() =>
+			this.incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
-					UnityEngine.Debug.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected: {WebTransportNative.ErrorString(errorCode)}");
+					transport.NetworkManager?.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected: {WebTransportNative.ErrorString(errorCode)}");
 
-				if (idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
+				if (this.idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
 				{
-					clients.Remove(fishNetId);
-					idMapToNative.Remove(fishNetId);
-					idMapFromNative.Remove(nativeConnectionId);
-					clientAddresses.Remove(fishNetId);
+					this.clients.Remove(fishNetId);
+					this.idMapToNative.Remove(fishNetId);
+					this.idMapFromNative.Remove(nativeConnectionId);
+					this.clientAddresses.Remove(fishNetId);
 
 					transport.HandleRemoteConnectionState(
 						new RemoteConnectionStateArgs(RemoteConnectionState.Stopped, fishNetId, transport.Index));
@@ -520,12 +540,12 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <param name="streamId">The QUIC stream ID.</param>
 		/// <param name="dataPtr">Pointer to the received data buffer.</param>
 		/// <param name="length">Length of the received data in bytes.</param>
-		private void handleNativeStreamData(IntPtr context, ulong nativeConnectionId, ulong streamId, IntPtr dataPtr, int length)
+		private void HandleNativeStreamData(IntPtr context, ulong nativeConnectionId, ulong streamId, IntPtr dataPtr, int length)
 		{
 			/* Security: reject invalid or oversized packets before allocating unmanaged memory. */
 			if (length <= 0 || length > MaxPacketSize)
 			{
-				UnityEngine.Debug.LogWarning($"[WebTransport Server] Invalid stream data length {length} from connection {nativeConnectionId}. Dropping.");
+				transport.NetworkManager?.LogWarning($"[WebTransport Server] Invalid stream data length {length} from connection {nativeConnectionId}. Dropping.");
 				return;
 			}
 
@@ -541,11 +561,11 @@ namespace FishNet.Transporting.WebTransport.Server
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
 
-			incomingEvents.Enqueue(() =>
+			this.incomingEvents.Enqueue(() =>
 			{
 				try
 				{
-					if (!idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
+					if (!this.idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
 						return;
 
 					byte[] buffer = new byte[length];
@@ -572,13 +592,13 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <param name="nativeConnectionId">The native connection ID that sent the datagram.</param>
 		/// <param name="dataPtr">Pointer to the received datagram buffer.</param>
 		/// <param name="length">Length of the received datagram in bytes.</param>
-		private void handleNativeDatagram(IntPtr context, ulong nativeConnectionId, IntPtr dataPtr, int length)
+		private void HandleNativeDatagram(IntPtr context, ulong nativeConnectionId, IntPtr dataPtr, int length)
 		{
 			/* Security: reject invalid or oversized datagrams. Datagrams larger than the MTU
              * should never arrive from a compliant peer, but we validate defensively. */
-			if (length <= 0 || length > mtu)
+			if (length <= 0 || length > this.mtu)
 			{
-				UnityEngine.Debug.LogWarning($"[WebTransport Server] Invalid datagram length {length} from connection {nativeConnectionId}. Dropping.");
+				transport.NetworkManager?.LogWarning($"[WebTransport Server] Invalid datagram length {length} from connection {nativeConnectionId}. Dropping.");
 				return;
 			}
 
@@ -590,11 +610,11 @@ namespace FishNet.Transporting.WebTransport.Server
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
 
-			incomingEvents.Enqueue(() =>
+			this.incomingEvents.Enqueue(() =>
 			{
 				try
 				{
-					if (!idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
+					if (!this.idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
 						return;
 
 					byte[] buffer = new byte[length];

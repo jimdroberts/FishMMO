@@ -1,17 +1,17 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Extension methods for System.Type, providing high-performance instance creation via 
+	/// Extension methods for System.Type, providing high-performance instance creation via
 	/// compiled expression trees and thread-safe delegate caching.
 	/// </summary>
 	public static class TypeExtensions
 	{
 		/// <summary>
-		/// Caches compiled delegates for default constructors. 
+		/// Caches compiled delegates for default constructors.
 		/// ConcurrentDictionary provides lock-free reads for high-frequency access.
 		/// </summary>
 		private static readonly ConcurrentDictionary<Type, Func<object?>> constructorCache =
@@ -83,9 +83,14 @@ namespace FishMMO.Shared
 
 					return lambda.Compile();
 				}
-				catch
+				catch (MissingMethodException)
 				{
 					// Return a null-returning delegate if no parameterless constructor exists
+					return () => null;
+				}
+				catch (ArgumentException)
+				{
+					// Return a null-returning delegate if constructor arguments are invalid
 					return () => null;
 				}
 			});

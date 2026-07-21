@@ -162,7 +162,7 @@ namespace FishMMO.Shared
 			AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
 			if (abilityTemplate != null)
 			{
-				Ability newAbility = new Ability(msg.ID, abilityTemplate, msg.Events);
+				Ability newAbility = new Ability(msg.ID, abilityTemplate, new List<int>(msg.Events));
 				LearnAbility(newAbility);
 
 				OnAddAbility?.Invoke(newAbility);
@@ -179,7 +179,7 @@ namespace FishMMO.Shared
 				AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(ability.TemplateID);
 				if (abilityTemplate != null)
 				{
-					Ability newAbility = new Ability(ability.ID, abilityTemplate, ability.Events);
+					Ability newAbility = new Ability(ability.ID, abilityTemplate, new List<int>(ability.Events));
 					LearnAbility(newAbility);
 
 					OnAddAbility?.Invoke(newAbility);

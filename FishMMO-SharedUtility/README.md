@@ -71,7 +71,7 @@ FishMMO-SharedUtility/
 ├── MathHelper.cs              # Vector/scalar/clamp helpers
 ├── IReference.cs              # Reference-equality interface contract
 ├── RefWrapper.cs              # Boxed reference wrapper for value types
-├── SetOnce.cs                 # Write-once latch with optional validator
+├── SetOnce.cs                 # Write-once latch (no validator)
 ├── Compression/
 │   ├── StringCompression.cs   # GZip-based string round-trip
 │   └── DictionaryCompression.cs
@@ -103,7 +103,7 @@ All public types live in the `FishMMO.Shared` namespace.
 | `FastActivator<TResult>` | Compiled-expression factory — faster than `Activator.CreateInstance` and avoids reflection per-call. |
 | `MathHelper` | Numeric helpers (clamp, lerp, snapping). |
 | `RefWrapper<T>` | Wraps a value type so reference-comparison works (used for parameter capture). |
-| `SetOnce<T>` | Latch that allows exactly one assignment; throws thereafter. |
+| `SetOnce<T>` | Latch that allows exactly one assignment; throws thereafter (no validator parameter). |
 | `IReference` | Marker interface for objects compared by reference. |
 
 ### Compression

@@ -226,8 +226,9 @@ namespace FishMMO.Server.Implementation
 			{
 				return tryAdd(runtimeData);
 			}
-			catch
+			catch (Exception ex)
 			{
+				Log.Error(GetType().Name, $"TryBeginInFlightRequest exception: {ex.Message}");
 				return false;
 			}
 		}
@@ -249,7 +250,10 @@ namespace FishMMO.Server.Implementation
 			{
 				onEnd(runtimeData);
 			}
-			catch { }
+			catch (Exception ex)
+			{
+				Log.Error(GetType().Name, $"EndInFlightRequest exception: {ex.Message}");
+			}
 		}
 
 		/// <summary>

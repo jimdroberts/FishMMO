@@ -187,13 +187,13 @@ namespace FishMMO.Client
 				characterList = new List<CharacterDetailsButton>();
 
 				// No characters were sent.
-				if (msg.Characters.Count < 1)
+				if (msg.Characters.Length < 1)
 				{
 					OnCharacterListReady();
 					return;
 				}
 
-				for (int i = 0; i < msg.Characters.Count; ++i)
+				for (int i = 0; i < msg.Characters.Length; ++i)
 				{
 					CharacterDetailsButton newCharacter = Instantiate(CharacterButtonPrefab, CharacterButtonParent);
 					newCharacter.Initialize(msg.Characters[i]);

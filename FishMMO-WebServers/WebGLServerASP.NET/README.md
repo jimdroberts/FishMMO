@@ -54,7 +54,7 @@ Browser
 +----v---------------------------------------+
 |  Kestrel (WebGLServer)                    |
 |  +-- ForwardedHeaders middleware          |
-|  +-- CORS (AllowAllOrigins)               |
+|  +-- CORS (Public)               |
 |  +-- UseDefaultFiles + UseStaticFiles     |
 |  +-- UseResponseCompression               |
 |  +-- MapControllers                       |
@@ -111,7 +111,7 @@ The server applies COOP (`same-origin`), COEP (`require-corp`), and a comprehens
 
 ## Security
 
-- **CORS** (`AllowAllOrigins`) is intentionally permissive - WebGL builds require cross-origin access for `.wasm` and `.data` files.
+- **CORS** (`Public`) allows cross-origin access from `play.fishmmo.com` for `.wasm` and `.data` files.
 - **ForwardedHeaders** ensures correct client IP logging when behind NGINX.
 - Kestrel binds to **localhost only** - not directly accessible from the internet.
 - No authentication middleware - static content is publicly served (access control is at the NGINX layer).
@@ -144,8 +144,8 @@ flowchart LR
     Nginx -->|"HTTP localhost:8000"| Kestrel[Kestrel]
     subgraph Server[WebGLServer]
         Kestrel --> Fwd[ForwardedHeaders]
-        Fwd --> Cors[CORS AllowAllOrigins]
-        Cors --> Defaults[UseDefaultFiles index.html]
+        Fwd --> Cors[CORS Public]
+        Cors[CORS Public] --> Defaults[UseDefaultFiles index.html]
         Defaults --> Static[UseStaticFiles\n(range requests natively supported)]
         Static -->|file found| OK[200 full / 206 partial]
         Static -->|not found| NF[404]

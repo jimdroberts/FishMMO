@@ -48,7 +48,7 @@ Unity Client
 +----v---------------------------------------+
 |  Kestrel (IPFetchServer)                  |
 |  +-- ForwardedHeaders middleware          |
-|  +-- CORS (AllowXFishMMO)                 |
+|  +-- CORS (Public)                 |
 |  +-- ClientGate (HMAC request signing)    |
 |  +-- Rate Limiting (token bucket)         |
 |  +-- LoginServerController                |
@@ -73,7 +73,7 @@ IpFetchServer/
 ## Middleware Pipeline
 
 1. **`UseForwardedHeaders`** — trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
-2. **`UseCors("AllowXFishMMO")`** — allows cross-origin requests from `play.fishmmo.com`.
+2. **`UseCors("Public")`** — allows cross-origin requests from `play.fishmmo.com`.
 3. **`UseFishMMOClientGate`** — validates `X-FishMMO-Client` HMAC-signed header (shared `ClientGate` middleware from FishMMO-WebShared). Rejects requests with invalid/missing/replayed signatures.
 4. **`UseRateLimiter`** — token-bucket rate limiting (10 req/s replenishment, 30 burst).
 5. **`UseRouting` + `MapControllers`** — standard ASP.NET routing.
@@ -86,7 +86,7 @@ IpFetchServer/
 | `LoginServerController` | Single-endpoint controller backing `GET /loginserver`. Reads active login servers from PostgreSQL via EF Core, returns `{ Ports, ConnectionToken }` envelope. Uses `SemaphoreSlim(1,1)` single-flight cache-stampede protection with 60s TTL + 0-10s random jitter. |
 | `ClientGate` (FishMMO-WebShared) | HMAC-SHA256 request signing validation with timestamp (±300s window) and nonce LRU replay protection. Shared across IPFetch, Patcher, and WebGL servers. |
 | `TokenCleanupService` | `BackgroundService` that runs every 60 seconds deleting expired connection tokens from the database via raw SQL. |
-| `IMemoryCache` (built-in) | 60-second TTL cache with jitter to prevent thundering-herd on cache expiry. Won't cache empty results. |
+| `IMemoryCache` (built-in) | 60-second TTL cache with jitter to prevent thundering-herd on cache expiry (was 300s in earlier versions). Won't cache empty results. |
 | `ConnectionTokenService` | Issues CSPRNG 32-byte connection tokens (SHA-256 hashed in DB, 60s TTL) for real-IP recovery at the QUIC layer. |
 
 ## Endpoints
@@ -102,9 +102,10 @@ Returns JSON array of active login servers with `Address` and `Port` fields.
 | Code | Condition |
 |------|-----------|
 | 200 | Login servers found (returns `[{Address, Port}, ...]`) |
-| 401 | Failed to create DB context |
-| 403 | Missing or invalid `X-FishMMO` header (from middleware) |
+| 401 | Missing or invalid `X-FishMMO-Client` header (from ClientGate middleware) |
 | 404 | No login servers available |
+| 429 | Rate limit exceeded (token bucket) |
+| 500 | Internal server error (e.g. DB connection failure, unexpected exception) |
 
 ## Configuration
 
@@ -156,7 +157,7 @@ export WebServer__HttpPort=8080
 ## Security
 
 - **ClientGate** validates HMAC-SHA256 request signatures with timestamp and nonce replay protection.
-- **CORS policy** (`AllowXFishMMO`) restricts cross-origin access to `play.fishmmo.com`.
+- **CORS policy** (`Public`) restricts cross-origin access to `play.fishmmo.com`.
 - **ForwardedHeaders** ensures correct client IP logging when behind NGINX.
 - **Rate limiting** (token bucket: 10 req/s, 30 burst) prevents DDoS.
 - Kestrel binds to **localhost only** — not directly accessible from the internet.
@@ -182,10 +183,10 @@ flowchart LR
     Nginx -->|"HTTP localhost:8080"| Kestrel[Kestrel]
     subgraph Server[IPFetchServer]
         Kestrel --> Fwd[ForwardedHeaders]
-        Fwd --> Cors[CORS AllowXFishMMO]
+        Fwd --> Cors[CORS Public]
         Cors --> Gate[ClientGate]
         Gate --> Ctrl[LoginServerController]
-        Ctrl -->|"cache hit (300s TTL)"| Cache[IMemoryCache]
+        Ctrl -->|"cache hit (60s TTL)"| Cache[IMemoryCache]
         Ctrl -->|cache miss| EF[EF Core / Npgsql]
         EF --> DB[("PostgreSQL LoginServers table")]
     end

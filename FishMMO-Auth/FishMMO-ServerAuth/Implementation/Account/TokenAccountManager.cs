@@ -40,7 +40,7 @@ namespace FishMMO.Auth.Implementation
 		/// indicating the handshake path was skipped or the connection was purged.</exception>
 		public void AddConnectionAccount(TConnection connection, string accountName, AccessLevel accessLevel)
 		{
-			lock (syncRoot)
+			lock (SyncRoot)
 			{
 				if (connectionAccountData.TryGetValue(connection, out AccountData accountData) && accountData != null)
 				{

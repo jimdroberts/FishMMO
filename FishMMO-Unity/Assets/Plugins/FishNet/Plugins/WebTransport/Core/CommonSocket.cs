@@ -1,3 +1,4 @@
+using FishNet.Managing;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -51,7 +52,7 @@ namespace FishNet.Transporting.WebTransport
 			 * it was fully initialized. Silently return instead of throwing NullReferenceException. */
 			if (transport == null)
 			{
-				UnityEngine.Debug.LogWarning($"[WebTransport] SetConnectionState({connectionState}, {asServer}) skipped: transport is null. Was Initialize() called?");
+				LogTransportWarning($"[WebTransport] SetConnectionState({connectionState}, {asServer}) skipped: transport is null. Was Initialize() called?");
 				return;
 			}
 
@@ -70,6 +71,34 @@ namespace FishNet.Transporting.WebTransport
 		protected Transport transport = null;
 		#endregion
 
+		#region Logging helpers
+		/// <summary>
+		/// Logs a warning message, routing through FishNet's NetworkManager when
+		/// the transport is initialized, falling back to UnityEngine.Debug.
+		/// This keeps WebTransport logging controllable through FishNet's
+		/// <c>NetworkManager.LogLevel</c> configuration.
+		/// </summary>
+		protected void LogTransportWarning(string message)
+		{
+			if (transport?.NetworkManager != null)
+				transport.NetworkManager.LogWarning(message);
+			else
+				UnityEngine.Debug.LogWarning(message);
+		}
+
+		/// <summary>
+		/// Logs an error message, routing through FishNet's NetworkManager when
+		/// the transport is initialized, falling back to UnityEngine.Debug.
+		/// </summary>
+		protected void LogTransportError(string message)
+		{
+			if (transport?.NetworkManager != null)
+				transport.NetworkManager.LogError(message);
+			else
+				UnityEngine.Debug.LogError(message);
+		}
+		#endregion
+
 		/// <summary>
 		/// Queues a packet for deferred sending during the next IterateOutgoing call.
 		/// </summary>
@@ -83,9 +112,24 @@ namespace FishNet.Transporting.WebTransport
 			if (GetConnectionState() != LocalConnectionState.Started)
 				return;
 
+			// Backpressure: drop packets when queue exceeds limit to prevent
+			// unbounded memory growth under network congestion or slow clients.
+			if (queue.Count >= MaxOutgoingQueueSize)
+			{
+				if (channelId == 0)
+					LogTransportWarning($"[WebTransport] Outgoing queue full ({MaxOutgoingQueueSize}); dropping reliable packet.");
+				return;
+			}
+
 			Packet outgoing = new Packet(connectionId, segment, channelId);
 			queue.Enqueue(outgoing);
 		}
+
+		/// <summary>
+		/// Maximum packets in the outgoing queue before backpressure kicks in.
+		/// Prevents unbounded memory growth under network congestion.
+		/// </summary>
+		protected const int MaxOutgoingQueueSize = 10000;
 
 		/// <summary>
 		/// Dequeues and disposes all packets in the given queue, returning their

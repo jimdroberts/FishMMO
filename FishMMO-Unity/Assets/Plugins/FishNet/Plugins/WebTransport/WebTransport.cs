@@ -13,7 +13,8 @@ namespace FishNet.Transporting.WebTransport
 	/// <para>Platform matrix:</para>
 	/// <list type="table">
 	///   <listheader><term>Platform</term><description>Backend</description></listheader>
-	///   <item><term>Windows/Linux/macOS (standalone)</term><description>Native C library via P/Invoke (fishmmo_webtransport / msquic)</description></item>
+	///   <item><term>Windows/Linux (standalone)</term><description>Native C library via P/Invoke (fishmmo_webtransport / msquic)</description></item>
+	///   <item><term>macOS (standalone)</term><description>Native C library via P/Invoke — requires manual build of libfishmmo_webtransport.dylib (see FishMMO-WebTransport/README.md); no pre-built binary shipped</description></item>
 	///   <item><term>WebGL (browser build)</term><description>Browser WebTransport API via JavaScript interop (WebTransport.jslib)</description></item>
 	///   <item><term>Unity Editor (any host OS)</term><description>Native C library loaded from the current platform's plugin — QUIC testing without a full build</description></item>
 	/// </list>
@@ -93,7 +94,7 @@ namespace FishNet.Transporting.WebTransport
 		#region ConnectionStates
 		public override string GetConnectionAddress(int connectionId)
 		{
-			return serverSocket.GetConnectionAddress(connectionId);
+			return this.serverSocket.GetConnectionAddress(connectionId);
 		}
 
 		public override event Action<ClientConnectionStateArgs> OnClientConnectionState;
@@ -102,12 +103,12 @@ namespace FishNet.Transporting.WebTransport
 
 		public override LocalConnectionState GetConnectionState(bool server)
 		{
-			return server ? serverSocket.GetConnectionState() : clientSocket.GetConnectionState();
+			return server ? this.serverSocket.GetConnectionState() : this.clientSocket.GetConnectionState();
 		}
 
 		public override RemoteConnectionState GetConnectionState(int connectionId)
 		{
-			return serverSocket.GetConnectionState(connectionId);
+			return this.serverSocket.GetConnectionState(connectionId);
 		}
 
 		public override void HandleClientConnectionState(ClientConnectionStateArgs connectionStateArgs)
@@ -130,17 +131,17 @@ namespace FishNet.Transporting.WebTransport
 		public override void IterateIncoming(bool server)
 		{
 			if (server)
-				serverSocket.IterateIncoming();
+				this.serverSocket.IterateIncoming();
 			else
-				clientSocket.IterateIncoming();
+				this.clientSocket.IterateIncoming();
 		}
 
 		public override void IterateOutgoing(bool server)
 		{
 			if (server)
-				serverSocket.IterateOutgoing();
+				this.serverSocket.IterateOutgoing();
 			else
-				clientSocket.IterateOutgoing();
+				this.clientSocket.IterateOutgoing();
 		}
 		#endregion
 
@@ -162,27 +163,27 @@ namespace FishNet.Transporting.WebTransport
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
-			sanitizeChannel(ref channelId);
+			SanitizeChannel(ref channelId);
 			if (channelId == 1 && segment.Count > Mtu)
 			{
 				base.NetworkManager.LogWarning(
 					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {Mtu}. Dropping.");
 				return;
 			}
-			clientSocket.SendToServer(channelId, segment);
+			this.clientSocket.SendToServer(channelId, segment);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public override void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
-			sanitizeChannel(ref channelId);
+			SanitizeChannel(ref channelId);
 			if (channelId == 1 && segment.Count > Mtu)
 			{
 				base.NetworkManager.LogWarning(
 					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {Mtu}. Dropping.");
 				return;
 			}
-			serverSocket.SendToClient(channelId, segment, connectionId);
+			this.serverSocket.SendToClient(channelId, segment, connectionId);
 		}
 		#endregion
 
@@ -214,15 +215,19 @@ namespace FishNet.Transporting.WebTransport
 
 		/// <summary>
 		/// Returns the maximum number of clients allowed to connect to the server.
+		/// The value is clamped to the range [1, 100000] to prevent resource exhaustion.
 		/// </summary>
 		public override int GetMaximumClients()
 		{
-			return serverSocket.GetMaximumClients();
+			return this.serverSocket.GetMaximumClients();
 		}
 
 		/// <summary>
-		/// Sets maximum number of clients allowed to connect to the server.
+		/// Sets the maximum number of clients allowed to connect to the server.
+		/// Only takes effect when the server is not currently running.
+		/// The value is clamped to the range [1, 100000] to prevent resource exhaustion.
 		/// </summary>
+		/// <param name="value">The maximum number of clients (clamped to [1, 100000]).</param>
 		public override void SetMaximumClients(int value)
 		{
 			/* Security: clamp to valid range [1, 100000] to prevent
@@ -234,12 +239,12 @@ namespace FishNet.Transporting.WebTransport
 				value = System.Math.Clamp(value, 1, 100000);
 			}
 
-			if (serverSocket.GetConnectionState() != LocalConnectionState.Stopped)
+			if (this.serverSocket.GetConnectionState() != LocalConnectionState.Stopped)
 				base.NetworkManager.LogWarning($"Cannot set maximum clients when server is running.");
 			else
 			{
 				this.maximumClients = value;
-				serverSocket.SetMaximumClients(value);
+				this.serverSocket.SetMaximumClients(value);
 			}
 		}
 
@@ -311,7 +316,7 @@ namespace FishNet.Transporting.WebTransport
 
 		public override bool StopConnection(int connectionId, bool immediately)
 		{
-			return stopRemoteConnection(connectionId, immediately);
+			return StopRemoteConnection(connectionId, immediately);
 		}
 
 		public override void Shutdown()
@@ -325,34 +330,34 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startServer()
 		{
-			serverSocket.Initialize(this, Mtu, certificatePath, privateKeyPath);
-			return serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);
+			this.serverSocket.Initialize(this, Mtu, certificatePath, privateKeyPath);
+			return this.serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);
 		}
 
 		private bool stopServer()
 		{
-			return serverSocket.StopConnection();
+			return this.serverSocket.StopConnection();
 		}
 
 		private bool startClient(string address)
 		{
-			clientSocket.Initialize(this, Mtu);
-			return clientSocket.StartConnection(address, port, useTls: true);
+			this.clientSocket.Initialize(this, Mtu);
+			return this.clientSocket.StartConnection(address, port, useTls: true);
 		}
 
 		private bool stopClient()
 		{
-			return clientSocket.StopConnection();
+			return this.clientSocket.StopConnection();
 		}
 
 		/// <summary>
 		/// Stops a server connection for the given connection ID.
-		/// Delegates to <c>serverSocket.StopConnection</c> because the transport
+		/// Delegates to <c>this.serverSocket.StopConnection</c> because the transport
 		/// passes <c>connectionId</c> overloads here for server-side disconnections.
 		/// </summary>
-		private bool stopRemoteConnection(int connectionId, bool immediately)
+		private bool StopRemoteConnection(int connectionId, bool immediately)
 		{
-			return serverSocket.StopConnection(connectionId, immediately);
+			return this.serverSocket.StopConnection(connectionId, immediately);
 		}
 		#endregion
 
@@ -361,7 +366,7 @@ namespace FishNet.Transporting.WebTransport
 		/// If channelId is invalid then channelId becomes forced to reliable.
 		/// WebTransport uses stream=reliable (0), datagram=unreliable (1).
 		/// </summary>
-		private void sanitizeChannel(ref byte channelId)
+		private void SanitizeChannel(ref byte channelId)
 		{
 			if (channelId >= TransportManager.CHANNEL_COUNT)
 			{

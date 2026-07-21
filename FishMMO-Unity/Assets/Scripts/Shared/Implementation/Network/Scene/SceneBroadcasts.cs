@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FishNet.Broadcast;
 using FishNet.Managing.Scened;
 
@@ -19,7 +18,7 @@ namespace FishMMO.Shared
 	public struct ClientScenesUnloadedBroadcast : IBroadcast
 	{
 		/// <summary>List of scenes that have been unloaded by the client.</summary>
-		public List<UnloadedScene> UnloadedScenes;
+		public UnloadedScene[] UnloadedScenes;
 	}
 
 	/// <summary>
@@ -69,7 +68,7 @@ namespace FishMMO.Shared
 	public struct SceneChannelListBroadcast : IBroadcast
 	{
 		/// <summary>List of available channel addresses for scene selection.</summary>
-		public List<ChannelAddress> Addresses;
+		public ChannelAddress[] Addresses;
 	}
 
 	/// <summary>

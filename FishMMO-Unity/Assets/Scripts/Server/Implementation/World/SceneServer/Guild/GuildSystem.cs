@@ -520,7 +520,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 						GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
 						{
-							Members = addBroadcasts,
+							Members = addBroadcasts.ToArray(),
 						};
 
 						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
@@ -1455,20 +1455,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				if (msg.GuildMemberID < 1)
+				if (msg.CharacterID < 1)
 				{
 					return;
 				}
 
 				// we can't kick ourself
-				if (msg.GuildMemberID == guildController.Character.ID)
+				if (msg.CharacterID == guildController.Character.ID)
 				{
 					return;
 				}
 
 				// Capture immutable data for async path
 				long guildID = guildController.ID;
-				long memberID = msg.GuildMemberID;
+				long memberID = msg.CharacterID;
 				long characterID = guildController.Character.ID;
 				GuildRank requesterRank = guildController.Rank;
 
@@ -1591,20 +1591,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				if (msg.GuildMemberID < 1)
+				if (msg.CharacterID < 1)
 				{
 					return;
 				}
 
 				// we can't promote ourself
-				if (msg.GuildMemberID == guildController.Character.ID)
+				if (msg.CharacterID == guildController.Character.ID)
 				{
 					return;
 				}
 
 				// Capture immutable data for async path
 				long guildID = guildController.ID;
-				long memberID = msg.GuildMemberID;
+				long memberID = msg.CharacterID;
 				GuildRank newRank = msg.Rank;
 
 				// Validate rank is within assignable range — only Member or Officer are valid targets.

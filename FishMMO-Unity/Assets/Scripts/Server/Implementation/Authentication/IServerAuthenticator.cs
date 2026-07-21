@@ -33,5 +33,12 @@ namespace FishMMO.Server.Implementation
 		/// token authenticators return a <see cref="TokenAccountManager"/>.
 		/// </summary>
 		IAccountManager<NetworkConnection> CreateAccountManager();
+
+		/// <summary>
+		/// Returns true when all bounded channels are empty and no worker tasks
+		/// are still running. Used by the server shutdown coroutine to poll for
+		/// completion without blocking the main thread.
+		/// </summary>
+		bool AreWorkersDrained();
 	}
 }

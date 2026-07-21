@@ -544,7 +544,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					Server.NetworkWrapper.Broadcast(conn, new SceneChannelListBroadcast
 					{
-						Addresses = addresses,
+						Addresses = addresses.ToArray(),
 					});
 				});
 			}
@@ -841,7 +841,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return null;
 			}
 
-			ushort port = result.Data.Port;
+			ushort port = (ushort)result.Data.Port;
 			if (ttl > TimeSpan.Zero)
 			{
 				runtimeData.SceneServerAddressCache.Set(sceneServerID, port);

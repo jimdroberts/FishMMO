@@ -11,11 +11,11 @@ namespace FishMMO.Database.Data
 		public readonly string Name;
 		public readonly DateTime LastPulse;
 		public readonly string Address;
-		public readonly ushort Port;
+		public readonly int Port;
 		public readonly int CharacterCount;
 		public readonly bool Locked;
 
-		public SceneServerData(long id, string name, DateTime lastPulse, string address, ushort port, int characterCount, bool locked)
+		public SceneServerData(long id, string name, DateTime lastPulse, string address, int port, int characterCount, bool locked)
 		{
 			ID = id;
 			Name = name;

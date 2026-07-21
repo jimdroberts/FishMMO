@@ -100,7 +100,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Maximum number of clients allowed per scene instance.
 		/// </summary>
-		private const int MAX_CLIENTS_PER_INSTANCE = 500;
+		private const int MaxClientsPerInstance = 500;
 
 		/// <summary>
 		/// Maximum connections allowed per waiting queue type (open-world or instance).
@@ -178,7 +178,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			runtimeData.NextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
 			runtimeData.NextDebounceCleanup = debounceCleanupIntervalSeconds;
 
-			Log.Debug("WorldSceneSystem", $"Initialized (WaitQueueRate={runtimeData.WaitQueueRateSeconds}s, MaxClientsPerInstance={MAX_CLIENTS_PER_INSTANCE})");
+			Log.Debug("WorldSceneSystem", $"Initialized (WaitQueueRate={runtimeData.WaitQueueRateSeconds}s, MaxClientsPerInstance={MaxClientsPerInstance})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -268,10 +268,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				try
 				{
 					action();
-				}
-				finally
-				{
 					tcs.TrySetResult(true);
+				}
+				catch (Exception ex)
+				{
+					tcs.TrySetException(ex);
 				}
 			}))
 			{
@@ -347,7 +348,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					}
 				}
 			}
-			runtimeData.NextWaitQueueUpdate -= deltaTime;
+			runtimeData.NextWaitQueueUpdate = runtimeData.WaitQueueRateSeconds;
 		}
 
 		/// <summary>
@@ -468,7 +469,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					foreach (var serverData in batchResult.Data)
 					{
-						ushort serverPort = serverData.Port;
+						ushort serverPort = (ushort)serverData.Port;
 						if (serverTtl > TimeSpan.Zero)
 						{
 							runtimeData.SceneServerAddressCache.Set(serverData.ID, serverPort);
@@ -625,7 +626,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					var (conn, accountName, charData) = unassigned[i];
 
 					if (!capacityHeap.TryAssignFromTop(out int assignedHandle) ||
-						!serverInfoByHandle.TryGetValue(assignedHandle, out var server))
+						!serverInfoByHandle.TryGetValue(assignedHandle, out var serverPort))
 					{
 						// No capacity anywhere — re-queue for the next processing cycle
 						TryEnqueueMainThread(() =>
@@ -648,7 +649,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						}
 					}
 
-					BroadcastSceneConnect(conn, server);
+					BroadcastSceneConnect(conn, serverPort);
 				}
 			}
 
@@ -830,7 +831,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 						Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
 						{
-							Port = sceneServer.Port,
+							Port = (ushort)sceneServer.Port,
 						});
 					});
 				}
@@ -1301,9 +1302,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			if (worldSceneDetailsCache?.Scenes?.TryGetValue(sceneName, out var details) == true)
 			{
-				return Mathf.Clamp(details.MaxClients, 1, MAX_CLIENTS_PER_INSTANCE);
+				return Mathf.Clamp(details.MaxClients, 1, MaxClientsPerInstance);
 			}
-			return MAX_CLIENTS_PER_INSTANCE;
+			return MaxClientsPerInstance;
 		}
 
 		#region Scene Instance Cache
@@ -1367,7 +1368,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return null;
 			}
 
-			ushort port = result.Data.Port;
+			ushort port = (ushort)result.Data.Port;
 			if (ttl > TimeSpan.Zero)
 			{
 				runtimeData.SceneServerAddressCache.Set(sceneServerID, port);

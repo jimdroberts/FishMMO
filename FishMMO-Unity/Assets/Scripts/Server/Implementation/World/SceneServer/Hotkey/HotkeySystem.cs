@@ -274,7 +274,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
-			if (playerCharacter == null || msg.HotkeyData == null || !CharacterStateValidation.CanAct(playerCharacter))
+			if (playerCharacter == null || !CharacterStateValidation.CanAct(playerCharacter))
 			{
 				return;
 			}
@@ -310,7 +310,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			IPlayerCharacter playerCharacter = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
-			if (playerCharacter == null || msg.Hotkeys == null || msg.Hotkeys.Count < 1 || !CharacterStateValidation.CanAct(playerCharacter))
+			if (playerCharacter == null || msg.Hotkeys == null || msg.Hotkeys.Length < 1 || !CharacterStateValidation.CanAct(playerCharacter))
 			{
 				return;
 			}
@@ -322,15 +322,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
-				int applyCount = Mathf.Min(msg.Hotkeys.Count, maxBulkHotkeyUpdates);
+				int applyCount = Mathf.Min(msg.Hotkeys.Length, maxBulkHotkeyUpdates);
 
 				for (int i = 0; i < applyCount; ++i)
 				{
 					HotkeySetBroadcast subMsg = msg.Hotkeys[i];
-					if (subMsg.HotkeyData == null)
-					{
-						continue;
-					}
 
 					TryApplyHotkey(playerCharacter, subMsg.HotkeyData);
 				}

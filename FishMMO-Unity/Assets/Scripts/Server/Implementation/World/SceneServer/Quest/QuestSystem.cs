@@ -982,7 +982,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
 				{
-					Items = modifiedItemBroadcasts,
+					Items = modifiedItemBroadcasts.ToArray(),
 				}, true, Channel.Reliable);
 			}
 		}
@@ -1040,7 +1040,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				character.Owner.Broadcast(new BankSetMultipleItemsBroadcast()
 				{
-					Items = modifiedItemBroadcasts,
+					Items = modifiedItemBroadcasts.ToArray(),
 				}, true, Channel.Reliable);
 			}
 		}

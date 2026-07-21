@@ -20,31 +20,51 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Service for handling Unity web requests.
 		/// </summary>
-		public UnityWebRequestService WebRequestService;
+		[SerializeField]
+		private UnityWebRequestService webRequestService;
+		/// <summary>
+		/// Service for handling Unity web requests.
+		/// </summary>
+		public UnityWebRequestService WebRequestService => webRequestService;
 
 		[Header("Configuration")]
 		/// <summary>
 		/// Maximum number of retries for each web request.
 		/// </summary>
 		[Tooltip("Maximum number of retries for each web request.")]
-		public int MaxRetries = 3;
+		[SerializeField]
+		private int maxRetries = 3;
+		/// <summary>
+		/// Maximum number of retries for each web request.
+		/// </summary>
+		public int MaxRetries => maxRetries;
 		/// <summary>
 		/// Delay in seconds between retries for web requests.
 		/// </summary>
 		[Tooltip("Delay in seconds between retries for web requests.")]
-		public float RetryDelay = 1.0f;
+		[SerializeField]
+		private float retryDelay = 1.0f;
+		/// <summary>
+		/// Delay in seconds between retries for web requests.
+		/// </summary>
+		public float RetryDelay => retryDelay;
 		/// <summary>
 		/// Timeout in seconds for each individual web request.
 		/// </summary>
 		[Tooltip("Timeout in seconds for each individual web request.")]
-		public int WebRequestTimeout = 10;
+		[SerializeField]
+		private int webRequestTimeout = 10;
+		/// <summary>
+		/// Timeout in seconds for each individual web request.
+		/// </summary>
+		public int WebRequestTimeout => webRequestTimeout;
 
 		/// <summary>
 		/// Unity Awake method. Validates dependencies and disables script if missing.
 		/// </summary>
 		private void Awake()
 		{
-			if (WebRequestService == null)
+			if (this.webRequestService == null)
 			{
 				Log.Error("HttpPatchServerService", "WebRequestService dependency is not assigned! This script will not function.");
 				this.gameObject.SetActive(false);
@@ -63,7 +83,7 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLatestVersion(string apiHost, string clientVersion, Action<VersionConfig, PatchInfo> onComplete, Action<string> onError)
 		{
-			if (WebRequestService == null)
+			if (this.webRequestService == null)
 			{
 				onError?.Invoke("PatchServerService not initialized due to missing WebRequestService.");
 				yield break;
@@ -85,9 +105,9 @@ namespace FishMMO.Client
 				Method = UnityWebRequest.kHttpVerbGET,
 				Headers = headers,
 				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
-				MaxRetries = MaxRetries,
-				RetryDelay = RetryDelay,
-				Timeout = WebRequestTimeout,
+				MaxRetries = this.maxRetries,
+				RetryDelay = this.retryDelay,
+				Timeout = this.webRequestTimeout,
 				OnProgress = null,
 				OnComplete = (request) =>
 				{
@@ -116,7 +136,7 @@ namespace FishMMO.Client
 				OnFailure = (request) => onError?.Invoke($"Error fetching latest version: {request.error}")
 			};
 
-			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
+			yield return this.webRequestService.StartCoroutine(this.webRequestService.SendWebRequestWithRetries(config));
 		}
 
 		/// <summary>
@@ -134,7 +154,7 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator DownloadPatch(string patchUrl, string tempFilePath, string expectedSha256, Action onComplete, Action<string> onError, Action<float, string> onProgress)
 		{
-			if (WebRequestService == null)
+			if (this.webRequestService == null)
 			{
 				onError?.Invoke("PatchServerService not initialized due to missing WebRequestService.");
 				yield break;
@@ -161,12 +181,12 @@ namespace FishMMO.Client
 				Headers = headers,
 				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
 				DownloadHandlerFactory = () => new DownloadHandlerFile(tempFilePath),
-				MaxRetries = MaxRetries,
-				RetryDelay = RetryDelay,
-				Timeout = WebRequestTimeout,
+				MaxRetries = this.maxRetries,
+				RetryDelay = this.retryDelay,
+				Timeout = this.webRequestTimeout,
 				OnProgress = (request, progress) =>
 				{
-					string progressText = $"{Mathf.RoundToInt(progress * 100f)}% ({WebRequestService.FormatBytes(request.downloadedBytes)})";
+					string progressText = $"{Mathf.RoundToInt(progress * 100f)}% ({this.webRequestService.FormatBytes(request.downloadedBytes)})";
 					onProgress?.Invoke(progress, progressText);
 				},
 				OnComplete = (request) =>
@@ -222,7 +242,7 @@ namespace FishMMO.Client
 				}
 			};
 
-			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
+			yield return this.webRequestService.StartCoroutine(this.webRequestService.SendWebRequestWithRetries(config));
 		}
 
 		/// <summary>

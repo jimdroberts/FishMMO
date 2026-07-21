@@ -89,18 +89,18 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (msg.Addresses == null || msg.Addresses.Count == 0)
+			if (msg.Addresses == null || msg.Addresses.Length == 0)
 			{
 				Hide();
 				return;
 			}
 
 			DestroyChannelButtons();
-			channelButtons = new List<ChannelDetailsButton>(msg.Addresses.Count);
+			channelButtons = new List<ChannelDetailsButton>(msg.Addresses.Length);
 
 			int currentHandle = Character.SceneHandle;
 
-			for (int i = 0; i < msg.Addresses.Count; ++i)
+			for (int i = 0; i < msg.Addresses.Length; ++i)
 			{
 				ChannelDetailsButton button = Instantiate(ChannelButtonPrefab, Content);
 				button.Initialize(msg.Addresses[i], i);

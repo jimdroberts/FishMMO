@@ -65,7 +65,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return await ExecuteReturningAsync(
 					dbContext,
 					sql,
-					new object[] { name, address, (int)port },
+					new object[] { name, address, port },
 					reader => new LoginServerEntity
 					{
 						ID = reader.GetInt64(0),
@@ -73,7 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 						TimeCreated = reader.GetDateTime(2),
 						LastPulse = reader.GetDateTime(3),
 						Address = reader.GetString(4),
-						Port = (ushort)reader.GetInt32(5),
+						Port = reader.GetInt32(5),
 					},
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);

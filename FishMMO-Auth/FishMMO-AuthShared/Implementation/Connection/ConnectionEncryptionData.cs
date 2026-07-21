@@ -9,7 +9,7 @@ namespace FishMMO.Auth.Implementation
 	/// during the handshake phase.
 	/// <para>Thread-safety: nonce contexts use <c>Interlocked</c> internally for counter operations.</para>
 	/// </summary>
-	public class ConnectionEncryptionData
+	public class ConnectionEncryptionData : IDisposable
 	{
 		/// <summary>
 		/// The client's X25519 public key received during the handshake.
@@ -189,6 +189,25 @@ namespace FishMMO.Auth.Implementation
 				CryptographicOperations.ZeroMemory(PublicKey);
 				PublicKey = null;
 			}
+		}
+
+		/// <summary>
+		/// Zeroes all sensitive key material and disposes nonce contexts.
+		/// Called by the finalizer as a safety net; <see cref="Dispose"/> suppresses finalization.
+		/// </summary>
+		~ConnectionEncryptionData()
+		{
+			Clear();
+		}
+
+		/// <summary>
+		/// Releases all sensitive key material by zeroing buffers and disposing nonce contexts.
+		/// Suppresses finalization since the work is done eagerly.
+		/// </summary>
+		public void Dispose()
+		{
+			Clear();
+			GC.SuppressFinalize(this);
 		}
 
 		/// <summary>

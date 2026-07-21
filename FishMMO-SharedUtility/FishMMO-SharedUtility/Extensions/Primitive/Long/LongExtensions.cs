@@ -74,7 +74,7 @@ namespace FishMMO.Shared
 			if (digitIndex < 0) return 0;
 
 			// Use BigInteger for the absolute value to correctly handle long.MinValue
-			BigInteger absVal = number == long.MinValue ? new BigInteger(9223372036854775808) : (number < 0 ? -number : number);
+			BigInteger absVal = number == long.MinValue ? -(BigInteger)long.MinValue : (number < 0 ? -number : number);
 
 			for (int i = 0; i < digitIndex; ++i)
 			{

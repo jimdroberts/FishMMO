@@ -24,7 +24,7 @@ namespace FishNet.Transporting.WebTransport
 		/// <summary>
 		/// The number of valid bytes in <see cref="Data"/>.
 		/// </summary>
-		public int Length;
+		public int Length { get; private set; }
 		/// <summary>
 		/// The channel: 0 = reliable (stream), 1 = unreliable (datagram).
 		/// </summary>
@@ -38,21 +38,21 @@ namespace FishNet.Transporting.WebTransport
 
 		public Packet(int sender, ArraySegment<byte> segment, byte channel)
 		{
-			Data = ByteArrayPool.Retrieve(segment.Count);
-			Buffer.BlockCopy(segment.Array, segment.Offset, Data, 0, segment.Count);
-			ConnectionId = sender;
-			Length = segment.Count;
-			Channel = channel;
-			owned = true;
+			this.Data = ByteArrayPool.Retrieve(segment.Count);
+			Buffer.BlockCopy(segment.Array, segment.Offset, this.Data, 0, segment.Count);
+			this.ConnectionId = sender;
+			this.Length = segment.Count;
+			this.Channel = channel;
+			this.owned = true;
 		}
 
 		public void Dispose()
 		{
-			if (Data != null && owned)
+			if (this.Data != null && this.owned)
 			{
-				owned = false;
-				ByteArrayPool.Store(Data);
-				Data = null;
+				this.owned = false;
+				ByteArrayPool.Store(this.Data);
+				this.Data = null;
 			}
 		}
 	}

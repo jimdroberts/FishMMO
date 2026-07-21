@@ -103,7 +103,7 @@ namespace FishMMO.Client
 							{
 								Client.Broadcast(new GuildChangeRankBroadcast()
 								{
-									GuildMemberID = id,
+									CharacterID = id,
 									Rank = nextRank,
 								}, Channel.Reliable);
 							});
@@ -118,7 +118,7 @@ namespace FishMMO.Client
 							{
 								Client.Broadcast(new GuildChangeRankBroadcast()
 								{
-									GuildMemberID = id,
+									CharacterID = id,
 									Rank = prevRank,
 								}, Channel.Reliable);
 							});
@@ -131,7 +131,7 @@ namespace FishMMO.Client
 						{
 							Client.Broadcast(new GuildRemoveBroadcast()
 							{
-								GuildMemberID = id,
+								CharacterID = id,
 							}, Channel.Reliable);
 						});
 					});

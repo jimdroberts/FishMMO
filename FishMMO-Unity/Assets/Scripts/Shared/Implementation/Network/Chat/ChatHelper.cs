@@ -234,17 +234,21 @@ namespace FishMMO.Shared
 		/// <returns>Command string if found, otherwise empty string.</returns>
 		public static string GetCommandAndTrim(ref string text)
 		{
-			if (!text.StartsWith("/"))
+			if (string.IsNullOrEmpty(text) || !text.StartsWith("/"))
 			{
 				return "";
 			}
 			int firstSpace = text.IndexOf(' ');
 			if (firstSpace < 0)
 			{
-				return "";
+				// Slash command with no arguments (e.g. "/help").
+				// Return the command name and clear the remainder.
+				string soloCmd = text.Substring(1);
+				text = "";
+				return soloCmd;
 			}
-			string cmd = text.Substring(0, firstSpace);
-			text = text.Substring(firstSpace, text.Length - firstSpace).Trim();
+			string cmd = text.Substring(1, firstSpace - 1);
+			text = text.Substring(firstSpace + 1).Trim();
 			return cmd;
 		}
 

@@ -169,7 +169,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					{
 						Name = data.Name,
 						LastPulse = data.LastPulse,
-						Port = data.Port,
+						Port = (ushort)data.Port,
 						CharacterCount = data.CharacterCount,
 						Locked = data.Locked,
 					};

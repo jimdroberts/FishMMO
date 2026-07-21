@@ -237,7 +237,7 @@ namespace FishMMO.Shared
 			{
 				BroadcastToOwnerOnly(Character, new FactionUpdateMultipleBroadcast()
 				{
-					Factions = updates,
+					Factions = updates.ToArray(),
 				}, Channel.Reliable);
 			}
 		}
@@ -255,7 +255,7 @@ namespace FishMMO.Shared
 			CharacterObserverFactionUpdateBroadcast observerBroadcast = new CharacterObserverFactionUpdateBroadcast()
 			{
 				CharacterID = Character.ID,
-				Factions = updates,
+				Factions = updates.ToArray(),
 			};
 			BroadcastToObserversOnly(Character, observerBroadcast, Channel.Reliable);
 		}

@@ -1,5 +1,4 @@
 using FishNet.Broadcast;
-using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -28,7 +27,7 @@ namespace FishMMO.Shared
 	public struct InventorySetMultipleItemsBroadcast : IBroadcast
 	{
 		/// <summary>List of items to set in the inventory.</summary>
-		public List<InventorySetItemBroadcast> Items;
+		public InventorySetItemBroadcast[] Items;
 	}
 
 	/// <summary>

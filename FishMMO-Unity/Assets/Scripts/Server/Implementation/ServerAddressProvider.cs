@@ -1,6 +1,8 @@
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Server.Core;
+using System;
+using System.Net;
 
 namespace FishMMO.Server.Implementation
 {
@@ -82,9 +84,12 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Attempts to get the server's IP address (either IPv4 or IPv6), using overrides if provided.
+		/// When the core server address is a loopback address (127.0.0.1, ::1, localhost, etc.),
+		/// falls back to the core server's remote address. This enables local-only deployments to
+		/// function while allowing production servers to register their public-facing address.
+		/// Loopback detection uses <see cref="IPAddress.TryParse"/> + <see cref="IPAddress.IsLoopback"/>,
+		/// which covers all RFC 5735 loopback variants — not just the magic strings 127.0.0.1 and localhost.
 		/// </summary>
-		/// <param name="address">When this method returns, contains the server address if found; otherwise, the default value.</param>
-		/// <returns><c>true</c> if an IP address was found; otherwise, <c>false</c>.</returns>
 		public bool TryGetServerIPAddress(out ServerAddress address)
 		{
 			if (!string.IsNullOrEmpty(addressOverride))
@@ -97,14 +102,11 @@ namespace FishMMO.Server.Implementation
 				return true;
 			}
 
-			const string LoopBack = "127.0.0.1";
-			const string LocalHost = "localhost";
-
 			if (transport != null)
 			{
-				string actualAddress = LoopBack;
+				string actualAddress = "127.0.0.1";
 				if (!string.IsNullOrWhiteSpace(coreServerAddress) &&
-					!coreServerAddress.Equals(LoopBack) && !coreServerAddress.Equals(LocalHost))
+					!IsLoopbackAddress(coreServerAddress))
 				{
 					actualAddress = coreServerAddress;
 				}
@@ -122,6 +124,18 @@ namespace FishMMO.Server.Implementation
 			}
 			address = default;
 			return false;
+		}
+
+		/// <summary>
+		/// Returns true if <paramref name="address"/> is a loopback address,
+		/// covering 127.0.0.1, ::1, 127.0.1.1, localhost, and all other variants
+		/// that IPAddress.IsLoopback detects — not just the two magic strings.
+		/// </summary>
+		private static bool IsLoopbackAddress(string address)
+		{
+			if (string.IsNullOrWhiteSpace(address)) return false;
+			if (string.Equals(address, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
+			return IPAddress.TryParse(address, out var ip) && IPAddress.IsLoopback(ip);
 		}
 	}
 }

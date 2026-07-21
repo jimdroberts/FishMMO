@@ -48,7 +48,7 @@ Unity Client
 +----v-----------------------------------------+
 |  Kestrel (Patcher)                          |
 |  +-- ForwardedHeaders middleware            |
-|  +-- CORS (AllowXFishMMO)                   |
+|  +-- CORS (Public)                   |
 |  +-- ClientGate (HMAC request signing)      |
 |  +-- Rate Limiting (two-tier)               |
 |  +-- PatchController                        |
@@ -76,7 +76,7 @@ Patcher/
 ## Middleware Pipeline
 
 1. **`UseForwardedHeaders`** — trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
-2. **`UseCors("AllowXFishMMO")`** — allows cross-origin requests from `play.fishmmo.com`.
+2. **`UseCors("Public")`** — allows cross-origin requests from `play.fishmmo.com`.
 3. **`UseFishMMOClientGate`** — validates `X-FishMMO-Client` HMAC-signed header (shared `ClientGate` middleware from FishMMO-WebShared).
 4. **`UseRateLimiter`** — two-tier: token bucket (10 req/s, 30 burst) for metadata endpoints; sliding window (6 permits/60s) for patch downloads.
 5. **`UseRouting` + `MapControllers`** — standard ASP.NET routing.
@@ -164,7 +164,7 @@ Examples:
 ## Security
 
 - **ClientGate** validates HMAC-SHA256 request signatures with timestamp and nonce replay protection.
-- **CORS policy** (`AllowXFishMMO`) restricts cross-origin access to `play.fishmmo.com`.
+- **CORS policy** (`Public`) restricts cross-origin access to `play.fishmmo.com`.
 - **ForwardedHeaders** ensures correct client IP logging when behind NGINX.
 - **Rate limiting** (two-tier: metadata + download) prevents abuse.
 - Kestrel binds to **localhost only** — not directly accessible from the internet.

@@ -102,6 +102,13 @@ namespace FishMMO.Server.Implementation
 			ShutdownWorkers();
 			InitializeCoreInstance();
 			Core.ExpectedGameVersion = MainBootstrapSystem.GameVersion;
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+			if (string.IsNullOrEmpty(Core.ExpectedGameVersion))
+			{
+				_ = Log.Warning(LogPrefix, $"ExpectedGameVersion is null or empty. Client version validation will be disabled in production. " +
+					"Set GameVersion in the MainBootstrap prefab to enable version enforcement.");
+			}
+#endif
 			workerCts = new CancellationTokenSource();
 			shutdownToken = workerCts.Token;
 			Core.InitializeWorkers(workerCts.Token);
@@ -133,6 +140,14 @@ namespace FishMMO.Server.Implementation
 
 		/// <inheritdoc/>
 		public abstract IAccountManager<NetworkConnection> CreateAccountManager();
+
+		/// <inheritdoc/>
+		public virtual bool AreWorkersDrained()
+		{
+			// Default implementation: workers are drained when the main-thread
+			// queue is empty and the core reports no active worker operations.
+			return mainThreadQueue.IsEmpty && (Core?.IsWorkerIdle ?? true);
+		}
 
 		/// <summary>
 		/// Unity OnDestroy callback. Ensures async workers are stopped and network
@@ -274,17 +289,17 @@ namespace FishMMO.Server.Implementation
 			if (ct.IsCancellationRequested)
 				return;
 
-				// Snapshot Server before any await to prevent nullification during
-				// execution (the property setter may be called from another thread).
-				var server = Server;
-				// Only process tokens on the Login Server. World/Scene servers
-				// do not have IAccountCreationSystemRuntimeData to store the result;
-				// the real IP is already in the account record from the Login phase.
-				if (server?.DataContainerRegistry == null ||
-					!server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
-				{
-					return;
-				}
+			// Snapshot Server before any await to prevent nullification during
+			// execution (the property setter may be called from another thread).
+			var server = Server;
+			// Only process tokens on the Login Server. World/Scene servers
+			// do not have IAccountCreationSystemRuntimeData to store the result;
+			// the real IP is already in the account record from the Login phase.
+			if (server?.DataContainerRegistry == null ||
+				!server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
+			{
+				return;
+			}
 			try
 			{
 				// Hash the raw token the same way IPFetch did

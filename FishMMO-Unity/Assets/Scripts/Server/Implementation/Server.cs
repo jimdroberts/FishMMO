@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+using System.Net;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -211,6 +212,19 @@ namespace FishMMO.Server.Implementation
 		private bool usedFallbackAddress = false;
 
 		/// <summary>
+		/// <summary>
+		/// Returns true if <paramref name="address"/> is a loopback address,
+		/// covering 127.0.0.1, ::1, 127.0.1.1, localhost, and all other variants
+		/// that IPAddress.IsLoopback detects — not just the two magic strings.
+		/// </summary>
+		private static bool IsLoopbackAddress(string address)
+		{
+			if (string.IsNullOrWhiteSpace(address)) return false;
+			if (string.Equals(address, "localhost", StringComparison.OrdinalIgnoreCase)) return true;
+			return System.Net.IPAddress.TryParse(address, out var ip) && System.Net.IPAddress.IsLoopback(ip);
+		}
+
+		/// <summary>
 		/// Finalizes server setup after fetching the external IP address.
 		/// </summary>
 		/// <param name="remoteAddress">The external remote address of the server.</param>
@@ -245,10 +259,13 @@ namespace FishMMO.Server.Implementation
 			if (string.IsNullOrWhiteSpace(remoteAddress))
 				throw new UnityException("Server: Failed to retrieve Remote IP Address.");
 
-			// When the external IP fetch returns 127.0.0.1 (timeout fallback or local-only
-			// deployment), prefer the explicitly configured address from the server config.
-			// This prevents a production server from registering 127.0.0.1 as its public IP.
-			if (remoteAddress == "127.0.0.1" || remoteAddress == "localhost")
+			// When the external IP fetch returns a loopback address (127.0.0.1, ::1,
+			// 127.0.1.1, localhost, etc.) — timeout fallback or local-only deployment —
+			// prefer the explicitly configured address from the server config.
+			// This prevents a production server from registering loopback as its public IP.
+			// Uses IPAddress.TryParse + IsLoopback to catch all loopback variants,
+			// not just the two magic strings "127.0.0.1" and "localhost".
+			if (IsLoopbackAddress(remoteAddress))
 			{
 				string configuredAddress = Configuration.GetString("Address", null);
 				if (!string.IsNullOrWhiteSpace(configuredAddress) && configuredAddress != "127.0.0.1" && configuredAddress != "localhost")
@@ -299,7 +316,7 @@ namespace FishMMO.Server.Implementation
 				throw new InvalidOperationException(
 					"Server: Authenticator does not implement IServerAuthenticator.");
 
-			NetworkWrapper.ApplyTransportConfiguration();
+			NetworkWrapper.ApplyTransportConfiguration(AddressOverride, PortOverride > 0 ? PortOverride : null);
 			NetworkWrapper.AttachLoginAuthenticator(this);
 			NetworkWrapper.RegisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 
@@ -370,14 +387,14 @@ namespace FishMMO.Server.Implementation
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		private void UpdateServerBehaviours(float deltaTime)
 		{
-			if (serverBehaviours == null)
+			if (this.serverBehaviours == null)
 				return;
 
 			// Snapshot to avoid list mutation if OnLateUpdate registers or unregisters behaviours.
-			behaviourSnapshot.Clear();
-			for (int i = 0; i < serverBehaviours.Count; i++)
+			this.behaviourSnapshot.Clear();
+			for (int i = 0; i < this.serverBehaviours.Count; i++)
 			{
-				behaviourSnapshot.Add(serverBehaviours[i]);
+				this.behaviourSnapshot.Add(this.serverBehaviours[i]);
 			}
 
 			for (int i = 0; i < behaviourSnapshot.Count; i++)
@@ -400,12 +417,12 @@ namespace FishMMO.Server.Implementation
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		private void UpdatePeriodicCallbacks(float deltaTime)
 		{
-			if (periodicCallbacks.Count == 0)
+			if (this.periodicCallbacks.Count == 0)
 				return;
 
-			readyCallbacks.Clear();
+			this.readyCallbacks.Clear();
 
-			foreach (var kvp in periodicCallbacks)
+			foreach (var kvp in this.periodicCallbacks)
 			{
 				var data = kvp.Value;
 				data.TimeRemaining -= deltaTime;
@@ -416,9 +433,9 @@ namespace FishMMO.Server.Implementation
 				}
 			}
 
-			for (int i = 0; i < readyCallbacks.Count; i++)
-			{
-				var data = readyCallbacks[i];
+				for (int i = 0; i < this.readyCallbacks.Count; i++)
+				{
+					var data = this.readyCallbacks[i];
 				try
 				{
 					data.Callback?.Invoke(data.Interval);
@@ -452,9 +469,9 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void PerformShutdown()
 		{
-			if (System.Threading.Interlocked.CompareExchange(ref hasShutdownFlag, 1, 0) != 0) return;
+			if (System.Threading.Interlocked.CompareExchange(ref this.hasShutdownFlag, 1, 0) != 0) return;
 
-				periodicCallbacks.Clear();
+			this.periodicCallbacks.Clear();
 
 			// 1. Signal worker cancellation FIRST — in-flight auth operations can
 			//    finish broadcasting before the transport is stopped.
@@ -464,18 +481,37 @@ namespace FishMMO.Server.Implementation
 				authenticator.ShutdownWorkers();
 			}
 
-			// 2. Brief drain wait for workers to complete their teardown before stopping
-			//    the transport, ensuring pending broadcasts from cancellation callbacks
-			//    are not interrupted by transport teardown.
-			System.Threading.Thread.Sleep(2000);
+			// 2. Start coroutine-based drain — polls for worker teardown, then
+			//    stops transport and tears down remaining subsystems.
+			//    Avoids Thread.Sleep() blocking the Unity main thread.
+			StartCoroutine(DrainWorkersAndFinishShutdown());
+		}
 
-			// 3. Stop accepting new connections — workers have been signalled and
-			//    drained; no new connections should be accepted.
+		/// <summary>Max seconds to poll for worker teardown before forcing stop.</summary>
+		private const float workerDrainTimeoutSeconds = 5f;
+
+		/// <summary>
+		/// Coroutine that waits for worker teardown to complete (or timeout),
+		/// then stops the transport and deinitializes all server subsystems.
+		/// </summary>
+		private System.Collections.IEnumerator DrainWorkersAndFinishShutdown()
+		{
+			float deadline = Time.realtimeSinceStartup + workerDrainTimeoutSeconds;
+			while (Time.realtimeSinceStartup < deadline)
+			{
+				if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator auth)
+				{
+					if (auth.AreWorkersDrained())
+						break;
+				}
+				else break;
+				yield return null;
+			}
+
+			// 3. Stop accepting new connections.
 			NetworkWrapper?.StopServer();
 
-			// 4. Deinitialize server behaviours — this is safe only after the network is
-			//    stopped and workers have completed, ensuring no callbacks reference
-			//    partially-destroyed components.
+			// 4. Deinitialize behaviours and data containers.
 			DeinitializeAllBehaviours();
 			UnregisterAllBehaviours();
 
@@ -496,21 +532,22 @@ namespace FishMMO.Server.Implementation
 			NetworkWrapper?.UnregisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 		}
 
+
 		/// <summary>
 		/// Registers all server behaviours in order.
 		/// </summary>
 		private void RegisterAllBehaviours()
 		{
-			if (serverBehaviours != null && BehaviourRegistry != null)
+			if (this.serverBehaviours != null && this.BehaviourRegistry != null)
 			{
 				// Register in order
-				for (int i = 0; i < serverBehaviours.Count; i++)
+				for (int i = 0; i < this.serverBehaviours.Count; i++)
 				{
-					var behaviour = serverBehaviours[i];
+					var behaviour = this.serverBehaviours[i];
 					if (behaviour != null && !behaviour.Initialized)
 					{
 						// Register to registry before initializing
-						BehaviourRegistry.Register(behaviour);
+						this.BehaviourRegistry.Register(behaviour);
 					}
 				}
 			}
@@ -524,7 +561,7 @@ namespace FishMMO.Server.Implementation
 		private void DiscoverAndCreateDataContainers()
 		{
 			// Clear to prevent accumulation if Unity domain reload is disabled.
-			dataContainers.Clear();
+			this.dataContainers.Clear();
 
 			var factory = new RuntimeDataContainerFactory();
 			var containerTypes = new HashSet<Type>(); // Prevent duplicates
@@ -569,7 +606,7 @@ namespace FishMMO.Server.Implementation
 					var container = factory.CreateContainer(containerType);
 					if (container is RuntimeDataContainer rdc)
 					{
-						dataContainers.Add(rdc);
+						this.dataContainers.Add(rdc);
 						Log.Debug("Server", $"Auto-created RuntimeDataContainer: {containerType.Name}");
 					}
 					else
@@ -585,16 +622,16 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void RegisterAllDataContainers()
 		{
-			if (dataContainers != null && DataContainerRegistry != null)
+			if (this.dataContainers != null && this.DataContainerRegistry != null)
 			{
 				// Register in order
-				for (int i = 0; i < dataContainers.Count; i++)
+				for (int i = 0; i < this.dataContainers.Count; i++)
 				{
-					var container = dataContainers[i];
+					var container = this.dataContainers[i];
 					if (container != null && !container.Initialized)
 					{
 						// Register to registry before initializing
-						DataContainerRegistry.Register(container);
+						this.DataContainerRegistry.Register(container);
 					}
 				}
 			}
@@ -605,12 +642,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void DeinitializeAllBehaviours()
 		{
-			if (serverBehaviours != null && BehaviourRegistry != null)
+			if (this.serverBehaviours != null && this.BehaviourRegistry != null)
 			{
 				// Deinitialize in reverse order to ensure proper cleanup dependencies
-				for (int i = serverBehaviours.Count - 1; i >= 0; i--)
+				for (int i = this.serverBehaviours.Count - 1; i >= 0; i--)
 				{
-					var behaviour = serverBehaviours[i];
+					var behaviour = this.serverBehaviours[i];
 					if (behaviour != null && behaviour.Initialized)
 					{
 						// Deinitialize the behaviour (calls OnDeinitialize and clears references)
@@ -625,16 +662,16 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void UnregisterAllBehaviours()
 		{
-			if (serverBehaviours != null && BehaviourRegistry != null)
+			if (this.serverBehaviours != null && this.BehaviourRegistry != null)
 			{
 				// Unregister in reverse order to ensure proper cleanup dependencies
-				for (int i = serverBehaviours.Count - 1; i >= 0; i--)
+				for (int i = this.serverBehaviours.Count - 1; i >= 0; i--)
 				{
-					var behaviour = serverBehaviours[i];
+					var behaviour = this.serverBehaviours[i];
 					if (behaviour != null)
 					{
 						// Unregister from registry before deinitializing
-						BehaviourRegistry.Unregister(behaviour);
+						this.BehaviourRegistry.Unregister(behaviour);
 					}
 				}
 			}
@@ -645,9 +682,9 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void DeinitializeAllDataContainers()
 		{
-			if (DataContainerRegistry != null)
+			if (this.DataContainerRegistry != null)
 			{
-				DataContainerRegistry.DeinitializeAll();
+				this.DataContainerRegistry.DeinitializeAll();
 			}
 		}
 
@@ -656,16 +693,16 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void UnregisterAllDataContainers()
 		{
-			if (dataContainers != null && DataContainerRegistry != null)
+			if (this.dataContainers != null && this.DataContainerRegistry != null)
 			{
 				// Unregister in reverse order to ensure proper cleanup dependencies
-				for (int i = dataContainers.Count - 1; i >= 0; i--)
+				for (int i = this.dataContainers.Count - 1; i >= 0; i--)
 				{
-					var container = dataContainers[i];
+					var container = this.dataContainers[i];
 					if (container != null)
 					{
 						// Unregister from registry
-						DataContainerRegistry.Unregister(container);
+						this.DataContainerRegistry.Unregister(container);
 					}
 				}
 			}

@@ -1054,7 +1054,8 @@ namespace FishMMO.Auth.Implementation
 			if (expiresUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("expiresUtc must be UTC.", nameof(expiresUtc));
 			if (hmacKey == null || hmacKey.Length != HmacKeyLength) throw new ArgumentException($"hmacKey must be {HmacKeyLength} bytes.", nameof(hmacKey));
 
-			TimeSpan lifetime = expiresUtc - DateTime.UtcNow;
+			DateTime utcNow = DateTime.UtcNow;
+			TimeSpan lifetime = expiresUtc - utcNow;
 			if (lifetime <= TimeSpan.Zero)
 				throw new ArgumentOutOfRangeException(nameof(expiresUtc), "Token has already expired.");
 			if (lifetime > TimeSpan.FromMinutes(MaxTokenLifetimeMinutes))
@@ -1281,13 +1282,13 @@ namespace FishMMO.Auth.Implementation
 			/// can be tuned without breaking existing stored hashes; <see cref="VerifyRecoveryCode"/>
 			/// transparently accepts the legacy "salt:hash" format at the original 100_000 iterations.
 			/// </summary>
-			private const int pbkdf2Iterations = 600_000;
+			private const int Pbkdf2Iterations = 600_000;
 
 			/// <summary>Legacy PBKDF2 iteration count for verifying hashes written before H2.</summary>
-			private const int pbkdf2IterationsLegacy = 100_000;
+			private const int Pbkdf2IterationsLegacy = 100_000;
 
 			/// <summary>Versioned envelope prefix written by <see cref="HashRecoveryCode"/>.</summary>
-			private const string recoveryCodeEnvelopeV2Prefix = "v2:";
+			private const string RecoveryCodeEnvelopeV2Prefix = "v2:";
 
 			/// <summary>
 			/// PBKDF2 salt length in bytes.
@@ -1554,10 +1555,10 @@ namespace FishMMO.Auth.Implementation
 				byte[] salt = GenerateKey(Pbkdf2SaltLength);
 				byte[] codeBytes = Encoding.UTF8.GetBytes(normalizedAccount + "|" + normalizedCode);
 
-				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, pbkdf2Iterations, HashAlgorithmName.SHA256))
+				using (var pbkdf2 = new Rfc2898DeriveBytes(codeBytes, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256))
 				{
 					byte[] hash = pbkdf2.GetBytes(Pbkdf2HashLength);
-					string result = recoveryCodeEnvelopeV2Prefix + pbkdf2Iterations.ToString(System.Globalization.CultureInfo.InvariantCulture)
+					string result = RecoveryCodeEnvelopeV2Prefix + Pbkdf2Iterations.ToString(System.Globalization.CultureInfo.InvariantCulture)
 						+ ":" + Convert.ToBase64String(salt) + ":" + Convert.ToBase64String(hash);
 					CryptographicOperations.ZeroMemory(salt);
 					CryptographicOperations.ZeroMemory(hash);
@@ -1580,7 +1581,7 @@ namespace FishMMO.Auth.Implementation
 				if (string.IsNullOrEmpty(submitted) || string.IsNullOrEmpty(storedHash))
 					return false;
 
-				bool isV2 = storedHash.StartsWith(recoveryCodeEnvelopeV2Prefix, StringComparison.Ordinal);
+				bool isV2 = storedHash.StartsWith(RecoveryCodeEnvelopeV2Prefix, StringComparison.Ordinal);
 				string[] parts;
 				int iterations;
 				string saltBase64;
@@ -1588,9 +1589,9 @@ namespace FishMMO.Auth.Implementation
 
 				if (isV2)
 				{
-					parts = storedHash.Substring(recoveryCodeEnvelopeV2Prefix.Length).Split(':');
+					parts = storedHash.Substring(RecoveryCodeEnvelopeV2Prefix.Length).Split(':');
 					if (parts.Length != 3) return false;
-					if (!int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out iterations) || iterations < pbkdf2IterationsLegacy)
+					if (!int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out iterations) || iterations < Pbkdf2IterationsLegacy)
 						return false;
 					saltBase64 = parts[1];
 					hashBase64 = parts[2];
@@ -1599,7 +1600,7 @@ namespace FishMMO.Auth.Implementation
 				{
 					parts = storedHash.Split(':');
 					if (parts.Length != 2) return false;
-					iterations = pbkdf2IterationsLegacy;
+					iterations = Pbkdf2IterationsLegacy;
 					saltBase64 = parts[0];
 					hashBase64 = parts[1];
 				}
@@ -1765,9 +1766,11 @@ namespace FishMMO.Auth.Implementation
 						}
 					}
 				}
-				catch
+				catch (Exception ex)
 				{
 					// Defensive: never let a reflection failure escape into the caller.
+					// Log at debug level since OtpNet internals may change across versions.
+					System.Diagnostics.Debug.WriteLine($"[CryptoHelper.TryZeroizeTotpInternals] Reflection-based zeroize failed: {ex.Message}");
 				}
 			}
 

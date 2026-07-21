@@ -1,3 +1,4 @@
+using FishNet.Managing;
 using FishNet.Transporting.WebTransport.Native;
 using FishNet.Transporting.WebTransport.WebGL;
 using System;
@@ -36,6 +37,12 @@ namespace FishNet.Transporting.WebTransport.Client
         private Action<int, IntPtr, int> webglOnDatagram;
         private Action<int> webglOnError;
 #endif
+		/// <summary>
+		/// Stored managed thread ID of the Unity main thread.
+		/// Set during first initialization and used for thread-affinity assertions.
+		/// </summary>
+		private static int mainThreadId = -1;
+
 		/// <summary>
 		/// Atomic guard to ensure StopConnection runs exactly once.
 		/// </summary>
@@ -81,7 +88,7 @@ namespace FishNet.Transporting.WebTransport.Client
              * Discarding without invoking would leak native heap memory. */
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				try { act?.Invoke(); } catch (System.Exception ex) { UnityEngine.Debug.LogWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
+				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
 			}
 			/* stopGuard is reset on the main thread (StartConnection is always called
 			 * from the Unity main thread). The race window is acceptable because
@@ -90,8 +97,10 @@ namespace FishNet.Transporting.WebTransport.Client
 			 * race with the stopGuard reset here.
 			 *
 			 * Assert we are on the Unity main thread. */
+			if (mainThreadId < 0)
+				mainThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
 			System.Diagnostics.Debug.Assert(
-				System.Threading.Thread.CurrentThread.ManagedThreadId == 1,
+				System.Threading.Thread.CurrentThread.ManagedThreadId == mainThreadId,
 				"[WebTransport Client] StartConnection must be called from the Unity main thread.");
 			stopGuard = 0;
 
@@ -101,7 +110,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			int slashIndex = address.IndexOf('/');
 			serverName = slashIndex >= 0 ? address.Substring(0, slashIndex) : address;
 
-			resetQueues();
+			ResetQueues();
 
 #if UNITY_WEBGL && !UNITY_EDITOR
             // WebGL: use browser WebTransport API via JS bridge
@@ -115,12 +124,12 @@ namespace FishNet.Transporting.WebTransport.Client
              * the GC could collect them before the JS callbacks fire, causing an
              * access-violation crash in the browser. */
             webglOnOpen = (_) => { incomingEvents.Enqueue(() => SetConnectionState(LocalConnectionState.Started, false)); };
-            webglOnClose = (_) => { incomingEvents.Enqueue(() => { UnityEngine.Debug.LogWarning("[WebTransport Client] WebGL connection closed."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
+            webglOnClose = (_) => { incomingEvents.Enqueue(() => { LogTransportWarning("[WebTransport Client] WebGL connection closed."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
             webglOnStream = (_, dataPtr, length) => {
                 /* Security: reject invalid or oversized packets before allocating managed memory. */
                 if (length <= 0 || length > MaxPacketSize)
                 {
-                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
+                    LogTransportWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
                     return;
                 }
                 byte[] buf = new byte[length];
@@ -132,7 +141,7 @@ namespace FishNet.Transporting.WebTransport.Client
                 /* Security: reject invalid or oversized datagrams. */
                 if (length <= 0 || length > mtu)
                 {
-                    UnityEngine.Debug.LogWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
+                    LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
                     return;
                 }
                 byte[] buf = new byte[length];
@@ -140,7 +149,7 @@ namespace FishNet.Transporting.WebTransport.Client
                 incomingEvents.Enqueue(() => transport.HandleClientReceivedDataArgs(
                     new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Unreliable, transport.Index)));
             };
-            webglOnError = (_) => { incomingEvents.Enqueue(() => { UnityEngine.Debug.LogError("[WebTransport Client] WebGL connection error."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
+            webglOnError = (_) => { incomingEvents.Enqueue(() => { LogTransportError("[WebTransport Client] WebGL connection error."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
 
             webglIndex = WebTransportJSLib.WTConnect(url,
                 webglOnOpen, webglOnClose, webglOnStream, webglOnDatagram, webglOnError);
@@ -155,10 +164,10 @@ namespace FishNet.Transporting.WebTransport.Client
 
 			pinnedCallbacks = new NativeCallbacks.ClientCallbacks
 			{
-				OnConnect = new NativeCallbacks.ClientConnectDelegate(handleNativeConnect),
-				OnDisconnect = new NativeCallbacks.ClientDisconnectDelegate(handleNativeDisconnect),
-				OnStreamData = new NativeCallbacks.ClientStreamDataDelegate(handleNativeStreamData),
-				OnDatagram = new NativeCallbacks.ClientDatagramDelegate(handleNativeDatagram),
+				OnConnect = new NativeCallbacks.ClientConnectDelegate(HandleNativeConnect),
+				OnDisconnect = new NativeCallbacks.ClientDisconnectDelegate(HandleNativeDisconnect),
+				OnStreamData = new NativeCallbacks.ClientStreamDataDelegate(HandleNativeStreamData),
+				OnDatagram = new NativeCallbacks.ClientDatagramDelegate(HandleNativeDatagram),
 			};
 
 			clientHandle = WebTransportNative.wt_client_create(
@@ -212,7 +221,7 @@ namespace FishNet.Transporting.WebTransport.Client
              * Transport callbacks since state is about to be Stopping. */
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				try { act?.Invoke(); } catch (System.Exception ex) { UnityEngine.Debug.LogWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
+				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
 			}
 
 			base.SetConnectionState(LocalConnectionState.Stopping, false);
@@ -252,7 +261,7 @@ namespace FishNet.Transporting.WebTransport.Client
 #endif
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				try { act?.Invoke(); } catch (Exception e) { UnityEngine.Debug.LogException(e); }
+				try { act?.Invoke(); } catch (Exception e) { LogTransportError(e.Message); }
 			}
 		}
 
@@ -270,7 +279,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 #endif
 
-			dequeueOutgoing();
+			DequeueOutgoing();
 		}
 
 		/// <summary>
@@ -293,7 +302,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// <summary>
 		/// Dequeues outgoing packets and sends via the native library.
 		/// </summary>
-		private void dequeueOutgoing()
+		private void DequeueOutgoing()
 		{
 			if (base.GetConnectionState() != LocalConnectionState.Started)
 			{
@@ -311,7 +320,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			int count = outgoing.Count;
 			for (int i = 0; i < count; i++)
 			{
-				Packet outgoing = this.outgoing.Dequeue();
+				Packet pkt = this.outgoing.Dequeue();
 
 #if UNITY_WEBGL && !UNITY_EDITOR
                 bool ok;
@@ -320,17 +329,17 @@ namespace FishNet.Transporting.WebTransport.Client
                 else
                     ok = WebTransportJSLib.WTSendStream(webglIndex, outgoing.Data, outgoing.Length);
                 if (!ok)
-                    UnityEngine.Debug.LogWarning("[WebTransport Client] Send failed (WebGL)");
+                    LogTransportWarning("[WebTransport Client] Send failed (WebGL)");
 #else
 				int result;
-				if (outgoing.Channel == 1)
-					result = WebTransportNative.wt_client_send_datagram(clientHandle, outgoing.Data, outgoing.Length);
+				if (pkt.Channel == 1)
+					result = WebTransportNative.wt_client_send_datagram(this.clientHandle, pkt.Data, pkt.Length);
 				else
-					result = WebTransportNative.wt_client_send_stream(clientHandle, outgoing.Data, outgoing.Length);
+					result = WebTransportNative.wt_client_send_stream(this.clientHandle, pkt.Data, pkt.Length);
 				if (result != 0)
-					UnityEngine.Debug.LogWarning($"[WebTransport Client] Send failed: {WebTransportNative.ErrorString(result)}");
+					transport.NetworkManager?.LogWarning($"[WebTransport Client] Send failed: {WebTransportNative.ErrorString(result)}");
 #endif
-				outgoing.Dispose();
+				pkt.Dispose();
 			}
 		}
 
@@ -338,7 +347,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// Resets the outgoing packet queue.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private void resetQueues()
+		private void ResetQueues()
 		{
 			base.ClearPacketQueue(outgoing);
 		}
@@ -351,7 +360,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// Queues the connection-state transition for execution on the main thread.
 		/// </summary>
 		/// <param name="context">User-supplied context pointer.</param>
-		private void handleNativeConnect(IntPtr context)
+		private void HandleNativeConnect(IntPtr context)
 		{
 			incomingEvents.Enqueue(() =>
 			{
@@ -366,12 +375,12 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		/// <param name="context">User-supplied context pointer.</param>
 		/// <param name="errorCode">Zero for clean disconnect; negative for error.</param>
-		private void handleNativeDisconnect(IntPtr context, int errorCode)
+		private void HandleNativeDisconnect(IntPtr context, int errorCode)
 		{
 			incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
-					UnityEngine.Debug.LogWarning($"[WebTransport Client] Disconnected: {WebTransportNative.ErrorString(errorCode)}");
+					LogTransportWarning($"[WebTransport Client] Disconnected: {WebTransportNative.ErrorString(errorCode)}");
 				StopConnection();
 			});
 		}
@@ -385,12 +394,12 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// <param name="streamId">The QUIC stream ID.</param>
 		/// <param name="dataPtr">Pointer to the received data buffer.</param>
 		/// <param name="length">Length of the received data in bytes.</param>
-		private void handleNativeStreamData(IntPtr context, ulong streamId, IntPtr dataPtr, int length)
+		private void HandleNativeStreamData(IntPtr context, ulong streamId, IntPtr dataPtr, int length)
 		{
 			/* Security: reject invalid or oversized packets before allocating unmanaged memory. */
 			if (length <= 0 || length > MaxPacketSize)
 			{
-				UnityEngine.Debug.LogWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
+				LogTransportWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
 				return;
 			}
 			
@@ -435,12 +444,12 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// <param name="context">User-supplied context pointer.</param>
 		/// <param name="dataPtr">Pointer to the received datagram buffer.</param>
 		/// <param name="length">Length of the received datagram in bytes.</param>
-		private void handleNativeDatagram(IntPtr context, IntPtr dataPtr, int length)
+		private void HandleNativeDatagram(IntPtr context, IntPtr dataPtr, int length)
 		{
 			/* Security: reject invalid or oversized datagrams. */
 			if (length <= 0 || length > mtu)
 			{
-				UnityEngine.Debug.LogWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
+				LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;
 			}
 			

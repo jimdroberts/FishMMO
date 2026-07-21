@@ -106,16 +106,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
-			// Register login server in database (Task.Run avoids deadlock from
-			// Unity's SynchronizationContext when blocking on async during init).
-			// Timeout prevents hanging indefinitely if the DB is unreachable.
+			// Register login server in database.
+			// BLOCKING THE MAIN THREAD IS INTENTIONAL: Unity's SynchronizationContext captures
+			// the main thread. If we awaited directly, any continuation that needs the main thread
+			// (e.g., FishNet callbacks, coroutine resumptions) would deadlock because the main thread
+			// is blocked. We use Task.Run to escape the SynchronizationContext, then Wait() to block
+			// synchronously on a background-thread task. The 30s timeout prevents indefinite hang.
 			const int dbRegistrationTimeoutMs = 30_000;
 			Task<DatabaseResult<LoginServerData>> registerTask = Task.Run(() =>
 				loginServerService.PersistAsync(name, server.Address, server.Port));
 
-			// Block the main thread intentionally during startup: Unity's SynchronizationContext
-			// would deadlock if we awaited directly, so we use Task.Run to escape it and Wait()
-			// to block synchronously. The 30s timeout prevents an indefinite hang if the DB is unreachable.
+			// Block the main thread intentionally during startup (see comment above).
 			if (!registerTask.Wait(dbRegistrationTimeoutMs))
 			{
 				Log.Error("LoginServerSystem", $"Login server DB registration timed out after {dbRegistrationTimeoutMs}ms");
@@ -279,7 +280,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					try
 					{
-						Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID)).Wait(5000);
+						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL: We use Task.Run to escape
+								// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
+								// At this point the server is shutting down, so blocking the main thread momentarily
+								// is acceptable and ensures the DB cleanup completes before process exit.
+								Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID)).Wait(5000);
 					}
 					catch (Exception ex)
 					{
@@ -291,7 +296,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					try
 					{
-						Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
+						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL (see comment above).
+								Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
 					}
 					catch (Exception ex)
 					{

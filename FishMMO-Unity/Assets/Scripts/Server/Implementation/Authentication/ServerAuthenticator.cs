@@ -230,7 +230,7 @@ namespace FishMMO.Server.Implementation
 
 			// Per-IP rate limiting: prevent unauthenticated clients from triggering DB
 			// queries at high frequency (DoS vector). Limit to 1 attempt per 5 seconds per IP.
-			string ip = conn.GetAddress();
+			string ip = ResolveRateLimitKey(conn);
 			if (!string.IsNullOrEmpty(ip) &&
 				!revokeRateLimiter.TryBegin(ip, DateTime.UtcNow, RevokeRateLimitDuration))
 			{

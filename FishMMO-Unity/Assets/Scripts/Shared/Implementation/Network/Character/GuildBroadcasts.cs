@@ -1,5 +1,4 @@
 using FishNet.Broadcast;
-using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -63,7 +62,7 @@ namespace FishMMO.Shared
 	public struct GuildAddMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of members to add to the guild.</summary>
-		public List<GuildAddBroadcast> Members;
+		public GuildAddBroadcast[] Members;
 	}
 
 	/// <summary>
@@ -76,22 +75,22 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// Broadcast for removing a member from a guild.
-	/// Contains the guild member ID to be removed.
+	/// Contains the character ID to be removed.
 	/// </summary>
 	public struct GuildRemoveBroadcast : IBroadcast
 	{
-		/// <summary>Guild member ID of the member to remove.</summary>
-		public long GuildMemberID;
+		/// <summary>Character ID of the member to remove.</summary>
+		public long CharacterID;
 	}
 
 	/// <summary>
 	/// Broadcast for changing a member's rank within a guild.
-	/// Contains the guild member ID and the new rank.
+	/// Contains the character ID and the new rank.
 	/// </summary>
 	public struct GuildChangeRankBroadcast : IBroadcast
 	{
-		/// <summary>Guild member ID of the member whose rank is changing.</summary>
-		public long GuildMemberID;
+		/// <summary>Character ID of the member whose rank is changing.</summary>
+		public long CharacterID;
 		/// <summary>New rank to assign to the member.</summary>
 		public GuildRank Rank;
 	}

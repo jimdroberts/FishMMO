@@ -62,6 +62,10 @@
 		public Achievement(int templateID)
 		{
 			Template = AchievementTemplate.Get<AchievementTemplate>(templateID);
+			if (Template == null)
+			{
+				UnityEngine.Debug.LogError($"[Achievement] Template not found for ID {templateID}. Achievement will be non-functional.");
+			}
 			CurrentTier = 0;
 			CurrentValue = 0;
 		}

@@ -186,8 +186,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg, Channel channel)
 		{
-			HashSet<long> newIds = new HashSet<long>(msg.Members.Count);
-			for (int i = 0; i < msg.Members.Count; i++)
+			HashSet<long> newIds = new HashSet<long>(msg.Members.Length);
+			for (int i = 0; i < msg.Members.Length; i++)
 			{
 				newIds.Add(msg.Members[i].CharacterID);
 			}
@@ -220,7 +220,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg, Channel channel)
 		{
-			OnRemoveGuildMember?.Invoke(msg.GuildMemberID);
+			OnRemoveGuildMember?.Invoke(msg.CharacterID);
 		}
 
 		/// <summary>

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -24,6 +23,6 @@ namespace FishMMO.Shared
 	public struct AchievementUpdateMultipleBroadcast : IBroadcast
 	{
 		/// <summary>List of achievements to update.</summary>
-		public List<AchievementUpdateBroadcast> Achievements;
+		public AchievementUpdateBroadcast[] Achievements;
 	}
 }

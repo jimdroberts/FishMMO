@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 
@@ -33,7 +33,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Reads and decompresses a dictionary from a GZip file.
 		/// </summary>
-		public static Dictionary<long, string> ReadFromGZipFile(this Dictionary<long, string> _, string filePath)
+		public static Dictionary<long, string> ReadFromGZipFile(string filePath)
 		{
 			if (!File.Exists(filePath)) return new Dictionary<long, string>();
 
@@ -59,9 +59,14 @@ namespace FishMMO.Shared
 					}
 				}
 			}
-			catch (System.Exception ex)
+			catch (IOException ex)
 			{
 				System.Console.WriteLine($"Error reading dictionary from GZip file: {ex.Message}");
+				return new Dictionary<long, string>();
+			}
+			catch (InvalidDataException ex)
+			{
+				System.Console.WriteLine($"Error reading dictionary from GZip file (invalid data): {ex.Message}");
 				return new Dictionary<long, string>();
 			}
 		}

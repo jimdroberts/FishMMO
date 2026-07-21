@@ -1,9 +1,8 @@
 {
-    "name": "FishMMO.Client.Security.Editor",
-    "rootNamespace": "FishMMO.Client",
+    "name": "WebTransport.Editor",
+    "rootNamespace": "FishNet.Transporting.WebTransport.Editor",
     "references": [
-        "FishMMO.Client",
-        "FishMMO.Shared"
+        "WebTransport"
     ],
     "includePlatforms": [
         "Editor"
@@ -12,7 +11,7 @@
     "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],
-    "autoReferenced": false,
+    "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false

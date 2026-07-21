@@ -215,7 +215,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				(abilityController, list) => abilityController.LearnBaseAbilities(list),
 				t => t.ID,
 				t => new KnownAbilityAddBroadcast { TemplateID = t.ID },
-				list => new KnownAbilityAddMultipleBroadcast { Abilities = list }
+				list => new KnownAbilityAddMultipleBroadcast { Abilities = list.ToArray() }
 			);
 		}
 
@@ -235,7 +235,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				(abilityController, list) => abilityController.LearnAbilityEvents(list),
 				t => t.ID,
 				t => new KnownAbilityEventAddBroadcast { TemplateID = t.ID },
-				list => new KnownAbilityEventAddMultipleBroadcast { AbilityEvents = list }
+				list => new KnownAbilityEventAddMultipleBroadcast { AbilityEvents = list.ToArray() }
 			);
 		}
 
@@ -304,7 +304,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
 					{
-						Items = modifiedItemBroadcasts,
+						Items = modifiedItemBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}
@@ -357,7 +357,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					character.Owner.Broadcast(new BankSetMultipleItemsBroadcast()
 					{
-						Items = modifiedItemBroadcasts,
+						Items = modifiedItemBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}

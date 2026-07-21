@@ -267,13 +267,13 @@ namespace FishMMO.Client
 				DestroyCharacterList();
 
 				// No characters were sent.
-				if (msg.Characters.Count < 1)
+				if (msg.Characters.Length < 1)
 				{
 					OnCharacterListReady();
 					return;
 				}
 
-				for (int i = 0; i < msg.Characters.Count; ++i)
+				for (int i = 0; i < msg.Characters.Length; ++i)
 				{
 					CreateCharacterRow(msg.Characters[i]);
 				}

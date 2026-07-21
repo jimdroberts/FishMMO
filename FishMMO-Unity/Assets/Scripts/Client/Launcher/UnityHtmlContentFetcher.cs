@@ -21,36 +21,61 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Service for handling Unity web requests.
 		/// </summary>
-		public UnityWebRequestService WebRequestService;
+		[SerializeField]
+		private UnityWebRequestService webRequestService;
+		/// <summary>
+		/// Service for handling Unity web requests.
+		/// </summary>
+		public UnityWebRequestService WebRequestService => webRequestService;
 
 		[Header("Configuration")]
 		/// <summary>
 		/// Maximum number of retries for each web request.
 		/// </summary>
 		[Tooltip("Maximum number of retries for each web request.")]
-		public int MaxRetries = 3;
+		[SerializeField]
+		private int maxRetries = 3;
+		/// <summary>
+		/// Maximum number of retries for each web request.
+		/// </summary>
+		public int MaxRetries => maxRetries;
 		/// <summary>
 		/// Delay in seconds between retries for web requests.
 		/// </summary>
 		[Tooltip("Delay in seconds between retries for web requests.")]
-		public float RetryDelay = 1.0f;
+		[SerializeField]
+		private float retryDelay = 1.0f;
+		/// <summary>
+		/// Delay in seconds between retries for web requests.
+		/// </summary>
+		public float RetryDelay => retryDelay;
 		/// <summary>
 		/// Timeout in seconds for each individual web request.
 		/// </summary>
 		[Tooltip("Timeout in seconds for each individual web request.")]
-		public int WebRequestTimeout = 10;
+		[SerializeField]
+		private int webRequestTimeout = 10;
+		/// <summary>
+		/// Timeout in seconds for each individual web request.
+		/// </summary>
+		public int WebRequestTimeout => webRequestTimeout;
 		/// <summary>
 		/// Approximate conversion factor from HTML pixels to TextMeshPro font size.
 		/// </summary>
 		[Tooltip("Approximate conversion factor from HTML pixels to TextMeshPro font size.")]
-		public float HtmlPxToTmpSizeFactor = 1.5f;
+		[SerializeField]
+		private float htmlPxToTmpSizeFactor = 1.5f;
+		/// <summary>
+		/// Approximate conversion factor from HTML pixels to TextMeshPro font size.
+		/// </summary>
+		public float HtmlPxToTmpSizeFactor => htmlPxToTmpSizeFactor;
 
 		/// <summary>
 		/// Unity Awake method. Validates dependencies and disables script if missing.
 		/// </summary>
 		private void Awake()
 		{
-			if (WebRequestService == null)
+			if (this.webRequestService == null)
 			{
 				Log.Error("UnityHtmlContentFetcher", "WebRequestService dependency is not assigned! This script will not function.");
 				this.gameObject.SetActive(false);

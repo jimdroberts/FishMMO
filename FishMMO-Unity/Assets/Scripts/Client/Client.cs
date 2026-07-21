@@ -54,7 +54,12 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Cached list of login server addresses discovered via API host probing.
 		/// </summary>
-		public List<ushort> LoginServerAddresses;
+		[SerializeField]
+		private List<ushort> loginServerAddresses;
+		/// <summary>
+		/// Cached list of login server addresses discovered via API host probing.
+		/// </summary>
+		public List<ushort> LoginServerAddresses => loginServerAddresses;
 		/// <summary>
 		/// UTC timestamp of the last successful login server address fetch.
 		/// Uses DateTime.UtcNow instead of Time.realtimeSinceStartup to survive scene reloads.
@@ -71,11 +76,21 @@ namespace FishMMO.Client
 		/// <see cref="IPFetch"/> response. If the cache outlives the token the server
 		/// will reject the handshake.
 		/// </summary>
-		public float LoginServerCacheTtlSeconds = 55f;
+		[SerializeField]
+		private float loginServerCacheTtlSeconds = 55f;
+		/// <summary>
+		/// Time-to-live in seconds for the cached login server address list.
+		/// </summary>
+		public float LoginServerCacheTtlSeconds => loginServerCacheTtlSeconds;
 		/// <summary>
 		/// Timeout in seconds for each login server probe request.
 		/// </summary>
-		public int LoginServerRequestTimeoutSeconds = 10;
+		[SerializeField]
+		private int loginServerRequestTimeoutSeconds = 10;
+		/// <summary>
+		/// Timeout in seconds for each login server probe request.
+		/// </summary>
+		public int LoginServerRequestTimeoutSeconds => loginServerRequestTimeoutSeconds;
 
 		/// <summary>
 		/// Delay in seconds between staggering login server probe requests.
@@ -90,7 +105,12 @@ namespace FishMMO.Client
 		/// <summary>
 		/// List of addressable scenes to preload when entering the game world.
 		/// </summary>
-		public List<AddressableSceneLoadData> WorldPreloadScenes = new List<AddressableSceneLoadData>();
+		[SerializeField]
+		private List<AddressableSceneLoadData> worldPreloadScenes = new List<AddressableSceneLoadData>();
+		/// <summary>
+		/// List of addressable scenes to preload when entering the game world.
+		/// </summary>
+		public List<AddressableSceneLoadData> WorldPreloadScenes => worldPreloadScenes;
 		/// <summary>
 		/// Dictionary of world scenes currently loaded, keyed by scene handle.
 		/// </summary>
@@ -107,23 +127,39 @@ namespace FishMMO.Client
 		/// </summary>
 		public event Action OnQuitToLogin;
 
+		/// <summary>
+		/// Backing field for <see cref="OnReconnectAttempt"/>.
+		/// Accumulates subscribers even before <see cref="Connection"/> is created.
+		/// </summary>
+		private Action<byte, byte> onReconnectAttempt;
+		/// <summary>
+		/// Backing field for <see cref="OnReconnectFailed"/>.
+		/// Accumulates subscribers even before <see cref="Connection"/> is created.
+		/// </summary>
+		private Action onReconnectFailed;
+		/// <summary>
+		/// Backing field for <see cref="OnConnectionSuccessful"/>.
+		/// Accumulates subscribers even before <see cref="Connection"/> is created.
+		/// </summary>
+		private Action onConnectionSuccessful;
+
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectAttempt"/>.</summary>
 		public event Action<byte, byte> OnReconnectAttempt
 		{
-			add { if (Connection != null) Connection.OnReconnectAttempt += value; }
-			remove { if (Connection != null) Connection.OnReconnectAttempt -= value; }
+			add { this.onReconnectAttempt += value; if (Connection != null) Connection.OnReconnectAttempt += value; }
+			remove { this.onReconnectAttempt -= value; if (Connection != null) Connection.OnReconnectAttempt -= value; }
 		}
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectFailed"/>.</summary>
 		public event Action OnReconnectFailed
 		{
-			add { if (Connection != null) Connection.OnReconnectFailed += value; }
-			remove { if (Connection != null) Connection.OnReconnectFailed -= value; }
+			add { this.onReconnectFailed += value; if (Connection != null) Connection.OnReconnectFailed += value; }
+			remove { this.onReconnectFailed -= value; if (Connection != null) Connection.OnReconnectFailed -= value; }
 		}
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnConnectionSuccessful"/>.</summary>
 		public event Action OnConnectionSuccessful
 		{
-			add { if (Connection != null) Connection.OnConnectionSuccessful += value; }
-			remove { if (Connection != null) Connection.OnConnectionSuccessful -= value; }
+			add { this.onConnectionSuccessful += value; if (Connection != null) Connection.OnConnectionSuccessful += value; }
+			remove { this.onConnectionSuccessful -= value; if (Connection != null) Connection.OnConnectionSuccessful -= value; }
 		}
 
 		// ── References ──────────────────────────────────────────────────
@@ -135,15 +171,30 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Authenticator used for login and world server authentication.
 		/// </summary>
-		public ClientLoginAuthenticator LoginAuthenticator;
+		[SerializeField]
+		private ClientLoginAuthenticator loginAuthenticator;
+		/// <summary>
+		/// Authenticator used for login and world server authentication.
+		/// </summary>
+		public ClientLoginAuthenticator LoginAuthenticator => loginAuthenticator;
 		/// <summary>
 		/// AudioListener component used by the client for 3D audio positioning.
 		/// </summary>
-		public AudioListener AudioListener;
+		[SerializeField]
+		private AudioListener audioListener;
+		/// <summary>
+		/// AudioListener component used by the client for 3D audio positioning.
+		/// </summary>
+		public AudioListener AudioListener => audioListener;
 		/// <summary>
 		/// Optional post-boot system for client-side initialization after scene load.
 		/// </summary>
-		public ClientPostbootSystem ClientPostbootSystem;
+		[SerializeField]
+		private ClientPostbootSystem clientPostbootSystem;
+		/// <summary>
+		/// Optional post-boot system for client-side initialization after scene load.
+		/// </summary>
+		public ClientPostbootSystem ClientPostbootSystem => clientPostbootSystem;
 		/// <summary>
 		/// The current server connection type (None, Login, World, or Scene).
 		/// </summary>
@@ -161,17 +212,17 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Unity Awake. Initializes NetworkManager, authenticator, transport, audio, UI, and event handlers.
 		/// </summary>
-		void Awake()
+		private void Awake()
 		{
 			if (!TryInitializeNetworkManager() || !TryInitializeAuthenticator() || !TryInitializeTransport())
 			{ Quit(); return; }
 
 			Application.logMessageReceived += OnLogMessage;
 
-			if (AudioListener == null && Camera.main != null)
-				AudioListener = Camera.main.gameObject.GetComponent<AudioListener>();
+			if (this.audioListener == null && Camera.main != null)
+				this.audioListener = Camera.main.gameObject.GetComponent<AudioListener>();
 
-			ClientPostbootSystem?.SetClient(this);
+			this.clientPostbootSystem?.SetClient(this);
 			UIManager.SetClient(this);
 			ClientNamingSystem.Initialize(this);
 
@@ -179,13 +230,25 @@ namespace FishMMO.Client
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
 
 			Connection = new ClientConnectionManager(NetworkManager);
+
+			// Forward any event subscribers that were queued before Connection was created.
+			if (this.onReconnectAttempt != null)
+				foreach (var d in this.onReconnectAttempt.GetInvocationList())
+					Connection.OnReconnectAttempt += (Action<byte, byte>)d;
+			if (this.onReconnectFailed != null)
+				foreach (var d in this.onReconnectFailed.GetInvocationList())
+					Connection.OnReconnectFailed += (Action)d;
+			if (this.onConnectionSuccessful != null)
+				foreach (var d in this.onConnectionSuccessful.GetInvocationList())
+					Connection.OnConnectionSuccessful += (Action)d;
+
 			Connection.OnReconnectFailed += () => OnQuitToLogin?.Invoke();
 
-			combatDisplay = new ClientCombatDisplay();
-			combatDisplay.Initialize();
+			this.combatDisplay = new ClientCombatDisplay();
+			this.combatDisplay.Initialize();
 
-			fogManager = new ClientFogManager(this);
-			fogManager.Initialize();
+			this.fogManager = new ClientFogManager(this);
+			this.fogManager.Initialize();
 
 #if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload += OnCharacterReadPayload;
@@ -193,7 +256,7 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStopLocalClient += OnCharacterStopLocal;
 			IGuildController.OnReadID += OnGuildReadId;
 			Pet.OnReadID += OnPetReadId;
-			regionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
+			this.regionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
 			DisplayRegionNameAction.OnDisplay2DLabel += OnRegionNameDisplay;
 #endif
 		}
@@ -201,12 +264,12 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Unity Update. Delegates tick processing to the Connection manager.
 		/// </summary>
-		void Update() => Connection?.Update();
+		private void Update() => Connection?.Update();
 
 		/// <summary>
 		/// Unity OnDestroy. Cleans up event subscriptions, managers, authenticator, connection, and settings.
 		/// </summary>
-		void OnDestroy()
+		private void OnDestroy()
 		{
 #if UNITY_EDITOR
 			PlayerInputController.MouseMode = true;
@@ -220,17 +283,17 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStopLocalClient -= OnCharacterStopLocal;
 			IGuildController.OnReadID -= OnGuildReadId;
 			Pet.OnReadID -= OnPetReadId;
-			if (regionNameLabel != null) { Destroy(regionNameLabel.gameObject); regionNameLabel = null; }
+			if (this.regionNameLabel != null) { Destroy(this.regionNameLabel.gameObject); this.regionNameLabel = null; }
 			DisplayRegionNameAction.OnDisplay2DLabel -= OnRegionNameDisplay;
 #endif
-			AudioListener = null;
-			combatDisplay?.Shutdown();
-			fogManager?.Shutdown();
+			this.audioListener = null;
+			this.combatDisplay?.Shutdown();
+			this.fogManager?.Shutdown();
 			DeinitializeAuthenticator();
 			Connection?.Shutdown();
 			ClientNamingSystem.Destroy();
 			UIManager.SetClient(null);
-			ClientPostbootSystem?.UnsetClient(this);
+			this.clientPostbootSystem?.UnsetClient(this);
 			Application.logMessageReceived -= OnLogMessage;
 		}
 
@@ -260,10 +323,10 @@ namespace FishMMO.Client
 		/// <returns>True if initialization succeeded; otherwise, false.</returns>
 		private bool TryInitializeAuthenticator()
 		{
-			if (LoginAuthenticator == null) LoginAuthenticator = FindFirstObjectByType<ClientLoginAuthenticator>();
-			if (LoginAuthenticator == null) { Log.Error("Client", "LoginAuthenticator not found."); return false; }
-			LoginAuthenticator.SetClient(this);
-			LoginAuthenticator.OnClientAuthenticationResult += OnAuthResult;
+			if (this.loginAuthenticator == null) this.loginAuthenticator = FindFirstObjectByType<ClientLoginAuthenticator>();
+			if (this.loginAuthenticator == null) { Log.Error("Client", "LoginAuthenticator not found."); return false; }
+			this.loginAuthenticator.SetClient(this);
+			this.loginAuthenticator.OnClientAuthenticationResult += OnAuthResult;
 			return true;
 		}
 
@@ -272,9 +335,9 @@ namespace FishMMO.Client
 		/// </summary>
 		private void DeinitializeAuthenticator()
 		{
-			if (LoginAuthenticator == null) return;
-			LoginAuthenticator.SetClient(null);
-			LoginAuthenticator.OnClientAuthenticationResult -= OnAuthResult;
+			if (this.loginAuthenticator == null) return;
+			this.loginAuthenticator.SetClient(null);
+			this.loginAuthenticator.OnClientAuthenticationResult -= OnAuthResult;
 		}
 
 		/// <summary>
@@ -317,14 +380,14 @@ namespace FishMMO.Client
 		/// <param name="forceDisconnect">If true, forces an immediate disconnection.</param>
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
-			fogManager?.Stop();
-			AddressableLoadProcessor.UnloadSceneByLabelAsync(WorldPreloadScenes);
+			this.fogManager?.Stop();
+			AddressableLoadProcessor.UnloadSceneByLabelAsync(this.worldPreloadScenes);
 			StopAllCoroutines(); // after unload has been initiated so the async operation isn't cancelled
 			UnloadWorldScenes();
 			if (forceDisconnect) Connection?.ForceDisconnect();
-			LoginAuthenticator?.RevokeAndClearAuthToken();
+			this.loginAuthenticator?.RevokeAndClearAuthToken();
 			Connection?.ResetReconnectState();
-			cachedConnectionToken = null;
+			this.cachedConnectionToken = null;
 			OnQuitToLogin?.Invoke();
 #if UNITY_EDITOR
 			PlayerInputController.MouseMode = true;
@@ -398,7 +461,7 @@ namespace FishMMO.Client
 		/// <returns>True if an address was available; otherwise, false.</returns>
 		public bool TryGetRandomLoginServerPort(out ushort port)
 		{
-			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0) { port = LoginServerAddresses.GetRandom(); return true; }
+			if (this.loginServerAddresses != null && this.loginServerAddresses.Count > 0) { port = this.loginServerAddresses.GetRandom(); return true; }
 			port = default; return false;
 		}
 
@@ -410,14 +473,14 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>, string> onDone)
 		{
-			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0)
+			if (this.loginServerAddresses != null && this.loginServerAddresses.Count > 0)
 			{
-				double age = (DateTime.UtcNow - loginServerAddressesFetchedAt).TotalSeconds;
-				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(LoginServerAddresses, cachedConnectionToken); yield break; }
+				double age = (DateTime.UtcNow - this.loginServerAddressesFetchedAt).TotalSeconds;
+				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerAddresses, this.cachedConnectionToken); yield break; }
 			}
 			var candidates = ApiHostResolver.GetCandidates();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
-			float stagger = probeStaggerInterval;
+			float stagger = this.probeStaggerInterval;
 			var pending = new List<PendingProbe>(candidates.Count);
 			float lastStart = float.NegativeInfinity;
 			int next = 0; string lastErr = null; List<ushort> winner = null;
@@ -453,7 +516,7 @@ namespace FishMMO.Client
 								Log.Debug("Client", $"GetLoginServerList: JSON parse failed. Raw response (truncated): {(rawText != null && rawText.Length > 200 ? rawText.Substring(0, 200) + "..." : rawText)}");
 								continue; 
 							}
-							cachedConnectionToken = parsed.ConnectionToken;
+							this.cachedConnectionToken = parsed.ConnectionToken;
 							winner = parsed.Ports;
 							break;
 						}
@@ -463,7 +526,7 @@ namespace FishMMO.Client
 					if (!any && next >= candidates.Count) break;
 					yield return null;
 				}
-				if (winner != null) { LoginServerAddresses = winner; loginServerAddressesFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, cachedConnectionToken); }
+				if (winner != null) { this.loginServerAddresses = winner; this.loginServerAddressesFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, this.cachedConnectionToken); }
 				else onFail?.Invoke(lastErr ?? "Failed to reach any APIHost.");
 			}
 			finally
@@ -488,7 +551,7 @@ namespace FishMMO.Client
 		/// Called when a scene load completes. Tracks newly loaded scenes by handle.
 		/// </summary>
 		/// <param name="args">Scene load end event arguments.</param>
-		private void OnSceneLoadEnd(SceneLoadEndEventArgs args) { if (args.LoadedScenes != null) foreach (var s in args.LoadedScenes) loadedWorldScenes[s.handle] = s; }
+		private void OnSceneLoadEnd(SceneLoadEndEventArgs args) { if (args.LoadedScenes != null) foreach (var s in args.LoadedScenes) this.loadedWorldScenes[s.handle] = s; }
 		/// <summary>
 		/// Called when a scene unload completes. Removes unloaded scenes from the tracking dictionary.
 		/// </summary>
@@ -497,8 +560,8 @@ namespace FishMMO.Client
 		{
 			if (args.UnloadedScenesV2 != null)
 			{
-				foreach (var us in args.UnloadedScenesV2) loadedWorldScenes.Remove(us.Handle);
-				Client.Broadcast(new ClientScenesUnloadedBroadcast { UnloadedScenes = args.UnloadedScenesV2 });
+				foreach (var us in args.UnloadedScenesV2) this.loadedWorldScenes.Remove(us.Handle);
+				Client.Broadcast(new ClientScenesUnloadedBroadcast { UnloadedScenes = args.UnloadedScenesV2.ToArray() });
 			}
 		}
 		/// <summary>
@@ -507,9 +570,9 @@ namespace FishMMO.Client
 		private void UnloadWorldScenes()
 		{
 			var sp = NetworkManager.SceneManager.GetSceneProcessor();
-			if (sp == null || loadedWorldScenes.Count < 1) return;
-			foreach (var s in loadedWorldScenes.Values) sp.BeginUnloadAsync(s);
-			loadedWorldScenes.Clear();
+			if (sp == null || this.loadedWorldScenes.Count < 1) return;
+			foreach (var s in this.loadedWorldScenes.Values) sp.BeginUnloadAsync(s);
+			this.loadedWorldScenes.Clear();
 		}
 
 		// ── Broadcast handlers ──────────────────────────────────────────
@@ -527,7 +590,10 @@ namespace FishMMO.Client
 		/// <param name="ch">The network channel.</param>
 		private void OnValidatedScene(ClientValidatedSceneBroadcast msg, Channel ch)
 		{
-			AddressableLoadProcessor.EnqueueLoad(WorldPreloadScenes);
+			// Guard against duplicate broadcasts: unsubscribe first to prevent
+			// multiple subscriptions that would send duplicate responses.
+			AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress;
+			AddressableLoadProcessor.EnqueueLoad(this.worldPreloadScenes);
 			try { AddressableLoadProcessor.OnProgressUpdate += OnValidatedSceneProgress; AddressableLoadProcessor.BeginProcessQueue(); }
 			catch (UnityException ex) { Log.Error("Client", "Preload failed", ex); }
 		}
@@ -604,11 +670,11 @@ namespace FishMMO.Client
 		/// kills WebGL tab blur / mobile sessions. Only revoke on explicit quit or logout.
 		/// </summary>
 		/// <param name="paused">True if the application is being paused.</param>
-		void OnApplicationPause(bool paused) { /* Auth token preserved across pause/unpause cycle. */ }
+		private void OnApplicationPause(bool paused) { /* Auth token preserved across pause/unpause cycle. */ }
 		/// <summary>
 		/// Unity OnApplicationQuit. Revokes the auth token when the application exits.
 		/// </summary>
-		void OnApplicationQuit() { try { LoginAuthenticator?.RevokeAndClearAuthToken(); } catch { } }
+		private void OnApplicationQuit() { try { this.loginAuthenticator?.RevokeAndClearAuthToken(); } catch { } }
 
 		// ── Character / guild / pet / region handlers ──────────────────
 
@@ -657,8 +723,8 @@ namespace FishMMO.Client
 			PlayerInputController.MouseMode = true;
 			c.GameObject.GetComponent<PlayerInputController>()?.Deinitialize();
 			UIManager.UnsetCharacter();
-			if (regionNameLabel != null && regionNameLabel.gameObject != null) regionNameLabel.gameObject.SetActive(false);
-			fogManager?.Stop();
+			if (this.regionNameLabel != null && this.regionNameLabel.gameObject != null) this.regionNameLabel.gameObject.SetActive(false);
+			this.fogManager?.Stop();
 			if (c?.GameObject != null) Destroy(c.GameObject);
 		}
 		/// <summary>
@@ -694,7 +760,7 @@ namespace FishMMO.Client
 		/// <param name="offset">The screen offset position.</param>
 		private void OnRegionNameDisplay(string text, FontStyle style, Font font, int size, Color color, float life, bool fade, bool up, Vector2 offset)
 		{
-			if (regionNameLabel != null) { regionNameLabel.gameObject.SetActive(true); regionNameLabel.Initialize(text, style, font, size, color, life, fade, up, offset); }
+			if (this.regionNameLabel != null) { this.regionNameLabel.gameObject.SetActive(true); this.regionNameLabel.Initialize(text, style, font, size, color, life, fade, up, offset); }
 		}
 #endif
 	}

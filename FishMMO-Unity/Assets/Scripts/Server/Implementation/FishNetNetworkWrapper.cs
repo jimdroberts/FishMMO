@@ -79,6 +79,7 @@ namespace FishMMO.Server.Implementation
 		private System.Collections.IEnumerator OnAwaitingConnectionReady()
 		{
 			yield return new WaitUntil(() => NetworkManager.IsServerStarted);
+			awaitingConnectionCoroutine = null;
 		}
 
 		/// <summary>
@@ -110,7 +111,6 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// <summary>
 		/// Applies transport configuration values from <see cref="IServerConfiguration"/>.
 		/// WebTransport (QUIC/HTTP3) for all platforms. Each game server terminates its
 		/// own TLS — NGINX forwards raw UDP at Layer 4.
@@ -124,13 +124,20 @@ namespace FishMMO.Server.Implementation
 		///   <item><term>Other</term><description><c>certs/fullchain.pem</c> (relative to working directory)</description></item>
 		/// </list>
 		/// </summary>
-		public void ApplyTransportConfiguration()
+		/// <summary>
+		/// Applies transport configuration. When <paramref name="addressOverride"/> or
+		/// <paramref name="portOverride"/> are supplied they take precedence over the
+		/// .cfg file values, allowing the Server component's Inspector overrides to
+		/// control the actual transport bind address and port.
+		/// </summary>
+		public void ApplyTransportConfiguration(string addressOverride = null, ushort? portOverride = null)
 		{
 			var transport = NetworkManager.TransportManager.Transport;
 			if (transport == null) return;
 
-			string address = config.GetString("Address", "127.0.0.1");
-			ushort port = config.GetUShort("Port", 7777);
+			// Inspector/component overrides take precedence over .cfg file values.
+			string address = !string.IsNullOrWhiteSpace(addressOverride) ? addressOverride : config.GetString("Address", "127.0.0.1");
+			ushort port = portOverride.HasValue && portOverride.Value > 0 ? portOverride.Value : config.GetUShort("Port", 7777);
 			int maxClients = config.GetInt("MaximumClients", 100);
 
 			// IPv6 dual-stack support: when enabled, binds both IPv4 and IPv6 on the same port.
@@ -205,6 +212,12 @@ namespace FishMMO.Server.Implementation
 #endif
 			string certPath = config.GetString("CertificatePath", defaultCertPath);
 			string keyPath  = config.GetString("PrivateKeyPath", defaultKeyPath);
+
+			// Validate certificate files exist before passing paths to native.
+			if (!System.IO.File.Exists(certPath))
+				throw new System.IO.FileNotFoundException($"Certificate file not found: {certPath}");
+			if (!System.IO.File.Exists(keyPath))
+				throw new System.IO.FileNotFoundException($"Private key file not found: {keyPath}");
 
 			wt.SetCertificatePath(certPath);
 			wt.SetPrivateKeyPath(keyPath);

@@ -36,9 +36,7 @@ namespace FishMMO.Server.Core
 				config.Set("Port", GetDefaultPort(serverTypeName));
 				config.Set("StaleSceneTimeout", 5);
 				config.Set("ServerType", serverType);
-#if !UNITY_EDITOR
-				config.Save();
-#endif
+config.Save();
 			}
 		}
 
@@ -133,7 +131,7 @@ namespace FishMMO.Server.Core
 			{
 				case ServerType.Login: return "7770";
 				case ServerType.World: return "7780";
-				case ServerType.Scene: return "7781";
+				case ServerType.Scene: return "7790";
 				default: return "7770";
 			}
 		}
@@ -143,22 +141,6 @@ namespace FishMMO.Server.Core
 		/// </summary>
 		/// <param name="serverTypeName">The name of the server type.</param>
 		/// <returns>The corresponding <see cref="ServerType"/> enum value.</returns>
-		private static ServerType GetServerType(string serverTypeName)
-		{
-			string upper = serverTypeName.ToUpperInvariant();
-			if (upper.StartsWith("LOGIN"))
-			{
-				return ServerType.Login;
-			}
-			if (upper.StartsWith("WORLD"))
-			{
-				return ServerType.World;
-			}
-			if (upper.StartsWith("SCENE"))
-			{
-				return ServerType.Scene;
-			}
-			return ServerType.Invalid;
-		}
+		private static ServerType GetServerType(string serverTypeName) => CoreServer.GetServerType(serverTypeName);
 	}
 }

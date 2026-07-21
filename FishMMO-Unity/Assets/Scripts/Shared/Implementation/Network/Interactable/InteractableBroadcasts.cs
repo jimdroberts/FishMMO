@@ -1,5 +1,4 @@
 using FishNet.Broadcast;
-using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -34,7 +33,7 @@ namespace FishMMO.Shared
 		/// <summary>Template ID of the ability to craft.</summary>
 		public int TemplateID;
 		/// <summary>List of event IDs associated with the crafting process.</summary>
-		public List<int> Events;
+		public int[] Events;
 	}
 
 	/// <summary>
@@ -168,7 +167,7 @@ namespace FishMMO.Shared
 	public struct MailListBroadcast : IBroadcast
 	{
 		/// <summary>List of mail entries.</summary>
-		public List<MailEntryData> Entries;
+		public MailEntryData[] Entries;
 	}
 
 	/// <summary>
@@ -331,7 +330,7 @@ namespace FishMMO.Shared
 		/// <summary>Template ID of the container.</summary>
 		public int TemplateID;
 		/// <summary>List of filled item slots.</summary>
-		public List<ContainerSlotData> Items;
+		public ContainerSlotData[] Items;
 	}
 
 	/// <summary>

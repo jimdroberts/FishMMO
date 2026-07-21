@@ -65,7 +65,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							{
 								Server.NetworkWrapper.Broadcast(owner, new GuildAddMultipleBroadcast()
 								{
-									Members = addBroadcasts,
+									Members = addBroadcasts.ToArray(),
 								}, true, Channel.Reliable);
 							}
 						});
@@ -93,7 +93,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							{
 								Server.NetworkWrapper.Broadcast(owner, new PartyAddMultipleBroadcast()
 								{
-									Members = addBroadcasts,
+									Members = addBroadcasts.ToArray(),
 								}, true, Channel.Reliable);
 							}
 						});
@@ -124,7 +124,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							{
 								Server.NetworkWrapper.Broadcast(owner, new FriendAddMultipleBroadcast()
 								{
-									Friends = friends,
+									Friends = friends.ToArray(),
 								}, true, Channel.Reliable);
 							}
 						});
@@ -183,7 +183,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new KnownAbilityAddMultipleBroadcast()
 					{
-						Abilities = knownAbilityBroadcasts,
+						Abilities = knownAbilityBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 
@@ -191,7 +191,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new KnownAbilityEventAddMultipleBroadcast()
 					{
-						AbilityEvents = knownAbilityEventBroadcasts,
+						AbilityEvents = knownAbilityEventBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}
@@ -214,7 +214,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
 					{
-						Achievements = achievements,
+						Achievements = achievements.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}
@@ -252,7 +252,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new QuestUpdateMultipleBroadcast()
 					{
-						Quests = questBroadcasts,
+						Quests = questBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}
@@ -286,7 +286,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
 					{
-						Items = itemBroadcasts,
+						Items = itemBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}
@@ -320,7 +320,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
 					{
-						Items = itemBroadcasts,
+						Items = itemBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}
@@ -333,11 +333,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				foreach (HotkeyData hotkey in character.Hotkeys)
 				{
-					// just in case..
-					if (hotkey == null)
-					{
-						continue;
-					}
 					// create the new hotkey broadcast
 					hotkeyBroadcasts.Add(new HotkeySetBroadcast()
 					{
@@ -355,7 +350,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Server.NetworkWrapper.Broadcast(character.Owner, new HotkeySetMultipleBroadcast()
 					{
-						Hotkeys = hotkeyBroadcasts,
+						Hotkeys = hotkeyBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}

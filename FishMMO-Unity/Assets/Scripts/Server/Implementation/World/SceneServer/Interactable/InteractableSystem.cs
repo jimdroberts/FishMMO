@@ -301,7 +301,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				Server.NetworkWrapper.Broadcast(networkConn, new InventorySetMultipleItemsBroadcast()
 				{
-					Items = modifiedItemBroadcasts,
+					Items = modifiedItemBroadcasts.ToArray(),
 				}, true, Channel.Reliable);
 
 				// Fire-and-forget: persist inventory changes to DB

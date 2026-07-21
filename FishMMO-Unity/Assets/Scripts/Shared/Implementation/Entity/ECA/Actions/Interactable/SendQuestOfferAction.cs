@@ -53,7 +53,7 @@ namespace FishMMO.Shared
 			initiator.NetworkObject.Broadcast(new QuestOfferBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
-				TemplateIDs = availableIDs,
+				TemplateIDs = availableIDs.ToArray(),
 			});
 #endif
 		}

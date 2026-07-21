@@ -97,6 +97,10 @@ namespace FishMMO.Auth.Implementation
 			tokenChannel = null;
 		}
 
+		/// <inheritdoc/>
+		public override bool IsWorkerIdle =>
+			(tokenChannel?.Reader.Completion.IsCompleted ?? true);
+
 		#endregion
 
 		#region UDP Receiver Gate

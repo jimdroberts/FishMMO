@@ -56,7 +56,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return await ExecuteReturningAsync(
 					dbContext,
 					sql,
-					new object[] { name, address, (int)port, characterCount, locked },
+					new object[] { name, address, port, characterCount, locked },
 					reader => new SceneServerEntity
 					{
 						ID = reader.GetInt64(0),
@@ -64,7 +64,7 @@ namespace FishMMO.Database.Npgsql.Services
 						TimeCreated = reader.GetDateTime(2),
 						LastPulse = reader.GetDateTime(3),
 						Address = reader.GetString(4),
-						Port = (ushort)reader.GetInt32(5),
+						Port = reader.GetInt32(5),
 						CharacterCount = reader.GetInt32(6),
 						Locked = reader.GetBoolean(7),
 					},

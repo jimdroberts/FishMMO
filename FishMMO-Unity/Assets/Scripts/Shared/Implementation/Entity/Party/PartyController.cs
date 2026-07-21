@@ -156,8 +156,8 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPartyAddMultipleBroadcastReceived(PartyAddMultipleBroadcast msg, Channel channel)
 		{
-			HashSet<long> newIds = new HashSet<long>(msg.Members.Count);
-			for (int i = 0; i < msg.Members.Count; i++)
+			HashSet<long> newIds = new HashSet<long>(msg.Members.Length);
+			for (int i = 0; i < msg.Members.Length; i++)
 			{
 				newIds.Add(msg.Members[i].CharacterID);
 			}
@@ -196,7 +196,7 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg, Channel channel)
 		{
-			OnRemovePartyMember?.Invoke(msg.MemberID);
+			OnRemovePartyMember?.Invoke(msg.CharacterID);
 		}
 #endif
 	}

@@ -189,13 +189,15 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
-				// Filter out local messages for the specified scene server
+				// Filter out local-only messages for the specified scene server.
+				// World chat is intentionally NOT in this list — it is a global channel
+				// and must be visible to all players regardless of which scene server
+				// they are connected to.
 				var localChannels = new byte[]
 				{
 					(byte)ChatChannel.Tell,
 					(byte)ChatChannel.Guild,
 					(byte)ChatChannel.Party,
-					(byte)ChatChannel.World,
 					(byte)ChatChannel.Trade
 				};
 

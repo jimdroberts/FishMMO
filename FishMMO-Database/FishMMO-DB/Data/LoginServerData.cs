@@ -11,9 +11,9 @@ namespace FishMMO.Database.Data
 		public readonly string Name;
 		public readonly DateTime LastPulse;
 		public readonly string Address;
-		public readonly ushort Port;
+		public readonly int Port;
 
-		public LoginServerData(long id, string name, DateTime lastPulse, string address, ushort port)
+		public LoginServerData(long id, string name, DateTime lastPulse, string address, int port)
 		{
 			ID = id;
 			Name = name;
