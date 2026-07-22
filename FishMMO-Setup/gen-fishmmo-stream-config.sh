@@ -38,7 +38,11 @@ gen_port() {
 server {
     listen ${port} udp;
     proxy_pass ${BACKEND_IP}:${port};
-    proxy_timeout ${PROXY_TIMEOUT:-900s};
+    # QUIC idle timeout is 120s (WT_DEFAULT_IDLE_TIMEOUT_MS).  Keep the nginx
+    # proxy_timeout within the same envelope so the UDP session is not held open
+    # after the game server has already freed the connection.  Allow a 60s grace
+    # period for clock skew and in-flight keepalives.
+    proxy_timeout ${PROXY_TIMEOUT:-180s};
     # Upload/download limit per-session. Default 100 MB/s (~800 Mbps) should
     # comfortably saturate a 1 Gbps NIC for most deployments while preventing
     # a single UDP proxy session from starving others. Tune per deployment

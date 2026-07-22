@@ -146,7 +146,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Unity Start method. Initializes and composes all server components.
 		/// </summary>
-		void Start()
+		private void Start()
 		{
 			hasShutdownFlag = 0;
 			Log.Debug("Server", "Server is starting...");
@@ -360,7 +360,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Unity LateUpdate method. Orchestrates server behaviour updates and periodic callback dispatch.
 		/// </summary>
-		void LateUpdate()
+		private void LateUpdate()
 		{
 			float deltaTime = Time.deltaTime;
 			UpdateServerBehaviours(deltaTime);
@@ -437,7 +437,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Unity OnDestroy callback. Deinitializes all server components and cleans up resources.
 		/// </summary>
-		void OnDestroy()
+		private void OnDestroy()
 		{
 			PerformShutdown();
 		}
@@ -445,7 +445,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Unity OnApplicationQuit callback. Deinitializes all server components and cleans up resources.
 		/// </summary>
-		void OnApplicationQuit()
+		private void OnApplicationQuit()
 		{
 			PerformShutdown();
 		}

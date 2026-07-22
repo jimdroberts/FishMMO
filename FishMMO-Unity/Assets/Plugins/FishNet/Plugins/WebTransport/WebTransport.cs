@@ -97,6 +97,12 @@ namespace FishNet.Transporting.WebTransport
 		#endregion
 
 		#region ConnectionStates
+		/// <summary>
+		/// Returns the remote address string for a connected client.
+		/// Delegates to <see cref="Server.ServerSocket.GetConnectionAddress"/>.
+		/// </summary>
+		/// <param name="connectionId">The FishNet connection ID.</param>
+		/// <returns>The remote address as a string, or <see cref="string.Empty"/> if not found.</returns>
 		public override string GetConnectionAddress(int connectionId)
 		{
 			return this.serverSocket.GetConnectionAddress(connectionId);
@@ -251,8 +257,8 @@ namespace FishNet.Transporting.WebTransport
 			if (value < 1 || value > 100000)
 			{
 				base.NetworkManager.LogWarning(
-					$"SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {Mathf.Clamp(value, 1, 100000)}.");
-				value = Mathf.Clamp(value, 1, 100000);
+					$"SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {System.Math.Clamp(value, 1, 100000)}.");
+				value = System.Math.Clamp(value, 1, 100000);
 			}
 
 			if (this.serverSocket.GetConnectionState() != LocalConnectionState.Stopped)
@@ -283,6 +289,14 @@ namespace FishNet.Transporting.WebTransport
 		/// <summary>
 		/// Sets which address the server will bind to.
 		/// </summary>
+		/// <remarks>
+		/// The <paramref name="addressType"/> parameter is accepted for FishNet API compatibility
+		/// but does not currently affect binding — the native WebTransport stack is IPv4-only.
+		/// Dual-stack / IPv6 support is handled at a higher level by FishNetNetworkWrapper,
+		/// which calls this method twice (once per IPAddressType) for each Multipass child
+		/// transport, giving the illusion of dual-stack. When the native library gains IPv6
+		/// support, this method should store both addresses and bind accordingly.
+		/// </remarks>
 		public override void SetServerBindAddress(string address, IPAddressType addressType)
 		{
 			this.serverBindAddress = address;
@@ -346,10 +360,10 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startServer()
 		{
-			#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
 				base.NetworkManager.LogError("[WebTransport] macOS standalone is not supported. Use Unity Editor on macOS or build from Windows/Linux. See FishMMO-WebTransport/README.md for manual build instructions.");
 				return false;
-			#endif
+#endif
 			this.serverSocket.Initialize(this, MTU, certificatePath, privateKeyPath);
 			// ALPN (Application-Layer Protocol Negotiation) is hardcoded to "h3" for HTTP/3 (WebTransport) in
 			// ServerSocket.DefaultAlpn. Override via ServerSocket.Alpn before calling StartConnection if needed.
@@ -363,10 +377,10 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startClient(string address)
 		{
-			#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
 				base.NetworkManager.LogError("[WebTransport] macOS standalone is not supported. Use Unity Editor on macOS or build from Windows/Linux. See FishMMO-WebTransport/README.md for manual build instructions.");
 				return false;
-			#endif
+#endif
 			this.clientSocket.Initialize(this, MTU);
 			return this.clientSocket.StartConnection(address, port, useTls: true);
 		}
@@ -409,6 +423,5 @@ namespace FishNet.Transporting.WebTransport
 			return MTU;
 		}
 		#endregion
-
 	}
 }

@@ -465,6 +465,18 @@ namespace FishMMO.Server.Implementation
 			protected override string ResolveRateLimitKey(NetworkConnection conn) => outer.ResolveRateLimitKey(conn);
 
 			/// <inheritdoc/>
+			protected override bool OnHandshakeDeferred(NetworkConnection conn)
+			{
+				// Delegate to the LoginQueueSystem if one is registered on this server.
+				if (outer.Server?.BehaviourRegistry != null &&
+					outer.Server.BehaviourRegistry.TryGet<LoginServer.LoginQueueSystem>(out var queueSystem))
+				{
+					return queueSystem.TryEnqueue(conn);
+				}
+				return false;
+			}
+
+			/// <inheritdoc/>
 			protected override void BroadcastCookieChallenge(NetworkConnection conn, byte[] cookie) =>
 				outer.NetworkManager.ServerManager.Broadcast(conn,
 					new ServerHandshake { Cookie = cookie }, false, Channel.Reliable);

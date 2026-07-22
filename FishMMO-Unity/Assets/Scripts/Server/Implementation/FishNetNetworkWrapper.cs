@@ -183,7 +183,8 @@ namespace FishMMO.Server.Implementation
 						}
 						wt.SetPort(port);
 						wt.SetMaximumClients(maxClients);
-						ConfigureWebTransport(wt);
+						if (!ConfigureWebTransport(wt))
+							Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed for Multipass child — TLS certificates not loaded.");
 						configured = true;
 					}
 				}
@@ -200,11 +201,12 @@ namespace FishMMO.Server.Implementation
 				}
 				transport.SetPort(port);
 				transport.SetMaximumClients(maxClients);
-				ConfigureWebTransport(wt);
+				if (!ConfigureWebTransport(wt))
+					Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed -- TLS certificates not loaded.");
 			}
 		}
 
-		private void ConfigureWebTransport(WebTransport wt)
+		private bool ConfigureWebTransport(WebTransport wt)
 		{
 			// Certificate paths from .cfg file — fully configurable per deployment.
 			// Falls back to platform defaults if not specified in config.
@@ -224,12 +226,12 @@ namespace FishMMO.Server.Implementation
 				if (!System.IO.File.Exists(certPath))
 				{
 					Log.Error("FishNetNetworkWrapper", $"Certificate file not found (from env): {certPath}");
-					return;
+					return false;
 				}
 				if (!System.IO.File.Exists(keyPath))
 				{
 					Log.Error("FishNetNetworkWrapper", $"Private key file not found (from env): {keyPath}");
-					return;
+					return false;
 				}
 
 				wt.SetCertificatePath(certPath);
@@ -237,7 +239,7 @@ namespace FishMMO.Server.Implementation
 
 				Log.Debug("FishNetNetworkWrapper",
 					$"WebTransport configured: cert={certPath}, key={keyPath}");
-				return;
+				return true;
 			}
 
 			// No env vars set — fall back to config / platform defaults.
@@ -261,12 +263,12 @@ namespace FishMMO.Server.Implementation
 			if (!System.IO.File.Exists(certPath))
 			{
 				Log.Error("FishNetNetworkWrapper", $"Certificate file not found: {certPath}. WebTransport will be skipped.");
-				return;
+				return false;
 			}
 			if (!System.IO.File.Exists(keyPath))
 			{
 				Log.Error("FishNetNetworkWrapper", $"Private key file not found: {keyPath}. WebTransport will be skipped.");
-				return;
+				return false;
 			}
 
 			wt.SetCertificatePath(certPath);
@@ -274,6 +276,7 @@ namespace FishMMO.Server.Implementation
 
 			Log.Debug("FishNetNetworkWrapper",
 				$"WebTransport configured: cert={certPath}, key={keyPath}");
+			return true;
 		}
 
 		/// <summary>

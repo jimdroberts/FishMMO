@@ -1306,7 +1306,7 @@ int32_t h3_client_connect(h3_session_t* h3,
 
     HQUIC ctrl_stream = NULL;
     QUIC_STATUS st = MsQuic->StreamOpen(h3->quic_conn,
-        QUIC_STREAM_OPEN_FLAG_NONE, h3_send_only_stream_cb, NULL, &ctrl_stream);
+        QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL, h3_send_only_stream_cb, NULL, &ctrl_stream);
     if (QUIC_FAILED(st)) return -1;
 
     /* Write stream type byte + SETTINGS frame */
@@ -1331,7 +1331,7 @@ int32_t h3_client_connect(h3_session_t* h3,
         buf.Buffer = ctrl_copy;
         buf.Length = (uint32_t)ctrl_total;
         st = MsQuic->StreamSend(ctrl_stream, &buf, 1,
-                                 QUIC_SEND_FLAG_FIN, ctrl_copy);
+                                 QUIC_SEND_FLAG_NONE, ctrl_copy);
         if (QUIC_FAILED(st)) {
             free(ctrl_copy);
             MsQuic->StreamClose(ctrl_stream);
@@ -1369,23 +1369,24 @@ int32_t h3_client_connect(h3_session_t* h3,
         }
         sctx->quic_stream = req_stream;
 
-        /* Link into session's stream context list for cleanup.
-         * This ensures the context is freed by h3_session_free if
-         * the connection shuts down before the handshake completes. */
-        sctx->next = h3->stream_ctx_list;
-        h3->stream_ctx_list = sctx;
-
         st = MsQuic->StreamStart(req_stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
         if (QUIC_FAILED(st)) {
-            h3_stream_ctx_unlink(sctx);
-            /* StreamClose before free: the stream callback may reference sctx
-             * as context.  Closing the stream first prevents a use-after-free
-             * if MsQuic fires SHUTDOWN_COMPLETE synchronously. */
+            /* StreamStart failed before the stream was active — no
+             * callback has been registered that would clean up sctx.
+             * Close the stream (no callback to do it) and free sctx. */
             MsQuic->StreamClose(req_stream);
             free(sctx->recv_buf);
             free(sctx);
             return -1;
         }
+
+        /* Link into session's stream context list for cleanup AFTER
+         * StreamStart succeeds.  This ensures the context is freed by
+         * h3_session_free if the connection shuts down before the
+         * handshake completes.  Must happen after StreamStart because
+         * the error path above frees sctx directly. */
+        sctx->next = h3->stream_ctx_list;
+        h3->stream_ctx_list = sctx;
 
         uint8_t req_data[2048];
         int req_len = h3_write_headers(req_data, sizeof(req_data),
@@ -1512,7 +1513,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
             /* Open server control stream */
             HQUIC srv_ctrl = NULL;
             QUIC_STATUS st = MsQuic->StreamOpen(
-                h3->quic_conn, QUIC_STREAM_OPEN_FLAG_NONE,
+                h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
                 h3_send_only_stream_cb, NULL, &srv_ctrl);
             if (QUIC_FAILED(st)) return -1;
 
@@ -1534,7 +1535,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                 buf.Buffer = srv_data;
                 buf.Length = (uint32_t)(1 + settings_len);
                 st = MsQuic->StreamSend(srv_ctrl, &buf, 1,
-                                         QUIC_SEND_FLAG_FIN, srv_data);
+                                         QUIC_SEND_FLAG_NONE, srv_data);
                 if (QUIC_FAILED(st)) {
                     free(srv_data);
                     MsQuic->StreamClose(srv_ctrl);
@@ -1737,7 +1738,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                 MsQuic->StreamSend(
                                                     sctx->quic_stream,
                                                     &buf, 1,
-                                                    QUIC_SEND_FLAG_FIN,
+                                                    QUIC_SEND_FLAG_NONE,
                                                     resp_copy);
                                             }
                                         }

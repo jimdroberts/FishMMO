@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using FishMMO.Auth.Core;
 using KinematicCharacterController;
 using UnityEngine;
-using TMPro;
 
 namespace FishMMO.Shared.Core
 {

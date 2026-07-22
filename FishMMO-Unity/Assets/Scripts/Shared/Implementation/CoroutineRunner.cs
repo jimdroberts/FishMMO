@@ -20,5 +20,14 @@ namespace FishMMO.Shared
 			}
 			instance.StartCoroutine(routine);
 		}
+
+		/// <summary>Stops a coroutine previously started via <see cref="Start"/>.</summary>
+		/// <param name="routine">The coroutine to stop. No-op if null or if the CoroutineRunner instance does not exist.</param>
+		public static void Stop(IEnumerator routine)
+		{
+			if (routine == null) return;
+			if (instance != null)
+				instance.StopCoroutine(routine);
+		}
 	}
 }

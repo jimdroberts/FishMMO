@@ -100,7 +100,11 @@ namespace FishNet.Transporting.WebTransport
 		#endregion
 
 		/// <summary>
-		/// Queues a packet for deferred sending during the next IterateOutgoing call.
+		/// Queues a packet for deferred sending during the next <c>IterateOutgoing</c> call.
+		/// The packet's data is copied into a buffer from <see cref="ByteArrayPool"/>.
+		/// Backpressure is enforced at <see cref="MaxOutgoingQueueSize"/> — reliable
+		/// packets exceeding the limit are dropped with a warning; unreliable packets
+		/// are silently dropped.
 		/// </summary>
 		/// <param name="queue">The outgoing packet queue to enqueue to.</param>
 		/// <param name="channelId">The channel: 0 = reliable (stream), 1 = unreliable (datagram).</param>
@@ -133,9 +137,11 @@ namespace FishNet.Transporting.WebTransport
 
 		/// <summary>
 		/// Dequeues and disposes all packets in the given queue, returning their
-		/// backing buffers to the <see cref="ByteArrayPool"/>.
+		/// backing buffers to <see cref="ByteArrayPool"/>.  Safe to call when the
+		/// connection is stopped — stale packets from a previous session are
+		/// cleaned up without sending.
 		/// </summary>
-		/// <param name="queue">The queue to drain and dispose.</param>
+		/// <param name="queue">The outgoing packet queue to drain.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void ClearPacketQueue(Queue<Packet> queue)
 		{

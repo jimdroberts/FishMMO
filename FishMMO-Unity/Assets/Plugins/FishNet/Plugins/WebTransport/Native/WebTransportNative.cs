@@ -209,7 +209,8 @@ namespace FishNet.Transporting.WebTransport.Native
 			}
 #endif
 			initialized = true;
-				initGuard = 0; // reset so Deinitialize()+EnsureInitialized() works for restarts
+			IsLibraryDeinitialized = false; // reset for re-init after Deinitialize()
+			initGuard = 0; // reset so Deinitialize()+EnsureInitialized() works for restarts
 			return true;
 		}
 

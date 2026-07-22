@@ -218,6 +218,16 @@ namespace FishMMO.Auth.Implementation
 		protected virtual void OnAuthSweep() { }
 
 		/// <summary>
+		/// Invoked when a handshake cannot be admitted because the pending authentication
+		/// cap (<see cref="MaxPendingAuthConnections"/>) has been reached.  Override to
+		/// implement a login queue — return <c>true</c> if the connection was queued and
+		/// should NOT be disconnected; return <c>false</c> (default) to drop the handshake.
+		/// </summary>
+		/// <param name="conn">The connection that is being deferred.</param>
+		/// <returns><c>true</c> if the connection was queued; <c>false</c> to reject.</returns>
+		protected virtual bool OnHandshakeDeferred(TConnection conn) => false;
+
+		/// <summary>
 		/// Resets the global handshake counter when the 1-second window expires.
 		/// Wall-clock based so a single long tick cannot silently extend the window.
 		/// </summary>
@@ -509,11 +519,16 @@ namespace FishMMO.Auth.Implementation
 			// Begin TTL tracking after all rate-limit gates have passed.
 			if (!TrackAuthStart(conn))
 			{
-				DateTime capNow = DateTime.UtcNow;
-				if (capNow >= nextPendingAuthCapWarningUtc)
+				// Give the hosting environment a chance to defer (queue) the handshake
+				// rather than dropping it outright.  LoginQueueSystem overrides this.
+				if (!OnHandshakeDeferred(conn))
 				{
-					nextPendingAuthCapWarningUtc = capNow.AddSeconds(5);
-					_ = Log.Warning(LogPrefix, $"Pending auth cap ({MaxPendingAuthConnections}) reached — handshake(s) dropped.");
+					DateTime capNow = DateTime.UtcNow;
+					if (capNow >= nextPendingAuthCapWarningUtc)
+					{
+						nextPendingAuthCapWarningUtc = capNow.AddSeconds(5);
+						_ = Log.Warning(LogPrefix, $"Pending auth cap ({MaxPendingAuthConnections}) reached — handshake(s) dropped.");
+					}
 				}
 				DecrementGlobalHandshakeCount();
 				return;

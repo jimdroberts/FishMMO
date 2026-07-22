@@ -284,6 +284,12 @@ namespace FishMMO.Client
 			this.fogManager?.Shutdown();
 			DeinitializeAuthenticator();
 			Connection?.Shutdown();
+			if (NetworkManager?.SceneManager != null)
+			{
+				NetworkManager.SceneManager.OnLoadStart -= OnSceneLoadStart;
+				NetworkManager.SceneManager.OnLoadEnd -= OnSceneLoadEnd;
+				NetworkManager.SceneManager.OnUnloadEnd -= OnSceneUnloadEnd;
+			}
 			ClientNamingSystem.Destroy();
 			UIManager.SetClient(null);
 			this.clientPostbootSystem?.UnsetClient(this);
@@ -303,6 +309,7 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnWorldSceneConnect);
 			NetworkManager.ClientManager.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnValidatedScene);
 			NetworkManager.ClientManager.RegisterBroadcast<ServerBusyBroadcast>(OnServerBusy);
+			NetworkManager.ClientManager.RegisterBroadcast<LoginQueuePositionBroadcast>(OnLoginQueuePosition);
 			NetworkManager.ClientManager.RegisterBroadcast<DeathBroadcast>(OnDeathBroadcast);
 			NetworkManager.SceneManager.OnLoadStart += OnSceneLoadStart;
 			NetworkManager.SceneManager.OnLoadEnd += OnSceneLoadEnd;
@@ -614,6 +621,51 @@ namespace FishMMO.Client
 		/// <param name="msg">The server busy message.</param>
 		/// <param name="ch">The network channel.</param>
 		private void OnServerBusy(ServerBusyBroadcast msg, Channel ch) { if (UIManager.TryGet("UIDialogBox", out UIDialogBox d)) d.Open("Server is busy. Please try again."); }
+
+	/// <summary>
+	/// Handles a <see cref="LoginQueuePositionBroadcast"/> from the LoginServer,
+	/// displaying the current queue position to the user.  Position &gt; 0 shows
+	/// a waiting dialog; position 0 means the client has been admitted and should
+	/// retry the handshake; position -1 means the queue entry was cancelled.
+	/// </summary>
+	private void OnLoginQueuePosition(LoginQueuePositionBroadcast msg, Channel ch)
+	{
+		if (msg.QueuePosition > 0)
+		{
+			string text = msg.EstimatedWaitSeconds > 0
+				? $"Queue position: {msg.QueuePosition} of {msg.TotalQueued}\nEstimated wait: ~{msg.EstimatedWaitSeconds}s"
+				: $"Queue position: {msg.QueuePosition} of {msg.TotalQueued}\nPlease wait...";
+
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d))
+			{
+				if (d.Visible)
+					d.SetText(text);
+				else
+					d.Open(text, onAccept: null, onCancel: () =>
+					{
+						// User chose to leave the queue — disconnect and return to login.
+						ForceDisconnect();
+						QuitToLogin();
+					});
+			}
+		}
+		else if (msg.QueuePosition == 0)
+		{
+			// Admitted from queue — retry the handshake on the existing connection.
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
+				d.Hide();
+
+			loginAuthenticator?.RetryHandshake();
+		}
+		else // position -1 = cancelled (timeout / shutdown)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
+				d.Hide();
+
+			ForceDisconnect();
+			QuitToLogin();
+		}
+	}
 		/// <summary>
 		/// Handles a death broadcast by showing the death dialog UI.
 		/// </summary>

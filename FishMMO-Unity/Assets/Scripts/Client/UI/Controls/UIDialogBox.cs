@@ -102,6 +102,17 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Called when the accept button is clicked. Invokes accept callback and hides the dialog.
 		/// </summary>
+		/// <summary>
+		/// Updates the dialog text without re-opening the dialog.
+		/// Useful for live-updating content such as queue positions or progress indicators.
+		/// </summary>
+		/// <param name="text">The new text to display in the dialog label.</param>
+		public void SetText(string text)
+		{
+			if (DialogueLabel != null)
+				DialogueLabel.text = text;
+		}
+
 		public void OnClick_Accept()
 		{
 			onAccept?.Invoke();

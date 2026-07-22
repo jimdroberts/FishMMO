@@ -107,4 +107,38 @@ namespace FishMMO.Shared
 	public struct ServerBusyBroadcast : IBroadcast
 	{
 	}
+
+	/// <summary>
+	/// Broadcast sent by the LoginServer to a queued client with their current
+	/// position in the login queue.  Sent periodically at a server-configured rate.
+	///
+	/// <para><b>Position semantics:</b></para>
+	/// <list type="bullet">
+	///   <item><b>&gt; 0</b> — Waiting in queue.  Display the position to the user.</item>
+	///   <item><b>0</b> — Admitted.  The client should re-initiate the handshake now.</item>
+	///   <item><b>-1</b> — Cancelled.  The queue entry was purged (timeout or shutdown).</item>
+	/// </list>
+	///
+	/// <para><b>Server-authoritative update rate:</b> The server controls how often
+	/// this broadcast is sent via the <c>LoginQueueUpdateRateSeconds</c> config key.
+	/// Clients are passive receivers only — there is no request path for faster updates.</para>
+	/// </summary>
+	public struct LoginQueuePositionBroadcast : IBroadcast
+	{
+		/// <summary>
+		/// Current 1-based queue position.  0 = admitted, -1 = cancelled.
+		/// </summary>
+		public int QueuePosition;
+
+		/// <summary>
+		/// Rough estimated wait time in seconds based on the server's admission rate.
+		/// 0 if unknown or if the client has been admitted.
+		/// </summary>
+		public int EstimatedWaitSeconds;
+
+		/// <summary>
+		/// Total number of clients currently in the queue.
+		/// </summary>
+		public int TotalQueued;
+	}
 }

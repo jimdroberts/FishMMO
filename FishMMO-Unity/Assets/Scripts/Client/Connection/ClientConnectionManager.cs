@@ -15,14 +15,14 @@ namespace FishMMO.Client
 	public class ClientConnectionManager
 	{
 		/// <summary>The FishNet NetworkManager managing this client connection.</summary>
-	public NetworkManager NetworkManager { get; private set; }
+		public NetworkManager NetworkManager { get; private set; }
 		/// <summary>The current local connection state (Stopped, Starting, Started, Stopping).</summary>
-	public LocalConnectionState ClientState { get; private set; } = LocalConnectionState.Stopped;
+		public LocalConnectionState ClientState { get; private set; } = LocalConnectionState.Stopped;
 		/// <summary>The type of server currently connecting to (None, Login, World, Scene).</summary>
-	public ServerConnectionType CurrentConnectionType { get; set; } = ServerConnectionType.None;
+		public ServerConnectionType CurrentConnectionType { get; set; } = ServerConnectionType.None;
 
 		/// <summary>Number of reconnect attempts made since the last successful connection.</summary>
-	public byte ReconnectsAttempted { get; private set; }
+		public byte ReconnectsAttempted { get; private set; }
 		private float nextReconnect;
 		/// <summary>In-flight connection guard. Prevents concurrent ConnectToServer calls from starting duplicate coroutines.</summary>
 		private int connectingGuard = 0;
@@ -32,42 +32,42 @@ namespace FishMMO.Client
 		private ushort lastWorldPort;
 
 		/// <summary>Maximum reconnect attempts before giving up. Default 10.</summary>
-	public byte MaxReconnectAttempts = 10;
+		public byte MaxReconnectAttempts = 10;
 		/// <summary>Base wait time in seconds between reconnect attempts. Default 5.</summary>
-	public float ReconnectAttemptWaitTime = 5f;
+		public float ReconnectAttemptWaitTime = 5f;
 		/// <summary>Maximum delay in seconds for exponential backoff. Default 60.</summary>
-	public float MaxReconnectDelay = 60f;
+		public float MaxReconnectDelay = 60f;
 		/// <summary>Timeout in seconds waiting for a connection to fully stop. Default 10.</summary>
-	public float ConnectionStopTimeoutSeconds = 10f;
+		public float ConnectionStopTimeoutSeconds = 10f;
 
 		/// <summary>Fired when a connection to the server is successfully established.</summary>
-	public event Action OnConnectionSuccessful;
+		public event Action OnConnectionSuccessful;
 		/// <summary>Fired on each reconnect attempt with current and max attempt counts.</summary>
-	public event Action<byte, byte> OnReconnectAttempt;
+		public event Action<byte, byte> OnReconnectAttempt;
 		/// <summary>Fired when all reconnect attempts are exhausted without success.</summary>
-	public event Action OnReconnectFailed;
+		public event Action OnReconnectFailed;
 
 		/// <summary>Returns true if the current connection type supports reconnection (World or Scene).</summary>
-	public bool CanReconnect =>
-			CurrentConnectionType == ServerConnectionType.World ||
-			CurrentConnectionType == ServerConnectionType.Scene;
+		public bool CanReconnect =>
+				CurrentConnectionType == ServerConnectionType.World ||
+				CurrentConnectionType == ServerConnectionType.Scene;
 
 		/// <summary>Creates a ClientConnectionManager and subscribes to NetworkManager connection events.</summary>
-	/// <param name="networkManager">The FishNet NetworkManager to manage.</param>
-	public ClientConnectionManager(NetworkManager networkManager)
+		/// <param name="networkManager">The FishNet NetworkManager to manage.</param>
+		public ClientConnectionManager(NetworkManager networkManager)
 		{
 			NetworkManager = networkManager;
 			NetworkManager.ClientManager.OnClientConnectionState += OnClientConnectionState;
 		}
 
 		/// <summary>Unsubscribes from NetworkManager events. Call during client teardown.</summary>
-	public void Shutdown()
+		public void Shutdown()
 		{
 			NetworkManager.ClientManager.OnClientConnectionState -= OnClientConnectionState;
 		}
 
 		/// <summary>Drives reconnect timer. Called every frame from the owning client.</summary>
-	public void Update()
+		public void Update()
 		{
 			if (forceDisconnect || ReconnectsAttempted > MaxReconnectAttempts || ClientState != LocalConnectionState.Stopped)
 				return;
@@ -108,7 +108,7 @@ namespace FishMMO.Client
 		/// timer expires — it must NOT reset the delay or the reconnect will never fire.
 		/// </summary>
 		public void TryReconnect()
-			{
+		{
 			if (ReconnectsAttempted < MaxReconnectAttempts)
 			{
 				if (!string.IsNullOrEmpty(lastWorldAddress) && lastWorldPort != 0)
@@ -126,17 +126,17 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Cancels pending reconnect and fires OnReconnectFailed immediately.</summary>
-	public void CancelReconnect() { ReconnectsAttempted = 0; nextReconnect = -1; OnReconnectFailed?.Invoke(); }
+		public void CancelReconnect() { ReconnectsAttempted = 0; nextReconnect = -1; OnReconnectFailed?.Invoke(); }
 
 		/// <summary>Forces the connection closed and prevents auto-reconnect until reset.</summary>
-	public void ForceDisconnect()
+		public void ForceDisconnect()
 		{
 			forceDisconnect = true;
 			NetworkManager.ClientManager.StopConnection();
 		}
 
 		/// <summary>Resets all reconnect state: attempt count, connection type, stored address.</summary>
-	public void ResetReconnectState()
+		public void ResetReconnectState()
 		{
 			forceDisconnect = false;
 			ReconnectsAttempted = 0; nextReconnect = -1;
@@ -145,12 +145,13 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Returns true if connected and optionally authenticated.</summary>
-	/// <param name="requireAuthentication">If true, also checks connection is authenticated.</param>
-	/// <returns>True if the connection is ready for use.</returns>
-	public bool IsConnectionReady(bool requireAuthentication = true)
+		/// <param name="requireAuthentication">If true, also checks connection is authenticated.</param>
+		/// <returns>True if the connection is ready for use.</returns>
+		public bool IsConnectionReady(bool requireAuthentication = true)
 		{
 			if (NetworkManager == null || ClientState != LocalConnectionState.Started) return false;
-			if (requireAuthentication && (!NetworkManager.ClientManager.Connection.IsValid ||
+			if (requireAuthentication && (NetworkManager.ClientManager.Connection == null ||
+				!NetworkManager.ClientManager.Connection.IsValid ||
 				!NetworkManager.ClientManager.Connection.IsAuthenticated)) return false;
 			return true;
 		}
@@ -229,5 +230,4 @@ namespace FishMMO.Client
 			yield return null;
 		}
 	}
-
 }

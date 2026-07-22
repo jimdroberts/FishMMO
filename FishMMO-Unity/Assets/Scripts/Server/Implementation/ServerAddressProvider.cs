@@ -107,10 +107,15 @@ namespace FishMMO.Server.Implementation
 				}
 				else
 				{
+					ushort port = portOverride > 0 ? portOverride : (transport != null ? transport.GetPort() : (ushort)0);
+					if (port == 0)
+					{
+						Log.Warning("ServerAddressProvider", $"Address override and transport both provided port 0 — server may not be reachable.");
+					}
 					address = new ServerAddress()
 					{
 						Address = addressOverride,
-						Port = portOverride > 0 ? portOverride : (transport != null ? transport.GetPort() : (ushort)0),
+						Port = port,
 					};
 					return true;
 				}
@@ -118,7 +123,7 @@ namespace FishMMO.Server.Implementation
 
 			if (transport != null)
 			{
-				string actualAddress = "127.0.0.1";
+				string actualAddress;
 				if (!string.IsNullOrWhiteSpace(coreServerAddress) &&
 					!NetHelper.IsLoopbackAddress(coreServerAddress))
 				{
@@ -128,11 +133,21 @@ namespace FishMMO.Server.Implementation
 				{
 					actualAddress = coreServerRemoteAddress;
 				}
+				else
+				{
+					actualAddress = "127.0.0.1";
+				}
+
+				ushort port = transport.GetPort();
+				if (port == 0)
+				{
+					Log.Warning("ServerAddressProvider", $"Transport returned port 0 — server may not be reachable.");
+				}
 
 				address = new ServerAddress()
 				{
 					Address = actualAddress,
-					Port = transport.GetPort(),
+					Port = port,
 				};
 				return true;
 			}

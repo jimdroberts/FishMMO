@@ -51,6 +51,12 @@ namespace FishMMO.Shared
 				runtimeBaseUrl = value;
 				if (!string.IsNullOrEmpty(runtimeBaseUrl) && !runtimeBaseUrl.EndsWith("/"))
 					runtimeBaseUrl += "/";
+
+				// NOTE: Changing RuntimeBaseUrl after Awake does NOT update the
+				// InternalIdTransformFunc already registered on the ResourceManager.
+				// The transform closure captured the value at registration time.
+				// To apply a new base URL, re-register the transform by calling
+				// SetAddressablesLoadPathOverride() after changing this property.
 			}
 		}
 

@@ -141,6 +141,64 @@ namespace FishMMO.Auth.Core.Collections
 			}
 		}
 
+		/// <summary>
+		/// Returns <c>true</c> if <paramref name="key"/> is currently tracked.
+		/// O(1) via dictionary lookup.
+		/// </summary>
+		public bool Contains(TKey key)
+		{
+			lock (gate)
+			{
+				return nodes.ContainsKey(key);
+			}
+		}
+
+		/// <summary>
+		/// Gets the 1-based position of <paramref name="key"/> in the queue.
+		/// Returns 0 if the key is not tracked.
+		/// O(1) via dictionary+LinkedListNode traversal is NOT possible
+		/// (LinkedListNode has no index).  This does an O(N) linear scan.
+		/// Callers that need per-entry positions for the entire queue
+		/// should use <see cref="ForEachInOrder"/> instead.
+		/// </summary>
+		public int GetPosition(TKey key)
+		{
+			lock (gate)
+			{
+				if (!nodes.TryGetValue(key, out LinkedListNode<ArrivalEntry<TKey>> target))
+					return 0;
+				int pos = 1;
+				for (var node = queue.First; node != null; node = node.Next)
+				{
+					if (node == target) return pos;
+					pos++;
+				}
+				return 0; // Should not reach here — node was in dictionary but not in list
+			}
+		}
+
+		/// <summary>
+		/// Invokes <paramref name="action"/> for each tracked key in FIFO order.
+		/// The callback receives the key, its first-seen UTC timestamp, and its
+		/// 1-based position.  All work is done under the internal lock so the
+		/// callback should be fast and must not call back into the tracker.
+		/// Returns the total number of entries processed.
+		/// </summary>
+		/// <param name="action">Callback invoked for each entry: (key, firstSeenUtc, position).</param>
+		/// <returns>The total number of entries iterated.</returns>
+		public int ForEachInOrder(Action<TKey, DateTime, int> action)
+		{
+			lock (gate)
+			{
+				int pos = 1;
+				for (var node = queue.First; node != null; node = node.Next, pos++)
+				{
+					action(node.Value.Key, node.Value.FirstSeenUtc, pos);
+				}
+				return pos - 1;
+			}
+		}
+
 		private readonly struct ArrivalEntry<T>
 		{
 			public readonly T Key;

@@ -748,9 +748,9 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * pending_shutdown_session safely on the application thread. */
         if (sconn->owner && sconn->pending_shutdown_session) {
             uint32_t head = atomic_load(&sconn->owner->pending_shutdown_head);
-            uint32_t tail = atomic_fetch_add(
-                &sconn->owner->pending_shutdown_tail, 1);
-            if ((tail - head) >= WT_MAX_CLIENTS) {
+            uint32_t tail = atomic_load(
+                &sconn->owner->pending_shutdown_tail);
+            if ((tail + 1 - head) >= WT_MAX_CLIENTS) {
                 WT_LOG_ERROR("Pending shutdown queue overflow — freeing session for connection %llu immediately (tail %u, head %u)",
                             (unsigned long long)sconn->id, tail, head);
                 /* ── CRITICAL: Free session immediately ───────────
@@ -771,15 +771,19 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                     wt_session_shutdown(overflow_session);
                 }
             } else {
+                /* Write data to the queue slot BEFORE publishing the new
+                 * tail index.  The consumer reads tail then reads the slot;
+                 * without this ordering the consumer could see the new tail
+                 * but stale slot data on weakly-ordered architectures. */
                 sconn->owner->pending_shutdown_queue[
                     tail % WT_MAX_CLIENTS] = sconn->id;
-                /* Release fence: paired with acquire fence in
-                 * wt_server_poll_impl.  The array write happens
-                 * AFTER the atomic_fetch_add that published tail;
-                 * on weakly-ordered architectures (ARM) the
-                 * consumer could observe the new tail before the
-                 * array write is visible without this fence. */
+                /* Release fence: ensures the slot write above is visible
+                 * before the tail update observed by the consumer.
+                 * Paired with the acquire fence in wt_server_poll_impl. */
                 atomic_thread_fence(std::memory_order_release);
+                /* Now publish the new tail — consumer's acquire fence
+                 * will see the slot write above. */
+                atomic_store(&sconn->owner->pending_shutdown_tail, tail + 1);
             }
         }
 
@@ -826,10 +830,11 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                  * We break here — the stream has been claimed by HTTP/3. */
                 break;
             } else if (hr < 0) {
-                /* Handshake error — shut down */
+                /* Handshake error — shut down the stream.  StreamShutdown
+                 * triggers SHUTDOWN_COMPLETE which calls StreamClose via
+                 * h3_stream_cb — do NOT call StreamClose here. */
                 MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
                                         QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-                MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
                 break;
             }
             /* hr == 1: regular data stream detected (or native client),

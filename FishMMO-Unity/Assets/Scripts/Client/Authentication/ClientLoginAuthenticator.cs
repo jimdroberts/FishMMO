@@ -245,6 +245,23 @@ namespace FishMMO.Client
 		/// </summary>
 		public bool HasAuthToken => core?.HasAuthToken ?? false;
 
+	/// <summary>
+	/// Resets the authentication state and re-initiates the handshake on the
+	/// current connection.  Used by the login queue system when a queued client
+	/// is admitted (queue position reaches 0).  Generates a fresh X25519 keypair
+	/// and sends a new <see cref="ClientHandshake"/> broadcast.
+	/// </summary>
+	/// <remarks>
+	/// The connection token from IPFetch is NOT re-sent — the real IP was already
+	/// recovered by the initial handshake that triggered queueing.
+	/// </remarks>
+	public void RetryHandshake()
+	{
+		if (core == null || !initialized) return;
+		core.OnDisconnected();
+		core.OnConnected(connectionToken: null);
+	}
+
 		/// <summary>
 		/// Initializes the authenticator once with the provided network manager.
 		/// Registers connection state and broadcast handlers.

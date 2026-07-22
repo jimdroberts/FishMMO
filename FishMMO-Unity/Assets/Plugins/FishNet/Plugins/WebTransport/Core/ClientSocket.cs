@@ -312,7 +312,10 @@ namespace FishNet.Transporting.WebTransport.Client
 		}
 
 		/// <summary>
-		/// Dequeues outgoing packets and sends via the native library or JS bridge.
+		/// Dequeues all pending outgoing packets and sends them via the native library
+		/// (standalone) or JS bridge (WebGL).  The connection state is checked before
+		/// each send, and the queue is drained if the connection is not in the Started state.
+		/// Each packet is disposed after sending, returning its buffer to <see cref="ByteArrayPool"/>.
 		/// </summary>
 		private void DequeueOutgoing()
 		{
