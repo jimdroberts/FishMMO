@@ -10,6 +10,14 @@ namespace FishMMO.Shared
 	/// Registers a persistent InternalIdTransformFunc on the Addressables ResourceManager
 	/// that rewrites remote asset URLs to use RuntimeBaseUrl. Only one instance should
 	/// exist in the scene — the last one to Awake wins.
+	/// <para>
+	/// Client builds with an empty or loopback RuntimeBaseUrl do not register a rewrite:
+	/// Addressables.RuntimePath already resolves correctly (including WebGL, where
+	/// StreamingAssets is an absolute http(s) URL derived from the page origin, e.g.
+	/// https://eqbrowser.com/test/StreamingAssets/aa). Rewriting those IDs to a
+	/// hardcoded host (or prefixing file://) breaks loads when the game is served from
+	/// a different domain or subpath.
+	/// </para>
 	/// </summary>
 	public class DynamicAddressableLoadPathSystem : MonoBehaviour
 	{
@@ -24,7 +32,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The base URL to use for remote Addressables asset loading at runtime.
 		/// When set to a real CDN URL on client builds, overrides the profile's remote load path.
-		/// When left empty (or set to a loopback placeholder), client builds fall back to local StreamingAssets.
+		/// When left empty (or set to a loopback placeholder), client builds keep Addressables'
+		/// default local StreamingAssets resolution and do not rewrite http(s) IDs.
 		/// Trailing slash is normalized automatically on set.
 		/// Cannot be set to null or empty after the transform is registered.
 		/// </summary>
@@ -79,11 +88,33 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Builds a load-base URL for Addressables.RuntimePath / StreamingAssets.
+		/// WebGL (and any platform where StreamingAssets is already http/https) must not
+		/// receive a file:// prefix — that produces invalid IDs like
+		/// file://https://host/StreamingAssets/aa/...
+		/// </summary>
+		public static string ToLoadBaseUrl(string path)
+		{
+			if (string.IsNullOrEmpty(path))
+				return path;
+
+			string normalized = path.Replace('\\', '/');
+			if (normalized.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+				normalized.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+				normalized.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+			{
+				return normalized.EndsWith("/") ? normalized : normalized + "/";
+			}
+
+			string fileUrl = "file://" + normalized;
+			return fileUrl.EndsWith("/") ? fileUrl : fileUrl + "/";
+		}
+
+		/// <summary>
 		/// Unity Awake message. On server builds, overrides RuntimeBaseUrl to load from
 		/// StreamingAssets/ServerData/ where the build pipeline places server-specific bundles.
-		/// On client builds, falls back to local StreamingAssets when no real CDN URL is configured,
-		/// and applies a CDN override when RuntimeBaseUrl is set to a non-loopback address.
-		/// Then applies the Addressables load path override.
+		/// On client builds, registers a CDN rewrite only when RuntimeBaseUrl is a non-loopback
+		/// address; otherwise leaves Addressables local StreamingAssets resolution alone.
 		/// </summary>
 		private void Awake()
 		{
@@ -102,17 +133,26 @@ namespace FishMMO.Shared
 
 #if UNITY_SERVER
 			// Server builds load from a dedicated ServerData subfolder where the build
-			// pipeline places server-specific Addressables asset bundles.
-			RuntimeBaseUrl = "file://" + Application.streamingAssetsPath + "/ServerData/";
-#else
-			// Client builds load from Addressables.RuntimePath, the canonical
-			// platform-agnostic path Unity uses for local bundle resolution
-			// ({StreamingAssetsPath}/aa/ on standalone). A real CDN URL overrides
-			// this when RuntimeBaseUrl is set to a non-loopback address.
-			if (string.IsNullOrEmpty(RuntimeBaseUrl) || IsLoopbackPlaceholder(RuntimeBaseUrl))
-				RuntimeBaseUrl = "file://" + Addressables.RuntimePath;
-#endif
+			// pipeline places server-specific Addressable asset bundles.
+			RuntimeBaseUrl = ToLoadBaseUrl(Application.streamingAssetsPath + "/ServerData");
 			SetAddressablesLoadPathOverride();
+#else
+			// Client: a real CDN / public host rewrites remote http(s) catalog IDs.
+			// Empty or loopback RuntimeBaseUrl means "use local StreamingAssets" — do not
+			// register InternalIdTransformFunc. On WebGL, RuntimePath is already an absolute
+			// URL under the page origin (e.g. https://eqbrowser.com/test/StreamingAssets/aa);
+			// rewriting those IDs to a hardcoded host or file:// breaks loads.
+			if (!string.IsNullOrEmpty(RuntimeBaseUrl) && !IsLoopbackPlaceholder(RuntimeBaseUrl))
+			{
+				Debug.Log($"DynamicAddressableLoadPathSystem: CDN rewrite active. RuntimeBaseUrl={RuntimeBaseUrl}", this);
+				SetAddressablesLoadPathOverride();
+			}
+			else
+			{
+				RuntimeBaseUrl = ToLoadBaseUrl(Addressables.RuntimePath);
+				Debug.Log($"DynamicAddressableLoadPathSystem: Local Addressables path (no URL rewrite). Base={RuntimeBaseUrl}", this);
+			}
+#endif
 		}
 
 		/// <summary>
