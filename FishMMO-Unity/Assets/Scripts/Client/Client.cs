@@ -353,11 +353,7 @@ namespace FishMMO.Client
 			var mp = tm.GetTransport<Multipass>();
 			if (mp == null) { Log.Error("Client", "Multipass not found."); return false; }
 			// WebTransport (QUIC/HTTP3) for all platforms.
-			if (!mp.SetClientTransport<WebTransport>())
-			{
-				Log.Error("Client", "Failed to set WebTransport as client transport.");
-				return false;
-			}
+			mp.SetClientTransport<WebTransport>();
 			return true;
 		}
 
