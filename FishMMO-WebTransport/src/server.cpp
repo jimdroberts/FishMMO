@@ -215,6 +215,18 @@ void wt_server_free_impl(wt_server_s* server)
                     (unsigned)atomic_load(&server->pending_shutdowns));
     }
 
+    /* Close QUIC handles deferred from wt_server_stop_impl.
+     * Order: config before registration (reverse of creation).
+     * Safe now because all SHUTDOWN_COMPLETE callbacks have finished. */
+    if (server->session_config) {
+        MsQuic->ConfigurationClose(server->session_config);
+        server->session_config = NULL;
+    }
+    if (server->registration) {
+        MsQuic->RegistrationClose(server->registration);
+        server->registration = NULL;
+    }
+
     wt_datagram_queue_destroy(&server->dgram_queue);
     free(server->connections);
     free(server);
@@ -346,14 +358,9 @@ void wt_server_stop_impl(wt_server_s* server)
         MsQuic->ListenerClose(server->listener);
         server->listener = NULL;
     }
-    if (server->session_config) {
-        MsQuic->ConfigurationClose(server->session_config);
-        server->session_config = NULL;
-    }
-    if (server->registration) {
-        MsQuic->RegistrationClose(server->registration);
-        server->registration = NULL;
-    }
+    /* Defer ConfigurationClose and RegistrationClose to free_impl
+     * (after the pending_shutdowns spin-wait). Closing registration
+     * before SHUTDOWN_COMPLETE callbacks finish is UB per msquic API. */
 
     atomic_store(&server->state, WT_SERVER_STOPPED);
     WT_LOG_INFO("Server stopped.");

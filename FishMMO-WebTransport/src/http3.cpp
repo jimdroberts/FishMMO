@@ -529,12 +529,13 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
     else if ((first & 0xE0) == 0x20) {
         /* Literal without name reference (001 prefix).
          * The name is encoded inline.  Format:
-         *   001 N H LLL+ [name string] [H value_len+] [value string]
-         * N=never-indexed, H=Huffman flag, LLL=3-bit name length prefix.
-         * Use qpack_varint_decode with prefix_bits=3 for the name length. */
+         *   001 N H LLLL+ [name string] [H value_len+] [value string]
+         * N=never-indexed, H=Huffman flag, LLLL=4-bit name length prefix
+         * (RFC 9204 §4.3.2: bits 7-5=001, bit 4=N, bits 3-0=4-bit prefix).
+         * Use qpack_varint_decode with prefix_bits=4 for the name length. */
         uint64_t name_len_val;
         uint8_t nbytes;
-        if (qpack_varint_decode(buf, buf_len, &name_len_val, &nbytes, 3) < 0)
+        if (qpack_varint_decode(buf, buf_len, &name_len_val, &nbytes, 4) < 0)
             return -1;
         out->name_len = (uint8_t)name_len_val;
         consumed = nbytes;
@@ -703,15 +704,15 @@ static int h3_write_headers(uint8_t* out, size_t out_cap,
         memcpy(fp, method, mlen); fp += mlen;
 
         /* :protocol: webtransport — literal without name ref (never-indexed).
-         * Format: 001 prefix with 3-bit name-length qpack varint.
+         * Format: 001 prefix with 4-bit name-length qpack varint
+         * (RFC 9204 §4.3.2: bits 7-5=001, bit 4=N, bits 3-0=4-bit prefix).
          * Name ":protocol" = 10 bytes, encoded as:
-         *   byte 0: 001 N H LLL  = 001 1 0 111 = 0x37
-         *   byte 1: continuation: 10 - 7 = 3 = 0x03
+         *   byte 0: 001 N H LLLL = 001 1 0 1010 = 0x3A (single byte)
          * Value length uses qpack_varint_encode with 7-bit prefix. */
         const char* proto = "webtransport";
         size_t plen = strlen(proto);
         uint8_t nb[8];
-        uint8_t nb_n = qpack_varint_encode(10, nb, 3);  /* ":protocol" = 10 bytes */
+        uint8_t nb_n = qpack_varint_encode(10, nb, 4);  /* ":protocol" = 10 bytes */
         nb[0] |= 0x20 | 0x10;  /* set bits 7-5 = 001, bit 4 = N (never-indexed) */
         memcpy(fp, nb, nb_n); fp += nb_n;
         memcpy(fp, ":protocol", 10); fp += 10;

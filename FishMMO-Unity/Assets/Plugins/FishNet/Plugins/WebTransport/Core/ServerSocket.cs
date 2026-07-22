@@ -20,10 +20,17 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// </summary>
 		internal RemoteConnectionState GetConnectionState(int connectionId)
 		{
-			RemoteConnectionState state = this.clients.Contains(connectionId)
-				? RemoteConnectionState.Started
-				: RemoteConnectionState.Stopped;
-			return state;
+			this.clientsLock.EnterReadLock();
+			try
+			{
+				return this.clients.Contains(connectionId)
+					? RemoteConnectionState.Started
+					: RemoteConnectionState.Stopped;
+			}
+			finally
+			{
+				this.clientsLock.ExitReadLock();
+			}
 		}
 		#endregion
 
@@ -49,10 +56,28 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <summary>
 		/// Currently connected client IDs.
 		/// Maps FishNet's int connection IDs to native ulong connection IDs.
+		/// All collection access is synchronized via <see cref="clientsLock"/>.
 		/// </summary>
 		private HashSet<int> clients = new HashSet<int>();
 		private Dictionary<int, ulong> idMapToNative = new Dictionary<int, ulong>();
 		private Dictionary<ulong, int> idMapFromNative = new Dictionary<ulong, int>();
+		/// <summary>
+		/// Address book: connectionId → remote address string.
+		/// Synchronized under <see cref="clientsLock"/>.
+		/// </summary>
+		private Dictionary<int, string> clientAddresses = new Dictionary<int, string>();
+
+		/// <summary>
+		/// Reader-writer lock protecting all connection-tracking collections
+		/// (<see cref="clients"/>, <see cref="idMapToNative"/>, <see cref="idMapFromNative"/>,
+		/// <see cref="clientAddresses"/>, <see cref="nextConnectionId"/>).
+		/// Read operations (<c>GetConnectionState</c>, <c>GetConnectionAddress</c>) acquire
+		/// the read lock; write operations (connect, disconnect, reset) acquire the write lock.
+		/// This prevents crashes from FishNet calling these methods from any thread while
+		/// the main thread writes to the collections during <c>IterateIncoming</c>.
+		/// </summary>
+		private readonly System.Threading.ReaderWriterLockSlim clientsLock =
+			new System.Threading.ReaderWriterLockSlim(System.Threading.LockRecursionPolicy.NoRecursion);
 
 		/// <summary>
 		/// Monotonic connection ID counter.
@@ -99,18 +124,16 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// Used with <see cref="System.Threading.Interlocked"/> to prevent a TOCTOU
 		/// race between <c>Count</c> check and <c>Enqueue</c> when native callbacks
 		/// fire concurrently from QUIC worker threads.
+		/// Int64 (long) — effectively overflow-proof; would require ~9 exabytes
+		/// of queued events to wrap.
 		/// </summary>
-		private int incomingEventCount;
+		private long incomingEventCount;
 
 		/// <summary>
 		/// Pinned delegate handles (prevent GC collection of callback delegates).
 		/// </summary>
 		private NativeCallbacks.ServerCallbacks pinnedCallbacks;
 
-		/// <summary>
-		/// Address book: connectionId → remote address string.
-		/// </summary>
-		private Dictionary<int, string> clientAddresses = new Dictionary<int, string>();
 
 		/// <summary>
 		/// Initializes the server socket with the specified transport, MTU, and TLS certificate paths.
@@ -286,12 +309,20 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (this.serverHandle == null || this.serverHandle.IsInvalid)
 				return string.Empty;
 
-			if (this.idMapToNative.TryGetValue(connectionId, out ulong nativeId))
+			this.clientsLock.EnterReadLock();
+			try
 			{
-				IntPtr addrPtr = WebTransportNative.wt_server_get_client_address(
-					this.serverHandle, nativeId);
-				if (addrPtr != IntPtr.Zero)
-					return System.Runtime.InteropServices.Marshal.PtrToStringAnsi(addrPtr) ?? string.Empty;
+				if (this.idMapToNative.TryGetValue(connectionId, out ulong nativeId))
+				{
+					IntPtr addrPtr = WebTransportNative.wt_server_get_client_address(
+						this.serverHandle, nativeId);
+					if (addrPtr != IntPtr.Zero)
+						return System.Runtime.InteropServices.Marshal.PtrToStringAnsi(addrPtr) ?? string.Empty;
+				}
+			}
+			finally
+			{
+				this.clientsLock.ExitReadLock();
 			}
 
 			return string.Empty;
@@ -375,11 +406,19 @@ namespace FishNet.Transporting.WebTransport.Server
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void ResetQueues()
 		{
-			this.clients.Clear();
-			this.idMapToNative.Clear();
-			this.idMapFromNative.Clear();
-			this.clientAddresses.Clear();
-			this.nextConnectionId = 1;
+			this.clientsLock.EnterWriteLock();
+			try
+			{
+				this.clients.Clear();
+				this.idMapToNative.Clear();
+				this.idMapFromNative.Clear();
+				this.clientAddresses.Clear();
+				this.nextConnectionId = 1;
+			}
+			finally
+			{
+				this.clientsLock.ExitWriteLock();
+			}
 			base.ClearPacketQueue(this.outgoing);
 			this.disconnectingNext.Clear();
 		}
@@ -483,7 +522,10 @@ namespace FishNet.Transporting.WebTransport.Server
 				unsafe
 				{
 					byte* p = (byte*)remoteAddressPtr;
-					while (addrLen < MaxAddrLen && p[addrLen] != 0) addrLen++;
+					// Cap at MaxAddrLen-1 to guarantee null-terminator space in the
+			// fixed-size native buffer (256 bytes). Without this, a 256-byte
+			// address with no null would cause MemoryCopy to read past the buffer.
+			while (addrLen < MaxAddrLen - 1 && p[addrLen] != 0) addrLen++;
 				}
 				if (addrLen > 0)
 				{
@@ -522,10 +564,28 @@ namespace FishNet.Transporting.WebTransport.Server
 						fishNetId = 1;
 						this.nextConnectionId = 2;
 					}
-					this.clients.Add(fishNetId);
-					idMapToNative[fishNetId] = nativeConnectionId;
-					idMapFromNative[nativeConnectionId] = fishNetId;
-					clientAddresses[fishNetId] = remoteAddr;
+					/* Acquire write lock — prevents concurrent reads from
+					 * GetConnectionState/GetConnectionAddress observing
+					 * torn internal state in the HashSet/Dictionaries. */
+					this.clientsLock.EnterWriteLock();
+					try
+					{
+						/* Guard against ID collision if nextConnectionId wraps. */
+						if (this.clients.Contains(fishNetId))
+						{
+							transport.NetworkManager?.LogWarning(
+								$"[WebTransport Server] Connection ID {fishNetId} already in use; skipping connect.");
+							return;
+						}
+						this.clients.Add(fishNetId);
+						idMapToNative[fishNetId] = nativeConnectionId;
+						idMapFromNative[nativeConnectionId] = fishNetId;
+						clientAddresses[fishNetId] = remoteAddr;
+					}
+					finally
+					{
+						this.clientsLock.ExitWriteLock();
+					}
 
 					transport.HandleRemoteConnectionState(
 						new RemoteConnectionStateArgs(RemoteConnectionState.Started, fishNetId, transport.Index));
@@ -562,10 +622,18 @@ namespace FishNet.Transporting.WebTransport.Server
 
 				if (this.idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
 				{
-					this.clients.Remove(fishNetId);
-					this.idMapToNative.Remove(fishNetId);
-					this.idMapFromNative.Remove(nativeConnectionId);
-					this.clientAddresses.Remove(fishNetId);
+					this.clientsLock.EnterWriteLock();
+					try
+					{
+						this.clients.Remove(fishNetId);
+						this.idMapToNative.Remove(fishNetId);
+						this.idMapFromNative.Remove(nativeConnectionId);
+						this.clientAddresses.Remove(fishNetId);
+					}
+					finally
+					{
+						this.clientsLock.ExitWriteLock();
+					}
 
 					transport.HandleRemoteConnectionState(
 						new RemoteConnectionStateArgs(RemoteConnectionState.Stopped, fishNetId, transport.Index));

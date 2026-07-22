@@ -64,8 +64,10 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// Used with <see cref="System.Threading.Interlocked"/> to prevent a TOCTOU
 		/// race between <c>Count</c> check and <c>Enqueue</c> when native callbacks
 		/// fire concurrently from QUIC worker threads.
+		/// Int64 (long) — effectively overflow-proof; would require ~9 exabytes
+		/// of queued events to wrap.
 		/// </summary>
-		private int incomingEventCount;
+		private long incomingEventCount;
 
 		/// <summary>
 		/// Maximum number of queued incoming events to prevent native heap exhaustion
@@ -160,6 +162,11 @@ namespace FishNet.Transporting.WebTransport.Client
 				lock (webglSockets)
 					webglSockets[webglIndex] = this;
 				webglPendingConnect = null;
+
+				// Configure congestion threshold to avoid silent data loss under
+				// game data rates (default 500, up from the previous hardcoded 80).
+				WebTransportJSLib.WTSetStreamThreshold(webglIndex, 500);
+
 				return true;
 			}
 			catch

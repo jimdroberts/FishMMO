@@ -147,7 +147,14 @@ namespace FishMMO.Auth.Core
 		public byte[] OtpauthUri;
 		/// <summary>Encrypted newline-delimited plaintext recovery codes (AES-GCM, server->client).</summary>
 		public byte[] RecoveryCodes;
-		/// <summary>Explicit message sequence number (server->client). Server derives: otpauthUri_seq = Seq - 1, recoveryCodes_seq = Seq.</summary>
+		/// <summary>Explicit message sequence number (server->client).
+		/// The server calls NextSendSequence() twice sequentially: first for
+		/// OtpauthUri (seq1), then for RecoveryCodes (seq2). Seq is set to seq2.
+		/// The client also calls receiveNonceCtx.NextNonce() twice sequentially
+		/// and does NOT read this Seq field for nonce derivation — it always
+		/// uses the next two sequential receive nonces regardless of Seq.
+		/// Both sides are consistent only because no other server→client messages
+		/// are sent between the two encryptions in the registration flow.</summary>
 		public uint Seq;
 	}
 

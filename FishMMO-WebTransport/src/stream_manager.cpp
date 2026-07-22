@@ -384,9 +384,16 @@ int32_t wt_stream_manager_send(
                                   QUIC_STREAM_START_FLAG_IMMEDIATE);
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("StreamStart failed: 0x%x", status);
-        /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE will
-         * fire from StreamClose and handle slot cleanup. Prematurely
-         * freeing the slot risks reuse before the callback fires. */
+        /* MsQuic does NOT guarantee SHUTDOWN_COMPLETE fires for a stream
+         * that never successfully started. Clean up the slot, sctx, and
+         * active_streams counter inline to prevent a permanent leak. */
+        sm_lock(mgr);
+        mgr->streams[slot].in_use = false;
+        mgr->streams[slot].quic_stream = NULL;
+        mgr->streams[slot].id = 0;
+        atomic_fetch_sub(&mgr->active_streams, 1);
+        sm_unlock(mgr);
+        free(sctx);
         MsQuic->StreamClose(quic_stream);
         return WT_ERR_SEND_FAILED;
     }

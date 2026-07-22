@@ -234,17 +234,18 @@ mergeInto(LibraryManager.library, {
          * typically cap concurrent streams at ~100. Drop data if we exceed
          * a safe threshold rather than queuing unboundedly.
          *
-         * Stuck-stream detection threshold: if _pendingStreams stays above 80
-         * for more than 10 seconds, the counter is reset. This prevents
-         * permanent blockage when the browser suspends promise resolution
-         * (e.g., tab backgrounding, mobile sleep).
+         * Stuck-stream detection threshold: if _pendingStreams stays above
+         * _streamCongestionThreshold for more than _streamCongestionTimeoutMs,
+         * the counter is reset. This prevents permanent blockage when the
+         * browser suspends promise resolution (e.g., tab backgrounding,
+         * mobile sleep).
          *
-         * NOTE: The 80-stream / 10-second thresholds are hardcoded. In
-         * high-throughput scenarios with many concurrent reliable sends,
-         * these values may need tuning. Consider making them configurable
-         * via a future JS API function if false positives occur. */
+         * The threshold is configurable via WTSetStreamThreshold(index, threshold)
+         * called from C#. Default is 500 (safe for all major browsers). */
         if (!session._pendingStreams) session._pendingStreams = 0;
-        if (session._pendingStreams > 80) {
+        if (!session._streamCongestionThreshold) session._streamCongestionThreshold = 500;
+        if (!session._streamCongestionTimeoutMs) session._streamCongestionTimeoutMs = 10000;
+        if (session._pendingStreams > session._streamCongestionThreshold) {
             /* Check for stuck counters: if _pendingStreams has been above
              * threshold for over 10 seconds, reset it. Stuck counters can
              * happen if the browser suspends promise resolution (e.g. tab
@@ -253,7 +254,7 @@ mergeInto(LibraryManager.library, {
             var now = Date.now();
             if (!session._pendingStreamsSince) {
                 session._pendingStreamsSince = now;
-            } else if (now - session._pendingStreamsSince > 10000) {
+            } else if (now - session._pendingStreamsSince > session._streamCongestionTimeoutMs) {
                 console.warn('[FishWT] Stream congestion timeout (' + session._pendingStreams +
                              ' pending for >10s), resetting counter');
                 session._pendingStreams = 0;
@@ -355,5 +356,11 @@ mergeInto(LibraryManager.library, {
         var session = FishWebTransport._get(index);
         if (!session || !session.wt) return false;
         return session.wt.readyState === 'connected';
+    },
+
+    WTSetStreamThreshold: function(index, threshold) {
+        var session = FishWebTransport._get(index);
+        if (!session) return;
+        session._streamCongestionThreshold = threshold > 0 ? threshold : 500;
     }
 });

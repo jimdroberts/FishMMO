@@ -188,10 +188,11 @@ namespace FishNet.Transporting.WebTransport.Native
 			/* Only one thread proceeds past this guard. */
 			if (System.Threading.Interlocked.CompareExchange(ref initGuard, 1, 0) != 0)
 			{
-				/* Another thread is initializing — yield with bounded timeout (~500ms Linux, up to ~3s Windows).
-				 * MsQuic DLL loading / entropy gathering can take a moment on some systems.
-				 * Using Thread.Sleep(2) avoids burning CPU, unlike a spin-wait. */
-				for (int i = 0; i < 250 && !initialized; i++)
+				/* Brief yield (50ms max). This method is documented as
+				 * main-thread-only; the fallback exists only as a secondary
+				 * safety net. 25 iterations x 2ms = 50ms, avoiding a visible
+				 * frame hitch at startup. */
+				for (int i = 0; i < 25 && !initialized; i++)
 					System.Threading.Thread.Sleep(2);
 				/* Timed out — caller will get an error from the native operation; they can retry next frame. */
 				return initialized;

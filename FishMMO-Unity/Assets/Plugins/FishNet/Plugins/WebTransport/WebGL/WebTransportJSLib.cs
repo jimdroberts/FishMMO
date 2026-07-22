@@ -49,6 +49,13 @@ namespace FishNet.Transporting.WebTransport.WebGL
 		/// <summary>Returns true if the session is in the 'connected' state.</summary>
 		[DllImport("__Internal")]
 		internal static extern bool WTIsConnected(int index);
+
+		/// <summary>
+		/// Sets the maximum number of pending outgoing streams before backpressure
+		/// kicks in. Default is 500. Values &lt;= 0 reset to the default.
+		/// </summary>
+		[DllImport("__Internal")]
+		internal static extern void WTSetStreamThreshold(int index, int threshold);
 	}
 #else
 	/// <summary>
@@ -89,6 +96,11 @@ namespace FishNet.Transporting.WebTransport.WebGL
 		{
 			UnityEngine.Debug.LogWarning("[WebTransport] WebTransportJSLib is only available in WebGL builds.");
 			return false;
+		}
+
+		internal static void WTSetStreamThreshold(int index, int threshold)
+		{
+			// No-op on non-WebGL platforms.
 		}
 	}
 #endif

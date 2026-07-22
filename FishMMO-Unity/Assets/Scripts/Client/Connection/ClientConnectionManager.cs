@@ -142,6 +142,11 @@ namespace FishMMO.Client
 			ReconnectsAttempted = 0; nextReconnect = -1;
 			CurrentConnectionType = ServerConnectionType.None;
 			lastWorldAddress = ""; lastWorldPort = 0;
+			// Reset the in-flight connection guard. If a coroutine was
+			// interrupted (e.g., StopAllCoroutines in QuitToLogin), the
+			// guard would otherwise be permanently stuck at 1, blocking
+			// all future ConnectToServer calls.
+			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 		}
 
 		/// <summary>Returns true if connected and optionally authenticated.</summary>
