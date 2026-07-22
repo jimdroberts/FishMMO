@@ -67,10 +67,7 @@ namespace FishMMO.Shared
 		/// Gets or sets the equipment view camera.
 		/// </summary>
 		public Camera EquipmentViewCamera { get { return this.equipmentViewCamera; } set { this.equipmentViewCamera = value; } }
-		/// <summary>
-		/// The character's display name (use this instead of GameObject.name).
-		/// </summary>
-		public new string Name { get { return CharacterName; } }
+
 		/// <summary>
 		/// The character's real name. Use this for referencing by name.
 		/// </summary>

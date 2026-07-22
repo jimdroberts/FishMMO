@@ -60,6 +60,14 @@ namespace FishNet.Transporting.WebTransport.Client
 		private int stopGuard = 0;
 
 		/// <summary>
+		/// Atomic counter tracking how many items are in <see cref="incomingEvents"/>.
+		/// Used with <see cref="System.Threading.Interlocked"/> to prevent a TOCTOU
+		/// race between <c>Count</c> check and <c>Enqueue</c> when native callbacks
+		/// fire concurrently from QUIC worker threads.
+		/// </summary>
+		private int incomingEventCount;
+
+		/// <summary>
 		/// Maximum number of queued incoming events to prevent native heap exhaustion
 		/// from a flood of incoming packets.
 		/// </summary>
@@ -101,8 +109,10 @@ namespace FishNet.Transporting.WebTransport.Client
 			// callbacks is properly freed via their finally blocks.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
+				System.Threading.Interlocked.Decrement(ref incomingEventCount);
 				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
 			}
+			incomingEventCount = 0;
 
 			// Assert we are on the Unity main thread.
 			if (mainThreadId < 0)
@@ -219,8 +229,10 @@ namespace FishNet.Transporting.WebTransport.Client
 			// that unmanaged memory is freed.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
+				System.Threading.Interlocked.Decrement(ref incomingEventCount);
 				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
 			}
+			incomingEventCount = 0;
 
 			base.SetConnectionState(LocalConnectionState.Stopping, false);
 
@@ -261,6 +273,7 @@ namespace FishNet.Transporting.WebTransport.Client
 #endif
 			while (incomingEvents.TryDequeue(out Action act))
 			{
+				System.Threading.Interlocked.Decrement(ref incomingEventCount);
 				try { act?.Invoke(); } catch (Exception e) { LogTransportError(e.Message); }
 			}
 		}
@@ -404,8 +417,9 @@ namespace FishNet.Transporting.WebTransport.Client
 				return;
 			}
 			// Backpressure: drop if event queue is saturated.
-			if (socket.incomingEvents.Count >= MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref socket.incomingEventCount) > MaxIncomingEvents)
 			{
+				System.Threading.Interlocked.Decrement(ref socket.incomingEventCount);
 				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping stream data.");
 				return;
 			}
@@ -426,8 +440,9 @@ namespace FishNet.Transporting.WebTransport.Client
 				socket.LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;
 			}
-			if (socket.incomingEvents.Count >= MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref socket.incomingEventCount) > MaxIncomingEvents)
 			{
+				System.Threading.Interlocked.Decrement(ref socket.incomingEventCount);
 				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping datagram.");
 				return;
 			}
@@ -462,8 +477,9 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private void HandleNativeConnect(IntPtr context)
 		{
-			if (incomingEvents.Count >= MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref incomingEventCount) > MaxIncomingEvents)
 			{
+				System.Threading.Interlocked.Decrement(ref incomingEventCount);
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping connect event.");
 				return;
 			}
@@ -480,8 +496,9 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private void HandleNativeDisconnect(IntPtr context, int errorCode)
 		{
-			if (incomingEvents.Count >= MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref incomingEventCount) > MaxIncomingEvents)
 			{
+				System.Threading.Interlocked.Decrement(ref incomingEventCount);
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping disconnect event.");
 				return;
 			}
@@ -514,8 +531,9 @@ namespace FishNet.Transporting.WebTransport.Client
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
 
-			if (incomingEvents.Count >= MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref incomingEventCount) > MaxIncomingEvents)
 			{
+				System.Threading.Interlocked.Decrement(ref incomingEventCount);
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping stream data.");
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
 				return;
@@ -561,8 +579,9 @@ namespace FishNet.Transporting.WebTransport.Client
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
 
-			if (incomingEvents.Count >= MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref incomingEventCount) > MaxIncomingEvents)
 			{
+				System.Threading.Interlocked.Decrement(ref incomingEventCount);
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping datagram.");
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
 				return;

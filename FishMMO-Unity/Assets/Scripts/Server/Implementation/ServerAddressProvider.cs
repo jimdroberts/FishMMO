@@ -99,7 +99,7 @@ namespace FishMMO.Server.Implementation
 				// Reject addresses that are too long (253 is max DNS hostname; 45 is max IPv6)
 				// or contain null bytes / control characters which could indicate injection.
 				if (addressOverride.Length > 253 ||
-					(addressOverride.Contains('\0') || ContainsControlCharacter(addressOverride)))
+					ContainsControlCharacter(addressOverride))
 				{
 					_ = FishMMO.Logging.Log.Warning("ServerAddressProvider",
 						$"Invalid address override '{addressOverride}' (length={addressOverride.Length}); falling through to transport address.");

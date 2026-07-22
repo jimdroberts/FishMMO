@@ -106,7 +106,9 @@ namespace FishMMO.Shared
 				return normalized.EndsWith("/") ? normalized : normalized + "/";
 			}
 
-			string fileUrl = "file://" + normalized;
+			// Windows absolute paths (e.g. "C:/...") need three slashes: file:///C:/...
+			bool isWindowsAbsolute = normalized.Length >= 2 && normalized[1] == ':';
+			string fileUrl = (isWindowsAbsolute ? "file:///" : "file://") + normalized;
 			return fileUrl.EndsWith("/") ? fileUrl : fileUrl + "/";
 		}
 

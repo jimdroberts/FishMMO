@@ -28,7 +28,7 @@ namespace FishNet.Transporting.WebTransport
 		/// <summary>
 		/// Current ConnectionState.
 		/// </summary>
-		private LocalConnectionState connectionState = LocalConnectionState.Stopped;
+		private volatile LocalConnectionState connectionState = LocalConnectionState.Stopped;
 
 		/// <summary>
 		/// Returns the current ConnectionState.

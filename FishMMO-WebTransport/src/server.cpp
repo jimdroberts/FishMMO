@@ -580,11 +580,15 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
         return QUIC_STATUS_SUCCESS;  /* handle closed, tell msquic we handled it */
     }
 
-    memset(conn, 0, sizeof(*conn));
     conn->id = conn_id;
     conn->quic_conn = event->NEW_CONNECTION.Connection;
+    conn->session = NULL;
+    conn->h3_session = NULL;
+    conn->pending_shutdown_session = NULL;
+    conn->remote_addr[0] = '\0';
     atomic_store(&conn->state, WT_CONN_STATE_HANDSHAKING);
     atomic_store(&conn->in_use, true);
+    atomic_store(&conn->dgram_drop_count, 0);
     conn->owner = srv;
 
     atomic_fetch_add(&srv->connection_count, 1);
@@ -784,7 +788,7 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * pending_shutdowns==0 allows the spin-wait to exit cleanly
          * rather than deadlocking.  sconn->owner is still valid here
          * because free_impl waits for pending_shutdowns before freeing. */
-        if (sconn->owner)
+        if (sconn->owner && atomic_load(&sconn->owner->pending_shutdowns) > 0)
             atomic_fetch_sub(&sconn->owner->pending_shutdowns, 1);
 
         /* Fire callback LAST — after all state changes are committed.

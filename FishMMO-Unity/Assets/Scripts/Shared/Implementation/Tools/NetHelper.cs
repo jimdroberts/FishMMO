@@ -34,7 +34,7 @@ namespace FishMMO.Shared
 				yield return webRequest.SendWebRequest();
 
 				// Check for network connection errors or HTTP protocol errors.
-				if (webRequest.result == UnityWebRequest.Result.ConnectionError || webRequest.result == UnityWebRequest.Result.ProtocolError)
+				if (webRequest.result != UnityWebRequest.Result.Success)
 				{
 					// Log the error more prominently.
 					Log.Error("NetHelper", $"Request error: {webRequest.error}");

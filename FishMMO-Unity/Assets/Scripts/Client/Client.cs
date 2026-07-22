@@ -11,10 +11,7 @@ using FishMMO.Shared.Core;
 using FishMMO.Logging;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
@@ -489,7 +486,7 @@ namespace FishMMO.Client
 						var url = candidates[next++] + "loginserver";
 						var req = UnityWebRequest.Get(url);
 						req.certificateHandler = new ClientSSLCertificateHandler();
-						req.redirectLimit = -1; // -1 disables redirect following (0 = unlimited in Unity)
+						req.redirectLimit = -1; // -1 disables redirect following entirely
 						req.SetRequestHeader(ClientApiSigner.HeaderKey, ClientApiSigner.BuildHeaderValue(UnityWebRequest.kHttpVerbGET, url));
 						if (LoginServerRequestTimeoutSeconds > 0) req.timeout = LoginServerRequestTimeoutSeconds;
 						pending.Add(new PendingProbe { Request = req, Op = req.SendWebRequest() });

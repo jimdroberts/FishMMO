@@ -255,7 +255,7 @@ namespace FishMMO.Server.Implementation
 			if (NetHelper.IsLoopbackAddress(remoteAddress))
 			{
 				string configuredAddress = Configuration.GetString("Address", null);
-				if (!string.IsNullOrWhiteSpace(configuredAddress) && configuredAddress != "127.0.0.1" && configuredAddress != "localhost")
+				if (!string.IsNullOrWhiteSpace(configuredAddress) && !NetHelper.IsLoopbackAddress(configuredAddress))
 				{
 					remoteAddress = configuredAddress;
 					Log.Debug("Server", $"Using configured Address \'{remoteAddress}\' instead of loopback fallback.");
@@ -462,37 +462,21 @@ namespace FishMMO.Server.Implementation
 
 			// 1. Signal worker cancellation FIRST — in-flight auth operations can
 			//    finish broadcasting before the transport is stopped.
-			//    We also drain the main-thread queue so pending broadcasts are flushed.
 			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator authenticator)
 			{
 				authenticator.ShutdownWorkers();
 			}
 
-			// 2. Start coroutine-based drain — polls for worker teardown before
-			//    proceeding to steps 3 and 4 (transport stop and subsystem teardown).
-			//    Avoids Thread.Sleep() blocking the Unity main thread.
-			StartCoroutine(DrainWorkersAndFinishShutdown());
-		}
-
-		/// <summary>Max seconds to poll for worker teardown before forcing stop.</summary>
-		private const float workerDrainTimeoutSeconds = 5f;
-
-		/// <summary>
-		/// Coroutine that waits for worker teardown to complete (or timeout),
-		/// then stops the transport and deinitializes all server subsystems.
-		/// </summary>
-		private System.Collections.IEnumerator DrainWorkersAndFinishShutdown()
-		{
+			// 2. Synchronous worker drain (no coroutine — OnDestroy can't yield).
 			float deadline = Time.realtimeSinceStartup + workerDrainTimeoutSeconds;
 			while (Time.realtimeSinceStartup < deadline)
 			{
 				if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator auth)
 				{
-					if (auth.AreWorkersDrained())
-						break;
+					if (auth.AreWorkersDrained()) break;
 				}
 				else break;
-				yield return null;
+				System.Threading.Thread.Sleep(10);
 			}
 
 			// 3. Stop accepting new connections.
@@ -519,6 +503,8 @@ namespace FishMMO.Server.Implementation
 			NetworkWrapper?.UnregisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 		}
 
+		/// <summary>Max seconds to poll for worker teardown before forcing stop.</summary>
+		private const float workerDrainTimeoutSeconds = 5f;
 
 		/// <summary>
 		/// Registers all server behaviours in order.

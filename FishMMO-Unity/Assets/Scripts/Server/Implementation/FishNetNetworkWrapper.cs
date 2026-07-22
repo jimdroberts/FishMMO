@@ -88,7 +88,11 @@ namespace FishMMO.Server.Implementation
 		/// <returns>IEnumerator for coroutine.</returns>
 		private System.Collections.IEnumerator OnAwaitingConnectionReady()
 		{
-			yield return new WaitUntil(() => NetworkManager.IsServerStarted);
+			float deadline = Time.realtimeSinceStartup + 30f;
+			while (!NetworkManager.IsServerStarted && Time.realtimeSinceStartup < deadline)
+				yield return null;
+			if (!NetworkManager.IsServerStarted)
+				Log.Warning("FishNetNetworkWrapper", "Server failed to start within 30 seconds.");
 			awaitingConnectionCoroutine = null;
 		}
 
@@ -180,8 +184,7 @@ namespace FishMMO.Server.Implementation
 						}
 						wt.SetPort(port);
 						wt.SetMaximumClients(maxClients);
-						if (certificatesValid)
-							ConfigureWebTransport(wt);
+						ConfigureWebTransport(wt);
 						configured = true;
 					}
 				}
@@ -198,8 +201,7 @@ namespace FishMMO.Server.Implementation
 				}
 				transport.SetPort(port);
 				transport.SetMaximumClients(maxClients);
-				if (certificatesValid)
-					ConfigureWebTransport(wt);
+				ConfigureWebTransport(wt);
 			}
 		}
 
@@ -211,14 +213,14 @@ namespace FishMMO.Server.Implementation
 			// precedence over config, allowing Docker and CI deployments to inject
 			// paths without modifying configuration files.
 			string envCertPath = System.Environment.GetEnvironmentVariable("FISHMMO_CERT_PATH");
-			string envKeyPath  = System.Environment.GetEnvironmentVariable("FISHMMO_KEY_PATH");
+			string envKeyPath = System.Environment.GetEnvironmentVariable("FISHMMO_KEY_PATH");
 
 			string certPath;
 			string keyPath;
 			if (!string.IsNullOrWhiteSpace(envCertPath) && !string.IsNullOrWhiteSpace(envKeyPath))
 			{
 				certPath = envCertPath;
-				keyPath  = envKeyPath;
+				keyPath = envKeyPath;
 
 				if (!System.IO.File.Exists(certPath))
 				{
@@ -245,7 +247,7 @@ namespace FishMMO.Server.Implementation
 			// No env vars set — fall back to config / platform defaults.
 #if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
 			string defaultCertPath = "/etc/fishmmo/certs/fullchain.pem";
-			string defaultKeyPath  = "/etc/fishmmo/certs/privkey.pem";
+			string defaultKeyPath = "/etc/fishmmo/certs/privkey.pem";
 #elif UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
 			string defaultCertPath = "C:\\ProgramData\\FishMMO\\certs\\fullchain.pem";
 			string defaultKeyPath  = "C:\\ProgramData\\FishMMO\\certs\\privkey.pem";
@@ -257,7 +259,7 @@ namespace FishMMO.Server.Implementation
 			string defaultKeyPath  = "certs/privkey.pem";
 #endif
 			certPath = config.GetString("CertificatePath", defaultCertPath);
-			keyPath  = config.GetString("PrivateKeyPath", defaultKeyPath);
+			keyPath = config.GetString("PrivateKeyPath", defaultKeyPath);
 
 			// Validate certificate files exist before passing paths to native.
 			if (!System.IO.File.Exists(certPath))

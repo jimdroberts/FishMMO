@@ -170,16 +170,13 @@ namespace FishMMO.Client
 			switch (ClientState)
 			{
 				case LocalConnectionState.Stopped:
+					CurrentConnectionType = ServerConnectionType.None;
 					if (!forceDisconnect && CanReconnect)
 					{
 						nextReconnect = ComputeReconnectDelay(ReconnectsAttempted);
 						// OnReconnectAttempt is intentionally NOT fired here — it fires
 						// once in TryReconnect() when the actual reconnect begins, so
 						// consumers don't receive duplicate events per cycle.
-					}
-					else
-					{
-						CurrentConnectionType = ServerConnectionType.None;
 					}
 					break;
 				case LocalConnectionState.Started:

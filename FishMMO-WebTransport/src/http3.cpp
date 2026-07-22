@@ -95,120 +95,191 @@ static uint8_t varint_encode(uint64_t val, uint8_t* out)
 }
 
 /* ═══════════════════════════════════════════════════════════════
+ * QPACK Variable-Length Integer (RFC 9204 §4.1.1)
+ * ═══════════════════════════════════════════════════════════════
+ * QPACK uses a configurable-prefix varint format (not the QUIC
+ * 2-bit-prefix varint from RFC 9000).  The prefix width is given
+ * by prefix_bits (typically 3, 6, or 7 bits).  When the value
+ * fits in the prefix, it is stored directly.  Otherwise, the
+ * prefix is set to all-1s and the remainder (value - prefix_max)
+ * is encoded in 7-bit chunks with a continuation bit (bit 7).
+ */
+
+static int qpack_varint_decode(const uint8_t* buf, size_t buf_len,
+                                uint64_t* out_val, uint8_t* out_bytes,
+                                uint8_t prefix_bits)
+{
+    if (buf_len < 1) return -1;
+    uint8_t prefix_max = (uint8_t)((1u << prefix_bits) - 1);
+    uint64_t val = buf[0] & prefix_max;
+
+    if (val < (uint64_t)prefix_max) {
+        *out_val = val;
+        *out_bytes = 1;
+        return 0;
+    }
+
+    /* Multi-byte: read 7-bit continuation chunks LSB first */
+    uint8_t pos = 1;
+    uint64_t shift = 0;
+    while (pos < (uint8_t)buf_len) {
+        uint8_t byte = buf[pos];
+        val += (uint64_t)(byte & 0x7F) << shift;
+        shift += 7;
+        pos++;
+        if (!(byte & 0x80)) {
+            *out_val = val;
+            *out_bytes = pos;
+            return 0;
+        }
+    }
+    return -1;  /* truncated */
+}
+
+static uint8_t qpack_varint_encode(uint64_t val, uint8_t* out,
+                                    uint8_t prefix_bits)
+{
+    uint8_t prefix_max = (uint8_t)((1u << prefix_bits) - 1);
+
+    if (val < (uint64_t)prefix_max) {
+        out[0] = (uint8_t)val;
+        return 1;
+    }
+
+    out[0] = prefix_max;
+    val -= prefix_max;
+
+    /* Encode remaining as 7-bit chunks LSB first */
+    uint8_t pos = 1;
+    while (val >= 128) {
+        out[pos++] = (uint8_t)((val & 0x7F) | 0x80);
+        val >>= 7;
+    }
+    out[pos++] = (uint8_t)(val & 0x7F);
+    return pos;
+}
+
+/* ═══════════════════════════════════════════════════════════════
  * QPACK Static Table (RFC 9204 Appendix A — all 99 entries)
  * ═══════════════════════════════════════════════════════════════
  * Complete table required for correct decoding of any QPACK-encoded
- * header field that references a static table index. Browsers may
- * use indexed field line encoding (0x00 prefix) for headers like
- * content-type (index 29), accept-encoding (index 28), etc.
+ * header field that references a static table index. Each entry
+ * stores both a field name and its known value.  Indexed field
+ * line (0x00 prefix) copies both name and value from the entry.
  */
 
 typedef struct {
     const char* name;
     uint8_t     name_len;
+    const char* value;
+    uint8_t     value_len;
 } qpack_entry_t;
 
+#define QE(N, V) { N, sizeof(N) - 1, V, sizeof(V) - 1 }
+
 static const qpack_entry_t kQpackStatic[] = {
-    { ":authority",                  10 },  /*  0 */
-    { ":path",                        5 },  /*  1 */
-    { "age",                          3 },  /*  2 */
-    { "content-disposition",         19 },  /*  3 */
-    { "content-length",              14 },  /*  4 */
-    { "cookie",                       6 },  /*  5 */
-    { "date",                         4 },  /*  6 */
-    { "etag",                         4 },  /*  7 */
-    { "if-modified-since",           17 },  /*  8 */
-    { "if-none-match",               13 },  /*  9 */
-    { "last-modified",               13 },  /* 10 */
-    { "link",                         4 },  /* 11 */
-    { "location",                     8 },  /* 12 */
-    { "referer",                      7 },  /* 13 */
-    { "set-cookie",                  10 },  /* 14 */
-    { ":method",                      7 },  /* 15 — CONNECT */
-    { ":method",                      7 },  /* 16 — GET */
-    { ":method",                      7 },  /* 17 — POST */
-    { ":path",                        5 },  /* 18 — / */
-    { ":path",                        5 },  /* 19 — /index.html */
-    { ":scheme",                      7 },  /* 20 — http */
-    { ":scheme",                      7 },  /* 21 — https */
-    { ":status",                      7 },  /* 22 — 103 */
-    { ":status",                      7 },  /* 23 — 200 */
-    { ":status",                      7 },  /* 24 — 304 */
-    { ":status",                      7 },  /* 25 — 404 */
-    { ":status",                      7 },  /* 26 — 503 */
-    { "accept",                       6 },  /* 27 */
-    { "accept-encoding",             15 },  /* 28 */
-    { "accept-ranges",               13 },  /* 29 */
-    { "access-control-allow-headers", 28 }, /* 30 */
-    { "access-control-allow-origin",  27 }, /* 31 */
-    { "cache-control",               13 },  /* 32 */
-    { "content-encoding",            16 },  /* 33 */
-    { "content-type",                12 },  /* 34 */
-    { "range",                        5 },  /* 35 */
-    { "strict-transport-security",   25 },  /* 36 */
-    { "vary",                         4 },  /* 37 */
-    { "x-content-type-options",      22 },  /* 38 */
-    { "x-xss-protection",            16 },  /* 39 */
-    { "accept-language",             15 },  /* 40 */
-    { "access-control-allow-credentials", 32 }, /* 41 */
-    { "access-control-allow-methods", 27 },    /* 42 */
-    { "access-control-expose-headers", 28 },   /* 43 */
-    { "alt-svc",                      7 },  /* 44 */
-    { "authorization",               13 },  /* 45 */
-    { "content-security-policy",     23 },  /* 46 */
-    { "early-data",                  10 },  /* 47 */
-    { "expect-ct",                    9 },  /* 48 */
-    { "forwarded",                    9 },  /* 49 */
-    { "if-range",                     8 },  /* 50 */
-    { "origin",                       6 },  /* 51 */
-    { "purpose",                      7 },  /* 52 */
-    { "server",                       6 },  /* 53 */
-    { "timing-allow-origin",         20 },  /* 54 */
-    { "upgrade-insecure-requests",   25 },  /* 55 */
-    { "user-agent",                  10 },  /* 56 */
-    { "x-forwarded-for",             15 },  /* 57 */
-    { "x-frame-options",             14 },  /* 58 */
-    { "x-forwarded-proto",           17 },  /* 59 */
-    { ":status",                      7 },  /* 60 — 100 */
-    { ":status",                      7 },  /* 61 — 204 */
-    { ":status",                      7 },  /* 62 — 206 */
-    { ":status",                      7 },  /* 63 — 302 */
-    { ":status",                      7 },  /* 64 — 400 */
-    { ":status",                      7 },  /* 65 — 401 */
-    { ":status",                      7 },  /* 66 — 403 */
-    { ":status",                      7 },  /* 67 — 421 */
-    { ":status",                      7 },  /* 68 — 425 */
-    { ":status",                      7 },  /* 69 — 500 */
-    { "accept-charset",              14 },  /* 70 */
-    { "accept-encoding",             15 },  /* 71 — "gzip, deflate, br" */
-    { "accept-language",             15 },  /* 72 */
-    { "accept-ranges",               13 },  /* 73 */
-    { "access-control-allow-headers", 28 }, /* 74 */
-    { "access-control-allow-methods", 27 },  /* 75 */
-    { "access-control-allow-origin",  27 },  /* 76 */
-    { "access-control-expose-headers", 28 }, /* 77 */
-    { "access-control-max-age",      23 },  /* 78 */
-    { "access-control-request-headers", 30 },/* 79 */
-    { "access-control-request-method", 29 }, /* 80 */
-    { "age",                          3 },  /* 81 */
-    { "authorization",               13 },  /* 82 */
-    { "content-security-policy",     23 },  /* 83 — "script-src 'none'..." */
-    { "content-type",                12 },  /* 84 — "application/dns-message" */
-    { "cookie",                       6 },  /* 85 */
-    { "date",                         4 },  /* 86 */
-    { "date",                         4 },  /* 87 */
-    { "early-data",                  10 },  /* 88 */
-    { "etag",                         4 },  /* 89 */
-    { "if-modified-since",           17 },  /* 90 */
-    { "if-none-match",               13 },  /* 91 */
-    { "last-modified",               13 },  /* 92 */
-    { "link",                         4 },  /* 93 */
-    { "location",                     8 },  /* 94 */
-    { "referer",                      7 },  /* 95 */
-    { "set-cookie",                  10 },  /* 96 */
-    { ":method",                      7 },  /* 97 — CONNECT */
-    { ":method",                      7 },  /* 98 — CONNECT */
+    QE(":authority",                    ""),                                  /*  0 */
+    QE(":path",                         "/"),                                 /*  1 */
+    QE("age",                           "0"),                                 /*  2 */
+    QE("content-disposition",           ""),                                  /*  3 */
+    QE("content-length",                "0"),                                 /*  4 */
+    QE("cookie",                        ""),                                  /*  5 */
+    QE("date",                          ""),                                  /*  6 */
+    QE("etag",                          ""),                                  /*  7 */
+    QE("if-modified-since",             ""),                                  /*  8 */
+    QE("if-none-match",                 ""),                                  /*  9 */
+    QE("last-modified",                 ""),                                  /* 10 */
+    QE("link",                          ""),                                  /* 11 */
+    QE("location",                      ""),                                  /* 12 */
+    QE("referer",                       ""),                                  /* 13 */
+    QE("set-cookie",                    ""),                                  /* 14 */
+    QE(":method",                       "CONNECT"),                           /* 15 */
+    QE(":method",                       "DELETE"),                            /* 16 */
+    QE(":method",                       "GET"),                               /* 17 */
+    QE(":method",                       "HEAD"),                              /* 18 */
+    QE(":method",                       "OPTIONS"),                           /* 19 */
+    QE(":method",                       "POST"),                              /* 20 */
+    QE(":method",                       "PUT"),                               /* 21 */
+    QE(":scheme",                       "http"),                              /* 22 */
+    QE(":scheme",                       "https"),                             /* 23 */
+    QE(":status",                       "103"),                               /* 24 */
+    QE(":status",                       "200"),                               /* 25 */
+    QE(":status",                       "304"),                               /* 26 */
+    QE(":status",                       "404"),                               /* 27 */
+    QE(":status",                       "503"),                               /* 28 */
+    QE("accept",                        "*/*"),                               /* 29 */
+    QE("accept",                        "application/dns-message"),           /* 30 */
+    QE("accept-encoding",               "gzip, deflate, br"),                 /* 31 */
+    QE("accept-ranges",                 "bytes"),                             /* 32 */
+    QE("access-control-allow-headers",  "cache-control"),                     /* 33 */
+    QE("access-control-allow-headers",  "content-type"),                      /* 34 */
+    QE("access-control-allow-origin",   "*"),                                 /* 35 */
+    QE("cache-control",                 "max-age=0"),                         /* 36 */
+    QE("cache-control",                 "max-age=2592000"),                   /* 37 */
+    QE("cache-control",                 "max-age=604800"),                    /* 38 */
+    QE("cache-control",                 "no-cache"),                          /* 39 */
+    QE("cache-control",                 "no-store"),                          /* 40 */
+    QE("cache-control",                 "public, max-age=31536000"),          /* 41 */
+    QE("content-encoding",              "br"),                                /* 42 */
+    QE("content-encoding",              "gzip"),                              /* 43 */
+    QE("content-type",                  "application/dns-message"),           /* 44 */
+    QE("content-type",                  "application/javascript"),            /* 45 */
+    QE("content-type",                  "application/json"),                  /* 46 */
+    QE("content-type",                  "application/x-www-form-urlencoded"), /* 47 */
+    QE("content-type",                  "image/gif"),                         /* 48 */
+    QE("content-type",                  "image/jpeg"),                        /* 49 */
+    QE("content-type",                  "image/png"),                         /* 50 */
+    QE("content-type",                  "text/css"),                          /* 51 */
+    QE("content-type",                  "text/html; charset=utf-8"),          /* 52 */
+    QE("content-type",                  "text/plain"),                        /* 53 */
+    QE("content-type",                  "text/plain;charset=utf-8"),          /* 54 */
+    QE("range",                         "bytes=0-"),                          /* 55 */
+    QE("strict-transport-security",     "max-age=31536000"),                  /* 56 */
+    QE("strict-transport-security",     "max-age=31536000; includesubdomains"), /* 57 */
+    QE("strict-transport-security",     "max-age=31536000; includesubdomains; preload"), /* 58 */
+    QE("vary",                          "accept-encoding"),                   /* 59 */
+    QE("vary",                          "origin"),                            /* 60 */
+    QE("x-content-type-options",        "nosniff"),                           /* 61 */
+    QE("x-xss-protection",              "1; mode=block"),                     /* 62 */
+    QE(":status",                       "100"),                               /* 63 */
+    QE(":status",                       "204"),                               /* 64 */
+    QE(":status",                       "206"),                               /* 65 */
+    QE(":status",                       "302"),                               /* 66 */
+    QE(":status",                       "400"),                               /* 67 */
+    QE(":status",                       "403"),                               /* 68 */
+    QE(":status",                       "421"),                               /* 69 */
+    QE(":status",                       "425"),                               /* 70 */
+    QE(":status",                       "500"),                               /* 71 */
+    QE("accept-language",               ""),                                  /* 72 */
+    QE("access-control-allow-credentials", "FALSE"),                          /* 73 */
+    QE("access-control-allow-credentials", "TRUE"),                           /* 74 */
+    QE("access-control-allow-headers",  "*"),                                 /* 75 */
+    QE("access-control-allow-methods",  "get"),                               /* 76 */
+    QE("access-control-allow-methods",  "get, post, options"),                /* 77 */
+    QE("access-control-allow-methods",  "options"),                           /* 78 */
+    QE("access-control-expose-headers", "content-length"),                    /* 79 */
+    QE("access-control-request-headers", "content-type"),                     /* 80 */
+    QE("access-control-request-method", "get"),                               /* 81 */
+    QE("access-control-request-method", "post"),                              /* 82 */
+    QE("alt-svc",                       "clear"),                             /* 83 */
+    QE("authorization",                 ""),                                  /* 84 */
+    QE("content-security-policy",       "script-src 'none'; object-src 'none'; base-uri 'none'"), /* 85 */
+    QE("early-data",                    "1"),                                 /* 86 */
+    QE("expect-ct",                     ""),                                  /* 87 */
+    QE("forwarded",                     ""),                                  /* 88 */
+    QE("if-range",                      ""),                                  /* 89 */
+    QE("origin",                        ""),                                  /* 90 */
+    QE("purpose",                       "prefetch"),                          /* 91 */
+    QE("server",                        ""),                                  /* 92 */
+    QE("timing-allow-origin",           "*"),                                 /* 93 */
+    QE("upgrade-insecure-requests",     "1"),                                 /* 94 */
+    QE("user-agent",                    ""),                                  /* 95 */
+    QE("x-forwarded-for",               ""),                                  /* 96 */
+    QE("x-frame-options",               "deny"),                              /* 97 */
+    QE("x-frame-options",               "sameorigin"),                        /* 98 */
 };
+
+#undef QE
 
 #define QPACK_STATIC_SIZE (sizeof(kQpackStatic) / sizeof(kQpackStatic[0]))
 
@@ -333,6 +404,8 @@ static const uint32_t kHuffCode[256] = {
 static int huffman_decode(const uint8_t* input, size_t input_len,
                           uint8_t* output, size_t output_capacity)
 {
+    if (input_len > 2048) return -1;  /* Cap to prevent DoS via large Huffman input */
+
     uint64_t buf = 0;       /* bit accumulator (MSB-aligned) */
     int bits = 0;            /* number of valid bits in buf */
     size_t out_pos = 0;
@@ -424,21 +497,29 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
          * the entire field (name AND value) comes from the static
          * table.  Only the varint-encoded index is on the wire —
          * there is NO value following the index.  Return immediately
-         * to prevent the value reader (line 496) from consuming
-         * subsequent bytes as a non-existent wire value. */
+         * to prevent the value reader from consuming subsequent
+         * bytes as a non-existent wire value.
+         *
+         * Use qpack_varint_decode with prefix_bits=6 (00xxxxxx). */
         uint8_t nbytes;
         uint64_t idx;
-        if (varint_decode(buf, buf_len, &idx, &nbytes) < 0) return -1;
+        if (qpack_varint_decode(buf, buf_len, &idx, &nbytes, 6) < 0) return -1;
         if (idx >= QPACK_STATIC_SIZE) return -1;
-        out->name_len = kQpackStatic[idx].name_len;
-        memcpy(out->name, kQpackStatic[idx].name, out->name_len);
+        const qpack_entry_t* entry = &kQpackStatic[idx];
+        out->name_len = entry->name_len;
+        memcpy(out->name, entry->name, out->name_len);
+        out->value_len = entry->value_len;
+        if (entry->value_len > 0) {
+            memcpy(out->value, entry->value, entry->value_len);
+        }
         return (int)nbytes;
     }
     else if ((first & 0xC0) == 0x40) {
-        /* Literal with name reference (static table: 01 prefix) */
+        /* Literal with name reference (static table: 01 prefix).
+         * Use qpack_varint_decode with prefix_bits=6 (01xxxxxx). */
         uint8_t nbytes;
         uint64_t idx;
-        if (varint_decode(buf, buf_len, &idx, &nbytes) < 0) return -1;
+        if (qpack_varint_decode(buf, buf_len, &idx, &nbytes, 6) < 0) return -1;
         consumed = nbytes;
         const char* sname = qpack_static_name(idx, &out->name_len);
         if (!sname) return -1;
@@ -447,34 +528,16 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
     }
     else if ((first & 0xE0) == 0x20) {
         /* Literal without name reference (001 prefix).
-         * The name is encoded inline. Format:
-         *   001NNNNN [name length varint] [name bytes] [value length varint] [value bytes] */
-        uint8_t nbytes;
+         * The name is encoded inline.  Format:
+         *   001 N H LLL+ [name string] [H value_len+] [value string]
+         * N=never-indexed, H=Huffman flag, LLL=3-bit name length prefix.
+         * Use qpack_varint_decode with prefix_bits=3 for the name length. */
         uint64_t name_len_val;
-        /* The varint after the prefix byte encodes the name length.
-         * First byte already consumed the 3-bit prefix;
-         * re-read the full varint from the start.
-         *
-         * Per RFC 9204 Section 4.1.1.3, the first byte format is:
-         *   001 N H LLL
-         * where N (bit 4) is the never-indexed flag, H (bit 3) is the
-         * Huffman flag for the name, and LLL (bits 2-0) are the first
-         * 3 bits of the name length.  Previously we masked with 0x1F
-         * (5 bits), incorrectly including N and H as part of the length. */
-        uint8_t raw_first = first & 0x07; /* mask off 001 prefix + N/H flags */
-        if (raw_first < 7) {
-            /* Single-byte varint for name length */
-            out->name_len = raw_first;
-            consumed = 1;
-        } else {
-            /* Multi-byte varint; re-encode for varint_decode */
-            uint8_t tmp[8];
-            tmp[0] = first;
-            uint64_t nv;
-            if (varint_decode(tmp, buf_len, &nv, &nbytes) < 0) return -1;
-            out->name_len = (uint8_t)nv;
-            consumed = nbytes;
-        }
+        uint8_t nbytes;
+        if (qpack_varint_decode(buf, buf_len, &name_len_val, &nbytes, 3) < 0)
+            return -1;
+        out->name_len = (uint8_t)name_len_val;
+        consumed = nbytes;
         if (consumed + out->name_len > buf_len) return -1;
         if (out->name_len >= sizeof(out->name)) return -1;
         memcpy(out->name, buf + consumed, out->name_len);
@@ -490,27 +553,19 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
         return -1;
     }
 
-    /* Read value: Huffman bit + length + data */
+    /* Read value: Huffman bit + length + data.
+     * Use qpack_varint_decode with prefix_bits=7.  Bit 7 (MSB) of
+     * the first byte is the Huffman flag, and bits 6-0 are the
+     * 7-bit length prefix.  Since qpack_varint_decode masks only
+     * the lower prefix_bits, the H flag in bit 7 is automatically
+     * excluded and read separately. */
     if (consumed >= buf_len) return -1;
-    uint8_t vbytes;
-    uint64_t vlen;
-    if (varint_decode(buf + consumed, buf_len - consumed, &vlen, &vbytes) < 0)
-        return -1;
-
     bool huffman = (buf[consumed] & 0x80) != 0;
-    /* Mask off Huffman bit from the length varint */
-    if (vbytes > 0 && huffman) {
-        /* Re-decode length without the Huffman bit.
-         * The varint encoded the literal length with bit 7 set.
-         * We need the actual length, which is the varint value
-         * minus the prefix bit's contribution. */
-        uint8_t raw[8];
-        memcpy(raw, buf + consumed, vbytes);
-        raw[0] &= 0x7F;  /* clear Huffman bit */
-        uint8_t tmp_bytes;
-        if (varint_decode(raw, vbytes, &vlen, &tmp_bytes) < 0)
-            return -1;
-    }
+    uint64_t vlen;
+    uint8_t vbytes;
+    if (qpack_varint_decode(buf + consumed, buf_len - consumed,
+                             &vlen, &vbytes, 7) < 0)
+        return -1;
 
     consumed += vbytes;
     if (consumed + vlen > buf_len) return -1;
@@ -626,50 +681,60 @@ static int h3_write_headers(uint8_t* out, size_t out_cap,
         if (sc >= 10 || slen > 0) { s[slen++] = '0' + (sc / 10); sc %= 10; }
         s[slen++] = '0' + sc;
 
-        /* Use static table idx=22 (:status) with literal value.
-         * 0101xxxx prefix + varint(22) */
-        *fp++ = 0x40 | 22;  /* literal + static name ref idx=22 (:status) */
+        /* Use static table idx=24 (:status 103) with literal value.
+         * 0101xxxx prefix + qpack_varint(24, 6).  Index 24 is the first
+         * :status entry in the QPACK static table (value "103" is
+         * ignored — we encode the actual status inline). */
+        *fp++ = 0x40 | 24;  /* literal + static name ref idx=24 (:status) */
         uint8_t vb[8];
-        uint8_t vn = varint_encode((uint64_t)slen, vb);
+        uint8_t vn = qpack_varint_encode((uint64_t)slen, vb, 7);
         memcpy(fp, vb, vn); fp += vn;
         memcpy(fp, s, (size_t)slen); fp += slen;
     }
     else {
         /* :method: CONNECT — literal + static name ref idx=15 (:method CONNECT)
-         * 0101xxxx prefix + varint(15) */
+         * 0101xxxx prefix + qpack_varint(15, 6).
+         * Value length uses qpack_varint_encode with 7-bit prefix. */
         *fp++ = 0x40 | 15;
         uint8_t vb[8]; uint8_t vn;
         size_t mlen = strlen(method);
-        vn = varint_encode(mlen, vb);
+        vn = qpack_varint_encode(mlen, vb, 7);
         memcpy(fp, vb, vn); fp += vn;
         memcpy(fp, method, mlen); fp += mlen;
 
-        /* :protocol: webtransport — literal without name ref (never-indexed)
-         * 001 prefix + name length + ":protocol" + value length + "webtransport" */
+        /* :protocol: webtransport — literal without name ref (never-indexed).
+         * Format: 001 prefix with 3-bit name-length qpack varint.
+         * Name ":protocol" = 10 bytes, encoded as:
+         *   byte 0: 001 N H LLL  = 001 1 0 111 = 0x37
+         *   byte 1: continuation: 10 - 7 = 3 = 0x03
+         * Value length uses qpack_varint_encode with 7-bit prefix. */
         const char* proto = "webtransport";
         size_t plen = strlen(proto);
-        *fp++ = 0x20; /* literal without name ref, never-indexed */
-        uint8_t nb = 10; /* ":protocol" length */
-        *fp++ = nb;
-        memcpy(fp, ":protocol", nb); fp += nb;
-        vn = varint_encode(plen, vb);
+        uint8_t nb[8];
+        uint8_t nb_n = qpack_varint_encode(10, nb, 3);  /* ":protocol" = 10 bytes */
+        nb[0] |= 0x20 | 0x10;  /* set bits 7-5 = 001, bit 4 = N (never-indexed) */
+        memcpy(fp, nb, nb_n); fp += nb_n;
+        memcpy(fp, ":protocol", 10); fp += 10;
+        vn = qpack_varint_encode(plen, vb, 7);
         memcpy(fp, vb, vn); fp += vn;
         memcpy(fp, proto, plen); fp += plen;
 
-        /* :path: <path> — literal + static name ref idx=1 (:path) */
+        /* :path: <path> — literal + static name ref idx=1 (:path /).
+         * Value length uses qpack_varint_encode with 7-bit prefix. */
         if (path && path[0]) {
             *fp++ = 0x40 | 1;
             size_t pathlen = strlen(path);
-            vn = varint_encode(pathlen, vb);
+            vn = qpack_varint_encode(pathlen, vb, 7);
             memcpy(fp, vb, vn); fp += vn;
             memcpy(fp, path, pathlen); fp += pathlen;
         }
 
-        /* :authority: <authority> — literal + static name ref idx=0 (:authority) */
+        /* :authority: <authority> — literal + static name ref idx=0 (:authority).
+         * Value length uses qpack_varint_encode with 7-bit prefix. */
         if (authority && authority[0]) {
             *fp++ = 0x40 | 0;
             size_t authlen = strlen(authority);
-            vn = varint_encode(authlen, vb);
+            vn = qpack_varint_encode(authlen, vb, 7);
             memcpy(fp, vb, vn); fp += vn;
             memcpy(fp, authority, authlen); fp += authlen;
         }
@@ -816,7 +881,11 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * synchronously, h3_server_process_data calls h3->on_ready
          * which creates the wt_session. */
         if (sctx->h3) {
-            h3_server_process_data(sctx->h3, sctx);
+            int hr = h3_server_process_data(sctx->h3, sctx);
+            if (hr < 0) {
+                MsQuic->StreamShutdown(stream,
+                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+            }
         }
         return QUIC_STATUS_SUCCESS;
     }
@@ -831,7 +900,11 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * causing the handshake to hang indefinitely. */
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
             if (sctx->h3) {
-                h3_server_process_data(sctx->h3, sctx);
+                int hr = h3_server_process_data(sctx->h3, sctx);
+                if (hr < 0) {
+                    MsQuic->StreamShutdown(stream,
+                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                }
             }
         }
         return QUIC_STATUS_SUCCESS;
@@ -1071,13 +1144,7 @@ static bool h3_parse_headers(const uint8_t* data, uint64_t data_len,
         int consumed = qpack_parse_field(data + parsed,
                                          (size_t)(data_len - parsed), &hdr);
         if (consumed < 0) {
-            /* Unsupported encoding — advance past this byte and retry.
-             * This handles fields with encodings we don't support
-             * (e.g. Huffman-coded values, dynamic table refs).
-             * The handshake still succeeds if the required pseudo-headers
-             * use supported encodings (which all major browsers do). */
-            parsed++;
-            continue;
+            return false;  /* Fail the entire header parse on any decode error */
         }
         parsed += (uint64_t)consumed;
 
@@ -1616,10 +1683,16 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                         QUIC_BUFFER buf;
                                                         buf.Buffer = rej_copy;
                                                         buf.Length = (uint32_t)rej_len;
-                                                        MsQuic->StreamSend(sctx->quic_stream, &buf, 1,
-                                                            QUIC_SEND_FLAG_NONE, rej_copy);  /* Do NOT FIN */
+                                                        QUIC_STATUS qst = MsQuic->StreamSend(
+                                                            sctx->quic_stream, &buf, 1,
+                                                            QUIC_SEND_FLAG_NONE, rej_copy);
+                                                        if (QUIC_FAILED(qst)) {
+                                                            free(rej_copy);
+                                                        }
                                                     }
                                                 }
+                                                MsQuic->StreamShutdown(sctx->quic_stream,
+                                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
                                                 return -1;  /* origin rejected */
                                             }
                                         }
