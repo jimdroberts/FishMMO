@@ -71,11 +71,11 @@ namespace FishMMO.Server.Implementation
 		{
 			base.InitializeOnce(networkManager);
 			networkManager.ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
-				this.clientHandshakeHandler = (conn, msg, channel) =>
-				{
-					_ = OnServerClientHandshakeReceivedAsync(conn, msg, channel);
-				};
-				networkManager.ServerManager.RegisterBroadcast<ClientHandshake>(this.clientHandshakeHandler, false);;
+			this.clientHandshakeHandler = (conn, msg, channel) =>
+			{
+				_ = OnServerClientHandshakeReceivedAsync(conn, msg, channel);
+			};
+			networkManager.ServerManager.RegisterBroadcast<ClientHandshake>(this.clientHandshakeHandler, false);
 			RegisterProtocolHandlers(networkManager);
 		}
 
