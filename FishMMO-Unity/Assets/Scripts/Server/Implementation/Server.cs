@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEngine;
-using System.Net;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif

@@ -361,8 +361,8 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (value < 1 || value > 100000)
 			{
 				transport.NetworkManager?.LogWarning(
-					$"[WebTransport Server] SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {System.Math.Clamp(value, 1, 100000)}.");
-				value = System.Math.Clamp(value, 1, 100000);
+					$"[WebTransport Server] SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {Mathf.Clamp(value, 1, 100000)}.");
+				value = Mathf.Clamp(value, 1, 100000);
 			}
 			this.maximumClients = value;
 		}

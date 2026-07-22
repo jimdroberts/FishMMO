@@ -1,4 +1,5 @@
 using FishNet.Transporting;
+using FishMMO.Logging;
 using FishMMO.Shared;
 using FishMMO.Server.Core;
 using System;
@@ -101,7 +102,7 @@ namespace FishMMO.Server.Implementation
 				if (addressOverride.Length > 253 ||
 					ContainsControlCharacter(addressOverride))
 				{
-					_ = FishMMO.Logging.Log.Warning("ServerAddressProvider",
+					Log.Warning("ServerAddressProvider",
 						$"Invalid address override '{addressOverride}' (length={addressOverride.Length}); falling through to transport address.");
 				}
 				else

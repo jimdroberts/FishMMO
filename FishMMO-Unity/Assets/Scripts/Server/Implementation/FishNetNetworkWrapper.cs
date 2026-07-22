@@ -20,7 +20,6 @@ namespace FishMMO.Server.Implementation
 		private readonly IServerConfiguration config;
 		private readonly MonoBehaviour coroutineHost;
 		private Coroutine awaitingConnectionCoroutine;
-		private bool certificatesValid;
 
 		/// <summary>
 		/// Gets the network manager wrapper instance.
@@ -225,13 +224,11 @@ namespace FishMMO.Server.Implementation
 				if (!System.IO.File.Exists(certPath))
 				{
 					Log.Error("FishNetNetworkWrapper", $"Certificate file not found (from env): {certPath}");
-					certificatesValid = false;
 					return;
 				}
 				if (!System.IO.File.Exists(keyPath))
 				{
 					Log.Error("FishNetNetworkWrapper", $"Private key file not found (from env): {keyPath}");
-					certificatesValid = false;
 					return;
 				}
 
@@ -240,7 +237,6 @@ namespace FishMMO.Server.Implementation
 
 				Log.Debug("FishNetNetworkWrapper",
 					$"WebTransport configured: cert={certPath}, key={keyPath}");
-				certificatesValid = true;
 				return;
 			}
 
@@ -265,13 +261,11 @@ namespace FishMMO.Server.Implementation
 			if (!System.IO.File.Exists(certPath))
 			{
 				Log.Error("FishNetNetworkWrapper", $"Certificate file not found: {certPath}. WebTransport will be skipped.");
-				certificatesValid = false;
 				return;
 			}
 			if (!System.IO.File.Exists(keyPath))
 			{
 				Log.Error("FishNetNetworkWrapper", $"Private key file not found: {keyPath}. WebTransport will be skipped.");
-				certificatesValid = false;
 				return;
 			}
 
@@ -280,7 +274,6 @@ namespace FishMMO.Server.Implementation
 
 			Log.Debug("FishNetNetworkWrapper",
 				$"WebTransport configured: cert={certPath}, key={keyPath}");
-			certificatesValid = true;
 		}
 
 		/// <summary>

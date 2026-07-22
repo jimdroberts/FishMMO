@@ -251,8 +251,8 @@ namespace FishNet.Transporting.WebTransport
 			if (value < 1 || value > 100000)
 			{
 				base.NetworkManager.LogWarning(
-					$"SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {System.Math.Clamp(value, 1, 100000)}.");
-				value = System.Math.Clamp(value, 1, 100000);
+					$"SetMaximumClients({value}) is outside allowed range [1, 100000]. Clamping to {Mathf.Clamp(value, 1, 100000)}.");
+				value = Mathf.Clamp(value, 1, 100000);
 			}
 
 			if (this.serverSocket.GetConnectionState() != LocalConnectionState.Stopped)

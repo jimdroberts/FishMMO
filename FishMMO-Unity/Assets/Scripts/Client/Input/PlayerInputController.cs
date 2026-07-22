@@ -107,7 +107,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private bool jumpQueued = false;
 		/// <summary>
-		/// <summary>
 		/// Indicates if crouch input is currently active.
 		/// </summary>
 		private bool crouchInputActive = false;
@@ -176,7 +175,6 @@ namespace FishMMO.Client
 			UnsubscribeFromInputActions();
 		}
 
-		/// <summary>
 		/// <summary>
 		/// Subscribes to all relevant input actions from this character's
 		/// PlayerControls instance. Called once from Initialize().

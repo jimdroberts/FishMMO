@@ -221,7 +221,7 @@ namespace FishMMO.Client
 			{
 				forceDisconnect = false;
 				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-				yield return null;
+				yield break;
 			}
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
 			NetworkManager.ClientManager.StartConnection(address, port);

@@ -1,7 +1,7 @@
 using FishNet.Transporting;
 using FishNet.Broadcast;
 using FishNet.Managing;
-using FishNet.Managing.Transporting;
+
 using FishNet.Transporting.Multipass;
 using FishNet.Transporting.WebTransport;
 using FishNet.Managing.Scened;
@@ -346,7 +346,11 @@ namespace FishMMO.Client
 			var mp = tm.GetTransport<Multipass>();
 			if (mp == null) { Log.Error("Client", "Multipass not found."); return false; }
 			// WebTransport (QUIC/HTTP3) for all platforms.
-			mp.SetClientTransport<WebTransport>();
+			if (!mp.SetClientTransport<WebTransport>())
+			{
+				Log.Error("Client", "Failed to set WebTransport as client transport.");
+				return false;
+			}
 			return true;
 		}
 
@@ -471,7 +475,7 @@ namespace FishMMO.Client
 				double age = Math.Max(0.0, (DateTime.UtcNow - this.loginServerPortsFetchedAt).TotalSeconds);
 				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerPorts, this.cachedConnectionToken); yield break; }
 			}
-			var candidates = ApiHostResolver.GetCandidates();
+			var candidates = ApiHostResolver.GetCandidates() ?? new List<string>();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
 			float stagger = this.probeStaggerInterval;
 			var pending = new List<PendingProbe>(candidates.Count);

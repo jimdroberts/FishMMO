@@ -11,6 +11,7 @@ namespace FishMMO.Shared
 		/// <param name="routine">The coroutine to start.</param>
 		public static void Start(IEnumerator routine)
 		{
+			if (routine == null) return;
 			if (instance == null)
 			{
 				var go = new GameObject("CoroutineRunner") { hideFlags = HideFlags.HideAndDontSave };
