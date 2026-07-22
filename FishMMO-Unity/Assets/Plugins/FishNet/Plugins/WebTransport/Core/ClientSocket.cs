@@ -23,20 +23,31 @@ namespace FishNet.Transporting.WebTransport.Client
 
 		private SafeClientHandle clientHandle;
 #if UNITY_WEBGL && !UNITY_EDITOR
-        private int webglIndex = -1;
-        /// <summary>
-        /// Stored delegate instances for WebGL JS callbacks.
-        /// Must be stored as fields to prevent GC collection — the JavaScript
-        /// bridge holds references to these delegates and invokes them
-        /// asynchronously. If the GC collects them, the browser will crash
-        /// with an access violation on the next callback invocation.
-        /// </summary>
-        private Action<int> webglOnOpen;
-        private Action<int> webglOnClose;
-        private Action<int, IntPtr, int> webglOnStream;
-        private Action<int, IntPtr, int> webglOnDatagram;
-        private Action<int> webglOnError;
+		private int webglIndex = -1;
+
+		/// <summary>
+		/// Maps JS session index → managed socket. Looked up from static
+		/// [AOT.MonoPInvokeCallback] entry points because IL2CPP cannot
+		/// marshal instance methods or lambdas to native code.
+		/// </summary>
+		private static readonly Dictionary<int, ClientSocket> webglSockets =
+			new Dictionary<int, ClientSocket>();
+
+		/// <summary>
+		/// Socket currently calling <see cref="StartConnection"/>, used if a
+		/// JS callback races before the index is registered in <see cref="webglSockets"/>.
+		/// </summary>
+		private static ClientSocket webglPendingConnect;
+
+		// Static delegate instances pinned for the process lifetime so the
+		// GC does not collect them while the JS bridge holds references.
+		private static readonly WTIndexCallback webglStaticOnOpen     = WebGlOnOpen;
+		private static readonly WTIndexCallback webglStaticOnClose    = WebGlOnClose;
+		private static readonly WTDataCallback  webglStaticOnStream   = WebGlOnStream;
+		private static readonly WTDataCallback  webglStaticOnDatagram = WebGlOnDatagram;
+		private static readonly WTIndexCallback webglStaticOnError    = WebGlOnError;
 #endif
+
 		/// <summary>
 		/// Stored managed thread ID of the Unity main thread.
 		/// Set during first initialization and used for thread-affinity assertions.
@@ -69,8 +80,6 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// Initializes the client socket with the specified transport and MTU.
 		/// Must be called before <see cref="StartConnection"/>.
 		/// </summary>
-		/// <param name="t">The parent transport instance.</param>
-		/// <param name="mtu">The maximum transmission unit for datagrams.</param>
 		internal void Initialize(Transport t, int mtu)
 		{
 			base.transport = t;
@@ -87,22 +96,15 @@ namespace FishNet.Transporting.WebTransport.Client
 
 			base.SetConnectionState(LocalConnectionState.Starting, false);
 
-			/* Reset stop guard to allow StopConnection on this new session.
-             * Drain any stale incoming events from a previous session first,
-             * INVOKING each action so that unmanaged memory (Marshal.AllocHGlobal)
-             * held by native callbacks is properly freed via their finally blocks.
-             * Discarding without invoking would leak native heap memory. */
+			// Drain any stale incoming events from a previous session,
+			// INVOKING each action so that unmanaged memory held by native
+			// callbacks is properly freed via their finally blocks.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
 				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
 			}
-			/* stopGuard is reset on the main thread (StartConnection is always called
-			 * from the Unity main thread). The race window is acceptable because
-			 * handleNativeDisconnect callbacks are queued in incomingEvents and
-			 * processed on the main thread during IterateIncoming — they cannot
-			 * race with the stopGuard reset here.
-			 *
-			 * Assert we are on the Unity main thread. */
+
+			// Assert we are on the Unity main thread.
 			if (mainThreadId < 0)
 				mainThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
 			System.Diagnostics.Debug.Assert(
@@ -119,54 +121,48 @@ namespace FishNet.Transporting.WebTransport.Client
 			ResetQueues();
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-            // WebGL: use browser WebTransport API via JS bridge
-            int slashIdx = address.IndexOf('/');
-            string host = slashIdx >= 0 ? address.Substring(0, slashIdx) : address;
-            string path = slashIdx >= 0 ? address.Substring(slashIdx) : "";
-            string url = "https://" + host + ":" + port + path;
+			// WebGL: browser WebTransport API via JS bridge.
+			// IL2CPP forbids marshaling instance methods / lambdas to JS — only
+			// static [AOT.MonoPInvokeCallback] methods may be passed to WTConnect.
+			int slashIdx = address.IndexOf('/');
+			string host = slashIdx >= 0 ? address.Substring(0, slashIdx) : address;
+			string path = slashIdx >= 0 ? address.Substring(slashIdx) : "";
+			string url = "https://" + host + ":" + port + path;
 
-            /* Store delegates as instance fields — the JS bridge holds references
-             * to these and invokes them asynchronously. If they were inline lambdas
-             * the GC could collect them before the JS callbacks fire, causing an
-             * access-violation crash in the browser. */
-            webglOnOpen = (_) => { incomingEvents.Enqueue(() => SetConnectionState(LocalConnectionState.Started, false)); };
-            webglOnClose = (_) => { incomingEvents.Enqueue(() => { LogTransportWarning("[WebTransport Client] WebGL connection closed."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
-            webglOnStream = (_, dataPtr, length) => {
-                /* Security: reject invalid or oversized packets before allocating managed memory. */
-                if (length <= 0 || length > MaxPacketSize)
-                {
-                    LogTransportWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
-                    return;
-                }
-                byte[] buf = new byte[length];
-                System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
-                incomingEvents.Enqueue(() => transport.HandleClientReceivedDataArgs(
-                    new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Reliable, transport.Index)));
-            };
-            webglOnDatagram = (_, dataPtr, length) => {
-                /* Security: reject invalid or oversized datagrams. */
-                if (length <= 0 || length > mtu)
-                {
-                    LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
-                    return;
-                }
-                byte[] buf = new byte[length];
-                System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
-                incomingEvents.Enqueue(() => transport.HandleClientReceivedDataArgs(
-                    new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Unreliable, transport.Index)));
-            };
-            webglOnError = (_) => { incomingEvents.Enqueue(() => { LogTransportError("[WebTransport Client] WebGL connection error."); SetConnectionState(LocalConnectionState.Stopped, false); }); };
+			webglPendingConnect = this;
+			try
+			{
+				webglIndex = WebTransportJSLib.WTConnect(
+					url,
+					webglStaticOnOpen,
+					webglStaticOnClose,
+					webglStaticOnStream,
+					webglStaticOnDatagram,
+					webglStaticOnError);
 
-            webglIndex = WebTransportJSLib.WTConnect(url,
-                webglOnOpen, webglOnClose, webglOnStream, webglOnDatagram, webglOnError);
-            if (webglIndex < 0)
-            {
-                base.SetConnectionState(LocalConnectionState.Stopped, false);
-                return false;
-            }
-            return true;
+				if (webglIndex < 0)
+				{
+					webglPendingConnect = null;
+					base.SetConnectionState(LocalConnectionState.Stopped, false);
+					return false;
+				}
+
+				lock (webglSockets)
+					webglSockets[webglIndex] = this;
+				webglPendingConnect = null;
+				return true;
+			}
+			catch
+			{
+				webglPendingConnect = null;
+				throw;
+			}
 #else
-			WebTransportNative.EnsureInitialized();
+			if (!WebTransportNative.EnsureInitialized())
+			{
+				base.SetConnectionState(LocalConnectionState.Stopped, false);
+				return false;
+			}
 
 			pinnedCallbacks = new NativeCallbacks.ClientCallbacks
 			{
@@ -208,8 +204,7 @@ namespace FishNet.Transporting.WebTransport.Client
 
 		internal bool StopConnection()
 		{
-			/* Atomic guard — ensure StopConnection runs exactly once,
-             * even if called from both a native callback and user code. */
+			// Atomic guard — ensure StopConnection runs exactly once.
 			if (System.Threading.Interlocked.CompareExchange(ref stopGuard, 1, 0) != 0)
 				return false;
 
@@ -220,11 +215,8 @@ namespace FishNet.Transporting.WebTransport.Client
 				return false;
 			}
 
-			/* Drain stale incoming events before shutdown.
-             * Invoke (not discard) each action so that unmanaged memory
-             * allocated in native callbacks is freed. The actions check
-             * connection state before processing — they will skip
-             * Transport callbacks since state is about to be Stopping. */
+			// Drain stale incoming events before shutdown, invoking each so
+			// that unmanaged memory is freed.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
 				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
@@ -233,11 +225,15 @@ namespace FishNet.Transporting.WebTransport.Client
 			base.SetConnectionState(LocalConnectionState.Stopping, false);
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-            if (webglIndex >= 0)
-            {
-                WebTransportJSLib.WTDisconnect(webglIndex);
-                webglIndex = -1;
-            }
+			if (webglIndex >= 0)
+			{
+				lock (webglSockets)
+					webglSockets.Remove(webglIndex);
+				if (ReferenceEquals(webglPendingConnect, this))
+					webglPendingConnect = null;
+				WebTransportJSLib.WTDisconnect(webglIndex);
+				webglIndex = -1;
+			}
 #else
 			if (clientHandle != null && !clientHandle.IsInvalid)
 			{
@@ -258,9 +254,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal void IterateIncoming()
 		{
-#if UNITY_WEBGL && !UNITY_EDITOR
-            // WebGL: no poll needed, callbacks fire via JS
-#else
+#if !UNITY_WEBGL || UNITY_EDITOR
 			if (clientHandle == null || clientHandle.IsInvalid)
 				return;
 			WebTransportNative.wt_client_poll(clientHandle, 0);
@@ -284,7 +278,6 @@ namespace FishNet.Transporting.WebTransport.Client
 				return;
 			}
 #endif
-
 			DequeueOutgoing();
 		}
 
@@ -299,14 +292,14 @@ namespace FishNet.Transporting.WebTransport.Client
 				return;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-            if (webglIndex < 0) return;
+			if (webglIndex < 0) return;
 #endif
 
 			base.Send(outgoing, channelId, segment, -1);
 		}
 
 		/// <summary>
-		/// Dequeues outgoing packets and sends via the native library.
+		/// Dequeues outgoing packets and sends via the native library or JS bridge.
 		/// </summary>
 		private void DequeueOutgoing()
 		{
@@ -317,7 +310,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-            if (webglIndex < 0) return;
+			if (webglIndex < 0) return;
 #else
 			if (clientHandle == null || clientHandle.IsInvalid)
 				return;
@@ -329,13 +322,13 @@ namespace FishNet.Transporting.WebTransport.Client
 				Packet pkt = this.outgoing.Dequeue();
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-                bool ok;
-                if (pkt.Channel == 1)
-                    ok = WebTransportJSLib.WTSendDatagram(webglIndex, pkt.Data, pkt.Length);
-                else
-                    ok = WebTransportJSLib.WTSendStream(webglIndex, pkt.Data, pkt.Length);
-                if (!ok)
-                    LogTransportWarning("[WebTransport Client] Send failed (WebGL)");
+				bool ok;
+				if (pkt.Channel == 1)
+					ok = WebTransportJSLib.WTSendDatagram(webglIndex, pkt.Data, pkt.Length);
+				else
+					ok = WebTransportJSLib.WTSendStream(webglIndex, pkt.Data, pkt.Length);
+				if (!ok)
+					LogTransportWarning("[WebTransport Client] Send failed (WebGL)");
 #else
 				int result;
 				if (pkt.Channel == 1)
@@ -358,6 +351,108 @@ namespace FishNet.Transporting.WebTransport.Client
 			base.ClearPacketQueue(outgoing);
 		}
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+		#region WebGL static callbacks (IL2CPP / jslib)
+
+		/// <summary>
+		/// Resolves the socket for a given JS session index.
+		/// Handles the race where a callback fires before StartConnection
+		/// finishes registering the index in <see cref="webglSockets"/>.
+		/// </summary>
+		private static bool TryGetWebGlSocket(int index, out ClientSocket socket)
+		{
+			lock (webglSockets)
+			{
+				if (index >= 0 && webglSockets.TryGetValue(index, out socket))
+					return true;
+			}
+			// Race: callback fired before StartConnection registered the index.
+			socket = webglPendingConnect;
+			return socket != null;
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(WTIndexCallback))]
+		private static void WebGlOnOpen(int index)
+		{
+			if (!TryGetWebGlSocket(index, out ClientSocket socket))
+				return;
+			socket.incomingEvents.Enqueue(() =>
+				socket.SetConnectionState(LocalConnectionState.Started, false));
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(WTIndexCallback))]
+		private static void WebGlOnClose(int index)
+		{
+			if (!TryGetWebGlSocket(index, out ClientSocket socket))
+				return;
+			socket.incomingEvents.Enqueue(() =>
+			{
+				socket.LogTransportWarning("[WebTransport Client] WebGL connection closed.");
+				socket.SetConnectionState(LocalConnectionState.Stopped, false);
+			});
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(WTDataCallback))]
+		private static void WebGlOnStream(int index, IntPtr dataPtr, int length)
+		{
+			if (!TryGetWebGlSocket(index, out ClientSocket socket))
+				return;
+			// Security: reject invalid or oversized packets.
+			if (length <= 0 || length > MaxPacketSize)
+			{
+				socket.LogTransportWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
+				return;
+			}
+			// Backpressure: drop if event queue is saturated.
+			if (socket.incomingEvents.Count >= MaxIncomingEvents)
+			{
+				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping stream data.");
+				return;
+			}
+			byte[] buf = new byte[length];
+			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
+			socket.incomingEvents.Enqueue(() =>
+				socket.transport.HandleClientReceivedDataArgs(
+					new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Reliable, socket.transport.Index)));
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(WTDataCallback))]
+		private static void WebGlOnDatagram(int index, IntPtr dataPtr, int length)
+		{
+			if (!TryGetWebGlSocket(index, out ClientSocket socket))
+				return;
+			if (length <= 0 || length > socket.mtu)
+			{
+				socket.LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
+				return;
+			}
+			if (socket.incomingEvents.Count >= MaxIncomingEvents)
+			{
+				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping datagram.");
+				return;
+			}
+			byte[] buf = new byte[length];
+			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
+			socket.incomingEvents.Enqueue(() =>
+				socket.transport.HandleClientReceivedDataArgs(
+					new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Unreliable, socket.transport.Index)));
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(WTIndexCallback))]
+		private static void WebGlOnError(int index)
+		{
+			if (!TryGetWebGlSocket(index, out ClientSocket socket))
+				return;
+			socket.incomingEvents.Enqueue(() =>
+			{
+				socket.LogTransportError("[WebTransport Client] WebGL connection error.");
+				socket.SetConnectionState(LocalConnectionState.Stopped, false);
+			});
+		}
+
+		#endregion
+#endif
+
 		#region Native Callbacks (invoked from QUIC worker threads)
 
 		/// <summary>
@@ -365,7 +460,6 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// Invoked from a QUIC worker thread — not the Unity main thread.
 		/// Queues the connection-state transition for execution on the main thread.
 		/// </summary>
-		/// <param name="context">User-supplied context pointer.</param>
 		private void HandleNativeConnect(IntPtr context)
 		{
 			if (incomingEvents.Count >= MaxIncomingEvents)
@@ -384,8 +478,6 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// Invoked from a QUIC worker thread — not the Unity main thread.
 		/// Queues the disconnect cleanup for execution on the main thread.
 		/// </summary>
-		/// <param name="context">User-supplied context pointer.</param>
-		/// <param name="errorCode">Zero for clean disconnect; negative for error.</param>
 		private void HandleNativeDisconnect(IntPtr context, int errorCode)
 		{
 			if (incomingEvents.Count >= MaxIncomingEvents)
@@ -404,50 +496,41 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// <summary>
 		/// Called by the native library when reliable stream data arrives for the client.
 		/// Invoked from a QUIC worker thread — not the Unity main thread.
-		/// Validates length, copies data to unmanaged memory, then queues processing on the main thread.
+		/// Copies data to unmanaged memory to avoid managed allocations on the callback thread.
 		/// </summary>
-		/// <param name="context">User-supplied context pointer.</param>
-		/// <param name="streamId">The QUIC stream ID.</param>
-		/// <param name="dataPtr">Pointer to the received data buffer.</param>
-		/// <param name="length">Length of the received data in bytes.</param>
 		private void HandleNativeStreamData(IntPtr context, ulong streamId, IntPtr dataPtr, int length)
 		{
-			/* Security: reject invalid or oversized packets before allocating unmanaged memory. */
 			if (length <= 0 || length > MaxPacketSize)
 			{
 				LogTransportWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
 				return;
 			}
-			
-			/* Copy data to unmanaged memory on the native callback thread.
-             * Managed allocations (new byte[]) on non-Unity-main threads can
-             * cause GC corruption on some Unity scripting backends. Using
-             * Marshal.AllocHGlobal avoids all managed allocations here; the
-             * byte[] allocation + Marshal.Copy happens on the main thread
-             * inside the queued action. */
+
+			// Copy to unmanaged memory on the callback thread — managed
+			// allocations on QUIC threads can corrupt the IL2CPP GC.
 			IntPtr unmanagedCopy = System.Runtime.InteropServices.Marshal.AllocHGlobal(length);
 			unsafe
 			{
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
-			
+
 			if (incomingEvents.Count >= MaxIncomingEvents)
 			{
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping stream data.");
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
 				return;
 			}
-			
+
 			incomingEvents.Enqueue(() =>
 			{
 				try
 				{
 					if (base.GetConnectionState() != LocalConnectionState.Started)
 						return;
-				
+
 					byte[] buffer = new byte[length];
 					System.Runtime.InteropServices.Marshal.Copy(unmanagedCopy, buffer, 0, length);
-				
+
 					// Channel 0 = reliable (stream)
 					ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
 					transport.HandleClientReceivedDataArgs(
@@ -459,48 +542,42 @@ namespace FishNet.Transporting.WebTransport.Client
 				}
 			});
 		}
+
 		/// <summary>
 		/// Called by the native library when unreliable datagram data arrives for the client.
 		/// Invoked from a QUIC worker thread — not the Unity main thread.
-		/// Validates length, copies data to unmanaged memory, then queues processing on the main thread.
 		/// </summary>
-		/// <param name="context">User-supplied context pointer.</param>
-		/// <param name="dataPtr">Pointer to the received datagram buffer.</param>
-		/// <param name="length">Length of the received datagram in bytes.</param>
 		private void HandleNativeDatagram(IntPtr context, IntPtr dataPtr, int length)
 		{
-			/* Security: reject invalid or oversized datagrams. */
-			if (length <= 0 || length > mtu)
+			if (length <= 0 || length > this.mtu)
 			{
 				LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;
 			}
-			
-			/* Copy data to unmanaged memory on the native callback thread.
-             * See HandleNativeStreamData for rationale. */
+
 			IntPtr unmanagedCopy = System.Runtime.InteropServices.Marshal.AllocHGlobal(length);
 			unsafe
 			{
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
-			
+
 			if (incomingEvents.Count >= MaxIncomingEvents)
 			{
-				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping datagram data.");
+				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping datagram.");
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
 				return;
 			}
-			
+
 			incomingEvents.Enqueue(() =>
 			{
 				try
 				{
 					if (base.GetConnectionState() != LocalConnectionState.Started)
 						return;
-				
+
 					byte[] buffer = new byte[length];
 					System.Runtime.InteropServices.Marshal.Copy(unmanagedCopy, buffer, 0, length);
-				
+
 					// Channel 1 = unreliable (datagram)
 					ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
 					transport.HandleClientReceivedDataArgs(
