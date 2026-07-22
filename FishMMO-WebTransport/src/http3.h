@@ -60,7 +60,8 @@ extern "C" {
 
 /* ── HTTP/3 Settings Identifiers ─────────────────────────────── */
 
-#define H3_SETTINGS_DATAGRAM    0x33  /* RFC 9114 §7.2.4 — HTTP/3 DATAGRAM support */
+#define H3_SETTINGS_ENABLE_WEBTRANSPORT  0x2b603742  /* RFC 9220 §5 — WebTransport support */
+#define H3_SETTINGS_DATAGRAM             0x33        /* RFC 9297 §5.1 — HTTP/3 DATAGRAM support */
 
 /* ── QPACK encoding prefixes ─────────────────────────────────── */
 #define QPACK_INDEXED_STATIC    0xC0  /* 11xxxxxx — indexed static table entry */

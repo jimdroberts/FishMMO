@@ -546,27 +546,42 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
 static int h3_write_settings(uint8_t* out)
 {
     uint8_t* p = out;
-    /* SETTINGS frame: type=4, with SETTINGS_H3_DATAGRAM (0x33) = 1.
-     * RFC 9114 §7.2.4 requires this setting to be advertised for
-     * HTTP/3 datagram support (QUIC DATAGRAM extension). Without it,
-     * browser clients will not enable the unreliable channel. */
+    /* SETTINGS frame: type=4.
+     * Advertises both SETTINGS_ENABLE_WEBTRANSPORT (RFC 9220 §5) and
+     * SETTINGS_H3_DATAGRAM (RFC 9297 §5.1).  Chrome requires
+     * SETTINGS_ENABLE_WEBTRANSPORT to proceed with the WebTransport
+     * handshake; without it the browser treats this as a plain H3
+     * connection and never sends the CONNECT request. */
     uint8_t type_buf[8], len_buf[8];
     uint8_t type_n = varint_encode(H3_FRAME_SETTINGS, type_buf);
 
-    /* Encode SETTINGS_H3_DATAGRAM (0x33) = 1:
-     *   varint(0x33) = 0x33 (1 byte, < 64)
-     *   varint(1)    = 0x01 (1 byte)
-     *   Total setting: 2 bytes */
-    uint8_t setting_id_buf[8], setting_val_buf[8];
-    uint8_t sid_n = varint_encode(H3_SETTINGS_DATAGRAM, setting_id_buf);
-    uint8_t sval_n = varint_encode(1, setting_val_buf);
-    uint32_t settings_payload_len = sid_n + sval_n;
+    /* Encode two settings:
+     *   1. SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) = 1  → 5 bytes
+     *   2. SETTINGS_H3_DATAGRAM        (0x33)       = 1  → 2 bytes
+     *                                             total = 7 bytes */
+    uint8_t  settings_payload[16];
+    uint8_t* sp = settings_payload;
+
+    /* SETTINGS_ENABLE_WEBTRANSPORT = 1 (4-byte varint ID + 1-byte value) */
+    uint8_t wt_id_buf[8], wt_val_buf[8];
+    uint8_t wt_sid_n = varint_encode(H3_SETTINGS_ENABLE_WEBTRANSPORT, wt_id_buf);
+    uint8_t wt_sval_n = varint_encode(1, wt_val_buf);
+    memcpy(sp, wt_id_buf, wt_sid_n); sp += wt_sid_n;
+    memcpy(sp, wt_val_buf, wt_sval_n); sp += wt_sval_n;
+
+    /* SETTINGS_H3_DATAGRAM = 1 (1-byte varint ID + 1-byte value) */
+    uint8_t dg_id_buf[8], dg_val_buf[8];
+    uint8_t dg_sid_n = varint_encode(H3_SETTINGS_DATAGRAM, dg_id_buf);
+    uint8_t dg_sval_n = varint_encode(1, dg_val_buf);
+    memcpy(sp, dg_id_buf, dg_sid_n); sp += dg_sid_n;
+    memcpy(sp, dg_val_buf, dg_sval_n); sp += dg_sval_n;
+
+    uint32_t settings_payload_len = (uint32_t)(sp - settings_payload);
 
     uint8_t len_n  = varint_encode(settings_payload_len, len_buf);
     memcpy(p, type_buf, type_n); p += type_n;
     memcpy(p, len_buf, len_n);   p += len_n;
-    memcpy(p, setting_id_buf, sid_n); p += sid_n;
-    memcpy(p, setting_val_buf, sval_n); p += sval_n;
+    memcpy(p, settings_payload, settings_payload_len); p += settings_payload_len;
     return (int)(p - out);
 }
 
@@ -1602,7 +1617,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                         buf.Buffer = rej_copy;
                                                         buf.Length = (uint32_t)rej_len;
                                                         MsQuic->StreamSend(sctx->quic_stream, &buf, 1,
-                                                            QUIC_SEND_FLAG_FIN, rej_copy);
+                                                            QUIC_SEND_FLAG_NONE, rej_copy);  /* Do NOT FIN */
                                                     }
                                                 }
                                                 return -1;  /* origin rejected */
