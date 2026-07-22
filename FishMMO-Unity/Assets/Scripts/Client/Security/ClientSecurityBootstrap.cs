@@ -68,13 +68,13 @@ namespace FishMMO.Client.Security
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
 		private static void Initialize()
 		{
-#if UNITY_ANDROID && !UNITY_EDITOR
-			// On Android, streaming assets are inside the APK/AAB and must be loaded
-			// via UnityWebRequest, which requires main-thread yielding.  A blocking
-			// spin-wait here would cause an ANR (Android) or browser-fetch deadlock
-			// (WebGL).  We defer to a coroutine-driven non-blocking load instead, and
-			// fall through to compile-time defaults synchronously only if the coroutine
-			// helper is unavailable.
+#if !UNITY_EDITOR && (UNITY_ANDROID || UNITY_WEBGL)
+			// On Android and WebGL, streaming assets are inside the APK/AAB or
+			// served via HTTP and must be loaded via UnityWebRequest, which requires
+			// main-thread yielding.  A blocking spin-wait here would cause an ANR
+			// (Android) or browser-fetch deadlock (WebGL).  We defer to a coroutine-driven
+			// non-blocking load instead, and fall through to compile-time defaults
+			// synchronously only if the coroutine helper is unavailable.
 			if (true)
 			{
 				CoroutineRunner.Start(LoadFromStreamingAssetsCoroutine());
@@ -141,7 +141,7 @@ namespace FishMMO.Client.Security
 			}
 		}
 
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if !UNITY_EDITOR && (UNITY_ANDROID || UNITY_WEBGL)
 		/// <summary>
 		/// Non-blocking coroutine that loads client-security.json via UnityWebRequest
 		/// on platforms where streaming assets are not directly filesystem-accessible.
@@ -220,10 +220,9 @@ namespace FishMMO.Client.Security
 		}
 
 		/// <summary>
-		/// Minimal MonoBehaviour for running coroutines from a static context.
-		/// Used on platforms where <see cref="Application.streamingAssetsPath"/> is
-		/// not directly filesystem-accessible (Android, WebGL) to load pin config
-		/// asynchronously via UnityWebRequest without blocking the main thread.
+		/// Serializable data class for deserializing the client-security.json configuration file.
+		/// Contains the list of SPKI pin hashes and the allow-on-empty fallback flag.
+		/// This is not a MonoBehaviour; it is a plain data contract used by JsonUtility.
 		/// </summary>
 	}
 }

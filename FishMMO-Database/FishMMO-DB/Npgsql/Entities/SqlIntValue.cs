@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace FishMMO.Database.Npgsql.Entities
 {
 	/// <summary>
@@ -7,6 +9,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// This is configured as a keyless entity type in <see cref="NpgsqlDbContext"/> and is intended
 	/// for mapping single-row results such as counts and status codes.
 	/// </remarks>
+	[Keyless]
 	public sealed class SqlIntValue
 	{
 		/// <summary>

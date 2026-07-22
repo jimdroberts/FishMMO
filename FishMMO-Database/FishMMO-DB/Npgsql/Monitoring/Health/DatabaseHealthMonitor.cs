@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -401,9 +402,10 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 					}
 				}
 			}
-			catch
+			catch (Exception ex)
 			{
 				// Silently ignore metrics extraction failures
+				Debug.WriteLine($"[FishMMO-DB] Monitoring failure in ExtractPoolMetrics: {ex.Message}");
 			}
 		}
 	}

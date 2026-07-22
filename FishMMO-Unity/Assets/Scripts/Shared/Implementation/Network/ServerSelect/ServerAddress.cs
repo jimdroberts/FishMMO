@@ -35,7 +35,12 @@ namespace FishMMO.Shared
 	[Serializable]
 	public struct ServerAddress
 	{
-		/// <summary>IP address or hostname the server binds to.</summary>
+		/// <summary>
+		/// IP address or hostname the server binds to.
+		///
+		/// NOTE: Per class documentation, Address is always Constants.Configuration.GameHost
+		/// for client-facing communication. This field exists for future multi-host support.
+		/// </summary>
 		public string Address;
 		/// <summary>Port number for the server.</summary>
 		public ushort Port;

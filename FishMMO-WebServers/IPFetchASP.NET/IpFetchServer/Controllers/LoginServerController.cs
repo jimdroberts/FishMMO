@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Logging;
@@ -18,6 +19,7 @@ public class LoginServerController : ControllerBase
 {
 	private readonly NpgsqlDbContextFactory dbContextFactory;
 	private readonly IMemoryCache memoryCache;
+	private readonly IConfiguration configuration;
 
 	/// <summary>
 	/// Per-process gate that serialises the cache-miss DB load. Without it, a burst of
@@ -31,10 +33,11 @@ public class LoginServerController : ControllerBase
 	/// </summary>
 	/// <param name="dbContextFactory">Factory used to create instances of <see cref="NpgsqlDbContext"/>.</param>
 	/// <param name="memoryCache">In-memory cache used to store and retrieve cached login server lists.</param>
-	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, IMemoryCache memoryCache)
+	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, IMemoryCache memoryCache, IConfiguration configuration)
 	{
 		this.dbContextFactory = dbContextFactory;
 		this.memoryCache = memoryCache;
+		this.configuration = configuration;
 	}
 
 	/// <summary>
@@ -118,35 +121,63 @@ public class LoginServerController : ControllerBase
 			return NotFound("No login servers available.");
 		}
 
-		// Generate a one-time connection token for real-IP recovery.
+		// Generate a stateless HMAC-signed connection token for real-IP recovery.
 		// The real client IP is visible here (via X-Forwarded-For from NGINX)
 		// but lost at the game server (L4 UDP proxy). The token bridges this gap:
 		// the client echoes it in the first ClientHandshake, and the Login Server
-		// looks it up to recover the real IP.
-		var tokenBytes = new byte[32];
-		System.Security.Cryptography.RandomNumberGenerator.Fill(tokenBytes);
-		var token = Convert.ToBase64String(tokenBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-		var tokenHash = BitConverter.ToString(
-			System.Security.Cryptography.SHA256.HashData(
-				System.Text.Encoding.UTF8.GetBytes(token)))
-			.Replace("-", "").ToLowerInvariant();
+		// verifies the HMAC to recover the real IP — no database round-trip needed.
+		//
+		// Token format: base64url(payload).base64url(hmac)
+		//   payload = realIp + '|' + expiryUnixSeconds
+		//   hmac    = HMAC-SHA256(sharedKey, payload)
+		var hmacKey = GetConnectionTokenHmacKey();
+		if (hmacKey == null)
+		{
+			await Log.Error("LoginServerController", "ConnectionToken HMAC key not configured.");
+			return StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error.");
+		}
 
 		var realIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+		long expiryUnix = DateTimeOffset.UtcNow.AddSeconds(60).ToUnixTimeSeconds();
+		var payload = System.Text.Encoding.UTF8.GetBytes($"{realIp}|{expiryUnix}");
 
-		using var db = dbContextFactory.CreateDbContext();
-		db.ConnectionTokens.Add(new FishMMO.Database.Npgsql.Entities.ConnectionTokenEntity
+		byte[] signature;
+		using (var hmac = new System.Security.Cryptography.HMACSHA256(hmacKey))
 		{
-			TokenHash = tokenHash,
-			RealIp = realIp,
-			ExpiresAt = DateTime.UtcNow.AddSeconds(60)
-		});
-		await db.SaveChangesAsync(HttpContext.RequestAborted);
+			signature = hmac.ComputeHash(payload);
+		}
+		var payloadB64 = Convert.ToBase64String(payload).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+		var sigB64 = Convert.ToBase64String(signature).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+		var token = $"{payloadB64}.{sigB64}";
 
 		await Log.Debug("LoginServerController",
-			$"Issued connection token for IP {realIp} (hash={tokenHash[..8]}...)");
+			$"Issued stateless connection token for IP {realIp} (expires in 60s)");
 
 		// Wrap in a "Ports" envelope so Unity's JsonUtility can deserialize
 		// the response without manual string rewriting on the client.
 		return Ok(new { Ports = loginServerPorts, ConnectionToken = token });
+	}
+
+	/// <summary>
+	/// Resolves the shared HMAC key for connection token signing.
+	/// Order: ConnectionToken:HmacKey in appsettings.json, then
+	/// CONNECTION_TOKEN_HMAC_KEY environment variable.
+	/// Returns null if neither is configured.
+	/// </summary>
+	private byte[]? GetConnectionTokenHmacKey()
+	{
+		var b64 = configuration["ConnectionToken:HmacKey"];
+		if (string.IsNullOrWhiteSpace(b64))
+			b64 = System.Environment.GetEnvironmentVariable("CONNECTION_TOKEN_HMAC_KEY");
+		if (string.IsNullOrWhiteSpace(b64))
+			return null;
+		try
+		{
+			return Convert.FromBase64String(b64.Trim());
+		}
+		catch (FormatException)
+		{
+			return null;
+		}
 	}
 }

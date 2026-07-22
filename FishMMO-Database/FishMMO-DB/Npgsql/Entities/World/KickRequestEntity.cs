@@ -2,6 +2,7 @@ using System;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
+	/// <summary>Kick request entity representing a request to forcibly disconnect an account from the server.</summary>
 	public class KickRequestEntity : IVersionedEntity
 	{
 		/// <summary>Primary key.</summary>

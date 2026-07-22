@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
+	/// <summary>Party entity representing a player party group and its member associations.</summary>
 	public class PartyEntity : IVersionedEntity
 	{
 		/// <summary>Primary key.</summary>

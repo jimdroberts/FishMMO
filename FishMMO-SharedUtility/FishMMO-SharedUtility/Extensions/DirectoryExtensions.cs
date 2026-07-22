@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-//using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
+	/// <summary>Extension methods for System.IO.Directory operations, including recursive file discovery.</summary>
 	public static class DirectoryExtensions
 	{
 		/// <summary>
@@ -39,12 +39,10 @@ namespace FishMMO.Shared
 				}
 				catch (UnauthorizedAccessException)
 				{
-					//Log.Debug("DirectoryExtensions", $"Access to directory '{currentDir}' is denied.");
 					continue; // Skip this directory if access is denied
 				}
 				catch (DirectoryNotFoundException)
 				{
-					//Log.Debug("DirectoryExtensions", $"Directory '{currentDir}' not found.");
 					continue; // Skip this directory if it's not found
 				}
 
@@ -59,12 +57,10 @@ namespace FishMMO.Shared
 				}
 				catch (UnauthorizedAccessException)
 				{
-					//Log.Debug("DirectoryExtensions", $"Access to directory '{currentDir}' is denied.");
 					continue; // Skip subdirectories if access is denied
 				}
 				catch (DirectoryNotFoundException)
 				{
-					//Log.Debug("DirectoryExtensions", $"Directory '{currentDir}' not found.");
 					continue; // Skip subdirectories if the current directory is not found
 				}
 			}

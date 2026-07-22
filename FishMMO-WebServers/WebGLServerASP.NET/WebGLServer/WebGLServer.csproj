@@ -18,6 +18,24 @@
       <Link>logging.json</Link>
     </None>
   </ItemGroup>
+  <!--
+    NOTE: PRODUCTION CONFIGURATION
+    Only the Development config (appsettings.WebGLServer.json) is copied to the
+    output directory by this target.  In production, configuration must be
+    provided through one of these mechanisms (in order of precedence):
+
+      1. Environment variables (e.g., ConnectionStrings__DefaultConnection,
+         FISHMMO_CLIENT_GATE_SECRET, etc.) overridden via systemd unit
+         Environment= directives or the container orchestrator.
+
+      2. A mounted appsettings.json file at the expected runtime location
+         (e.g., /etc/fishmmo/webglserver/appsettings.json) via a volume mount
+         or secret store.
+
+    Bundling production secrets into the build output is NOT recommended.
+    To add production-specific appsettings.*.json files, update this target
+    or deploy a separate configuration file as described above.
+  -->
   <!-- Copy-and-rename config from FishMMO-Setup/Development/ to output. -->
   <Target Name="CopyFishMMOConfig" AfterTargets="Build">
     <Copy SourceFiles="..\..\..\FishMMO-Setup\Development\appsettings.WebGLServer.json"

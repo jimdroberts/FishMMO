@@ -19,8 +19,12 @@ namespace FishMMO.Database.Npgsql.Entities
 				.ValueGeneratedOnAdd();
 
 			// Required fields
-			builder.Property(e => e.SenderCharacterID)
+			builder.Property(e => e.SenderID)
 				.IsRequired();
+
+			builder.Property(e => e.SenderName)
+				.IsRequired(false)
+				.HasMaxLength(100);
 
 			builder.Property(e => e.CharacterID)
 				.IsRequired();
@@ -29,9 +33,17 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasMaxLength(200);
 
-			builder.Property(e => e.Message)
+			builder.Property(e => e.Body)
 				.IsRequired()
 				.HasMaxLength(4000);
+
+			builder.Property(e => e.Read)
+				.IsRequired()
+				.HasDefaultValue(false);
+
+			builder.Property(e => e.CurrencyAttachment)
+				.IsRequired()
+				.HasDefaultValue(0);
 
 			builder.Property(e => e.ItemAttachmentTemplateID)
 				.IsRequired()
@@ -49,7 +61,7 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.CharacterID);
 
 			// Index for sender lookups
-			builder.HasIndex(e => e.SenderCharacterID);
+			builder.HasIndex(e => e.SenderID);
 
 			// Index for creation time (sorting/filtering)
 			builder.HasIndex(e => e.TimeCreated);
@@ -66,9 +78,9 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.HasOne<CharacterEntity>()
 				.WithMany()
-				.HasForeignKey(e => e.SenderCharacterID)
+				.HasForeignKey(e => e.SenderID)
 				.OnDelete(DeleteBehavior.NoAction)
-				.HasConstraintName("FK_CharacterMail_SenderCharacterID");
+				.HasConstraintName("FK_CharacterMail_SenderID");
 		}
 	}
 }

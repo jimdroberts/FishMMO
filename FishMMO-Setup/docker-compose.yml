@@ -1,0 +1,376 @@
+# FishMMO Production Docker Compose
+# ===================================
+# Orchestrates the full FishMMO server stack.
+#
+# Prerequisites:
+#   1. Copy .env.example to fishmmo-secrets.env and fill in values.
+#   2. Ensure Docker and Docker Compose v2 are installed.
+#   3. Build the FishMMO Docker images (see each service's build context).
+#
+# Usage:
+#   docker compose --env-file fishmmo-secrets.env up -d
+#   docker compose --env-file fishmmo-secrets.env down
+#   docker compose --env-file fishmmo-secrets.env logs -f
+#
+# Secrets are loaded from fishmmo-secrets.env — NEVER commit that file.
+# See .env.example for the full list of required variables.
+
+version: "3.9"
+
+volumes:
+  postgres_data:
+    driver: local
+  nginx_certs:
+    driver: local
+  nginx_logs:
+    driver: local
+  game_logs:
+    driver: local
+  certbot_data:
+    driver: local
+
+networks:
+  fishmmo_internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    internal: false
+  fishmmo_public:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+          gateway: 172.21.0.1
+
+services:
+
+  # ═════════════════════════════════════════════════════════════════
+  # PostgreSQL Database
+  # ═════════════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: fishmmo-postgres
+    restart: unless-stopped
+    networks:
+      fishmmo_internal:
+        aliases:
+          - postgres
+    ports:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: fishmmo
+      POSTGRES_USER: ${POSTGRES_USER:-fishmmo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fishmmo} -d fishmmo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=128MB"
+      - "-c"
+      - "effective_cache_size=384MB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "max_wal_size=2GB"
+      - "-c"
+      - "min_wal_size=512MB"
+      - "-c"
+      - "log_min_duration_statement=500"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ═════════════════════════════════════════════════════════════════
+  # Database Migrator (one-shot)
+  # ═════════════════════════════════════════════════════════════════
+  db-migrator:
+    image: fishmmo/db-migrator:latest
+    container_name: fishmmo-db-migrator
+    build:
+      context: ../FishMMO-Database/FishMMO-DB-Migrator
+      dockerfile: Dockerfile
+    restart: "no"
+    networks:
+      - fishmmo_internal
+    environment:
+      ConnectionStrings__NpgsqlConnection: ${ConnectionStrings__NpgsqlConnection}
+      FISHMMO_ENVIRONMENT: Production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ═════════════════════════════════════════════════════════════════
+  # IP Fetch Server (ASP.NET — Login Server Discovery)
+  # ═════════════════════════════════════════════════════════════════
+  ipfetch-server:
+    image: fishmmo/ipfetch-server:latest
+    container_name: fishmmo-ipfetch
+    build:
+      context: ../FishMMO-WebServers/IPFetchASP.NET/IpFetchServer
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      fishmmo_internal:
+        aliases:
+          - ipfetch
+      fishmmo_public: {}
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      ConnectionStrings__NpgsqlConnection: ${ConnectionStrings__NpgsqlConnection}
+      FISHMMO_ENVIRONMENT: Production
+      FISHMMO_CLIENT_GATE_SECRET: ${FISHMMO_CLIENT_GATE_SECRET}
+      WebServer__HttpPort: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ═════════════════════════════════════════════════════════════════
+  # nginx Reverse Proxy
+  # ═════════════════════════════════════════════════════════════════
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: fishmmo-nginx
+    restart: unless-stopped
+    networks:
+      fishmmo_internal:
+        aliases:
+          - nginx
+      fishmmo_public: {}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+      - "7770-7779:7770-7779/udp"
+      - "7780-7789:7780-7789/udp"
+      - "7790-7999:7790-7999/udp"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_logs:/var/log/nginx
+      - nginx_certs:/etc/letsencrypt:ro
+      - certbot_data:/var/www/certbot:ro
+    depends_on:
+      - ipfetch-server
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ═════════════════════════════════════════════════════════════════
+  # Login Server (Placeholder)
+  # ═════════════════════════════════════════════════════════════════
+  login-server:
+    image: fishmmo/login-server:latest
+    container_name: fishmmo-login
+    build:
+      context: ../FishMMO-Auth/FishMMO-ServerAuth
+      dockerfile: Dockerfile
+    profiles:
+      - all
+      - game-servers
+    restart: unless-stopped
+    networks:
+      fishmmo_internal:
+        aliases:
+          - loginserver
+    ports:
+      - "127.0.0.1:7770:7770/udp"
+    volumes:
+      - game_logs:/var/log/fishmmo
+      - nginx_certs:/etc/fishmmo/certs:ro
+    environment:
+      ConnectionStrings__NpgsqlConnection: ${ConnectionStrings__NpgsqlConnection}
+      FISHMMO_ENVIRONMENT: Production
+      FISHMMO_CLIENT_GATE_SECRET: ${FISHMMO_CLIENT_GATE_SECRET}
+      FISHMMO_SIGNING_KEY_KEK_BASE64: ${FISHMMO_SIGNING_KEY_KEK_BASE64}
+      FISHMMO_SMTP_PASSWORD: ${FISHMMO_SMTP_PASSWORD}
+      ServerName: LoginServer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ═════════════════════════════════════════════════════════════════
+  # World Server (Placeholder)
+  # ═════════════════════════════════════════════════════════════════
+  world-server:
+    image: fishmmo/world-server:latest
+    container_name: fishmmo-world
+    build:
+      context: ../FishMMO-Unity
+      dockerfile: Dockerfile.world
+    profiles:
+      - all
+      - game-servers
+    restart: unless-stopped
+    networks:
+      fishmmo_internal:
+        aliases:
+          - worldserver
+    ports:
+      - "127.0.0.1:7780:7780/udp"
+    volumes:
+      - game_logs:/var/log/fishmmo
+      - nginx_certs:/etc/fishmmo/certs:ro
+    environment:
+      ConnectionStrings__NpgsqlConnection: ${ConnectionStrings__NpgsqlConnection}
+      FISHMMO_ENVIRONMENT: Production
+      ServerName: WorldServer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 2G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ═════════════════════════════════════════════════════════════════
+  # Scene Server (Placeholder)
+  # ═════════════════════════════════════════════════════════════════
+  scene-server:
+    image: fishmmo/scene-server:latest
+    container_name: fishmmo-scene
+    build:
+      context: ../FishMMO-Unity
+      dockerfile: Dockerfile.scene
+    profiles:
+      - all
+      - game-servers
+    restart: unless-stopped
+    networks:
+      fishmmo_internal:
+        aliases:
+          - sceneserver
+    ports:
+      - "127.0.0.1:7790:7790/udp"
+    volumes:
+      - game_logs:/var/log/fishmmo
+      - nginx_certs:/etc/fishmmo/certs:ro
+    environment:
+      ConnectionStrings__NpgsqlConnection: ${ConnectionStrings__NpgsqlConnection}
+      FISHMMO_ENVIRONMENT: Production
+      ServerName: SceneServer
+    depends_on:
+      - world-server
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 2G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ═════════════════════════════════════════════════════════════════
+  # Certbot — Let's Encrypt TLS Certificate Renewal
+  # ═════════════════════════════════════════════════════════════════
+  certbot:
+    image: certbot/certbot:latest
+    container_name: fishmmo-certbot
+    profiles:
+      - all
+      - certbot
+    restart: unless-stopped
+    networks:
+      fishmmo_public: {}
+    volumes:
+      - nginx_certs:/etc/letsencrypt
+      - certbot_data:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done;'"
+    deploy:
+      resources:
+        limits:
+          memory: 256M

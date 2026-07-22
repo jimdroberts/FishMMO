@@ -1335,6 +1335,13 @@ int32_t h3_client_connect(h3_session_t* h3,
                                  QUIC_SEND_FLAG_NONE, ctrl_copy);
         if (QUIC_FAILED(st)) {
             free(ctrl_copy);
+            /* NOTE: StreamClose is called directly because the stream was
+             * started but never had StreamSend called on it. StreamShutdown
+             * is not needed.  An unstarted stream has no protocol state to
+             * shut down; the only resource held is the QUIC stream handle
+             * itself, which StreamClose releases directly.  Calling
+             * StreamShutdown on an unstarted stream would produce undefined
+             * behaviour (QUIC_STATUS_INVALID_STATE). */
             MsQuic->StreamClose(ctrl_stream);
             return -1;
         }
@@ -1648,13 +1655,56 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
 
                                         /* Validate Origin header for cross-origin
                                          * WebTransport. Uses exact-match with length
-                                         * check to prevent prefix-injection attacks. */
-                                        if (phdr.origin[0] != '\0') {
+                                         * check to prevent prefix-injection attacks.
+                                         *
+                                         * When allowed_origins is configured (non-NULL,
+                                         * non-empty), the Origin header is REQUIRED.
+                                         * Non-browser clients that omit the Origin header
+                                         * are rejected. When allowed_origins is NULL or
+                                         * empty (no origin restriction configured), empty
+                                         * origins are accepted (backward-compatible with
+                                         * native clients that don't send Origin). */
+                                        const char* allowed = h3->allowed_origins;
+                                        const bool origins_configured =
+                                            (allowed != NULL && allowed[0] != '\0');
+
+                                        if (phdr.origin[0] == '\0') {
+                                            if (origins_configured) {
+                                                /* Origin header is missing but allowed_origins
+                                                 * is configured — reject to prevent CORS bypass
+                                                 * by non-browser clients. */
+                                                WT_LOG_WARN("Rejected WebTransport CONNECT: "
+                                                            "Origin header required but missing");
+                                                uint8_t rej[128];
+                                                int rej_len = h3_write_headers(
+                                                    rej, sizeof(rej), 403, NULL, NULL, NULL);
+                                                if (rej_len > 0) {
+                                                    uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
+                                                    if (rej_copy) {
+                                                        memcpy(rej_copy, rej, (size_t)rej_len);
+                                                        QUIC_BUFFER buf;
+                                                        buf.Buffer = rej_copy;
+                                                        buf.Length = (uint32_t)rej_len;
+                                                        QUIC_STATUS qst = MsQuic->StreamSend(
+                                                            sctx->quic_stream, &buf, 1,
+                                                            QUIC_SEND_FLAG_NONE, rej_copy);
+                                                        if (QUIC_FAILED(qst)) {
+                                                            free(rej_copy);
+                                                        }
+                                                    }
+                                                }
+                                                MsQuic->StreamShutdown(sctx->quic_stream,
+                                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                                                return -1;
+                                            }
+                                            /* No origins configured — allow empty origin
+                                             * (backward-compatible with native clients). */
+                                        } else {
+                                            /* Origin header is present — validate it. */
                                             bool origin_ok = false;
                                             size_t origin_len = strlen(phdr.origin);
 
-                                            const char* allowed = h3->allowed_origins;
-                                            if (allowed == NULL || allowed[0] == '\0') {
+                                            if (!origins_configured) {
                                                 origin_ok = true;
                                             } else {
                                                 const char* start = allowed;

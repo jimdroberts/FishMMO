@@ -26,14 +26,14 @@ namespace FishMMO.Auth.Implementation
 	{
 		#region Constants
 
-		/// <summary>Number of concurrent SRP verify worker tasks.</summary>
-		private const int VerifyWorkerCount = 2;
-		/// <summary>Number of concurrent SRP proof worker tasks.</summary>
-		private const int ProofWorkerCount = 2;
-		/// <summary>Maximum pending SRP verify requests in the bounded channel before new writes are dropped.</summary>
-		private const int VerifyChannelCapacity = 500;
-		/// <summary>Maximum pending SRP proof requests in the bounded channel before new writes are dropped.</summary>
-		private const int ProofChannelCapacity = 500;
+		/// <summary>Default number of concurrent SRP verify worker tasks. Configurable via .cfg SrpVerifyWorkers.</summary>
+		public int VerifyWorkerCount { get; set; } = 2;
+		/// <summary>Default number of concurrent SRP proof worker tasks. Configurable via .cfg SrpProofWorkers.</summary>
+		public int ProofWorkerCount { get; set; } = 2;
+		/// <summary>Default maximum pending SRP verify requests in the bounded channel. Configurable via .cfg SrpVerifyChannelCapacity.</summary>
+		public int VerifyChannelCapacity { get; set; } = 500;
+		/// <summary>Default maximum pending SRP proof requests in the bounded channel. Configurable via .cfg SrpProofChannelCapacity.</summary>
+		public int ProofChannelCapacity { get; set; } = 500;
 
 		/// <summary>Maximum unauthenticated connection entries scanned per account manager sweep.</summary>
 		private const int AccountManagerSweepMaxScan = 256;
@@ -58,8 +58,8 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Seconds before a cached connection-IP mapping expires from the last-seen cache.</summary>
 		private const float ConnectionIpCacheTtlSeconds = 300f;
 
-		/// <summary>Maximum number of TOTP code verifications that may run concurrently.</summary>
-		private const int MaxConcurrentTotpVerifications = 4;
+		/// <summary>Default maximum number of TOTP code verifications running concurrently. Configurable via .cfg SrpMaxConcurrentTotp.</summary>
+		public int MaxConcurrentTotpVerifications { get; set; } = 4;
 		/// <summary>Maximum total TOTP attempts allowed per pending state before the connection is dropped.</summary>
 		private const int MaxTotpAttempts = 5;
 		/// <summary>Maximum TOTP failures tracked per username before that username is locked out.</summary>
@@ -179,6 +179,14 @@ namespace FishMMO.Auth.Implementation
 		/// <inheritdoc/>
 		protected override void InitializeWorkersCore(CancellationToken cancellationToken)
 		{
+			// Clamp user-configurable values to safe ranges to prevent
+			// misconfiguration from breaking the auth pipeline.
+			VerifyWorkerCount = Math.Max(1, Math.Min(VerifyWorkerCount, 64));
+			ProofWorkerCount = Math.Max(1, Math.Min(ProofWorkerCount, 64));
+			VerifyChannelCapacity = Math.Max(1, Math.Min(VerifyChannelCapacity, 10000));
+			ProofChannelCapacity = Math.Max(1, Math.Min(ProofChannelCapacity, 10000));
+			MaxConcurrentTotpVerifications = Math.Max(1, Math.Min(MaxConcurrentTotpVerifications, 32));
+
 			fakeSaltKey = CryptoHelper.GenerateKey(CryptoHelper.HmacSha512KeyLength);
 
 			// Pre-warm fake SRP state to prevent first-use timing side-channel.
@@ -400,7 +408,7 @@ namespace FishMMO.Auth.Implementation
 			string ipAddress = ResolveAndCacheIp(conn);
 			if (!TryBeginIpAuthAttempt(ipAddress))
 			{
-				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: false);
+				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: true);
 				return;
 			}
 
@@ -426,7 +434,7 @@ namespace FishMMO.Auth.Implementation
 			if (verifyChannel == null || !verifyChannel.Writer.TryWrite(request))
 			{
 				AccountManager.TryAdvanceAuthState(conn, AuthState.VerifyPending, AuthState.Handshake);
-				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: false);
+				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: true);
 			}
 		}
 
@@ -471,7 +479,7 @@ namespace FishMMO.Auth.Implementation
 			if (proofChannel == null || !proofChannel.Writer.TryWrite(request))
 			{
 				AccountManager.TryAdvanceAuthState(conn, AuthState.ProofPending, priorState);
-				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: false);
+				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: true);
 			}
 		}
 
@@ -541,6 +549,8 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
+			// NOTE: Interlocked.Increment after semaphore check allows at most MaxTotpAttempts+1 under race.
+			// The semaphore limits concurrency to MaxConcurrentTotpVerifications, bounding the overcount.
 			int attempts = Interlocked.Increment(ref pendingState.Attempts);
 			if (attempts > MaxTotpAttempts)
 			{
@@ -650,6 +660,14 @@ namespace FishMMO.Auth.Implementation
 		private async Task ProcessSrpVerifyAsync(SrpVerifyRequest<TConnection> request)
 		{
 			TConnection conn = request.Connection;
+			// Ghost-connection guard: the client may have disconnected while
+			// this request was queued in the bounded channel. Bail early to
+			// avoid wasted DB queries and crypto on a dead connection.
+			if (!IsConnectionActive(conn))
+			{
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
 			ClientAuthenticationResult result;
 			bool waitingForProof = false;
 
@@ -817,6 +835,14 @@ namespace FishMMO.Auth.Implementation
 				result = ClientAuthenticationResult.ServerBusy;
 			}
 
+			// SAFETY: PurgeConnectionAuthState is called here on the async worker thread.
+			// It zeroes the per-connection encryption keys (AES-GCM key, sequence counters)
+			// via AccountManager.RemoveConnectionAccount. The EnqueueMainThread callback above
+			// does NOT reference the encryption data — it uses only a pre-computed result
+			// code (ClientAuthenticationResult) and calls DisconnectConnection, both of
+			// which are safe after key zeroing. No encrypted payload is constructed in
+			// this error path; any prior encrypted output was already pre-computed and
+			// sent before this point.
 			EnqueueMainThread(conn, () =>
 			{
 				if (IsConnectionActive(conn))
@@ -841,6 +867,14 @@ namespace FishMMO.Auth.Implementation
 		private async Task ProcessSrpProofAsync(SrpProofRequest<TConnection> request)
 		{
 			TConnection conn = request.Connection;
+
+			// Ghost-connection guard: bail early if the client disconnected
+			// while this request was queued in the bounded channel.
+			if (!IsConnectionActive(conn))
+			{
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
 
 			if (request.EncryptionData == null)
 			{
@@ -1011,7 +1045,7 @@ namespace FishMMO.Auth.Implementation
 				byte[] encryptedServerProof = SrpService.EncryptServerProof(serverProof!, request.EncryptionData);
 
 				byte[]? encryptedToken = (authenticated && IsConnectionActive(conn))
-					? await GenerateEncryptedAuthTokenAsync(request.EncryptionData, username!, accessLevel)
+					? await GenerateEncryptedAuthTokenAsync(request.EncryptionData, username!, accessLevel, ResolveClientRealIp(conn))
 					: null;
 
 				EnqueueMainThread(conn, () =>
@@ -1058,6 +1092,13 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="pendingState">The saved TOTP pending state for this connection.</param>
 		private async Task ProcessTwoFactorVerifyAsync(TConnection conn, byte[] encryptedCode, uint seq, TotpPendingState pendingState)
 		{
+			// Ghost-connection guard: the client may have disconnected while
+			// the TOTP Task.Run was scheduled.
+			if (!IsConnectionActive(conn))
+			{
+				totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
+				return;
+			}
 			string totpCode;
 			try
 			{
@@ -1080,7 +1121,7 @@ namespace FishMMO.Auth.Implementation
 				}
 				else
 				{
-					BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true);
+					EnqueueMainThread(conn, () => BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true));
 				}
 				return;
 			}
@@ -1100,7 +1141,7 @@ namespace FishMMO.Auth.Implementation
 				}
 				else
 				{
-					BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true);
+					EnqueueMainThread(conn, () => BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true));
 				}
 				return;
 			}
@@ -1111,7 +1152,7 @@ namespace FishMMO.Auth.Implementation
 
 			byte[] encryptedServerProof = SrpService.EncryptServerProof(pendingState.ServerProof!, pendingState.EncryptionData);
 			byte[]? encryptedToken = (IsConnectionActive(conn))
-				? await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, pendingState.Username!, pendingState.AccessLevel)
+				? await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, pendingState.Username!, pendingState.AccessLevel, ResolveClientRealIp(conn))
 				: null;
 
 			EnqueueMainThread(conn, () =>
@@ -1209,7 +1250,7 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="username">Account name to embed in the token.</param>
 		/// <param name="accessLevel">Access level to embed in the token.</param>
 		/// <returns>The encrypted token bytes, or <c>null</c> if signing key is unavailable or encryption failed.</returns>
-		private async Task<byte[]?> GenerateEncryptedAuthTokenAsync(ConnectionEncryptionData encryptionData, string username, AccessLevel accessLevel)
+		private async Task<byte[]?> GenerateEncryptedAuthTokenAsync(ConnectionEncryptionData encryptionData, string username, AccessLevel accessLevel, string? realIp = null)
 		{
 			byte[]? signingKey = tokenSigningKey;
 			if (signingKey == null) return null;
@@ -1222,7 +1263,8 @@ namespace FishMMO.Auth.Implementation
 				(int)TokenExpirationMinutes,
 				signingKey,
 				accessLevel,
-				out byte[]? rawTokenForHashing);
+				out byte[]? rawTokenForHashing,
+				realIp);
 
 			if (rawTokenForHashing != null && encryptedToken != null)
 			{
@@ -1239,8 +1281,22 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Provides a way to reject and purge a connection from an async callback context.
+		/// Rejects and purges a connection from an async worker thread context.
+		/// <para>
+		/// SAFETY (async-thread / main-thread callback race):
+		/// <see cref="PurgeConnectionAuthState"/> zeroes per-connection encryption keys
+		/// immediately on the async thread. The <see cref="EnqueueMainThread"/> callback
+		/// must NOT reference those keys after they are zeroed. This is safe because:
+		/// (a) <see cref="BroadcastAuthResult"/> sends only a pre-computed result code,
+		/// not any encrypted payload; and (b) any encrypted payload the caller needs
+		/// (e.g., server proof, auth token) MUST be pre-computed <em>before</em>
+		/// this method is called. Callers on the async thread must pre-compute all
+		/// encrypted payloads before calling <see cref="RejectAndPurge"/>; the
+		/// main-thread callback only uses pre-computed data or simple result codes.
+		/// </para>
 		/// </summary>
+		/// <param name="conn">The connection to reject and purge.</param>
+		/// <param name="result">The authentication result to broadcast before disconnecting.</param>
 		private void RejectAndPurge(TConnection conn, ClientAuthenticationResult result)
 		{
 			EnqueueMainThread(conn, () =>
@@ -1317,6 +1373,17 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="defaultResult">The result to return if no override logic modifies it.</param>
 		/// <param name="username">Account name being authenticated.</param>
 		/// <returns>The final <see cref="ClientAuthenticationResult"/> to send to the client.</returns>
+		/// <summary>
+		/// Resolves the client's real IP for embedding in auth tokens (v4).
+		/// Override in server-specific subclasses to look up the IP from
+		/// ConnectionIpCache or similar source. Returns null if unavailable.
+		/// </summary>
+		protected virtual string? ResolveClientRealIp(TConnection conn) => null;
+
+		/// <summary>
+		/// Attempts to complete login authentication. Override in subclasses for
+		/// server-type-specific logic (e.g., WorldServer checks player limit).
+		/// </summary>
 		protected virtual Task<ClientAuthenticationResult> TryLoginAsync(ClientAuthenticationResult defaultResult, string username)
 		{
 			return Task.FromResult(defaultResult);

@@ -93,9 +93,12 @@ namespace FishMMO.Client
 					request.useHttpContinue = false;
 
 					// Add custom headers
-					foreach (var header in config.Headers)
+					if (config.Headers != null)
 					{
-						request.SetRequestHeader(header.Key, header.Value);
+						foreach (var header in config.Headers)
+						{
+							request.SetRequestHeader(header.Key, header.Value);
+						}
 					}
 
 					// Create fresh handlers per attempt to avoid reusing disposed instances.

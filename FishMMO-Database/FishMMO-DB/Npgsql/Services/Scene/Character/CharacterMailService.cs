@@ -63,9 +63,10 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SendAsync(
 			long senderCharacterId,
+			string senderName,
 			long recipientCharacterId,
 			string subject,
-			string message,
+			string body,
 			int itemAttachmentTemplateID,
 			int itemAttachmentSeed,
 			uint itemAttachmentAmount,
@@ -86,11 +87,11 @@ namespace FishMMO.Database.Npgsql.Services
 					"Mail subject cannot be null or empty.");
 			}
 
-			if (string.IsNullOrWhiteSpace(message))
+			if (string.IsNullOrWhiteSpace(body))
 			{
 				return DatabaseResult.Failure(
 					DatabaseErrorCodes.ValidationError,
-					"Mail message cannot be null or empty.");
+					"Mail body cannot be null or empty.");
 			}
 
 			if (incomingVersion <= 0)
@@ -115,13 +116,13 @@ namespace FishMMO.Database.Npgsql.Services
 				var now = DateTime.UtcNow;
 				var sql = $@"
 					INSERT INTO {TableName}
-						(sender_character_id, character_id, subject, message, item_attachment_template_id, item_attachment_seed, item_attachment_amount, version, time_created, deleted, time_deleted)
+						(sender_id, sender_name, character_id, subject, body, item_attachment_template_id, item_attachment_seed, item_attachment_amount, currency_attachment, read, version, time_created, deleted, time_deleted)
 					VALUES
-						({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, {{8}}, FALSE, NULL)";
+						({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, {{8}}, {{9}}, {{10}}, {{11}}, FALSE, NULL)";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { senderCharacterId, recipientCharacterId, subject, message, itemAttachmentTemplateID, itemAttachmentSeed, itemAttachmentAmount, incomingVersion, now },
+					new object[] { senderCharacterId, senderName, recipientCharacterId, subject, body, itemAttachmentTemplateID, itemAttachmentSeed, itemAttachmentAmount, 0, false, incomingVersion, now },
 					cancellationToken)
 					.ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -225,34 +226,34 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var entities = await getMailQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 
-				// Batch-fetch sender names for all unique sender IDs
-				var senderIds = entities.Select(m => m.SenderCharacterID).Distinct().ToList();
-				var senderNames = await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => senderIds.Contains(c.ID))
-					.Select(c => new { c.ID, c.Name })
-					.ToDictionaryAsync(c => c.ID, c => c.Name, cancellationToken)
-					.ConfigureAwait(false);
+				// Batch-fetch sender names as fallback for any entries missing SenderName
+				var senderIds = entities.Where(m => string.IsNullOrEmpty(m.SenderName)).Select(m => m.SenderID).Distinct().ToList();
+				Dictionary<long, string>? senderNames = null;
+				if (senderIds.Count > 0)
+				{
+					senderNames = await dbContext.Characters
+						.AsNoTracking()
+						.Where(c => senderIds.Contains(c.ID))
+						.Select(c => new { c.ID, c.Name })
+						.ToDictionaryAsync(c => c.ID, c => c.Name, cancellationToken)
+						.ConfigureAwait(false);
+				}
 
 				var mail = entities.Select(m => new CharacterMailData(
 					id: m.ID,
 					version: m.Version,
 					characterID: m.CharacterID,
-					senderID: m.SenderCharacterID,
-					senderName: senderNames.TryGetValue(m.SenderCharacterID, out var name) ? name : string.Empty,
+					senderID: m.SenderID,
+					senderName: !string.IsNullOrEmpty(m.SenderName) ? m.SenderName
+						: (senderNames != null && senderNames.TryGetValue(m.SenderID, out var name) ? name : string.Empty),
 					subject: m.Subject,
-					body: m.Message,
+					body: m.Body,
 					timeSent: m.TimeCreated,
-					read: false,
-					// ItemAttachmentTemplateID is used for the currency attachment field because
-					// the mail system stores item template IDs (which may represent currency-item
-					// types, e.g. gold coin templates) in CurrencyAttachment, while the seed for
-					// item randomization is stored in ItemAttachment. Both database column names
-					// (item_attachment_template_id, item_attachment_seed) and DTO parameter names
-					// (currencyAttachment, itemAttachment) use semantically distinct naming, but
-					// the int-to-int mapping is correct for the data they carry.
-					currencyAttachment: m.ItemAttachmentTemplateID,
-					itemAttachment: m.ItemAttachmentSeed
+					read: m.Read,
+					currencyAttachment: m.CurrencyAttachment,
+					itemAttachmentTemplateID: m.ItemAttachmentTemplateID,
+					itemAttachmentSeed: m.ItemAttachmentSeed,
+					itemAttachmentAmount: (int)m.ItemAttachmentAmount
 				)).ToList();
 
 				return (IReadOnlyList<CharacterMailData>)mail;

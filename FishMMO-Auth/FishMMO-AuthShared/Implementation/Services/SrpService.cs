@@ -26,6 +26,11 @@ namespace FishMMO.Auth.Implementation
 		/// Prevents timing-based account enumeration. The salt is AES-GCM encrypted
 		/// before transmission (if applicable), so reuse is unobservable on the wire.
 		/// </summary>
+		/// <remarks>
+		/// <b>NOTE:</b> <c>fakeSrpTuple</c> uses compile-time constants (<c>"fake_user"</c>, <c>"fake_password"</c>).
+		/// An attacker who decompiles the binary knows the exact fake verifier. This is mitigated by
+		/// per-username fake salts (<see cref="DerivePerUsernameFakeSalt"/>) which are the primary defense.
+		/// </remarks>
 		private static readonly Lazy<(string Salt, string Verifier)> fakeSrpTuple =
 			new Lazy<(string, string)>(() =>
 			{

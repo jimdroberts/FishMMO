@@ -118,10 +118,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private void OnServerCharacterRequestListBroadcastReceived(NetworkConnection conn, CharacterRequestListBroadcast msg, Channel channel)
 		{
 			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
-			{
-				// character is requesting character list before authentication completes, disconnect them...
-				conn.Disconnect(true);
-			}
+				{
+					// character is requesting character list before authentication completes, disconnect them...
+					try
+					{
+						conn.Disconnect(true);
+					}
+					catch (Exception ex)
+					{
+						Log.Warning("CharacterSelectSystem", $"conn.Disconnect threw: {ex.Message}");
+					}
+				}
 			else if (conn.IsActive)
 			{
 				if (!TryBeginInFlightRequest(conn))

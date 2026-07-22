@@ -1,5 +1,10 @@
 using System;
 
+// NOTE: All fields in this file use snake_case naming as a deliberate JSON contract exception.
+// JsonUtility.FromJson maps directly to field names; PascalCase would break deserialization
+// of the server response (which is produced by a non-.NET backend following JSON conventions).
+// This is the ONLY place in the codebase where snake_case is intentionally used.
+
 namespace FishMMO.Client
 {
 	/// <summary>

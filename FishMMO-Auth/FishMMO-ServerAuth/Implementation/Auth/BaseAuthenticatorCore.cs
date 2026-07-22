@@ -231,6 +231,10 @@ namespace FishMMO.Auth.Implementation
 		/// Resets the global handshake counter when the 1-second window expires.
 		/// Wall-clock based so a single long tick cannot silently extend the window.
 		/// </summary>
+		/// <summary>
+		/// Resets the global handshake counter when the 1-second window expires.
+		/// Wall-clock based so a single long tick cannot silently extend the window.
+		/// </summary>
 		private void ResetGlobalHandshakeWindowIfExpired()
 		{
 			lock (handshakeCountGate)
@@ -244,6 +248,12 @@ namespace FishMMO.Auth.Implementation
 			}
 		}
 
+		/// <summary>
+		/// Atomically increments the global handshake count if the rate limit has not been
+		/// reached this window.  Resets the window lazily when it has expired.
+		/// Returns <c>true</c> if the handshake may proceed; <c>false</c> if the global cap
+		/// has been exhausted and the handshake must be rejected.
+		/// </summary>
 		/// <summary>
 		/// Atomically increments the global handshake count if the rate limit has not been
 		/// reached this window.  Resets the window lazily when it has expired.
@@ -272,6 +282,11 @@ namespace FishMMO.Auth.Implementation
 		/// does not consume a rate-limit slot.  Safe to call even if the count is already
 		/// zero (floor at 0).
 		/// </summary>
+		/// <summary>
+		/// Decrements the global handshake count on a failure path so a rejected handshake
+		/// does not consume a rate-limit slot.  Safe to call even if the count is already
+		/// zero (floor at 0).
+		/// </summary>
 		private void DecrementGlobalHandshakeCount()
 		{
 			lock (handshakeCountGate)
@@ -281,6 +296,11 @@ namespace FishMMO.Auth.Implementation
 			}
 		}
 
+		/// <summary>
+		/// Disconnects and purges connections that exceeded the authentication TTL window
+		/// without completing authentication. Scans are bounded by <see cref="AuthSweepMaxScan"/>
+		/// and <see cref="AuthSweepMaxRemovals"/> to keep call-site cost predictable.
+		/// </summary>
 		/// <summary>
 		/// Disconnects and purges connections that exceeded the authentication TTL window
 		/// without completing authentication. Scans are bounded by <see cref="AuthSweepMaxScan"/>
@@ -349,6 +369,9 @@ namespace FishMMO.Auth.Implementation
 			OnAuthSweep();
 		}
 
+		/// <summary>
+		/// Removes expired per-IP handshake rate-limit entries to prevent unbounded dictionary growth.
+		/// </summary>
 		/// <summary>
 		/// Removes expired per-IP handshake rate-limit entries to prevent unbounded dictionary growth.
 		/// </summary>

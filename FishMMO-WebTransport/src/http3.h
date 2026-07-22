@@ -191,24 +191,6 @@ h3_session_t* h3_session_create(
  */
 void h3_session_free(h3_session_t* h3);
 
-#if 0
-/**
- * Process a new peer-initiated bidirectional stream.
- * Must be called from the QUIC PEER_STREAM_STARTED callback.
- *
- * PRESERVED but DISABLED: This function was part of the original HTTP/3
- * stream acceptance design. The handshake now uses h3_server_handle_stream
- * instead, which integrates with the state machine for automatic protocol
- * detection (HTTP/3 vs native). Keeping this for reference in case a
- * separate accept-stream API is needed for future HTTP/3 work.
- *
- * Returns true if h3 took ownership of the stream (HTTP/3 protocol stream).
- * Returns false if the stream is a regular data stream (the caller
- * should process it via wt_stream_manager).
- */
-bool h3_session_accept_stream(h3_session_t* h3, HQUIC stream);
-#endif
-
 /**
  * Begin the WebTransport handshake as a client.
  * Sends the control stream (type 0x00) and SETTINGS frame, then

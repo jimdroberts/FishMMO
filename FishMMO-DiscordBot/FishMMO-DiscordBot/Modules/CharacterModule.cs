@@ -253,7 +253,7 @@ namespace FishMMO.DiscordBot.Modules
 						var sb = new StringBuilder();
 						foreach (var skill in activeSkills)
 						{
-							sb.AppendLine($"Hash={skill.Hash}: Level {skill.Level}");
+							sb.AppendLine($"TemplateID={skill.TemplateID}: Level {skill.Level}");
 						}
 						skillsEmbed.WithDescription(Truncate(sb.ToString(), 4096));
 					}

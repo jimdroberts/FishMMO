@@ -104,7 +104,7 @@ typedef struct wt_session_s {
  * the other thread.
  *
  * The poll thread owns session lifecycle; the send/acquire path must
- * synchronise with it by running on the same thread. */
+ * synchronize with it by running on the same thread. */
 
 int32_t wt_session_init(
     wt_session_t* session, HQUIC quic_conn, wt_connection_id_t conn_id);

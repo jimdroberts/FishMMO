@@ -45,6 +45,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Maximum number of characters allowed per account.
 		/// </summary>
 		[SerializeField]
+		[Tooltip("Maximum number of characters allowed per account.")]
 		private int maxCharacters = 8;
 
 		/// <summary>
@@ -171,7 +172,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// --- Main-thread-only validation ---
 
 			// Validate character name
-			if (!Authentication.IsAllowedCharacterName(msg.CharacterName))
+			// Null guard: msg.CharacterName could be null if the client sends a
+			// malformed broadcast.  Authentication.IsAllowedCharacterName would throw
+			// NRE on null input, so we short-circuit here.
+			if (msg.CharacterName == null || !Authentication.IsAllowedCharacterName(msg.CharacterName))
 			{
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{

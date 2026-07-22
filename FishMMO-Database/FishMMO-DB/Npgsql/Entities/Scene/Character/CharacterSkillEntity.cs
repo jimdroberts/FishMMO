@@ -21,13 +21,17 @@ namespace FishMMO.Database.Npgsql.Entities
 		public long CharacterID { get; set; }
 		public CharacterEntity Character { get; set; }
 		/// <summary>
-		/// Hash identifier for this skill.
+		/// Template identifier for this skill.
 		/// </summary>
-		public int Hash { get; set; }
+		public int TemplateID { get; set; }
 		/// <summary>
 		/// Current level of the skill.
 		/// </summary>
 		public int Level { get; set; }
+		/// <summary>
+		/// Current experience points in this skill.
+		/// </summary>
+		public int Experience { get; set; }
 		/// <summary>
 		/// Unix timestamp (seconds) when the cast time ends.
 		/// Stored as <c>double</c> rather than <c>DateTime</c> to maintain

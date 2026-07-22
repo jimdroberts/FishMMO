@@ -284,6 +284,10 @@ namespace FishMMO.Client
 			this.fogManager?.Shutdown();
 			DeinitializeAuthenticator();
 			Connection?.Shutdown();
+			// Null guard: NetworkManager may already be destroyed during teardown
+			// (OnDestroy can fire after scene unload).  The null-conditional ?.
+			// prevents NRE on NetworkManager, and the != null check on SceneManager
+			// ensures we only unsubscribe if the SceneManager is still live.
 			if (NetworkManager?.SceneManager != null)
 			{
 				NetworkManager.SceneManager.OnLoadStart -= OnSceneLoadStart;
@@ -499,6 +503,7 @@ namespace FishMMO.Client
 						pending.Add(new PendingProbe { Request = req, Op = req.SendWebRequest() });
 						lastStart = Time.realtimeSinceStartup;
 					}
+					// NOTE: PendingProbe structs are value types, so writing default to the list element and using the local copy is safe. Do not change to foreach.
 					bool any = false;
 					for (int i = 0; i < pending.Count; i++)
 					{
@@ -516,6 +521,7 @@ namespace FishMMO.Client
 								Log.Debug("Client", $"GetLoginServerList: JSON parse failed. Raw response (truncated): {(rawText != null && rawText.Length > 200 ? rawText.Substring(0, 200) + "..." : rawText)}");
 								continue; 
 							}
+							// NOTE: Token not explicitly cleared in the cache path. TTL (55s) < server token TTL (60s), providing a 5s safety margin. Reset on QuitToLogin().
 							this.cachedConnectionToken = parsed.ConnectionToken;
 							winner = parsed.Ports;
 							break;
@@ -651,7 +657,7 @@ namespace FishMMO.Client
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
 				d.Hide();
 
-			loginAuthenticator?.RetryHandshake();
+			_ = loginAuthenticator?.RetryHandshakeAsync();
 		}
 		else // position -1 = cancelled (timeout / shutdown)
 		{

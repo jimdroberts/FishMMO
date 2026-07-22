@@ -56,7 +56,35 @@ namespace FishMMO.Database.Npgsql.Services
 			KeyOverlapWindowDays = keyOverlapWindowDays > 0 ? keyOverlapWindowDays : throw new ArgumentOutOfRangeException(nameof(keyOverlapWindowDays), "Key overlap window must be greater than 0.");
 		}
 
-		/// <inheritdoc/>
+		/// <summary>
+		/// Upserts the active signing key for the specified LoginServer.
+		///
+		/// DUAL-LAYER EXECUTION CONTROL:
+		///
+		/// Outer layer — ExecuteWriteAsync retry loop (defined in BaseService):
+		///   Wraps the entire operation in a configurable retry policy
+		///   (up to 3 attempts with exponential backoff).  If the inner
+		///   execution strategy or transaction fails transiently (e.g.
+		///   serialisation error, deadlock victim), the outer loop retries
+		///   from scratch — creating a fresh DbContext and re-entering the
+		///   execution strategy.
+		///
+		/// Inner layer — execution strategy with explicit transaction:
+		///   The DbContext.Database.CreateExecutionStrategy() provides
+		///   Npgsql's built-in retry-on-serialisation-failure inside the
+		///   transaction scope.  The explicit transaction itself ensures
+		///   atomicity of the deactivate-INSERT pair: if the INSERT fails,
+		///   the UPDATE is rolled back and no key is lost.  The partial
+		///   UNIQUE index on (login_server_id) WHERE is_active=true
+		///   additionally serialises concurrent rotations.
+		///
+		/// This dual-layer design was chosen because the outer retry
+		/// handles connection-level failures (pool exhaustion, DNS flake,
+		/// TCP reset) while the inner strategy handles database-level
+		/// contention (serialisation failures, unique-index violations).
+		/// Each layer retries at its own granularity without conflating
+		/// the two failure modes.
+		/// </summary>
 		public async Task<DatabaseResult<LoginServerSigningKeyData>> UpsertAsync(
 			long loginServerId,
 			byte[] hmacKey,
@@ -76,6 +104,8 @@ namespace FishMMO.Database.Npgsql.Services
 					"HMAC key must not be empty.");
 			}
 
+			// NOTE: Dual-layer execution control — outer ExecuteWriteAsync retry loop, inner ExecutionStrategy
+			// with transaction. If inner transaction rolls back, outer wrapper has no awareness but will retry fresh.
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				// Wrap the deactivate + insert in an explicit transaction so a failure of the

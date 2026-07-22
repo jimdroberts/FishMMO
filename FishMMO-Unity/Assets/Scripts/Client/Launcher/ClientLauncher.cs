@@ -305,7 +305,7 @@ namespace FishMMO.Client
 			this.updaterLauncher = new SystemUpdaterLauncher();
 
 			// Basic null checks for dependencies
-			if (this.unityWebRequestService == null || this.htmlContentFetcher == null || this.patchServerService == null || this.updaterLauncher == null)
+			if (this.unityWebRequestService == null || this.htmlContentFetcher == null || this.patchServerService == null)
 			{
 				Log.Error("ClientLauncher", "One or more required service dependencies are not assigned in the Inspector or are missing!");
 				if (this.PlayButtonText != null)
@@ -629,6 +629,18 @@ namespace FishMMO.Client
 		private System.Collections.IEnumerator LaunchWatchdog()
 		{
 			yield return new WaitForSeconds(this.launchWatchdogTimeoutSeconds);
+			/* Watchdog reset: isLaunching is set back to false on timeout so that
+			 * the Play button is re-enabled and the player can retry.  In the normal
+			 * (success) path, OnPostbootSceneLoaded unloads the launcher scene, which
+			 * destroys this MonoBehaviour and stops the coroutine automatically —
+			 * isLaunching is never explicitly set back to false on success; the
+			 * GameObject simply goes away.  This asymmetry (timeout path resets,
+			 * success path destroys) is intentional and expected.
+			 *
+			 * NOTE: isLaunching is reset but isConnecting is not. The next
+			 * PlayButtonConnect() call checks isConnecting which should already
+			 * be false from the connection failure path.
+			 */
 			this.isLaunching = false;
 			SetLauncherState(LauncherState.LaunchFailed,
 				"Scene load timed out. Check that Addressable bundles are built and up to date.");

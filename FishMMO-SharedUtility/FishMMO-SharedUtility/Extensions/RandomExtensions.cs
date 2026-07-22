@@ -27,12 +27,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static long Next(this System.Random random, long min, long max)
 		{
-			if (min == max) return min;
-
 			if (min > max)
 			{
 				(min, max) = (max, min);
 			}
+
+			if (min == max) return min;
 
 			// Using ulong for range to handle the full span of long.MinValue to long.MaxValue
 			ulong range = (ulong)(max - min);

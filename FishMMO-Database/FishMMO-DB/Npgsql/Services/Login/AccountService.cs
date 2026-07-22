@@ -19,6 +19,10 @@ namespace FishMMO.Database.Npgsql.Services
 	/// </summary>
 	public sealed class AccountService : BaseService<AccountEntity>, IAccountService
 	{
+		// NOTE: Some methods use Authentication.NormalizeAccountLookup() while others use
+		// .ToLowerInvariant(). Both normalize to lowercase but may diverge in the future.
+		// Consolidate when the authentication normalization logic stabilizes.
+
 		/// <summary>
 		/// Compiled query for ExistsAsync hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.

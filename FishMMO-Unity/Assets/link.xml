@@ -1,0 +1,17 @@
+<linker>
+  <!--
+    BouncyCastle relies on reflection for algorithm lookup, ASN.1 type
+    activation, and cryptographic service resolution.  On IL2CPP / AOT
+    platforms (WebGL, iOS, consoles) the managed-code linker strips
+    unreferenced types, causing runtime crashes in:
+      - X509CertificateParser.ReadCertificate()
+      - SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo()
+      - DigestUtilities / CipherUtilities / SignerUtilities algorithm lookups
+
+    Preserving the entire assembly is the only safe option; partial
+    namespace preservation still misses deeply-nested reflection chains.
+
+    Referenced by: ClientCertificatePinning.cs
+  -->
+  <assembly fullname="Org.BouncyCastle" preserve="all"/>
+</linker>

@@ -55,7 +55,6 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<AuthTokenEntity> AuthTokens { get; set; }
 		public DbSet<TwoFactorRecoveryCodeEntity> TwoFactorRecoveryCodes { get; set; }
 		public DbSet<EmailQueueEntity> EmailQueue { get; set; }
-		public DbSet<ConnectionTokenEntity> ConnectionTokens { get; set; }
 
 		public DbSet<CharacterEntity> Characters { get; set; }
 		public DbSet<CharacterAbilityEntity> CharacterAbilities { get; set; }
@@ -85,6 +84,16 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<PartyUpdateEntity> PartyUpdates { get; set; }
 		public DbSet<ChatEntity> Chat { get; set; }
 
+		/// <summary>
+		/// Keyless entity set for mapping scalar <c>integer</c> results from raw SQL queries via <c>FromSqlRaw</c>.
+		/// </summary>
+		public DbSet<SqlIntValue> SqlIntValues { get; set; }
+
+		/// <summary>
+		/// Keyless entity set for mapping scalar <c>bigint</c> results from raw SQL queries via <c>FromSqlRaw</c>.
+		/// </summary>
+		public DbSet<SqlLongValue> SqlLongValues { get; set; }
+
 		public override void Dispose()
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
@@ -113,8 +122,6 @@ namespace FishMMO.Database.Npgsql
 			// Apply all configurations in the assembly
 			modelBuilder.ApplyConfigurationsFromAssembly(typeof(NpgsqlDbContext).Assembly);
 
-			modelBuilder.Ignore<SqlIntValue>();
-			modelBuilder.Ignore<SqlLongValue>();
 
 			ApplyLogicalVersionConventions(modelBuilder);
 			ApplyTimeCreatedConventions(modelBuilder);

@@ -247,17 +247,22 @@ namespace FishMMO.Client
 
 	/// <summary>
 	/// Resets the authentication state and re-initiates the handshake on the
-	/// current connection.  Used by the login queue system when a queued client
-	/// is admitted (queue position reaches 0).  Generates a fresh X25519 keypair
-	/// and sends a new <see cref="ClientHandshake"/> broadcast.
+	/// current connection after a randomized jitter delay (0-1s). The jitter
+	/// prevents all admitted queue clients from sending handshakes simultaneously,
+	/// which would create a thundering herd at the server's SRP verify channel.
 	/// </summary>
 	/// <remarks>
-	/// The connection token from IPFetch is NOT re-sent — the real IP was already
+	/// The connection token from IPFetch is NOT re-sent -- the real IP was already
 	/// recovered by the initial handshake that triggered queueing.
 	/// </remarks>
-	public void RetryHandshake()
+	public async System.Threading.Tasks.Task RetryHandshakeAsync()
 	{
 		if (core == null || !initialized) return;
+		// Spread re-handshake attempts across ~1 second to prevent all admitted
+		// clients from hitting the SRP verify channel at the same instant.
+		int jitterMs = UnityEngine.Random.Range(0, 1000);
+		if (jitterMs > 0)
+			await System.Threading.Tasks.Task.Delay(jitterMs);
 		core.OnDisconnected();
 		core.OnConnected(connectionToken: null);
 	}
@@ -419,7 +424,11 @@ namespace FishMMO.Client
 				// the write (Array.Clear can be optimized away as dead).
 				if (tokenCopy != null)
 				{
-					CryptographicOperations.ZeroMemory(tokenCopy);
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_0_OR_GREATER
+					System.Security.Cryptography.CryptographicOperations.ZeroMemory(tokenCopy);
+#else
+					Array.Clear(tokenCopy, 0, tokenCopy.Length);
+#endif
 				}
 			}
 		}

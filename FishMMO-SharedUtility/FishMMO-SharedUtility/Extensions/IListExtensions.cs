@@ -89,6 +89,17 @@ namespace FishMMO.Shared
 		{
 			if (list == null || list.Count == 0) return default;
 
+			// IList<T> does not guarantee resizability — arrays (T[]) implement
+			// IList<T> but throw NotSupportedException on RemoveAt. Check IsReadOnly
+			// upfront to give a clear error instead of a cryptic NSE.
+			if (list.IsReadOnly)
+			{
+				throw new InvalidOperationException(
+					$"TakeRandom cannot be called on a read-only or fixed-size collection " +
+					$"(type: {list.GetType().FullName}). Use GetRandom() if selection without " +
+					$"removal is acceptable, or copy the collection to a resizable List<T> first.");
+			}
+
 			int index = Instance.Next(0, list.Count);
 			T element = list[index];
 			list.RemoveAt(index);

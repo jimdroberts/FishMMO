@@ -96,13 +96,18 @@ public class PatchController : ControllerBase
 		string etag = "W/\"" + etagSource + "\"";
 
 		// Conditional GET: short-circuit with 304 when the client already has the
-		// current answer cached.
+		// current answer cached.  Per RFC 7232, If-None-Match can contain a
+		// comma-separated list of ETags; parse all values and match any one.
 		var ifNoneMatch = Request.Headers["If-None-Match"].ToString();
-		if (!string.IsNullOrEmpty(ifNoneMatch) && ifNoneMatch == etag)
+		if (!string.IsNullOrEmpty(ifNoneMatch))
 		{
-			Response.Headers["ETag"] = etag;
-			Response.Headers["Cache-Control"] = "public, max-age=30";
-			return StatusCode(StatusCodes.Status304NotModified);
+			var etags = ifNoneMatch.Split(',').Select(e => e.Trim().Trim('"')).ToArray();
+			if (etags.Contains(etag.Trim('"')))
+			{
+				Response.Headers["ETag"] = etag;
+				Response.Headers["Cache-Control"] = "public, max-age=30";
+				return StatusCode(StatusCodes.Status304NotModified);
+			}
 		}
 
 		Response.Headers["ETag"] = etag;

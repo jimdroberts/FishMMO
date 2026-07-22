@@ -95,12 +95,13 @@ namespace FishMMO.Database.Npgsql.Services
 				var sql = $@"
 					WITH upserted AS (
 						INSERT INTO {TableName}
-							(character_id, hash, version, level, cast_time_end, cooldown_end, time_created, deleted, time_deleted)
+							(character_id, template_id, version, level, experience, cast_time_end, cooldown_end, time_created, deleted, time_deleted)
 						VALUES
-							({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, FALSE, NULL)
-						ON CONFLICT (character_id, hash)
+							({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, FALSE, NULL)
+						ON CONFLICT (character_id, template_id)
 						DO UPDATE SET
 							level = EXCLUDED.level,
+							experience = EXCLUDED.experience,
 							cast_time_end = EXCLUDED.cast_time_end,
 							cooldown_end = EXCLUDED.cooldown_end,
 							deleted = FALSE,
@@ -115,7 +116,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var id = await ExecuteScalarLongAsync(
 					dbContext,
 					sql,
-					new object[] { skillData.CharacterID, skillData.TemplateID, skillData.Version, skillData.Level, 0d, 0d, now },
+					new object[] { skillData.CharacterID, skillData.TemplateID, skillData.Version, skillData.Level, skillData.Experience, skillData.CastTimeEnd, skillData.CooldownEnd, now },
 					cancellationToken).ConfigureAwait(false);
 
 				if (id <= 0)
@@ -187,23 +188,25 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var now = DateTime.UtcNow;
 				var characterIdArray = activeSkills.Select(s => s.CharacterID).ToArray();
-				var hashArray = activeSkills.Select(s => s.TemplateID).ToArray();
+				var templateIdArray = activeSkills.Select(s => s.TemplateID).ToArray();
 				var versionArray = activeSkills.Select(s => s.Version).ToArray();
 				var levelArray = activeSkills.Select(s => s.Level).ToArray();
-				var castTimeEndArray = activeSkills.Select(s => 0d).ToArray();
-				var cooldownEndArray = activeSkills.Select(s => 0d).ToArray();
+				var experienceArray = activeSkills.Select(s => s.Experience).ToArray();
+				var castTimeEndArray = activeSkills.Select(s => s.CastTimeEnd).ToArray();
+				var cooldownEndArray = activeSkills.Select(s => s.CooldownEnd).ToArray();
 
 				var sql = $@"
 					INSERT INTO {TableName}
-						(character_id, hash, version, level, cast_time_end, cooldown_end, time_created, deleted, time_deleted)
+						(character_id, template_id, version, level, experience, cast_time_end, cooldown_end, time_created, deleted, time_deleted)
 					SELECT
 						u.character_id,
-						u.hash,
+						u.template_id,
 						u.version,
 						u.level,
+						u.experience,
 						u.cast_time_end,
 						u.cooldown_end,
-						{{6}},
+						{{7}},
 						FALSE,
 						NULL
 					FROM UNNEST(
@@ -211,12 +214,14 @@ namespace FishMMO.Database.Npgsql.Services
 						{{1}}::integer[],
 						{{2}}::bigint[],
 						{{3}}::integer[],
-						{{4}}::double precision[],
-						{{5}}::double precision[]
-					) AS u(character_id, hash, version, level, cast_time_end, cooldown_end)
-					ON CONFLICT (character_id, hash)
+						{{4}}::integer[],
+						{{5}}::double precision[],
+						{{6}}::double precision[]
+					) AS u(character_id, template_id, version, level, experience, cast_time_end, cooldown_end)
+					ON CONFLICT (character_id, template_id)
 					DO UPDATE SET
 						level = EXCLUDED.level,
+						experience = EXCLUDED.experience,
 						cast_time_end = EXCLUDED.cast_time_end,
 						cooldown_end = EXCLUDED.cooldown_end,
 						deleted = FALSE,
@@ -229,7 +234,7 @@ namespace FishMMO.Database.Npgsql.Services
 					dbContext,
 					sql,
 					activeSkills.Count,
-					new object[] { characterIdArray, hashArray, versionArray, levelArray, castTimeEndArray, cooldownEndArray, now },
+					new object[] { characterIdArray, templateIdArray, versionArray, levelArray, experienceArray, castTimeEndArray, cooldownEndArray, now },
 					"One or more skills were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -294,9 +299,11 @@ namespace FishMMO.Database.Npgsql.Services
 					id: s.ID,
 					version: s.Version,
 					characterID: s.CharacterID,
-					templateID: s.Hash,
+					templateID: s.TemplateID,
 					level: s.Level,
-					experience: 0
+					experience: s.Experience,
+					castTimeEnd: s.CastTimeEnd,
+					cooldownEnd: s.CooldownEnd
 				)).ToList();
 
 				return (IReadOnlyList<CharacterSkillData>)skills;

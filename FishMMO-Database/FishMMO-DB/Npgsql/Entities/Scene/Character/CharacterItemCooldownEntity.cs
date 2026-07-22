@@ -23,7 +23,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>
 		/// Cooldown category or group identifier for this item.
 		/// </summary>
-		public string Category { get; set; }
+		public int Category { get; set; }
 		/// <summary>
 		/// Unix timestamp (seconds) when the cooldown expires.
 		/// Stored as <c>double</c> rather than <c>DateTime</c> to maintain

@@ -7,6 +7,11 @@ namespace FishMMO.Client.Security
 	/// <summary>
 	/// Scaffold interface for out-of-band TLS pin updates.
 	///
+	/// This is a forward-planning scaffold only. No production implementation
+	/// is currently wired into the client. The <see cref="NullPinUpdateSidecar"/>
+	/// default is always returned, meaning the static pin set from
+	/// <see cref="ClientSecurityBootstrap"/> is never overridden at runtime.
+	///
 	/// Hard-coded compile-time pins (see <see cref="ClientSecurityBootstrap"/>) and
 	/// StreamingAssets configuration both require shipping a new client build to
 	/// rotate keys. That is unacceptable when a CA-incident or HSM rotation forces

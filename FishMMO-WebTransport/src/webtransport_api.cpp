@@ -45,7 +45,7 @@ WT_API int32_t wt_init(void)
      * copy of the API table, and return. */
     atomic_bool expected = false;
     if (atomic_compare_exchange_strong(&g_initialised, &expected, true)) {
-        MsQuic = api;
+        atomic_ptr_store(&MsQuic, api);
         /* Release-store: paired with acquire-load in API entry guards.
          * Ensures MsQuic is visible before g_initialised. */
         WT_LOG_INFO("WebTransport library initialised (msquic %s)", wt_version());
@@ -101,7 +101,7 @@ WT_API void wt_deinit(void)
     if (MsQuic) {
         MsQuicClose(MsQuic);
     }
-    MsQuic = NULL;
+    atomic_ptr_store(&MsQuic, (const QUIC_API_TABLE*)NULL);
 }
 
 /* ── Version ────────────────────────────────────────────────── */
@@ -110,6 +110,15 @@ WT_API void wt_deinit(void)
 #define WT_VERSION_MINOR 0
 #define WT_VERSION_PATCH 0
 
+/**
+ * Returns the library version string.
+ * Used by wt_init() for startup logging and can be called at any time
+ * after wt_init() completes (before wt_init() the global MsQuic API table
+ * is not yet populated, but the version string itself is a static literal
+ * and does not depend on MsQuic state).
+ *
+ * @return Static string literal "1.0.0" (semver).
+ */
 const char* wt_version(void)
 {
     return "1.0.0";

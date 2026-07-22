@@ -81,6 +81,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 
 			var channelByte = (byte)channel;
+			// NOTE: Uses EF Core change tracker (AddAsync + SaveChanges) instead of raw SQL like most other
+			// services. ChatEntity does not implement IVersionedEntity so there's no concurrency token concern.
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var entity = new ChatEntity

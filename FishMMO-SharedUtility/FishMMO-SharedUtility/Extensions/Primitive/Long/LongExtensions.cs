@@ -1,5 +1,4 @@
-﻿using System.Numerics;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -73,8 +72,8 @@ namespace FishMMO.Shared
 		{
 			if (digitIndex < 0) return 0;
 
-			// Use BigInteger for the absolute value to correctly handle long.MinValue
-			BigInteger absVal = number == long.MinValue ? -(BigInteger)long.MinValue : (number < 0 ? -number : number);
+			// Use ulong for the absolute value. long.MinValue fits in ulong via (ulong)long.MaxValue + 1.
+			ulong absVal = number == long.MinValue ? (ulong)long.MaxValue + 1 : (ulong)(number < 0 ? -number : number);
 
 			for (int i = 0; i < digitIndex; ++i)
 			{
@@ -84,7 +83,14 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Normalizes the long value to a double in the range [0, 1] by dividing by long.MaxValue.
+		/// Normalizes the absolute value of a long to a double in the range [0, 1]
+		/// by dividing by <see cref="long.MaxValue"/>.
+		/// <para>Negative values are converted to their positive equivalent via
+		/// <see cref="Absolute"/> before normalization. This means both
+		/// <c>long.MaxValue</c> and <c>long.MinValue</c> map to 1.0, and
+		/// a positive value and its negation map to the same result.
+		/// For signed normalization in [-1, 1], divide by <c>long.MaxValue</c>
+		/// directly without calling <see cref="Absolute"/>.</para>
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static double Normalize(this long number)

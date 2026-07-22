@@ -22,12 +22,16 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.CharacterID)
 				.IsRequired();
 
-			builder.Property(e => e.Hash)
+			builder.Property(e => e.TemplateID)
 				.IsRequired();
 
 			builder.Property(e => e.Level)
 				.IsRequired()
 				.HasDefaultValue(1);
+
+			builder.Property(e => e.Experience)
+				.IsRequired()
+				.HasDefaultValue(0);
 
 			builder.Property(e => e.CastTimeEnd)
 				.IsRequired()
@@ -37,8 +41,8 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(0d);
 
-			// Unique constraint: one skill hash per character
-			builder.HasIndex(e => new { e.CharacterID, e.Hash })
+			// Unique constraint: one skill template per character
+			builder.HasIndex(e => new { e.CharacterID, e.TemplateID })
 				.IsUnique();
 
 			// Performance index for character skill queries

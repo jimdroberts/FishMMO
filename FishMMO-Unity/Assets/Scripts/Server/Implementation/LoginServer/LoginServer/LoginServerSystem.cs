@@ -281,10 +281,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 					try
 					{
 						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL: We use Task.Run to escape
-								// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
-								// At this point the server is shutting down, so blocking the main thread momentarily
-								// is acceptable and ensures the DB cleanup completes before process exit.
-								Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID)).Wait(5000);
+						// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
+						// At this point the server is shutting down, so blocking the main thread momentarily
+						// is acceptable and ensures the DB cleanup completes before process exit.
+						if (!Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID)).Wait(5000))
+						{
+							Log.Warning("LoginServerSystem", $"Signing key deletion timed out after 5000ms");
+						}
 					}
 					catch (Exception ex)
 					{
@@ -297,7 +300,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 					try
 					{
 						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL (see comment above).
-								Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
+						if (!Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000))
+						{
+							Log.Warning("LoginServerSystem", $"Login server deregistration timed out after 5000ms");
+						}
 					}
 					catch (Exception ex)
 					{
@@ -328,6 +334,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 				// C6: Token signing key rotation. Inspects the age of the in-memory active key and
 				// triggers an asynchronous rotation when it exceeds the configured interval. A single
 				// rotation may be in flight at a time (CAS-guarded by rotationInFlight).
+				// NOTE: Key rotation is triggered only during periodic heartbeats. If the heartbeat
+				// mechanism fails, key rotation also stops. Consider adding an independent rotation
+				// timer.
 				if (signingKeyRotationHours > 0f &&
 					(DateTime.UtcNow - signingKeyIssuedUtc).TotalHours >= signingKeyRotationHours &&
 					System.Threading.Interlocked.CompareExchange(ref rotationInFlight, 1, 0) == 0)

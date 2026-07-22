@@ -57,6 +57,9 @@ namespace FishMMO.Database.Npgsql.Monitoring.Metrics
 
 			var ticks = responseTime.Ticks;
 
+			// NOTE: Interlocked inside lock is redundant but harmless. The lock already provides mutual exclusion.
+			// RecordSuccess uses Interlocked WITHOUT a lock — the inconsistency is intentional
+			// (lock needed here for errorCountsByType dictionary access).
 			// Update all metrics atomically within lock to ensure consistency
 			lock (lockObject)
 			{

@@ -2,6 +2,7 @@ using System;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
+	/// <summary>World server registration entity representing an active world server instance.</summary>
 	public class WorldServerEntity : IVersionedEntity
 	{
 		/// <summary>Primary key.</summary>

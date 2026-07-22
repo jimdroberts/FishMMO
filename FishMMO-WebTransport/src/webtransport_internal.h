@@ -28,7 +28,17 @@
  * every access to these variables. */
 typedef int atomic_int;
 typedef unsigned int atomic_uint;
-typedef int atomic_bool;    /* always 4 bytes — consistent struct layout across platforms */
+/* atomic_bool is typedef'd to int because C11 _Atomic bool has
+ * inconsistent size across platforms. All atomic operations on this
+ * type read/write 4 bytes (int-sized).  Some platforms use 1-byte
+ * _Bool, others 4.  The typedef to int guarantees consistent struct
+ * layout across all ABIs.  All atomic macros (atomic_load,
+ * atomic_store, etc.) operate on int-sized operands via GCC __atomic
+ * builtins or MSVC Interlocked intrinsics.  This ensures that every
+ * access to an atomic_bool field uses the correct atomic instruction
+ * and that structs containing atomic_bool fields have the same layout
+ * on x86, ARM, and ARM64. */
+typedef int atomic_bool;
 
 /* Pointer atomics — prevents TOCTOU when session ptr is freed on another thread */
 #if defined(_MSC_VER)
@@ -135,6 +145,20 @@ typedef enum {
 /* ── Logging ────────────────────────────────────────────────── */
 
 #ifndef WT_NO_LOGGING
+  /* NOTE: fprintf(stderr) is not async-signal-safe. These logs are for
+   * development/debugging only. In production, disable via compile flag
+   * or redirect stderr.
+   *
+   * fprintf is also NOT async-signal-safe in signal-handler context (e.g.
+   * SIGSEGV in a QUIC callback) where fprintf may deadlock on stderr's
+   * internal FILE lock held by the interrupted thread.  This is acceptable
+   * because:
+   *   - WT_LOG_* macros are only called from application-thread contexts
+   *     (QUIC callbacks, poll, send) — never from signal handlers.
+   *   - The native library is a non-production debugging aid; production
+   *     deployments disable it via WT_NO_LOGGING.
+   * If production-grade signal-safe logging is ever needed, replace fprintf
+   * with writev(2) to a dedicated log fd (preserving errno). */
   #define WT_LOG(level, fmt, ...) \
       fprintf(stderr, "[wt:%s] " fmt "\n", level, ##__VA_ARGS__)
   #define WT_LOG_INFO(fmt, ...)  WT_LOG("INFO",  fmt, ##__VA_ARGS__)

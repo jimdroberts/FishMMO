@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Threading.RateLimiting;
 using FishMMO.Database.Npgsql;
 using FishMMO.WebShared;
@@ -84,8 +85,6 @@ namespace FishMMO.WebServer
 						services.AddSingleton<NpgsqlDbContextFactory>();
 						services.AddMemoryCache();
 
-							// Periodic cleanup of expired connection tokens (every 60s)
-							services.AddHostedService<TokenCleanupService>();
 						services.AddControllers()
 							.AddJsonOptions(options =>
 							{
@@ -262,7 +261,7 @@ namespace FishMMO.WebServer
 				return;
 			}
 
-			string normalized = connectionString.Replace(" ", "").ToLowerInvariant();
+			string normalized = Regex.Replace(connectionString, @"\s+", "").ToLowerInvariant();
 			// Accept any of: sslmode=require / verifyca / verifyfull / sslmode=disable-explicit-with-allow flag.
 			bool hasRequire = normalized.Contains("sslmode=require")
 				|| normalized.Contains("sslmode=verifyca")

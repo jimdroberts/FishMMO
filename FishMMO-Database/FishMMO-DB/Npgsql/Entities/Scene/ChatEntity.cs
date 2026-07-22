@@ -2,6 +2,7 @@ using System;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
+	/// <summary>Chat message entity representing a persisted chat message from any channel.</summary>
 	public class ChatEntity : IVersionedEntity
 	{
 		/// <summary>Primary key.</summary>

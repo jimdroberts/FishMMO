@@ -306,7 +306,8 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// </returns>
 		internal string GetConnectionAddress(int connectionId)
 		{
-			if (this.serverHandle == null || this.serverHandle.IsInvalid)
+			SafeServerHandle handle = this.serverHandle;
+			if (handle == null || handle.IsInvalid)
 				return string.Empty;
 
 			this.clientsLock.EnterReadLock();
@@ -315,7 +316,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				if (this.idMapToNative.TryGetValue(connectionId, out ulong nativeId))
 				{
 					IntPtr addrPtr = WebTransportNative.wt_server_get_client_address(
-						this.serverHandle, nativeId);
+						handle, nativeId);
 					if (addrPtr != IntPtr.Zero)
 						return System.Runtime.InteropServices.Marshal.PtrToStringAnsi(addrPtr) ?? string.Empty;
 				}
@@ -455,9 +456,17 @@ namespace FishNet.Transporting.WebTransport.Server
 
 				if (connectionId == -1) // Broadcast
 				{
-					foreach (int cid in this.clients)
+					this.clientsLock.EnterReadLock();
+					try
 					{
-						SendPacketToClient(pkt, cid);
+						foreach (int cid in this.clients)
+						{
+							SendPacketToClient(pkt, cid);
+						}
+					}
+					finally
+					{
+						this.clientsLock.ExitReadLock();
 					}
 				}
 				else // Unicast

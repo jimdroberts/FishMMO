@@ -369,6 +369,15 @@ void wt_server_stop_impl(wt_server_s* server)
 void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
 {
     (void)timeout_us;
+    /* NOTE: timeout_us is ignored by design — poll is non-blocking for Unity
+     * main-thread integration. Use a short sleep in the caller if backpressure
+     * is needed.
+     *
+     * timeout_us is intentionally ignored — this poll is always non-blocking.
+     * The Unity main thread calls poll every frame (typically 16ms at 60 FPS).
+     * Blocking in poll would stall the entire Unity tick, causing frame drops
+     * and delaying Netcode sends.  Datagrams and shutdown events are drained
+     * in a single pass and the call returns immediately. */
     if (!server || atomic_load(&server->state) != WT_SERVER_STARTED)
         return;
 
@@ -379,7 +388,23 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
      * no TOCTOU between session free and acquire. */
     uint32_t head = atomic_load(&server->pending_shutdown_head);
     uint32_t tail = atomic_load(&server->pending_shutdown_tail);
-    /* Acquire fence: paired with release fence in SHUTDOWN_COMPLETE.
+    /* NOTE: tail is loaded once before the loop. Entries added after this
+     * point won't be seen until the next poll call. This single-cycle delay
+     * is acceptable for the intended use (polled each frame).
+     *
+     * (void)timeout_us — see above; this is a non-blocking poll.
+     *
+     * SINGLE-POLL-CYCLE DELAY (by design):
+     * The pending_shutdown_head load above may return a stale value because
+     * the QUIC callback thread wrote a new tail concurrently.  The acquire
+     * fence below ensures that when we DO see an updated tail, the array
+     * slot contents are also visible.  If head is stale (behind the real
+     * producer position), we simply process one fewer entry this cycle; the
+     * entry will be drained on the next frame's poll call.  This is an
+     * acceptable single-frame delay for session shutdown — Unity already
+     * tolerates frame-level latency for network events.
+     *
+     * Acquire fence: paired with release fence in SHUTDOWN_COMPLETE.
      * Ensures that the producer's array writes are visible before we
      * read them on weakly-ordered architectures (ARM).  Without this,
      * the consumer could see an updated tail but stale array data. */
@@ -395,6 +420,14 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
             }
         }
         head++;
+        /* Release fence: paired with the producer's acquire load of
+         * pending_shutdown_head in SHUTDOWN_COMPLETE.  Ensures that
+         * all slot processing (reads/writes to the session struct)
+         * completes before the head update becomes visible, so the
+         * producer sees a fully-consumed slot before reusing it.
+         * (atomic_store already uses __ATOMIC_SEQ_CST, which includes
+         *  release semantics; the explicit fence documents the intent.) */
+        std::atomic_thread_fence(std::memory_order_release);
         atomic_store(&server->pending_shutdown_head, head);
     }
 
@@ -409,6 +442,17 @@ int32_t wt_server_send_stream_impl(
     if (!server || !data || length <= 0) return WT_ERR_SEND_FAILED;
 
     if (conn_id == WT_BROADCAST_ALL) {
+        /* NOTE: returns WT_OK even if every session acquire fails. Callers
+         * should validate send success independently.  The broadcast loop
+         * iterates every connection slot.  If every active session fails
+         * acquire (e.g. all sessions entered shutdown concurrently), worst
+         * stays WT_OK — which is technically misleading (nothing was sent).
+         * This is intentional: a broadcast to zero recipients is a no-op,
+         * not an error, and the caller (who issued a broadcast send) should
+         * not see a failure code for a condition outside its control.
+         * Per-connection send failures (buffer full, stream closed) DO
+         * propagate via worst, so genuine transport errors are still
+         * surfaced. */
         int32_t worst = WT_OK;
         for (uint32_t i = 1; i <= server->max_clients; i++) {
             wt_server_conn_t* c = &server->connections[i];
@@ -562,10 +606,13 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     wt_server_s* srv = (wt_server_s*)ctx;
     QUIC_STATUS status;
 
-    /* Reject connections if server is not running */
+    /* Reject connections if server is not running.
+     * Return QUIC_STATUS_CONNECTION_REFUSED without calling
+     * ConnectionClose — msquic owns the handle and will clean it
+     * up internally. Calling both would double-close. */
     if (atomic_load(&srv->state) != WT_SERVER_STARTED) {
         if (event->Type == QUIC_LISTENER_EVENT_NEW_CONNECTION)
-            MsQuic->ConnectionClose(event->NEW_CONNECTION.Connection);
+            return QUIC_STATUS_CONNECTION_REFUSED;
         return QUIC_STATUS_SUCCESS;
     }
 
@@ -583,8 +630,9 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
         }
     }
     if (!conn) {
-        MsQuic->ConnectionClose(event->NEW_CONNECTION.Connection);
-        return QUIC_STATUS_SUCCESS;  /* handle closed, tell msquic we handled it */
+        /* No free slot — refuse without ConnectionClose. msquic
+         * cleans up the handle when CONNECTION_REFUSED is returned. */
+        return QUIC_STATUS_CONNECTION_REFUSED;
     }
 
     conn->id = conn_id;
@@ -606,10 +654,11 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
                                         srv->session_config);
     if (QUIC_FAILED(status)) {
         WT_LOG_WARN("ConnectionSetConfiguration: 0x%x", status);
-        MsQuic->ConnectionClose(conn->quic_conn);
+        /* Undo what we set up above; do NOT call ConnectionClose —
+         * msquic closes the handle when CONNECTION_REFUSED is returned. */
         atomic_store(&conn->in_use, false);
         atomic_fetch_sub(&srv->connection_count, 1);
-        return QUIC_STATUS_SUCCESS;  /* handle closed, tell msquic we handled it */
+        return QUIC_STATUS_CONNECTION_REFUSED;
     }
     return QUIC_STATUS_SUCCESS;
 }

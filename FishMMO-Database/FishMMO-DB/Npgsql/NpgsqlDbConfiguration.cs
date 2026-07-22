@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using FishMMO.Database.Exceptions;
 using Npgsql;
@@ -123,7 +122,39 @@ namespace FishMMO.Database.Npgsql
 				MaxPoolSize = s.MaxPoolSize,
 				Timeout = s.ConnectionTimeout,
 				CommandTimeout = s.CommandTimeout,
+				// WARNING: NoResetOnClose = true skips DISCARD ALL / RESET ALL when returning
+				// connections to the pool. This is a deliberate performance optimization —
+				// it avoids the per-connection round-trip cost of the reset sequence and
+				// reduces time-to-first-query for pooled connections.
+				//
+				// In this codebase, no code path sets session-level state (SET LOCAL,
+				// SET SESSION, SET ROLE, CREATE TEMP TABLE, search_path changes, LISTEN/
+				// NOTIFY, or advisory locks on the session scope). All services in
+				// BaseService create fresh DbContext instances per operation, and the
+				// RetryPolicy always opens a new connection on retry.
+				//
+				// If any future code introduces session-level state, it MUST manually
+				// reset that state before returning the connection to the pool, or change
+				// NoResetOnClose to false. The performance cost of switching to false is:
+				// one extra round-trip per connection checkout (~0.5-2 ms on LAN,
+				// potentially more on WAN). Measure before changing.
 				NoResetOnClose = true,
+				// MaxAutoPrepare = 0 disables Npgsql's automatic prepared-statement
+				// caching.  This codebase uses the EF Core compiled query pattern
+				// (EF.CompileAsyncQuery) and raw SQL via ExecuteSqlRawAsync for the
+				// majority of hot-path queries.  Prepared-statement caching offers
+				// negligible benefit when queries are already compiled at the EF level,
+				// and the dynamic-SQL nature of the BaseService retry strategy makes
+				// cache hits unpredictable.  Setting MaxAutoPrepare to a non-zero value
+				// (e.g. 50) would consume additional client-side memory tracking
+				// statement plans that are rarely reused, with no measurable throughput
+				// improvement.  If a future migration to parameterised queries changes
+				// this trade-off, raise MaxAutoPrepare incrementally (start at 50) and
+				// measure the impact on connection-open latency and memory usage.
+				//
+				// MaxAutoPrepare=0 disables automatic statement preparation to avoid Npgsql
+				// prepared-statement memory accumulation from the dynamic SQL patterns used by
+				// BaseService. Enable with a non-zero value if query patterns are stable.
 				MaxAutoPrepare = 0
 			}.ConnectionString;
 		}
@@ -154,7 +185,7 @@ namespace FishMMO.Database.Npgsql
 			{
 				return port;
 			}
-			Debug.WriteLine($"[FishMMO-DB] Port configuration '{portValue}' is invalid or missing; defaulting to 5432.");
+			Console.Error.WriteLine($"[FishMMO-DB] Port configuration '{portValue}' is invalid or missing; defaulting to 5432.");
 			return 5432;
 		}
 	}

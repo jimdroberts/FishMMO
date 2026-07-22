@@ -113,7 +113,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var id = await ExecuteScalarLongAsync(
 					dbContext,
 					sql,
-					new object[] { cooldownData.CharacterID, cooldownData.Category.ToString(), cooldownData.Version, cooldownData.CooldownEnd, now },
+					new object[] { cooldownData.CharacterID, cooldownData.Category, cooldownData.Version, cooldownData.CooldownEnd, now },
 					cancellationToken).ConfigureAwait(false);
 
 				if (id <= 0)
@@ -185,7 +185,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var now = DateTime.UtcNow;
 				var characterIdArray = activeCooldowns.Select(c => c.CharacterID).ToArray();
-				var categoryArray = activeCooldowns.Select(c => c.Category.ToString()).ToArray();
+				var categoryArray = activeCooldowns.Select(c => c.Category).ToArray();
 				var versionArray = activeCooldowns.Select(c => c.Version).ToArray();
 				var cooldownEndArray = activeCooldowns.Select(c => c.CooldownEnd).ToArray();
 
@@ -202,7 +202,7 @@ namespace FishMMO.Database.Npgsql.Services
 						NULL
 					FROM UNNEST(
 						{{0}}::bigint[],
-						{{1}}::text[],
+						{{1}}::integer[],
 						{{2}}::bigint[],
 						{{3}}::double precision[]
 					) AS u(character_id, category, version, cooldown_end)
@@ -284,7 +284,7 @@ namespace FishMMO.Database.Npgsql.Services
 					id: c.ID,
 					version: c.Version,
 					characterID: c.CharacterID,
-					category: int.TryParse(c.Category, out var cat) ? cat : 0,
+					category: c.Category,
 					cooldownEnd: c.CooldownEnd
 				)).ToList();
 

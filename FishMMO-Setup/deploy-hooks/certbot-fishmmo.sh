@@ -84,16 +84,47 @@ signal_reload_fallback() {
 # MsQuic reads certs once at QUIC configuration load time and does
 # not auto-reload. A restart is required.
 #
-# TODO: For true zero-downtime, implement a rolling restart with health-check
-# polling between each server restart. Example pattern:
-#   for unit in fishmmo-login fishmmo-world; do
-#     systemctl restart "$unit"
-#     wait-for-healthy.sh "$unit"  # poll health endpoint before proceeding
-#     sleep 5
-#   done
-# Until then, the brief serial restart with a 5-second pause provides
-# basic connection draining between restarts.
+# The wait_for_server_healthy helper below implements rolling restart
+# with health-check polling: after each restart it polls systemd and
+# checks for a listening port (via ss) with exponential backoff up to
+# 60 seconds before proceeding to the next server.
 #
+# Between scene server restarts a 2-second sleep prevents
+# thundering-herd reconnections.  For true zero-downtime across all
+# server tiers, consider adding an application-level health endpoint
+# (e.g., /healthz) and waiting for a 200 response instead of just a
+# listening port.
+#
+# ── HEALTH-CHECK POLLING HELPER ──────────────────────────────
+# Polls systemd unit status AND verifies at least one listening
+# port is up (via ss).  Uses exponential backoff up to 10s.
+wait_for_server_healthy() {
+    local unit_name="$1"
+    local timeout="${2:-60}"
+    local elapsed=0
+    local delay=1
+
+    echo "  Waiting for $unit_name to become healthy (timeout ${timeout}s)..."
+    while [ "$elapsed" -lt "$timeout" ]; do
+        if systemctl is-active --quiet "$unit_name" 2>/dev/null; then
+            local pid
+            pid=$(systemctl show --property MainPID --value "$unit_name" 2>/dev/null)
+            if [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; then
+                if ss -tuln -p 2>/dev/null | grep -q "pid=$pid,"; then
+                    echo "  $unit_name is healthy (port listening)"
+                    return 0
+                fi
+            fi
+        fi
+        sleep "$delay"
+        elapsed=$((elapsed + delay))
+        delay=$((delay * 2))
+        [ "$delay" -gt 10 ] && delay=10
+    done
+    echo "  WARNING: $unit_name did not become healthy within ${timeout}s"
+    return 1
+}
+
 # Option A: systemd service restart (brief downtime per server)
 if command -v systemctl &>/dev/null; then
     # Broader systemd check: if any fishmmo unit exists, use systemctl
@@ -102,18 +133,20 @@ if command -v systemctl &>/dev/null; then
         for unit in fishmmo-login fishmmo-world; do
             if systemctl is-active --quiet "$unit" 2>/dev/null; then
                 systemctl restart "$unit" || echo "  WARNING: $unit restart failed"
-                # Brief pause between restarts for connection draining.
-                # TODO: Replace with health-check polling for true zero-downtime.
-                sleep 5
+                # Poll for health instead of a fixed sleep.
+                wait_for_server_healthy "$unit" 60
             fi
         done
         for unit in $(systemctl list-units --all --plain --no-legend 'fishmmo-scene@*' 2>/dev/null | awk '{print $1}'); do
             if systemctl is-active --quiet "$unit" 2>/dev/null; then
                 systemctl restart "$unit" || true
+                # Brief pause between scene server restarts to prevent
+                # thundering-herd reconnections from all disconnected clients.
+                sleep 2
             fi
         done
     else
-        # No fishmmo systemd units found — fall through to signal-based reload
+        # No fishmmo systemd units found, falling back to signal-based reload.
         echo "  No fishmmo systemd units found, falling back to signal-based reload."
         signal_reload_fallback
     fi

@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 		/// Caches compiled delegates for default constructors.
 		/// ConcurrentDictionary provides lock-free reads for high-frequency access.
 		/// </summary>
-		private static readonly ConcurrentDictionary<Type, Func<object?>> constructorCache =
+		private static readonly ConcurrentDictionary<Type, Func<object?>> ConstructorCache =
 			new ConcurrentDictionary<Type, Func<object?>>();
 
 		/// <summary>
@@ -50,13 +50,37 @@ namespace FishMMO.Shared
 			if (type == null) return null;
 
 			// GetOrAdd is thread-safe and more efficient than manual locking for this use case
-			return constructorCache.GetOrAdd(type, t =>
+			return ConstructorCache.GetOrAdd(type, t =>
 			{
 				if (t.IsAbstract || t.IsInterface)
 				{
 					return () => null;
 				}
 
+#if ENABLE_IL2CPP
+				// IL2CPP does not support System.Reflection.Emit, so Expression.Compile()
+				// would throw PlatformNotSupportedException.  Use Activator.CreateInstance
+				// instead, which is AOT-safe.
+				try
+				{
+					if (t.IsValueType)
+					{
+						return () => Activator.CreateInstance(t);
+					}
+
+					var constructorInfo = t.GetConstructor(Type.EmptyTypes);
+					if (constructorInfo == null)
+					{
+						return () => null;
+					}
+
+					return () => constructorInfo.Invoke(null);
+				}
+				catch
+				{
+					return () => null;
+				}
+#else
 				try
 				{
 					// Compile the "new T()" call into a reusable delegate
@@ -93,6 +117,7 @@ namespace FishMMO.Shared
 					// Return a null-returning delegate if constructor arguments are invalid
 					return () => null;
 				}
+#endif
 			});
 		}
 	}

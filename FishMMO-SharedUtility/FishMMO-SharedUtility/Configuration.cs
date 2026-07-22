@@ -316,13 +316,11 @@ namespace FishMMO.Shared
 		/// <returns>The string with BOM removed if present.</returns>
 		private string RemoveBOM(string s)
 		{
-			// Gets the UTF-8 BOM as a string.
-			string bomMarkUtf8 = Encoding.UTF8.GetString(Encoding.UTF8.GetPreamble());
-			// Checks if the input string starts with the BOM using ordinal comparison for efficiency.
-			if (s.StartsWith(bomMarkUtf8, StringComparison.Ordinal))
+			// BOM is the single Unicode character U+FEFF (UTF-8 preamble encoded as a char).
+			// Checking s[0] avoids allocating a BOM string on every call.
+			if (s.Length > 0 && s[0] == '﻿')
 			{
-				// Removes the BOM from the beginning of the string.
-				s = s.Remove(0, bomMarkUtf8.Length);
+				return s.Substring(1);
 			}
 			return s;
 		}

@@ -34,11 +34,23 @@ namespace FishNet.Transporting.WebTransport.WebGL
 			WTDataCallback onDatagram,
 			WTIndexCallback onError);
 
-		/// <summary>Send reliable data via a new bidirectional stream.</summary>
+		/// <summary>
+		/// Send reliable data via a new bidirectional stream.
+		/// IMPORTANT: Returns true when the data is QUEUED for send, NOT when it has been
+		/// delivered. The underlying browser WebTransport API uses JS Promises which may
+		/// reject asynchronously. The caller should not interpret a true return as
+		/// guaranteed delivery.
+		/// </summary>
 		[DllImport("__Internal")]
 		internal static extern bool WTSendStream(int index, byte[] data, int length);
 
-		/// <summary>Send unreliable data via datagram.</summary>
+		/// <summary>
+		/// Send unreliable data via datagram.
+		/// IMPORTANT: Returns true when the data is QUEUED for send, NOT when it has been
+		/// delivered. The underlying browser WebTransport API uses JS Promises which may
+		/// reject asynchronously. The caller should not interpret a true return as
+		/// guaranteed delivery.
+		/// </summary>
 		[DllImport("__Internal")]
 		internal static extern bool WTSendDatagram(int index, byte[] data, int length);
 

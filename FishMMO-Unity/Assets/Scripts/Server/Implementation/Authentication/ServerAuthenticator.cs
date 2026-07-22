@@ -4,6 +4,7 @@ using FishNet.Transporting;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Server.Core.Collections;
+using FishMMO.Server.Core.LoginServer;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
 using System.Net;
@@ -160,6 +161,18 @@ namespace FishMMO.Server.Implementation
 			core.TokenSigningKeyId = tokenSigningKeyId;
 			core.TokenExpirationMinutes = tokenExpirationMinutes;
 
+			// Read SRP worker/channel configuration from the server .cfg file.
+			// Defaults match the previous hardcoded constants; operators can tune
+			// these per deployment for login-storm resilience.
+			if (Server?.Configuration != null)
+			{
+				core.VerifyWorkerCount = Server.Configuration.GetInt("AuthSrpVerifyWorkerCount", 2);
+				core.ProofWorkerCount = Server.Configuration.GetInt("AuthSrpProofWorkerCount", 2);
+				core.VerifyChannelCapacity = Server.Configuration.GetInt("AuthSrpVerifyChannelCapacity", 500);
+				core.ProofChannelCapacity = Server.Configuration.GetInt("AuthSrpProofChannelCapacity", 500);
+				core.MaxConcurrentTotpVerifications = Server.Configuration.GetInt("AuthMaxConcurrentTotpVerifications", 4);
+			}
+
 			// Apply cached key material that was set before the core was created,
 			// then release the cache references so callers observe the core values.
 			if (tokenSigningKeyBacking != null)
@@ -251,40 +264,55 @@ namespace FishMMO.Server.Implementation
 
 			_ = Task.Run(async () =>
 			{
-				string tokenHash = null;
 				try
 				{
-					tokenHash = TokenService.HashToken(tokenCopy);
-				}
-				finally
-				{
-					CryptographicOperations.ZeroMemory(tokenCopy);
-				}
-
-				if (string.IsNullOrEmpty(tokenHash))
-				{
-					return;
-				}
-
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
-				{
-					return;
-				}
-
-				try
-				{
-					var r = await svc.RevokeByHashAsync(tokenHash);
-					if (!r.IsSuccess)
+					string tokenHash = null;
+					try
 					{
-						// Treat "not found" as a non-event: an attacker could otherwise probe
-						// for valid token hashes by observing log differences.
-						await Log.Debug(LogPrefix, $"RevokeByHashAsync returned {r.ErrorCode} for client-initiated revoke.");
+						tokenHash = TokenService.HashToken(tokenCopy);
+					}
+					finally
+					{
+						CryptographicOperations.ZeroMemory(tokenCopy);
+					}
+
+					if (string.IsNullOrEmpty(tokenHash))
+					{
+						return;
+					}
+
+					if (Server?.Database?.ServiceRegistry == null ||
+						!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
+					{
+						return;
+					}
+
+					try
+					{
+						var r = await svc.RevokeByHashAsync(tokenHash);
+						if (!r.IsSuccess)
+						{
+							/* LOGGING ORACLE NOTE: We log even "not found" results at Debug level
+							 * (not Warning) to avoid creating a side-channel oracle.  An attacker
+							 * who can observe the log output (e.g. via a shared logging service or
+							 * timing side-channel) could distinguish "token existed and was revoked"
+							 * from "token never existed" by the presence/absence of a higher-severity
+							 * log line.  Debug-level logging is disabled in production by default,
+							 * so the oracle is closed.  If Debug logging is enabled in production,
+							 * an observer could exploit this — keep Debug disabled in production. */
+							// Treat "not found" as a non-event: an attacker could otherwise probe
+							// for valid token hashes by observing log differences.
+							await Log.Debug(LogPrefix, $"RevokeByHashAsync returned {r.ErrorCode} for client-initiated revoke.");
+						}
+					}
+					catch (Exception ex)
+					{
+						await Log.Warning(LogPrefix, $"Exception during client-initiated token revoke: {ex.Message}");
 					}
 				}
 				catch (Exception ex)
 				{
-					await Log.Warning(LogPrefix, $"Exception during client-initiated token revoke: {ex.Message}");
+					await Log.Error(LogPrefix, $"Unhandled exception in token revocation task: {ex.Message}");
 				}
 			});
 		}
@@ -465,14 +493,41 @@ namespace FishMMO.Server.Implementation
 			protected override string ResolveRateLimitKey(NetworkConnection conn) => outer.ResolveRateLimitKey(conn);
 
 			/// <inheritdoc/>
+			protected override string? ResolveClientRealIp(NetworkConnection conn)
+			{
+				if (conn == null) return null;
+				// Look up the real IP that was recovered from the connection token
+				// (or stateless HMAC token) during the ClientHandshake.
+				if (outer.Server?.DataContainerRegistry != null &&
+					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
+					rt.ConnectionIpCache != null)
+				{
+					if (rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? ip))
+						return ip;
+				}
+				return null;
+			}
+
+			/// <inheritdoc/>
 			protected override bool OnHandshakeDeferred(NetworkConnection conn)
 			{
-				// Delegate to the LoginQueueSystem if one is registered on this server.
+				// NOTE: Both code paths below broadcast ServerBusy. The queue-rejection path
+				// returns false, and the caller (the core handshake handler) may also broadcast
+				// a separate ServerBusy result. Ensure the client handles duplicate ServerBusy
+				// gracefully.
 				if (outer.Server?.BehaviourRegistry != null &&
 					outer.Server.BehaviourRegistry.TryGet<LoginServer.LoginQueueSystem>(out var queueSystem))
 				{
-					return queueSystem.TryEnqueue(conn);
+					if (queueSystem.TryEnqueue(conn))
+						return true;
+					// Queue is full — tell the client so they don't hang waiting
+					// for a handshake response that will never arrive.
+					BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: false);
+					return false;
 				}
+				// No queue system and auth cap reached — reject immediately with
+				// a clear signal rather than leaving the client hanging.
+				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: false);
 				return false;
 			}
 
@@ -643,6 +698,9 @@ namespace FishMMO.Server.Implementation
 		/// (obtained before the lock). Calling <see cref="CryptographicOperations.ZeroMemory"/>
 		/// here would corrupt in-flight auth operations that are still using the old key
 		/// material. The old arrays will be reclaimed by the garbage collector.</para>
+		/// <para><b>NOTE:</b> Old key arrays remain in heap until GC. An attacker with a
+		/// memory dump could recover historical signing keys. For defense-in-depth, consider
+		/// pinning+zeroing old keys after all concurrent readers have completed.</para>
 		/// <para>All key material is zeroed during server shutdown via
 		/// <see cref="BaseAuthenticatorCore{TConnection}.ShutdownWorkers"/>. Any arrays held
 		/// exclusively by the core are cleared at that point. If a subclass holds additional

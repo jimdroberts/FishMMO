@@ -17,6 +17,15 @@
 			The Microsoft.Extensions.* 9.0.x packages are backward-compatible with
 			.NET Standard 2.1 and work correctly alongside EF Core 5.x. Do not bump EF
 			Core beyond 5.0.x without verifying Unity's netstandard2.1 support.
+
+			WARNING: Runtime binding redirect risk. EF Core 5.0.x was compiled against older
+			Microsoft.Extensions.* assemblies (typically 5.x or 6.x), while the 9.0.x packages
+			ship newer surface APIs. At runtime, Unity's assembly resolver may bind to the
+			wrong version, producing TypeLoadException / MissingMethodException if a 9.0.x-only
+			API is called through an older facade. Test ALL Unity platform targets thoroughly
+			before adding or upgrading any Microsoft.Extensions.* dependency, especially on
+			IL2CPP builds where reflection-based fallbacks do not apply and version mismatches
+			manifest as hard crashes rather than warning logs.
 		-->
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.17" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Abstractions" Version="5.0.17" />
@@ -123,7 +132,8 @@
 			        **/*.Test.dll;
 			        **/*.Tests.dll;
 			        **/xunit.*.dll;
-			        **/nunit.*.dll" />
+			        **/nunit.*.dll;
+        **/*.resources.dll" />
 		</ItemGroup>
 
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />

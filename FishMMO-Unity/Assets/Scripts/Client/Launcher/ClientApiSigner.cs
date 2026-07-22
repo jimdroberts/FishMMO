@@ -83,7 +83,11 @@ namespace FishMMO.Client
 			// Cryptographically zero the secret buffer copy to remove it from
 			// process memory promptly (resistant to JIT eliding a plain Array.Clear).
 			// The underlying constant still lives in the loaded assembly image regardless.
-			CryptographicOperations.ZeroMemory(secret);
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_0_OR_GREATER
+			System.Security.Cryptography.CryptographicOperations.ZeroMemory(secret);
+#else
+			if (secret != null) Array.Clear(secret, 0, secret.Length);
+#endif
 
 			return version + "." + ts.ToString() + "." + nonce + "." + ToBase64Url(mac);
 		}

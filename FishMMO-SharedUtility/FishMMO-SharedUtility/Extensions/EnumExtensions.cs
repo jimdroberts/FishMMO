@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class EnumExtensions
 	{
-		private static readonly object cacheLock = new object();
+		private static readonly object CacheLock = new object();
 		private static Array? lastValues;
 		private static Type? lastEnumType;
 
@@ -22,7 +22,7 @@ namespace FishMMO.Shared
 		/// <returns>A copied array of all enum values.</returns>
 		public static T[] ToArray<T>() where T : Enum
 		{
-			lock (cacheLock)
+			lock (CacheLock)
 			{
 				Type currentType = typeof(T);
 				if (lastEnumType == currentType && lastValues != null)

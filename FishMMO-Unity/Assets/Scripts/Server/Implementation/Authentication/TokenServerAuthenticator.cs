@@ -3,6 +3,7 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database;
 using FishMMO.Database.Data;
+using FishMMO.Server.Core.LoginServer;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
 using System.Security.Cryptography;
@@ -114,6 +115,13 @@ namespace FishMMO.Server.Implementation
 					$"{LogPrefix}: Server.AccountManager must implement ITokenAccountManager<NetworkConnection>. " +
 					$"Actual type: {Server.AccountManager?.GetType().FullName ?? "null"}.");
 			core = new TokenCore(this, tam);
+
+			// Read token auth worker/channel configuration from the server .cfg file.
+			if (Server?.Configuration != null)
+			{
+				core.TokenWorkerCount = Server.Configuration.GetInt("AuthTokenWorkerCount", 2);
+				core.TokenChannelCapacity = Server.Configuration.GetInt("AuthTokenChannelCapacity", 500);
+			}
 		}
 
 		/// <inheritdoc/>
@@ -412,6 +420,21 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override Task<bool> CheckTokenRevocationAsync(string tokenHash) =>
 				outer.CheckTokenRevocationCoreAsync(tokenHash);
+
+			/// <inheritdoc/>
+			/// <inheritdoc/>
+			protected override void StoreClientRealIp(NetworkConnection conn, string realIp)
+			{
+				// Store the real IP recovered from the auth token for rate limiting.
+				// This is essential for World/Scene servers behind an L4 proxy where
+				// conn.GetAddress() returns 127.0.0.1.
+				if (outer.Server?.DataContainerRegistry != null &&
+					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
+					rt.ConnectionIpCache != null)
+				{
+					rt.ConnectionIpCache.Upsert(conn.ClientId, realIp, DateTime.UtcNow);
+				}
+			}
 
 			/// <inheritdoc/>
 			protected override Task OnTokenAuthSuccessAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId) =>

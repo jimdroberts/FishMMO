@@ -23,7 +23,15 @@ extern "C" {
 typedef struct {
     wt_connection_id_t      id;
     HQUIC                   quic_conn;
-    wt_session_t*           session;          /* use atomic_ptr_load/store */
+    /* WARNING: session, state, and in_use are declared as plain types but
+     * MUST be accessed only through atomic_ptr_load/store, atomic_load/store
+     * respectively (see the platform-conditional macros in
+     * webtransport_internal.h).  Direct read/write on these fields produces
+     * non-atomic, non-ordered memory accesses that silently compile.
+     * This applies to all fields in this struct whose comments mention
+     * "atomic" or "use atomic_*" — the plain C type is an implementation
+     * detail to avoid C11 _Atomic ABI variance across compilers. */
+    wt_session_t*           session;          // Raw pointer typed for C ABI compatibility. Access ONLY via atomic_ptr_load/atomic_ptr_store.
     atomic_int              state;            /* wt_connection_state_t, atomic */
     char                    remote_addr[WT_MAX_ADDRESS_LENGTH];
     atomic_bool             in_use;           /* atomic — set from two threads */
@@ -34,7 +42,7 @@ typedef struct {
      * MUST be accessed via atomic_ptr_load/atomic_ptr_store — written
      * on the QUIC callback thread, read/written on the poll thread
      * without a lock. */
-    wt_session_t*           pending_shutdown_session;
+    wt_session_t*           pending_shutdown_session;  // Raw pointer typed for C ABI compatibility. Access ONLY via atomic_ptr_load/atomic_ptr_store.
 
     /* HTTP/3 handshake session. Created on CONNECTED, freed when
      * the WebTransport session is established (on_h3_session_ready).

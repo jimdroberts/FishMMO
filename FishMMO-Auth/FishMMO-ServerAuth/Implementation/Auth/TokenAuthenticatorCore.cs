@@ -20,12 +20,12 @@ namespace FishMMO.Auth.Implementation
 	/// <typeparam name="TConnection">The type representing a network connection.</typeparam>
 	public abstract class TokenAuthenticatorCore<TConnection> : BaseAuthenticatorCore<TConnection>
 	{
-		#region Constants
+		#region Configuration
 
-		/// <summary>Number of concurrent token auth worker tasks.</summary>
-		private const int TokenWorkerCount = 2;
-		/// <summary>Maximum number of pending token auth requests in the bounded channel.</summary>
-		private const int TokenChannelCapacity = 500;
+		/// <summary>Default number of concurrent token auth worker tasks. Configurable via .cfg AuthTokenWorkerCount.</summary>
+		public int TokenWorkerCount { get; set; } = 2;
+		/// <summary>Default maximum pending token auth requests in the bounded channel. Configurable via .cfg AuthTokenChannelCapacity.</summary>
+		public int TokenChannelCapacity { get; set; } = 500;
 		/// <summary>Maximum accepted byte length for an encrypted token payload.</summary>
 		private const int MaxTokenPayloadBytes = 2048;
 
@@ -74,6 +74,10 @@ namespace FishMMO.Auth.Implementation
 		/// <inheritdoc/>
 		protected override void InitializeWorkersCore(CancellationToken cancellationToken)
 		{
+			// Clamp user-configurable values to safe ranges.
+			TokenWorkerCount = Math.Max(1, Math.Min(TokenWorkerCount, 64));
+			TokenChannelCapacity = Math.Max(1, Math.Min(TokenChannelCapacity, 10000));
+
 			tokenChannel = Channel.CreateBounded<TokenAuthRequest>(new BoundedChannelOptions(TokenChannelCapacity)
 			{
 				FullMode = BoundedChannelFullMode.DropWrite,
@@ -185,6 +189,13 @@ namespace FishMMO.Auth.Implementation
 		private async Task ProcessTokenAuthAsync(TokenAuthRequest request)
 		{
 			TConnection conn = request.Connection;
+			// Ghost-connection guard: bail early if the client disconnected
+			// while this request was queued in the bounded channel.
+			if (!IsConnectionActive(conn))
+			{
+				PurgeConnectionAuthState(conn, disconnect: false);
+				return;
+			}
 			byte[]? rawToken = null;
 			byte[]? hmacKey = null;
 
@@ -254,6 +265,18 @@ namespace FishMMO.Auth.Implementation
 				try
 				{
 					tokenAccountManager.AddConnectionAccount(conn, verifyResult.AccountName!, verifyResult.AccessLevel);
+
+				// Require a verified real IP from the auth token (v4+).
+				// World/Scene servers behind an L4 proxy see 127.0.0.1 from
+				// conn.GetAddress(). If the IP is missing or unverified,
+				// disconnect immediately — no fallback to proxy IP or ClientId.
+				if (verifyResult.RealIp == null)
+				{
+					await Log.Warning(LogPrefix, $"Token for '{verifyResult.AccountName}' missing real IP — rejecting.");
+					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
+					return;
+				}
+				EnqueueMainThread(conn, () => StoreClientRealIp(conn, verifyResult.RealIp!));
 				}
 				catch (InvalidOperationException addEx)
 				{
@@ -320,6 +343,23 @@ namespace FishMMO.Auth.Implementation
 
 		#region Helpers
 
+		/// <summary>
+		/// Rejects and purges a connection from an async worker thread context.
+		/// <para>
+		/// SAFETY (async-thread / main-thread callback race):
+		/// <see cref="PurgeConnectionAuthState"/> zeroes per-connection encryption keys
+		/// immediately on the async thread. The <see cref="EnqueueMainThread"/> callback
+		/// must NOT reference those keys after they are zeroed. This is safe because:
+		/// (a) <see cref="BroadcastAuthResult"/> sends only a pre-computed result code,
+		/// not any encrypted payload; and (b) any encrypted payload the caller needs
+		/// (e.g., server proof, auth token) MUST be pre-computed <em>before</em>
+		/// this method is called. Callers on the async thread must pre-compute all
+		/// encrypted payloads before calling <see cref="RejectAndPurge"/>; the
+		/// main-thread callback only uses pre-computed data or simple result codes.
+		/// </para>
+		/// </summary>
+		/// <param name="conn">The connection to reject and purge.</param>
+		/// <param name="result">The authentication result to broadcast before disconnecting.</param>
 		private void RejectAndPurge(TConnection conn, ClientAuthenticationResult result)
 		{
 			EnqueueMainThread(conn, () =>
@@ -431,6 +471,12 @@ namespace FishMMO.Auth.Implementation
 				Seq = seq;
 			}
 		}
+
+		/// <summary>
+		/// Stores the real client IP recovered from a verified auth token (v4+).
+		/// Override in server-specific subclasses to write to ConnectionIpCache.
+		/// </summary>
+		protected virtual void StoreClientRealIp(TConnection conn, string realIp) { }
 
 		#endregion
 	}

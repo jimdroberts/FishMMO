@@ -294,15 +294,13 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			dbContextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
 
+			// NOTE: Constructor creates (and disposes) a DbContext to resolve the table name. This couples
+			// service initialization to database availability. The table name is cached for the service lifetime.
 			try
 			{
 				// Cache table name once at construction - dispose context immediately
 				using var dbContext = DbContextFactory.CreateDbContext();
 				TableName = dbContext.GetTableName<TEntity>();
-			}
-			catch (DatabaseException)
-			{
-				throw;
 			}
 			catch (Exception ex)
 			{
@@ -810,9 +808,10 @@ namespace FishMMO.Database.Npgsql.Services
 				var duration = stopwatch != null ? stopwatch.Elapsed : DateTime.UtcNow - attemptStartUtc;
 				PerformanceTracker?.RecordQuery(operationName, duration, success);
 			}
-			catch
+			catch (Exception ex)
 			{
 				// Monitoring must never break core database execution.
+				Debug.WriteLine($"[FishMMO-DB] Monitoring failure in RecordOperationAttempt: {ex.Message}");
 			}
 		}
 

@@ -32,6 +32,11 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Launches the updater executable and polls for process exit via a coroutine,
 		/// ensuring callbacks execute on the Unity main thread.
+		/// <para><b>IMPORTANT:</b> This method returns an IEnumerator and the caller
+		/// MUST invoke it via <c>MonoBehaviour.StartCoroutine</c>. The implementation
+		/// uses <c>yield return new WaitForSeconds(...)</c> which requires a Unity
+		/// coroutine host with a main-thread UnitySynchronizationContext. Calling this
+		/// method outside of a Unity coroutine context will result in undefined behavior.</para>
 		/// </summary>
 		/// <param name="updaterPath">Path to the updater executable.</param>
 		/// <param name="currentClientVersion">Current client version string.</param>
@@ -61,6 +66,14 @@ namespace FishMMO.Client
 			// from Process output/error handlers (which fire on background threads)
 			// are marshalled back to the main thread.
 			SynchronizationContext unityContext = SynchronizationContext.Current;
+			// Runtime assertion: LaunchUpdater must be called via
+			// MonoBehaviour.StartCoroutine on the Unity main thread. If
+			// SynchronizationContext.Current is null, there is no UnitySynchronizationContext
+			// installed (e.g., called from a background thread or a non-Unity context).
+			System.Diagnostics.Debug.Assert(
+				unityContext != null,
+				"[SystemUpdaterLauncher] LaunchUpdater must be invoked via MonoBehaviour.StartCoroutine " +
+				"on the Unity main thread. SynchronizationContext.Current is null.");
 
 			try
 			{

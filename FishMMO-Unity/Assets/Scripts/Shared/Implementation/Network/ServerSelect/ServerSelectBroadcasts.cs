@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Array of available world servers. Each entry is a <see cref="WorldServerDetails"/>
 		/// defined in the <c>FishMMO.Shared</c> namespace at
-		/// <see cref="WorldServerDetails"/> (file: Network/WorldServerDetails.cs).
+		/// <see cref="WorldServerDetails"/> (defined in the same namespace).
 		///
 		/// A fixed-size array avoids the concurrent-modification hazard of a
 		/// <see cref="System.Collections.Generic.List{T}"/> during FishNet

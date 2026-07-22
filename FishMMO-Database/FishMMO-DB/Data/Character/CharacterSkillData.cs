@@ -11,15 +11,17 @@ namespace FishMMO.Database.Data
 		public readonly int TemplateID;
 		public readonly int Level;
 		public readonly int Experience;
+		public readonly double CastTimeEnd;
+		public readonly double CooldownEnd;
 
 		long IVersioned<CharacterSkillData>.Version => Version;
 
-		public CharacterSkillData(long id, long characterID, int templateID, int level, int experience)
-			: this(id, version: 0, characterID, templateID, level, experience)
+		public CharacterSkillData(long id, long characterID, int templateID, int level, int experience, double castTimeEnd, double cooldownEnd)
+			: this(id, version: 0, characterID, templateID, level, experience, castTimeEnd, cooldownEnd)
 		{
 		}
 
-		public CharacterSkillData(long id, long version, long characterID, int templateID, int level, int experience)
+		public CharacterSkillData(long id, long version, long characterID, int templateID, int level, int experience, double castTimeEnd, double cooldownEnd)
 		{
 			ID = id;
 			Version = version;
@@ -27,11 +29,13 @@ namespace FishMMO.Database.Data
 			TemplateID = templateID;
 			Level = level;
 			Experience = experience;
+			CastTimeEnd = castTimeEnd;
+			CooldownEnd = cooldownEnd;
 		}
 
 		public CharacterSkillData WithVersion(long newVersion)
 		{
-			return new CharacterSkillData(ID, newVersion, CharacterID, TemplateID, Level, Experience);
+			return new CharacterSkillData(ID, newVersion, CharacterID, TemplateID, Level, Experience, CastTimeEnd, CooldownEnd);
 		}
 	}
 }

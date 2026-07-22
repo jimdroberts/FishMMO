@@ -191,9 +191,17 @@ namespace FishNet.Transporting.WebTransport.Native
 				/* Brief yield (50ms max). This method is documented as
 				 * main-thread-only; the fallback exists only as a secondary
 				 * safety net. 25 iterations x 2ms = 50ms, avoiding a visible
-				 * frame hitch at startup. */
+				 * frame hitch at startup.
+				 *
+				 * NOTE: Thread.Sleep(2) is replaced with Thread.SpinWait(100)
+				 * because Sleep(n) with n < ~10ms rounds up to the system
+				 * scheduler's minimum sleep granularity (~15ms on most
+				 * kernels), turning a designed 50ms worst-case into 375ms
+				 * worst-case. SpinWait avoids blocking the Unity main thread.
+				 * This path is rarely hit (only during concurrent initialization
+				 * race). */
 				for (int i = 0; i < 25 && !initialized; i++)
-					System.Threading.Thread.Sleep(2);
+					System.Threading.Thread.SpinWait(100);
 				/* Timed out — caller will get an error from the native operation; they can retry next frame. */
 				return initialized;
 			}
@@ -413,6 +421,8 @@ namespace FishNet.Transporting.WebTransport.Native
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_client_get_mtu(SafeClientHandle client);
 
+		/// Declared for future use (diagnostic logging, capability negotiation).
+		/// Not currently called from C#.
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
 		public static extern int wt_init();
 

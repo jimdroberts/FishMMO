@@ -99,7 +99,9 @@ $ZIG c++ -target x86_64-windows-gnu -shared -O2 \
     "${OBJECTS[@]}" \
     "$MSQUIC_DLL" \
     -lws2_32 -lbcrypt -lncrypt \
-    -Wl,--out-implib,"$BDIR/libmsquic.a" 2>&1 | grep -v "warning:" | grep -v "^$" | head -3 || true
+    -Wl,--out-implib,"$BDIR/libmsquic.a" \
+    2>&1 | grep -v "warning:" | grep -v "^$" | head -3 || true
+# NOTE: link failures may not be caught — verify the output DLL exists before proceeding.
 
 # Copy runtime msquic.dll alongside our DLL
 cp "$MSQUIC_DLL" "$UNITY_DIR/"

@@ -23,8 +23,7 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired();
 
 			builder.Property(e => e.Category)
-				.IsRequired()
-				.HasMaxLength(100);
+				.IsRequired();
 
 			builder.Property(e => e.CooldownEnd)
 				.IsRequired()

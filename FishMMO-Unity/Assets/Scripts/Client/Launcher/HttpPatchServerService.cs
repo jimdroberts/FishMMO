@@ -180,7 +180,15 @@ namespace FishMMO.Client
 				Method = UnityWebRequest.kHttpVerbGET,
 				Headers = headers,
 				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
+#if !UNITY_WEBGL || UNITY_EDITOR
+				// DownloadHandlerFile writes directly to disk via the OS filesystem.
+				// WebGL runs under Emscripten's MEMFS (in-memory virtual FS); the
+				// file is lost when the tab closes and may silently fail on large
+				// writes. Fall back to DownloadHandlerBuffer + manual write below.
 				DownloadHandlerFactory = () => new DownloadHandlerFile(tempFilePath),
+#else
+				DownloadHandlerFactory = () => new DownloadHandlerBuffer(),
+#endif
 				MaxRetries = this.maxRetries,
 				RetryDelay = this.retryDelay,
 				Timeout = this.webRequestTimeout,
@@ -191,7 +199,22 @@ namespace FishMMO.Client
 				},
 				OnComplete = (request) =>
 				{
+#if !UNITY_WEBGL || UNITY_EDITOR
 					// DownloadHandlerFile does not support .text; check response code only.
+#else
+					// DownloadHandlerBuffer was used; persist the downloaded bytes
+					// to the filesystem at tempFilePath.
+					try
+					{
+						File.WriteAllBytes(tempFilePath, request.downloadHandler.data);
+					}
+					catch (Exception ex)
+					{
+						onError?.Invoke($"Error writing downloaded patch to disk: {ex.Message}");
+						TryDeleteTempFile(tempFilePath);
+						return;
+					}
+#endif
 					if (request.responseCode == (long)HttpStatusCode.NoContent)
 					{
 						// Server indicates client is already up to date.

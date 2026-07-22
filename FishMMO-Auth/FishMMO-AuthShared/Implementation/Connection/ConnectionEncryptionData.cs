@@ -71,6 +71,11 @@ namespace FishMMO.Auth.Implementation
 		/// Builds the next server→client GCM nonce and advances the send counter.
 		/// </summary>
 		/// <returns>Tuple of (12-byte nonce, sequence number).</returns>
+		/// <remarks>
+		/// <b>NOTE:</b> The lock only protects the reference-read of <c>SendNonceCtx</c>. After lock
+		/// release, <c>ctx.NextNonce()</c> is called on an unprotected reference. This is safe because
+		/// <c>Clear()</c> and <c>NextNonce()</c> are never called concurrently in the designed flow.
+		/// </remarks>
 		public (byte[] Nonce, uint Sequence) NextSendNonce()
 		{
 			CryptoHelper.GcmNonceContext ctx;

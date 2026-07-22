@@ -204,6 +204,11 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public void SetCertificatePath(string path)
 		{
+			if (string.IsNullOrEmpty(path))
+			{
+				base.NetworkManager?.LogWarning("[WebTransport] Certificate path is null or empty. Skipping.");
+				return;
+			}
 			certificatePath = path;
 		}
 
@@ -212,6 +217,11 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public void SetPrivateKeyPath(string path)
 		{
+			if (string.IsNullOrEmpty(path))
+			{
+				base.NetworkManager?.LogWarning("[WebTransport] Private key path is null or empty. Skipping.");
+				return;
+			}
 			privateKeyPath = path;
 		}
 
@@ -275,6 +285,9 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override void SetClientAddress(string address)
 		{
+			// NOTE: No input validation performed. The native library is responsible
+			// for validating address strings. Malformed addresses will produce
+			// native-level errors.
 			this.clientAddress = address;
 		}
 
@@ -299,6 +312,9 @@ namespace FishNet.Transporting.WebTransport
 		/// </remarks>
 		public override void SetServerBindAddress(string address, IPAddressType addressType)
 		{
+			// NOTE: No input validation performed. The native library is responsible
+			// for validating address strings. Malformed addresses will produce
+			// native-level errors.
 			this.serverBindAddress = address;
 		}
 

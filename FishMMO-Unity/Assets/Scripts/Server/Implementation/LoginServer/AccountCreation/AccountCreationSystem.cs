@@ -90,7 +90,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private int globalCreationsCurrentHourCount = 0;
 		private readonly object globalCreationsCounterLock = new object();
 
-
 		/// <summary>
 		/// Minimum seconds between email queue processing sweeps.
 		/// </summary>
@@ -110,7 +109,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// Lock for thread-safe lazy initialization of <see cref="smtpService"/>.
 	/// </summary>
 	private readonly object smtpServiceLock = new object();
-
 
 		/// <summary>
 		/// Injectable SMTP service. When set externally (e.g. by LoginServerSystem during
@@ -158,10 +156,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// load balancer where all clients share the proxy's IP, causing false-positive rate limiting
 		/// that blocks legitimate users.
 		/// </summary>
-		[Header("Proxy Compatibility")]
-		[Tooltip("Use connection ID instead of IP for rate limiting. Enable when behind a proxy/NAT/load balancer where all clients share one IP.")]
-		[SerializeField] private bool useConnectionIdForRateLimit = false;
-
 		/// <summary>
 		/// Maximum cumulative verification failures per username across all connections before
 		/// a temporary lockout. Prevents botnets from distributing brute-force across IPs.
@@ -326,10 +320,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// trusted proxy that prevents arbitrary client reconnection. On a direct-Internet
 			// listener it lets an attacker reset their rate-limit bucket simply by reconnecting,
 			// so surface this loudly at startup so it cannot be enabled by accident.
-			if (useConnectionIdForRateLimit)
 			{
 				Log.Warning("AccountCreationSystem",
-					"useConnectionIdForRateLimit=true: rate limits are keyed by FishNet ClientId. " +
 					"This is ONLY safe behind a trusted reverse proxy / load balancer that authenticates " +
 					"connection establishment. On a direct-Internet listener an attacker can bypass " +
 					"per-IP throttling by simply reconnecting. Disable this unless you have a proxy in front.");
@@ -414,8 +406,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			// Get a cached IP key for rate limiting.
-			string ipAddress = ResolveIpAddress(conn);
+			// Get the real IP from the connection token cache.
+			// Never fall back to proxy IP or ClientId — disconnect if unavailable.
+			string? ipAddress = ResolveIpAddress(conn);
+			if (string.IsNullOrEmpty(ipAddress))
+			{
+				_ = Log.Warning("AccountCreationSystem", $"Rejecting account creation: no real IP for connection {conn.ClientId}.");
+				conn.Disconnect(true);
+				return;
+			}
 
 			// Create request with ENCRYPTED data (no decryption on network thread!)
 			var request = new AccountCreationRequest<NetworkConnection>(
@@ -585,6 +584,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="conn">Network connection to send response to.</param>
 		private void SendServerBusyResponse(NetworkConnection conn)
 		{
+			if (conn == null)
+				return;
+
 			// Increment rejection counter
 			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
@@ -599,10 +601,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}, false, Channel.Unreliable);
 
 			// Optional: Log for monitoring
-			if (conn != null)
-			{
-				Log.Warning("AccountCreationSystem", $"Rejected request from {ResolveIpAddress(conn)} - Rate limited or queue full");
-			}
+			Log.Warning("AccountCreationSystem", $"Rejected request from {ResolveIpAddress(conn)} - Rate limited or queue full");
 		}
 
 		/// <summary>
@@ -1114,7 +1113,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 			CleanUpMappingData(deltaTime);
 		}
 
-
 		/// <summary>
 		/// Processes pending emails from the outbound queue via the configured SMTP service.
 		/// Called every frame; gated by <see cref="emailSendIntervalSeconds"/>.
@@ -1367,7 +1365,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		///
 		/// <para>
 		/// For direct connections (no proxy), the current implementation is correct.
-		/// When <see cref="useConnectionIdForRateLimit"/> is enabled, this method returns
+		/// When connection-ID keying was enabled, this method returns
 		/// <c>conn.ClientId.ToString()</c> as a proxy-compatible fallback key.
 		/// Operators must be aware that connection-ID keying trades IP-level aggregation
 		/// for per-socket granularity, which may be less effective against distributed attacks
@@ -1376,47 +1374,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		/// <param name="conn">The network connection to resolve a rate-limit key for.</param>
 		/// <returns>A stable string key for IP-based or connection-based rate limiting.</returns>
-		private string ResolveIpAddress(NetworkConnection conn)
-		{
-			if (conn == null)
-			{
-				return string.Empty;
-			}
-
-			// Proxy-compatible fallback: use connection ID instead of IP when configured.
-			if (useConnectionIdForRateLimit)
-			{
-				return conn.ClientId.ToString();
-			}
-
-			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
-			{
-				return HandshakeService.NormalizeIp(conn.GetAddress());
-			}
-
-			DateTime now = DateTime.UtcNow;
-			if (runtimeData.ConnectionIpCache.TryGetAndTouch(conn.ClientId, now, out string cachedIp) &&
-				!string.IsNullOrEmpty(cachedIp))
-			{
-				return cachedIp;
-			}
-
-			string ipAddress = HandshakeService.NormalizeIp(conn.GetAddress());
-
-			runtimeData.ConnectionIpCache.Upsert(conn.ClientId, ipAddress, now);
-			return ipAddress;
-		}
-
 		/// <summary>
-		/// Resolves encryption data with a per-connection cache to reduce lock pressure on AccountManager.
-		/// <para><b>ClientId reuse safety:</b> This cache is keyed by <c>conn.ClientId</c>.
-		/// <see cref="OnRemoteConnectionStopped"/> evicts the entry when the connection closes.
-		/// If the transport layer reuses ClientIds, the eviction MUST fire before the new
-		/// connection's first <c>ResolveEncryptionData</c> call; otherwise the new connection
-		/// would receive stale key material from the previous session. FishNet currently assigns
-		/// monotonically increasing IDs; if this changes, add a generation counter or validate
-		/// the cached reference against <c>AccountManager.GetConnectionEncryptionData</c>.</para>
+		/// Resolves the real client IP for rate limiting. Requires the IP to have
+		/// been recovered from a verified connection token. Returns null if the IP
+		/// is not available — callers MUST reject the request.
+		/// Never falls back to proxy IP or ClientId.
 		/// </summary>
+		private string? ResolveIpAddress(NetworkConnection conn)
+		{
+			if (conn == null) return null;
+			if (Server?.DataContainerRegistry != null &&
+				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
+				rt.ConnectionIpCache != null &&
+				rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? realIp))
+			{
+				return HandshakeService.NormalizeIp(realIp);
+			}
+			return null;
+		}
 		private bool ResolveEncryptionData(NetworkConnection conn, out ConnectionEncryptionData encryptionData)
 		{
 			encryptionData = null;
@@ -1643,8 +1618,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 								// observed is the one still in the map. If a concurrent
 								// TrackVerifyUsernameFailure has already reset it, the CAS
 								// fails and we leave their fresh entry intact.
-								// NOTE: ConcurrentDictionary.TryRemove(KeyValuePair) isn't available
-								// in Unity's runtime; ICollection<KVP>.Remove provides the same CAS.
+								// NOTE: ConcurrentDictionary.TryRemove(KeyValuePair) is not available
+								// in Unity's runtime. The ICollection<KVP>.Remove fallback is fragile --
+								// verify after Unity runtime upgrades.
 								((ICollection<KeyValuePair<string, (int Count, DateTime FirstFailure)>>)verifyUsernameFailures)
 									.Remove(new KeyValuePair<string, (int Count, DateTime FirstFailure)>(userKey, failInfo));
 							}
@@ -1718,9 +1694,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (mappingData == null || string.IsNullOrEmpty(ipAddress))
 				return true;
 
-			// Capacity check is racy by design — the AddOrUpdate below tolerates
-			// transient over-shoot by a handful of entries which the periodic sweep
-			// removes. The check is here purely to bound peak memory at ~50K.
+			// NOTE: Capacity check is 'racy by design' — under flood, the dictionary may
+			// temporarily exceed MaxIpFailureTrackerEntries before the race resolves.
+			// This is an acceptable probabilistic memory guard.
 			if (mappingData.IpFailureTracker.Count >= MaxIpFailureTrackerEntries &&
 				!mappingData.IpFailureTracker.ContainsKey(ipAddress))
 			{

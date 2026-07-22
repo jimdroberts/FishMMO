@@ -35,7 +35,12 @@ typedef struct wt_client_s {
     atomic_bool             connected;
     atomic_uint             pending_shutdowns;
 
-    wt_session_t*           session;
+    /* WARNING: session is declared as a plain pointer but MUST be accessed
+     * only through atomic_ptr_load/atomic_ptr_store.  See the same pattern
+     * and rationale in server.h.  Direct assignment or read of this field
+     * bypasses atomic ordering guarantees and will silently produce torn
+     * or non-ordered accesses on ARM/POWER. */
+    wt_session_t*           session;  // Raw pointer typed for C ABI compatibility. Access ONLY via atomic_ptr_load/atomic_ptr_store.
 
     /* Session pending deferred shutdown. Set by QUIC callback thread
      * (SHUTDOWN_COMPLETE), consumed by poll (application thread) to
@@ -43,7 +48,7 @@ typedef struct wt_client_s {
      * MUST be accessed via atomic_ptr_load/atomic_ptr_store — written
      * on the QUIC callback thread, read/written on the poll thread
      * without a lock. */
-    wt_session_t*           pending_shutdown_session;
+    wt_session_t*           pending_shutdown_session;  // Raw pointer typed for C ABI compatibility. Access ONLY via atomic_ptr_load/atomic_ptr_store.
 
     /* HTTP/3 handshake session (optional — only used when connecting
      * to standard WebTransport servers). NULL for native raw-QUIC mode. */

@@ -1069,11 +1069,8 @@ namespace FishMMO.Auth.Implementation
 				throw new ArgumentException("Account name too long.", nameof(accountName));
 			}
 
-			// Layout (v4): [1B version][1B tokenType][2B nameLen][name][1B accessLevel][8B serverId][8B signingKeyId][8B ticks][1B ipLen][realIp][16B nonce]
-			// v4: realIp field
-			byte[] ipBytes = realIp != null ? Encoding.UTF8.GetBytes(realIp) : Array.Empty<byte>();
-			if (ipBytes.Length > 255) throw new ArgumentException("realIp too long.", nameof(realIp));
-			int payloadLength = 1 + 1 + 2 + nameBytes.Length + 1 + 8 + 8 + 8 + 1 + ipBytes.Length + 16;
+			// Layout: [1B version][1B tokenType][2B nameLen][name][1B accessLevel][8B serverId][8B signingKeyId][8B ticks][16B nonce]
+			int payloadLength = 1 + 1 + 2 + nameBytes.Length + 1 + 8 + 8 + 8 + 16;
 			byte[] payload = new byte[payloadLength];
 			int offset = 0;
 
@@ -1121,14 +1118,6 @@ namespace FishMMO.Auth.Implementation
 			}
 			offset += 8;
 
-			// Real IP (v4: 1B length + bytes)
-			payload[offset++] = (byte)ipBytes.Length;
-			if (ipBytes.Length > 0)
-			{
-				Buffer.BlockCopy(ipBytes, 0, payload, offset, ipBytes.Length);
-				offset += ipBytes.Length;
-			}
-
 			// Random nonce (16 bytes)
 			byte[] nonce = GenerateKey(16);
 			Buffer.BlockCopy(nonce, 0, payload, offset, 16);
@@ -1159,7 +1148,7 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// Minimum valid signed token length: 1 (version) + 1 (tokenType) + 2 (nameLen) + 1 (name) + 1 (accessLevel) + 8 (serverId) + 8 (signingKeyId) + 8 (ticks) + 16 (nonce) + 32 (HMAC).
 		/// </summary>
-		public const int MinSignedTokenLength = 1 + 1 + 2 + 1 + 1 + 8 + 8 + 8 + 1 + 0 + 16 + HmacTagLength; // v4: +1B ipLen
+		public const int MinSignedTokenLength = 1 + 1 + 2 + 1 + 1 + 8 + 8 + 8 + 16 + HmacTagLength;
 
 		/// <summary>
 		/// Parses and verifies an authentication token's HMAC signature.
@@ -1173,14 +1162,13 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="accessLevel">Parsed access level (AccessLevel.Player on failure).</param>
 		/// <param name="expiresUtc">Parsed UTC expiration (DateTime.MinValue on failure).</param>
 		/// <returns><c>true</c> if the HMAC is valid and the token is well-formed; otherwise <c>false</c>.</returns>
-		public static bool TryParseAndVerifyAuthToken(byte[] signedToken, byte[] hmacKey, out string? accountName, out long loginServerId, out long signingKeyId, out AccessLevel accessLevel, out DateTime expiresUtc, out string? realIp)
+		public static bool TryParseAndVerifyAuthToken(byte[] signedToken, byte[] hmacKey, out string? accountName, out long loginServerId, out long signingKeyId, out AccessLevel accessLevel, out DateTime expiresUtc)
 		{
 			accountName = null;
 			loginServerId = 0;
 			signingKeyId = 0;
 			accessLevel = AccessLevel.Player;
 			expiresUtc = DateTime.MinValue;
-			realIp = null;
 
 			if (signedToken == null || signedToken.Length < MinSignedTokenLength)
 				return false;
@@ -1754,25 +1742,9 @@ namespace FishMMO.Auth.Implementation
 			/// Failures are swallowed — we cannot guarantee the field layout across OtpNet versions
 			/// and this is defence-in-depth on top of caller-side zeroize of <c>plaintextSecret</c>.
 			/// </summary>
-			/// <remarks>
-			/// <para><b>IL2CPP / AOT limitation:</b> On Unity IL2CPP and other AOT compilation targets,
-			/// the runtime strips reflection metadata from non-public fields by default. This causes
-			/// <see cref="System.Reflection.BindingFlags.NonPublic"/> field lookups to silently return
-			/// no results, making this zeroization a no-op. The OtpNet <c>Totp</c> object graph
-			/// (<c>InMemoryKey</c> holding the <c>byte[]</c> secret) relies solely on non-public fields,
-			/// so on IL2CPP builds this entire method does nothing.</para>
-			/// <para>This is an accepted defence-in-depth limitation. The primary zeroization path is
-			/// the caller's explicit <c>CryptographicOperations.ZeroMemory(plaintextSecret)</c> in the
-			/// <c>finally</c> block. On IL2CPP, where reflection zeroization is unavailable, callers
-			/// must accept that the OtpNet internal copy persists until the next GC cycle.</para>
-			/// </remarks>
 			private static void TryZeroizeTotpInternals(object totp)
 			{
 				if (totp == null) return;
-#if ENABLE_IL2CPP
-				System.Diagnostics.Debug.WriteLine("[CryptoHelper.TryZeroizeTotpInternals] IL2CPP build: reflection-based zeroization is a no-op. Rely on caller-side ZeroMemory only.");
-				return;
-#endif
 				try
 				{
 					const System.Reflection.BindingFlags flags =
@@ -1819,6 +1791,7 @@ namespace FishMMO.Auth.Implementation
 					System.Diagnostics.Debug.WriteLine($"[CryptoHelper.TryZeroizeTotpInternals] Reflection-based zeroize failed: {ex.Message}");
 				}
 			}
+
 			private sealed class ReferenceEqualityComparer : System.Collections.Generic.IEqualityComparer<object>
 			{
 				public static readonly ReferenceEqualityComparer Instance = new ReferenceEqualityComparer();

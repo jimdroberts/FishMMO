@@ -225,6 +225,11 @@ namespace FishMMO.Client
 						case "font-size":
 							if (value.EndsWith("%") && float.TryParse(value.Replace("%", ""), out float percentage))
 							{
+								// KNOWN LIMITATION: The percentage value is used directly as an absolute TMP
+								// size tag rather than being multiplied by a base font size. For example,
+								// "150%" produces <size=150> instead of <size=1.5 * baseFontSize>. To support
+								// percentage-based font sizes correctly, add a baseFontSize field and apply it:
+								// <size={(int)(percentage / 100f * baseFontSize)}>.
 								openTags.Add($"<size={(int)(percentage)}>");
 							}
 							else if (value.EndsWith("px") && float.TryParse(value.Replace("px", ""), out float pxValue))

@@ -54,6 +54,10 @@ namespace FishMMO.Shared
 			/// overridden by a config file or branding patch without recompiling.
 			/// </para>
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string ProjectName = "FishMMO";
 
 			/// <summary>
@@ -61,6 +65,10 @@ namespace FishMMO.Shared
 			/// Windows uses ".exe" suffix; Linux and macOS omit it.
 			/// <c>static readonly</c> required because of the <c>#if</c> conditional compilation.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string ClientExecutable =
 #if UNITY_STANDALONE_WIN
 				ProjectName + ".exe";
@@ -75,6 +83,10 @@ namespace FishMMO.Shared
 			/// Windows uses ".exe" suffix; Linux and macOS omit it.
 			/// <c>static readonly</c> required because of the <c>#if</c> conditional compilation.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string UpdaterExecutable =
 #if UNITY_STANDALONE_WIN
 				"Updater.exe";
@@ -92,6 +104,10 @@ namespace FishMMO.Shared
 			/// configuration (e.g. from a setup config file or environment variable).
 			/// </para>
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string SetupDirectory = "FishMMO-Setup";
 
 			/// <summary>
@@ -105,6 +121,10 @@ namespace FishMMO.Shared
 			/// <c>ApiHostResolver</c>) instead of modifying this constant.
 			/// </para>
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const string APIHost = "https://api.fishmmo.com/";
 
 			/// <summary>
@@ -120,6 +140,10 @@ namespace FishMMO.Shared
 			/// <c>ApiHostResolver</c>) instead of modifying this constant.
 			/// </para>
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const string GameHost = "game.fishmmo.com";
 
 			/// <summary>
@@ -130,6 +154,10 @@ namespace FishMMO.Shared
 			/// resolve at runtime and can be replaced for specialized layouts.
 			/// </para>
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string ScenePath = "Assets/Scenes/";
 
 			/// <summary>
@@ -145,31 +173,55 @@ namespace FishMMO.Shared
 			/// will pick it up automatically.
 			/// </para>
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string BootstrapScenePath = "Assets/Scenes/";
 
 			/// <summary>
 			/// Path for client-specific bootstrap scenes.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string ClientBootstrapScenePath = "Assets/Scenes/Client/";
 
 			/// <summary>
 			/// Path for server-specific bootstrap scenes.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string ServerBootstrapScenePath = "Assets/Scenes/Server/";
 
 			/// <summary>
 			/// Path template for world scene assets.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string WorldScenePath = "Assets/Scenes/WorldScene";
 
 			/// <summary>
 			/// Path for local development scene assets (not source-controlled).
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly string LocalScenePath = "Assets/LOCAL/Scenes/";
 
 			/// <summary>
 			/// Maximum number of configurable player hotkeys.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const int MaximumPlayerHotkeys = 12;
 		}
 
@@ -178,28 +230,48 @@ namespace FishMMO.Shared
 			/// <summary>
 			/// DefaultLayer (Layer 0), used for most GameObjects.
 			/// </summary>
-			public static readonly LayerMask DefaultLayer = LayerMask.NameToLayer("Default");
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
+			public static readonly LayerMask DefaultLayer = 1 << LayerMask.NameToLayer("Default");
 
 			/// <summary>
 			/// Ignore Raycast layer, used for UI and non-interactive objects.
 			/// </summary>
-			public static readonly LayerMask IgnoreRaycast = LayerMask.NameToLayer("Ignore Raycast");
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
+			public static readonly LayerMask IgnoreRaycast = 1 << LayerMask.NameToLayer("Ignore Raycast");
 
 			/// <summary>
 			/// Ground layer, used for terrain and walkable surfaces.
 			/// </summary>
-			public static readonly LayerMask Ground = LayerMask.NameToLayer("Ground");
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
+			public static readonly LayerMask Ground = 1 << LayerMask.NameToLayer("Ground");
 
 			/// <summary>
 			/// Obstruction layer mask combining Default and Ground layers,
 			/// used for line-of-sight and occlusion checks.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly LayerMask Obstruction = LayerMask.GetMask("Default", "Ground");
 
 			/// <summary>
 			/// Player layer, used for player characters.
 			/// </summary>
-			public static readonly LayerMask Player = LayerMask.NameToLayer("Player");
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
+			public static readonly LayerMask Player = 1 << LayerMask.NameToLayer("Player");
 
 			static Layers()
 			{
@@ -216,15 +288,19 @@ namespace FishMMO.Shared
 			/// Returns a list of missing layer names, or an empty list if all are present.
 			/// Call during bootstrap to catch misconfigured projects early.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static System.Collections.Generic.List<string> Validate()
 			{
 				var missing = new System.Collections.Generic.List<string>();
-				void Check(int layer, string name) { if (layer < 0) missing.Add(name); }
+				void Check(int layerIndex, string name) { if (layerIndex < 0) missing.Add(name); }
 
-				Check(DefaultLayer, "Default");
-				Check(IgnoreRaycast, "Ignore Raycast");
-				Check(Ground, "Ground");
-				Check(Player, "Player");
+				Check(LayerMask.NameToLayer("Default"), "Default");
+				Check(LayerMask.NameToLayer("Ignore Raycast"), "Ignore Raycast");
+				Check(LayerMask.NameToLayer("Ground"), "Ground");
+				Check(LayerMask.NameToLayer("Player"), "Player");
 
 				// Obstruction is a combined mask; verify its bitmask is non-zero.
 				if (Obstruction.value == 0) missing.Add("Obstruction");
@@ -238,42 +314,74 @@ namespace FishMMO.Shared
 			/// <summary>
 			/// Movement speed while walking.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const float WalkSpeed = 1.5f;
 
 			/// <summary>
 			/// Movement speed while running.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const float RunSpeed = 4.0f;
 
 			/// <summary>
 			/// Movement speed while sprinting.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const float SprintSpeed = 6.0f;
 
 			/// <summary>
 			/// Stamina cost per second while sprinting.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const float SprintStaminaCost = 5.0f;
 
 			/// <summary>
 			/// Movement speed while crouching.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const float CrouchSpeed = 2.0f;
 
 			/// <summary>
 			/// Upward velocity applied when jumping.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const float JumpUpSpeed = 6.5f;
 
 			/// <summary>
 			/// Stamina cost per jump.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public const float JumpStaminaCost = 5.0f;
 
 			/// <summary>
 			/// Gravity vector applied to characters.
 			/// <c>static readonly</c> because <see cref="Vector3"/> is a non-primitive type and cannot be <c>const</c>.
 			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
 			public static readonly Vector3 Gravity = new Vector3(0, -14.0f, 0);
 		}
 	}

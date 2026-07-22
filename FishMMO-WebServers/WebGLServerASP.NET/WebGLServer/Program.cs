@@ -160,6 +160,23 @@ namespace FishMMO.WebServer
 						}));
 
 						app.UseForwardedHeaders();
+
+						// After UseForwardedHeaders has resolved the real client IP, reject any
+						// request still missing a RemoteIpAddress. This only happens when the proxy
+						// chain is misconfigured or the request bypassed NGINX entirely; both cases
+						// would silently coalesce into a single "unknown" rate-limit bucket and let
+						// an attacker escape per-IP throttling.
+						app.Use(async (ctx, next) =>
+						{
+							if (ctx.Connection.RemoteIpAddress == null)
+							{
+								ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+								await Log.Warning("Program", $"Request rejected: unresolved client IP for {ctx.Request.Path}");
+								return;
+							}
+							await next();
+						});
+
 						app.UseFishMMOSecurityHeaders(context.HostingEnvironment, extraHeaders: h =>
 						{
 							// Cross-Origin-Opener-Policy isolates the

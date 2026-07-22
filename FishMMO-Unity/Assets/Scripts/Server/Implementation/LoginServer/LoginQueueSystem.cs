@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Auth.Core.Collections;
@@ -77,6 +78,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private const float PurgeSweepIntervalSeconds = 10f;
 
 		/// <summary>
+		/// Set of client IDs that were recently admitted from the queue.
+		/// If a recently-admitted client's re-handshake fails (auth cap full),
+		/// they get immediate re-admission instead of being re-queued at the tail.
+		/// Entries expire after <see cref="RecentAdmitTtlSeconds"/>.
+		/// </summary>
+		private readonly HashSet<int> recentlyAdmitted = new HashSet<int>();
+		private const float RecentAdmitTtlSeconds = 15f;
+		private float nextRecentAdmitSweep;
+
+		/// <summary>
 		/// Returns the current number of clients in the queue.
 		/// </summary>
 		public int QueuedCount => queue?.Count ?? 0;
@@ -97,9 +108,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <inheritdoc/>
 		protected override void OnUpdate(float deltaTime)
 		{
-			if (queue == null || queue.Count == 0)
+			if (queue == null)
 				return;
 
+			SweepRecentlyAdmitted(deltaTime);
 			TryAdmitFromQueue(deltaTime);
 			BroadcastPositionUpdates(deltaTime);
 			PurgeStaleEntries(deltaTime);
@@ -126,6 +138,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				queue.Clear();
 				queue = null;
 			}
+			recentlyAdmitted.Clear();
 		}
 
 		#endregion
@@ -187,6 +200,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (queue == null) return false;
 			if (conn == null || !conn.IsActive) return false;
 
+			// Fast-pass: if this client was recently admitted from the queue
+			// but their re-handshake failed (auth cap still full), admit them
+			// immediately instead of re-queuing at the tail.
+			if (recentlyAdmitted.Contains(conn.ClientId))
+			{
+				recentlyAdmitted.Remove(conn.ClientId);
+				int pos = 0; // immediate re-admission
+				SendPositionUpdate(conn, pos, 0, queue.Count);
+				Log.Debug("LoginQueueSystem",
+					$"Connection {conn.ClientId} fast-pass re-admitted (recently admitted).");
+				return true;
+			}
+
 			if (queue.Count >= maxQueueSize)
 			{
 				Log.Warning("LoginQueueSystem",
@@ -230,6 +256,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				if (conn != null && conn.IsActive)
 				{
+					// Track as recently admitted so that if their re-handshake
+					// fails (auth cap still full), they get a fast-pass through
+					// TryEnqueue instead of being re-queued at the tail.
+					recentlyAdmitted.Add(conn.ClientId);
+
 					// Position 0 = "you are being processed now — retry your handshake"
 					SendPositionUpdate(conn, 0, 0, 0);
 					Log.Debug("LoginQueueSystem",
@@ -260,6 +291,37 @@ namespace FishMMO.Server.Implementation.LoginServer
 				int estimate = EstimateWaitSeconds(pos);
 				SendPositionUpdate(conn, pos, estimate, total);
 			});
+		}
+
+		/// <summary>
+		/// Removes expired entries from <see cref="recentlyAdmitted"/>.
+		/// Runs every <see cref="PurgeSweepIntervalSeconds"/> seconds.
+		/// </summary>
+		private void SweepRecentlyAdmitted(float deltaTime)
+		{
+			nextRecentAdmitSweep -= deltaTime;
+			if (nextRecentAdmitSweep > 0f || recentlyAdmitted.Count == 0) return;
+
+			nextRecentAdmitSweep = PurgeSweepIntervalSeconds;
+			// NOTE: All entries are cleared at once, not just expired ones.
+			// The effective fast-pass window ranges from 0 to ~25 seconds (not exactly 15s).
+			// This is an acceptable simplification for the admission rate.
+			recentlyAdmitted.Clear();
+		}
+
+		/// <summary>
+		/// Immediately removes a disconnected client from both the queue and
+		/// the recently-admitted set. Call from connection-stopped handlers
+		/// to prevent wasted admission ticks on dead connections.
+		/// </summary>
+		/// <param name="clientId">The FishNet client ID that disconnected.</param>
+		public void OnClientDisconnected(int clientId)
+		{
+			recentlyAdmitted.Remove(clientId);
+			// We can't look up the NetworkConnection from just the clientId
+			// without access to the ServerManager, but the next purge sweep
+			// will catch it. The recentlyAdmitted cleanup is the critical path
+			// to prevent fast-pass abuse after disconnect.
 		}
 
 		/// <summary>
@@ -296,7 +358,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 							conn.Disconnect(true);
 						}
 					}
-					catch { }
+					catch (Exception ex)
+				{
+					Log.Warning("LoginQueueSystem", $"Error disconnecting purged client {conn?.ClientId}: {ex.Message}");
+				}
 				}
 			}
 

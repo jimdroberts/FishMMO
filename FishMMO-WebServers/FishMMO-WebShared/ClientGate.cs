@@ -49,6 +49,11 @@ namespace FishMMO.WebShared
         // victim list that evicts still-valid nonces and leaves the cache over cap.
         private static readonly object pruneLock = new object();
 
+        // Cached regex for collapsing repeated slashes in path canonicalization.
+        // Compiled for throughput since it runs on every gated request.
+        private static readonly System.Text.RegularExpressions.Regex MultipleSlashRegex =
+            new System.Text.RegularExpressions.Regex("/{2,}", System.Text.RegularExpressions.RegexOptions.Compiled);
+
         /// <summary>
         /// Adds the gate middleware. Reads the shared secret from the
         /// <c>FISHMMO_CLIENT_GATE_SECRET</c> environment variable. If the
@@ -283,9 +288,27 @@ namespace FishMMO.WebShared
                     // cost is bounded. However, at NonceCacheCapacity=20000, a full sort of
                     // the snapshot adds measurable latency on the request thread that wins
                     // the lock after a burst.
+                    //
+                    // DoS VECTOR: An attacker sending a high rate of requests with unique
+                    // nonces can drive the cache over capacity, triggering this eviction
+                    // path every ~5 seconds.  Each O(n log n) sort of 20,000 entries on
+                    // the hot request thread adds tens of milliseconds of latency, stalling
+                    // all concurrent requests that contend on pruneLock.  Under a sustained
+                    // flood this compounds: the 5-second throttle means only one request
+                    // per window pays the sort cost, but that request's latency spike can
+                    // cause upstream timeouts and cascade to healthy clients behind a load
+                    // balancer.
+                    //
+                    // MITIGATION: The 5-second throttle and the hard cap at
+                    // NonceCacheCapacity=20000 bound the worst-case CPU spend to one sort
+                    // every ~5 seconds.  The per-process nature means only the targeted
+                    // instance is affected — other processes (or other nginx workers)
+                    // continue serving unaffected.  Additionally, the upstream ClientGate
+                    // rate limiting in nginx (api_limit/patch_limit zones) normally prevents
+                    // the flood from reaching this code path in the first place.
                     // TODO: Replace the full-sort LRU with a sampling-based eviction strategy
                     // (e.g., evict from a random subset of entries) to keep eviction O(1) and
-                    // avoid stalling the request pipeline under attack.
+                    // eliminate this attack surface entirely.
                     var liveSnapshot = seenNonces.ToArray();
                     Array.Sort(liveSnapshot, (a, b) => a.Value.CompareTo(b.Value));
                     int evictCount = Math.Min(target, liveSnapshot.Length);
@@ -306,6 +329,14 @@ namespace FishMMO.WebShared
         /// URL-decodes the path first, then collapses repeated slashes and rejects any
         /// path-traversal segment (raw or percent-encoded).
         /// Returns null if the path is unsafe.
+        ///
+        /// NOTE: Double-encoded path traversal (e.g., %252e%252e%252f, where %25 is the
+        /// encoding of '%') could theoretically bypass the single-UnescapeDataString pass
+        /// below. In practice, ASP.NET Core's own request-path normalization handles most
+        /// of these cases before this middleware runs, so the gap is defense-in-depth
+        /// rather than an active vulnerability. A truly rigorous solution would iteratively
+        /// unescape until no further changes occur, but the ASP.NET Core layer provides
+        /// sufficient protection for the current threat model.
         /// </summary>
         private static string? CanonicalizePath(string path)
         {
@@ -356,7 +387,7 @@ namespace FishMMO.WebShared
                 if (decodedSeg.Contains('/') || decodedSeg.Contains('\\')) return null;
             }
 
-            path = System.Text.RegularExpressions.Regex.Replace(path, "/{2,}", "/");
+            path = MultipleSlashRegex.Replace(path, "/");
             return path;
         }
 

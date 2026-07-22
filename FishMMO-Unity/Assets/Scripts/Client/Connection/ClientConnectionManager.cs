@@ -25,6 +25,10 @@ namespace FishMMO.Client
 		public byte ReconnectsAttempted { get; private set; }
 		private float nextReconnect;
 		/// <summary>In-flight connection guard. Prevents concurrent ConnectToServer calls from starting duplicate coroutines.</summary>
+		/// <remarks>All access to connectingGuard happens on the Unity main thread (Update, coroutines, event callbacks),
+		/// so a plain int would be technically sufficient. The Interlocked.CompareExchange/Exchange usage is
+		/// a defensive measure — it costs nothing on x86/ARM and documents the intent against future refactoring
+		/// that might introduce background-thread access.</remarks>
 		private int connectingGuard = 0;
 		/// <summary>Thread-safe disconnect flag. Volatile for visibility across transport-worker callbacks.</summary>
 		private volatile bool forceDisconnect;
@@ -161,6 +165,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
+		/// <summary>Computes the reconnect delay with exponential backoff and jitter for the given attempt number.</summary>
 		private float ComputeReconnectDelay(int attempt)
 		{
 			float d = ReconnectAttemptWaitTime <= 0 ? 1f : ReconnectAttemptWaitTime;

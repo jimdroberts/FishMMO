@@ -18,7 +18,11 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>
 		/// Foreign key to the character who sent this mail.
 		/// </summary>
-		public long SenderCharacterID { get; set; }
+		public long SenderID { get; set; }
+		/// <summary>
+		/// Display name of the sender at the time the mail was sent.
+		/// </summary>
+		public string SenderName { get; set; }
 		/// <summary>
 		/// Foreign key to the owning character (recipient).
 		/// </summary>
@@ -30,7 +34,15 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>
 		/// Body text of the mail message.
 		/// </summary>
-		public string Message { get; set; }
+		public string Body { get; set; }
+		/// <summary>
+		/// Whether the recipient has read this mail.
+		/// </summary>
+		public bool Read { get; set; }
+		/// <summary>
+		/// Currency amount attached to this mail.
+		/// </summary>
+		public int CurrencyAttachment { get; set; }
 		/// <summary>
 		/// Template identifier for an item attachment, or zero if no item is attached.
 		/// </summary>

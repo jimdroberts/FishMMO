@@ -114,7 +114,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var id = await ExecuteScalarLongAsync(
 					dbContext,
 					sql,
-					new object[] { attributeData.CharacterID, attributeData.TemplateID, attributeData.Version, attributeData.Value, 0f, now },
+					new object[] { attributeData.CharacterID, attributeData.TemplateID, attributeData.Version, attributeData.Value, attributeData.CurrentValue, now },
 					cancellationToken).ConfigureAwait(false);
 
 				if (id <= 0)
@@ -189,7 +189,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var templateIdArray = activeAttributes.Select(a => a.TemplateID).ToArray();
 				var versionArray = activeAttributes.Select(a => a.Version).ToArray();
 				var valueArray = activeAttributes.Select(a => a.Value).ToArray();
-				var currentValueArray = activeAttributes.Select(a => 0f).ToArray();
+				var currentValueArray = activeAttributes.Select(a => a.CurrentValue).ToArray();
 
 				var sql = $@"
 					INSERT INTO {TableName}
@@ -290,7 +290,8 @@ namespace FishMMO.Database.Npgsql.Services
 					version: a.Version,
 					characterID: a.CharacterID,
 					templateID: a.TemplateID,
-					value: a.Value
+					value: a.Value,
+					currentValue: a.CurrentValue
 				)).ToList();
 
 				return (IReadOnlyList<CharacterPetAttributeData>)attributes;

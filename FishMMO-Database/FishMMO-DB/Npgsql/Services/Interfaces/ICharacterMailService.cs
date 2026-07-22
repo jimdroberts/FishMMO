@@ -21,9 +21,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Sends a new mail message from one character to another.
 		/// </summary>
 		/// <param name="senderCharacterId">The sending character ID.</param>
+		/// <param name="senderName">The display name of the sender.</param>
 		/// <param name="recipientCharacterId">The recipient character ID.</param>
 		/// <param name="subject">The mail subject.</param>
-		/// <param name="message">The mail body text.</param>
+		/// <param name="body">The mail body text.</param>
 		/// <param name="itemAttachmentTemplateID">The attached item template ID (0 for none).</param>
 		/// <param name="itemAttachmentSeed">The attached item seed (0 for none).</param>
 		/// <param name="itemAttachmentAmount">The attached item amount (0 for none).</param>
@@ -32,9 +33,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
 		Task<DatabaseResult> SendAsync(
 			long senderCharacterId,
+			string senderName,
 			long recipientCharacterId,
 			string subject,
-			string message,
+			string body,
 			int itemAttachmentTemplateID,
 			int itemAttachmentSeed,
 			uint itemAttachmentAmount,

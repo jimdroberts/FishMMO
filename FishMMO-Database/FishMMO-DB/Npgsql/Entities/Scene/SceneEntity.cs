@@ -2,6 +2,7 @@ using System;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
+	/// <summary>Scene instance entity representing a currently loaded scene on a scene server.</summary>
 	public class SceneEntity : IVersionedEntity
 	{
 		/// <summary>Primary key.</summary>

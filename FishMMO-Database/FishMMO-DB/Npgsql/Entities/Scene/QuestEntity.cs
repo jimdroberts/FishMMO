@@ -15,6 +15,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public long ID { get; set; }
 		/// <summary>Concurrency version for optimistic locking.</summary>
 		public long Version { get; set; }
+		/// <summary>Display name of the quest.</summary>
+		public string Name { get; set; }
 		/// <summary>Row creation timestamp (UTC).</summary>
 		public DateTime TimeCreated { get; set; }
 	}

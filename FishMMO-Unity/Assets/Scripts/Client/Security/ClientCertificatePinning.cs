@@ -26,6 +26,12 @@ namespace FishMMO.Client.Security
 	/// validity and instead requires that the leaf's SPKI match a known-good
 	/// pin. Always configure at least two pins (active + backup) so an emergency
 	/// key rotation does not require a client patch.
+	///
+	/// <c>IL2CPP / AOT platforms (WebGL, iOS, consoles):</c>
+	/// BouncyCastle relies on runtime reflection for algorithm lookup and type
+	/// activation. Without linker instructions, the managed-code linker will
+	/// strip the types it needs.  Ensure <c>Assets/link.xml</c> includes:
+	/// <c>&lt;assembly fullname="Org.BouncyCastle" preserve="all"/&gt;</c>.
 	/// </summary>
 	public static class ClientCertificatePinning
 	{

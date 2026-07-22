@@ -21,6 +21,16 @@ namespace FishMMO.Shared
 	/// byte arrays in constructors — they store the caller's reference directly
 	/// for zero-allocation performance on hot auth paths.
 	/// </para>
+	/// <para>
+	/// <b>Multi-Field Struct Field Order:</b> Structs in this file with multiple fields
+	/// rely on FishNet's declaration-order serialization. <b>Do not reorder fields.</b>
+	/// The <see cref="System.Runtime.InteropServices.StructLayoutAttribute"/> with
+	/// <see cref="System.Runtime.InteropServices.LayoutKind.Sequential"/> is applied
+	/// where necessary (e.g. <see cref="TwoFactorSetupBroadcast"/>). C# defaults to
+	/// Sequential layout for structs, so the attribute is omitted on other structs for
+	/// brevity. If the compiler or runtime behavior changes, add the attribute explicitly,
+	/// using the <c>TwoFactorSetupBroadcast</c> declaration as a template.
+	/// </para>
 
 	/// <summary>
 	/// Size limits for authentication broadcast fields.
@@ -317,7 +327,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Explicit message sequence number (server->client).
 		///
-		/// NOTE: The client does NOT use Seq-1 / Seq derivation for these
+		/// NOTE: Seq is declared LAST. The nonce derivation calls NextNonce()
+		/// for byte-array fields first, then uses Seq for replay tracking.
+		/// Reordering fields will desynchronize the nonce stream.
+		///
+		/// The client does NOT use Seq-1 / Seq derivation for these
 		/// two fields. Instead, it calls receiveNonceCtx.NextNonce() twice
 		/// sequentially — first for the OtpauthUri, then for the
 		/// RecoveryCodes.  Consequently, the server MUST send the URI

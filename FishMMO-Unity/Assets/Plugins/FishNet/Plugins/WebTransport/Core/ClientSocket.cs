@@ -111,10 +111,10 @@ namespace FishNet.Transporting.WebTransport.Client
 			// callbacks is properly freed via their finally blocks.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				System.Threading.Interlocked.Decrement(ref incomingEventCount);
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
 			}
-			incomingEventCount = 0;
+			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
 			// Assert we are on the Unity main thread.
 			if (mainThreadId < 0)
@@ -236,10 +236,10 @@ namespace FishNet.Transporting.WebTransport.Client
 			// that unmanaged memory is freed.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				System.Threading.Interlocked.Decrement(ref incomingEventCount);
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
 			}
-			incomingEventCount = 0;
+			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
 			base.SetConnectionState(LocalConnectionState.Stopping, false);
 
@@ -280,7 +280,7 @@ namespace FishNet.Transporting.WebTransport.Client
 #endif
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				System.Threading.Interlocked.Decrement(ref incomingEventCount);
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				try { act?.Invoke(); } catch (Exception e) { LogTransportError(e.Message); }
 			}
 		}
@@ -345,6 +345,14 @@ namespace FishNet.Transporting.WebTransport.Client
 				Packet pkt = this.outgoing.Dequeue();
 
 #if UNITY_WEBGL && !UNITY_EDITOR
+				// IMPORTANT: return value means "queued for send", not "delivered".
+				// The underlying browser WebTransport API uses JS Promises which may
+				// reject asynchronously after this call returns true. The packet is
+				// considered best-effort; the C# side disposes the buffer immediately
+				// and does NOT track pending JS promises. Silent data loss can occur
+				// if the Promise rejects (e.g. due to congestion, connection drop, or
+				// stream-creation failure after the threshold is exceeded). This is an
+				// inherent limitation of the browser's WebTransport API.
 				bool ok;
 				if (pkt.Channel == 1)
 					ok = WebTransportJSLib.WTSendDatagram(webglIndex, pkt.Data, pkt.Length);
@@ -436,8 +444,16 @@ namespace FishNet.Transporting.WebTransport.Client
 			byte[] buf = new byte[length];
 			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
 			socket.incomingEvents.Enqueue(() =>
-				socket.transport.HandleClientReceivedDataArgs(
-					new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Reliable, socket.transport.Index)));
+			{
+				Transport transport = socket.transport;
+				if (transport == null)
+				{
+					socket.LogTransportWarning("[WebTransport Client] Dropping reliable stream data — transport not initialized.");
+					return;
+				}
+				transport.HandleClientReceivedDataArgs(
+					new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Reliable, transport.Index));
+			});
 		}
 
 		[AOT.MonoPInvokeCallback(typeof(WTDataCallback))]
@@ -459,8 +475,16 @@ namespace FishNet.Transporting.WebTransport.Client
 			byte[] buf = new byte[length];
 			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
 			socket.incomingEvents.Enqueue(() =>
-				socket.transport.HandleClientReceivedDataArgs(
-					new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Unreliable, socket.transport.Index)));
+			{
+				Transport transport = socket.transport;
+				if (transport == null)
+				{
+					socket.LogTransportWarning("[WebTransport Client] Dropping unreliable datagram — transport not initialized.");
+					return;
+				}
+				transport.HandleClientReceivedDataArgs(
+					new ClientReceivedDataArgs(new ArraySegment<byte>(buf), Channel.Unreliable, transport.Index));
+			});
 		}
 
 		[AOT.MonoPInvokeCallback(typeof(WTIndexCallback))]
@@ -487,9 +511,9 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private void HandleNativeConnect(IntPtr context)
 		{
-			if (System.Threading.Interlocked.Increment(ref incomingEventCount) > MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref this.incomingEventCount) > MaxIncomingEvents)
 			{
-				System.Threading.Interlocked.Decrement(ref incomingEventCount);
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping connect event.");
 				return;
 			}
@@ -506,9 +530,9 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private void HandleNativeDisconnect(IntPtr context, int errorCode)
 		{
-			if (System.Threading.Interlocked.Increment(ref incomingEventCount) > MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref this.incomingEventCount) > MaxIncomingEvents)
 			{
-				System.Threading.Interlocked.Decrement(ref incomingEventCount);
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping disconnect event.");
 				return;
 			}
@@ -541,9 +565,9 @@ namespace FishNet.Transporting.WebTransport.Client
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
 
-			if (System.Threading.Interlocked.Increment(ref incomingEventCount) > MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref this.incomingEventCount) > MaxIncomingEvents)
 			{
-				System.Threading.Interlocked.Decrement(ref incomingEventCount);
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping stream data.");
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
 				return;
@@ -561,8 +585,15 @@ namespace FishNet.Transporting.WebTransport.Client
 
 					// Channel 0 = reliable (stream)
 					ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
-					transport.HandleClientReceivedDataArgs(
-						new ClientReceivedDataArgs(segment, Channel.Reliable, transport.Index));
+					try
+					{
+						transport.HandleClientReceivedDataArgs(
+							new ClientReceivedDataArgs(segment, Channel.Reliable, transport.Index));
+					}
+					catch (System.Exception ex)
+					{
+						LogTransportWarning("[WebTransport Client] Receive error: " + ex.Message);
+					}
 				}
 				finally
 				{
@@ -589,9 +620,9 @@ namespace FishNet.Transporting.WebTransport.Client
 				System.Buffer.MemoryCopy((void*)dataPtr, (void*)unmanagedCopy, length, length);
 			}
 
-			if (System.Threading.Interlocked.Increment(ref incomingEventCount) > MaxIncomingEvents)
+			if (System.Threading.Interlocked.Increment(ref this.incomingEventCount) > MaxIncomingEvents)
 			{
-				System.Threading.Interlocked.Decrement(ref incomingEventCount);
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping datagram.");
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(unmanagedCopy);
 				return;
@@ -609,8 +640,15 @@ namespace FishNet.Transporting.WebTransport.Client
 
 					// Channel 1 = unreliable (datagram)
 					ArraySegment<byte> segment = new ArraySegment<byte>(buffer);
-					transport.HandleClientReceivedDataArgs(
-						new ClientReceivedDataArgs(segment, Channel.Unreliable, transport.Index));
+					try
+					{
+						transport.HandleClientReceivedDataArgs(
+							new ClientReceivedDataArgs(segment, Channel.Unreliable, transport.Index));
+					}
+					catch (System.Exception ex)
+					{
+						LogTransportWarning("[WebTransport Client] Receive error: " + ex.Message);
+					}
 				}
 				finally
 				{

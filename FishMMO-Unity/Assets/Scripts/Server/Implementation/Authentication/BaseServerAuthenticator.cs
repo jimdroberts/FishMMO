@@ -33,14 +33,6 @@ namespace FishMMO.Server.Implementation
 		[UnityEngine.SerializeField]
 		private int maxMainThreadActionsPerUpdate = 100;
 
-		/// <summary>
-		/// When true, uses the connection ID as the rate-limiting key instead of the remote IP.
-		/// Enable when the server is behind a reverse proxy where all clients share one IP.
-		/// </summary>
-		[Header("Proxy Compatibility")]
-		[Tooltip("Use connection ID instead of IP for rate limiting. Enable when behind a proxy/NAT/load balancer.")]
-		[SerializeField]
-		private bool useConnectionIdForRateLimit = false;
 
 		/// <summary>Thread-safe queue for marshalling network operations to the main Unity thread.</summary>
 		private readonly ConcurrentQueue<Action> mainThreadQueue = new ConcurrentQueue<Action>();
@@ -53,6 +45,9 @@ namespace FishMMO.Server.Implementation
 		/// in fire-and-forget async operations. Set during <see cref="InitializeWorkers"/>.
 		/// </summary>
 		private CancellationToken shutdownToken;
+
+		/// <summary>Cached handler delegate for ClientHandshake broadcast registration/unregistration.</summary>
+		private Action<NetworkConnection, ClientHandshake, Channel> clientHandshakeHandler;
 
 		/// <summary>The engine-independent authenticator core. Created by <see cref="InitializeCoreInstance"/>.</summary>
 		protected abstract BaseAuthenticatorCore<NetworkConnection> Core { get; }
@@ -76,7 +71,11 @@ namespace FishMMO.Server.Implementation
 		{
 			base.InitializeOnce(networkManager);
 			networkManager.ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
-			networkManager.ServerManager.RegisterBroadcast<ClientHandshake>(OnServerClientHandshakeReceived, false);
+				this.clientHandshakeHandler = (conn, msg, channel) =>
+				{
+					_ = OnServerClientHandshakeReceivedAsync(conn, msg, channel);
+				};
+				networkManager.ServerManager.RegisterBroadcast<ClientHandshake>(this.clientHandshakeHandler, false);;
 			RegisterProtocolHandlers(networkManager);
 		}
 
@@ -113,17 +112,6 @@ namespace FishMMO.Server.Implementation
 			shutdownToken = workerCts.Token;
 			Core.InitializeWorkers(workerCts.Token);
 
-			// Operational warning: keying rate limits by FishNet ClientId is only safe
-			// behind a trusted proxy. On a direct-Internet listener an attacker can
-			// reset their bucket simply by reconnecting, defeating the throttle entirely.
-			if (useConnectionIdForRateLimit)
-			{
-				_ = Log.Warning(LogPrefix,
-					"useConnectionIdForRateLimit=true: rate limits are keyed by FishNet ClientId. " +
-					"This is ONLY safe behind a trusted reverse proxy / load balancer. On a direct-Internet " +
-					"listener an attacker can bypass per-IP throttling by reconnecting. Disable this unless " +
-					"a proxy fronts this server.");
-			}
 		}
 
 		/// <summary>
@@ -230,7 +218,7 @@ namespace FishMMO.Server.Implementation
 				return;
 
 			NetworkManager.ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
-			NetworkManager.ServerManager.UnregisterBroadcast<ClientHandshake>(OnServerClientHandshakeReceived);
+			NetworkManager.ServerManager.UnregisterBroadcast<ClientHandshake>(this.clientHandshakeHandler);
 			UnregisterProtocolHandlers(NetworkManager);
 		}
 
@@ -239,15 +227,25 @@ namespace FishMMO.Server.Implementation
 		#region Rate Limit Key Resolution
 
 		/// <summary>
-		/// Resolves a rate-limit key for a connection.
-		/// Returns the connection ID string when <c>useConnectionIdForRateLimit</c> is enabled
-		/// (proxy/NAT deployments); otherwise returns the normalized remote IP.
+		/// Resolves the real client IP for rate limiting. Requires the IP to have been
+		/// recovered from a verified connection token or auth token. Returns null if
+		/// the real IP is not yet available — callers MUST disconnect the client.
+		/// Never falls back to proxy IP or ClientId.
 		/// </summary>
-		protected string ResolveRateLimitKey(NetworkConnection conn)
+		protected string? ResolveRateLimitKey(NetworkConnection conn)
 		{
-			if (conn == null) return string.Empty;
-			if (useConnectionIdForRateLimit) return conn.ClientId.ToString();
-			return HandshakeService.NormalizeIp(conn.GetAddress());
+			if (conn == null) return null;
+			// Look up the real IP recovered from the connection/auth token.
+			// Never fall back to conn.GetAddress() (which returns 127.0.0.1
+			// behind an L4 proxy) or conn.ClientId (which resets on reconnect).
+			if (Server?.DataContainerRegistry != null &&
+				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
+				rt.ConnectionIpCache != null &&
+				rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? realIp))
+			{
+				return HandshakeService.NormalizeIp(realIp);
+			}
+			return null;
 		}
 
 		#endregion
@@ -256,7 +254,7 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>Routes incoming ClientHandshake broadcast to the core handshake handler
 		/// and processes the connection token for real-IP recovery.</summary>
-		internal void OnServerClientHandshakeReceived(NetworkConnection conn, ClientHandshake msg, Channel channel)
+		internal async Task OnServerClientHandshakeReceivedAsync(NetworkConnection conn, ClientHandshake msg, Channel channel)
 		{
 			if (conn.IsAuthenticated)
 			{
@@ -275,91 +273,148 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			// Process connection token for real-IP recovery.
+			// Process connection token for real-IP recovery synchronously.
 			// When behind an L4 UDP proxy, conn.GetAddress() returns 127.0.0.1.
 			// The token bridges the real IP from the HTTP layer into the QUIC layer.
-			//
-			// NOTE: Fire-and-forget by design. Awaiting ProcessConnectionTokenAsync
-			// would block the handshake on DB latency for every connection, adding
-			// unnecessary RTT and reducing throughput under load.
-			//
-			// The compensating controls for this fire-and-forget design are:
-			//   1. Rate limiting may briefly use the proxy IP (127.0.0.1) for the
-			//      first packet until the token resolves the real IP. This is
-			//      acceptable because the token is bound to a short TTL and the
-			//      connection ID is unique to each handshake, preventing a proxy-IP
-			//      collision from allowing abuse.
-			//   2. useConnectionIdForRateLimit=true (configured on this authenticator)
-			//      keys rate limits against the FishNet ClientId instead of the
-			//      remote IP. This is the recommended setting when all clients are
-			//      behind a trusted reverse proxy, eliminating the window entirely.
+			// We await resolution because rate limiting requires a verified real IP —
+			// falling back to proxy IP or ClientId is not acceptable for DoS protection.
 			if (!string.IsNullOrEmpty(msg.ConnectionToken))
 			{
-				_ = ProcessConnectionTokenAsync(conn, msg.ConnectionToken);
+				try
+				{
+					if (!await ProcessConnectionTokenAsync(conn, msg.ConnectionToken))
+					{
+						conn.Disconnect(true);
+						return;
+					}
+				}
+				catch (Exception ex)
+				{
+					await Log.Error(LogPrefix, $"ProcessConnectionTokenAsync threw for connection {conn.ClientId}: {ex.Message}");
+					conn.Disconnect(true);
+					return;
+				}
+			}
+			else
+			{
+				// No connection token provided — client is not coming through the
+				// IPFetch proxy path. Disconnect immediately.
+				await Log.Warning(LogPrefix, $"Connection {conn.ClientId} rejected: no connection token.");
+				conn.Disconnect(true);
+				return;
 			}
 
-			Core?.OnHandshakeReceived(conn, msg.PublicKey, msg.Cookie, msg.ConnectionToken, msg.MinVersion, msg.MaxVersion, msg.GameVersion ?? "");
+			if (Core == null)
+			{
+				await Log.Warning(LogPrefix, $"Core is null during OnHandshakeReceived for connection {conn.ClientId} — handshake discarded. Ensure InitializeWorkers() was called before accepting connections.");
+			}
+			else
+			{
+				Core.OnHandshakeReceived(conn, msg.PublicKey, msg.Cookie, msg.ConnectionToken, msg.MinVersion, msg.MaxVersion, msg.GameVersion ?? "");
+			}
 		}
 
 		/// <summary>
 		/// Validates a connection token against the database and stores the real IP
 		/// for rate-limiting and logging. Fire-and-forget — does not block the handshake.
 		/// </summary>
-		private async Task ProcessConnectionTokenAsync(NetworkConnection conn, string rawToken)
+		/// <returns>true if the real IP was successfully recovered; false if the client should be disconnected.</returns>
+		private async Task<bool> ProcessConnectionTokenAsync(NetworkConnection conn, string rawToken)
 		{
-			// Snapshot the cancellation token before any await to ensure
-			// shutdown detection is reliable even if workerCts is disposed later.
 			CancellationToken ct = shutdownToken;
+			if (ct.IsCancellationRequested) return false;
 
-			// Bail early if shutdown has been signalled.
-			if (ct.IsCancellationRequested)
-				return;
-
-			// Snapshot Server before any await to prevent nullification during
-			// execution (the property setter may be called from another thread).
 			var server = Server;
-			// Only process tokens on the Login Server. World/Scene servers
-			// do not have IAccountCreationSystemRuntimeData to store the result;
-			// the real IP is already in the account record from the Login phase.
 			if (server?.DataContainerRegistry == null ||
 				!server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
+				return false;
+
+			// Try stateless HMAC verification first (new format: payloadB64.sigB64).
+			// Falls back to DB lookup for legacy tokens or if HMAC key not configured.
+			string? realIp = TryVerifyStatelessConnectionToken(rawToken, server.Configuration);
+			if (realIp != null)
 			{
-				return;
+				StoreRealIpForConnection(conn.ClientId, realIp);
+				await Log.Debug(LogPrefix, $"Real IP {realIp} recovered via HMAC token for connection {conn.ClientId}.");
+				return true;
 			}
+
+			// Legacy DB-backed token path removed (IConnectionTokenService deleted
+			// when connection tokens migrated to stateless HMAC).
+			await Log.Warning(LogPrefix, $"Legacy connection token not supported for {conn.ClientId}.");
+			return false;
+		}
+
+		/// <summary>
+		/// Attempts to verify a stateless HMAC-signed connection token.
+		/// Token format: base64url(realIp|expiryUnix).base64url(HMAC-SHA256(key, payload))
+		/// Returns the real IP on success, null if the token is invalid/expired
+		/// or the HMAC key is not configured.
+		/// </summary>
+		private static string? TryVerifyStatelessConnectionToken(string rawToken, IServerConfiguration? config)
+		{
+			if (string.IsNullOrEmpty(rawToken)) return null;
+			int dotIdx = rawToken.LastIndexOf('.');
+			if (dotIdx <= 0 || dotIdx >= rawToken.Length - 1) return null;
+
+			var hmacKey = ResolveConnectionTokenHmacKey(config);
+			if (hmacKey == null) return null;
+
 			try
 			{
-				// Hash the raw token the same way IPFetch did
-				using var sha256 = SHA256.Create();
-				var tokenHash = BitConverter.ToString(
-					sha256.ComputeHash(Encoding.UTF8.GetBytes(rawToken)))
-					.Replace("-", "").ToLowerInvariant();
+				var payloadB64 = rawToken.Substring(0, dotIdx).Replace('-', '+').Replace('_', '/');
+				var sigB64 = rawToken.Substring(dotIdx + 1).Replace('-', '+').Replace('_', '/');
+				// Restore Base64 padding
+				while (payloadB64.Length % 4 != 0) payloadB64 += "=";
+				while (sigB64.Length % 4 != 0) sigB64 += "=";
 
-				if (ct.IsCancellationRequested) return;
+				var payload = Convert.FromBase64String(payloadB64);
+				var expectedSig = Convert.FromBase64String(sigB64);
 
-				if (server?.Database?.ServiceRegistry == null ||
-					!server.Database.ServiceRegistry.TryGet<IConnectionTokenService>(out var svc))
-				{
-					await Log.Debug(LogPrefix, "IConnectionTokenService not registered — token skipped.");
-					return;
-				}
+				using var hmac = new HMACSHA256(hmacKey);
+				var computedSig = hmac.ComputeHash(payload);
+				if (!CryptographicOperations.FixedTimeEquals(computedSig, expectedSig))
+					return null;
 
-				if (ct.IsCancellationRequested) return;
+				var payloadStr = Encoding.UTF8.GetString(payload);
+				int pipeIdx = payloadStr.LastIndexOf('|');
+				if (pipeIdx <= 0) return null;
 
-				var result = await svc.ValidateAndConsumeAsync(tokenHash);
-				if (!result.IsSuccess || result.Data == null)
-				{
-					await Log.Debug(LogPrefix, $"Connection token not found or expired for connection {conn.ClientId}.");
-					return;
-				}
+				var realIp = payloadStr.Substring(0, pipeIdx);
+				if (!long.TryParse(payloadStr.Substring(pipeIdx + 1), out long expiryUnix))
+					return null;
 
-				// Store real IP for rate limiting — overwrite the loopback address
-				StoreRealIpForConnection(conn.ClientId, result.Data);
-				await Log.Debug(LogPrefix, $"Real IP {result.Data} recovered for connection {conn.ClientId}.");
+				if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiryUnix)
+					return null; // expired
+
+				return realIp;
 			}
-			catch (Exception ex)
+			catch
 			{
-				await Log.Warning(LogPrefix, $"Connection token processing failed: {ex}");
+				return null;
 			}
+		}
+
+		/// <summary>
+		/// Resolves the shared HMAC key for connection token verification.
+		/// Order: ConnectionTokenHmacKeyBase64 in server .cfg, then
+		/// FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 env var.
+		/// </summary>
+		private static byte[]? ResolveConnectionTokenHmacKey(IServerConfiguration? config)
+		{
+			string? b64 = null;
+			if (config != null && config.TryGetString("ConnectionTokenHmacKeyBase64", out var cfgValue) &&
+				!string.IsNullOrWhiteSpace(cfgValue))
+				b64 = cfgValue.Trim();
+			else
+			{
+				var envValue = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
+				if (!string.IsNullOrWhiteSpace(envValue))
+					b64 = envValue.Trim();
+			}
+			if (string.IsNullOrEmpty(b64)) return null;
+			try { return Convert.FromBase64String(b64); }
+			catch { return null; }
 		}
 
 		/// <summary>
@@ -379,7 +434,16 @@ namespace FishMMO.Server.Implementation
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped)
+			{
 				Core?.HandleConnectionStopped(conn);
+				// Immediately notify the login queue so dead connections
+				// don't consume admission ticks for up to 10 seconds.
+				if (Server?.BehaviourRegistry != null &&
+					Server.BehaviourRegistry.TryGet<LoginServer.LoginQueueSystem>(out var queueSystem))
+				{
+					queueSystem.OnClientDisconnected(conn.ClientId);
+				}
+			}
 		}
 
 		#endregion

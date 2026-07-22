@@ -2,6 +2,7 @@ using System;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
+	/// <summary>Login server registration entity representing an active login server instance.</summary>
 	public class LoginServerEntity
 	{
 		/// <summary>Primary key.</summary>

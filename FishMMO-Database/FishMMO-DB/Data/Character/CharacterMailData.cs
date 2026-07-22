@@ -17,16 +17,18 @@ namespace FishMMO.Database.Data
 		public readonly DateTime TimeSent;
 		public readonly bool Read;
 		public readonly int CurrencyAttachment;
-		public readonly int ItemAttachment;
+		public readonly int ItemAttachmentTemplateID;
+		public readonly int ItemAttachmentSeed;
+		public readonly int ItemAttachmentAmount;
 
 		long IVersioned<CharacterMailData>.Version => Version;
 
-		public CharacterMailData(long id, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachment)
-			: this(id, version: 0, characterID, senderID, senderName, subject, body, timeSent, read, currencyAttachment, itemAttachment)
+		public CharacterMailData(long id, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachmentTemplateID, int itemAttachmentSeed, int itemAttachmentAmount)
+			: this(id, version: 0, characterID, senderID, senderName, subject, body, timeSent, read, currencyAttachment, itemAttachmentTemplateID, itemAttachmentSeed, itemAttachmentAmount)
 		{
 		}
 
-		public CharacterMailData(long id, long version, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachment)
+		public CharacterMailData(long id, long version, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachmentTemplateID, int itemAttachmentSeed, int itemAttachmentAmount)
 		{
 			ID = id;
 			Version = version;
@@ -38,12 +40,14 @@ namespace FishMMO.Database.Data
 			TimeSent = timeSent;
 			Read = read;
 			CurrencyAttachment = currencyAttachment;
-			ItemAttachment = itemAttachment;
+			ItemAttachmentTemplateID = itemAttachmentTemplateID;
+			ItemAttachmentSeed = itemAttachmentSeed;
+			ItemAttachmentAmount = itemAttachmentAmount;
 		}
 
 		public CharacterMailData WithVersion(long newVersion)
 		{
-			return new CharacterMailData(ID, newVersion, CharacterID, SenderID, SenderName, Subject, Body, TimeSent, Read, CurrencyAttachment, ItemAttachment);
+			return new CharacterMailData(ID, newVersion, CharacterID, SenderID, SenderName, Subject, Body, TimeSent, Read, CurrencyAttachment, ItemAttachmentTemplateID, ItemAttachmentSeed, ItemAttachmentAmount);
 		}
 	}
 }

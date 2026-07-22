@@ -20,6 +20,10 @@ namespace FishMMO.Database.Npgsql.Entities
 				.ValueGeneratedOnAdd();
 
 			// Required fields
+			builder.Property(e => e.Name)
+				.IsRequired()
+				.HasMaxLength(200);
+
 			builder.Property(e => e.TimeCreated)
 				.IsRequired()
 				.HasDefaultValue(DateTime.UnixEpoch);

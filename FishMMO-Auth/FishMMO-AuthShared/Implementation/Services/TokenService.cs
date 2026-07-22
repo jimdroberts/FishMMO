@@ -32,12 +32,13 @@ namespace FishMMO.Auth.Implementation
 			long signingKeyId,
 			DateTime expiresUtc,
 			byte[] signingKey,
-			AccessLevel accessLevel)
+			AccessLevel accessLevel,
+			string? realIp = null)
 		{
 			if (signingKey == null || signingKey.Length < CryptoHelper.HmacKeyLength)
 				return null;
 
-			return CryptoHelper.BuildAuthToken(username, loginServerId, signingKeyId, expiresUtc, signingKey, accessLevel);
+			return CryptoHelper.BuildAuthToken(username, loginServerId, signingKeyId, expiresUtc, signingKey, accessLevel, realIp);
 		}
 
 		/// <summary>
@@ -75,11 +76,12 @@ namespace FishMMO.Auth.Implementation
 			int tokenExpirationMinutes,
 			byte[] signingKey,
 			AccessLevel accessLevel,
-			out byte[]? rawTokenForHashing)
+			out byte[]? rawTokenForHashing,
+			string? realIp = null)
 		{
 			rawTokenForHashing = null;
 
-			byte[]? rawToken = BuildToken(username, loginServerId, signingKeyId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes), signingKey, accessLevel);
+			byte[]? rawToken = BuildToken(username, loginServerId, signingKeyId, DateTime.UtcNow.AddMinutes(tokenExpirationMinutes), signingKey, accessLevel, realIp);
 			if (rawToken == null)
 				return null;
 
@@ -143,6 +145,9 @@ namespace FishMMO.Auth.Implementation
 			/// <summary>Token expiration time (UTC) extracted from the verified token.</summary>
 			public DateTime ExpiresUtc;
 
+			/// <summary>Real client IP extracted from the verified token (v4+). Null for pre-v4 tokens.</summary>
+			public string? RealIp;
+
 			/// <summary>SHA-256 hex hash of the raw token for revocation lookups.</summary>
 			public string? TokenHash;
 
@@ -173,6 +178,11 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="loginServerId">Extracted login server ID for signing key ownership checks.</param>
 		/// <param name="signingKeyId">Extracted signing-key ID for signing key lookup.</param>
 		/// <returns><c>true</c> if decryption and partial parse succeeded.</returns>
+		/// <remarks>
+		/// <b>NOTE:</b> Does not validate version/type bytes during partial parse. Full validation
+		/// happens in <see cref="VerifyToken"/>. The partial parse is used only for key lookup;
+		/// the cross-check in VerifyToken prevents tampering.
+		/// </remarks>
 		public static bool TryDecryptAndPartialParse(
 			byte[] encryptedToken,
 			ConnectionEncryptionData encryptionData,
@@ -272,7 +282,8 @@ namespace FishMMO.Auth.Implementation
 				out result.LoginServerId,
 				out result.SigningKeyId,
 				out result.AccessLevel,
-				out result.ExpiresUtc);
+				out result.ExpiresUtc,
+				out result.RealIp);
 
 			if (!signingKeyFound || !hmacValid)
 			{

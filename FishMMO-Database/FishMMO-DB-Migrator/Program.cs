@@ -4,6 +4,8 @@ using Npgsql;
 
 Console.WriteLine("FishMMO DB Migrator starting...");
 
+// NOTE: Connection string is read directly from environment variable and bypasses NpgsqlDbConfiguration validation.
+// Migrator is a standalone tool with minimal dependencies — configuration validation is deferred to runtime.
 string? connectionString = Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_STRING");
 if (string.IsNullOrWhiteSpace(connectionString))
 {

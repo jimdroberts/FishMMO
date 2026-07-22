@@ -2,8 +2,8 @@
   "LoggingManager": {
     "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"],
     "FileSink": {
-      "Description": "File logging for production. Set _enabled to true and adjust Path as needed.",
-      "_enabled": false,
+      "Description": "File logging enabled for production. Disable in development if console output is sufficient. File logging for production. Production-ready: enabled by default with 100MB rolling files. Adjust Path as needed for deployment.",
+      "_enabled": true,
       "Path": "/var/log/fishmmo/server.log",
       "FileSizeLimitMb": 100,
       "MaxFileCount": 10,

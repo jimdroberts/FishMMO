@@ -21,12 +21,12 @@ namespace FishMMO.Database.Npgsql
 		/// <summary>
 		/// Maximum time in milliseconds to wait for active contexts during disposal.
 		/// </summary>
-		private const int disposeWaitTimeoutMs = 5000;
+		private const int DisposeWaitTimeoutMs = 5000;
 
 		/// <summary>
 		/// Interval in milliseconds between polls when waiting for contexts to complete.
 		/// </summary>
-		private const int shutdownPollIntervalMs = 50;
+		private const int ShutdownPollIntervalMs = 50;
 
 		private int disposed;
 		private int shutdown;
@@ -239,7 +239,22 @@ namespace FishMMO.Database.Npgsql
 			Interlocked.Exchange(ref shutdown, 1);
 		}
 
-		/// <inheritdoc />
+		/// <summary>
+		/// Initiates shutdown and returns immediately without waiting for active DbContext instances to complete.
+		/// <para>
+		/// This method sets the shutdown flag (which causes <see cref="CreateDbContext"/> to throw
+		/// <see cref="ObjectDisposedException"/> for future calls) and returns <see cref="Task.CompletedTask"/>
+		/// without waiting for active contexts to drain. This is a non-graceful shutdown — active queries
+		/// or transactions on existing contexts will continue until those contexts are disposed by their
+		/// owners, but no new contexts can be created.
+		/// </para>
+		/// <para>
+		/// Callers that require a graceful shutdown (waiting for all active contexts to complete)
+		/// should use <see cref="ShutdownGracefullyAsync"/> with an appropriate timeout instead.
+		/// </para>
+		/// </summary>
+		/// <param name="cancellationToken">A cancellation token to observe while initiating shutdown.</param>
+		/// <returns>A task that completes immediately after the shutdown flag is set.</returns>
 		public Task ShutdownAsync(CancellationToken cancellationToken = default)
 		{
 			Shutdown();
@@ -267,7 +282,7 @@ namespace FishMMO.Database.Npgsql
 					return false;
 				}
 
-				await Task.Delay(shutdownPollIntervalMs, cancellationToken).ConfigureAwait(false);
+				await Task.Delay(ShutdownPollIntervalMs, cancellationToken).ConfigureAwait(false);
 			}
 
 			return true;
@@ -309,9 +324,9 @@ namespace FishMMO.Database.Npgsql
 			// Wait briefly for active contexts to complete (consistent with ShutdownGracefullyAsync behavior)
 			var elapsed = Stopwatch.StartNew();
 
-			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < disposeWaitTimeoutMs)
+			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < DisposeWaitTimeoutMs)
 			{
-				Thread.Sleep(shutdownPollIntervalMs);
+				Thread.Sleep(ShutdownPollIntervalMs);
 			}
 
 			performanceTracker.Dispose();
@@ -353,9 +368,9 @@ namespace FishMMO.Database.Npgsql
 
 			var elapsed = Stopwatch.StartNew();
 
-			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < disposeWaitTimeoutMs)
+			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < DisposeWaitTimeoutMs)
 			{
-				await Task.Delay(shutdownPollIntervalMs).ConfigureAwait(false);
+				await Task.Delay(ShutdownPollIntervalMs).ConfigureAwait(false);
 			}
 
 			performanceTracker.Dispose();

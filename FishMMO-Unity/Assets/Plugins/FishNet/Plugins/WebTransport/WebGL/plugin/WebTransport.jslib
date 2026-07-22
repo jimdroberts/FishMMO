@@ -217,77 +217,69 @@ mergeInto(LibraryManager.library, {
         return index;
     },
 
-    /** Send data over a reliable bidirectional stream.
-     *  Returns true if the data was queued for async send (not "sent successfully").
-     *  The actual write may still fail asynchronously after the function returns. */
+    /** Send data over a reusable persistent bidirectional stream.
+     *  Creates one stream on first send and caches its writer for all
+     *  subsequent reliable sends.  A new stream is created only when
+     *  the existing writer becomes closed or errored
+     *  (desiredSize === null).
+     *
+     *  This eliminates the massive overhead + QUIC stream-limit
+     *  exhaustion of opening a new stream per packet (the previous
+     *  behaviour), which is critical for game RPCs at 20+ Hz.
+     *
+     *  The writer-caching pattern mirrors WTSendDatagram below. */
     WTSendStream: function(index, dataPtr, length) {
         var session = FishWebTransport._get(index);
         if (!session || !session.wt) return false;
-
-        /* Verify session is still connected before queuing async work.
-         * createBidirectionalStream will fail if state changed between
-         * this check and the async call, and the catch handles that. */
         if (session.wt.readyState !== 'connected') return false;
 
-        /* Track in-flight stream count to avoid exhausting browser limits.
-         * Each send creates a new bidirectional stream with FIN; browsers
-         * typically cap concurrent streams at ~100. Drop data if we exceed
-         * a safe threshold rather than queuing unboundedly.
-         *
-         * Stuck-stream detection threshold: if _pendingStreams stays above
-         * _streamCongestionThreshold for more than _streamCongestionTimeoutMs,
-         * the counter is reset. This prevents permanent blockage when the
-         * browser suspends promise resolution (e.g., tab backgrounding,
-         * mobile sleep).
-         *
-         * The threshold is configurable via WTSetStreamThreshold(index, threshold)
-         * called from C#. Default is 500 (safe for all major browsers). */
-        if (!session._pendingStreams) session._pendingStreams = 0;
-        if (!session._streamCongestionThreshold) session._streamCongestionThreshold = 500;
-        if (!session._streamCongestionTimeoutMs) session._streamCongestionTimeoutMs = 10000;
-        if (session._pendingStreams > session._streamCongestionThreshold) {
-            /* Check for stuck counters: if _pendingStreams has been above
-             * threshold for over 10 seconds, reset it. Stuck counters can
-             * happen if the browser suspends promise resolution (e.g. tab
-             * backgrounding). Resetting allows sends to resume rather than
-             * being permanently blocked. */
-            var now = Date.now();
-            if (!session._pendingStreamsSince) {
-                session._pendingStreamsSince = now;
-            } else if (now - session._pendingStreamsSince > session._streamCongestionTimeoutMs) {
-                console.warn('[FishWT] Stream congestion timeout (' + session._pendingStreams +
-                             ' pending for >10s), resetting counter');
-                session._pendingStreams = 0;
-                session._pendingStreamsSince = now;
-            }
-            console.warn('[FishWT] Stream congestion (' + session._pendingStreams +
-                         ' pending), dropping reliable send');
-            return false;
-        }
-        /* Reset the stuck-since timer when below threshold. */
-        session._pendingStreamsSince = undefined;
-
         var data = HEAPU8.slice(dataPtr, dataPtr + length);
-        session._pendingStreams++;
+
+        /* Check cached writer — desiredSize is null when the
+         * underlying stream is closed or errored. */
+        if (session._streamWriter) {
+            try {
+                if (session._streamWriter.desiredSize === null) {
+                    try { session._streamWriter.releaseLock(); } catch (_) {}
+                    session._streamWriter = null;
+                }
+            } catch (_) {
+                session._streamWriter = null;
+            }
+        }
+
+        if (session._streamWriter) {
+            /* Reuse the existing writer — no new stream created. */
+            var writer = session._streamWriter;
+            writer.write(data).catch(function(e) {
+                console.warn('[FishWT] stream write error: ' + e.message);
+                if (session._streamWriter === writer) {
+                    try { writer.releaseLock(); } catch (_) {}
+                    session._streamWriter = null;
+                }
+            });
+            return true;
+        }
+
+        /* No valid cached writer: create a new persistent
+         * bidirectional stream and cache its writer. */
         try {
             session.wt.createBidirectionalStream().then(function(stream) {
                 var writer = stream.writable.getWriter();
-                writer.write(data).then(function() {
-                    return writer.close();
-                }).then(function() {
-                    session._pendingStreams = Math.max(0, session._pendingStreams - 1);
-                }).catch(function(e) {
-                    console.warn('[FishWT] stream send/close error: ' + e.message);
-                    session._pendingStreams = Math.max(0, session._pendingStreams - 1);
+                session._streamWriter = writer;
+                writer.write(data).catch(function(e) {
+                    console.warn('[FishWT] stream write error: ' + e.message);
+                    if (session._streamWriter === writer) {
+                        try { writer.releaseLock(); } catch (_) {}
+                        session._streamWriter = null;
+                    }
                 });
             }).catch(function(err) {
-                console.warn('[FishWT] SendStream: ' + err.message);
-                session._pendingStreams = Math.max(0, session._pendingStreams - 1);
+                console.warn('[FishWT] createBidirectionalStream failed: ' + err.message);
             });
             return true;
         } catch (e) {
-            console.error('[FishWT] SendStream: ' + e.message);
-            session._pendingStreams = Math.max(0, session._pendingStreams - 1);
+            console.error('[FishWT] SendStream create error: ' + e.message);
             return false;
         }
     },

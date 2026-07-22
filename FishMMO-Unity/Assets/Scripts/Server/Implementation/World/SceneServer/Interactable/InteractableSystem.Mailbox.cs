@@ -137,7 +137,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						Subject = ChatHelper.Sanitize(mail.Subject) ?? "",
 						Body = ChatHelper.Sanitize(mail.Body) ?? "",
 						Read = mail.Read,
-						ItemTemplateID = mail.ItemAttachment,
+						ItemTemplateID = mail.ItemAttachmentTemplateID,
 						CurrencyAmount = mail.CurrencyAttachment,
 					});
 				}
@@ -226,11 +226,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				long senderID = character.ID;
+				string senderName = character.CharacterName;
 				string recipientName = msg.RecipientName;
 				string subject = msg.Subject;
 				string body = msg.Body;
 
-				if (TryEnqueueAsyncWork(() => SendMailAsync(senderID, recipientName, subject, body, guardKey), conn, senderID))
+				if (TryEnqueueAsyncWork(() => SendMailAsync(senderID, senderName, recipientName, subject, body, guardKey), conn, senderID))
 				{
 					asyncOwnsGuard = true;
 				}
@@ -247,7 +248,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>
 		/// Sends mail via the database asynchronously.
 		/// </summary>
-		private async Task SendMailAsync(long senderID, string recipientName, string subject, string body, long guardKey)
+		private async Task SendMailAsync(long senderID, string senderName, string recipientName, string subject, string body, long guardKey)
 		{
 			try
 			{
@@ -280,6 +281,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				DatabaseResult result = await mailService.SendAsync(
 					senderID,
+					senderName,
 					recipientID,
 					subject,
 					body,
