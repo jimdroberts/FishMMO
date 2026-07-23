@@ -1,4 +1,4 @@
-﻿namespace FishMMO.Shared
+namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Represents the rank of a character within a guild.
@@ -13,16 +13,16 @@
 		/// <summary>
 		/// Standard guild member.
 		/// </summary>
-		Member,
+		Member = 1,
 
 		/// <summary>
 		/// Guild officer with additional permissions.
 		/// </summary>
-		Officer,
+		Officer = 2,
 
 		/// <summary>
 		/// Guild leader with full permissions.
 		/// </summary>
-		Leader,
+		Leader = 3,
 	}
 }

@@ -7,40 +7,75 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterData : IVersioned<CharacterData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Character display name.</summary>
 		public readonly string Name;
+		/// <summary>Lowercase copy of name for lookups.</summary>
 		public readonly string NameLowercase;
+		/// <summary>Account name that owns this character.</summary>
 		public readonly string Account;
+		/// <summary>Whether this is the active character.</summary>
 		public readonly bool Selected;
+		/// <summary>World server ID this character belongs to.</summary>
 		public readonly long WorldServerID;
+		/// <summary>Current scene name.</summary>
 		public readonly string SceneName;
+		/// <summary>Current scene handle.</summary>
 		public readonly int SceneHandle;
+		/// <summary>Bind point scene name.</summary>
 		public readonly string BindScene;
+		/// <summary>Bind point position X.</summary>
 		public readonly float BindX;
+		/// <summary>Bind point position Y.</summary>
 		public readonly float BindY;
+		/// <summary>Bind point position Z.</summary>
 		public readonly float BindZ;
+		/// <summary>Instance ID (0 if over-world).</summary>
 		public readonly long InstanceID;
+		/// <summary>Instance spawn position X.</summary>
 		public readonly float InstanceX;
+		/// <summary>Instance spawn position Y.</summary>
 		public readonly float InstanceY;
+		/// <summary>Instance spawn position Z.</summary>
 		public readonly float InstanceZ;
+		/// <summary>Instance spawn rotation X.</summary>
 		public readonly float InstanceRotX;
+		/// <summary>Instance spawn rotation Y.</summary>
 		public readonly float InstanceRotY;
+		/// <summary>Instance spawn rotation Z.</summary>
 		public readonly float InstanceRotZ;
+		/// <summary>Instance spawn rotation W.</summary>
 		public readonly float InstanceRotW;
+		/// <summary>Character race template ID.</summary>
 		public readonly int RaceID;
+		/// <summary>Character model index.</summary>
 		public readonly int ModelIndex;
+		/// <summary>World position X.</summary>
 		public readonly float X;
+		/// <summary>World position Y.</summary>
 		public readonly float Y;
+		/// <summary>World position Z.</summary>
 		public readonly float Z;
+		/// <summary>World rotation X.</summary>
 		public readonly float RotX;
+		/// <summary>World rotation Y.</summary>
 		public readonly float RotY;
+		/// <summary>World rotation Z.</summary>
 		public readonly float RotZ;
+		/// <summary>World rotation W.</summary>
 		public readonly float RotW;
+		/// <summary>Access level for permissions.</summary>
 		public readonly byte AccessLevel;
+		/// <summary>Whether the character is currently online.</summary>
 		public readonly bool Online;
+		/// <summary>Character state flags.</summary>
 		public readonly int Flags;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Timestamp when character was created.</summary>
 		public readonly DateTime TimeCreated;
+		/// <summary>Timestamp of last save.</summary>
 		public readonly DateTime LastSaved;
 
 		long IVersioned<CharacterData>.Version => Version;

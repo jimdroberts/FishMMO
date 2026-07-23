@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterKnownAbilityEntityConfiguration : IEntityTypeConfiguration<CharacterKnownAbilityEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterKnownAbilityEntity> builder)
 		{
 			builder.ToTable("character_knownabilities");

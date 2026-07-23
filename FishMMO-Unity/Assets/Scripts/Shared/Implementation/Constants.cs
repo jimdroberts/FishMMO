@@ -267,8 +267,9 @@ namespace FishMMO.Shared
 				Check(LayerMask.NameToLayer("Ground"), "Ground");
 				Check(LayerMask.NameToLayer("Player"), "Player");
 
-				// Obstruction is a combined mask; verify its bitmask is non-zero.
-				if (Obstruction.value == 0) missing.Add("Obstruction");
+				// Obstruction is a combined mask of Default + Ground layers;
+				// verify its bitmask is non-zero (both constituent layers must exist).
+				if (Obstruction.value == 0) missing.Add("Default and/or Ground (Obstruction mask is empty)");
 
 				return missing;
 			}

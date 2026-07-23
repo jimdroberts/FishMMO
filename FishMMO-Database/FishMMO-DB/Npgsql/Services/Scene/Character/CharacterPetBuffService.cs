@@ -16,6 +16,18 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Provides async operations for CRUD operations on character pet buff data.
 	/// Uses the BaseService execution strategy for automatic retry on transient database failures.
 	/// Returns DatabaseResult for consistent, safe error handling.
+	///
+	/// FIELD MAPPING (DTO â Entity columns):
+	///   CharacterPetBuffData.Level      â character_pet_buffs.stacks
+	///   CharacterPetBuffData.BuffTimeEnd â character_pet_buffs.remaining_time
+	///
+	/// When PersistAsync writes Level as the stacks column and BuffTimeEnd as
+	/// remaining_time, these are mapped inversely in FetchAsync:
+	///   character_pet_buffs.stacks        â CharacterPetBuffData.Level
+	///   character_pet_buffs.remaining_time â CharacterPetBuffData.BuffTimeEnd
+	///
+	/// The character_pet_buffs.tick_time and character_pet_buffs.tick_count columns
+	/// are always written as 0 â they are reserved for future periodic-tick mechanics.
 	/// </summary>
 	public sealed class CharacterPetBuffService : BaseService<CharacterPetBuffEntity>, ICharacterPetBuffService
 	{

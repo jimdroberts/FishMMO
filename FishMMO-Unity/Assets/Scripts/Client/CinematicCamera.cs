@@ -45,7 +45,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Normalized progress along the spline (0=start, 1=end).
 		/// </summary>
-		private float t = 0.0f;
+		private float splineProgress = 0.0f;
 		/// <summary>
 		/// Total length of the spline path.
 		/// </summary>
@@ -90,22 +90,22 @@ namespace FishMMO.Client
 			splineLength = spline.GetLength();
 
 			// Loop through the spline movement from t = 0 to t = 1 (start to finish)
-			while (t < 1f)
+			while (splineProgress < 1f)
 			{
 				// Handle input skip: if allowed and any key/mouse button is pressed, jump to end
 				if (allowInputSkip && AnyInputPressedThisFrame())
 				{
-					t = 1f;  // Skip to the end of the spline
+					splineProgress = 1f;  // Skip to the end of the spline
 				}
 
 				// Update t based on speed and distance
-				t = Mathf.Clamp01(t + (SpeedInUnitsPerSecond * Time.deltaTime) / splineLength);
+				splineProgress = Mathf.Clamp01(splineProgress + (SpeedInUnitsPerSecond * Time.deltaTime) / splineLength);
 
 				// Get the target position from the spline
-				Vector3 targetPosition = spline.EvaluatePosition(t);
+				Vector3 targetPosition = spline.EvaluatePosition(splineProgress);
 
 				// Smoothly interpolate the camera's position using a gradual approach
-				cameraTransform.position = Vector3.Lerp(cameraTransform.position, targetPosition, Mathf.Pow(t, 0.5f)); // More gradual interpolation
+				cameraTransform.position = Vector3.Lerp(cameraTransform.position, targetPosition, Mathf.Pow(splineProgress, 0.5f)); // More gradual interpolation
 
 				// If there's a LookAtTarget, make sure the camera faces it instantly
 				if (LookAtTarget != null)
@@ -119,19 +119,19 @@ namespace FishMMO.Client
 					float rotationSmoothFactor = 1f;
 
 					// Apply rotation smoothing
-					if (t < RotationSmoothStart)
+					if (splineProgress < RotationSmoothStart)
 					{
 						// Use smooth easing to gradually accelerate and decelerate the rotation
-						rotationSmoothFactor = Mathf.Pow(t / RotationSmoothStrength, 3.0f); // Exponential smoothing
+						rotationSmoothFactor = Mathf.Pow(splineProgress / RotationSmoothStrength, 3.0f); // Exponential smoothing
 					}
 					else
 					{
 						// Use linear interpolation for the final phase
-						rotationSmoothFactor = Mathf.Lerp(1f, t, 0.5f); // Smooth transition to the final target rotation
+						rotationSmoothFactor = Mathf.Lerp(1f, splineProgress, 0.5f); // Smooth transition to the final target rotation
 					}
 
 					// Calculate the look direction to the next knot
-					float nextT = Mathf.Min(t + 0.1f, 1f); // Get a slightly ahead position for smoother rotation
+					float nextT = Mathf.Min(splineProgress + 0.1f, 1f); // Get a slightly ahead position for smoother rotation
 					Vector3 nextKnotPosition = spline.EvaluatePosition(nextT);
 					Vector3 lookDirection = nextKnotPosition - cameraTransform.position;
 
@@ -165,7 +165,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public void Reset()
 		{
-			t = 0f;
+			splineProgress = 0f;
 		}
 	}
 }

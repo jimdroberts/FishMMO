@@ -20,5 +20,13 @@ namespace FishMMO.Shared
 		/// the network, register a custom serializer via <c>NetworkManager.Serializer.RegisterSerializerType</c>
 		/// or change this field to an array of key-value pair structs for native FishNet serialization.</remarks>
 		public Dictionary<int, int> EquippedItems;
+
+	/// <summary>
+	/// Serializable key-value pair for equipped items. Register as a FishNet custom
+	/// serializer and migrate EquippedItems to EquippedItemEntry[] when ready.
+	/// See FishNet.Serialize.DictionarySerializer for the registration pattern.
+	/// </summary>
+	[System.Serializable]
+	public struct EquippedItemEntry { public int Key; public int Value; }
 	}
 }

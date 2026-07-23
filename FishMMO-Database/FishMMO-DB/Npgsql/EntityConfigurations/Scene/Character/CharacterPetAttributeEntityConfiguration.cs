@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterPetAttributeEntityConfiguration : IEntityTypeConfiguration<CharacterPetAttributeEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterPetAttributeEntity> builder)
 		{
 			builder.ToTable("character_pet_attributes");

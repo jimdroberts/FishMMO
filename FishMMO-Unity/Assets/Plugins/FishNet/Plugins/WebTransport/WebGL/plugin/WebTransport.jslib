@@ -57,15 +57,20 @@ var FishWebTransport = {
                 reader.read().then(function(result) {
                     if (session._closed) { try { reader.releaseLock(); } catch (_) {} return; }
                     if (result.done) {
-                        /* Streams closed — guard against infinite restart loop.
-                         * If the ReadableStream stays done across restarts
-                         * (e.g. peer closed bidi but kept connection alive),
-                         * give up after 3 consecutive immediate-done results
-                         * to avoid a 1-second-forever retry cycle. */
+                        /* Streams closed — retry with exponential backoff.
+                         * "done" can occur transiently during browser memory
+                         * pressure; a hard cut-off after a few retries would
+                         * permanently kill the pump. Back off exponentially
+                         * (1.5x per retry, capped at 30s, up to 100 retries)
+                         * and log a warning on each transient done. */
                         try { reader.releaseLock(); } catch (_) {}
                         session._doneRetries = (session._doneRetries || 0) + 1;
-                        if (session._doneRetries <= 3) {
-                            setTimeout(function() { startPump(); }, 1000);
+                        if (session._doneRetries <= 100) {
+                            var delay = Math.min(1000 * Math.pow(1.5, session._doneRetries - 1), 30000);
+                            console.warn('[FishWT] Bidi stream pump got done (' +
+                                         session._doneRetries + '/100), retrying in ' +
+                                         Math.round(delay) + 'ms');
+                            setTimeout(function() { startPump(); }, delay);
                         } else {
                             console.warn('[FishWT] Bidi stream pump giving up after ' +
                                          session._doneRetries + ' consecutive done results');
@@ -133,12 +138,17 @@ var FishWebTransport = {
                 reader.read().then(function(result) {
                     if (session._closed) { try { reader.releaseLock(); } catch (_) {} return; }
                     if (result.done) {
-                        /* Guard against infinite restart loop (same pattern
-                         * as _readBidiStreams above). */
+                        /* Guard against transient done reads (same pattern
+                         * as _readBidiStreams above). Exponential backoff
+                         * with up to 100 retries. */
                         try { reader.releaseLock(); } catch (_) {}
                         session._dgramDoneRetries = (session._dgramDoneRetries || 0) + 1;
-                        if (session._dgramDoneRetries <= 3) {
-                            setTimeout(function() { startPump(); }, 1000);
+                        if (session._dgramDoneRetries <= 100) {
+                            var delay = Math.min(1000 * Math.pow(1.5, session._dgramDoneRetries - 1), 30000);
+                            console.warn('[FishWT] Datagram pump got done (' +
+                                         session._dgramDoneRetries + '/100), retrying in ' +
+                                         Math.round(delay) + 'ms');
+                            setTimeout(function() { startPump(); }, delay);
                         } else {
                             console.warn('[FishWT] Datagram pump giving up after ' +
                                          session._dgramDoneRetries + ' consecutive done results');
@@ -255,9 +265,11 @@ mergeInto(LibraryManager.library, {
                 if (session._streamWriter.desiredSize === null) {
                     try { session._streamWriter.releaseLock(); } catch (_) {}
                     session._streamWriter = null;
+                    session._streamWriterPending = false;
                 }
             } catch (_) {
                 session._streamWriter = null;
+                session._streamWriterPending = false;
             }
         }
 
@@ -274,12 +286,37 @@ mergeInto(LibraryManager.library, {
             return true;
         }
 
-        /* No valid cached writer: create a new persistent
-         * bidirectional stream and cache its writer. */
+        /* If a createBidirectionalStream promise is already in-flight
+         * (e.g. from a rapid previous send before the promise resolved),
+         * queue this data to be flushed once the stream becomes available.
+         * This prevents exhausting the browser's stream limit (~100-200)
+         * by creating a new bidi stream on every rapid send. */
+        if (session._streamWriterPending) {
+            if (!session._sendQueue) session._sendQueue = [];
+            session._sendQueue.push(data);
+            return true;
+        }
+
+        /* No valid cached writer and no pending creation:
+         * start creating a new persistent bidirectional stream. */
+        session._streamWriterPending = true;
         try {
             session.wt.createBidirectionalStream().then(function(stream) {
                 var writer = stream.writable.getWriter();
                 session._streamWriter = writer;
+                session._streamWriterPending = false;
+
+                /* Flush any data that was queued while the stream was
+                 * being created. */
+                var queue = session._sendQueue || [];
+                session._sendQueue = [];
+                for (var i = 0; i < queue.length; i++) {
+                    writer.write(queue[i]).catch(function(e) {
+                        console.warn('[FishWT] queued stream write error: ' + e.message);
+                    });
+                }
+
+                /* Write the current data. */
                 writer.write(data).catch(function(e) {
                     console.warn('[FishWT] stream write error: ' + e.message);
                     if (session._streamWriter === writer) {
@@ -289,10 +326,13 @@ mergeInto(LibraryManager.library, {
                 });
             }).catch(function(err) {
                 console.warn('[FishWT] createBidirectionalStream failed: ' + err.message);
+                session._streamWriterPending = false;
+                session._sendQueue = [];
             });
             return true;
         } catch (e) {
             console.error('[FishWT] SendStream create error: ' + e.message);
+            session._streamWriterPending = false;
             return false;
         }
     },
@@ -346,6 +386,7 @@ mergeInto(LibraryManager.library, {
         var session = FishWebTransport._get(index);
         if (session) {
             session._closed = true;
+            if (session._sendQueue) { session._sendQueue.length = 0; delete session._sendQueue; }
             if (session.wt) {
                 try {
                     session.wt.close({closeCode: 0, reason: 'Client disconnect'});
@@ -357,6 +398,9 @@ mergeInto(LibraryManager.library, {
         FishWebTransport._remove(index);
     },
 
+    /** @deprecated Reserved for future use — currently not called from C#.
+     *  Returns true if the WebTransport session is in the 'connected' state.
+     *  C# callers should track connection state locally instead. */
     WTIsConnected: function(index) {
         var session = FishWebTransport._get(index);
         if (!session || !session.wt) return false;

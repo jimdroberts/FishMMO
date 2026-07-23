@@ -58,13 +58,18 @@ namespace FishNet.Transporting.WebTransport.WebGL
 		[DllImport("__Internal")]
 		internal static extern void WTDisconnect(int index);
 
-		/// <summary>Returns true if the session is in the 'connected' state.</summary>
+		/// <summary>
+		/// Returns true if the session is in the 'connected' state.
+		/// NOTE: Reserved/deprecated — not currently called from managed code.
+		/// Callers should track connection state locally instead.
+		/// </summary>
 		[DllImport("__Internal")]
 		internal static extern bool WTIsConnected(int index);
 
 		/// <summary>
-		/// Sets the maximum number of pending outgoing streams before backpressure
-		/// kicks in. Default is 500. Values &lt;= 0 reset to the default.
+		/// Reserved for future stream congestion control.
+		/// Currently a no-op in the jslib implementation — streams are created
+		/// on demand without threshold enforcement.
 		/// </summary>
 		[DllImport("__Internal")]
 		internal static extern void WTSetStreamThreshold(int index, int threshold);
@@ -110,9 +115,13 @@ namespace FishNet.Transporting.WebTransport.WebGL
 			return false;
 		}
 
+		/// <summary>
+		/// Reserved for future stream congestion control.
+		/// No-op on non-WebGL platforms.
+		/// </summary>
 		internal static void WTSetStreamThreshold(int index, int threshold)
 		{
-			// No-op on non-WebGL platforms.
+			// Reserved — no-op on non-WebGL platforms.
 		}
 	}
 #endif

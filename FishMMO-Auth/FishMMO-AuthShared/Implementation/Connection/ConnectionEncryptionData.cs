@@ -97,7 +97,10 @@ namespace FishMMO.Auth.Implementation
 		/// <returns>The next send sequence number.</returns>
 		public uint NextSendSequence()
 		{
-			return SendNonceCtx!.NextSequenceOnly();
+			lock (clearLock)
+			{
+				return SendNonceCtx!.NextSequenceOnly();
+			}
 		}
 
 		/// <summary>
@@ -125,7 +128,10 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> if consumed; <c>false</c> otherwise.</returns>
 		public bool TryConsumeReceiveSequence(uint seq)
 		{
-			return ReceiveNonceCtx!.TryConsumeSequence(seq);
+			lock (clearLock)
+			{
+				return ReceiveNonceCtx!.TryConsumeSequence(seq);
+			}
 		}
 
 		/// <summary>
@@ -140,7 +146,10 @@ namespace FishMMO.Auth.Implementation
 		/// <returns><c>true</c> on success; <c>false</c> on duplicate/gap/exhaustion.</returns>
 		public bool TryConsumeReceiveSequenceRange(uint baseSeq, uint count)
 		{
-			return ReceiveNonceCtx!.TryConsumeSequenceRange(baseSeq, count);
+			lock (clearLock)
+			{
+				return ReceiveNonceCtx!.TryConsumeSequenceRange(baseSeq, count);
+			}
 		}
 
 		/// <summary>
@@ -149,7 +158,10 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		public byte[] BuildReceiveNonce(uint seq)
 		{
-			return ReceiveNonceCtx!.BuildNonceForSequence(seq);
+			lock (clearLock)
+			{
+				return ReceiveNonceCtx!.BuildNonceForSequence(seq);
+			}
 		}
 
 		/// <summary>
@@ -158,7 +170,10 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		public byte[] BuildSendNonce(uint seq)
 		{
-			return SendNonceCtx!.BuildNonceForSequence(seq);
+			lock (clearLock)
+			{
+				return SendNonceCtx!.BuildNonceForSequence(seq);
+			}
 		}
 
 		/// <summary>
@@ -256,6 +271,14 @@ namespace FishMMO.Auth.Implementation
 		/// connection observe a single monotonic sequence space, preventing both
 		/// receive-sequence rejection and catastrophic send-nonce reuse.
 		/// </summary>
+		/// <remarks>
+		/// <para><b>IMPORTANT — do not dispose the clone.</b> The returned clone shares
+		/// <see cref="GcmNonceContext"/> references with the original.  Never call
+		/// <see cref="Clear()"/> or <see cref="Dispose()"/> on the clone — the original
+		/// owns disposal of all key material and nonce contexts.  Calling <c>Clear()</c>
+		/// on the clone will dispose the shared <see cref="GcmNonceContext"/> instances,
+		/// corrupting the original and all other clones derived from it.</para>
+		/// </remarks>
 		public ConnectionEncryptionData CloneForAsyncWorker()
 		{
 			var clone = new ConnectionEncryptionData(PublicKey!)
@@ -264,11 +287,16 @@ namespace FishMMO.Auth.Implementation
 				ClientToServerKey = ClientToServerKey,
 				ServerToClientKey = ServerToClientKey,
 				AgreedVersion = AgreedVersion,
-				// Share nonce contexts — they are thread-safe.
-				// Never call Clear() on the clone; the original owns disposal.
+				// Never call Clear() or Dispose() on the clone; the original owns disposal.
 				SendNonceCtx = SendNonceCtx,
 				ReceiveNonceCtx = ReceiveNonceCtx,
 			};
+
+			System.Diagnostics.Debug.Assert(
+				object.ReferenceEquals(clone.SendNonceCtx, this.SendNonceCtx) &&
+				object.ReferenceEquals(clone.ReceiveNonceCtx, this.ReceiveNonceCtx),
+				"CloneForAsyncWorker must share nonce context references with the original.");
+
 			return clone;
 		}
 	}

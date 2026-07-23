@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterPartyEntityConfiguration : IEntityTypeConfiguration<CharacterPartyEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterPartyEntity> builder)
 		{
 			builder.ToTable("character_party");

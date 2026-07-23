@@ -14,6 +14,9 @@ namespace FishMMO.Auth.Implementation
 	/// contents remain in managed heap memory until garbage-collected. This limitation applies
 	/// to all methods in this class, including <see cref="GetSaltAndVerifier"/> and
 	/// <see cref="GetProof"/> where derived private keys are short-lived locals.
+	/// Intermediate decrypted <c>byte[]</c> buffers (e.g., AES-GCM ciphertext inputs, session
+	/// encryption keys) are zeroed correctly via <c>CryptographicOperations.ZeroMemory</c> in
+	/// the authenticator workers — only the SRP library's string outputs persist in the heap.
 	/// <para/>
 	/// <b>Thread safety:</b> This class is <b>not</b> thread-safe. <see cref="GetProof"/>,
 	/// <see cref="Verify"/>, and <see cref="Clear"/> must not be called concurrently.

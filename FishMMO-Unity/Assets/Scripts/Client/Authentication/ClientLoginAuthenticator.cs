@@ -22,9 +22,11 @@ namespace FishMMO.Client
 		#region Inner Core
 
 		/// <summary>
-		/// Concrete <see cref="ClientAuthenticatorCore"/> implementation that bridges the engine-independent
-		/// authentication state machine to FishNet broadcasts and the FishMMO <see cref="FishMMO.Client.Client"/>.
-		/// All abstract send hooks marshal payloads into the matching broadcast types.
+		/// Concrete <see cref="ClientAuthenticatorCore"/> implementation that bridges
+		/// the engine-independent authentication state machine (defined in
+		/// FishMMO-Auth/FishMMO-ClientAuth) to FishNet broadcasts and the FishMMO
+		/// <see cref="FishMMO.Client.Client"/>.
+		/// See the FishMMO-Auth project for the full authentication state machine.
 		/// </summary>
 		private sealed class LoginAuthenticatorCore : ClientAuthenticatorCore
 		{
@@ -260,7 +262,7 @@ namespace FishMMO.Client
 		if (core == null || !initialized) return;
 		// Spread re-handshake attempts across ~1 second to prevent all admitted
 		// clients from hitting the SRP verify channel at the same instant.
-		int jitterMs = System.Random.Shared.Next(0, 1000);
+		int jitterMs = UnityEngine.Random.Range(0, 1000);
 		if (jitterMs > 0)
 			await System.Threading.Tasks.Task.Delay(jitterMs);
 		// Guard: between the jitter delay and the OnConnected/OnDisconnected calls,
@@ -303,7 +305,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnDestroy()
 		{
-			if (initialized && networkManager != null)
+			if (initialized && networkManager != null && networkManager.ClientManager != null)
 			{
 				networkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 				networkManager.ClientManager.UnregisterBroadcast<ServerHandshake>(OnClientServerHandshakeBroadcastReceived);
@@ -384,7 +386,7 @@ namespace FishMMO.Client
 		/// Safe to call when there is no active connection — the broadcast is simply
 		/// dropped by FishNet and the local token is still cleared.
 		/// </summary>
-		public void RevokeAndClearAuthToken()
+		public async System.Threading.Tasks.Task RevokeAndClearAuthToken()
 		{
 			if (core == null) return;
 			if (!core.TryConsumeStoredTokenForRevoke(out byte[] tokenCopy) || tokenCopy == null)
@@ -412,17 +414,19 @@ namespace FishMMO.Client
 						catch (Exception ex)
 						{
 							lastEx = ex;
+							if (attempt < MaxRevokeAttempts - 1)
+								await System.Threading.Tasks.Task.Delay(100);
 						}
 					}
 					if (lastEx != null)
 					{
-						FishMMO.Logging.Log.Warning("ClientLoginAuthenticator", $"RevokeTokenBroadcast send failed after {MaxRevokeAttempts} attempts: {lastEx.Message}");
+						_ = FishMMO.Logging.Log.Warning("ClientLoginAuthenticator", $"RevokeTokenBroadcast send failed after {MaxRevokeAttempts} attempts: {lastEx.Message}");
 					}
 				}
 			}
 			catch (Exception ex)
 			{
-				FishMMO.Logging.Log.Warning("ClientLoginAuthenticator", $"RevokeTokenBroadcast send failed: {ex.Message}");
+				_ = FishMMO.Logging.Log.Warning("ClientLoginAuthenticator", $"RevokeTokenBroadcast send failed: {ex.Message}");
 			}
 			finally
 			{

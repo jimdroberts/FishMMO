@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterItemCooldownEntityConfiguration : IEntityTypeConfiguration<CharacterItemCooldownEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterItemCooldownEntity> builder)
 		{
 			builder.ToTable("character_itemcooldowns");

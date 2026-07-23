@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using FishMMO.Database.Data.Enums;
@@ -10,6 +10,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterEntityConfiguration : IEntityTypeConfiguration<CharacterEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterEntity> builder)
 		{
 			builder.ToTable("characters");
@@ -50,6 +51,7 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasOne<AccountEntity>()
 				.WithMany()
 				.HasForeignKey(e => e.Account)
+				.HasPrincipalKey(a => a.Name)
 				.OnDelete(DeleteBehavior.Restrict)
 				.HasConstraintName("FK_Character_Account");
 

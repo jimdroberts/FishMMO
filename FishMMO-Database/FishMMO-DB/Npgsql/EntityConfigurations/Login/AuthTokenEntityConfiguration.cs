@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class AuthTokenEntityConfiguration : IEntityTypeConfiguration<AuthTokenEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<AuthTokenEntity> builder)
 		{
 			builder.ToTable("auth_tokens");

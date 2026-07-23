@@ -5,12 +5,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterBuffData : IVersioned<CharacterBuffData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that owns this buff.</summary>
 		public readonly long CharacterID;
+		/// <summary>Buff template ID.</summary>
 		public readonly int TemplateID;
+		/// <summary>Remaining buff duration.</summary>
 		public readonly double RemainingTime;
+		/// <summary>Time between buff ticks.</summary>
 		public readonly double TickTime;
+		/// <summary>Number of buff stacks.</summary>
 		public readonly int Stacks;
 		/// <summary>
 		/// Number of ticks that have fired for this buff instance (cumulative tick modifiers).

@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterAchievementEntityConfiguration : IEntityTypeConfiguration<CharacterAchievementEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterAchievementEntity> builder)
 		{
 			builder.ToTable("character_achievements");

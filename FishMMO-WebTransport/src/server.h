@@ -100,6 +100,7 @@ wt_server_s* wt_server_alloc_impl(
     const char*                 bind_address,
     uint16_t                    port,
     uint32_t                    max_clients,
+    const char*                 allowed_origins,
     const wt_server_callbacks_t* callbacks,
     void*                       context);
 

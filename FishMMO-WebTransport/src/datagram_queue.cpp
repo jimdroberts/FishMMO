@@ -103,6 +103,10 @@ int32_t wt_datagram_queue_drain(
             r = (r + 1) % WT_DGRAM_QUEUE_CAPACITY;
             q->read_idx = r;
 
+            /* Mutex is released BEFORE the callback — the callback runs without
+             * holding the lock, so re-entrant datagram_queue_push from within
+             * the callback is safe (no deadlock even on non-recursive Windows
+             * CRITICAL_SECTION). */
             wt_mutex_unlock(&q->mutex);
             cb(ctx, cid, tmp, len);
             wt_mutex_lock(&q->mutex);

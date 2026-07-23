@@ -1232,7 +1232,8 @@ namespace FishMMO.Auth.Implementation
 			// Account name length (2 bytes big-endian)
 			int nameLength = (signedToken[offset] << 8) | signedToken[offset + 1];
 			offset += 2;
-			if (nameLength <= 0 || offset + nameLength + 1 + 8 + 8 + 8 + 16 > payloadLength)
+			// +1 (accessLevel) + 8 (serverId) + 8 (signingKeyId) + 8 (ticks) + 1 (ipLen) + 0 (min realIp) + 16 (nonce)
+			if (nameLength <= 0 || offset + nameLength + 1 + 8 + 8 + 8 + 1 + 0 + 16 > payloadLength)
 			{
 				return false;
 			}
@@ -1271,6 +1272,32 @@ namespace FishMMO.Auth.Implementation
 
 			if (ticks < 0 || ticks > DateTime.MaxValue.Ticks)
 				return false;
+
+			// Real IP length (1 byte) — v4 token format
+			int ipLen = signedToken[offset++];
+			if (offset + ipLen + 16 > payloadLength)
+				return false;
+
+			// Real client IP (UTF-8, ipLen bytes, may be empty)
+			if (ipLen > 0)
+			{
+				try
+				{
+					realIp = StrictUtf8.GetString(signedToken, offset, ipLen);
+				}
+				catch (DecoderFallbackException)
+				{
+					return false;
+				}
+				offset += ipLen;
+			}
+			else
+			{
+				realIp = string.Empty;
+			}
+
+			// Random nonce (16 bytes) — skip; integrity verified by HMAC
+			offset += 16;
 
 			expiresUtc = new DateTime(ticks, DateTimeKind.Utc);
 			return true;

@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class LoginServerEntityConfiguration : IEntityTypeConfiguration<LoginServerEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<LoginServerEntity> builder)
 		{
 			builder.ToTable("login_servers");

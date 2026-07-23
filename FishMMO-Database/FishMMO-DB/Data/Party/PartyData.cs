@@ -5,6 +5,7 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct PartyData
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
 
 		public PartyData(long id)

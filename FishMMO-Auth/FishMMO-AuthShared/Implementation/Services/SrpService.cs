@@ -27,9 +27,25 @@ namespace FishMMO.Auth.Implementation
 		/// before transmission (if applicable), so reuse is unobservable on the wire.
 		/// </summary>
 		/// <remarks>
-		/// <b>NOTE:</b> <c>fakeSrpTuple</c> uses compile-time constants (<c>"fake_user"</c>, <c>"fake_password"</c>).
-		/// An attacker who decompiles the binary knows the exact fake verifier. This is mitigated by
-		/// per-username fake salts (<see cref="DerivePerUsernameFakeSalt"/>) which are the primary defense.
+		/// <para>
+		/// <b>Static compile-time fallback.</b> <c>fakeSrpTuple</c> uses compile-time constants
+		/// (<c>"fake_user"</c>, <c>"fake_password"</c>). An attacker who decompiles the binary
+		/// knows the exact fake verifier. This is a deliberate trade-off — it provides basic
+		/// timing equalization at type-load cost with zero per-request allocation.
+		/// </para>
+		/// <para>
+		/// <b>Primary defense: per-username fake salt.</b> The <see cref="DerivePerUsernameFakeSalt"/>
+		/// method (backed by HMAC-SHA512 with a server-only key) is the main anti-enumeration defense.
+		/// It ensures each non-existent username gets a unique, unpredictable fake salt, making
+		/// salt-reuse detection attacks impossible regardless of the static verifier.
+		/// </para>
+		/// <para>
+		/// <b>Future improvement:</b> Regenerating the fake SRP data at server boot (or periodically)
+		/// would rotate the static tuple and eliminate the decompilation concern entirely. This has
+		/// not been implemented because the per-username fake salt already addresses the primary
+		/// attack vector, and a per-boot rotation would add startup complexity without closing any
+		/// remaining practical window.
+		/// </para>
 		/// </remarks>
 		private static readonly Lazy<(string Salt, string Verifier)> fakeSrpTuple =
 			new Lazy<(string, string)>(() =>

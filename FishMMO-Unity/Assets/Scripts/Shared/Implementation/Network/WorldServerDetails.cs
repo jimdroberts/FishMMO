@@ -22,7 +22,11 @@ namespace FishMMO.Shared
 		public long LastPulseUtcTicks;
 		/// <summary>Port number for the server.</summary>
 		public ushort Port;
-		/// <summary>Number of characters currently on the server.</summary>
+		/// <summary>
+		/// Number of characters currently on the server.
+		/// Server must enforce CharacterCount >= 0. Negative values indicate
+		/// a desync or uninitialized counter.
+		/// </summary>
 		public int CharacterCount;
 		/// <summary>Indicates whether the server is locked (not accepting new connections).</summary>
 		public bool Locked;

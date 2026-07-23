@@ -278,7 +278,9 @@ namespace FishMMO.Database.Npgsql.Services
 			// For exponential backoff, use: BaseDelay * 2^(attempt-1).
 			// RandomNumberGenerator.GetInt32 was introduced in .NET 6 and is not available on netstandard2.1.
 			// Random.Shared is also .NET 6+; use ThreadLocal<Random> instead.
-			int maxJitter = RetryPolicy.MaxJitterMs > 0 ? RetryPolicy.MaxJitterMs : 1;
+			// When MaxJitterMs is explicitly configured as 0, use 0 (no jitter).
+			// Previously fell back to 1ms which contradicted user expectation.
+			int maxJitter = RetryPolicy.MaxJitterMs > 0 ? RetryPolicy.MaxJitterMs : 0;
 			int jitterMs = jitterRng.Value!.Next(0, maxJitter);
 			return TimeSpan.FromMilliseconds((RetryPolicy.BaseDelayMs * attempt) + jitterMs);
 		}

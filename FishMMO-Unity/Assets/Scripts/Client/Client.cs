@@ -128,12 +128,21 @@ namespace FishMMO.Client
 		/// Backing field for <see cref="OnReconnectAttempt"/>.
 		/// Accumulates subscribers even before <see cref="Connection"/> is created.
 		/// </summary>
-		private Action<byte, byte> onReconnectAttempt;
+		private Action<int, int> onReconnectAttempt;
 		/// <summary>
 		/// Backing field for <see cref="OnReconnectFailed"/>.
 		/// Accumulates subscribers even before <see cref="Connection"/> is created.
 		/// </summary>
 		private Action onReconnectFailed;
+		/// <summary>
+		/// Stored delegate for the OnReconnectFailed -> OnQuitToLogin forwarding subscription.
+		/// Must be held as a field so it can be unsubscribed in <see cref="OnDestroy"/>.
+		/// </summary>
+		/// <summary>
+		/// Delegate that forwards OnReconnectFailed to OnQuitToLogin.
+		/// Initialized in <see cref="Awake"/> because field initializers cannot reference instance members.
+		/// </summary>
+		private Action onReconnectFailedQuitToLogin;
 		/// <summary>
 		/// Backing field for <see cref="OnConnectionSuccessful"/>.
 		/// Accumulates subscribers even before <see cref="Connection"/> is created.
@@ -141,7 +150,7 @@ namespace FishMMO.Client
 		private Action onConnectionSuccessful;
 
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectAttempt"/>.</summary>
-		public event Action<byte, byte> OnReconnectAttempt
+		public event Action<int, int> OnReconnectAttempt
 		{
 			add { this.onReconnectAttempt += value; if (Connection != null) Connection.OnReconnectAttempt += value; }
 			remove { this.onReconnectAttempt -= value; if (Connection != null) Connection.OnReconnectAttempt -= value; }
@@ -236,10 +245,13 @@ namespace FishMMO.Client
 
 			Connection = new ClientConnectionManager(NetworkManager);
 
+			// Initialize the OnReconnectFailed -> OnQuitToLogin forwarding delegate.
+			this.onReconnectFailedQuitToLogin = () => OnQuitToLogin?.Invoke();
+
 			// Forward any event subscribers that were queued before Connection was created.
 			if (this.onReconnectAttempt != null)
 				foreach (var d in this.onReconnectAttempt.GetInvocationList())
-					Connection.OnReconnectAttempt += (Action<byte, byte>)d;
+					Connection.OnReconnectAttempt += (Action<int, int>)d;
 			if (this.onReconnectFailed != null)
 				foreach (var d in this.onReconnectFailed.GetInvocationList())
 					Connection.OnReconnectFailed += (Action)d;
@@ -247,7 +259,7 @@ namespace FishMMO.Client
 				foreach (var d in this.onConnectionSuccessful.GetInvocationList())
 					Connection.OnConnectionSuccessful += (Action)d;
 
-			Connection.OnReconnectFailed += () => OnQuitToLogin?.Invoke();
+			Connection.OnReconnectFailed += this.onReconnectFailedQuitToLogin;
 
 			this.combatDisplay = new ClientCombatDisplay();
 			this.combatDisplay.Initialize();
@@ -291,6 +303,10 @@ namespace FishMMO.Client
 			this.combatDisplay?.Shutdown();
 			this.fogManager?.Shutdown();
 			DeinitializeAuthenticator();
+			if (Connection != null)
+			{
+				Connection.OnReconnectFailed -= this.onReconnectFailedQuitToLogin;
+			}
 			Connection?.Shutdown();
 			// Null guard: NetworkManager may already be destroyed during teardown
 			// (OnDestroy can fire after scene unload).  The null-conditional ?.
@@ -316,6 +332,8 @@ namespace FishMMO.Client
 		/// <returns>True if initialization succeeded; otherwise, false.</returns>
 		private bool TryInitializeNetworkManager()
 		{
+			// TODO: For production, assign NetworkManager via the Inspector (SerializeField)
+			// to avoid the FindFirstObjectByType scan in Awake.
 			if (NetworkManager == null) NetworkManager = FindFirstObjectByType<NetworkManager>();
 			if (NetworkManager == null) { Log.Error("Client", "NetworkManager not found."); return false; }
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnWorldSceneConnect);
@@ -335,6 +353,8 @@ namespace FishMMO.Client
 		/// <returns>True if initialization succeeded; otherwise, false.</returns>
 		private bool TryInitializeAuthenticator()
 		{
+			// TODO: For production, assign loginAuthenticator via the Inspector to avoid
+			// the FindFirstObjectByType scan in Awake.
 			if (this.loginAuthenticator == null) this.loginAuthenticator = FindFirstObjectByType<ClientLoginAuthenticator>();
 			if (this.loginAuthenticator == null) { Log.Error("Client", "LoginAuthenticator not found."); return false; }
 			this.loginAuthenticator.SetClient(this);
@@ -665,7 +685,9 @@ namespace FishMMO.Client
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
 				d.Hide();
 
-			_ = loginAuthenticator?.RetryHandshakeAsync();
+			_ = (loginAuthenticator?.RetryHandshakeAsync() ?? System.Threading.Tasks.Task.CompletedTask)
+				.ContinueWith(static t => Log.Error("Client", $"RetryHandshakeAsync failed: {t.Exception?.InnerException?.Message}"),
+					System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
 		}
 		else // position -1 = cancelled (timeout / shutdown)
 		{

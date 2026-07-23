@@ -5,13 +5,21 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterSkillData : IVersioned<CharacterSkillData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that owns this skill.</summary>
 		public readonly long CharacterID;
+		/// <summary>Skill template ID.</summary>
 		public readonly int TemplateID;
+		/// <summary>Current skill level.</summary>
 		public readonly int Level;
+		/// <summary>Current skill experience.</summary>
 		public readonly int Experience;
+		/// <summary>Timestamp when cast completes.</summary>
 		public readonly double CastTimeEnd;
+		/// <summary>Timestamp when cooldown ends.</summary>
 		public readonly double CooldownEnd;
 
 		long IVersioned<CharacterSkillData>.Version => Version;

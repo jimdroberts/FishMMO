@@ -43,6 +43,8 @@ namespace FishMMO.Shared
 	{
 		/// <summary>
 		/// IP address or hostname the server binds to.
+		/// May be null if not yet initialized. Consumers should check for
+		/// null or empty before use.
 		///
 		/// NOTE: Per class documentation, Address is always Constants.Configuration.GameHost
 		/// for client-facing communication. This field exists for future multi-host support.

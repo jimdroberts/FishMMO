@@ -97,10 +97,11 @@ namespace FishMMO.Server.Implementation
 			if (!string.IsNullOrEmpty(addressOverride))
 			{
 				// Validate override format before accepting it.
-				// Reject addresses that are too long (253 is max DNS hostname; 45 is max IPv6)
-				// or contain null bytes / control characters which could indicate injection.
+				// Reject addresses that are too long (253 is max DNS hostname; 45 is max IPv6),
+				// contain null bytes / control characters, or are not valid IPs/hostnames.
 				if (addressOverride.Length > 253 ||
-					ContainsControlCharacter(addressOverride))
+					ContainsControlCharacter(addressOverride) ||
+					!IsValidAddressOverride(addressOverride))
 				{
 					Log.Warning("ServerAddressProvider",
 						$"Invalid address override '{addressOverride}' (length={addressOverride.Length}); falling through to transport address.");
@@ -170,6 +171,30 @@ namespace FishMMO.Server.Implementation
 				}
 			}
 			return false;
+		}
+
+		/// <summary>
+		/// Validates that <paramref name="address"/> is a valid IP address or hostname.
+		/// Accepts IP addresses via <see cref="IPAddress.TryParse"/> and hostnames
+		/// consisting of letters, digits, dots, and hyphens. Rejects empty/whitespace strings.
+		/// </summary>
+		private static bool IsValidAddressOverride(string address)
+		{
+			if (string.IsNullOrWhiteSpace(address))
+				return false;
+
+			// Accept valid IP addresses (IPv4 or IPv6).
+			if (IPAddress.TryParse(address, out _))
+				return true;
+
+			// Not a valid IP — accept valid hostnames.
+			for (int i = 0; i < address.Length; i++)
+			{
+				char c = address[i];
+				if (!char.IsLetterOrDigit(c) && c != '.' && c != '-')
+					return false;
+			}
+			return true;
 		}
 	}
 }

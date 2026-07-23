@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterInventoryEntityConfiguration : IEntityTypeConfiguration<CharacterInventoryEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterInventoryEntity> builder)
 		{
 			builder.ToTable("character_inventory");

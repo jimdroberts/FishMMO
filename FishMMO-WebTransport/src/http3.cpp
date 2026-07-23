@@ -41,6 +41,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* ── Stream context list lock helpers ────────────────────────── */
+#if defined(WT_PLATFORM_WINDOWS)
+  #define H3_LOCK(h3)    EnterCriticalSection(&(h3)->stream_ctx_lock)
+  #define H3_UNLOCK(h3)  LeaveCriticalSection(&(h3)->stream_ctx_lock)
+#else
+  #define H3_LOCK(h3)    pthread_mutex_lock(&(h3)->stream_ctx_lock)
+  #define H3_UNLOCK(h3)  pthread_mutex_unlock(&(h3)->stream_ctx_lock)
+#endif
+
 /* ═══════════════════════════════════════════════════════════════
  * QUIC Variable-Length Integer (RFC 9000 §16)
  * ═══════════════════════════════════════════════════════════════ */
@@ -422,6 +431,22 @@ static int huffman_decode(const uint8_t* input, size_t input_len,
         /* Emit decoded symbols while we have enough bits to match */
         while (bits >= 5) {  /* minimum code length is 5 bits */
             bool matched = false;
+            /* NOTE: Linear scan of 256 symbols per decoded byte creates
+             * data-dependent timing variation (branch on symbol match),
+             * which could theoretically leak header content via a timing
+             * side-channel.  This is an acceptable risk because:
+             *   - huffman_decode is only used during the HTTP/3 handshake
+             *     phase, processing at most a few hundred bytes of headers.
+             *   - Handshake headers contain only connection metadata
+             *     (:path, :authority, :method, :protocol, origin), not
+             *     per-application data.
+             *   - The handshake completes before any application data
+             *     exchange begins, so the timing window is very small.
+             *
+             * TODO: Replace this linear scan with a lookup table (e.g.
+             * 256-entry next-state table per code length, or a full
+             * 4-bit/8-bit stride decoder) to both eliminate the
+             * side-channel and improve throughput. */
             for (int sym = 0; sym < 256; sym++) {
                 uint8_t code_len = kHuffLen[sym];
                 if (code_len > bits) continue;
@@ -946,8 +971,10 @@ static h3_stream_ctx_t* h3_stream_ctx_create(HQUIC stream, h3_session_t* h3)
                                 (void*)(uintptr_t)k_h3_stream_handler, sctx);
     /* Link into the session's stream context list for cleanup tracking */
     if (h3) {
+        H3_LOCK(h3);
         sctx->next = h3->stream_ctx_list;
         h3->stream_ctx_list = sctx;
+        H3_UNLOCK(h3);
     }
     return sctx;
 }
@@ -960,16 +987,19 @@ void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx)
 {
     if (!sctx || !sctx->h3) return;
     h3_session_t* h3 = sctx->h3;
+    H3_LOCK(h3);
     h3_stream_ctx_t** pp = &h3->stream_ctx_list;
     while (*pp) {
         if (*pp == sctx) {
             *pp = sctx->next;
             sctx->next = NULL;
             sctx->h3 = NULL;
+            H3_UNLOCK(h3);
             return;
         }
         pp = &(*pp)->next;
     }
+    H3_UNLOCK(h3);
 }
 
 /* ── Send-only control-stream callback ──────────────────────────
@@ -1231,6 +1261,13 @@ h3_session_t* h3_session_create(
         h3->client_state = H3_CLI_SENDING_SETTINGS;
     }
 
+    /* Initialize stream context list mutex */
+#if defined(WT_PLATFORM_WINDOWS)
+    InitializeCriticalSection(&h3->stream_ctx_lock);
+#else
+    pthread_mutex_init(&h3->stream_ctx_lock, NULL);
+#endif
+
     return h3;
 }
 
@@ -1266,6 +1303,13 @@ void h3_session_free(h3_session_t* h3)
         sctx = next;
     }
     h3->stream_ctx_list = NULL;
+
+    /* Destroy stream context list mutex */
+#if defined(WT_PLATFORM_WINDOWS)
+    DeleteCriticalSection(&h3->stream_ctx_lock);
+#else
+    pthread_mutex_destroy(&h3->stream_ctx_lock);
+#endif
 
     free(h3);
 }
@@ -1389,12 +1433,15 @@ int32_t h3_client_connect(h3_session_t* h3,
 
         st = MsQuic->StreamStart(req_stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
         if (QUIC_FAILED(st)) {
-            /* StreamStart failed before the stream was active — no
-             * callback has been registered that would clean up sctx.
-             * Close the stream (no callback to do it) and free sctx. */
+            /* StreamOpen registered h3_client_stream_cb with sctx, so
+             * StreamClose fires SHUTDOWN_COMPLETE synchronously. Null
+             * h3 to prevent h3_stream_ctx_unlink (sctx was never linked
+             * into h3->stream_ctx_list) and recv_buf so free(recv_buf)
+             * inside the callback is a no-op. The callback frees sctx. */
+            sctx->h3 = NULL;
+            sctx->recv_buf = NULL;
             MsQuic->StreamClose(req_stream);
-            free(sctx->recv_buf);
-            free(sctx);
+            /* sctx is now freed by the callback — do NOT touch it again */
             return -1;
         }
 
@@ -1796,11 +1843,17 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                 QUIC_BUFFER buf;
                                                 buf.Buffer = resp_copy;
                                                 buf.Length = (uint32_t)resp_len;
-                                                MsQuic->StreamSend(
+                                                QUIC_STATUS qst = MsQuic->StreamSend(
                                                     sctx->quic_stream,
                                                     &buf, 1,
                                                     QUIC_SEND_FLAG_NONE,
                                                     resp_copy);
+                                                if (QUIC_FAILED(qst)) {
+                                                    /* StreamSend failed — resp_copy
+                                                     * will never be freed by
+                                                     * SEND_COMPLETE. Free it now. */
+                                                    free(resp_copy);
+                                                }
                                             }
                                         }
 

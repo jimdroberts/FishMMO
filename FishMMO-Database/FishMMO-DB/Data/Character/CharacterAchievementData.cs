@@ -5,11 +5,17 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterAchievementData : IVersioned<CharacterAchievementData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that earned this achievement.</summary>
 		public readonly long CharacterID;
+		/// <summary>Achievement template ID.</summary>
 		public readonly int TemplateID;
+		/// <summary>Achievement tier level.</summary>
 		public readonly byte Tier;
+		/// <summary>Achievement progress value.</summary>
 		public readonly uint Value;
 
 		long IVersioned<CharacterAchievementData>.Version => Version;

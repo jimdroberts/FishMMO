@@ -132,6 +132,7 @@ wt_server_s* wt_server_alloc_impl(
     const char* cert_path, const char* key_path,
     const char* alpn, const char* bind_address,
     uint16_t port, uint32_t max_clients,
+    const char* allowed_origins,
     const wt_server_callbacks_t* callbacks, void* context)
 {
     if (!callbacks) return NULL;
@@ -158,6 +159,15 @@ wt_server_s* wt_server_alloc_impl(
                        ? max_clients : WT_MAX_CLIENTS;
     memcpy(&srv->callbacks, callbacks, sizeof(*callbacks));
     srv->user_context = context;
+
+    /* Copy allowed origins for CORS validation on browser WebTransport
+     * connections.  Empty string (or NULL) = allow all (dev/testing). */
+    if (allowed_origins) {
+        strncpy(srv->allowed_origins, allowed_origins,
+                sizeof(srv->allowed_origins) - 1);
+        srv->allowed_origins[sizeof(srv->allowed_origins) - 1] = '\0';
+    }
+    /* else: calloc already zeroed the buffer — empty = allow all */
 
     atomic_init(&srv->state, WT_SERVER_STOPPED);
     atomic_init(&srv->connection_count, 0);
@@ -198,9 +208,7 @@ void wt_server_free_impl(wt_server_s* server)
     }
 
     /* Wait for pending SHUTDOWN_COMPLETE callbacks (bounded).
-     * 600 iterations * 10ms = 6 second max wait.
-     * After nulling all owner pointers above, late callbacks are
-     * harmless no-ops — no UAF even if the timeout fires. */
+     * 600 iterations * 10ms = 6 second max wait. */
     int retries = 600;
     while (atomic_load(&server->pending_shutdowns) > 0 && retries-- > 0) {
 #if defined(WT_PLATFORM_WINDOWS)
@@ -211,8 +219,24 @@ void wt_server_free_impl(wt_server_s* server)
 #endif
     }
     if (retries < 0) {
-        WT_LOG_WARN("Timed out waiting for %u pending shutdowns",
-                    (unsigned)atomic_load(&server->pending_shutdowns));
+        WT_LOG_ERROR("Timed out waiting for %u pending shutdowns -- forcing cleanup (late callbacks may crash)",
+                     (unsigned)atomic_load(&server->pending_shutdowns));
+        /* Close QUIC handles on the application thread even though
+         * SHUTDOWN_COMPLETE callbacks may still be pending.  This is
+         * a last-resort path; under normal operation the spin-wait
+         * completes before the timeout. */
+        if (server->session_config) {
+            MsQuic->ConfigurationClose(server->session_config);
+            server->session_config = NULL;
+        }
+        if (server->registration) {
+            MsQuic->RegistrationClose(server->registration);
+            server->registration = NULL;
+        }
+        wt_datagram_queue_destroy(&server->dgram_queue);
+        free(server->connections);
+        free(server);
+        return;
     }
 
     /* Close QUIC handles deferred from wt_server_stop_impl.
@@ -287,6 +311,11 @@ int32_t wt_server_start_impl(wt_server_s* server)
         cred_cfg.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_FILE;
         cred_cfg.CertificateFile = &cert_file;
     } else {
+        WT_LOG_WARN("No certificate configured — using self-signed certificate. "
+                    "This is INSECURE for production: clients cannot verify "
+                    "the server identity and the connection is vulnerable to "
+                    "MITM attacks. Provide a valid certificate via "
+                    "wt_server_create_with_params().");
         cred_cfg.Type = QUIC_CREDENTIAL_TYPE_NONE;
         cred_cfg.Flags = QUIC_CREDENTIAL_FLAG_USE_PORTABLE_CERTIFICATES;
     }
@@ -429,11 +458,9 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
          * pending_shutdown_head in SHUTDOWN_COMPLETE.  Ensures that
          * all slot processing (reads/writes to the session struct)
          * completes before the head update becomes visible, so the
-         * producer sees a fully-consumed slot before reusing it.
-         * (atomic_store already uses __ATOMIC_SEQ_CST, which includes
-         *  release semantics; the explicit fence documents the intent.) */
+         * producer sees a fully-consumed slot before reusing it. */
         std::atomic_thread_fence(std::memory_order_release);
-        atomic_store(&server->pending_shutdown_head, head);
+        atomic_fetch_add(&server->pending_shutdown_head, 1);
     }
 
     wt_datagram_queue_drain(&server->dgram_queue,
@@ -574,6 +601,18 @@ void wt_server_disconnect_impl(
     if (!qconn) return;  /* already shutting down */
     atomic_ptr_store(&conn->quic_conn, NULL);
 
+    /* Check connection state before proceeding with ConnectionShutdown.
+     * If the connection is still in IDLE state (never started handshaking),
+     * msquic may never fire SHUTDOWN_COMPLETE, which would leave
+     * pending_shutdowns permanently incremented and cause a hang in
+     * wt_server_free_impl's spin-wait.  In that case, just clean up
+     * the slot directly. */
+    wt_connection_state_t state = (wt_connection_state_t)atomic_load(&conn->state);
+    if (state == WT_CONN_STATE_IDLE) {
+        atomic_store(&conn->in_use, false);
+        return;
+    }
+
     /* Do NOT set in_use=false here — SHUTDOWN_COMPLETE owns that. */
     atomic_fetch_add(&server->pending_shutdowns, 1);
     MsQuic->ConnectionShutdown(qconn,
@@ -584,6 +623,24 @@ void wt_server_disconnect_impl(
     /* fire_disconnect is called by SHUTDOWN_COMPLETE — don't double-fire */
 }
 
+/* Returns a pointer to the connection's remote address string.
+ *
+ * LIFETIME WARNING:
+ * The returned pointer points directly into `conn->remote_addr` (internal
+ * storage within the connection struct).  It is valid ONLY while the
+ * connection is alive AND `conn->in_use` remains true.  If the connection
+ * disconnects concurrently, the underlying storage may be freed or
+ * overwritten, producing a dangling pointer.
+ *
+ * The caller MUST ensure the connection stays alive for the entire
+ * duration the returned pointer is accessed.  In practice the caller
+ * should copy the string immediately (e.g. with strdup or by
+ * marshalling to a managed string) while holding whatever lock
+ * prevents the connection from being torn down.
+ *
+ * A future improvement could change this function to accept a
+ * caller-provided buffer + size and copy into it, eliminating the
+ * lifetime concern entirely. */
 const char* wt_server_get_client_addr_impl(
     wt_server_s* server, wt_connection_id_t conn_id)
 {
@@ -818,14 +875,38 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         /* Enqueue for O(1) poll drain — the poll thread processes
          * pending_shutdown_session safely on the application thread. */
         if (sconn->owner && sconn->pending_shutdown_session) {
-            uint32_t head = atomic_load(&sconn->owner->pending_shutdown_head);
-            uint32_t tail = atomic_load(
-                &sconn->owner->pending_shutdown_tail);
-            /* Use subtraction-based full check to avoid uint32_t
+            /* ── Consistent head/tail snapshot ──────────────────
+             * Load head and tail with a confirm-retry so a stale head
+             * (consumer advanced head between two separate atomic loads)
+             * doesn't cause a false "queue full" detection.  False
+             * overflow would trigger premature wt_session_shutdown on
+             * the callback thread, which is safe (the overflow path
+             * handles it) but wasteful.  One re-read eliminates nearly
+             * all false positives without risking livelock (monotonic
+             * head advances monotonically — each retry sees head >=
+             * the previous).
+             *
+             * Use subtraction-based full check to avoid uint32_t
              * wraparound when tail is near UINT32_MAX.  The ring
              * buffer holds WT_MAX_CLIENTS entries; we reject when
              * occupancy reaches WT_MAX_CLIENTS - 1 to leave one
              * guard slot. */
+            uint32_t head = atomic_load(&sconn->owner->pending_shutdown_head);
+            atomic_thread_fence(std::memory_order_acquire);
+            uint32_t tail = atomic_load(
+                &sconn->owner->pending_shutdown_tail);
+            if ((tail - head) >= WT_MAX_CLIENTS - 1) {
+                /* Confirm: re-read head.  If the consumer advanced it,
+                 * recompute occupancy with the fresh snapshot. */
+                uint32_t head2 = atomic_load(
+                    &sconn->owner->pending_shutdown_head);
+                if (head2 != head) {
+                    head = head2;
+                    atomic_thread_fence(std::memory_order_acquire);
+                    tail = atomic_load(
+                        &sconn->owner->pending_shutdown_tail);
+                }
+            }
             if ((tail - head) >= WT_MAX_CLIENTS - 1) {
                 WT_LOG_ERROR("Pending shutdown queue overflow — freeing session for connection %llu immediately (tail %u, head %u)",
                             (unsigned long long)sconn->id, tail, head);
@@ -851,15 +932,18 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                  * tail index.  The consumer reads tail then reads the slot;
                  * without this ordering the consumer could see the new tail
                  * but stale slot data on weakly-ordered architectures. */
+                /* Atomically claim a unique slot in the ring buffer.
+                 * atomic_fetch_add prevents multiple QUIC threads from
+                 * writing to the same slot — each call returns a
+                 * unique position. */
+                uint32_t claimed_tail = atomic_fetch_add(
+                    &sconn->owner->pending_shutdown_tail, 1);
                 sconn->owner->pending_shutdown_queue[
-                    tail % WT_MAX_CLIENTS] = sconn->id;
+                    claimed_tail % WT_MAX_CLIENTS] = sconn->id;
                 /* Release fence: ensures the slot write above is visible
                  * before the tail update observed by the consumer.
                  * Paired with the acquire fence in wt_server_poll_impl. */
                 atomic_thread_fence(std::memory_order_release);
-                /* Now publish the new tail — consumer's acquire fence
-                 * will see the slot write above. */
-                atomic_store(&sconn->owner->pending_shutdown_tail, tail + 1);
             }
         }
 
@@ -867,9 +951,21 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * If the callback triggers wt_server_destroy → free_impl,
          * pending_shutdowns==0 allows the spin-wait to exit cleanly
          * rather than deadlocking.  sconn->owner is still valid here
-         * because free_impl waits for pending_shutdowns before freeing. */
-        if (sconn->owner && atomic_load(&sconn->owner->pending_shutdowns) > 0)
-            atomic_fetch_sub(&sconn->owner->pending_shutdowns, 1);
+         * because free_impl waits for pending_shutdowns before freeing.
+         * Guard against unsigned underflow: if ConnectionClose fires
+         * SHUTDOWN_COMPLETE synchronously on the never-connected path,
+         * pending_shutdowns may not have been incremented yet.
+         * Use a single atomic_fetch_sub and check the pre-decrement
+         * value to eliminate the TOCTOU race between the separate
+         * atomic_load and atomic_fetch_sub. */
+        if (sconn->owner) {
+            unsigned int prev_sub = atomic_fetch_sub(
+                &sconn->owner->pending_shutdowns, 1);
+            if (prev_sub == 0) {
+                /* Underflow — correct it. */
+                atomic_fetch_add(&sconn->owner->pending_shutdowns, 1);
+            }
+        }
 
         /* Fire callback LAST — after all state changes are committed.
          * The callback may enqueue work that calls back into the API;
@@ -976,15 +1072,23 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     }
 
     case QUIC_CONNECTION_EVENT_DATAGRAM_SEND_STATE_CHANGED:
-        /* Free copy only on terminal states to avoid double-free.
-         * QUIC_DATAGRAM_SEND_STATE_IS_FINAL() is true for ACK and LOST. */
-        if (event->DATAGRAM_SEND_STATE_CHANGED.ClientContext &&
+    {
+        /* Free the wrapper struct only if msquic claimed ownership.
+         * The owned_by_msquic flag prevents double-free if msquic were
+         * to fire this callback synchronously from within DatagramSend
+         * (which it currently does not guarantee by contract). */
+        void* ctx = event->DATAGRAM_SEND_STATE_CHANGED.ClientContext;
+        if (ctx &&
             QUIC_DATAGRAM_SEND_STATE_IS_FINAL(
                 event->DATAGRAM_SEND_STATE_CHANGED.State)) {
-            free(event->DATAGRAM_SEND_STATE_CHANGED.ClientContext);
+            wt_dgram_send_ctx_t* send_ctx = (wt_dgram_send_ctx_t*)ctx;
+            if (send_ctx->owned_by_msquic) {
+                free(send_ctx);
+            }
             event->DATAGRAM_SEND_STATE_CHANGED.ClientContext = NULL;
         }
         break;
+    }
 
     default:
         break;

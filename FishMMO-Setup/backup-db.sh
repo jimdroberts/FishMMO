@@ -6,6 +6,26 @@
 #   - Keep last 4 weekly backups (Sundays)
 #   - Keep last 3 monthly backups (1st of month)
 #
+# SECURITY RECOMMENDATION: Encrypt backup files before offsite transfer.
+# Backup files contain sensitive database contents (user accounts, emails,
+# password hashes). If the backup directory or transfer channel is
+# compromised, unencrypted dumps expose all user data.
+#
+# Recommended approach — GPG symmetric encryption:
+#   1. Generate a strong encryption key:
+#        gpg --gen-random --armor 2 64 > backup-key.txt
+#   2. Encrypt the dump after creation:
+#        gpg --symmetric --cipher AES256 --batch --passphrase-file backup-key.txt \
+#            --output "$BACKUP_FILE.gpg" "$BACKUP_FILE"
+#   3. Transfer the .gpg file offsite (rsync, scp, s3, b2) separately from
+#      the key file.
+#   4. Store the backup key in a secure location (password manager, offline
+#      storage, or HSM). Loss of the key means loss of the backup data.
+#
+# For automated offsite transfer, consider using rclone with encryption
+# backend (crypt remote) or rsync over SSH with an SSH key restricted to
+# append-only access.
+#
 # All connection parameters are read from environment variables,
 # following the same conventions as .env.example / fishmmo-secrets.env.
 #

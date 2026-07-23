@@ -103,11 +103,11 @@ namespace FishMMO.Shared
 		/// <summary>Operation succeeded.</summary>
 		Success = 0,
 		/// <summary>Guild name is invalid.</summary>
-		InvalidGuildName,
+		InvalidGuildName = 1,
 		/// <summary>Guild name already exists.</summary>
-		NameAlreadyExists,
+		NameAlreadyExists = 2,
 		/// <summary>Character is already in a guild.</summary>
-		AlreadyInGuild,
+		AlreadyInGuild = 3,
 	}
 
 	/// <summary>

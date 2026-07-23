@@ -5,11 +5,17 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterPetBuffData : IVersioned<CharacterPetBuffData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that owns this pet buff.</summary>
 		public readonly long CharacterID;
+		/// <summary>Buff template ID.</summary>
 		public readonly int TemplateID;
+		/// <summary>Buff level.</summary>
 		public readonly int Level;
+		/// <summary>Timestamp when buff expires.</summary>
 		public readonly double BuffTimeEnd;
 
 		long IVersioned<CharacterPetBuffData>.Version => Version;

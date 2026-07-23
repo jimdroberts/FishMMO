@@ -137,10 +137,40 @@ namespace FishMMO.WebShared
         /// <summary>
         /// Gets the client IP from the current HTTP context.
         /// RemoteIpAddress reflects X-Forwarded-For after UseForwardedHeaders runs.
+        /// When IP is unresolvable (null), uses a hash of available identifying
+        /// information (User-Agent + X-Forwarded-For) to spread requests across
+        /// multiple rate-limit buckets instead of collapsing them into a single
+        /// "unknown" bucket.
         /// </summary>
         public static string GetClientIpKey(this HttpContext context)
         {
-            return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var ip = context.Connection.RemoteIpAddress;
+            if (ip != null) return ip.ToString();
+
+            // IP is null (e.g., request bypassed NGINX or proxy misconfiguration).
+            // Instead of collapsing all such requests into a single "unknown" bucket
+            // (which would let a single attacker without a resolved IP exhaust the
+            // shared rate-limit budget), use a hash of available identifying
+            // information to spread them across multiple buckets.
+            var headers = context.Request.Headers;
+            string userAgent = headers["User-Agent"].FirstOrDefault() ?? "";
+            string xForwardedFor = headers["X-Forwarded-For"].FirstOrDefault() ?? "";
+            string identifyingInfo = userAgent + "|" + xForwardedFor;
+
+            if (!string.IsNullOrEmpty(identifyingInfo.Replace("|", "")))
+            {
+                // Hash the identifying info to produce a stable bucket key per client.
+                byte[] hash = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(identifyingInfo));
+                string suffix = Convert.ToHexString(hash).Substring(0, 8).ToLowerInvariant();
+                return "unknown-" + suffix;
+            }
+
+            // No identifying info available — log a warning and fall back to "unknown".
+            Log.Warning("MiddlewareExtensions",
+                "Request has no RemoteIpAddress and no identifying headers " +
+                "(User-Agent, X-Forwarded-For). Rate-limit key will be 'unknown'.");
+            return "unknown";
         }
     }
 }

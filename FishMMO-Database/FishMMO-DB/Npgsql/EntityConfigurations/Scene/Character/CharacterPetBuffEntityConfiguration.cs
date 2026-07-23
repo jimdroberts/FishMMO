@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterPetBuffEntityConfiguration : IEntityTypeConfiguration<CharacterPetBuffEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterPetBuffEntity> builder)
 		{
 			builder.ToTable("character_pet_buffs");
@@ -27,11 +28,11 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.RemainingTime)
 				.IsRequired()
-				.HasDefaultValue(0f);
+				.HasDefaultValue(0d);
 
 			builder.Property(e => e.TickTime)
 				.IsRequired()
-				.HasDefaultValue(0f);
+				.HasDefaultValue(0d);
 
 			builder.Property(e => e.Stacks)
 				.IsRequired()

@@ -11,10 +11,20 @@ namespace FishMMO.Shared
 	public static class TypeExtensions
 	{
 		/// <summary>
+		/// When false, uses Activator.CreateInstance/ConstructorInfo.Invoke instead of
+		/// Expression.Compile(). Set this to false from the Unity host when running on
+		/// IL2CPP (which does not support System.Reflection.Emit) or on AOT-restricted
+		/// platforms where runtime code generation is unavailable.
+		/// Defaults to true (Expression.Compile() path) for maximum throughput on JIT-capable
+		/// runtimes.
+		/// </summary>
+		internal static bool UseExpressionCompilation { get; set; } = true;
+
+		/// <summary>
 		/// Caches compiled delegates for default constructors.
 		/// ConcurrentDictionary provides lock-free reads for high-frequency access.
 		/// </summary>
-		private static readonly ConcurrentDictionary<Type, Func<object?>> ConstructorCache =
+		private static readonly ConcurrentDictionary<Type, Func<object?>> constructorCache =
 			new ConcurrentDictionary<Type, Func<object?>>();
 
 		/// <summary>
@@ -50,37 +60,39 @@ namespace FishMMO.Shared
 			if (type == null) return null;
 
 			// GetOrAdd is thread-safe and more efficient than manual locking for this use case
-			return ConstructorCache.GetOrAdd(type, t =>
+			return constructorCache.GetOrAdd(type, t =>
 			{
 				if (t.IsAbstract || t.IsInterface)
 				{
 					return () => null;
 				}
 
-#if ENABLE_IL2CPP
-				// IL2CPP does not support System.Reflection.Emit, so Expression.Compile()
-				// would throw PlatformNotSupportedException.  Use Activator.CreateInstance
-				// instead, which is AOT-safe.
-				try
+				// Use the safe Activator.CreateInstance/ConstructorInfo.Invoke path when
+				// expression compilation is disabled (e.g., IL2CPP, AOT platforms where
+				// Expression.Compile() would throw PlatformNotSupportedException).
+				if (!UseExpressionCompilation)
 				{
-					if (t.IsValueType)
+					try
 					{
-						return () => Activator.CreateInstance(t);
-					}
+						if (t.IsValueType)
+						{
+							return () => Activator.CreateInstance(t);
+						}
 
-					var constructorInfo = t.GetConstructor(Type.EmptyTypes);
-					if (constructorInfo == null)
+						var constructorInfo = t.GetConstructor(Type.EmptyTypes);
+						if (constructorInfo == null)
+						{
+							return () => null;
+						}
+
+						return () => constructorInfo.Invoke(null);
+					}
+					catch
 					{
 						return () => null;
 					}
+				}
 
-					return () => constructorInfo.Invoke(null);
-				}
-				catch
-				{
-					return () => null;
-				}
-#else
 				try
 				{
 					// Compile the "new T()" call into a reusable delegate
@@ -117,7 +129,6 @@ namespace FishMMO.Shared
 					// Return a null-returning delegate if constructor arguments are invalid
 					return () => null;
 				}
-#endif
 			});
 		}
 	}

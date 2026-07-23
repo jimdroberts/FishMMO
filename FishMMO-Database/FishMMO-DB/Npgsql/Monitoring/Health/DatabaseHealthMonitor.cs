@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -169,7 +170,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 			catch (NpgsqlException ex)
 			{
 				result.Status = HealthStatus.Unhealthy;
-				result.Message = $"Database connection failed: {ex.Message}";
+				result.Message = $"Database connection failed: {SanitizeExceptionMessage(ex.Message)}";
 				result.IsConnected = false;
 				result.ResponseTimeMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
 				result.ErrorCode = ex.ErrorCode.ToString();
@@ -180,7 +181,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 			catch (Exception ex)
 			{
 				result.Status = HealthStatus.Unhealthy;
-				result.Message = $"Health check failed: {ex.Message}";
+				result.Message = $"Health check failed: {SanitizeExceptionMessage(ex.Message)}";
 				result.IsConnected = false;
 				result.ResponseTimeMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
 				result.Exception = ex;
@@ -223,7 +224,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 				command.CommandText = "SELECT 1";
 				command.CommandTimeout = 5;
 
-				var queryResult = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+				_ = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
 				var elapsed = DateTime.UtcNow - startTime;
 
 				// Populate result
@@ -278,7 +279,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 			catch (NpgsqlException ex)
 			{
 				result.Status = HealthStatus.Unhealthy;
-				result.Message = $"Database connection failed: {ex.Message}";
+				result.Message = $"Database connection failed: {SanitizeExceptionMessage(ex.Message)}";
 				result.IsConnected = false;
 				result.ResponseTimeMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
 				result.ErrorCode = ex.ErrorCode.ToString();
@@ -291,7 +292,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 			catch (Exception ex)
 			{
 				result.Status = HealthStatus.Unhealthy;
-				result.Message = $"Health check failed: {ex.Message}";
+				result.Message = $"Health check failed: {SanitizeExceptionMessage(ex.Message)}";
 				result.IsConnected = false;
 				result.ResponseTimeMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
 				result.Exception = ex;
@@ -329,6 +330,27 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 				poolWarningThreshold,
 				poolCriticalThreshold);
 		}
+
+		/// <summary>
+		/// Sanitizes an exception message to prevent leaking sensitive connection details
+		/// (connection strings, server addresses, credentials) via health check status messages.
+		/// Strips patterns that contain "Host=", "Password=", "Username=", "User Id=",
+		/// "ApplicationName=", or "Database=" (case-insensitive) and replaces the message
+		/// with "[redacted]".
+		/// </summary>
+		private static string SanitizeExceptionMessage(string message)
+		{
+			if (string.IsNullOrEmpty(message))
+				return message;
+
+			return ConnectionStringLeakPattern.IsMatch(message)
+				? "[redacted]"
+				: message;
+		}
+
+		private static readonly Regex ConnectionStringLeakPattern = new Regex(
+			@"(Host=|Password=|Username=|User\s+Id=|ApplicationName=|Database=)",
+			RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		/// <summary>
 		/// Extracts connection pool information from Npgsql connection.

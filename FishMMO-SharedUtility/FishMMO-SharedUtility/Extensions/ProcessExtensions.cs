@@ -17,9 +17,12 @@ namespace FishMMO.Shared
 		/// <param name="process">The process to wait for.</param>
 		/// <param name="cancellationToken">Optional token to cancel the wait.</param>
 		/// <returns>A Task that completes when the process exits.</returns>
-#if !UNITY_WEBGL
 		public static async Task WaitForExitAsync(this Process process, CancellationToken cancellationToken = default)
 		{
+			if (Configuration.DisableFileIO)
+			{
+				throw new PlatformNotSupportedException("Process.WaitForExitAsync is not supported on WebGL.");
+			}
 			// Safety check: if the process is already gone, return immediately.
 			if (process.HasExited) return;
 
@@ -50,11 +53,5 @@ namespace FishMMO.Shared
 				process.Exited -= exitHandler;
 			}
 		}
-#else
-		public static Task WaitForExitAsync(this Process process, CancellationToken cancellationToken = default)
-		{
-			throw new PlatformNotSupportedException("Process.WaitForExitAsync is not supported on WebGL.");
-		}
-#endif
 	}
 }

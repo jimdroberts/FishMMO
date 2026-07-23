@@ -28,18 +28,18 @@ namespace FishMMO.Shared
 	public static class ChatHelper
 	{
 		/// <summary>Prefix prepended to all chat error/control codes to prevent collision with player messages.</summary>
-		private const string CHAT_CODE_PREFIX = "FISHMMO_";
+		private const string ChatCodePrefix = "FISHMMO_";
 
 		/// <summary>Error code for when the target is already in a guild.</summary>
-		public const string GUILD_ERROR_TARGET_IN_GUILD = CHAT_CODE_PREFIX + "GUILD_ERROR_TARGET_IN_GUILD";
+		public const string GUILD_ERROR_TARGET_IN_GUILD = ChatCodePrefix + "GUILD_ERROR_TARGET_IN_GUILD";
 		/// <summary>Error code for when the target is already in a party.</summary>
-		public const string PARTY_ERROR_TARGET_IN_PARTY = CHAT_CODE_PREFIX + "PARTY_ERROR_TARGET_IN_PARTY";
+		public const string PARTY_ERROR_TARGET_IN_PARTY = ChatCodePrefix + "PARTY_ERROR_TARGET_IN_PARTY";
 		/// <summary>Code for relayed tell messages.</summary>
-		public const string TELL_RELAYED = CHAT_CODE_PREFIX + "TELL_RELAYED";
+		public const string TELL_RELAYED = ChatCodePrefix + "TELL_RELAYED";
 		/// <summary>Error code for sending a tell message to oneself.</summary>
-		public const string TELL_ERROR_MESSAGE_SELF = CHAT_CODE_PREFIX + "TELL_ERROR_MESSAGE_SELF";
+		public const string TELL_ERROR_MESSAGE_SELF = ChatCodePrefix + "TELL_ERROR_MESSAGE_SELF";
 		/// <summary>Error code for when the target is offline.</summary>
-		public const string TARGET_OFFLINE = CHAT_CODE_PREFIX + "TARGET_OFFLINE";
+		public const string TARGET_OFFLINE = ChatCodePrefix + "TARGET_OFFLINE";
 
 		#region Regex
 		// Regex patterns for Unity Rich Text tags. Used to sanitize chat messages by removing formatting.
@@ -103,12 +103,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Dictionary mapping command strings to chat command details.
 		/// </summary>
-		public static Dictionary<string, ChatCommandDetails> CommandChannelMap = new Dictionary<string, ChatCommandDetails>();
+		public static Dictionary<string, ChatCommandDetails> CommandChannelMap { get; } = new Dictionary<string, ChatCommandDetails>();
 
 		/// <summary>
 		/// Dictionary mapping chat channels to their supported command strings.
 		/// </summary>
-		public static Dictionary<ChatChannel, List<string>> ChannelCommandMap = new Dictionary<ChatChannel, List<string>>()
+		public static Dictionary<ChatChannel, List<string>> ChannelCommandMap { get; } = new Dictionary<ChatChannel, List<string>>()
 	   {
 		   { ChatChannel.World, new List<string>() { "/w", "/world", } },
 		   { ChatChannel.Region, new List<string>() { "/r", "/region", } },

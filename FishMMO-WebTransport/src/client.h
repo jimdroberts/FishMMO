@@ -30,6 +30,7 @@ typedef struct wt_client_s {
     char                    address[256];
     uint16_t                port;
     bool                    use_tls;
+    char                    alpn[WT_MAX_ALPN_LENGTH];  /* ALPN string (default "h3") */
 
     atomic_int              state;
     atomic_bool             connected;

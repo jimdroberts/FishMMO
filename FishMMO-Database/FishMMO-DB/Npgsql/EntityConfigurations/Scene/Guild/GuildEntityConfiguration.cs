@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class GuildEntityConfiguration : IEntityTypeConfiguration<GuildEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<GuildEntity> builder)
 		{
 			builder.ToTable("guilds");

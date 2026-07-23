@@ -65,6 +65,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
+		/// Tracks the number of entries in <see cref="recentAdmissionsByAccount"/>.
+		/// Updated atomically via Interlocked — incremented on first admission for a
+		/// username, decremented on sweep removal. Avoids the systematic undercount that
+		/// would occur from iterating a ConcurrentDictionary snapshot while concurrent
+		/// admissions add new entries.
+		/// </summary>
+		private int recentAdmissionCount;
+
+		/// <summary>
 		/// Maximum number of players allowed to connect to the world server.
 		/// </summary>
 		[SerializeField] private uint maxPlayers = 5000;
@@ -94,6 +103,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Rate-limit TryLoginAsync per account to prevent repeated expensive DB calls.
+			username = Authentication.NormalizeAccountLookup(username);
 			if (!loginAttemptByAccount.TryBegin(username, DateTime.UtcNow, TimeSpan.FromSeconds(loginAttemptDebounceSeconds)))
 			{
 				await Log.Warning("WorldServerAuthenticator", $"Rate-limited TryLoginAsync for account '{username}'");
@@ -143,7 +153,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				// Reserve a slot for the brief window before UpdateConnectionCountAsync
 				// notices this admission. Repeated admissions for the same username (e.g.
 				// fast reconnect) overwrite the timestamp rather than double-counting.
-				recentAdmissionsByAccount[username] = DateTime.UtcNow;
+				//
+				// TryAdd avoids double-counting when an existing entry is updated.
+				recentAdmissionsByAccount.AddOrUpdate(
+					username,
+					_ => { Interlocked.Increment(ref recentAdmissionCount); return DateTime.UtcNow; },
+					(_, _) => DateTime.UtcNow);
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}
 
@@ -154,41 +169,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
-		/// Returns the number of distinct usernames admitted within the last
-		/// <see cref="TimeSpan.FromSeconds(recentAdmissionWindowSeconds)"/>. Inline sweep — the map is small and this
-		/// method is called once per <see cref="TryLoginAsync"/>, which is rate-limited.
+		/// Returns the number of distinct usernames admitted within the recent-admission
+		/// window. This uses an <see cref="Interlocked"/>-maintained counter rather than
+		/// iterating <see cref="recentAdmissionsByAccount"/>, avoiding the systematic
+		/// undercount that a foreach snapshot would produce when concurrent admissions
+		/// add entries during iteration.
 		///
-		/// <para><b>Snapshot semantics:</b> Iterating a <see cref="ConcurrentDictionary{TKey,TValue}"/>
-		/// produces a point-in-time snapshot. Entries that expire (fall below the cutoff)
-		/// <i>after</i> the snapshot is taken will be missed until the next sweep. This is
-		/// acceptable because the admission window is a best-effort guard against burst admissions;
-		/// a transient over-admission is bounded by the sweep rate and corrected on the next call.
-		/// The conservative direction (under-admit) is enforced by the DB-derived <c>ConnectionCount</c>.</para>
-		///
-		/// <para><b>Inline sweep correctness:</b> Calling <see cref="ConcurrentDictionary{TKey,TValue}.TryRemove"/>
-		/// during <c>foreach</c> enumeration is safe because <c>ConcurrentDictionary</c> iteration tolerates
-		/// concurrent additions and removals (it snapshots keys and does not throw). Removing expired entries
-		/// inline avoids allocating a separate collection of keys to purge, at the cost of slightly enlarged
-		/// dictionary size between sweeps. The <see cref="OnAuthSweep"/> method provides a bounded fallback
-		/// sweep for entries that expire between <c>CountRecentAdmissions</c> calls.</para>
+		/// <para>Removals happen in <see cref="OnAuthSweep"/>, which decrements the counter
+		/// when it removes expired entries. Between sweeps the counter may include a small
+		/// number of expired-but-not-yet-swept entries — this overcount is conservative
+		/// (slightly under-admits), which is the safe direction.</para>
 		/// </summary>
-		private int CountRecentAdmissions(DateTime now)
-		{
-			DateTime cutoff = now - TimeSpan.FromSeconds(recentAdmissionWindowSeconds);
-			int count = 0;
-			foreach (var kvp in recentAdmissionsByAccount)
-			{
-				if (kvp.Value >= cutoff)
-				{
-					count++;
-				}
-				else
-				{
-					recentAdmissionsByAccount.TryRemove(kvp.Key, out _);
-				}
-			}
-			return count;
-		}
+		private int CountRecentAdmissions(DateTime now) => Thread.VolatileRead(ref recentAdmissionCount);
 
 		/// <summary>
 		/// Sweeps expired login-attempt rate-limit entries to prevent unbounded memory growth.
@@ -200,17 +192,16 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Bounded sweep of the recent-admission map. Keeps the dictionary from
 			// retaining stale entries across server uptime even if no new logins arrive.
-			// NOTE: TryRemove during foreach is safe because ConcurrentDictionary
-			// iteration produces a point-in-time snapshot and tolerates concurrent
-			// removals. See CountRecentAdmissions for the full rationale.
+			// Decrements the admission counter atomically so CountRecentAdmissions
+			// remains consistent without iterating the dictionary.
 			DateTime cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(recentAdmissionWindowSeconds);
 			int scanned = 0;
 			foreach (var kvp in recentAdmissionsByAccount)
 			{
 				if (++scanned > sweepMaxScan) break;
-				if (kvp.Value < cutoff)
+				if (kvp.Value < cutoff && recentAdmissionsByAccount.TryRemove(kvp.Key, out _))
 				{
-					recentAdmissionsByAccount.TryRemove(kvp.Key, out _);
+					Interlocked.Decrement(ref recentAdmissionCount);
 				}
 			}
 		}

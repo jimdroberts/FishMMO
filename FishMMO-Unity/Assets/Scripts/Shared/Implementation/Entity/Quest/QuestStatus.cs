@@ -1,4 +1,4 @@
-﻿namespace FishMMO.Shared
+namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Defines the lifecycle status of a quest instance for a character.
@@ -13,21 +13,21 @@
 		/// <summary>
 		/// The quest has been accepted and is in progress.
 		/// </summary>
-		Active,
+		Active = 1,
 
 		/// <summary>
 		/// All objectives have been met and the quest is ready for turn-in.
 		/// </summary>
-		Complete,
+		Complete = 2,
 
 		/// <summary>
 		/// The quest has been turned in and rewards have been granted.
 		/// </summary>
-		TurnedIn,
+		TurnedIn = 3,
 
 		/// <summary>
 		/// The quest was failed (e.g. timer expired).
 		/// </summary>
-		Failed,
+		Failed = 4,
 	}
 }

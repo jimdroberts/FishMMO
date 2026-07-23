@@ -62,23 +62,23 @@ namespace FishMMO.WebServer
 					webBuilder.UseContentRoot(AppContext.BaseDirectory);
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
-						// Parse port as a string to distinguish "missing" from "invalid".
-						// GetValue<int?>() silently returns 0 for malformed (non-null) values,
-						// which would bind Kestrel to a random OS port instead of the fallback.
-						int port = 8080;
-						string? portSetting = context.Configuration["WebServer:HttpPort"];
-						if (!string.IsNullOrEmpty(portSetting))
-						{
-							if (!int.TryParse(portSetting, out port) || port < 1 || port > 65535)
-							{
-								_ = Log.Warning("Kestrel", $"WebServer:HttpPort '{portSetting}' is invalid; falling back to port 8080.");
-								port = 8080;
-							}
-						}
 						// WebServer:HttpPort accepts both string ("8080") and number (8080) formats
 						// through the configuration binder. This inconsistency is intentional
 						// so operators can use either format in appsettings.json.
+						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8080";
+						// Refuse to start on a malformed port rather than silently falling back,
+						// matching the behavior of Patcher and WebGLServer.
+						if (!int.TryParse(httpPort, out int port) || port <= 0 || port > 65535)
+						{
+							throw new InvalidOperationException($"WebServer:HttpPort '{httpPort}' is not a valid TCP port.");
+						}
 						options.ListenLocalhost(port);
+						// NOTE: TLS is intentionally not configured on the Kestrel listener.
+						// TLS termination is handled by the upstream NGINX reverse proxy, which
+						// manages certificate provisioning (Let's Encrypt via certbot) and
+						// termination at the network edge. Kestrel listens on localhost only,
+						// so traffic between NGINX and Kestrel never leaves the host.
+						// This is the standard reverse-proxy pattern (edge TLS termination).
 						// Hardening: cap request body for this metadata-only endpoint.
 						// /loginserver is GET-only; legitimate clients never upload anything.
 						options.Limits.MaxRequestBodySize = 16 * 1024; // 16 KiB.
@@ -158,6 +158,9 @@ namespace FishMMO.WebServer
 							options.OnRejected = async (context, token) =>
 							{
 								await Log.Warning("RateLimiter", $"Rejected {context.HttpContext.GetClientIpKey()} for {context.HttpContext.Request.Path}");
+								context.HttpContext.Response.ContentType = "text/plain";
+								// Retry-After is derived from the token bucket replenishment period:
+								// TokenLimit=30, TokensPerPeriod=10, ReplenishmentPeriod=1s → 1 second.
 								context.HttpContext.Response.Headers["Retry-After"] = "1";
 								await context.HttpContext.Response.WriteAsync("Too many requests.", token);
 							};
@@ -173,6 +176,11 @@ namespace FishMMO.WebServer
 						app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
 						{
 							ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+					var exFeature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+					if (exFeature?.Error != null)
+					{
+						_ = Log.Error("IpFetchServer", "Unhandled exception in IpFetchServer request pipeline.", exFeature.Error);
+					}
 							ctx.Response.ContentType = "text/plain";
 							await ctx.Response.WriteAsync("Internal Server Error");
 						}));
@@ -272,16 +280,14 @@ namespace FishMMO.WebServer
 			try
 			{
 				var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
-				if (builder.SslMode != Npgsql.SslMode.Require &&
-					builder.SslMode != Npgsql.SslMode.VerifyCA &&
-					builder.SslMode != Npgsql.SslMode.VerifyFull)
+				if (builder.SslMode != Npgsql.SslMode.Require)
 				{
 					throw new InvalidOperationException(
 						"In Production, the Npgsql ConnectionStrings:NpgsqlConnection must use " +
-						"'Ssl Mode=Require' (or VerifyCA / VerifyFull). The default 'Prefer' silently " +
+						"'Ssl Mode=Require'. The default 'Prefer' silently " +
 						"falls back to plaintext, exposing credentials. Set " +
 						"ConnectionStrings:AllowInsecureNpgsql=true to deliberately allow an " +
-						"unencrypted connection (e.g., loopback Unix socket).");
+						"unencrypted connection (e.g., loopback Unix socket). NOTE: Upgrade to Npgsql 6.0+ for VerifyCA and VerifyFull modes.");
 				}
 			}
 			catch (InvalidOperationException) { throw; }

@@ -7,8 +7,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Reference to the camera used for billboarding. The object's rotation matches this camera.
 		/// </summary>
-		private Camera Camera;
-
+		private Camera targetCamera;
 		/// <summary>
 		/// If true, only the Y-axis (vertical) rotation is matched, creating a horizontal billboard effect.
 		/// </summary>
@@ -32,10 +31,10 @@ namespace FishMMO.Client
 		/// </summary>
 		void LateUpdate()
 		{
-			if (Camera != null)
+			if (this.targetCamera != null)
 			{
 				// Make the object share the same rotation as the camera
-				transform.rotation = Camera.transform.rotation;
+				transform.rotation = this.targetCamera.transform.rotation;
 				if (PivotYAxis)
 				{
 					// Only match the Y-axis rotation for horizontal billboarding
@@ -45,7 +44,7 @@ namespace FishMMO.Client
 			else
 			{
 				// Try to get the new main camera if the reference is lost
-				Camera = Camera.main;
+				this.targetCamera = Camera.main;
 			}
 		}
 
@@ -55,8 +54,8 @@ namespace FishMMO.Client
 		/// <param name="target">Camera to use for billboarding.</param>
 		public void SetCamera(Camera target)
 		{
-			Camera = target;
-			Transform = Camera == null ? null : Camera.transform;
+			this.targetCamera = target;
+			Transform = this.targetCamera == null ? null : this.targetCamera.transform;
 		}
 	}
 }

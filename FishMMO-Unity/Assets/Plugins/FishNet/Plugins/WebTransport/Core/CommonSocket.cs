@@ -37,7 +37,7 @@ namespace FishNet.Transporting.WebTransport
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		internal LocalConnectionState GetConnectionState()
 		{
-			return connectionState;
+			return this.connectionState;
 		}
 
 		/// <summary>

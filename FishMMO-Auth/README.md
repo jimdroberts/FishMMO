@@ -207,7 +207,7 @@ public class MyWorldAuthenticator : TokenAuthenticatorCore<NetworkConnection>
     protected override void OnAuthenticationResult(NetworkConnection conn, bool authenticated) { /* pass/fail auth */ }
     protected override void EnqueueMainThread(NetworkConnection conn, Action action) => mainThreadDispatcher.Enqueue(action);
 
-    protected override Task<byte[]> FetchSigningKeyAsync(long loginServerId) { /* DB lookup */ }
+    protected override Task<byte[]> FetchSigningKeyAsync(long loginServerId, long signingKeyId) { /* DB lookup */ }
     protected override Task<bool> CheckTokenRevocationAsync(string tokenHash) { /* DB check */ }
 }
 ```
@@ -222,7 +222,7 @@ public class MyClientAuth : ClientAuthenticatorCore
     // auth.SetLoginCredentials(username, password);
     // Then call auth.OnConnected() from your transport OnConnected callback.
 
-    protected override void SendClientHandshake(byte[] publicKey, byte[]? cookie, ushort minVersion, ushort maxVersion) { /* send broadcast */ }
+    protected override void SendClientHandshake(byte[] publicKey, byte[]? cookie, string? connectionToken, ushort minVersion, ushort maxVersion, string gameVersion) { /* send broadcast */ }
     protected override void SendTokenAuth(byte[] encryptedToken, uint seq) { /* send broadcast */ }
     protected override void SendSrpVerify(byte[] encUser, byte[] encEphemeral, uint seq) { /* send broadcast */ }
     protected override void SendSrpProof(byte[] encProof, uint seq) { /* send broadcast */ }

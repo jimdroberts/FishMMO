@@ -350,6 +350,39 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// Sweeps expired per-username TOTP failure entries to prevent unbounded dictionary growth.
 		/// </summary>
+		/// <remarks>
+		/// <para><b>Sweep coverage limitation:</b></para>
+		/// This method scans at most <see cref="TotpUsernameFailureSweepMaxScan"/> (64) entries per invocation
+		/// and removes at most that many expired entries. Under sustained brute-force attack against many
+		/// distinct usernames, new entries can arrive faster than the sweep removes them, until the
+		/// <see cref="MaxTotpUsernameFailureEntries"/> (10,000) cap is reached — at which point
+		/// <see cref="TrackTotpUsernameFailure"/> starts rejecting new entries, removing the rate-limiter's
+		/// lockout protection for additional usernames until the next sweep frees capacity.
+		/// <para/>
+		/// <para><b>Mitigating factors:</b></para>
+		/// <list type="bullet">
+		///   <item><description>
+		///   Per-IP debounce (<see cref="IpAuthAttemptDebounceSeconds"/> = 1 s) limits each attacker IP
+		///   to one SRP verify attempt per second, which bounds the rate at which new TOTP failure entries
+		///   can be created.
+		///   </description></item>
+		///   <item><description>
+		///   The per-username lockout at <see cref="MaxTotpFailuresPerUsername"/> (15) failures stops repeated
+		///   attempts against the same targeted account, limiting the per-username contribution to the tracker.
+		///   </description></item>
+		///   <item><description>
+		///   Each sweep invocation is called from <see cref="OnAuthSweep"/> which runs periodically; increasing
+		///   the sweep frequency or <see cref="TotpUsernameFailureSweepMaxScan"/> reduces the gap. The current
+		///   constants are tuned to keep per-tick CPU cost negligible even on constrained hosts.
+		///   </description></item>
+		/// </list>
+		/// <para/>
+		/// <para>
+		/// If a deployment experiences sustained distributed attacks across many distinct usernames,
+		/// raise <see cref="TotpUsernameFailureSweepMaxScan"/> or <see cref="MaxTotpUsernameFailureEntries"/>
+		/// to increase sweep throughput and capacity.
+		/// </para>
+		/// </remarks>
 		private void SweepExpiredTotpUsernameFailures()
 		{
 			DateTime now = DateTime.UtcNow;

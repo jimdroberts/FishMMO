@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class ChatEntityConfiguration : IEntityTypeConfiguration<ChatEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<ChatEntity> builder)
 		{
 			builder.ToTable("chat");

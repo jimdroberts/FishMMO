@@ -45,43 +45,80 @@ namespace FishMMO.Database.Npgsql
 			Schema = schema;
 		}
 
+		/// <summary>Login server registry.</summary>
 		public DbSet<LoginServerEntity> LoginServers { get; set; }
+		/// <summary>World server registry.</summary>
 		public DbSet<WorldServerEntity> WorldServers { get; set; }
+		/// <summary>Scene server registry.</summary>
 		public DbSet<SceneServerEntity> SceneServers { get; set; }
+		/// <summary>Scene instances.</summary>
 		public DbSet<SceneEntity> Scenes { get; set; }
+		/// <summary>Player accounts.</summary>
 		public DbSet<AccountEntity> Accounts { get; set; }
+		/// <summary>Kick request records.</summary>
 		public DbSet<KickRequestEntity> KickRequests { get; set; }
+		/// <summary>Login server signing keys.</summary>
 		public DbSet<LoginServerSigningKeyEntity> LoginServerSigningKeys { get; set; }
+		/// <summary>Authentication tokens.</summary>
 		public DbSet<AuthTokenEntity> AuthTokens { get; set; }
+		/// <summary>Two-factor recovery codes.</summary>
 		public DbSet<TwoFactorRecoveryCodeEntity> TwoFactorRecoveryCodes { get; set; }
+		/// <summary>Email queue.</summary>
 		public DbSet<EmailQueueEntity> EmailQueue { get; set; }
 
+		/// <summary>Player characters.</summary>
 		public DbSet<CharacterEntity> Characters { get; set; }
+		/// <summary>Character abilities.</summary>
 		public DbSet<CharacterAbilityEntity> CharacterAbilities { get; set; }
+		/// <summary>Character known abilities.</summary>
 		public DbSet<CharacterKnownAbilityEntity> CharacterKnownAbilities { get; set; }
+		/// <summary>Character attributes.</summary>
 		public DbSet<CharacterAttributeEntity> CharacterAttributes { get; set; }
+		/// <summary>Character achievements.</summary>
 		public DbSet<CharacterAchievementEntity> CharacterAchievements { get; set; }
+		/// <summary>Character inventory items.</summary>
 		public DbSet<CharacterInventoryEntity> CharacterInventoryItems { get; set; }
+		/// <summary>Character equipped items.</summary>
 		public DbSet<CharacterEquipmentEntity> CharacterEquippedItems { get; set; }
+		/// <summary>Character bank items.</summary>
 		public DbSet<CharacterBankEntity> CharacterBankItems { get; set; }
+		/// <summary>Character hotkeys.</summary>
 		public DbSet<CharacterHotkeyEntity> CharacterHotkeys { get; set; }
+		/// <summary>Character mail.</summary>
 		public DbSet<CharacterMailEntity> CharacterMail { get; set; }
+		/// <summary>Character item cooldowns.</summary>
 		public DbSet<CharacterItemCooldownEntity> CharacterItemCooldowns { get; set; }
+		/// <summary>Character skills.</summary>
 		public DbSet<CharacterSkillEntity> CharacterSkills { get; set; }
+		/// <summary>Character buffs.</summary>
 		public DbSet<CharacterBuffEntity> CharacterBuffs { get; set; }
+		/// <summary>Character pets.</summary>
 		public DbSet<CharacterPetEntity> CharacterPets { get; set; }
+		/// <summary>Character pet attributes.</summary>
 		public DbSet<CharacterPetAttributeEntity> CharacterPetAttributes { get; set; }
+		/// <summary>Character pet buffs.</summary>
 		public DbSet<CharacterPetBuffEntity> CharacterPetBuffs { get; set; }
+		/// <summary>Character faction standings.</summary>
 		public DbSet<CharacterFactionEntity> CharacterFactions { get; set; }
+		/// <summary>Character quests.</summary>
 		public DbSet<CharacterQuestEntity> CharacterQuests { get; set; }
+		/// <summary>Character friends.</summary>
 		public DbSet<CharacterFriendEntity> CharacterFriends { get; set; }
+		/// <summary>Character archetypes.</summary>
 		public DbSet<CharacterArchetypeEntity> CharacterArchetypes { get; set; }
+		/// <summary>Character guild memberships.</summary>
 		public DbSet<CharacterGuildEntity> CharacterGuilds { get; set; }
+		/// <summary>Guilds.</summary>
 		public DbSet<GuildEntity> Guilds { get; set; }
+		/// <summary>Guild update records.</summary>
 		public DbSet<GuildUpdateEntity> GuildUpdates { get; set; }
+		/// <summary>Character party memberships.</summary>
 		public DbSet<CharacterPartyEntity> CharacterParties { get; set; }
+		/// <summary>Parties.</summary>
 		public DbSet<PartyEntity> Parties { get; set; }
+		/// <summary>Party update records.</summary>
 		public DbSet<PartyUpdateEntity> PartyUpdates { get; set; }
+		/// <summary>Chat messages.</summary>
 		public DbSet<ChatEntity> Chat { get; set; }
 
 		/// <summary>

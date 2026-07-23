@@ -114,6 +114,20 @@ public class PatchController : ControllerBase
 		Response.Headers["ETag"] = etag;
 		Response.Headers["Cache-Control"] = "public, max-age=30";
 
+		// HMAC-sign the version manifest using the shared FISHMMO_CLIENT_GATE_SECRET.
+		// The canonical content is derived from the response payload fields.
+		// The client can verify the signature using the same shared secret to
+		// confirm the manifest was produced by an authentic patcher server
+		// (defense against DNS spoofing or MITM proxy serving a tampered
+		// version manifest).
+		string canonicalContent = "latest_version=" + (latest ?? "") +
+			"&etag_source=" + etagSource;
+		string? signature = versionService.SignContent(canonicalContent);
+		if (signature != null)
+		{
+			Response.Headers["X-FishMMO-Version-Signature"] = signature;
+		}
+
 		if (HttpMethods.IsHead(Request.Method))
 		{
 			// HEAD: emit headers only, no body.

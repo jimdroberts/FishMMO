@@ -90,6 +90,26 @@ typedef struct wt_session_s {
     atomic_bool             released;     /* owner has released its reference */
 } wt_session_t;
 
+/* Wrapper for datagram send buffers -- ensures safe ownership transfer
+ * between wt_session_send_datagram (allocation) and the
+ * DATAGRAM_SEND_STATE_CHANGED callback (free).
+ *
+ * msquic guarantees that DATAGRAM_SEND_STATE_CHANGED never fires
+ * synchronously from within DatagramSend, but this flag makes the
+ * ownership explicit and prevents a double-free should that guarantee
+ * ever change (e.g. a future msquic version).
+ *
+ * The struct is allocated with space for the data payload at the end
+ * (flexible array member).  The struct pointer is passed as
+ * ClientContext to DatagramSend.  On success, owned_by_msquic is set
+ * to true.  Both the callback and the failure path check the flag
+ * before freeing: the callback frees only if true, the failure path
+ * frees only if false. */
+typedef struct {
+    bool owned_by_msquic;
+    uint8_t data[];
+} wt_dgram_send_ctx_t;
+
 /* ── API ────────────────────────────────────────────────────── */
 
 /**

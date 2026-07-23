@@ -69,6 +69,15 @@ namespace FishMMO.Auth.Implementation
 		private int cookieEchoed;
 
 		/// <summary>Signed auth token from the LoginServer. Persists across connections; used for World/Scene auth.</summary>
+		/// <remarks>
+		/// <b>No client-side expiration check.</b> The client presents this token to every World/Scene
+		/// server until the server rejects it (e.g., <see cref="ClientAuthenticationResult.TokenExpired"/>).
+		/// Adding a client-side expiry check would save at most one round-trip on an already-expired
+		/// token, but the server <em>must</em> validate the token independently regardless — the client
+		/// cannot be trusted to self-censor.  Server-side rejection is the authoritative check, and the
+		/// wasted round-trip on expiry is negligible compared to the complexity and maintenance burden
+		/// of duplicating the expiry logic client-side.
+		/// </remarks>
 		private byte[]? storedAuthToken;
 
 		// ── Credential fields ──────────────────────────────────────────────────────────────────────

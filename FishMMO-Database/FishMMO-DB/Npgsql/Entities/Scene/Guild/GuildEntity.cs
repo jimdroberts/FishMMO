@@ -23,6 +23,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// </summary>
 		public string Name { get; set; }
 
+		/// <summary>Lowercase copy of guild name for lookups.</summary>
 		/// <remarks>
 		/// This value is stored as a computed column in PostgreSQL (generated from <see cref="Name"/>).
 		/// It exists to support efficient case-insensitive lookups and uniqueness enforcement.

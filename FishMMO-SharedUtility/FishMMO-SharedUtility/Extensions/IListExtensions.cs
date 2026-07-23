@@ -21,7 +21,7 @@ namespace FishMMO.Shared
 		/// Initializes a new instance if one does not exist for the calling thread.
 		/// Uses a cryptographically random seed for better distribution across threads.
 		/// </summary>
-		private static Random Instance
+		private static Random instance
 		{
 			get
 			{
@@ -54,7 +54,7 @@ namespace FishMMO.Shared
 			for (int i = n - 1; i > 0; i--)
 			{
 				// Select a random index from 0 to i inclusive
-				int j = Instance.Next(0, i + 1);
+				int j = instance.Next(0, i + 1);
 
 				// Fisher-Yates shuffle using thread-local Random. Each element is swapped with a randomly selected element from the remaining unshuffled portion.
 				T temp = list[j];
@@ -75,7 +75,7 @@ namespace FishMMO.Shared
 			{
 				return default;
 			}
-			return list[Instance.Next(0, list.Count)];
+			return list[instance.Next(0, list.Count)];
 		}
 
 		/// <summary>
@@ -100,7 +100,7 @@ namespace FishMMO.Shared
 					$"removal is acceptable, or copy the collection to a resizable List<T> first.");
 			}
 
-			int index = Instance.Next(0, list.Count);
+			int index = instance.Next(0, list.Count);
 			T element = list[index];
 			list.RemoveAt(index);
 			return element;

@@ -3,6 +3,7 @@ using FishNet.Transporting.WebTransport.Native;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace FishNet.Transporting.WebTransport.Server
@@ -12,7 +13,7 @@ namespace FishNet.Transporting.WebTransport.Server
 	/// Accepts QUIC connections, manages WebTransport sessions per client,
 	/// and provides broadcast + unicast send capability.
 	/// </summary>
-	public class ServerSocket : CommonSocket
+	public class ServerSocket : CommonSocket, IDisposable
 	{
 		#region Public
 		/// <summary>
@@ -126,17 +127,38 @@ namespace FishNet.Transporting.WebTransport.Server
 		// for callers that explicitly set to null.
 		public string Alpn { get => alpn; set => alpn = value ?? "h3"; }
 
+			/// <summary>
+			/// Comma-separated list of allowed Origin header values for browser
+			/// WebTransport CORS validation (e.g. "https://play.fishmmo.com").
+			/// Empty string or null means allow all origins (development/testing only).
+			/// In production, this MUST be set to a specific origin to prevent
+			/// cross-site WebTransport connection attempts.
+			/// </summary>
+			private string allowedOrigins = "";
+			/// <summary>
+			/// Gets or sets the allowed origins for browser WebTransport CORS
+			/// validation. Must be called before <see cref="StartConnection"/>.
+			/// Pass an empty string or null to allow all origins (dev/testing only).
+			/// </summary>
+			public string AllowedOrigins { get => allowedOrigins; set => allowedOrigins = value ?? ""; }
+
 		/// <summary>
 		/// Atomic guard to ensure StopConnection runs exactly once,
 		/// even if called from both a native callback and user code.
 		/// </summary>
 		private int stopGuard = 0;
+		/// <summary>
+		/// Atomic guard to ensure Dispose runs exactly once.
+		/// </summary>
+		private int disposed = 0;
 
 		/// <summary>
 		/// Atomic counter tracking how many items are in <see cref="incomingEvents"/>.
-		/// Used with <see cref="System.Threading.Interlocked"/> to prevent a TOCTOU
-		/// race between <c>Count</c> check and <c>Enqueue</c> when native callbacks
-		/// fire concurrently from QUIC worker threads.
+		/// Used with <see cref="System.Threading.Interlocked"/> to enforce a soft
+		/// limit against <see cref="MaxIncomingEvents"/>. The increment-then-check
+		/// pattern has a TOCTOU window — concurrent QUIC worker threads may both
+		/// pass the check, producing a transient overage bounded by thread count,
+		/// not unbounded (see <see cref="MaxIncomingEvents"/> for details).
 		/// Int64 (long) — effectively overflow-proof; would require ~9 exabytes
 		/// of queued events to wrap.
 		/// </summary>
@@ -168,10 +190,42 @@ namespace FishNet.Transporting.WebTransport.Server
 		{
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				// Drain without invoking -- finalizer thread is not the
-				// Unity main thread. Invoking FishNet callbacks here
-				// would cause data corruption / crashes.
+				// Invoke each action so that unmanaged memory held by native
+				// callbacks (Marshal.AllocHGlobal) is freed via their finally blocks.
+				// The action bodies check connection state and skip FishNet callbacks
+				// when the transport is not in Started state.
+				// We swallow exceptions — the finalizer thread cannot safely
+				// propagate them, and the process is shutting down.
+				try { act?.Invoke(); } catch { /* swallow — finalizer */ }
 			}
+			Dispose();
+		}
+
+		/// <summary>
+		/// Releases all unmanaged resources (native handles, pinned callback table).
+		/// Safe to call multiple times; subsequent calls are no-ops.
+		/// Called from <see cref="StopConnection"/> on the main thread and from
+		/// the finalizer on the finalizer thread.
+		/// </summary>
+		public void Dispose()
+		{
+			if (System.Threading.Interlocked.Exchange(ref this.disposed, 1) != 0)
+				return;
+
+			if (this.serverHandle != null && !this.serverHandle.IsInvalid)
+			{
+				WebTransportNative.wt_server_stop(this.serverHandle);
+				WebTransportNative.wt_server_destroy(this.serverHandle);
+				this.serverHandle = null;
+			}
+
+			if (this.pinnedCallbacksPtr != IntPtr.Zero)
+			{
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+				this.pinnedCallbacksPtr = IntPtr.Zero;
+			}
+
+			GC.SuppressFinalize(this);
 		}
 
 		/// <summary>
@@ -216,7 +270,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.ToString()}"); }
 			}
-			this.incomingEventCount = 0;
+			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
 			if (!WebTransportNative.EnsureInitialized())
 			{
@@ -253,6 +307,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				bindAddress,
 				port,
 				(uint)maximumClients,
+				string.IsNullOrEmpty(this.allowedOrigins) ? null : this.allowedOrigins,
 				this.pinnedCallbacksPtr,
 				IntPtr.Zero);
 			if (this.serverHandle == null || this.serverHandle.IsInvalid)
@@ -313,24 +368,12 @@ namespace FishNet.Transporting.WebTransport.Server
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.ToString()}"); }
 			}
-			this.incomingEventCount = 0;
+			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
 			ResetQueues();
 			base.SetConnectionState(LocalConnectionState.Stopping, true);
 
-			WebTransportNative.wt_server_stop(this.serverHandle);
-			WebTransportNative.wt_server_destroy(this.serverHandle);
-			this.serverHandle = null;
-
-			// Free the unmanaged callback table allocated in StartConnection.
-			// Safe to call on IntPtr.Zero (no-op) if never allocated.
-			if (this.pinnedCallbacksPtr != IntPtr.Zero)
-			{
-				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
-				this.pinnedCallbacksPtr = IntPtr.Zero;
-			}
-
-			GC.SuppressFinalize(this);
+			Dispose();
 			base.SetConnectionState(LocalConnectionState.Stopped, true);
 			return true;
 		}
@@ -345,7 +388,18 @@ namespace FishNet.Transporting.WebTransport.Server
 				return false;
 
 			if (!immediately)
-				this.disconnectingNext.Add(connectionId);
+			{
+				this.clientsLock.EnterReadLock();
+				try
+				{
+					if (this.clients.Contains(connectionId))
+						this.disconnectingNext.Add(connectionId);
+				}
+				finally
+				{
+					this.clientsLock.ExitReadLock();
+				}
+			}
 			else if (this.idMapToNative.TryGetValue(connectionId, out ulong nativeId))
 				WebTransportNative.wt_server_disconnect(this.serverHandle, nativeId);
 
@@ -365,10 +419,22 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// is active in the native server's connection array. No free is required and no
 		/// corresponding free function exists in the C API.</para>
 		///
-		/// <para><b>Thread safety:</b> The returned pointer is atomically guarded by
-		/// <c>atomic_load(&amp;conn-&gt;in_use)</c> in the native code. The C# side marshals
-		/// (copies) the string immediately via <see cref="System.Runtime.InteropServices.Marshal.PtrToStringUTF8"/>,
-		/// so there is no dangling-pointer window on this side.</para>
+		/// <para><b>LIFETIME WARNING:</b> The returned native pointer points directly into
+		/// the connection struct's internal storage.  It is valid ONLY while both of the
+		/// following hold simultaneously:
+		///   (1) the C# <c>clientsLock</c> read lock is held (this call), AND
+		///   (2) the native connection remains alive (<c>conn-&gt;in_use == true</c>).
+		///
+		/// The <c>atomic_load(&amp;conn-&gt;in_use)</c> check inside the native function
+		/// only guarantees the pointer is valid at the instant of the check.  A concurrent
+		/// native disconnect after that check but before <c>PtrToStringUTF8</c> copies the
+		/// data can still produce a dangling-pointer read.
+		///
+		/// Because we call <c>Marshal.PtrToStringUTF8</c> immediately on the returned pointer
+		/// (within the same try block and while the read lock is held), the practical risk
+		/// window is a few nanoseconds, but it is NOT zero.  The native-side
+		/// <c>wt_server_get_client_addr_impl</c> documents this same caveat.
+		/// </para>
 		/// </returns>
 		internal string GetConnectionAddress(int connectionId)
 		{
@@ -567,7 +633,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (result != 0)
 			{
 				transport.NetworkManager?.LogWarning(
-					$"[WebTransport Server] Send to {connectionId} failed: {WebTransportNative.ErrorString((WTError)result)}");
+					$"[WebTransport Server] Send to {connectionId} failed: {WebTransportNative.ErrorString((WebTransportNative.WTError)result)}");
 			}
 		}
 
@@ -634,17 +700,26 @@ namespace FishNet.Transporting.WebTransport.Server
 						remoteAddr = System.Runtime.InteropServices.Marshal.PtrToStringUTF8(unmanagedAddr, addrLen) ?? "unknown";
 					}
 
-					int fishNetId = this.nextConnectionId++;
-					/* Overflow protection: wrap to 1 if the counter
-					 * overflows past int.MaxValue or wraps to zero. */
-					if (fishNetId <= 0)
+					// Atomic allocation with overflow protection and collision retry.
+					int fishNetId;
+					for (;;)
 					{
-						fishNetId = 1;
-						this.nextConnectionId = 2;
+						fishNetId = System.Threading.Interlocked.Increment(ref this.nextConnectionId);
+						// Overflow protection: wrap to 1 if the counter overflows past
+						// int.MaxValue or wraps to zero/negative.
+						if (fishNetId <= 0)
+						{
+							int wrapped = System.Threading.Interlocked.CompareExchange(
+								ref this.nextConnectionId, 2, fishNetId);
+							// If CAS succeeded, use 1; if another thread already wrapped,
+							// retry with the value that thread set.
+							fishNetId = (wrapped == fishNetId) ? 1 : wrapped;
+							if (fishNetId <= 0)
+								continue;
+						}
+						break;
 					}
-					/* Acquire write lock — prevents concurrent reads from
-					 * GetConnectionState/GetConnectionAddress observing
-					 * torn internal state in the HashSet/Dictionaries. */
+
 					this.clientsLock.EnterWriteLock();
 					try
 					{
@@ -652,7 +727,7 @@ namespace FishNet.Transporting.WebTransport.Server
 						if (this.clients.Contains(fishNetId))
 						{
 							transport.NetworkManager?.LogWarning(
-								$"[WebTransport Server] Connection ID {fishNetId} already in use; skipping connect.");
+								$"[WebTransport Server] Connection ID {fishNetId} already in use; retrying connect.");
 							return;
 						}
 						this.clients.Add(fishNetId);
@@ -665,6 +740,8 @@ namespace FishNet.Transporting.WebTransport.Server
 						this.clientsLock.ExitWriteLock();
 					}
 
+					// Fire transport callback OUTSIDE the write lock to prevent deadlock
+					// when subscribers call GetConnectionState/GetConnectionAddress.
 					transport.HandleRemoteConnectionState(
 						new RemoteConnectionStateArgs(RemoteConnectionState.Started, fishNetId, transport.Index));
 				}
@@ -696,7 +773,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			this.incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
-					transport.NetworkManager?.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected: {WebTransportNative.ErrorString((WTError)errorCode)}");
+					transport.NetworkManager?.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected: {WebTransportNative.ErrorString((WebTransportNative.WTError)errorCode)}");
 
 				if (this.idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
 				{

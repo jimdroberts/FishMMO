@@ -9,6 +9,28 @@ namespace FishMMO.Database.Npgsql
 	/// Encapsulates validated Npgsql database configuration.
 	/// Responsibility is limited to binding and validating a provided <see cref="IConfiguration"/> instance.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>WARNING — NoResetOnClose = true.</b> This configuration sets <c>NoResetOnClose = true</c>
+	/// on the Npgsql connection string, which skips <c>DISCARD ALL</c> / <c>RESET ALL</c> when
+	/// returning connections to the pool. This is a deliberate performance optimization, but it
+	/// means the following session-level state will <b>NOT</b> be automatically reset:
+	/// </para>
+	/// <list type="bullet">
+	///   <item><description><c>SET LOCAL</c> / <c>SET SESSION</c> / <c>SET ROLE</c></description></item>
+	///   <item><description>Temporary tables created with <c>CREATE TEMP TABLE</c></description></item>
+	///   <item><description>Prepared statements via <c>PREPARE</c> / <c>DEALLOCATE</c></description></item>
+	///   <item><description>Advisory locks acquired at session scope</description></item>
+	///   <item><description><c>LISTEN</c> / <c>UNLISTEN</c> subscriptions</description></item>
+	///   <item><description><c>search_path</c> changes via <c>SET search_path</c></description></item>
+	/// </list>
+	/// <para>
+	/// If any future code introduces session-level state, it MUST manually reset that state
+	/// before returning the connection to the pool, or change <c>NoResetOnClose</c> to false.
+	/// See the comment on the <c>NoResetOnClose = true</c> line in
+	/// <see cref="BuildConnectionString"/> for details on the performance trade-off.
+	/// </para>
+	/// </remarks>
 	public sealed class NpgsqlDbConfiguration
 	{
 		/// <summary>
@@ -155,6 +177,14 @@ namespace FishMMO.Database.Npgsql
 				// MaxAutoPrepare=0 disables automatic statement preparation to avoid Npgsql
 				// prepared-statement memory accumulation from the dynamic SQL patterns used by
 				// BaseService. Enable with a non-zero value if query patterns are stable.
+				//
+				// TODO: For compiled queries (EF.CompileAsyncQuery) that DO use stable
+				// parameterised SQL, selectively enabling Npgsql auto-prepare could improve
+				// execution time by avoiding per-call plan compilation.  When the compiled-query
+				// hot paths are well-characterised, consider splitting the connection string:
+				// one pool with MaxAutoPrepare=0 for dynamic-SQL services, and another with
+				// MaxAutoPrepare >= 50 for services that rely heavily on compiled queries.
+				// Measure connection-open latency and memory before and after the split.
 				MaxAutoPrepare = 0
 			}.ConnectionString;
 		}

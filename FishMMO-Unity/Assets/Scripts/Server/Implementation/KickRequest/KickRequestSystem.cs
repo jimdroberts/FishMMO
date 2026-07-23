@@ -6,6 +6,7 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
+using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
 
@@ -42,6 +43,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		[SerializeField]
 		private int updateFetchCount = 100;
+		/// <summary>
+		/// Dedicated lock object for synchronizing kick-request processing state.
+		/// Must NOT lock on the <see cref="IKickRequestSystemQueueData"/> interface reference
+		/// since the concrete type is publicly visible and could be locked externally.
+		/// </summary>
+		private readonly object kickLock = new object();
 
 		/// <summary>
 		/// Gets or sets the server kick request update pump rate limit in seconds.
@@ -137,7 +144,7 @@ namespace FishMMO.Server.Implementation
 		{
 			if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				long entityKey = (long)accountName.GetHashCode();
+				long entityKey = (long)accountName.GetDeterministicHashCode();
 				if (!TryEnqueueAsyncWork(() => DeleteKickRequestAsync(accountName), entityKey))
 				{
 					Log.Warning("KickRequestSystem", $"Failed to enqueue kick-request cleanup for account '{accountName}'.");
@@ -211,7 +218,7 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			lock (data)
+			lock (this.kickLock)
 			{
 				if (data.IsProcessing)
 				{
@@ -241,7 +248,7 @@ namespace FishMMO.Server.Implementation
 
 				// Update polling position under lock for safe cross-thread visibility.
 				KickRequestData latest = dbResult.Data[dbResult.Data.Count - 1];
-				lock (data)
+				lock (this.kickLock)
 				{
 					data.LastFetchTime = latest.TimeCreated;
 					data.LastPosition = latest.ID;
@@ -295,7 +302,7 @@ namespace FishMMO.Server.Implementation
 			}
 			finally
 			{
-				lock (data)
+				lock (this.kickLock)
 				{
 					data.IsProcessing = false;
 				}

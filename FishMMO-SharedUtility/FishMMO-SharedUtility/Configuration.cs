@@ -15,16 +15,29 @@ namespace FishMMO.Shared
 	/// so that multiple <see cref="Configuration"/> objects can be used independently
 	/// without cross-instance contention.
 	/// </summary>
-	public class Configuration
+	public class Configuration : IDisposable
 	{
 		public const string DEFAULT_FILENAME = "Configuration";
 		public const string EXTENSION = ".cfg";
 		public const string FULL_NAME = DEFAULT_FILENAME + EXTENSION;
 
+		private static Configuration? globalSettings;
+
 		/// <summary>
 		/// Represents the globally accessible configuration instance. This should typically be set once at application startup.
+		/// Thread-safe via <see cref="Interlocked.Exchange"/> on the backing field.
 		/// </summary>
-		public static Configuration? GlobalSettings { get; private set; }
+		public static Configuration? GlobalSettings
+		{
+			get => globalSettings;
+			private set => globalSettings = value;
+		}
+
+		/// <summary>
+		/// Set to true by the Unity host when running in a WebGL build.
+		/// When true, file I/O operations will be skipped.
+		/// </summary>
+		public static bool DisableFileIO { get; set; }
 
 		private static int nextInstanceId = 0;
 
@@ -32,12 +45,14 @@ namespace FishMMO.Shared
 
 		private readonly CultureInfo cultureInfo = CultureInfo.InvariantCulture;
 
+		private bool disposed;
+
 		/// <summary>
 		/// Synchronizes access to the <see cref="settings"/> dictionary. ReaderWriterLockSlim is used
 		/// because reads vastly outnumber writes in typical usage.
 		/// Instance-level so multiple <see cref="Configuration"/> objects do not contend.
 		/// </summary>
-		private readonly ReaderWriterLockSlim settingsLock = new ReaderWriterLockSlim();
+		private ReaderWriterLockSlim settingsLock = new ReaderWriterLockSlim();
 
 		/// <summary>
 		/// Stores the configuration settings as key-value pairs. Keys are treated case-insensitively using <see cref="StringComparer.OrdinalIgnoreCase"/>.
@@ -50,10 +65,35 @@ namespace FishMMO.Shared
 		/// </summary>
 		public string DefaultFileDirectory { get; }
 
+		private string fileName = DEFAULT_FILENAME;
+
 		/// <summary>
 		/// Gets or sets the base name of the configuration file (without the extension).
+		/// The getter acquires the read lock so that concurrent reads see a consistent value
+		/// on ARM weak memory models. The setter acquires the write lock so that concurrent
+		/// Save/Load calls see a consistent file name.
 		/// </summary>
-		public string FileName { get; set; } = DEFAULT_FILENAME;
+		public string FileName
+		{
+			get
+			{
+				settingsLock.EnterReadLock();
+				try { return fileName; }
+				finally { settingsLock.ExitReadLock(); }
+			}
+			set
+			{
+				settingsLock.EnterWriteLock();
+				try
+				{
+					fileName = value;
+				}
+				finally
+				{
+					settingsLock.ExitWriteLock();
+				}
+			}
+		}
 
 
 		/// <summary>
@@ -117,7 +157,8 @@ namespace FishMMO.Shared
 		/// <param name="config">The configuration instance to set as global.</param>
 		public static void SetGlobalSettings(Configuration config)
 		{
-			GlobalSettings = config ?? throw new ArgumentNullException(nameof(config));
+			if (config == null) throw new ArgumentNullException(nameof(config));
+			Interlocked.Exchange(ref globalSettings, config);
 		}
 
 		/// <summary>
@@ -126,6 +167,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override string ToString()
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			// Creates a StringBuilder from Cysharp.Text for high-performance string concatenation (reduces allocations).
 			using (var sb = ZString.CreateStringBuilder())
 			{
@@ -170,6 +212,7 @@ namespace FishMMO.Shared
 		/// <param name="other">The other configuration to combine with.</param>
 		public void Combine(Configuration other)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (other == null)
 			{
 				return;
@@ -240,6 +283,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Save()
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			Save(DefaultFileDirectory, FileName + EXTENSION);
 		}
 
@@ -253,6 +297,7 @@ namespace FishMMO.Shared
 		/// <param name="fullFileName">The full file name (e.g., "myconfig.cfg").</param>
 		public void Save(string fileDirectory, string fullFileName)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (string.IsNullOrWhiteSpace(fileDirectory) || string.IsNullOrWhiteSpace(fullFileName))
 			{
 				Console.WriteLine("Warning: Cannot save configuration. File directory or file name is invalid.");
@@ -263,38 +308,41 @@ namespace FishMMO.Shared
 
 			try
 			{
-#if !UNITY_WEBGL
-				// Creates the directory if it does not already exist.
-				if (!Directory.Exists(fileDirectory))
+				if (!DisableFileIO)
 				{
-					Directory.CreateDirectory(fileDirectory);
-				}
-
-				// Acquire the read lock BEFORE opening the file to prevent a TOCTOU race
-				// where another thread mutates the dictionary between the file-open and
-				// the lock acquisition, causing the written snapshot to be inconsistent.
-				settingsLock.EnterReadLock();
-				try
-				{
-					// Opens/creates the file for writing, truncating if it already exists, and ensures exclusive access.
-					// Uses StreamWriter with UTF8 encoding without a Byte Order Mark (BOM) for cleaner text files.
-					using (FileStream fs = File.Open(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
-					using (StreamWriter sw = new StreamWriter(fs, new UTF8Encoding(false)))
+					// Creates the directory if it does not already exist.
+					if (!Directory.Exists(fileDirectory))
 					{
-						// Writes each key-value pair to the file in "key=value" format, followed by a new line.
-						foreach (KeyValuePair<string, string> pair in this.settings)
+						Directory.CreateDirectory(fileDirectory);
+					}
+
+					// Acquire the read lock BEFORE opening the file to prevent a TOCTOU race
+					// where another thread mutates the dictionary between the file-open and
+					// the lock acquisition, causing the written snapshot to be inconsistent.
+					settingsLock.EnterReadLock();
+					try
+					{
+						// Opens/creates the file for writing, truncating if it already exists, and ensures exclusive access.
+						// Uses StreamWriter with UTF8 encoding without a Byte Order Mark (BOM) for cleaner text files.
+						using (FileStream fs = File.Open(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
+						using (StreamWriter sw = new StreamWriter(fs, new UTF8Encoding(false)))
 						{
-							sw.WriteLine($"{pair.Key}={pair.Value}");
+							// Writes each key-value pair to the file in "key=value" format, followed by a new line.
+							foreach (KeyValuePair<string, string> pair in this.settings)
+							{
+								sw.WriteLine($"{pair.Key}={pair.Value}");
+							}
 						}
 					}
+					finally
+					{
+						settingsLock.ExitReadLock();
+					}
 				}
-				finally
+				else
 				{
-					settingsLock.ExitReadLock();
+					Console.WriteLine("Warning: File I/O not supported on WebGL. Configuration was not saved to disk.");
 				}
-#else
-				Console.WriteLine("Warning: File I/O not supported on WebGL. Configuration was not saved to disk.");
-#endif
 			}
 			// Catches specific exceptions related to file access permissions.
 			catch (UnauthorizedAccessException ex)
@@ -337,6 +385,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the configuration was loaded successfully, false otherwise.</returns>
 		public bool Load(string fileName)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			return Load(DefaultFileDirectory, fileName + EXTENSION);
 		}
 
@@ -351,6 +400,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the configuration was loaded successfully, false otherwise.</returns>
 		public bool Load(string fileDirectory, string fullFileName)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (string.IsNullOrWhiteSpace(fileDirectory) || string.IsNullOrWhiteSpace(fullFileName))
 			{
 				Console.WriteLine("Warning: Cannot load configuration. File directory or file name is invalid.");
@@ -358,87 +408,90 @@ namespace FishMMO.Shared
 			}
 
 			string fullPath = Path.Combine(fileDirectory, fullFileName);
-#if !UNITY_WEBGL
-			if (!File.Exists(fullPath))
+			if (!DisableFileIO)
 			{
-				return false;
-			}
+				if (!File.Exists(fullPath))
+				{
+					return false;
+				}
 
-			try
-			{
-				// Reads the entire content of the file as a single string using UTF-8 encoding.
-				string unsplit = File.ReadAllText(fullPath, Encoding.UTF8);
-
-				// Strips any Byte Order Mark (BOM) from the beginning of the string.
-				unsplit = RemoveBOM(unsplit);
-
-				// Synchronize the entire dictionary replacement under a single write lock
-				// to avoid nested locking with Set() and to keep the replacement atomic.
-				settingsLock.EnterWriteLock();
 				try
 				{
-					FileName = Path.GetFileNameWithoutExtension(fullFileName); // Stores only the base name of the file (without its extension).
+					// Reads the entire content of the file as a single string using UTF-8 encoding.
+					string unsplit = File.ReadAllText(fullPath, Encoding.UTF8);
 
-					// Clears all existing settings before populating with new ones from the file.
-					this.settings.Clear();
+					// Strips any Byte Order Mark (BOM) from the beginning of the string.
+					unsplit = RemoveBOM(unsplit);
 
-					// Splits the entire file content into individual lines, removing any empty lines.
-					string[] lines = unsplit.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-					// Processes each line read from the configuration file.
-					foreach (string line in lines)
+					// Synchronize the entire dictionary replacement under a single write lock
+					// to avoid nested locking with Set() and to keep the replacement atomic.
+					settingsLock.EnterWriteLock();
+					try
 					{
-						// Skips lines that are empty or start with '#' or ';' (treated as comments).
-						string trimmed = line.TrimStart();
-						if (trimmed.Length == 0 || trimmed[0] == '#' || trimmed[0] == ';')
-						{
-							continue;
-						}
+						FileName = Path.GetFileNameWithoutExtension(fullFileName); // Stores only the base name of the file (without its extension).
 
-						// Splits the line into a key and a value pair, only at the *first* occurrence of '='.
-						// This allows values to safely contain '=' characters (e.g., for URLs or paths).
-						string[] pair = line.Split(new char[] { '=' }, 2, StringSplitOptions.None);
-						// Checks if the line was successfully split into two parts (key and value) and the key is not empty.
-						if (pair.Length == 2 && !string.IsNullOrWhiteSpace(pair[0]))
+						// Clears all existing settings before populating with new ones from the file.
+						this.settings.Clear();
+
+						// Splits the entire file content into individual lines, removing any empty lines.
+						string[] lines = unsplit.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+						// Processes each line read from the configuration file.
+						foreach (string line in lines)
 						{
-							// Sets the configuration entry by writing directly to the dictionary under the write lock
-							// instead of calling Set(), to avoid nested lock acquisition.
-							this.settings[pair[0].Trim()] = pair[1].Trim();
-						}
-						else
-						{
-							// Logs a warning for any malformed lines that cannot be parsed.
-							Console.WriteLine($"Warning: Malformed configuration line skipped: '{line}' in {fullFileName}");
+							// Skips lines that are empty or start with '#' or ';' (treated as comments).
+							string trimmed = line.TrimStart();
+							if (trimmed.Length == 0 || trimmed[0] == '#' || trimmed[0] == ';')
+							{
+								continue;
+							}
+
+							// Splits the line into a key and a value pair, only at the *first* occurrence of '='.
+							// This allows values to safely contain '=' characters (e.g., for URLs or paths).
+							string[] pair = line.Split(new char[] { '=' }, 2, StringSplitOptions.None);
+							// Checks if the line was successfully split into two parts (key and value) and the key is not empty.
+							if (pair.Length == 2 && !string.IsNullOrWhiteSpace(pair[0]))
+							{
+								// Sets the configuration entry by writing directly to the dictionary under the write lock
+								// instead of calling Set(), to avoid nested lock acquisition.
+								this.settings[pair[0].Trim()] = pair[1].Trim();
+							}
+							else
+							{
+								// Logs a warning for any malformed lines that cannot be parsed.
+								Console.WriteLine($"Warning: Malformed configuration line skipped: '{line}' in {fullFileName}");
+							}
 						}
 					}
+					finally
+					{
+						settingsLock.ExitWriteLock();
+					}
+					return true;
 				}
-				finally
+				// Catches specific exceptions related to I/O operations during file loading.
+				catch (IOException ex)
 				{
-					settingsLock.ExitWriteLock();
+					Console.WriteLine($"Error: An I/O error occurred while loading configuration from {fullPath}. {ex.Message}");
+					return false;
 				}
-				return true;
+				// Catches specific exceptions related to file access permissions during loading.
+				catch (UnauthorizedAccessException ex)
+				{
+					Console.WriteLine($"Error: Access denied when loading configuration from {fullPath}. {ex.Message}");
+					return false;
+				}
+				// Catches any other unexpected exceptions during the load process.
+				catch (Exception ex)
+				{
+					Console.WriteLine($"An unexpected error occurred while loading configuration from {fullPath}. {ex.Message}");
+					return false;
+				}
 			}
-			// Catches specific exceptions related to I/O operations during file loading.
-			catch (IOException ex)
+			else
 			{
-				Console.WriteLine($"Error: An I/O error occurred while loading configuration from {fullPath}. {ex.Message}");
+				Console.WriteLine("Warning: File I/O not supported on WebGL. Configuration was not loaded from disk.");
 				return false;
 			}
-			// Catches specific exceptions related to file access permissions during loading.
-			catch (UnauthorizedAccessException ex)
-			{
-				Console.WriteLine($"Error: Access denied when loading configuration from {fullPath}. {ex.Message}");
-				return false;
-			}
-			// Catches any other unexpected exceptions during the load process.
-			catch (Exception ex)
-			{
-				Console.WriteLine($"An unexpected error occurred while loading configuration from {fullPath}. {ex.Message}");
-				return false;
-			}
-#else
-			Console.WriteLine("Warning: File I/O not supported on WebGL. Configuration was not loaded from disk.");
-			return false;
-#endif
 		}
 
 		/// <summary>
@@ -450,6 +503,7 @@ namespace FishMMO.Shared
 		/// <param name="value">The string value to set.</param>
 		public void Set(string name, string value)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (string.IsNullOrWhiteSpace(name))
 			{
 				throw new ArgumentNullException(nameof(name), "Setting name cannot be null or empty.");
@@ -474,6 +528,7 @@ namespace FishMMO.Shared
 		/// <param name="value">The value to set.</param>
 		public void Set<T>(string name, T value)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (value != null)
 			{
 				Set(name, value.ToString());
@@ -492,6 +547,7 @@ namespace FishMMO.Shared
 		/// <param name="value">The double value to set.</param>
 		public void Set(string name, double value)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			Set(name, value.ToString("R", this.cultureInfo));
 		}
 
@@ -502,6 +558,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting exists; otherwise, false.</returns>
 		public bool Exists(string name)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			settingsLock.EnterReadLock();
 			try
 			{
@@ -520,6 +577,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was successfully removed; otherwise, false if the setting was not found.</returns>
 		public bool Remove(string name)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			settingsLock.EnterWriteLock();
 			try
 			{
@@ -547,6 +605,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGet<T>(string name, out T result, T defaultValue = default!) where T : IConvertible
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string settingValue))
 			{
 				try
@@ -581,6 +640,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found; otherwise, false.</returns>
 		public bool TryGetString(string name, out string? result, string? defaultValue = null)
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out result))
 			{
 				return true;
@@ -599,6 +659,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetChar(string name, out char result, char defaultValue = default(char))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return char.TryParse(setting, out result);
@@ -618,6 +679,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetByte(string name, out byte result, byte defaultValue = default(byte))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return byte.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -637,6 +699,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetSByte(string name, out sbyte result, sbyte defaultValue = default(sbyte))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return sbyte.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -656,6 +719,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetShort(string name, out short result, short defaultValue = default(short))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return short.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -675,6 +739,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetUShort(string name, out ushort result, ushort defaultValue = default(ushort))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return ushort.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -694,6 +759,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetInt(string name, out int result, int defaultValue = default(int))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return int.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -713,6 +779,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetUInt(string name, out uint result, uint defaultValue = default(uint))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return uint.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -732,6 +799,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetLong(string name, out long result, long defaultValue = default(long))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return long.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -751,6 +819,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetULong(string name, out ulong result, ulong defaultValue = default(ulong))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return ulong.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -769,6 +838,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetBool(string name, out bool result, bool defaultValue = default(bool))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return bool.TryParse(setting, out result);
@@ -788,6 +858,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetFloat(string name, out float result, float defaultValue = default(float))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return float.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
@@ -807,6 +878,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetDouble(string name, out double result, double defaultValue = default(double))
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				return double.TryParse(setting, NumberStyles.Any, this.cultureInfo.NumberFormat, out result);
@@ -827,6 +899,7 @@ namespace FishMMO.Shared
 		/// <returns>True if the setting was found and successfully converted; otherwise, false.</returns>
 		public bool TryGetEnum<TEnum>(string name, out TEnum result, TEnum defaultValue = default(TEnum)) where TEnum : struct, Enum
 		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
 				// Enum.TryParse is used for robust parsing, including case-insensitivity.
@@ -838,6 +911,18 @@ namespace FishMMO.Shared
 			}
 			result = defaultValue;
 			return false;
+		}
+
+		/// <summary>
+		/// Disposes the <see cref="ReaderWriterLockSlim"/> used for thread-safe access.
+		/// </summary>
+		public void Dispose()
+		{
+			if (this.disposed) return;
+			this.disposed = true;
+			GC.SuppressFinalize(this);
+			this.settingsLock?.Dispose();
+			this.settingsLock = null;
 		}
 	}
 }

@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class LoginServerSigningKeyEntityConfiguration : IEntityTypeConfiguration<LoginServerSigningKeyEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<LoginServerSigningKeyEntity> builder)
 		{
 			builder.ToTable("login_server_signing_keys");

@@ -22,7 +22,7 @@ namespace FishMMO.Client
 		public ServerConnectionType CurrentConnectionType { get; set; } = ServerConnectionType.None;
 
 		/// <summary>Number of reconnect attempts made since the last successful connection.</summary>
-		public byte ReconnectsAttempted { get; private set; }
+		public int ReconnectsAttempted { get; private set; }
 		private float nextReconnect;
 		/// <summary>In-flight connection guard. Prevents concurrent ConnectToServer calls from starting duplicate coroutines.</summary>
 		/// <remarks>All access to connectingGuard happens on the Unity main thread (Update, coroutines, event callbacks),
@@ -35,23 +35,24 @@ namespace FishMMO.Client
 		private string lastWorldAddress = "";
 		private ushort lastWorldPort;
 
-		/// <summary>Maximum reconnect attempts before giving up. Default 10.</summary>
-		[SerializeField]
-		public byte MaxReconnectAttempts = 10;
+		private int maxReconnectAttempts = 10;
+		/// <summary>Maximum reconnect attempts before giving up. Range [1, 255]. Default 10.</summary>
+		public int MaxReconnectAttempts
+		{
+			get => maxReconnectAttempts;
+			set => maxReconnectAttempts = Math.Max(1, Math.Min(value, 255));
+		}
 		/// <summary>Base wait time in seconds between reconnect attempts. Default 5.</summary>
-		[SerializeField]
-		public float ReconnectAttemptWaitTime = 5f;
+		public float ReconnectAttemptWaitTime { get; set; } = 5f;
 		/// <summary>Maximum delay in seconds for exponential backoff. Default 60.</summary>
-		[SerializeField]
-		public float MaxReconnectDelay = 60f;
+		public float MaxReconnectDelay { get; set; } = 60f;
 		/// <summary>Timeout in seconds waiting for a connection to fully stop. Default 10.</summary>
-		[SerializeField]
-		public float ConnectionStopTimeoutSeconds = 10f;
+		public float ConnectionStopTimeoutSeconds { get; set; } = 10f;
 
 		/// <summary>Fired when a connection to the server is successfully established.</summary>
 		public event Action OnConnectionSuccessful;
 		/// <summary>Fired on each reconnect attempt with current and max attempt counts.</summary>
-		public event Action<byte, byte> OnReconnectAttempt;
+		public event Action<int, int> OnReconnectAttempt;
 		/// <summary>Fired when all reconnect attempts are exhausted without success.</summary>
 		public event Action OnReconnectFailed;
 
@@ -185,7 +186,9 @@ namespace FishMMO.Client
 			switch (ClientState)
 			{
 				case LocalConnectionState.Stopped:
-					CurrentConnectionType = ServerConnectionType.None;
+					// Check CanReconnect BEFORE clearing CurrentConnectionType —
+					// CanReconnect reads CurrentConnectionType to decide whether
+					// World/Scene reconnection is applicable.
 					if (!forceDisconnect && CanReconnect)
 					{
 						nextReconnect = ComputeReconnectDelay(ReconnectsAttempted);
@@ -193,6 +196,7 @@ namespace FishMMO.Client
 						// once in TryReconnect() when the actual reconnect begins, so
 						// consumers don't receive duplicate events per cycle.
 					}
+					CurrentConnectionType = ServerConnectionType.None;
 					break;
 				case LocalConnectionState.Started:
 					OnConnectionSuccessful?.Invoke();
@@ -206,8 +210,17 @@ namespace FishMMO.Client
 			if (ClientState != LocalConnectionState.Stopped)
 			{
 				float deadline = Time.realtimeSinceStartup + Mathf.Max(0.1f, ConnectionStopTimeoutSeconds);
+				int maxWaitIters = 1000;
 				while (ClientState != LocalConnectionState.Stopped && Time.realtimeSinceStartup < deadline)
+				{
+					if (--maxWaitIters <= 0)
+					{
+						Log.Error("ClientConnection", "Connection stop wait iteration limit exceeded.");
+						System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+						yield break;
+					}
 					yield return null;
+				}
 				if (ClientState != LocalConnectionState.Stopped)
 				{
 					Log.Warning("ClientConnection", $"Timed out waiting for connection stop; forcing teardown.");
@@ -216,8 +229,17 @@ namespace FishMMO.Client
 					// Without this wait, StartConnection may fail because the transport
 					// is still in Stopping state.
 					float forcedDeadline = Time.realtimeSinceStartup + Mathf.Max(0.1f, ConnectionStopTimeoutSeconds);
+					int maxForcedIters = 1000;
 					while (ClientState != LocalConnectionState.Stopped && Time.realtimeSinceStartup < forcedDeadline)
+					{
+						if (--maxForcedIters <= 0)
+						{
+							Log.Error("ClientConnection", "Forced stop wait iteration limit exceeded.");
+							System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+							yield break;
+						}
 						yield return null;
+					}
 					if (ClientState != LocalConnectionState.Stopped)
 					{
 						Log.Error("ClientConnection", "Forced connection stop timed out; aborting connect.");

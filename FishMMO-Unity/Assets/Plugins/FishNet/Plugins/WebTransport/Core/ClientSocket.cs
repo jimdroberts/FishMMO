@@ -8,7 +8,7 @@ using System.Runtime.CompilerServices;
 
 namespace FishNet.Transporting.WebTransport.Client
 {
-	public class ClientSocket : CommonSocket
+	public class ClientSocket : CommonSocket, IDisposable
 	{
 		#region Private Configuration
 		private string address = string.Empty;
@@ -58,12 +58,18 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// Atomic guard to ensure StopConnection runs exactly once.
 		/// </summary>
 		private int stopGuard = 0;
+		/// <summary>
+		/// Atomic guard to ensure Dispose runs exactly once.
+		/// </summary>
+		private int disposed = 0;
 
 		/// <summary>
 		/// Atomic counter tracking how many items are in <see cref="incomingEvents"/>.
-		/// Used with <see cref="System.Threading.Interlocked"/> to prevent a TOCTOU
-		/// race between <c>Count</c> check and <c>Enqueue</c> when native callbacks
-		/// fire concurrently from QUIC worker threads.
+		/// Used with <see cref="System.Threading.Interlocked"/> to enforce a soft
+		/// limit against <see cref="MaxIncomingEvents"/>. The increment-then-check
+		/// pattern has a TOCTOU window — concurrent QUIC worker threads may both
+		/// pass the check, producing a transient overage bounded by thread count,
+		/// not unbounded (see <see cref="MaxIncomingEvents"/> for details).
 		/// Int64 (long) — effectively overflow-proof; would require ~9 exabytes
 		/// of queued events to wrap.
 		/// </summary>
@@ -114,10 +120,53 @@ namespace FishNet.Transporting.WebTransport.Client
 		{
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				// Drain without invoking -- finalizer thread is not the
-				// Unity main thread. Invoking FishNet callbacks here
-				// would cause data corruption / crashes.
+				// Invoke each action so that unmanaged memory held by native
+				// callbacks (Marshal.AllocHGlobal) is freed via their finally blocks.
+				// The action bodies check connection state and skip FishNet callbacks
+				// when the transport is not in Started state.
+				// We swallow exceptions — the finalizer thread cannot safely
+				// propagate them, and the process is shutting down.
+				try { act?.Invoke(); } catch { /* swallow — finalizer */ }
 			}
+			Dispose();
+		}
+
+		/// <summary>
+		/// Releases all unmanaged resources (native handles, pinned callback table).
+		/// Safe to call multiple times; subsequent calls are no-ops.
+		/// Called from <see cref="StopConnection"/> on the main thread and from
+		/// the finalizer on the finalizer thread.
+		/// </summary>
+		public void Dispose()
+		{
+			if (System.Threading.Interlocked.Exchange(ref this.disposed, 1) != 0)
+				return;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+			if (webglIndex >= 0)
+			{
+				webglSockets.TryRemove(webglIndex, out _);
+				if (ReferenceEquals(webglPendingConnect, this))
+					webglPendingConnect = null;
+				WebTransportJSLib.WTDisconnect(webglIndex);
+				webglIndex = -1;
+			}
+#else
+			if (clientHandle != null && !clientHandle.IsInvalid)
+			{
+				WebTransportNative.wt_client_disconnect(clientHandle);
+				WebTransportNative.wt_client_destroy(clientHandle);
+				clientHandle = null;
+			}
+
+			if (this.pinnedCallbacksPtr != IntPtr.Zero)
+			{
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+				this.pinnedCallbacksPtr = IntPtr.Zero;
+			}
+#endif
+
+			GC.SuppressFinalize(this);
 		}
 
 		/// <summary>
@@ -198,9 +247,9 @@ namespace FishNet.Transporting.WebTransport.Client
 
 				// Configure congestion threshold to avoid silent data loss under
 				// game data rates (default 500, up from the previous hardcoded 80).
-				// TODO: WTSetStreamThreshold is a no-op in the jslib (reserved for future
-		// stream congestion control). Uncomment when the jslib implementation is ready.
-		// WebTransportJSLib.WTSetStreamThreshold(webglIndex, 500);
+				// WTSetStreamThreshold is reserved for future stream congestion control.
+				// Currently a no-op in the jslib — uncomment when the implementation is ready.
+				// WebTransportJSLib.WTSetStreamThreshold(webglIndex, 500);
 
 				return true;
 			}
@@ -296,33 +345,7 @@ namespace FishNet.Transporting.WebTransport.Client
 
 			base.SetConnectionState(LocalConnectionState.Stopping, false);
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-			if (webglIndex >= 0)
-			{
-				webglSockets.TryRemove(webglIndex, out _);
-				if (ReferenceEquals(webglPendingConnect, this))
-					webglPendingConnect = null;
-				WebTransportJSLib.WTDisconnect(webglIndex);
-				webglIndex = -1;
-			}
-#else
-			if (clientHandle != null && !clientHandle.IsInvalid)
-			{
-				WebTransportNative.wt_client_disconnect(clientHandle);
-				WebTransportNative.wt_client_destroy(clientHandle);
-				clientHandle = null;
-			}
-
-			// Free the unmanaged callback table allocated in StartConnection.
-			// Safe to call on IntPtr.Zero (no-op) if never allocated.
-			if (this.pinnedCallbacksPtr != IntPtr.Zero)
-			{
-				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
-				this.pinnedCallbacksPtr = IntPtr.Zero;
-			}
-#endif
-
-			GC.SuppressFinalize(this);
+			Dispose();
 			base.SetConnectionState(LocalConnectionState.Stopped, false);
 			return true;
 		}
@@ -427,7 +450,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				else
 					result = WebTransportNative.wt_client_send_stream(this.clientHandle, pkt.Data, pkt.Length);
 				if (result != 0)
-					transport.NetworkManager?.LogWarning($"[WebTransport Client] Send failed: {WebTransportNative.ErrorString((WTError)result)}");
+					transport.NetworkManager?.LogWarning($"[WebTransport Client] Send failed: {WebTransportNative.ErrorString((WebTransportNative.WTError)result)}");
 #endif
 				}
 				finally
@@ -624,7 +647,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
-					LogTransportWarning("[WebTransport Client] Disconnected: " + WebTransportNative.ErrorString((WTError)errorCode));
+					LogTransportWarning("[WebTransport Client] Disconnected: " + WebTransportNative.ErrorString((WebTransportNative.WTError)errorCode));
 				StopConnection();
 			});
 		}

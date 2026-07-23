@@ -189,7 +189,7 @@ namespace FishMMO.Shared
 					// Swallow callback exceptions to prevent list corruption.
 					// If the application needs to observe these, it should handle
 					// errors inside the callback itself.
-					Console.WriteLine($"CircularBuffer Remove callback threw: {ex.Message}");
+					System.Diagnostics.Debug.WriteLine($"[CircularBuffer] Remove callback threw: {ex.Message}");
 				}
 
 				if (head == tail)
@@ -235,7 +235,7 @@ namespace FishMMO.Shared
 				catch (Exception ex)
 				{
 					// Swallow callback exceptions to prevent list corruption.
-					Console.WriteLine($"CircularBuffer Pop callback threw: {ex.Message}");
+					System.Diagnostics.Debug.WriteLine($"[CircularBuffer] Pop callback threw: {ex.Message}");
 				}
 
 				if (head == tail)
@@ -306,7 +306,7 @@ namespace FishMMO.Shared
 				catch (Exception ex)
 				{
 					// Swallow callback exceptions to prevent list corruption.
-					Console.WriteLine($"CircularBuffer Clear callback threw: {ex.Message}");
+					System.Diagnostics.Debug.WriteLine($"[CircularBuffer] Clear callback threw: {ex.Message}");
 				}
 						current.Clear();
 						current = next;

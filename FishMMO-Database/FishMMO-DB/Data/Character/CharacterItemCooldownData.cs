@@ -5,10 +5,15 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterItemCooldownData : IVersioned<CharacterItemCooldownData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that owns this cooldown.</summary>
 		public readonly long CharacterID;
+		/// <summary>Cooldown category identifier.</summary>
 		public readonly int Category;
+		/// <summary>Timestamp when cooldown ends.</summary>
 		public readonly double CooldownEnd;
 
 		long IVersioned<CharacterItemCooldownData>.Version => Version;

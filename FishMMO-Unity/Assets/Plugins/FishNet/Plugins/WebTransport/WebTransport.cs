@@ -90,7 +90,7 @@ namespace FishNet.Transporting.WebTransport
 
 
 		#region Initialization and Unity
-		protected void OnDestroy()
+		private void OnDestroy()
 		{
 			Shutdown();
 		}
@@ -200,37 +200,45 @@ namespace FishNet.Transporting.WebTransport
 
 		#region Configuration
 		/// <summary>
-		/// Sets the TLS certificate path.
+		/// Sets the TLS certificate path. Validates the file exists on disk.
 		/// </summary>
-		public void SetCertificatePath(string path)
+		/// <param name="path">Path to the PEM certificate file.</param>
+		/// <returns><c>true</c> if the path is valid and the file exists; <c>false</c> otherwise.</returns>
+		public bool SetCertificatePath(string path)
 		{
-			// WARNING: The `path` parameter is nullable (string?), and we only check
-			// for null/empty here. We do NOT verify the file exists on disk.
-			// A future hardening pass should add System.IO.File.Exists(path) and
-			// log a clear error if the PEM file is missing -- otherwise msquic will
-			// fail with an opaque TLS error at bind time.
 			if (string.IsNullOrEmpty(path))
 			{
-				base.NetworkManager?.LogWarning("[WebTransport] Certificate path is null or empty. Skipping.");
-				return;
+				base.NetworkManager?.LogError("[WebTransport] Certificate path is null or empty.");
+				return false;
+			}
+			if (!System.IO.File.Exists(path))
+			{
+				base.NetworkManager?.LogError($"[WebTransport] Certificate file not found: {path}");
+				return false;
 			}
 			certificatePath = path;
+			return true;
 		}
 
 		/// <summary>
-		/// Sets the TLS private key path.
+		/// Sets the TLS private key path. Validates the file exists on disk.
 		/// </summary>
-		public void SetPrivateKeyPath(string path)
+		/// <param name="path">Path to the PEM private key file.</param>
+		/// <returns><c>true</c> if the path is valid and the file exists; <c>false</c> otherwise.</returns>
+		public bool SetPrivateKeyPath(string path)
 		{
-			// WARNING: The `path` parameter is nullable (string?), and we only check
-			// for null/empty here. We do NOT verify the file exists on disk.
-			// See comment in SetCertificatePath for rationale.
 			if (string.IsNullOrEmpty(path))
 			{
-				base.NetworkManager?.LogWarning("[WebTransport] Private key path is null or empty. Skipping.");
-				return;
+				base.NetworkManager?.LogError("[WebTransport] Private key path is null or empty.");
+				return false;
+			}
+			if (!System.IO.File.Exists(path))
+			{
+				base.NetworkManager?.LogError($"[WebTransport] Private key file not found: {path}");
+				return false;
 			}
 			privateKeyPath = path;
+			return true;
 		}
 
 		/// <summary>
@@ -242,6 +250,18 @@ namespace FishNet.Transporting.WebTransport
 		public void SetAlpn(string alpn)
 		{
 			this.serverSocket.Alpn = alpn;
+		}
+
+		/// <summary>
+		/// Sets the allowed origins for browser WebTransport CORS validation.
+		/// Comma-separated list of Origin header values (e.g. "https://play.fishmmo.com").
+		/// Empty or null means allow all origins (development/testing only).
+		/// In production, set to a specific origin to prevent cross-site connections.
+		/// Only takes effect before the server is started.
+		/// </summary>
+		public void SetAllowedOrigins(string origins)
+		{
+			this.serverSocket.AllowedOrigins = origins;
 		}
 
 		/// <summary>
@@ -296,9 +316,11 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override void SetClientAddress(string address)
 		{
-			// NOTE: Input validation is minimal here -- the native library is
-			// responsible for rejecting malformed addresses. A future hardening
-			// pass should add a null/empty guard and basic URI format check.
+			if (string.IsNullOrWhiteSpace(address))
+			{
+				base.NetworkManager?.LogError("[WebTransport] Client address cannot be null or empty.");
+				return;
+			}
 			this.clientAddress = address;
 		}
 
@@ -307,7 +329,7 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override string GetClientAddress()
 		{
-			return clientAddress;
+			return this.clientAddress;
 		}
 
 		/// <summary>
@@ -323,9 +345,11 @@ namespace FishNet.Transporting.WebTransport
 		/// </remarks>
 		public override void SetServerBindAddress(string address, IPAddressType addressType)
 		{
-			// NOTE: Input validation is minimal here -- the native library is
-			// responsible for rejecting malformed addresses. A future hardening
-			// pass should add a null/empty guard and basic URI format check.
+			if (string.IsNullOrWhiteSpace(address))
+			{
+				base.NetworkManager?.LogError("[WebTransport] Server bind address cannot be null or empty.");
+				return;
+			}
 			this.serverBindAddress = address;
 		}
 
@@ -334,7 +358,7 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override string GetServerBindAddress(IPAddressType addressType)
 		{
-			return serverBindAddress;
+			return this.serverBindAddress;
 		}
 
 		/// <summary>
@@ -350,7 +374,7 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override ushort GetPort()
 		{
-			return port;
+			return this.port;
 		}
 		#endregion
 
@@ -387,12 +411,12 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startServer()
 		{
-#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
-				if (!WebTransportNative.EnsureInitialized())
-				{
-					base.NetworkManager.LogError("[WebTransport] macOS standalone requires libfishmmo_webtransport.dylib to be built. See FishMMO-WebTransport/README.md.");
-					return false;
-				}
+#if (UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX || UNITY_STANDALONE_LINUX) && !UNITY_EDITOR
+			if (!WebTransportNative.EnsureInitialized())
+			{
+				base.NetworkManager.LogError("[WebTransport] Native library not available on this platform. See FishMMO-WebTransport/README.md for build instructions.");
+				return false;
+			}
 #endif
 			this.serverSocket.Initialize(this, MTU, certificatePath, privateKeyPath);
 			// ALPN (Application-Layer Protocol Negotiation) is hardcoded to "h3" for HTTP/3 (WebTransport) in
@@ -407,12 +431,12 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool startClient(string address)
 		{
-#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
-				if (!WebTransportNative.EnsureInitialized())
-				{
-					base.NetworkManager.LogError("[WebTransport] macOS standalone requires libfishmmo_webtransport.dylib to be built. See FishMMO-WebTransport/README.md.");
-					return false;
-				}
+#if (UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX || UNITY_STANDALONE_LINUX) && !UNITY_EDITOR
+			if (!WebTransportNative.EnsureInitialized())
+			{
+				base.NetworkManager.LogError("[WebTransport] Native library not available on this platform. See FishMMO-WebTransport/README.md for build instructions.");
+				return false;
+			}
 #endif
 			this.clientSocket.Initialize(this, MTU);
 			return this.clientSocket.StartConnection(address, port, useTls: true);

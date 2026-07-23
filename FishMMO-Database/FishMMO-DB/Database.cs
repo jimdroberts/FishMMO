@@ -284,8 +284,21 @@ namespace FishMMO.Database
 
 				foreach (var serviceInterface in group.OrderBy(t => t.FullName, StringComparer.Ordinal))
 				{
-					var registerMethod = registerOpenMethod.MakeGenericMethod(serviceInterface);
-					registerMethod.Invoke(registry, new[] { instance });
+					try
+					{
+						var registerMethod = registerOpenMethod.MakeGenericMethod(serviceInterface);
+						registerMethod.Invoke(registry, new[] { instance });
+					}
+					catch (Exception ex)
+					{
+						throw new DatabaseException(
+							$"Failed to register '{implementation.FullName}' for interface '{serviceInterface.FullName}'. " +
+							$"The naming convention requires '{implementation.Name}' to implement exactly the interface " +
+							$"'{serviceInterface.Name}' and the registry method must accept that type. " +
+							$"See the XML doc on {nameof(RegisterNpgsqlServicesByReflection)} for debugging steps.",
+							innerException: ex,
+							errorCode: "INVALID_CONFIGURATION");
+					}
 				}
 			}
 		}

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -11,11 +12,18 @@ namespace FishMMO.Shared
 	public static class DictionaryCompression
 	{
 		/// <summary>
+		/// Maximum number of dictionary entries allowed when reading from a GZip file,
+		/// to guard against malicious or malformed files that advertise an unrealistically
+		/// large count and cause an OutOfMemoryException.
+		/// </summary>
+		private const int MaxDictionaryCount = 10_000_000;
+
+		/// <summary>
 		/// Serializes and compresses a dictionary to a GZip file.
 		/// </summary>
 		public static void WriteToGZipFile(this Dictionary<long, string> dictionary, string filePath)
 		{
-			if (dictionary == null) return;
+			if (dictionary == null) throw new ArgumentNullException(nameof(dictionary));
 
 			using (var fileStream = File.Create(filePath))
 			using (var gzipStream = new GZipStream(fileStream, CompressionLevel.Optimal))
@@ -47,6 +55,10 @@ namespace FishMMO.Shared
 					using (var reader = new BinaryReader(gzipStream))
 					{
 						int count = reader.ReadInt32();
+						if (count < 0 || count > MaxDictionaryCount)
+						{
+							throw new InvalidDataException($"Dictionary entry count {count} exceeds the maximum allowed ({MaxDictionaryCount}).");
+						}
 						var dictionary = new Dictionary<long, string>(count);
 
 						for (int i = 0; i < count; i++)

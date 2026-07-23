@@ -34,6 +34,16 @@ namespace FishMMO.Auth.Implementation
 		/// Process-lifetime random HMAC key used to equalize timing when a token's claimed
 		/// signing key cannot be resolved. Initialized once at type load — never zeroed and
 		/// never used to sign real tokens.
+		/// <para>
+		/// <b>Intentional — zeroing would serve no purpose.</b> This key has no security value:
+		/// it is used solely to keep HMAC verification runtime constant regardless of whether
+		/// the real signing key was found, preventing timing oracles that could distinguish
+		/// "key not found" from "key found, signature bad."  Because the dummy key is shared
+		/// across all requests and is never a real signing secret, zeroing it on shutdown
+		/// would provide no security benefit.  The real signing keys obtained from
+		/// <see cref="FetchSigningKeyAsync"/> are always zeroed after use (see
+		/// <see cref="ProcessTokenAuthAsync"/>).
+		/// </para>
 		/// </summary>
 		private static readonly byte[] StaticDummyHmacKey = GenerateStaticDummyHmacKey();
 
@@ -265,19 +275,19 @@ namespace FishMMO.Auth.Implementation
 
 				try
 				{
-					tokenAccountManager.AddConnectionAccount(conn, verifyResult.AccountName!, verifyResult.AccessLevel);
+					// Require a verified real IP from the auth token (v4+).
+					// World/Scene servers behind an L4 proxy see 127.0.0.1 from
+					// conn.GetAddress(). If the IP is missing or unverified,
+					// disconnect immediately — no fallback to proxy IP or ClientId.
+					if (verifyResult.RealIp == null)
+					{
+						await Log.Warning(LogPrefix, $"Token for '{verifyResult.AccountName}' missing real IP — rejecting.");
+						RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
+						return;
+					}
 
-				// Require a verified real IP from the auth token (v4+).
-				// World/Scene servers behind an L4 proxy see 127.0.0.1 from
-				// conn.GetAddress(). If the IP is missing or unverified,
-				// disconnect immediately — no fallback to proxy IP or ClientId.
-				if (verifyResult.RealIp == null)
-				{
-					await Log.Warning(LogPrefix, $"Token for '{verifyResult.AccountName}' missing real IP — rejecting.");
-					RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
-					return;
-				}
-				EnqueueMainThread(conn, () => StoreClientRealIp(conn, verifyResult.RealIp!));
+					tokenAccountManager.AddConnectionAccount(conn, verifyResult.AccountName!, verifyResult.AccessLevel);
+					EnqueueMainThread(conn, () => StoreClientRealIp(conn, verifyResult.RealIp!));
 				}
 				catch (InvalidOperationException addEx)
 				{
@@ -424,9 +434,6 @@ namespace FishMMO.Auth.Implementation
 		/// <param name="authenticated">True if authentication succeeded.</param>
 		protected abstract void OnAuthenticationResult(TConnection conn, bool authenticated);
 
-		/// <summary>
-		/// Broadcasts a generic auth result to the client.
-		/// </summary>
 		/// <summary>
 		/// Fetches the HMAC signing key for the given login server ID from the database.
 		/// Returns null if the key is not found, too short, or a database error occurred;

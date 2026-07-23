@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class PartyUpdateEntityConfiguration : IEntityTypeConfiguration<PartyUpdateEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<PartyUpdateEntity> builder)
 		{
 			builder.ToTable("party_updates");

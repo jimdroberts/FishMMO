@@ -1,0 +1,15 @@
+<linker>
+	<!--
+		FishNet WebTransport Plugin — IL2CPP Linker Preservation
+		=========================================================
+		The WebTransport plugin uses Marshal.StructureToPtr, Marshal.SizeOf&lt;T&gt;,
+		delegate marshaling via Marshal.GetFunctionPointerForDelegate, and
+		Marshal.PtrToStringUTF8. IL2CPP code stripping may remove types only
+		accessed via reflection or marshaling, causing ExecutionEngineException
+		or NullReferenceException at runtime on iOS/tvOS/WebGL.
+
+		This link.xml ensures all WebTransport types, their callbacks,
+		and the native interop surface survive IL2CPP managed code stripping.
+	-->
+	<assembly fullname="WebTransport" preserve="all"/>
+</linker>

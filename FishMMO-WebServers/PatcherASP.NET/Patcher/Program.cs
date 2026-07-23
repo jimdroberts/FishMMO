@@ -74,6 +74,12 @@ namespace FishMMO.WebServer
 							throw new InvalidOperationException($"WebServer:HttpPort '{httpPort}' is not a valid TCP port.");
 						}
 						options.ListenLocalhost(port);
+						// NOTE: TLS is intentionally not configured on the Kestrel listener.
+						// TLS termination is handled by the upstream NGINX reverse proxy, which
+						// manages certificate provisioning (Let's Encrypt via certbot) and
+						// termination at the network edge. Kestrel listens on localhost only,
+						// so traffic between NGINX and Kestrel never leaves the host.
+						// This is the standard reverse-proxy pattern (edge TLS termination).
 						// Hardening: the patcher only serves GETs (latest_version + patch download);
 						// no legitimate client uploads a body. Cap at 16 KiB.
 						options.Limits.MaxRequestBodySize = 16 * 1024;
@@ -153,7 +159,20 @@ namespace FishMMO.WebServer
 							options.OnRejected = async (context, token) =>
 							{
 								await Log.Warning("RateLimiter", $"Rejected {context.HttpContext.GetClientIpKey()} for {context.HttpContext.Request.Path}");
-								context.HttpContext.Response.Headers["Retry-After"] = "1";
+								context.HttpContext.Response.ContentType = "text/plain";
+								// Use the metadata from the rate limit lease to determine the actual re-try after time.
+								// This correctly reflects whichever policy (global token bucket with ~1s,
+								// or PatchDownload sliding window with ~10s) actually triggered the rejection.
+								if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
+								{
+									context.HttpContext.Response.Headers["Retry-After"] = ((int)retryAfter.TotalSeconds).ToString();
+								}
+								else
+								{
+									// Fallback to the most restrictive policy
+									// (PatchDownload sliding window: 6/60s = 10s per permit).
+									context.HttpContext.Response.Headers["Retry-After"] = "10";
+								}
 								await context.HttpContext.Response.WriteAsync("Too many requests.", token);
 							};
 						});
@@ -165,6 +184,11 @@ namespace FishMMO.WebServer
 						app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
 						{
 							ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+					var exFeature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+					if (exFeature?.Error != null)
+					{
+						_ = Log.Error("Patcher", "Unhandled exception in Patcher request pipeline.", exFeature.Error);
+					}
 							ctx.Response.ContentType = "text/plain";
 							await ctx.Response.WriteAsync("Internal Server Error");
 						}));
@@ -198,15 +222,6 @@ namespace FishMMO.WebServer
 						app.UseEndpoints(endpoints =>
 						{
 							endpoints.MapControllers();
-
-							// The [EnableRateLimiting("PatchDownload")] attribute on PatchController.GetPatch
-							// handles rate limiting for the attribute route GET /{version}. This conventional
-							// route matches the same pattern but is never reached when attribute routing
-							// is active; it is kept as a fallback for non-attribute-based invocation.
-							endpoints.MapControllerRoute(
-								name: "patch-download",
-								pattern: "{version}",
-								defaults: new { controller = "Patch", action = "GetPatch" });
 
 							endpoints.MapGet("/healthz", async ctx =>
 							{

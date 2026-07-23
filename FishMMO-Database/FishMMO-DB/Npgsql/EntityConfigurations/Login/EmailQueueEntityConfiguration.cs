@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class EmailQueueEntityConfiguration : IEntityTypeConfiguration<EmailQueueEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<EmailQueueEntity> builder)
 		{
 			builder.ToTable("email_queue");

@@ -108,9 +108,9 @@ namespace FishMMO.Server.Implementation
 					"Set GameVersion in the MainBootstrap prefab to enable version enforcement.");
 			}
 #endif
-#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-			// Validate connection token HMAC key is configured in production.
-			// Without this key, all clients will be rejected (no connection token verification).
+			// Validate connection token HMAC key is configured.
+			// Without this key, connection token verification will fail and all
+			// proxy-authenticated clients will be rejected.
 			{
 				string? hmacKeyB64 = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
 				if (string.IsNullOrWhiteSpace(hmacKeyB64))
@@ -119,6 +119,7 @@ namespace FishMMO.Server.Implementation
 					if (Server?.Configuration != null)
 						Server.Configuration.TryGetString("ConnectionTokenHmacKeyBase64", out hmacKeyB64);
 				}
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
 				if (string.IsNullOrWhiteSpace(hmacKeyB64))
 				{
 					_ = Log.Error(LogPrefix,
@@ -127,8 +128,17 @@ namespace FishMMO.Server.Implementation
 						"Set ConnectionTokenHmacKeyBase64 in the server .cfg file " +
 						"or FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.");
 				}
-			}
+#else
+				if (string.IsNullOrWhiteSpace(hmacKeyB64))
+				{
+					_ = Log.Warning(LogPrefix,
+						"ConnectionTokenHmacKeyBase64 is not configured. " +
+						"Connection token verification will fail -- clients connecting " +
+						"through the proxy will be rejected. For local testing, ensure " +
+						"clients connect directly (not through the HTTP IPFetch flow).");
+				}
 #endif
+			}
 			workerCts = new CancellationTokenSource();
 			shutdownToken = workerCts.Token;
 			Core.InitializeWorkers(workerCts.Token);

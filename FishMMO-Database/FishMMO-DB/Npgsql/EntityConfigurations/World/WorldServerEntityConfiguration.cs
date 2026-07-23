@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class WorldServerEntityConfiguration : IEntityTypeConfiguration<WorldServerEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<WorldServerEntity> builder)
 		{
 			builder.ToTable("world_servers");

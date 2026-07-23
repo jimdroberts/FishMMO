@@ -31,7 +31,7 @@ namespace FishMMO.Client
 	{
 		private const string headerName = "X-FishMMO-Client";
 		private const string version = "v1";
-		private static readonly DateTime UnixEpoch = UnixEpoch;
+		private static readonly DateTime unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
 		/// <summary>
 		/// Computes the gate header for the given HTTP method + absolute URL
@@ -70,7 +70,7 @@ namespace FishMMO.Client
 			// a path the server will reject after the round trip.
 			string canonicalPath = CanonicalizePath(path)
 				?? throw new ArgumentException("URL path failed canonicalization", nameof(url));
-			long ts = (long)(DateTime.UtcNow - UnixEpoch).TotalSeconds;
+			long ts = (long)(DateTime.UtcNow - unixEpoch).TotalSeconds;
 			string nonce = GenerateNonce();
 			string methodUpper = method.ToUpperInvariant();
 
@@ -98,6 +98,9 @@ namespace FishMMO.Client
 		/// Falls back to "/" if the URL cannot be parsed; the server will then
 		/// reject the request with a 401 — which is preferable to silently
 		/// signing the wrong canonical input.
+		/// </summary>
+		/// <summary>
+		/// Extracts the path component from a URL for HMAC signing.
 		/// </summary>
 		private static string ExtractPath(string url)
 		{
@@ -173,6 +176,9 @@ namespace FishMMO.Client
 			return pathOnly + tail;
 		}
 
+		/// <summary>
+		/// Generates a cryptographically random 16-byte nonce and returns it as a base64url-encoded string.
+		/// </summary>
 		private static string GenerateNonce()
 		{
 			byte[] buf = new byte[16];
@@ -183,6 +189,9 @@ namespace FishMMO.Client
 			return ToBase64Url(buf);
 		}
 
+		/// <summary>
+		/// Converts a byte array to a base64url-encoded string per RFC 4648 Section 5 (padding stripped).
+		/// </summary>
 		private static string ToBase64Url(byte[] bytes)
 		{
 			string s = Convert.ToBase64String(bytes);

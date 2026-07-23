@@ -1,4 +1,4 @@
-﻿namespace FishMMO.Shared
+namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Specifies the types of inventories available to a character, used for item management and slot operations.
@@ -13,11 +13,11 @@
 		/// <summary>
 		/// The equipment inventory for storing equipped items (e.g., armor, weapons).
 		/// </summary>
-		Equipment,
+		Equipment = 1,
 
 		/// <summary>
 		/// The bank inventory for storing items in a bank or safe location.
 		/// </summary>
-		Bank,
+		Bank = 2,
 	}
 }

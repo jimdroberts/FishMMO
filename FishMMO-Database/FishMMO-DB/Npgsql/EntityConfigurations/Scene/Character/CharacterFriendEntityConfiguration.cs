@@ -45,6 +45,11 @@ namespace FishMMO.Database.Npgsql.Entities
 				.HasForeignKey(e => e.CharacterID)
 				.OnDelete(DeleteBehavior.NoAction);
 
+			// FK to CharacterEntity for the friend character.
+			// NOTE: No navigation property exists on CharacterEntity for
+			// this relationship (no "FriendsOf" collection). If reverse
+			// lookups ("who has this character as a friend?") become a
+			// performance concern, add a navigation property and migration.
 			builder.HasOne<CharacterEntity>()
 				.WithMany()
 				.HasForeignKey(e => e.FriendCharacterID)

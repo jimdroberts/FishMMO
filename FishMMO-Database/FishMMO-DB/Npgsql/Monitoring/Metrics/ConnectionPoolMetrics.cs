@@ -18,7 +18,6 @@ namespace FishMMO.Database.Npgsql.Monitoring.Metrics
 		private long peakActiveConnections;
 		private long connectionErrors;
 		private long poolExhaustionCount;
-		private readonly object lockObject = new object();
 
 		/// <summary>
 		/// Gets the total number of connections created since startup.
@@ -110,15 +109,12 @@ namespace FishMMO.Database.Npgsql.Monitoring.Metrics
 		/// </summary>
 		public void Reset()
 		{
-			lock (lockObject)
-			{
-				Interlocked.Exchange(ref totalConnectionsCreated, 0);
-				Interlocked.Exchange(ref totalConnectionsDisposed, 0);
-				Interlocked.Exchange(ref activeConnections, 0);
-				Interlocked.Exchange(ref peakActiveConnections, 0);
-				Interlocked.Exchange(ref connectionErrors, 0);
-				Interlocked.Exchange(ref poolExhaustionCount, 0);
-			}
+			Interlocked.Exchange(ref totalConnectionsCreated, 0);
+			Interlocked.Exchange(ref totalConnectionsDisposed, 0);
+			Interlocked.Exchange(ref activeConnections, 0);
+			Interlocked.Exchange(ref peakActiveConnections, 0);
+			Interlocked.Exchange(ref connectionErrors, 0);
+			Interlocked.Exchange(ref poolExhaustionCount, 0);
 		}
 
 		/// <summary>

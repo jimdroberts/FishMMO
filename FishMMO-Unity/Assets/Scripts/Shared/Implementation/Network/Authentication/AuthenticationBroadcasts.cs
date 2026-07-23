@@ -310,6 +310,8 @@ namespace FishMMO.Shared
 	///      would be misleading. See the file-level doc comment for details. -->
 	/// The nonce-derivation protocol is therefore fragile and should ideally use an
 	/// explicit tagging scheme rather than declaration order.
+	/// TODO: Migrate to an explicit tagging scheme (e.g., a tagged union or per-field
+	/// nonce labels) to eliminate the declaration-order dependency.
 	/// Reordering these fields WILL break TOTP setup. DO NOT reorder.</para>
 	public struct TwoFactorSetupBroadcast : IBroadcast
 	{

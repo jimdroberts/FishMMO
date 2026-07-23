@@ -39,7 +39,7 @@ namespace FishMMO.Shared
 		/// <param name="internalLogMessageCallback">Callback for internal log messages.</param>
 		public static void Initialize(Action<string> internalLogMessageCallback)
 		{
-			internalLogMessageCallback = internalLogMessageCallback;
+			UnityLoggerBridge.internalLogMessageCallback = internalLogMessageCallback;
 			if (instance != null)
 			{
 				internalLogMessageCallback?.Invoke($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss 'UTC'}] [UnityLoggerBridge] Bridge already initialized. Skipping re-initialization.");

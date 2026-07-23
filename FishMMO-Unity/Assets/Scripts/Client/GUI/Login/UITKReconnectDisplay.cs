@@ -64,7 +64,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="attempts">The current attempt number.</param>
 		/// <param name="maxAttempts">The maximum number of allowed attempts.</param>
-		public void OnReconnectAttemptsChanged(byte attempts, byte maxAttempts)
+		public void OnReconnectAttemptsChanged(int attempts, int maxAttempts)
 		{
 			if (attempts <= maxAttempts)
 			{

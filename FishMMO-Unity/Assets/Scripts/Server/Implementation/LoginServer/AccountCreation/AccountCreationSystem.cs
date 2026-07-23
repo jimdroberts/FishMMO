@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -105,6 +106,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Lazily-constructed SMTP sender. Null until first email queue sweep.
 		/// </summary>
 		private ISmtpService smtpService;
+		/// <summary>
+		/// Guard flag preventing concurrent in-flight email sends.
+		/// ProcessNextEmailAsync is fire-and-forget without this guard;
+		/// if the SendEmailAsync call takes longer than emailSendIntervalSeconds,
+		/// a second sweep could overlap and send duplicate emails.
+		/// </summary>
+		private volatile int emailSendInFlight;
 	/// <summary>
 	/// Lock for thread-safe lazy initialization of <see cref="smtpService"/>.
 	/// </summary>
@@ -323,11 +331,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// trusted proxy that prevents arbitrary client reconnection. On a direct-Internet
 			// listener it lets an attacker reset their rate-limit bucket simply by reconnecting,
 			// so surface this loudly at startup so it cannot be enabled by accident.
+			if (useConnectionIdForRateLimiting)
 			{
 				Log.Warning("AccountCreationSystem",
-					"This is ONLY safe behind a trusted reverse proxy / load balancer that authenticates " +
-					"connection establishment. On a direct-Internet listener an attacker can bypass " +
-					"per-IP throttling by simply reconnecting. Disable this unless you have a proxy in front.");
+					"Rate limiting is using ConnectionId instead of real client IP. " +
+					"This is ONLY safe behind a trusted reverse proxy that sets X-Forwarded-For correctly.");
 			}
 
 			// Operational warning: the global hourly account-creation cap is a primary
@@ -615,6 +623,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private async Task ProcessAccountCreationAsync(AccountCreationRequest<NetworkConnection> request)
 		{
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+			if (request.IpAddress == null)
+			{
+				// Defense-in-depth: IpAddress should never be null here (the caller in
+				// OnServerAccountVerifyBroadcastReceived guards against it), but if the
+				// method is ever called from a different path, fail closed.
+				NetworkConnection failConn = request.Connection;
+				TryEnqueueMainThread(() =>
+				{
+					if (failConn != null && failConn.IsActive)
+						failConn.Disconnect(false);
+				});
+				return;
+			}
 
 			if (Server.Database?.ServiceRegistry != null &&
 				Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
@@ -718,11 +739,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 						string ageStr = CryptoHelper.StrictUtf8.GetString(decryptedAge);
 						if (!int.TryParse(ageStr, out age))
 						{
-							CryptographicOperations.ZeroMemory(decryptedUsername);
-							CryptographicOperations.ZeroMemory(decryptedEmail);
-							CryptographicOperations.ZeroMemory(decryptedAge);
-							CryptographicOperations.ZeroMemory(decryptedSalt);
-							CryptographicOperations.ZeroMemory(decryptedVerifier);
+							CryptographicOperationsCompat.ZeroMemory(decryptedUsername);
+							CryptographicOperationsCompat.ZeroMemory(decryptedEmail);
+							CryptographicOperationsCompat.ZeroMemory(decryptedAge);
+							CryptographicOperationsCompat.ZeroMemory(decryptedSalt);
+							CryptographicOperationsCompat.ZeroMemory(decryptedVerifier);
 							NetworkConnection failConn = request.Connection;
 							TryEnqueueMainThread(() =>
 							{
@@ -734,11 +755,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					catch (DecoderFallbackException)
 					{
-						CryptographicOperations.ZeroMemory(decryptedUsername);
-						CryptographicOperations.ZeroMemory(decryptedEmail);
-						CryptographicOperations.ZeroMemory(decryptedAge);
-						CryptographicOperations.ZeroMemory(decryptedSalt);
-						CryptographicOperations.ZeroMemory(decryptedVerifier);
+						CryptographicOperationsCompat.ZeroMemory(decryptedUsername);
+						CryptographicOperationsCompat.ZeroMemory(decryptedEmail);
+						CryptographicOperationsCompat.ZeroMemory(decryptedAge);
+						CryptographicOperationsCompat.ZeroMemory(decryptedSalt);
+						CryptographicOperationsCompat.ZeroMemory(decryptedVerifier);
 						NetworkConnection failConn = request.Connection;
 						TryEnqueueMainThread(() =>
 						{
@@ -747,9 +768,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 						});
 						return;
 					}
-					CryptographicOperations.ZeroMemory(decryptedUsername);
-					CryptographicOperations.ZeroMemory(decryptedEmail);
-					CryptographicOperations.ZeroMemory(decryptedAge);
+					CryptographicOperationsCompat.ZeroMemory(decryptedUsername);
+					CryptographicOperationsCompat.ZeroMemory(decryptedEmail);
+					CryptographicOperationsCompat.ZeroMemory(decryptedAge);
 
 					// Validate decrypted username against centralized naming rules before any DB work.
 					if (!Authentication.IsAllowedUsername(username))
@@ -815,8 +836,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					catch (DecoderFallbackException)
 					{
-						CryptographicOperations.ZeroMemory(decryptedSalt);
-						CryptographicOperations.ZeroMemory(decryptedVerifier);
+						CryptographicOperationsCompat.ZeroMemory(decryptedSalt);
+						CryptographicOperationsCompat.ZeroMemory(decryptedVerifier);
 						// email+age already zeroed above
 						NetworkConnection failConn = request.Connection;
 						TryEnqueueMainThread(() =>
@@ -826,8 +847,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 						});
 						return;
 					}
-					CryptographicOperations.ZeroMemory(decryptedSalt);
-					CryptographicOperations.ZeroMemory(decryptedVerifier);
+					CryptographicOperationsCompat.ZeroMemory(decryptedSalt);
+					CryptographicOperationsCompat.ZeroMemory(decryptedVerifier);
 
 					// Validate decrypted salt/verifier lengths before any DB work.
 					if (salt.Length > MaxSaltLength || verifier.Length > MaxVerifierLength)
@@ -999,9 +1020,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 									byte[] encRecoveryCodes = CryptoHelper.EncryptAES(request.EncryptionData.ServerToClientKey, nonce2, recoveryCodesBytes, aad2);
 
 									// Zeroize plaintext secrets.
-									CryptographicOperations.ZeroMemory(totpSecret);
-									CryptographicOperations.ZeroMemory(otpauthUriBytes);
-									CryptographicOperations.ZeroMemory(recoveryCodesBytes);
+									CryptographicOperationsCompat.ZeroMemory(totpSecret);
+									CryptographicOperationsCompat.ZeroMemory(otpauthUriBytes);
+									CryptographicOperationsCompat.ZeroMemory(recoveryCodesBytes);
 
 									// Capture for main-thread dispatch.
 									byte[] capturedEncUri = encOtpauthUri;
@@ -1152,6 +1173,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// can safely share the email queue via FOR UPDATE SKIP LOCKED.
 			string serverName = Server.Configuration?.GetString("ServerName", "unknown") ?? "unknown";
 
+			// Guard: prevent concurrent in-flight email sends. ProcessNextEmailAsync
+			// is fire-and-forget; if the SMTP call takes longer than the sweep interval,
+			// a second call would overlap and could send duplicate emails.
+			if (Interlocked.CompareExchange(ref emailSendInFlight, 1, 0) != 0)
+				return;
+
 			// Fire-and-forget: process one email per sweep to avoid blocking the main thread.
 			_ = ProcessNextEmailAsync(emailQueueService, serverName);
 		}
@@ -1195,6 +1222,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			catch (Exception ex)
 			{
 				await Log.Warning("AccountCreationSystem", $"Email queue processing error: {ex.Message}");
+			}
+			finally
+			{
+				// Release the in-flight guard so the next sweep can send.
+				Interlocked.Exchange(ref emailSendInFlight, 0);
 			}
 		}
 
@@ -1476,7 +1508,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			string ipAddress = ResolveIpAddress(conn);
+			string? ipAddress = ResolveIpAddress(conn);
+			if (string.IsNullOrEmpty(ipAddress))
+			{
+				_ = Log.Warning("AccountCreationSystem", $"Rejecting account verify: no real IP for connection {conn.ClientId}.");
+				conn.Disconnect(true);
+				return;
+			}
 
 			// Reuse account creation rate limiting for verification attempts.
 			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData))
@@ -1527,6 +1565,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 			uint seq)
 		{
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+			if (ipAddress == null)
+			{
+				// Defense-in-depth: ipAddress should never be null here (the caller in
+				// OnServerAccountVerifyBroadcastReceived guards against it), but if the
+				// method is ever called from a different path, fail closed.
+				NetworkConnection failConn = conn;
+				TryEnqueueMainThread(() =>
+				{
+					if (failConn != null && failConn.IsActive)
+						failConn.Disconnect(false);
+				});
+				return;
+			}
 
 			if (Server.Database?.ServiceRegistry != null &&
 				Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
@@ -1587,8 +1638,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 						string codeStr = CryptoHelper.StrictUtf8.GetString(decryptedVerifyCode);
 						if (!int.TryParse(codeStr, out verifyCode))
 						{
-							CryptographicOperations.ZeroMemory(decryptedUsername);
-							CryptographicOperations.ZeroMemory(decryptedVerifyCode);
+							CryptographicOperationsCompat.ZeroMemory(decryptedUsername);
+							CryptographicOperationsCompat.ZeroMemory(decryptedVerifyCode);
 							NetworkConnection failConn = conn;
 							TryEnqueueMainThread(() =>
 							{
@@ -1600,8 +1651,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					catch (DecoderFallbackException)
 					{
-						CryptographicOperations.ZeroMemory(decryptedUsername);
-						CryptographicOperations.ZeroMemory(decryptedVerifyCode);
+						CryptographicOperationsCompat.ZeroMemory(decryptedUsername);
+						CryptographicOperationsCompat.ZeroMemory(decryptedVerifyCode);
 						NetworkConnection failConn = conn;
 						TryEnqueueMainThread(() =>
 						{
@@ -1610,8 +1661,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 						});
 						return;
 					}
-					CryptographicOperations.ZeroMemory(decryptedUsername);
-					CryptographicOperations.ZeroMemory(decryptedVerifyCode);
+					CryptographicOperationsCompat.ZeroMemory(decryptedUsername);
+					CryptographicOperationsCompat.ZeroMemory(decryptedVerifyCode);
 
 					if (!Authentication.IsAllowedUsername(username))
 					{

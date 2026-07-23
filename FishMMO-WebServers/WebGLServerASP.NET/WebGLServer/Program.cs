@@ -73,6 +73,12 @@ namespace FishMMO.WebServer
 							throw new InvalidOperationException($"WebServer:HttpPort '{httpPort}' is not a valid TCP port.");
 						}
 						options.ListenLocalhost(port);
+						// NOTE: TLS is intentionally not configured on the Kestrel listener.
+						// TLS termination is handled by the upstream NGINX reverse proxy, which
+						// manages certificate provisioning (Let's Encrypt via certbot) and
+						// termination at the network edge. Kestrel listens on localhost only,
+						// so traffic between NGINX and Kestrel never leaves the host.
+						// This is the standard reverse-proxy pattern (edge TLS termination).
 						// Hardening: WebGL host serves static files only — no request body expected.
 						options.Limits.MaxRequestBodySize = 16 * 1024;
 						_ = Log.Info("Kestrel", $"Kestrel configured to listen on localhost on port {httpPort}.");
@@ -144,6 +150,9 @@ namespace FishMMO.WebServer
 							options.OnRejected = async (context, token) =>
 							{
 								await Log.Warning("RateLimiter", $"Rejected {context.HttpContext.GetClientIpKey()} for {context.HttpContext.Request.Path}");
+								context.HttpContext.Response.ContentType = "text/plain";
+								// Retry-After is derived from the token bucket replenishment period:
+								// TokenLimit=120, TokensPerPeriod=60, ReplenishmentPeriod=1s → 1 second.
 								context.HttpContext.Response.Headers["Retry-After"] = "1";
 								await context.HttpContext.Response.WriteAsync("Too many requests.", token);
 							};
@@ -156,6 +165,11 @@ namespace FishMMO.WebServer
 						app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
 						{
 							ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+					var exFeature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+					if (exFeature?.Error != null)
+					{
+						_ = Log.Error("WebGLServer", "Unhandled exception in WebGLServer request pipeline.", exFeature.Error);
+					}
 							ctx.Response.ContentType = "text/plain";
 							await ctx.Response.WriteAsync("Internal Server Error");
 						}));

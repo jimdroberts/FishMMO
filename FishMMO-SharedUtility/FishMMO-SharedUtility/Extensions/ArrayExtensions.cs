@@ -74,8 +74,7 @@ namespace FishMMO.Shared
 					array[i][j] = new T[depth];
 					for (int k = 0; k < depth; ++k)
 					{
-						// FIXED: Replaced array[k].Length with local depth variable
-						array[i][j][k] = new T();
+array[i][j][k] = new T();
 					}
 				}
 			}

@@ -12,14 +12,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Scene is currently loading.
 		/// </summary>
-		Loading,
+		Loading = 1,
 		/// <summary>
 		/// Scene is fully loaded and ready.
 		/// </summary>
-		Ready,
+		Ready = 2,
 		/// <summary>
 		/// Scene failed to load.
 		/// </summary>
-		Failed,
+		Failed = 3,
 	}
 }

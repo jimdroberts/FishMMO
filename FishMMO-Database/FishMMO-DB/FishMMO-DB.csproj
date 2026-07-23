@@ -12,11 +12,23 @@
     <NoWarn>$(NoWarn);CS8618;CS8625</NoWarn>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
-  <!-- EF Core 5.0 (EOL)
-       Entity Framework Core 5.0 reached end-of-life on 2022-03-09 and is no longer receiving
+  <!-- TODO: EF Core upgrade path (requires .NET 6+ target framework first)
+       EF Core 5.0 reached end-of-life on 2022-03-09 and is no longer receiving
        security patches. This version is pinned because the project targets netstandard2.1
        (required for Unity compatibility), and EF Core 6.0+ dropped netstandard2.1 support.
-       Upgrading beyond 5.0 would require retargeting to .NET 6+ and verifying Unity interop. -->
+       Upgrading beyond 5.0 would require retargeting to .NET 6+ and verifying Unity interop.
+
+       Recommended upgrade path: 5.x -> 6.x (LTS) -> 8.x (LTS).
+       Key breaking changes to address on each step:
+         - 5.x -> 6.x: DateTime/DateTimeOffset default SQL translation changed (old behavior:
+           DateTime translated as 'timestamp without time zone'; new default translates as
+           'timestamp with time zone'). A ValueConverter or column type override may be needed.
+           Null semantics in LINQ queries changed (C# 8 nullable reference types interact
+           differently with SQL generation). Several obsolete APIs removed (e.g.
+           UseRowNumberForPaging, UseTranslationFailed).
+         - 6.x -> 8.x: Further null-semantics refinements. ComplexType / OwnedEntity changes.
+         See: https://learn.microsoft.com/ef/core/what-is-new/ef-core-6.0/breaking-changes
+              https://learn.microsoft.com/ef/core/what-is-new/ef-core-8.0/breaking-changes -->
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" Version="5.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.17" />

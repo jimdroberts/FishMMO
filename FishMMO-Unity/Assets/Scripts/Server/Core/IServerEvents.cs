@@ -4,7 +4,12 @@ namespace FishMMO.Server.Core
 {
 	/// <summary>
 	/// Interface for a service that raises server lifecycle events.
-	/// Provides event delegates for subscription.
+	/// Provides event delegates for subscription. The <c>Action</c> properties use
+	/// <c>get; set;</c> rather than the <c>event</c> keyword to allow invocation
+	/// from external types (e.g., <c>CoreServer</c>). Callers MUST use <c>+=</c>/<c>-=</c>
+	/// for subscription management — direct assignment (<c>=</c>) will replace all
+	/// existing subscribers and should never be used outside of the implementing
+	/// <c>ServerEvents</c> class initialization.
 	/// </summary>
 	public interface IServerEvents
 	{

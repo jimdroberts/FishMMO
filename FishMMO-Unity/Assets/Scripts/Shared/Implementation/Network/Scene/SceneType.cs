@@ -12,14 +12,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Normal open world scene instance.
 		/// </summary>
-		OpenWorld,
+		OpenWorld = 1,
 		/// <summary>
 		/// Group specific scene instance.
 		/// </summary>
-		Group,
+		Group = 2,
 		/// <summary>
 		/// Player versus Player scene instance.
 		/// </summary>
-		PvP,
+		PvP = 3,
 	}
 }

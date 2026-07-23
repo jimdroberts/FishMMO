@@ -9,89 +9,89 @@ namespace FishMMO.Auth.Core
 		/// <summary>
 		/// Account was successfully created.
 		/// </summary>
-		AccountCreated,
+		AccountCreated = 0,
 		/// <summary>
 		/// SRP verification step required.
 		/// </summary>
-		SrpVerify,
+		SrpVerify = 1,
 		/// <summary>
 		/// SRP proof step required.
 		/// </summary>
-		SrpProof,
+		SrpProof = 2,
 		/// <summary>
 		/// Username or password is invalid.
 		/// </summary>
-		InvalidUsernameOrPassword,
+		InvalidUsernameOrPassword = 3,
 		/// <summary>
 		/// Account is already online and cannot log in again.
 		/// </summary>
-		AlreadyOnline,
+		AlreadyOnline = 4,
 		/// <summary>
 		/// Account is banned and cannot log in.
 		/// </summary>
-		Banned,
+		Banned = 5,
 		/// <summary>
 		/// Login was successful.
 		/// </summary>
-		LoginSuccess,
+		LoginSuccess = 6,
 		/// <summary>
 		/// Login to the world server was successful.
 		/// </summary>
-		WorldLoginSuccess,
+		WorldLoginSuccess = 7,
 		/// <summary>
 		/// Login to the scene was successful.
 		/// </summary>
-		SceneLoginSuccess,
+		SceneLoginSuccess = 8,
 		/// <summary>
 		/// Server is full and cannot accept new connections.
 		/// </summary>
-		ServerFull,
+		ServerFull = 9,
 		/// <summary>
 		/// Server is busy and cannot process the request at this time.
 		/// </summary>
-		ServerBusy,
+		ServerBusy = 10,
 		/// <summary>
 		/// No character is selected on the account. The client must select a character before connecting to a world server.
 		/// </summary>
-		NoCharacterSelected,
+		NoCharacterSelected = 11,
 		/// <summary>
 		/// The authentication token is invalid (malformed, bad signature, or not found).
 		/// </summary>
-		TokenInvalid,
+		TokenInvalid = 12,
 		/// <summary>
 		/// The authentication token has expired.
 		/// </summary>
-		TokenExpired,
+		TokenExpired = 13,
 		/// <summary>
 		/// The authentication token has been revoked.
 		/// </summary>
-		TokenRevoked,
+		TokenRevoked = 14,
 		/// <summary>
 		/// Account email has not been verified. The user must enter the verification code sent during registration.
 		/// </summary>
-		AccountUnverified,
+		AccountUnverified = 15,
 		/// <summary>
 		/// Account has been successfully verified with the correct verification code.
 		/// </summary>
-		AccountVerified,
+		AccountVerified = 16,
 		/// <summary>
 		/// Login requires TOTP two-factor authentication. The client must provide a valid TOTP code.
 		/// </summary>
-		TwoFactorRequired,
+		TwoFactorRequired = 17,
 		/// <summary>
 		/// The submitted TOTP code was invalid or has already been used (anti-replay).
 		/// </summary>
-		TwoFactorInvalid,
+		TwoFactorInvalid = 18,
 		/// <summary>
 		/// Client-only: Auth token decryption failed after otherwise-successful SRP login.
 		/// The user is authenticated at the Login server but will be unable to connect to
 		/// World/Scene servers until re-authenticating. Not sent over the wire.
 		/// </summary>
-		TokenDecryptFailed,
+		TokenDecryptFailed = 19,
 		/// <summary>
 		/// Server rejected the client because the game version does not match.
 		/// The client must update (or downgrade) to match the server's version.
 		/// </summary>
-		VersionMismatch,
+		VersionMismatch = 20,
 	}
 }

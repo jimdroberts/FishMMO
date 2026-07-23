@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 
 namespace FishMMO.Shared
 {
@@ -7,34 +8,23 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class EnumExtensions
 	{
-		private static readonly object CacheLock = new object();
-		private static Array? lastValues;
-		private static Type? lastEnumType;
+		private static readonly ConcurrentDictionary<Type, Array> enumValueCache = new ConcurrentDictionary<Type, Array>();
 
 		/// <summary>
 		/// Returns an array of all values of the specified enum type.
-		/// Uses an internal cache to avoid expensive reflection on subsequent calls.
+		/// Uses a <see cref="ConcurrentDictionary{TKey,TValue}"/> to cache the results
+		/// so that reflection is only performed once per enum type. Thread-safe without
+		/// requiring an explicit lock.
 		///
 		/// NOTE: A new clone is returned on each call so callers cannot mutate the cached copy.
-		/// The cache is invalidated when the enum type changes between calls.
 		/// </summary>
 		/// <typeparam name="T">The enum type.</typeparam>
 		/// <returns>A copied array of all enum values.</returns>
 		public static T[] ToArray<T>() where T : Enum
 		{
-			lock (CacheLock)
-			{
-				Type currentType = typeof(T);
-				if (lastEnumType == currentType && lastValues != null)
-				{
-					// Return a clone of the cached array to prevent callers from mutating the shared cache.
-					return (T[])lastValues.Clone();
-				}
-
-				lastValues = Enum.GetValues(currentType);
-				lastEnumType = currentType;
-				return (T[])lastValues.Clone();
-			}
+			Type currentType = typeof(T);
+			Array values = enumValueCache.GetOrAdd(currentType, Enum.GetValues);
+			return (T[])values.Clone();
 		}
 	}
 }

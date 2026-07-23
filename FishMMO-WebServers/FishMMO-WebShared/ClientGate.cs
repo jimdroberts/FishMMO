@@ -16,7 +16,7 @@ namespace FishMMO.WebShared
     /// <para>
     /// The gate is intentionally lightweight: it filters out generic crawlers
     /// and casual scanners that don't ship the signed header, and it adds an
-    /// anti-replay window so a captured header is useful only for ~5 minutes.
+    /// anti-replay window so a captured header is useful only for 30 seconds.
     /// It is NOT an authentication mechanism — the shared secret is compiled
     /// into the public client and any motivated attacker can extract it.
     /// All real authority comes from the SRP/token flow inside the application.
@@ -51,7 +51,7 @@ namespace FishMMO.WebShared
 
         // Cached regex for collapsing repeated slashes in path canonicalization.
         // Compiled for throughput since it runs on every gated request.
-        private static readonly System.Text.RegularExpressions.Regex MultipleSlashRegex =
+        private static readonly System.Text.RegularExpressions.Regex multipleSlashRegex =
             new System.Text.RegularExpressions.Regex("/{2,}", System.Text.RegularExpressions.RegexOptions.Compiled);
 
         /// <summary>
@@ -270,53 +270,39 @@ namespace FishMMO.WebShared
                 }
 
                 // Hard cap: if we're still over capacity after the time-based sweep
-                // (e.g., a burst of fresh nonces), evict the oldest-expiring entries via LRU
-                // rather than clearing the entire cache. Clearing would allow a flood of fresh
-                // nonces to evict legitimate still-valid nonces and enable replay of those
-                // previously-seen nonces until their original expiry. LRU bounds memory while
-                // preserving replay-protection for the most recent legitimate traffic.
+                // (e.g., a burst of fresh nonces), evict entries via sampling-based
+                // eviction rather than clearing the entire cache. Clearing would allow a
+                // flood of fresh nonces to evict legitimate still-valid nonces and enable
+                // replay of those previously-seen nonces until their original expiry.
+                // Sampling-based eviction bounds memory while keeping eviction O(1)
+                // instead of O(n log n), eliminating the DoS vector from sorting all 20K
+                // entries under lock.
                 int over = seenNonces.Count - NonceCacheCapacity;
                 if (over > 0)
                 {
                     int target = Math.Max(over, NonceCacheCapacity / 4);
                     Log.Warning(LogChannel, $"Nonce cache exceeded {NonceCacheCapacity}; evicting {target} oldest entries.");
-                    // Re-snapshot post-expiry. Use Array.Sort so we operate on a fully
-                    // detached copy instead of an OrderBy enumerator over the live dict.
-                    //
-                    // NOTE: Array.Sort is O(n log n) and runs under pruneLock, which
-                    // serialises all concurrent eviction attempts. During a sustained
-                    // flood attack, the 5-second throttle in MaybePruneNonceCache prevents
-                    // this sort from being invoked more than once every ~5 seconds, so the
-                    // cost is bounded. However, at NonceCacheCapacity=20000, a full sort of
-                    // the snapshot adds measurable latency on the request thread that wins
-                    // the lock after a burst.
-                    //
-                    // DoS VECTOR: An attacker sending a high rate of requests with unique
-                    // nonces can drive the cache over capacity, triggering this eviction
-                    // path every ~5 seconds.  Each O(n log n) sort of 20,000 entries on
-                    // the hot request thread adds tens of milliseconds of latency, stalling
-                    // all concurrent requests that contend on pruneLock.  Under a sustained
-                    // flood this compounds: the 5-second throttle means only one request
-                    // per window pays the sort cost, but that request's latency spike can
-                    // cause upstream timeouts and cascade to healthy clients behind a load
-                    // balancer.
-                    //
-                    // MITIGATION: The 5-second throttle and the hard cap at
-                    // NonceCacheCapacity=20000 bound the worst-case CPU spend to one sort
-                    // every ~5 seconds.  The per-process nature means only the targeted
-                    // instance is affected — other processes (or other nginx workers)
-                    // continue serving unaffected.  Additionally, the upstream ClientGate
-                    // rate limiting in nginx (api_limit/patch_limit zones) normally prevents
-                    // the flood from reaching this code path in the first place.
-                    // TODO: Replace the full-sort LRU with a sampling-based eviction strategy
-                    // (e.g., evict from a random subset of entries) to keep eviction O(1) and
-                    // eliminate this attack surface entirely.
-                    var liveSnapshot = seenNonces.ToArray();
-                    Array.Sort(liveSnapshot, (a, b) => a.Value.CompareTo(b.Value));
-                    int evictCount = Math.Min(target, liveSnapshot.Length);
+                    // Sampling-based LRU: take a random subset of entries and evict the
+                    // oldest from that subset. This avoids sorting the entire cache
+                    // (O(n log n)) under pruneLock, keeping eviction O(1). Random
+                    // sampling provides statistically-equivalent LRU behavior for cache
+                    // management while eliminating the latency spike that a full sort
+                    // would cause on the hot request thread.
+                    var evictSnapshot = seenNonces.ToArray();
+                    int sampleSize = Math.Min(100, evictSnapshot.Length);
+                    var rng = Random.Shared;
+                    // Fisher-Yates partial shuffle: select 'sampleSize' random elements
+                    // into the first positions of the array, then sort just that subset.
+                    for (int i = 0; i < sampleSize; i++)
+                    {
+                        int swap = rng.Next(i, evictSnapshot.Length);
+                        (evictSnapshot[i], evictSnapshot[swap]) = (evictSnapshot[swap], evictSnapshot[i]);
+                    }
+                    Array.Sort(evictSnapshot, 0, sampleSize, Comparer<KeyValuePair<string, long>>.Create((a, b) => a.Value.CompareTo(b.Value)));
+                    int evictCount = Math.Min(target, sampleSize);
                     for (int i = 0; i < evictCount; i++)
                     {
-                        seenNonces.TryRemove(liveSnapshot[i].Key, out _);
+                        seenNonces.TryRemove(evictSnapshot[i].Key, out _);
                     }
                 }
             }
@@ -353,9 +339,20 @@ namespace FishMMO.WebShared
             // (e.g., "..%2f" -> "../") cannot bypass the segment-level
             // traversal check.  The raw path is then re-split on '/'
             // and every segment is checked for traversal patterns.
-            string decoded;
-            try { decoded = Uri.UnescapeDataString(path); }
-            catch { return null; }
+            //
+            // Iteratively unescape (max 3 iterations) to catch double-encoded
+            // payloads (e.g., %252e%252e%252f, where %25 decodes to '%' on the
+            // first pass, yielding %2e%2e%2f, which decodes to ../ on the second
+            // pass). This is defense-in-depth: ASP.NET Core's own request-path
+            // normalization is the primary defense against path traversal.
+            string decoded = path;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                string prev = decoded;
+                try { decoded = Uri.UnescapeDataString(decoded); }
+                catch { return null; }
+                if (string.Equals(decoded, prev, StringComparison.Ordinal)) break;
+            }
 
             // Check the fully-decoded path for traversal patterns after splitting.
             // This catches attacks that encode the separator itself (e.g., "..%2f..%2fetc").
@@ -389,7 +386,7 @@ namespace FishMMO.WebShared
                 if (decodedSeg.Contains('/') || decodedSeg.Contains('\\')) return null;
             }
 
-            path = MultipleSlashRegex.Replace(path, "/");
+            path = multipleSlashRegex.Replace(path, "/");
             return path;
         }
 

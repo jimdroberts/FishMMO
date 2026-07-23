@@ -1,3 +1,4 @@
+using System;
 using FishNet.Broadcast;
 
 namespace FishMMO.Shared
@@ -173,6 +174,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Data structure for a single mail entry within a <see cref="MailListBroadcast"/>.
 	/// </summary>
+	[Serializable]
 	public struct MailEntryData
 	{
 		/// <summary>Unique mail ID.</summary>
@@ -310,6 +312,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Data structure for a single item slot within a <see cref="ContainerOpenBroadcast"/>.
 	/// </summary>
+	[Serializable]
 	public struct ContainerSlotData
 	{
 		/// <summary>Slot index in the container.</summary>

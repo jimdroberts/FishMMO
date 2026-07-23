@@ -163,6 +163,9 @@ typedef struct {
  * @param bind_address      IP address to bind (e.g. "0.0.0.0" or "127.0.0.1").
  * @param port              UDP port to listen on.
  * @param max_clients       Maximum concurrent client connections.
+ * @param allowed_origins   Comma-separated list of allowed Origin header values
+ *                          for CORS validation (e.g. "https://game.example.com").
+ *                          Pass NULL or "" to allow all origins (dev/testing).
  * @param callbacks         Struct of callback function pointers.
  * @param context           Opaque user pointer passed to all callbacks.
  * @return Server handle, or NULL on failure.
@@ -177,6 +180,7 @@ WT_API WT_SERVER wt_server_create(
     const char*                 bind_address,
     uint16_t                    port,
     uint32_t                    max_clients,
+    const char*                 allowed_origins,
     const wt_server_callbacks_t* callbacks,
     void*                       context);
 
@@ -419,6 +423,14 @@ WT_API int32_t wt_client_is_connected(WT_CLIENT client);
  * @thread_safety Safe to call from any thread (returns a constant).
  */
 WT_API int32_t wt_client_get_mtu(WT_CLIENT client);
+
+/**
+ * Set the ALPN string for the client (must be called before wt_client_connect).
+ * Defaults to "h3".  Max WT_MAX_ALPN_LENGTH-1 characters.
+ *
+ * @thread_safety Safe to call from any thread before wt_client_connect.
+ */
+WT_API void wt_client_set_alpn(WT_CLIENT client, const char* alpn);
 
 /* ── Lifecycle ─────────────────────────────────────────────── */
 

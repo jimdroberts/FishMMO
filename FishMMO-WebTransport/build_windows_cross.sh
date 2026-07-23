@@ -94,14 +94,19 @@ echo "  Compiled $ok/7 objects"
 MSQUIC_DLL="$MSQUIC_DIR/build/native/bin/x64/msquic.dll"
 echo "Linking fishmmo_webtransport.dll..."
 
-$ZIG c++ -target x86_64-windows-gnu -shared -O2 \
+link_output=$($ZIG c++ -target x86_64-windows-gnu -shared -O2 \
     -o "$UNITY_DIR/fishmmo_webtransport.dll" \
     "${OBJECTS[@]}" \
     "$MSQUIC_DLL" \
     -lws2_32 -lbcrypt -lncrypt \
     -Wl,--out-implib,"$BDIR/libmsquic.a" \
-    2>&1 | grep -v "warning:" | grep -v "^$" | head -3 || true
-# NOTE: link failures may not be caught — verify the output DLL exists before proceeding.
+    2>&1) && rc=0 || rc=$?
+# Show first 3 non-warning lines of output
+echo "$link_output" | grep -v "warning:" | grep -v "^$" | head -3
+if [ "$rc" -ne 0 ]; then
+    echo "ERROR: Linking fishmmo_webtransport.dll failed (exit code $rc)" >&2
+    exit 1
+fi
 
 # Copy runtime msquic.dll alongside our DLL
 cp "$MSQUIC_DLL" "$UNITY_DIR/"

@@ -25,6 +25,14 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 // Determine the database schema to use for migrations.
 // Priority: FISHMMO_DB_SCHEMA env var > appsettings.Database.json (Npgsql:Schema) > "public"
+//
+// WARNING — Schema divergence risk:
+// The Migrator reads schema from FISHMMO_DB_SCHEMA env var (or appsettings.Database.json).
+// The host application (server processes) reads schema from the Npgsql:Schema config key
+// via NpgsqlDbConfiguration.  If these two sources differ, the Migrator will create/migrate
+// tables in schema "A" while the application reads/writes tables in schema "B".
+// Deployments MUST set both FISHMMO_DB_SCHEMA and Npgsql:Schema to the same value.
+// See FishMMO.Database.Npgsql.NpgsqlDbConfiguration for the canonical schema resolution.
 string schema = Environment.GetEnvironmentVariable("FISHMMO_DB_SCHEMA") ?? "";
 if (string.IsNullOrWhiteSpace(schema))
 {

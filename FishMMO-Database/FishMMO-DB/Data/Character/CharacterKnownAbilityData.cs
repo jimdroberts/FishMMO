@@ -5,9 +5,13 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterKnownAbilityData : IVersioned<CharacterKnownAbilityData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that knows this ability.</summary>
 		public readonly long CharacterID;
+		/// <summary>Ability template ID.</summary>
 		public readonly int TemplateID;
 
 		long IVersioned<CharacterKnownAbilityData>.Version => Version;

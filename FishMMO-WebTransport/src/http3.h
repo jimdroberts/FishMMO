@@ -156,8 +156,18 @@ typedef struct h3_session_s {
 
     /* Linked list of active stream context objects.
      * Freed during h3_session_free to prevent leaks from
-     * streams that outlive the HTTP/3 session teardown. */
+     * streams that outlive the HTTP/3 session teardown.
+     * Must be accessed only while holding stream_ctx_lock. */
     struct h3_stream_ctx_s* stream_ctx_list;
+
+    /* Mutex protecting stream_ctx_list and h3_stream_ctx_t linked-list
+     * operations.  Multiple QUIC worker threads can concurrently unlink
+     * stream contexts in SHUTDOWN_COMPLETE callbacks. */
+#if defined(WT_PLATFORM_WINDOWS)
+    CRITICAL_SECTION        stream_ctx_lock;
+#else
+    pthread_mutex_t         stream_ctx_lock;
+#endif
 
     /* Link to parent (for cleanup during teardown) */
     /* Allowed origins for CORS (comma-separated, empty = allow all) */

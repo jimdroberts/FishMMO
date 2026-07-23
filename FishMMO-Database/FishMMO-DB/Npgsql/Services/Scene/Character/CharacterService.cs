@@ -797,11 +797,25 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		/// <remarks>
-		/// NOTE: This update intentionally does NOT use version gating (no <c>AND version &lt; {version_param}</c>)
+		/// <para><b>Last-writer-wins (intentional — no version gating):</b></para>
+		/// This update intentionally does NOT use version gating (no <c>AND version &lt; {version_param}</c>)
 		/// because position data is considered "last writer wins" and is not critical for consistency.
 		/// Frequent position updates would cause excessive version conflicts under optimistic concurrency.
-		/// If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
-		/// and pass the incoming version as a parameter.
+		/// <para/>
+		/// <para><b>Split-brain scenario:</b></para>
+		/// If two server processes concurrently claim ownership of the same character (e.g., due to a
+		/// lease expiry race), their position updates will silently overwrite each other without
+		/// detection. The character&#39;s persisted position will reflect whichever server wrote last
+		/// (approximately), potentially causing brief jitter on the client if it reconnects to the
+		/// second server. This is acceptable because:
+		/// <list type="bullet">
+		///   <item><description>Position is transient state re-synced from the authoritative server on reconnect.</description></item>
+		///   <item><description>The session lease system (TryClaim/Release/RefreshSessionLease) bounds the split-brain window to at most one lease duration (~2 minutes).</description></item>
+		///   <item><description>Authoritative state (inventory, quests, skills) uses strict version gating and is not affected.</description></item>
+		/// </list>
+		/// <para/>
+		/// <para>If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
+		/// and pass the incoming version as a parameter.</para>
 		/// </remarks>
 		public async Task<DatabaseResult> UpdatePositionAsync(long characterId, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, CancellationToken cancellationToken = default)
 		{
@@ -847,11 +861,25 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		/// <remarks>
-		/// NOTE: This update intentionally does NOT use version gating (no <c>AND version &lt; {version_param}</c>)
+		/// <para><b>Last-writer-wins (intentional — no version gating):</b></para>
+		/// This update intentionally does NOT use version gating (no <c>AND version &lt; {version_param}</c>)
 		/// because scene/position data is considered "last writer wins" and is not critical for consistency.
 		/// Frequent scene updates would cause excessive version conflicts under optimistic concurrency.
-		/// If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
-		/// and pass the incoming version as a parameter.
+		/// <para/>
+		/// <para><b>Split-brain scenario:</b></para>
+		/// If two server processes concurrently claim ownership of the same character (e.g., due to a
+		/// lease expiry race), their scene updates will silently overwrite each other without
+		/// detection. The character&#39;s persisted scene will reflect whichever server wrote last
+		/// (approximately), potentially causing the client to briefly land in the wrong scene on
+		/// reconnect. This is acceptable because:
+		/// <list type="bullet">
+		///   <item><description>Scene is transient state re-synced from the authoritative server on reconnect.</description></item>
+		///   <item><description>The session lease system (TryClaim/Release/RefreshSessionLease) bounds the split-brain window to at most one lease duration (~2 minutes).</description></item>
+		///   <item><description>Authoritative state (inventory, quests, skills) uses strict version gating and is not affected.</description></item>
+		/// </list>
+		/// <para/>
+		/// <para>If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
+		/// and pass the incoming version as a parameter.</para>
 		/// </remarks>
 		public async Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default)
 		{

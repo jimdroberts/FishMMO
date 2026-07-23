@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class KickRequestEntityConfiguration : IEntityTypeConfiguration<KickRequestEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<KickRequestEntity> builder)
 		{
 			builder.ToTable("kick_requests");

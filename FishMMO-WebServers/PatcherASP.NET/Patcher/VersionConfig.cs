@@ -32,7 +32,7 @@ public class VersionConfig : IComparable<VersionConfig?>
 
 	// Pre-release is intentionally constrained to safe characters so parsed
 	// values can never be used to construct a directory-escaping file path.
-	private static readonly Regex VersionRegex =
+	private static readonly Regex versionRegex =
 		new Regex(@"^(\d{1,9})\.(\d{1,9})\.(\d{1,9})(?:\.([A-Za-z0-9\-]{1,32}))?$", RegexOptions.Compiled);
 
 	public static VersionConfig? Parse(string versionString)
@@ -43,7 +43,7 @@ public class VersionConfig : IComparable<VersionConfig?>
 			return null;
 		}
 
-		Match match = VersionRegex.Match(versionString);
+		Match match = versionRegex.Match(versionString);
 
 		if (!match.Success)
 		{

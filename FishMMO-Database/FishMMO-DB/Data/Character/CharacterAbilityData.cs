@@ -7,11 +7,17 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterAbilityData : IVersioned<CharacterAbilityData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that owns this ability.</summary>
 		public readonly long CharacterID;
+		/// <summary>Ability template ID.</summary>
 		public readonly int TemplateID;
+		/// <summary>List of ability event IDs.</summary>
 		public readonly List<int> AbilityEvents;
+		/// <summary>Remaining cooldown duration.</summary>
 		public readonly float Cooldown;
 
 		long IVersioned<CharacterAbilityData>.Version => Version;

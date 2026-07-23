@@ -79,7 +79,7 @@ namespace FishMMO.Client.Security
 			// the async load is in-flight. The coroutine handler will replace
 			// this configuration with the real pins from StreamingAssets on
 			// success, or fall through to compile-time defaults on failure.
-			ClientCertificatePinning.Configure(Array.Empty<string>(), allowOnEmpty: true);
+			ClientCertificatePinning.Configure(defaultPins, DefaultAllowOnEmpty);
 			try
 			{
 				CoroutineRunner.Start(LoadFromStreamingAssetsCoroutine());

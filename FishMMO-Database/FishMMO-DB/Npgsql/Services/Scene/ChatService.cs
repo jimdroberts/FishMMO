@@ -80,23 +80,25 @@ namespace FishMMO.Database.Npgsql.Services
 				normalizedAccountName = normalizedAccountName.Substring(0, MaxAuditAccountLength);
 
 
-			var channelByte = (byte)channel;
-			// NOTE: Uses EF Core change tracker (AddAsync + SaveChanges) instead of raw SQL like most other
-			// services. ChatEntity does not implement IVersionedEntity so there's no concurrency token concern.
-			var result = await ExecuteWriteAsync(async dbContext =>
-			{
-				var entity = new ChatEntity
+				var channelByte = (byte)channel;
+				// NOTE: Uses EF Core change tracker (AddAsync + SaveChanges) instead of raw SQL like most other
+				// services. Version is explicitly set to 1 to match the DB default; otherwise EF would default
+				// to 0 and the concurrency token check would fail on the first update.
+				var result = await ExecuteWriteAsync(async dbContext =>
 				{
-					CharacterID = characterId,
-					CharacterName = normalizedCharacterName,
-					AccountName = normalizedAccountName,
-					WorldServerID = worldServerId,
-					SceneServerID = sceneServerId,
-					ServerReceivedTime = serverReceivedTime,
-					TimeCreated = DateTime.UtcNow,
-					Channel = channelByte,
-					Message = message
-				};
+					var entity = new ChatEntity
+					{
+						CharacterID = characterId,
+						CharacterName = normalizedCharacterName,
+						AccountName = normalizedAccountName,
+						WorldServerID = worldServerId,
+						SceneServerID = sceneServerId,
+						ServerReceivedTime = serverReceivedTime,
+						TimeCreated = DateTime.UtcNow,
+						Channel = channelByte,
+						Message = message,
+						Version = 1
+					};
 
 				await dbContext.Chat.AddAsync(entity, cancellationToken).ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -162,7 +164,8 @@ namespace FishMMO.Database.Npgsql.Services
 							ServerReceivedTime = m.serverReceivedTime,
 							TimeCreated = now,
 							Channel = (byte)m.channel,
-							Message = m.message
+							Message = m.message,
+							Version = 1
 						};
 					}
 

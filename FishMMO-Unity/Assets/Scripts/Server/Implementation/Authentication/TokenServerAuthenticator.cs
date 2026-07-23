@@ -97,7 +97,7 @@ namespace FishMMO.Server.Implementation
 
 			if (unwrapped.Length < CryptoHelper.HmacKeyLength)
 			{
-				CryptographicOperations.ZeroMemory(unwrapped);
+				CryptographicOperationsCompat.ZeroMemory(unwrapped);
 				return null;
 			}
 			return unwrapped;
@@ -133,10 +133,13 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		public override void ShutdownWorkers()
 		{
-			if (signingKeyKek != null)
+			lock (signingKeyKekLock)
 			{
-				CryptographicOperations.ZeroMemory(signingKeyKek);
-				signingKeyKek = null;
+				if (signingKeyKek != null)
+				{
+					CryptographicOperationsCompat.ZeroMemory(signingKeyKek);
+					signingKeyKek = null;
+				}
 			}
 			base.ShutdownWorkers();
 		}
@@ -336,9 +339,9 @@ namespace FishMMO.Server.Implementation
 			{
 				if (rawTokenForHashing != null)
 				{
-					CryptographicOperations.ZeroMemory(rawTokenForHashing);
+					CryptographicOperationsCompat.ZeroMemory(rawTokenForHashing);
 				}
-				CryptographicOperations.ZeroMemory(signingKey);
+				CryptographicOperationsCompat.ZeroMemory(signingKey);
 			}
 		}
 

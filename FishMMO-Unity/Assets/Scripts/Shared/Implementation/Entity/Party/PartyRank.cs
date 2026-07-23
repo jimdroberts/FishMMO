@@ -1,4 +1,4 @@
-﻿namespace FishMMO.Shared
+namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Defines the rank of a character within a party.
@@ -13,11 +13,11 @@
 		/// <summary>
 		/// Standard party member.
 		/// </summary>
-		Member,
+		Member = 1,
 
 		/// <summary>
 		/// Party leader with elevated permissions.
 		/// </summary>
-		Leader,
+		Leader = 2,
 	}
 }

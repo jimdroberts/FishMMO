@@ -80,6 +80,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Log.Warning("LoginServerSystem", $"Process hardening skipped: {hardeningStatus}");
 			}
 
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+			if (Server.Configuration.TryGetBool("AutoVerifyAccounts", out bool autoVerify) && autoVerify)
+			{
+				Log.Error("LoginServerSystem",
+					"FATAL: AutoVerifyAccounts=true is not allowed in production builds. " +
+					"Set AutoVerifyAccounts=false in the server .cfg file.");
+				throw new InvalidOperationException(
+					"AutoVerifyAccounts must be false in production builds.");
+			}
+#endif
+
 			if (!Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
 			{
 				Log.Error("LoginServerSystem", "Failed to initialize: ILoginServerRuntimeData not found");

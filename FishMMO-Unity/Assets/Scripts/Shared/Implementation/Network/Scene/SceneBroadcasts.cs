@@ -80,6 +80,7 @@ namespace FishMMO.Shared
 	/// (port, scene name, character count, etc.) when only <c>SceneHandle</c> (int) is needed
 	/// to identify the target. If bandwidth becomes a concern, consider replacing with a
 	/// leaner struct containing only <c>int SceneHandle</c>.
+	/// TODO: Optimize by sending only SceneHandle instead of the full ChannelAddress.
 	/// </remarks>
 	public struct SceneChannelSelectBroadcast : IBroadcast
 	{
@@ -122,6 +123,10 @@ namespace FishMMO.Shared
 	/// <para><b>Server-authoritative update rate:</b> The server controls how often
 	/// this broadcast is sent via the <c>LoginQueueUpdateRateSeconds</c> config key.
 	/// Clients are passive receivers only — there is no request path for faster updates.</para>
+	///
+	/// <para><b>Validation:</b> The server MUST enforce the documented QueuePosition
+	/// semantics (&gt;0 waiting, 0 admitted, -1 cancelled). The client treats these
+	/// values as authoritative — no local defensive validation is performed.</para>
 	/// </summary>
 	public struct LoginQueuePositionBroadcast : IBroadcast
 	{

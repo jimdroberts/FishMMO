@@ -96,11 +96,11 @@ See [src/webtransport_api.h](src/webtransport_api.h) for the complete C API surf
 | Function | Purpose |
 |----------|---------|
 | `wt_init()` / `wt_deinit()` | Lifecycle — initialises / closes the MsQuic API table |
-| `wt_server_alloc()` / `wt_server_start()` / `wt_server_stop()` / `wt_server_destroy()` | Server lifecycle |
+| `wt_server_create()` / `wt_server_start()` / `wt_server_stop()` / `wt_server_destroy()` | Server lifecycle |
 | `wt_server_poll()` | Drain pending shutdowns + datagrams (call each frame) |
 | `wt_server_send_stream()` / `wt_server_send_datagram()` | Send to a client |
 | `wt_server_disconnect()` | Disconnect a client |
-| `wt_client_alloc()` / `wt_client_connect()` / `wt_client_disconnect()` / `wt_client_destroy()` | Client lifecycle |
+| `wt_client_create()` / `wt_client_connect()` / `wt_client_disconnect()` / `wt_client_destroy()` | Client lifecycle |
 | `wt_client_poll()` | Drain pending shutdowns + datagrams (call each frame) |
 | `wt_client_send_stream()` / `wt_client_send_datagram()` | Send to the server |
 | `wt_error_string()` | Human-readable error message |

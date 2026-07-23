@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class SceneServerEntityConfiguration : IEntityTypeConfiguration<SceneServerEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<SceneServerEntity> builder)
 		{
 			builder.ToTable("scene_servers");

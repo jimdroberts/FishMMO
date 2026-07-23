@@ -121,6 +121,8 @@ namespace FishMMO.Server.Implementation
 
 			// Round-robin across workers
 			long index = Interlocked.Increment(ref roundRobinCounter);
+			// Modulo overflow on a long counter wrapping past 9 quintillion is
+			// not a practical concern at any realistic worker count (< 10^6).
 			int workerIndex = (int)(((index % workerCount) + workerCount) % workerCount);
 			return channels[workerIndex].Writer.TryWrite(new AsyncWorkItem(work, callerName));
 		}
@@ -219,7 +221,10 @@ namespace FishMMO.Server.Implementation
 				{
 					try
 					{
-						Task.WaitAll(workerTasks, TimeSpan.FromSeconds(10));
+						// NOTE: 3-second deadline. Workers processing long-running items
+						// may not fully drain within this window; remaining items are
+						// abandoned on process exit.
+						Task.WaitAll(workerTasks, TimeSpan.FromSeconds(3));
 					}
 					catch (AggregateException) { /* workers may have faulted */ }
 				}

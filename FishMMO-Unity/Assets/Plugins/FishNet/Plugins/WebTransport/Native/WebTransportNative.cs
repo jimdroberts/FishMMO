@@ -293,6 +293,7 @@ namespace FishNet.Transporting.WebTransport.Native
 			[MarshalAs(UnmanagedType.LPUTF8Str)] string alpn,
 			[MarshalAs(UnmanagedType.LPUTF8Str)] string bindAddress,
 			ushort port, uint maxClients,
+			[MarshalAs(UnmanagedType.LPUTF8Str)] string allowedOrigins,
 			IntPtr callbacks,
 			IntPtr context);
 
@@ -477,7 +478,7 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static SafeServerHandle wt_server_create(
 			string certificatePath, string privateKeyPath,
 			string alpn, string bindAddress, ushort port,
-			uint maxClients,
+			uint maxClients, string allowedOrigins,
 			IntPtr callbacks,
 			IntPtr context) => new SafeServerHandle();
 

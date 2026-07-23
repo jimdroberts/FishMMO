@@ -9,6 +9,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class QuestEntityConfiguration : IEntityTypeConfiguration<QuestEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<QuestEntity> builder)
 		{
 			builder.ToTable("quests");

@@ -11,91 +11,102 @@ namespace FishMMO.Shared
 	public static class Authentication
 	{
 		#region Error Messages
+		/// <summary>Error message for invalid usernames.</summary>
 		public static readonly string InvalidUsernameError =
 			$"Invalid username. Username must be between {AccountNameMinLength} and {AccountNameMaxLength} characters and contains only letters, numbers, and underscores.";
 
+		/// <summary>Error message for invalid passwords.</summary>
 		public static readonly string InvalidPasswordError =
 			$"Invalid password. Password must be between {AccountPasswordMinLength} and {AccountPasswordMaxLength} characters.";
 
+		/// <summary>Error message for invalid character names.</summary>
 		public static readonly string InvalidCharacterNameError =
 			$"Invalid character name. Names must be between {CharacterNameMinLength} and {CharacterNameMaxLength} characters (Letters and single spaces only).";
 
+		/// <summary>Error message for invalid guild names.</summary>
 		public static readonly string InvalidGuildNameError =
 			$"Invalid guild name. Guild name must be between {GuildNameMinLength} and {GuildNameMaxLength} characters.";
 		#endregion
 
 		#region Constraints
+		/// <summary>Minimum length for account usernames.</summary>
 		public const int AccountNameMinLength = 3;
+		/// <summary>Maximum length for account usernames.</summary>
 		public const int AccountNameMaxLength = 32;
+		/// <summary>Minimum length for account passwords.</summary>
 		public const int AccountPasswordMinLength = 8;
+		/// <summary>Maximum length for account passwords.</summary>
 		public const int AccountPasswordMaxLength = 32;
+		/// <summary>Minimum length for character names.</summary>
 		public const int CharacterNameMinLength = 3;
+		/// <summary>Maximum length for character names.</summary>
 		public const int CharacterNameMaxLength = 24; // Reduced slightly for UI/Label consistency
+		/// <summary>Minimum length for guild names.</summary>
 		public const int GuildNameMinLength = 3;
+		/// <summary>Maximum length for guild names.</summary>
 		public const int GuildNameMaxLength = 32; // Standard MMO guild length
 		#endregion
 
 		#region Regular Expressions
-		// Static fields use PascalCase per .NET naming conventions (no `this.` prefix);
-		// usage follows the ClassName.FieldName pattern.
+		// Private static fields use camelCase per .NET naming conventions.
 		// Emails: Standard RFC-adjacent validation (supports + aliases)
-		private static readonly Regex EmailUsernameRegex = new Regex(
+		private static readonly Regex emailUsernameRegex = new Regex(
 			@"^(?=.{3,320}$)[a-zA-Z0-9](?:[a-zA-Z0-9._+-]*[a-zA-Z0-9])?@[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Usernames: Alphanumeric and underscores
-		private static readonly Regex UsernameRegex = new Regex(
+		private static readonly Regex usernameRegex = new Regex(
 			@"^[a-zA-Z0-9_]+$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Passwords: Allow special characters (!@#$%^ etc) for better security
 		// Removed the restricted alphanumeric-only rule to encourage stronger passwords
-		private static readonly Regex PasswordRegex = new Regex(
+		private static readonly Regex passwordRegex = new Regex(
 			@"^[a-zA-Z0-9!@#$%^&*()_+=\-\[\]{}|;:',.<>?~`]+$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Character Names: Starts with letter, allows single spaces between names (e.g. "Aragorn of Arnor")
-		private static readonly Regex CharacterNameRegex = new Regex(
+		private static readonly Regex characterNameRegex = new Regex(
 			@"^[A-Za-z]+(?: [A-Za-z]+)*$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Guild Names: Similar to character names but allows more segments
-		private static readonly Regex GuildNameRegex = new Regex(
+		private static readonly Regex guildNameRegex = new Regex(
 			@"^[A-Za-z0-9]+(?: [A-Za-z0-9]+)*$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 		#endregion
 
 		/// <summary>Validates an email address against the email regex pattern. Returns false for null/empty/whitespace input.</summary>
 		public static bool IsAllowedEmailUsername(string email) =>
-			!string.IsNullOrWhiteSpace(email) && EmailUsernameRegex.IsMatch(email);
+			!string.IsNullOrWhiteSpace(email) && emailUsernameRegex.IsMatch(email);
 
 		/// <summary>Validates an account username against length constraints and the alphanumeric+underscore regex pattern.</summary>
 		public static bool IsAllowedUsername(string accountName) =>
 			!string.IsNullOrWhiteSpace(accountName) &&
 			accountName.Length >= AccountNameMinLength &&
 			accountName.Length <= AccountNameMaxLength &&
-			UsernameRegex.IsMatch(accountName);
+			usernameRegex.IsMatch(accountName);
 
 		/// <summary>Validates an account password against length constraints and the allowed-special-characters regex pattern.</summary>
 		public static bool IsAllowedPassword(string accountPassword) =>
 			!string.IsNullOrWhiteSpace(accountPassword) &&
 			accountPassword.Length >= AccountPasswordMinLength &&
 			accountPassword.Length <= AccountPasswordMaxLength &&
-			PasswordRegex.IsMatch(accountPassword);
+			passwordRegex.IsMatch(accountPassword);
 
 		/// <summary>Validates a character name against length constraints and the letters-and-single-spaces regex pattern.</summary>
 		public static bool IsAllowedCharacterName(string characterName) =>
 			!string.IsNullOrWhiteSpace(characterName) &&
 			characterName.Length >= CharacterNameMinLength &&
 			characterName.Length <= CharacterNameMaxLength &&
-			CharacterNameRegex.IsMatch(characterName);
+			characterNameRegex.IsMatch(characterName);
 
 		/// <summary>Validates a guild name against length constraints and the alphanumeric-with-spaces regex pattern.</summary>
 		public static bool IsAllowedGuildName(string guildName) =>
 			!string.IsNullOrWhiteSpace(guildName) &&
 			guildName.Length >= GuildNameMinLength &&
 			guildName.Length <= GuildNameMaxLength &&
-			GuildNameRegex.IsMatch(guildName);
+			guildNameRegex.IsMatch(guildName);
 
 		/// <summary>
 		/// Produces the canonical lookup form of an account name for case-insensitive comparisons

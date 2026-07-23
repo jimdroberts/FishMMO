@@ -93,6 +93,7 @@ extern const QUIC_API_TABLE* MsQuic;
   #include <windows.h>
 #else
   #include <unistd.h>
+  #include <pthread.h>
 #endif
 
 #ifdef __cplusplus
@@ -173,5 +174,34 @@ typedef enum {
 #ifdef __cplusplus
 }
 #endif
+
+/* ── Global API call reference counter ────────────────────────
+ * Prevents wt_deinit() from closing MsQuic while any API call is
+ * in-flight on another thread. Every API entry point increments
+ * this counter before reading MsQuic; wt_deinit spins until it
+ * reaches zero before closing. */
+extern atomic_int g_api_call_refcount;
+
+/* Helper: increment refcount, return true if library is initialised. */
+static inline int wt_api_enter(void) {
+    atomic_fetch_add(&g_api_call_refcount, 1);
+    /* Full fence: ensure refcount increment is visible before reading MsQuic */
+#if defined(_MSC_VER)
+    MemoryBarrier();
+#else
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+#endif
+    return (MsQuic != NULL);
+}
+
+/* Helper: decrement refcount on API call exit. */
+static inline void wt_api_exit(void) {
+#if defined(_MSC_VER)
+    MemoryBarrier();
+#else
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+#endif
+    atomic_fetch_sub(&g_api_call_refcount, 1);
+}
 
 #endif /* WEBTRANSPORT_INTERNAL_H */

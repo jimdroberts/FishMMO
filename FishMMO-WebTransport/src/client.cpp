@@ -29,6 +29,8 @@ wt_client_s* wt_client_alloc_impl(
 
     memcpy(&cli->callbacks, callbacks, sizeof(*callbacks));
     cli->user_context = context;
+    strncpy(cli->alpn, "h3", sizeof(cli->alpn) - 1);
+    cli->alpn[sizeof(cli->alpn) - 1] = '\0';
     atomic_init(&cli->state, WT_CLIENT_STOPPED);
     atomic_init(&cli->connected, false);
     atomic_init(&cli->pending_shutdowns, 0);
@@ -163,8 +165,8 @@ int32_t wt_client_connect_impl(
 
     /* ── Open configuration with ALPN ── */
     QUIC_BUFFER alpn_buf;
-    alpn_buf.Buffer = (uint8_t*)"h3";
-    alpn_buf.Length = 2;
+    alpn_buf.Buffer = (uint8_t*)client->alpn;
+    alpn_buf.Length = (uint32_t)strlen(client->alpn);
 
     status = MsQuic->ConfigurationOpen(client->registration, &alpn_buf, 1U, &settings, (uint32_t)sizeof(settings), NULL, &client->session_config);
     if (QUIC_FAILED(status)) {
@@ -452,8 +454,8 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             }
         }
 
-        MsQuic->ConnectionClose(conn);
         atomic_ptr_store(&cli->quic_conn, NULL);
+        MsQuic->ConnectionClose(conn);
 
         /* Clean up any incomplete HTTP/3 handshake */
         if (cli->h3_session) {
@@ -472,9 +474,17 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * rather than deadlocking.
          * Guard against unsigned underflow: if ConnectionClose fires
          * SHUTDOWN_COMPLETE synchronously on the never-connected path,
-         * pending_shutdowns may not have been incremented yet. */
-        if (atomic_load(&cli->pending_shutdowns) > 0)
-            atomic_fetch_sub(&cli->pending_shutdowns, 1);
+         * pending_shutdowns may not have been incremented yet.
+         * Use a single atomic_fetch_sub and check the pre-decrement
+         * value to eliminate the TOCTOU race between the separate
+         * atomic_load and atomic_fetch_sub. */
+        {
+            unsigned int prev_sub = atomic_fetch_sub(&cli->pending_shutdowns, 1);
+            if (prev_sub == 0) {
+                /* Underflow — correct it: add the 1 back. */
+                atomic_fetch_add(&cli->pending_shutdowns, 1);
+            }
+        }
 
         /* Fire callback LAST — after all state changes are committed.
          * The callback may enqueue work that calls back into the API;
@@ -548,13 +558,22 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     }
 
     case QUIC_CONNECTION_EVENT_DATAGRAM_SEND_STATE_CHANGED:
-        if (event->DATAGRAM_SEND_STATE_CHANGED.ClientContext &&
+    {
+        /* Free the wrapper struct only if msquic claimed ownership.
+         * The owned_by_msquic flag prevents double-free if msquic were
+         * to fire this callback synchronously from within DatagramSend. */
+        void* ctx = event->DATAGRAM_SEND_STATE_CHANGED.ClientContext;
+        if (ctx &&
             QUIC_DATAGRAM_SEND_STATE_IS_FINAL(
                 event->DATAGRAM_SEND_STATE_CHANGED.State)) {
-            free(event->DATAGRAM_SEND_STATE_CHANGED.ClientContext);
+            wt_dgram_send_ctx_t* send_ctx = (wt_dgram_send_ctx_t*)ctx;
+            if (send_ctx->owned_by_msquic) {
+                free(send_ctx);
+            }
             event->DATAGRAM_SEND_STATE_CHANGED.ClientContext = NULL;
         }
         break;
+    }
 
     default:
         break;

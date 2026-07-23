@@ -5,11 +5,17 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterPetAttributeData : IVersioned<CharacterPetAttributeData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that owns this pet attribute.</summary>
 		public readonly long CharacterID;
+		/// <summary>Attribute template ID.</summary>
 		public readonly int TemplateID;
+		/// <summary>Base attribute value.</summary>
 		public readonly int Value;
+		/// <summary>Current attribute value.</summary>
 		public readonly float CurrentValue;
 
 		long IVersioned<CharacterPetAttributeData>.Version => Version;

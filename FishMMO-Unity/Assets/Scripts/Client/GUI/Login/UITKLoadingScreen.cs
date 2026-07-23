@@ -133,7 +133,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="attempts">The current attempt number.</param>
 		/// <param name="maxAttempts">The maximum number of allowed attempts.</param>
-		public void Client_OnReconnectAttempt(byte attempts, byte maxAttempts)
+		public void Client_OnReconnectAttempt(int attempts, int maxAttempts)
 		{
 			SetLoadingImage(DefaultLoadingScreenSprite);
 			Show();

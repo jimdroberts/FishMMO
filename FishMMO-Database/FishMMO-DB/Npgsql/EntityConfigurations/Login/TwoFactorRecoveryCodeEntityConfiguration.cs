@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class TwoFactorRecoveryCodeEntityConfiguration : IEntityTypeConfiguration<TwoFactorRecoveryCodeEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<TwoFactorRecoveryCodeEntity> builder)
 		{
 			builder.ToTable("two_factor_recovery_codes");

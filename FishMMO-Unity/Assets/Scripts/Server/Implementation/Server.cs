@@ -90,7 +90,7 @@ namespace FishMMO.Server.Implementation
 		/// List of all server behaviours attached to the server.
 		/// </summary>
 		[SerializeField]
-		private List<ServerBehaviour> serverBehaviours = new List<ServerBehaviour>();
+		private List<ServerBehaviour> serverBehaviors = new List<ServerBehaviour>();
 
 		/// <summary>
 		/// List of all runtime data containers managed by the server.
@@ -272,6 +272,11 @@ namespace FishMMO.Server.Implementation
 			// Build the configuration using our shared helper
 			// This automatically handles appsettings.json, appsettings.{env}.json, 
 			// and Environment Variables using the BaseDirectory.
+			// Despite the "DesignTime" name, this method is safe for runtime use.
+			// It builds an IConfiguration from appsettings.json + environment variables
+			// using the same provider pipeline as the ASP.NET servers.
+			// The name reflects its origin as a shared helper for both design-time
+			// tooling (EF Core migrations) and runtime server startup.
 			IConfiguration dbConfig = DatabaseConfigurationHelper.BuildDesignTimeConfiguration();
 
 			// Initialize Database with the configuration object
@@ -372,14 +377,18 @@ namespace FishMMO.Server.Implementation
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		private void UpdateServerBehaviours(float deltaTime)
 		{
-			if (this.serverBehaviours == null)
+			if (this.serverBehaviors == null)
 				return;
 
-			// Snapshot to avoid list mutation if OnLateUpdate registers or unregisters behaviours.
+			// Belt-and-suspenders: snapshot the list so that if a behaviour's
+			// OnLateUpdate mutates serverBehaviors (register/unregister), the
+			// iteration continues safely against the frozen copy. In practice
+			// behaviours should not register/unregister during OnLateUpdate, but
+			// the defensive copy prevents a hard-to-debug collection-mutation crash.
 			this.behaviourSnapshot.Clear();
-			for (int i = 0; i < this.serverBehaviours.Count; i++)
+			for (int i = 0; i < this.serverBehaviors.Count; i++)
 			{
-				this.behaviourSnapshot.Add(this.serverBehaviours[i]);
+				this.behaviourSnapshot.Add(this.serverBehaviors[i]);
 			}
 
 			for (int i = 0; i < behaviourSnapshot.Count; i++)
@@ -476,9 +485,16 @@ namespace FishMMO.Server.Implementation
 				else break;
 				// Thread.Sleep is acceptable here: PerformShutdown runs during OnDestroy,
 				// which cannot yield (no coroutine support). The sleep duration is
-				// bounded by workerDrainTimeoutSeconds (5s) and this path only executes
+				// bounded by workerDrainTimeoutSeconds (1s) and this path only executes
 				// during process teardown, not during normal gameplay.
+#if UNITY_WEBGL && !UNITY_EDITOR
+				// WebGL: Thread.Sleep is not available. Use a brief spin-wait
+				// as a fallback (WebGL is single-threaded so the worker drain
+				// will complete quickly).
+				System.Threading.Thread.SpinWait(10000);
+#else
 				System.Threading.Thread.Sleep(10);
+#endif
 			}
 
 			// 3. Stop accepting new connections.
@@ -505,20 +521,22 @@ namespace FishMMO.Server.Implementation
 			NetworkWrapper?.UnregisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 		}
 
-		/// <summary>Max seconds to poll for worker teardown before forcing stop.</summary>
-		private const float workerDrainTimeoutSeconds = 5f;
+		/// <summary>Max seconds to poll for worker teardown before forcing stop.
+		/// Workers might not fully drain if pending items exceed this window;
+		/// remaining work items are abandoned on process exit.</summary>
+		private const float workerDrainTimeoutSeconds = 1f;
 
 		/// <summary>
 		/// Registers all server behaviours in order.
 		/// </summary>
 		private void RegisterAllBehaviours()
 		{
-			if (this.serverBehaviours != null && this.BehaviourRegistry != null)
+			if (this.serverBehaviors != null && this.BehaviourRegistry != null)
 			{
 				// Register in order
-				for (int i = 0; i < this.serverBehaviours.Count; i++)
+				for (int i = 0; i < this.serverBehaviors.Count; i++)
 				{
-					var behaviour = this.serverBehaviours[i];
+					var behaviour = this.serverBehaviors[i];
 					if (behaviour != null && !behaviour.Initialized)
 					{
 						// Register to registry before initializing
@@ -543,7 +561,7 @@ namespace FishMMO.Server.Implementation
 			var containersByPriority = new SortedDictionary<int, List<Type>>();
 
 			// Scan all ServerBehaviours for RequiresDataContainer attributes
-			foreach (var behaviour in serverBehaviours)
+			foreach (var behaviour in serverBehaviors)
 			{
 				if (behaviour == null)
 					continue;
@@ -617,12 +635,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void DeinitializeAllBehaviours()
 		{
-			if (this.serverBehaviours != null && this.BehaviourRegistry != null)
+			if (this.serverBehaviors != null && this.BehaviourRegistry != null)
 			{
 				// Deinitialize in reverse order to ensure proper cleanup dependencies
-				for (int i = this.serverBehaviours.Count - 1; i >= 0; i--)
+				for (int i = this.serverBehaviors.Count - 1; i >= 0; i--)
 				{
-					var behaviour = this.serverBehaviours[i];
+					var behaviour = this.serverBehaviors[i];
 					if (behaviour != null && behaviour.Initialized)
 					{
 						// Deinitialize the behaviour (calls OnDeinitialize and clears references)
@@ -637,12 +655,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void UnregisterAllBehaviours()
 		{
-			if (this.serverBehaviours != null && this.BehaviourRegistry != null)
+			if (this.serverBehaviors != null && this.BehaviourRegistry != null)
 			{
 				// Unregister in reverse order to ensure proper cleanup dependencies
-				for (int i = this.serverBehaviours.Count - 1; i >= 0; i--)
+				for (int i = this.serverBehaviors.Count - 1; i >= 0; i--)
 				{
-					var behaviour = this.serverBehaviours[i];
+					var behaviour = this.serverBehaviors[i];
 					if (behaviour != null)
 					{
 						// Unregister from registry before deinitializing

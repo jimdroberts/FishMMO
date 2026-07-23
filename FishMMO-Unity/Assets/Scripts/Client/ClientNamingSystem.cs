@@ -16,7 +16,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Reference to the client instance for network operations.
 		/// </summary>
-		internal static Client Client;
+		internal static Client client;
 
 		/// <summary>
 		/// Maps naming system type and ID to name. Used for fast lookup and caching.
@@ -46,7 +46,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			Client = client;
+			ClientNamingSystem.client = client;
 
 			Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ReverseNamingBroadcast>(OnClientReverseNamingBroadcastReceived);
@@ -74,7 +74,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public static void Destroy()
 		{
-			if (Client != null)
+			if (client != null)
 			{
 				Client.NetworkManager.ClientManager.UnregisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
 				Client.NetworkManager.ClientManager.UnregisterBroadcast<ReverseNamingBroadcast>(OnClientReverseNamingBroadcastReceived);
@@ -112,7 +112,7 @@ namespace FishMMO.Client
 				// Name found in cache, invoke callback immediately.
 				action?.Invoke(name);
 			}
-			else if (Client != null)
+			else if (client != null)
 			{
 				if (!pendingNameRequests.TryGetValue(type, out Dictionary<long, Action<string>> pendingActions))
 				{
@@ -150,7 +150,7 @@ namespace FishMMO.Client
 				// ID found in cache, invoke callback immediately.
 				action?.Invoke(id);
 			}
-			else if (Client != null)
+			else if (client != null)
 			{
 				var nameLowerCase = name.ToLowerInvariant().Trim();
 

@@ -72,87 +72,10 @@ echo "  NGINX reloaded"
 # actually signaling or restarting any services.
 DRY_RUN="${FISHMMO_DRY_RUN:-0}"
 
-# ── DOCKER HEALTH CHECK HELPER ──────────────────────────────
-# Polls Docker container health status with exponential backoff.
-docker_wait_for_healthy() {
-    local container_name="$1"
-    local timeout="${2:-60}"
-    local elapsed=0
-    local delay=1
-
-    echo "  Waiting for Docker container $container_name to become healthy (timeout ${timeout}s)..."
-    while [ "$elapsed" -lt "$timeout" ]; do
-        local status
-        status=$(docker inspect --format='{{.State.Health.Status}}' "$container_name" 2>/dev/null || echo "starting")
-        if [ "$status" = "healthy" ]; then
-            echo "  Docker container $container_name is healthy"
-            return 0
-        fi
-        sleep "$delay"
-        elapsed=$((elapsed + delay))
-        delay=$((delay * 2))
-        [ "$delay" -gt 10 ] && delay=10
-    done
-    echo "  WARNING: Docker container $container_name did not become healthy within ${timeout}s"
-    return 1
-}
-
-# ── DOCKER RESTART FUNCTION ─────────────────────────────────
-# Restarts game server containers using docker compose.
-# Used when game servers are deployed via Docker rather than systemd.
-docker_restart_servers() {
-    local compose_dir="${1:-/etc/fishmmo}"
-    local compose_file="${compose_dir}/docker-compose.yml"
-
-    echo "  Restarting game servers via Docker Compose..."
-
-    # Check that docker is available and the compose file exists.
-    if ! command -v docker &>/dev/null; then
-        echo "  WARNING: docker command not found, cannot restart containers."
-        return 1
-    fi
-    if [ ! -f "$compose_file" ] || [ ! -f "${compose_dir}/fishmmo-secrets.env" ]; then
-        echo "  WARNING: Missing required files in $compose_dir. Skipping Docker restart."
-        return 1
-    fi
-
-    # Check if the fishmmo stack is running (any container from it).
-    local project_name
-    project_name=$(docker compose ls --filter name="fishmmo" --format json 2>/dev/null | grep -o '"Name":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
-    if [ -z "$project_name" ]; then
-        echo "  WARNING: No fishmmo Docker Compose stack appears to be running."
-        return 1
-    fi
-
-    echo "  Found running Docker Compose project: $project_name"
-
-    if [ "$DRY_RUN" = "1" ]; then
-        echo "  [DRY RUN] Would run: docker compose -p $project_name restart nginx"
-        echo "  [DRY RUN] Would run: docker compose -p $project_name restart login-server world-server scene-server"
-        return 0
-    fi
-
-    # 1. Reload nginx (config may reference renewed certs).
-    echo "  Restarting nginx container..."
-    docker compose -p "$project_name" restart nginx
-    docker_wait_for_healthy "fishmmo-nginx" 30
-
-    # 2. Restart game server containers (rolling where possible).
-    #    Docker compose restart stops and starts each container in parallel.
-    #    We use --no-deps to avoid restarting dependencies.
-    for svc in login-server world-server scene-server; do
-        echo "  Restarting $svc..."
-        docker compose -p "$project_name" restart --no-deps "$svc" 2>/dev/null || \
-            docker compose -p "$project_name" restart "$svc" 2>/dev/null || \
-            echo "  WARNING: $svc restart failed (container may not exist in stack)"
-    done
-
-    echo "  Docker Compose restart completed"
-    return 0
-}
+# ── SERVER HEALTH CHECK HELPER ──────────────────────────────
 
 # ── SIGNAL-BASED RELOAD FALLBACK ───────────────────────────
-# Used when neither Docker nor systemd are available.
+# Used when systemd is not available.
 #
 # !!! WARNING !!!
 # SIGHUP sent via pkill will TERMINATE any process that does not
@@ -163,40 +86,11 @@ docker_restart_servers() {
 # Console.CancelKeyPress) before relying on this path.
 #
 # This function attempts safer alternatives first:
-#   1. docker kill -s HUP <container>  (if Docker is available)
+#   1. systemctl reload <unit>         (if systemd is available)
 #   2. systemctl reload <unit>         (if systemd is available)
 #   3. pkill -HUP                      (last resort, with warning)
 signal_reload_fallback() {
     local signaled_any=0
-
-    # ── Attempt 1: Docker-based SIGHUP ──────────────────────
-    if command -v docker &>/dev/null; then
-        for container in fishmmo-login fishmmo-world fishmmo-scene; do
-            if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$container"; then
-                echo "  Signaling $container to reload certs via docker kill -s HUP..."
-                if [ "$DRY_RUN" = "1" ]; then
-                    echo "  [DRY RUN] Would run: docker kill -s HUP $container"
-                else
-                    docker kill -s HUP "$container" 2>/dev/null && signaled_any=1 || \
-                        echo "  WARNING: failed to signal $container"
-                    # ── 5-second health check after signal ──
-                    local hup_elapsed=0
-                    while [ "$hup_elapsed" -lt 5 ]; do
-                        if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$container" && \
-                           docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null | grep -q "running"; then
-                            break
-                        fi
-                        sleep 1
-                        hup_elapsed=$((hup_elapsed + 1))
-                    done
-                    if [ "$hup_elapsed" -ge 5 ]; then
-                        echo "  CRITICAL: $container may have been terminated by SIGHUP (no SIGHUP handler?)" >&2
-                    fi
-                fi
-            fi
-        done
-    fi
-
     # ── Attempt 2: systemctl reload ─────────────────────────
     if command -v systemctl &>/dev/null; then
         for unit in fishmmo-login fishmmo-world; do
@@ -293,12 +187,7 @@ if [ "$DRY_RUN" = "1" ]; then
     echo ""
     echo "  >>> DRY RUN MODE — no services will be restarted <<<"
     echo ""
-fi
-
-# Option A: Docker Compose restart
-if docker_restart_servers; then
-    echo "  Docker Compose restart path completed successfully."
-# Option B: systemd service restart (brief downtime per server)
+# Primary: systemd service restart (brief downtime per server)
 elif command -v systemctl &>/dev/null; then
     # Broader systemd check: if any fishmmo unit exists, use systemctl
     if systemctl list-units --all --plain --no-legend 'fishmmo-*' 2>/dev/null | grep -q .; then

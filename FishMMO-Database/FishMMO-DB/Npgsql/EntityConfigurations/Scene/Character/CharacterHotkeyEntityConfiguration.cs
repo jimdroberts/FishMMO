@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterHotkeyEntityConfiguration : IEntityTypeConfiguration<CharacterHotkeyEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterHotkeyEntity> builder)
 		{
 			builder.ToTable("character_hotkeys");

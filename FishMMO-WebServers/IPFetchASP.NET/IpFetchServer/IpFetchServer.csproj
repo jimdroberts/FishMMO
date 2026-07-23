@@ -2,14 +2,20 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <NoWarn>$(NoWarn);CS8618;CS8625;CS8600;CS8601</NoWarn>
+    <NoWarn>$(NoWarn);CS8600;CS8601</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
     <!--
-      EF Core 5.0.17 is end-of-life and should be upgraded to 8.x when the
-      netstandard2.1 dependency is dropped. Pinned here for compatibility
-      with FishMMO-DB (netstandard2.1).
+      WARNING: EF Core 5.0.17 is END-OF-LIFE (no security patches).
+      Pinned because Unity's .NET Standard 2.1 runtime does not support
+      EF Core 6.0+ (which requires .NET 6+).
+
+      Mitigation options:
+      1. Run IpFetchServer behind a WAF/API gateway that filters SQL attacks.
+      2. Keep Npgsql updated (5.0.18 patch releases are still published).
+      3. Monitor CVE databases for EF Core 5.x vulnerabilities.
+      4. Long-term: migrate Unity to .NET 8+ when Unity supports it.
     -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="5.0.17" />
   </ItemGroup>

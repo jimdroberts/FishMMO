@@ -183,6 +183,10 @@ namespace FishMMO.Server.Implementation
 						}
 						wt.SetPort(port);
 						wt.SetMaximumClients(maxClients);
+						// Configure allowed origins for browser WebTransport CORS.
+						// Empty = allow all (dev); production MUST set this via .cfg.
+						string allowedOrigins = config.GetString("AllowedOrigins", "");
+						wt.SetAllowedOrigins(allowedOrigins);
 						if (!ConfigureWebTransport(wt))
 							Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed for Multipass child — TLS certificates not loaded.");
 						configured = true;
@@ -201,6 +205,8 @@ namespace FishMMO.Server.Implementation
 				}
 				transport.SetPort(port);
 				transport.SetMaximumClients(maxClients);
+				string allowedOrigins = config.GetString("AllowedOrigins", "");
+				wt.SetAllowedOrigins(allowedOrigins);
 				if (!ConfigureWebTransport(wt))
 					Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed -- TLS certificates not loaded.");
 			}
@@ -234,8 +240,10 @@ namespace FishMMO.Server.Implementation
 					return false;
 				}
 
-				wt.SetCertificatePath(certPath);
-				wt.SetPrivateKeyPath(keyPath);
+				if (!wt.SetCertificatePath(certPath))
+					return false;
+				if (!wt.SetPrivateKeyPath(keyPath))
+					return false;
 
 				Log.Debug("FishNetNetworkWrapper",
 					$"WebTransport configured: cert={certPath}, key={keyPath}");
@@ -271,8 +279,10 @@ namespace FishMMO.Server.Implementation
 				return false;
 			}
 
-			wt.SetCertificatePath(certPath);
-			wt.SetPrivateKeyPath(keyPath);
+			if (!wt.SetCertificatePath(certPath))
+				return false;
+			if (!wt.SetPrivateKeyPath(keyPath))
+				return false;
 
 			Log.Debug("FishNetNetworkWrapper",
 				$"WebTransport configured: cert={certPath}, key={keyPath}");

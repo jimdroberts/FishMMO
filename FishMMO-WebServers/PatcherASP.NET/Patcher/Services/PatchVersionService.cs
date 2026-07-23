@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using FishMMO.Logging;
 
@@ -50,10 +51,16 @@ public class PatchVersionService : IDisposable
 
 	private FileSystemWatcher? watcher;
 	private readonly object reindexLock = new();
-	private volatile bool _disposed;
+	private volatile bool disposed;
 	private Timer? debounceTimer;
 
-	private static readonly Regex PatchFileNameRegex =
+	/// <summary>
+	/// HMAC signing key for version manifest responses, derived from the
+	/// FISHMMO_CLIENT_GATE_SECRET environment variable. Null if unconfigured.
+	/// </summary>
+	private readonly byte[]? signingKey;
+
+	private static readonly Regex patchFileNameRegex =
 		new Regex(@"^(\d{1,9}\.\d{1,9}\.\d{1,9}(?:\.[A-Za-z0-9\-]{1,32})?)-(\d{1,9}\.\d{1,9}\.\d{1,9}(?:\.[A-Za-z0-9\-]{1,32})?)\.zip$", RegexOptions.Compiled);
 
 	public PatchVersionService(IHostEnvironment env, IConfiguration config)
@@ -66,6 +73,23 @@ public class PatchVersionService : IDisposable
 		debounceInterval = TimeSpan.FromSeconds(Math.Max(debounceSecs, 1));
 		searchPattern = config.GetValue<string>("Patches:SearchPattern") ?? "*.zip";
 
+		// Read the FISHMMO_CLIENT_GATE_SECRET for HMAC-signing version manifest responses.
+		// This is the same shared secret used by ClientGate middleware. We take the first
+		// key (before any comma) for signing; if the secret is unconfigured the version
+		// manifest will not be signed.
+		string? secretText = Environment.GetEnvironmentVariable("FISHMMO_CLIENT_GATE_SECRET");
+		if (!string.IsNullOrEmpty(secretText))
+		{
+			string firstKey = secretText.Split(',', StringSplitOptions.RemoveEmptyEntries)[0].Trim();
+			signingKey = Encoding.UTF8.GetBytes(firstKey);
+		}
+
+		// TODO: InitializeLatestVersion() enumerates the patches directory and computes
+		// SHA-256 hashes for every patch file synchronously during DI construction.
+		// For large patch directories this can cause significant startup delays.
+		// Consider moving patch indexing to a background initialization (e.g. IHostedService)
+		// or making it lazy so the server can start serving health checks and metadata
+		// endpoints before indexing completes.
 		InitializeLatestVersion();
 		StartWatcher();
 	}
@@ -111,7 +135,7 @@ public class PatchVersionService : IDisposable
 
 	private void ScheduleReindex()
 	{
-		if (_disposed) return;
+		if (disposed) return;
 		// Use CompareExchange so two FileSystemWatcher callbacks racing on the very
 		// first event can never construct two Timers (and leak the loser). After the timer
 		// exists, the cheap Change() call is safe to race on — Timer.Change is thread-safe.
@@ -122,7 +146,7 @@ public class PatchVersionService : IDisposable
 			{
 				lock (reindexLock)
 				{
-					if (_disposed) return;
+					if (disposed) return;
 					try
 					{
 						InitializeLatestVersion();
@@ -146,7 +170,7 @@ public class PatchVersionService : IDisposable
 
 	public void Dispose()
 	{
-		_disposed = true;
+		disposed = true;
 
 		if (watcher != null)
 		{
@@ -164,7 +188,7 @@ public class PatchVersionService : IDisposable
 
 	private void InitializeLatestVersion()
 	{
-		if (_disposed) return;
+		if (disposed) return;
 		var patchesDirectoryConfig = config["Patches:DirectoryName"] ?? "Patches";
 		var patchesPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, patchesDirectoryConfig));
 		PatchesRoot = patchesPath.EndsWith(Path.DirectorySeparatorChar) ? patchesPath : patchesPath + Path.DirectorySeparatorChar;
@@ -199,7 +223,7 @@ public class PatchVersionService : IDisposable
 			foreach (var filePath in Directory.EnumerateFiles(patchesPath, "*.zip", SearchOption.TopDirectoryOnly))
 			{
 				string fileName = Path.GetFileName(filePath);
-				Match match = PatchFileNameRegex.Match(fileName);
+				Match match = patchFileNameRegex.Match(fileName);
 
 				if (!match.Success)
 				{
@@ -274,7 +298,26 @@ public class PatchVersionService : IDisposable
 	{
 		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: false);
 		using var sha = SHA256.Create();
+		// TODO: This FileStream uses useAsync: false and ComputeHash synchronously.
+		// For large patch files this blocks the constructor thread. Async variants
+		// (FileStream with useAsync: true + ComputeHashAsync) should be used when
+		// the indexing runs in a background task.
 		byte[] hash = sha.ComputeHash(stream);
 		return Convert.ToHexString(hash).ToLowerInvariant();
+	}
+
+	/// <summary>
+	/// HMAC-SHA256 signs the given content using the FISHMMO_CLIENT_GATE_SECRET
+	/// and returns the signature as a base64url-encoded string.
+	/// Returns null if no signing key is configured.
+	/// The client can verify this signature to confirm the version manifest
+	/// was produced by an authentic patcher server.
+	/// </summary>
+	public string? SignContent(string content)
+	{
+		if (signingKey == null || signingKey.Length == 0) return null;
+		using var hmac = new HMACSHA256(signingKey);
+		byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(content));
+		return Convert.ToBase64String(hash).Replace('+', '-').Replace('/', '_').TrimEnd('=');
 	}
 }

@@ -16,7 +16,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static string CompressString(string input)
 		{
-			if (string.IsNullOrEmpty(input)) return string.Empty;
+			if (input == null) throw new ArgumentNullException(nameof(input));
+			if (input.Length == 0) return string.Empty;
 
 			try
 			{
@@ -45,7 +46,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static string DecompressString(string compressedInput)
 		{
-			if (string.IsNullOrEmpty(compressedInput)) return string.Empty;
+			if (compressedInput == null) throw new ArgumentNullException(nameof(compressedInput));
+			if (compressedInput.Length == 0) return string.Empty;
 
 			try
 			{
@@ -72,7 +74,8 @@ namespace FishMMO.Shared
 		{
 			if (filePath == null) throw new ArgumentNullException(nameof(filePath));
 
-			if (string.IsNullOrEmpty(compressedString)) return;
+			if (compressedString == null) throw new ArgumentNullException(nameof(compressedString));
+			if (compressedString.Length == 0) return;
 
 			try
 			{

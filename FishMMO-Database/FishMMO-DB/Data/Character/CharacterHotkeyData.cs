@@ -5,11 +5,17 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterHotkeyData : IVersioned<CharacterHotkeyData>
 	{
+		/// <summary>Primary key.</summary>
 		public readonly long ID;
+		/// <summary>Optimistic concurrency version.</summary>
 		public readonly long Version;
+		/// <summary>Character that owns this hotkey.</summary>
 		public readonly long CharacterID;
+		/// <summary>Hotkey type identifier.</summary>
 		public readonly byte Type;
+		/// <summary>Hotkey slot index.</summary>
 		public readonly int Slot;
+		/// <summary>Referenced ability or item ID.</summary>
 		public readonly long ReferenceID;
 
 		long IVersioned<CharacterHotkeyData>.Version => Version;

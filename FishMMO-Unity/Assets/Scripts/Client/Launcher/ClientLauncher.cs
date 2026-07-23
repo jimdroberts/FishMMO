@@ -621,14 +621,19 @@ namespace FishMMO.Client
 				}
 				catch (UnityException ex)
 				{
+					this.isLaunching = false;
 					SetLauncherState(LauncherState.LaunchFailed,
 						$"Failed to load game scene: {ex.Message}. Check that Addressable bundles are built.");
 					return;
 				}
 			}
-			finally
+			catch (Exception ex)
 			{
 				this.isLaunching = false;
+				Log.Error("ClientLauncher", $"Unexpected error in PlayButtonLaunch: {ex}");
+				SetLauncherState(LauncherState.LaunchFailed,
+					$"Unexpected error: {ex.Message}");
+				return;
 			}
 
 			// Start a watchdog — BeginProcessQueue() starts async work and returns immediately.
@@ -756,7 +761,6 @@ namespace FishMMO.Client
 				if (candidates.Count == 0)
 				{
 					SetLauncherState(LauncherState.VersionCheckFailed, "No API host configured. Check Constants.cs Configuration.APIHost.");
-					this.isConnecting = false;
 					yield break;
 				}
 
@@ -800,7 +804,6 @@ namespace FishMMO.Client
 				{
 					SetLauncherState(LauncherState.VersionCheckFailed,
 						lastError ?? "All API hosts failed. Check your internet connection and firewall.");
-					this.isConnecting = false;
 					yield break;
 				}
 
@@ -818,7 +821,6 @@ namespace FishMMO.Client
 				{
 					SetLauncherState(LauncherState.VersionError,
 						$"Client version '{MainBootstrapSystem.GameVersion}' is not valid. Reinstall or delete version.txt.");
-					this.isConnecting = false;
 					yield break;
 				}
 
@@ -831,10 +833,8 @@ namespace FishMMO.Client
 					// If this code path executes, the deployed WebGL build is outdated.
 					SetLauncherState(LauncherState.VersionError,
 						"Your browser client is outdated. Please refresh the page (Ctrl+F5) to get the latest version.");
-					this.isConnecting = false;
 					yield break;
 #else
-					this.isConnecting = false;
 					PlayButtonUpdate();
 #endif
 				}
@@ -842,12 +842,10 @@ namespace FishMMO.Client
 				{
 					Log.Warning("ClientLauncher", string.Format(UIText.LogDebugClientVersionAhead, MainBootstrapSystem.GameVersion, latestVersionString));
 					SetLauncherState(LauncherState.ClientAhead);
-					this.isConnecting = false;
 				}
 				else
 				{
 					SetLauncherState(LauncherState.ReadyToPlay);
-					this.isConnecting = false;
 				}
 			}
 			finally

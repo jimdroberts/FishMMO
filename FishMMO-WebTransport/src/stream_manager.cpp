@@ -266,6 +266,11 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
      * systems (embedded, small stacks in QUIC callback threads). */
     HQUIC* pending = (HQUIC*)malloc(sizeof(HQUIC) * (size_t)WT_MAX_STREAMS);
     if (!pending) {
+        WT_LOG_ERROR("wt_stream_manager_shutdown: malloc(%zu) failed — "
+                     "cannot collect stream handles for shutdown. "
+                     "Leaking %u active streams.",
+                     sizeof(HQUIC) * (size_t)WT_MAX_STREAMS,
+                     (unsigned)atomic_load(&mgr->active_streams));
         return;  /* Can't collect handles — skip shutdown. Leaks streams but
                   * avoids stack overflow; better a leak than a crash. */
     }
@@ -378,16 +383,15 @@ int32_t wt_stream_manager_send(
     mgr->streams[slot].quic_stream = quic_stream;
     sm_unlock(mgr);
 
-    MsQuic->SetCallbackHandler(quic_stream,
-                                (void*)(uintptr_t)k_stream_handler, sctx);
-
     status = MsQuic->StreamStart(quic_stream,
                                   QUIC_STREAM_START_FLAG_IMMEDIATE);
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("StreamStart failed: 0x%x", status);
         /* MsQuic does NOT guarantee SHUTDOWN_COMPLETE fires for a stream
          * that never successfully started. Clean up the slot, sctx, and
-         * active_streams counter inline to prevent a permanent leak. */
+         * active_streams counter inline to prevent a permanent leak.
+         * SetCallbackHandler is called below (only on success), so
+         * StreamClose here won't trigger SHUTDOWN_COMPLETE — safe. */
         sm_lock(mgr);
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].quic_stream = NULL;
@@ -398,6 +402,9 @@ int32_t wt_stream_manager_send(
         MsQuic->StreamClose(quic_stream);
         return WT_ERR_SEND_FAILED;
     }
+
+    MsQuic->SetCallbackHandler(quic_stream,
+                                (void*)(uintptr_t)k_stream_handler, sctx);
 
     /* Send data — copy to ensure lifetime across async send */
     uint8_t* copy = (uint8_t*)malloc((size_t)length);

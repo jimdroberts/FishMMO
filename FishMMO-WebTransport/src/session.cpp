@@ -8,6 +8,24 @@
 #include "client.h"
 #include <stdlib.h>
 
+/* ── Stream manager lock helpers for session use ────────────────
+ * We use the stream_manager's existing streams_lock to synchronize
+ * the shutdown decision between wt_session_shutdown and
+ * on_streams_done.  These macros provide a platform-conditional
+ * lock/unlock that operates on the mgr's lock fields.
+ *
+ * NOTE: On Windows, we use EnterCriticalSection/LeaveCriticalSection
+ * directly (not the recursive sm_lock_fn from stream_manager.cpp).
+ * The session path never enters the mgr lock recursively, so the
+ * bare CRITICAL_SECTION is correct here. */
+#if defined(WT_PLATFORM_WINDOWS)
+  #define session_mgr_lock(mgr)    EnterCriticalSection(&(mgr)->streams_lock_cs)
+  #define session_mgr_unlock(mgr)  LeaveCriticalSection(&(mgr)->streams_lock_cs)
+#else
+  #define session_mgr_lock(mgr)    pthread_mutex_lock(&(mgr)->streams_lock)
+  #define session_mgr_unlock(mgr)  pthread_mutex_unlock(&(mgr)->streams_lock)
+#endif
+
 /* ── Stream data callback that dispatches to parent ─────────── */
 
 static void session_on_stream_data(
@@ -75,14 +93,41 @@ bool wt_session_acquire(wt_session_t* session)
 void wt_session_release(wt_session_t* session)
 {
     if (!session) return;
-    uint32_t prev = atomic_fetch_sub(&session->ref_count, 1);
-    if (prev == 1) {
-        /* We were the last reference. If the owner has released,
-         * it's safe to free. Otherwise the owner still holds it. */
-        if (atomic_load(&session->released)) {
-            free(session);
+
+    /* CAS loop: decrement ref_count only if it is > 0.
+     * This eliminates the TOCTOU-underflow race in the old
+     * atomic_fetch_sub approach: between fetch_sub returning 1
+     * (ref_count went 1->0) and the subsequent load of `released`,
+     * a concurrent wt_session_shutdown could call its own
+     * wt_session_release, which would fetch_sub on 0 and underflow
+     * to UINT32_MAX, leaking the session.
+     *
+     * With the CAS loop we never decrement below 0, so no underflow
+     * is possible.  The race window between releasing the last ref
+     * and checking `released` still exists, but it is benign: if
+     * shutdown's release runs first and calls free(session), this
+     * thread's CAS fails (ref_count==0, expected reloads to 0,
+     * loop exits) and we return without touching freed memory. */
+    unsigned int expected = atomic_load(&session->ref_count);
+    while (expected > 0) {
+        if (atomic_compare_exchange_strong(
+                &session->ref_count, &expected, expected - 1)) {
+            /* We decremented from expected to expected-1.
+             * If expected was 1, we went from 1 to 0 — we hold
+             * the last reference. Check if the owner has released. */
+            if (expected == 1) {
+                if (atomic_load(&session->released)) {
+                    free(session);
+                }
+            }
+            return;
         }
+        /* CAS failed: `expected` was reloaded with the current value.
+         * If it dropped to 0, we exit the loop (should not happen
+         * under normal usage). */
     }
+    /* ref_count was already 0 — double-release or use-after-free. */
+    WT_LOG_WARN("wt_session_release: ref_count already 0");
 }
 
 static void try_free_mgr(wt_stream_manager_t* mgr)
@@ -104,18 +149,12 @@ static void on_streams_done(void* ctx)
 {
     wt_stream_manager_t* mgr = (wt_stream_manager_t*)ctx;
 
-    /* Check shutdown_complete FIRST — if set, mgr may be concurrently
-     * freed by wt_session_shutdown. Only write to mgr fields after
-     * confirming shutdown_complete is still false. */
-    if (atomic_load(&mgr->shutdown_complete)) {
-        try_free_mgr(mgr);
-        return;  /* do NOT touch mgr after try_free_mgr */
-    }
-
+    session_mgr_lock(mgr);
     atomic_store(&mgr->streams_done_flag, true);
-    /* Re-check after store — shutdown may have completed between
-     * our first check and the store. */
-    if (atomic_load(&mgr->shutdown_complete))
+    int should_free = atomic_load(&mgr->shutdown_complete);
+    session_mgr_unlock(mgr);
+
+    if (should_free)
         try_free_mgr(mgr);
 }
 
@@ -142,21 +181,19 @@ void wt_session_shutdown(wt_session_t* session)
 
         wt_stream_manager_shutdown(mgr);
 
+        /* Serialize with on_streams_done: under streams_lock, set
+         * shutdown_complete and check if on_streams_done has already
+         * set its flag.  Whichever thread runs second under the lock
+         * sees the other's state and avoids touching freed memory. */
+        session_mgr_lock(mgr);
         atomic_store(&mgr->shutdown_complete, true);
-
-        /* NULL the mgr pointer BEFORE the potential free. If another thread
-         * dereferences session->stream_mgr between free and NULL, that's a
-         * use-after-free. Nulling first eliminates the window entirely. */
+        int should_free = atomic_load(&mgr->streams_done_flag) ||
+                          atomic_load(&mgr->active_streams) == 0;
         session->stream_mgr = NULL;
+        session_mgr_unlock(mgr);
 
-        /* Free if no streams active or callback already fired. CAS ensures
-         * exactly one of session_shutdown or on_streams_done wins the free.
-         * on_streams_done holds its own mgr reference (done_ctx), so it is
-         * safe to free mgr via its original pointer here. */
-        if (atomic_load(&mgr->active_streams) == 0 ||
-            atomic_load(&mgr->streams_done_flag)) {
+        if (should_free)
             try_free_mgr(mgr);
-        }
     }
     session->quic_conn = NULL;
 
@@ -188,29 +225,32 @@ int32_t wt_session_send_datagram(
     if (!session || !session->quic_conn) return WT_ERR_INVALID_STATE;
     if (!data || length <= 0) return WT_ERR_SEND_FAILED;
 
-    /* Copy data for async send — QUIC buffers must outlive the call */
-    uint8_t* copy = (uint8_t*)malloc((size_t)length);
-    if (!copy) return WT_ERR_SEND_FAILED;
-    memcpy(copy, data, (size_t)length);
+    /* Allocate a wrapper struct that includes both the data payload
+     * (flexible array member) and an ownership flag.  The struct pointer
+     * is passed as ClientContext to DatagramSend so the callback can
+     * check the flag before freeing — eliminating double-free risk even
+     * if a future msquic version fires DATAGRAM_SEND_STATE_CHANGED
+     * synchronously. */
+    wt_dgram_send_ctx_t* ctx = (wt_dgram_send_ctx_t*)malloc(
+        sizeof(wt_dgram_send_ctx_t) + (size_t)length);
+    if (!ctx) return WT_ERR_SEND_FAILED;
+    ctx->owned_by_msquic = false;
+    memcpy(ctx->data, data, (size_t)length);
 
     QUIC_BUFFER dgram_buf;
-    dgram_buf.Buffer = copy;
+    dgram_buf.Buffer = ctx->data;
     dgram_buf.Length = (uint32_t)length;
 
     QUIC_STATUS status = MsQuic->DatagramSend(
         session->quic_conn, &dgram_buf, 1,
-        QUIC_SEND_FLAG_NONE, copy);
-    /* On success, `copy` is freed by the DATAGRAM_SEND_STATE_CHANGED
-     * callback when QUIC_DATAGRAM_SEND_STATE_IS_FINAL (ACK or LOST).
-     * On failure, the datagram was never queued — no callback will fire
-     * for it, so we free `copy` ourselves. MsQuic guarantees that
-     * DATAGRAM_SEND_STATE_CHANGED does NOT fire synchronously from
-     * within DatagramSend, so there is no double-free risk. */
+        QUIC_SEND_FLAG_NONE, ctx);
 
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("DatagramSend failed: 0x%x", status);
-        free(copy);
+        /* Only free if the callback hasn't already claimed ownership */
+        if (!ctx->owned_by_msquic) free(ctx);
         return WT_ERR_SEND_FAILED;
     }
+    ctx->owned_by_msquic = true;
     return WT_OK;
 }

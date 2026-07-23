@@ -8,6 +8,7 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// </summary>
 	public class CharacterMailEntityConfiguration : IEntityTypeConfiguration<CharacterMailEntity>
 	{
+		/// <inheritdoc/>
 		public void Configure(EntityTypeBuilder<CharacterMailEntity> builder)
 		{
 			builder.ToTable("character_mail");

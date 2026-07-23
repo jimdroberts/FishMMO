@@ -90,7 +90,7 @@ namespace FishMMO.Server.Implementation
 				{
 					if (tokenSigningKeyBacking != null)
 					{
-						CryptographicOperations.ZeroMemory(tokenSigningKeyBacking);
+						CryptographicOperationsCompat.ZeroMemory(tokenSigningKeyBacking);
 					}
 
 					if (value != null)
@@ -130,7 +130,7 @@ namespace FishMMO.Server.Implementation
 				{
 					if (totpMasterKeyBacking != null)
 					{
-						CryptographicOperations.ZeroMemory(totpMasterKeyBacking);
+						CryptographicOperationsCompat.ZeroMemory(totpMasterKeyBacking);
 					}
 
 					if (value != null)
@@ -180,7 +180,7 @@ namespace FishMMO.Server.Implementation
 				byte[] copy = new byte[tokenSigningKeyBacking.Length];
 				Buffer.BlockCopy(tokenSigningKeyBacking, 0, copy, 0, copy.Length);
 				core.TokenSigningKey = copy;
-				CryptographicOperations.ZeroMemory(tokenSigningKeyBacking);
+				CryptographicOperationsCompat.ZeroMemory(tokenSigningKeyBacking);
 				tokenSigningKeyBacking = null;
 			}
 			if (totpMasterKeyBacking != null)
@@ -188,7 +188,7 @@ namespace FishMMO.Server.Implementation
 				byte[] copy = new byte[totpMasterKeyBacking.Length];
 				Buffer.BlockCopy(totpMasterKeyBacking, 0, copy, 0, copy.Length);
 				core.TotpMasterKey = copy;
-				CryptographicOperations.ZeroMemory(totpMasterKeyBacking);
+				CryptographicOperationsCompat.ZeroMemory(totpMasterKeyBacking);
 				totpMasterKeyBacking = null;
 			}
 		}
@@ -275,7 +275,7 @@ namespace FishMMO.Server.Implementation
 					}
 					finally
 					{
-						CryptographicOperations.ZeroMemory(tokenCopy);
+						CryptographicOperationsCompat.ZeroMemory(tokenCopy);
 					}
 
 					if (string.IsNullOrEmpty(tokenHash))
@@ -458,7 +458,7 @@ namespace FishMMO.Server.Implementation
 				}
 				finally
 				{
-					if (plaintextSecret != null) CryptographicOperations.ZeroMemory(plaintextSecret);
+					if (plaintextSecret != null) CryptographicOperationsCompat.ZeroMemory(plaintextSecret);
 				}
 			}
 		}
@@ -697,7 +697,7 @@ namespace FishMMO.Server.Implementation
 		/// <remarks>
 		/// <para><b>Key material lifetime:</b> Old key arrays are intentionally NOT zeroed
 		/// by this method because a concurrent reader thread may hold a reference to them
-		/// (obtained before the lock). Calling <see cref="CryptographicOperations.ZeroMemory"/>
+		/// (obtained before the lock). Calling <see cref="CryptographicOperationsCompat.ZeroMemory"/>
 		/// here would corrupt in-flight auth operations that are still using the old key
 		/// material. The old arrays will be reclaimed by the garbage collector.</para>
 		/// <para><b>NOTE:</b> Old key arrays remain in heap until GC. An attacker with a

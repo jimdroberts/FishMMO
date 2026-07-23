@@ -79,14 +79,15 @@ namespace FishMMO.Client
 			// from Process output/error handlers (which fire on background threads)
 			// are marshalled back to the main thread.
 			SynchronizationContext unityContext = SynchronizationContext.Current;
-			// Runtime assertion: LaunchUpdater must be called via
+			// Runtime check: LaunchUpdater must be called via
 			// MonoBehaviour.StartCoroutine on the Unity main thread. If
 			// SynchronizationContext.Current is null, there is no UnitySynchronizationContext
 			// installed (e.g., called from a background thread or a non-Unity context).
-			System.Diagnostics.Debug.Assert(
-				unityContext != null,
-				"[SystemUpdaterLauncher] LaunchUpdater must be invoked via MonoBehaviour.StartCoroutine " +
-				"on the Unity main thread. SynchronizationContext.Current is null.");
+			if (unityContext == null)
+			{
+				onError?.Invoke("LaunchUpdater must be invoked via MonoBehaviour.StartCoroutine on the Unity main thread. SynchronizationContext.Current is null.");
+				yield break;
+			}
 
 			try
 			{
