@@ -156,6 +156,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// load balancer where all clients share the proxy's IP, causing false-positive rate limiting
 		/// that blocks legitimate users.
 		/// </summary>
+		[Tooltip("When true, uses conn.ClientId instead of remote IP for rate limiting. Safe only behind a trusted proxy.")]
+		[SerializeField] private bool useConnectionIdForRateLimiting = false;
+
 		/// <summary>
 		/// Maximum cumulative verification failures per username across all connections before
 		/// a temporary lockout. Prevents botnets from distributing brute-force across IPs.
@@ -1029,6 +1032,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 									await Log.Error("AccountCreationSystem", $"2FA setup failed for {username} (account created without 2FA): {tfaEx}");
 								}
 							}
+							else
+							{
+								await Log.Error("AccountCreationSystem", $"TotpMasterKey is {(totpMasterKeySnapshot == null ? "null" : $"length {totpMasterKeySnapshot.Length}, expected 32")}. TOTP two-factor authentication setup is DISABLED for new accounts. Set TotpMasterKey to a valid 32-byte AES-256 key.");
+							}
 							}
 						}
 						else
@@ -1383,6 +1390,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private string? ResolveIpAddress(NetworkConnection conn)
 		{
 			if (conn == null) return null;
+
+			// When behind a trusted proxy, all clients share the proxy's IP which
+			// breaks IP-based rate limiting. Use the transport-level connection ID
+			// as the rate-limiting key instead.
+			if (useConnectionIdForRateLimiting)
+			{
+				return conn.ClientId.ToString();
+			}
+
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 				rt.ConnectionIpCache != null &&
@@ -1618,11 +1634,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 								// observed is the one still in the map. If a concurrent
 								// TrackVerifyUsernameFailure has already reset it, the CAS
 								// fails and we leave their fresh entry intact.
-								// NOTE: ConcurrentDictionary.TryRemove(KeyValuePair) is not available
-								// in Unity's runtime. The ICollection<KVP>.Remove fallback is fragile --
-								// verify after Unity runtime upgrades.
-								((ICollection<KeyValuePair<string, (int Count, DateTime FirstFailure)>>)verifyUsernameFailures)
-									.Remove(new KeyValuePair<string, (int Count, DateTime FirstFailure)>(userKey, failInfo));
+								// Use TryGetValue + TryRemove instead of the ICollection<KVP>.Remove
+								// pattern which has known issues under IL2CPP.
+								if (verifyUsernameFailures.TryGetValue(userKey, out var existing)
+									&& existing.Count == failInfo.Count
+									&& existing.FirstFailure == failInfo.FirstFailure)
+								{
+									verifyUsernameFailures.TryRemove(userKey, out _);
+								}
 							}
 							else if (failInfo.Count >= MaxVerifyFailuresPerUsername)
 							{

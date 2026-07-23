@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using FishMMO.Logging;
 
 /// <summary>
@@ -127,8 +128,11 @@ public class PatchController : ControllerBase
 	/// Streams the patch file that upgrades from <paramref name="version"/> to the
 	/// server's latest version. Only patches indexed at startup are served; no
 	/// caller-controlled string is ever concatenated into a filesystem path.
+	/// The dedicated PatchDownload rate-limiting policy is applied here so
+	/// download requests are throttled independently of metadata endpoints.
 	/// </summary>
 	[HttpGet("{version}")]
+	[EnableRateLimiting("PatchDownload")]
 	public IActionResult GetPatch(string version)
 	{
 		var latest = versionService.LatestVersion;

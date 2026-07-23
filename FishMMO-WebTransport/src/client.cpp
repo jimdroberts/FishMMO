@@ -48,12 +48,12 @@ void wt_client_free_impl(wt_client_s* client)
      * completes, so state is unreliable for distinguishing paths. */
     if (atomic_load(&client->pending_shutdowns) > 0) {
         /* Spin-wait for SHUTDOWN_COMPLETE to finish (bounded).
-         * 300 iterations * 10ms = 3 second max wait.
+         * 600 iterations * 10ms = 6 second max wait.
          * The callback closes the QUIC connection and signals
          * pending_shutdowns=0. We close config/registration here
          * on the application thread to avoid calling MsQuic
          * handle-close functions from within a callback. */
-        int retries = 300;
+        int retries = 600;
         while (atomic_load(&client->pending_shutdowns) > 0 && retries-- > 0) {
 #if defined(WT_PLATFORM_WINDOWS)
             Sleep(10);
@@ -65,6 +65,15 @@ void wt_client_free_impl(wt_client_s* client)
         if (retries < 0) {
             WT_LOG_WARN("Client shutdown timed out (pending=%u), forcing free",
                         (unsigned)atomic_load(&client->pending_shutdowns));
+            /* Force-close the QUIC connection to prevent late
+             * SHUTDOWN_COMPLETE callbacks from accessing freed memory.
+             * This is a last resort — under normal operation the
+             * spin-wait completes before the timeout. */
+            HQUIC qc = (HQUIC)atomic_ptr_load(&client->quic_conn);
+            if (qc) {
+                MsQuic->ConnectionClose(qc);
+                atomic_ptr_store(&client->quic_conn, NULL);
+            }
         }
 
         /* Close handles deferred from SHUTDOWN_COMPLETE callback.
@@ -84,9 +93,12 @@ void wt_client_free_impl(wt_client_s* client)
     }
 
     /* Never connected — clean up inline. Handle closure order: conn first. */
-    if (client->quic_conn) {
-        MsQuic->ConnectionClose(client->quic_conn);
-        client->quic_conn = NULL;
+    {
+        HQUIC qconn = (HQUIC)atomic_ptr_load(&client->quic_conn);
+        if (qconn) {
+            MsQuic->ConnectionClose(qconn);
+            atomic_ptr_store(&client->quic_conn, NULL);
+        }
     }
     if (client->session_config) {
         MsQuic->ConfigurationClose(client->session_config);
@@ -208,16 +220,16 @@ int32_t wt_client_connect_impl(
      * resolves the 4th parameter via DNS if it's a hostname, or
      * connects directly if it's an IP. */
     atomic_store(&client->state, WT_CLIENT_STARTING);
-    status = MsQuic->ConnectionStart(client->quic_conn,
+    status = MsQuic->ConnectionStart((HQUIC)atomic_ptr_load(&client->quic_conn),
                                       client->session_config,
                                       QUIC_ADDRESS_FAMILY_UNSPEC,
                                       client->address, port);
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("ConnectionStart: 0x%x", status);
-        MsQuic->ConnectionClose(client->quic_conn);
+        MsQuic->ConnectionClose((HQUIC)atomic_ptr_load(&client->quic_conn));
         MsQuic->ConfigurationClose(client->session_config);
         MsQuic->RegistrationClose(client->registration);
-        client->quic_conn = NULL;
+        atomic_ptr_store(&client->quic_conn, NULL);
         client->session_config = NULL;
         client->registration = NULL;
         atomic_store(&client->state, WT_CLIENT_STOPPED);
@@ -240,8 +252,8 @@ void wt_client_disconnect_impl(wt_client_s* client)
 
     /* Update state BEFORE ConnectionShutdown (sync callback may free client) */
     atomic_store(&client->connected, false);
-    HQUIC conn = client->quic_conn;
-    client->quic_conn = NULL;
+    HQUIC conn = (HQUIC)atomic_ptr_load(&client->quic_conn);
+    atomic_ptr_store(&client->quic_conn, NULL);
     atomic_store(&client->state, WT_CLIENT_STOPPED);
 
     /* Shut down connection FIRST — stream SHUTDOWN_COMPLETE callbacks
@@ -441,7 +453,7 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         }
 
         MsQuic->ConnectionClose(conn);
-        cli->quic_conn = NULL;
+        atomic_ptr_store(&cli->quic_conn, NULL);
 
         /* Clean up any incomplete HTTP/3 handshake */
         if (cli->h3_session) {
@@ -457,8 +469,12 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         /* Signal completion BEFORE firing the disconnect callback.
          * If the callback triggers wt_client_destroy → free_impl,
          * pending_shutdowns==0 allows the spin-wait to exit cleanly
-         * rather than deadlocking. */
-        atomic_fetch_sub(&cli->pending_shutdowns, 1);
+         * rather than deadlocking.
+         * Guard against unsigned underflow: if ConnectionClose fires
+         * SHUTDOWN_COMPLETE synchronously on the never-connected path,
+         * pending_shutdowns may not have been incremented yet. */
+        if (atomic_load(&cli->pending_shutdowns) > 0)
+            atomic_fetch_sub(&cli->pending_shutdowns, 1);
 
         /* Fire callback LAST — after all state changes are committed.
          * The callback may enqueue work that calls back into the API;

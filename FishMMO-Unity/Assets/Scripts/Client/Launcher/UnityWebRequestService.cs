@@ -84,7 +84,7 @@ namespace FishMMO.Client
 					// response means either a misconfiguration or an active MITM trying to
 					// pivot the request. Refusing redirects converts these into a hard fail
 					// instead of silently following the attacker's Location header.
-					request.redirectLimit = -1; // -1 disables redirect following (0 = unlimited in Unity)
+					request.redirectLimit = -1; // -1 disables redirect following (0 = default limit of 20 redirects in Unity 2021+)
 
 					// Hardening: disable HTTP/1.1 100-Continue for upload bodies. Launcher
 					// traffic is GET-only and has no request body; this is a defensive

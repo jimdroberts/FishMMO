@@ -47,6 +47,19 @@ namespace FishMMO.Client
 		public IEnumerator LaunchUpdater(string updaterPath, string currentClientVersion, string latestServerVersion, Action onComplete, Action<string> onError)
 		{
 #if UNITY_WEBGL && !UNITY_EDITOR
+			// WebGL builds run in the browser sandbox (MEMFS in-memory virtual filesystem);
+			// there is no executable file to launch, and the browser tab does not allow
+			// spawning child processes. Consequently, the standalone updater cannot be
+			// invoked on this platform.
+			//
+			// IMPORTANT: WebGL builds MUST always be deployed with the latest version.
+			// The build pipeline must ensure the WebGL build matches the server's
+			// expected version before deployment. Unlike desktop clients, WebGL users
+			// cannot apply a patch -- they must refresh the browser tab to receive an
+			// updated build from the web server.
+			//
+			// If a WebGL client version is outdated, ClientLauncher.GetLatestVersion()
+			// shows a user-friendly message directing the player to refresh the page.
 			Log.Error("SystemUpdaterLauncher", "LaunchUpdater is not supported on WebGL platform.");
 			onError?.Invoke("Updater is not supported on WebGL. Please use a desktop client.");
 			yield break;
@@ -78,15 +91,20 @@ namespace FishMMO.Client
 			try
 			{
 				// Prepare process start info with required arguments and settings
+				// Using ArgumentList instead of Arguments string to avoid injection
+				// from unescaped spaces in paths or version strings.
 				ProcessStartInfo startInfo = new ProcessStartInfo
 				{
 					FileName = updaterPath,
-					Arguments = $"-version={currentClientVersion} -latestversion={latestServerVersion} -pid={Process.GetCurrentProcess().Id} -exe={Constants.Configuration.ClientExecutable}",
 					UseShellExecute = false,
 					RedirectStandardOutput = true,
 					RedirectStandardError = true,
 					CreateNoWindow = true
 				};
+				startInfo.ArgumentList.Add($"-version={currentClientVersion}");
+				startInfo.ArgumentList.Add($"-latestversion={latestServerVersion}");
+				startInfo.ArgumentList.Add($"-pid={Process.GetCurrentProcess().Id}");
+				startInfo.ArgumentList.Add($"-exe={Constants.Configuration.ClientExecutable}");
 
 				process = new Process { StartInfo = startInfo };
 

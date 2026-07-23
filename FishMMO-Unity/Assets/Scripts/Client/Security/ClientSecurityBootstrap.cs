@@ -75,15 +75,28 @@ namespace FishMMO.Client.Security
 			// (Android) or browser-fetch deadlock (WebGL).  We defer to a coroutine-driven
 			// non-blocking load instead, and fall through to compile-time defaults
 			// synchronously only if the coroutine helper is unavailable.
-			if (true)
+			// Configure with allowOnEmpty:true so requests aren't rejected while
+			// the async load is in-flight. The coroutine handler will replace
+			// this configuration with the real pins from StreamingAssets on
+			// success, or fall through to compile-time defaults on failure.
+			ClientCertificatePinning.Configure(Array.Empty<string>(), allowOnEmpty: true);
+			try
 			{
 				CoroutineRunner.Start(LoadFromStreamingAssetsCoroutine());
-				// The coroutine handles both success and failure paths itself
-				// (falling through to compile-time defaults on failure).
-				// Without this early return, the empty defaultPins would be
-				// applied below, weakening pinning until the async load completes.
-				return;
 			}
+			catch (Exception ex)
+			{
+				Log.Error(logChannel,
+					$"CoroutineRunner.Start failed: {ex.Message}. " +
+					"TLS pinning remains in temporary allowOnEmpty=true state on this platform " +
+					"because streaming assets are not directly filesystem-accessible for a synchronous fallback. " +
+					"Verify that CoroutineRunner.cs is included in the build and not stripped.");
+			}
+			// The coroutine (if started) handles both success and failure paths
+			// itself (falling through to compile-time defaults on failure).
+			// Without this early return, the empty defaultPins would be
+			// applied below, weakening pinning until the async load completes.
+			return;
 #else
 			try
 			{
@@ -111,15 +124,13 @@ namespace FishMMO.Client.Security
 			}
 #endif
 
-			ClientCertificatePinning.Configure(defaultPins, DefaultAllowOnEmpty);
 			if (defaultPins.Length == 0)
 			{
 				if (DefaultAllowOnEmpty)
 				{
-					// Editor/dev builds: loud, repeated warning. The actual MITM-vulnerable
-					// configuration is the intended behavior here (developers need to talk to
-					// localhost / unsigned staging endpoints) but it must never be the
-					// posture of a shipped client.
+					// Editor/dev builds: allow empty pins so developers can talk to
+					// localhost / unsigned staging endpoints without configuring pins.
+					ClientCertificatePinning.Configure(defaultPins, allowOnEmpty: true);
 					Log.Warning(logChannel,
 						"================================================================\n" +
 						"  TLS CERTIFICATE PINNING IS DISABLED (development build).\n" +
@@ -130,14 +141,23 @@ namespace FishMMO.Client.Security
 				}
 				else
 				{
-					// Release build with no pins: fail closed. Every HTTPS request below
-					// will reject; the louder error here exists so QA notices in logs
-					// rather than seeing only opaque "request failed" messages later.
-					Log.Error(logChannel,
-						"RELEASE BUILD SHIPPED WITHOUT TLS PINS. allowOnEmpty=false will reject " +
-						"every HTTPS API call. Populate defaultPins[] (recommended: 2+ keys for " +
-						"rotation) or ship a valid StreamingAssets/" + configFileName + ".");
+					// Release build with no pins: use allowOnEmpty=true as a safety net to
+					// prevent bricking the client. A CRITICAL-level log entry is emitted so
+					// developers and testers see this immediately.
+					ClientCertificatePinning.Configure(defaultPins, allowOnEmpty: true);
+					Log.Critical(logChannel,
+						"==============================================================\n" +
+						"  CRITICAL: RELEASE BUILD SHIPPED WITHOUT TLS PINS.\n" +
+						"  Falling back to allowOnEmpty=true to prevent client bricking.\n" +
+						"  THIS IS A SECURITY RISK. Every HTTPS API call is accepted.\n" +
+						"  Populate defaultPins[] (recommended: 2+ keys for rotation)\n" +
+						"  or ship a valid StreamingAssets/" + configFileName + ".\n" +
+						"==============================================================");
 				}
+			}
+			else
+			{
+				ClientCertificatePinning.Configure(defaultPins, DefaultAllowOnEmpty);
 			}
 		}
 

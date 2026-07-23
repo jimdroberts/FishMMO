@@ -104,32 +104,44 @@ namespace FishNet.Transporting.WebTransport.Native
 
 	public static class WebTransportNative
 	{
-		// ── Error code constants (match webtransport_api.h) ──────
-		public const int WT_OK = 0;
-		public const int WT_ERR_UNKNOWN = -1;
-		public const int WT_ERR_INVALID_STATE = -2;
-		public const int WT_ERR_CONNECT_FAILED = -3;
-		public const int WT_ERR_TLS_FAILED = -4;
-		public const int WT_ERR_SEND_FAILED = -5;
-		public const int WT_ERR_BUFFER_FULL = -6;
-		public const int WT_ERR_NOT_FOUND = -7;
+		// ── Error code enum (match webtransport_api.h) ──────
+		/// <summary>Error codes returned by the native WebTransport library.</summary>
+		public enum WTError : int
+		{
+			/// <summary>Success.</summary>
+			OK = 0,
+			/// <summary>Unknown/generic error.</summary>
+			Unknown = -1,
+			/// <summary>Operation not valid in current state.</summary>
+			InvalidState = -2,
+			/// <summary>Connection attempt failed.</summary>
+			ConnectFailed = -3,
+			/// <summary>TLS/certificate error.</summary>
+			TLSError = -4,
+			/// <summary>Send operation failed.</summary>
+			SendFailed = -5,
+			/// <summary>Buffer/queue full.</summary>
+			BufferFull = -6,
+			/// <summary>Connection ID not found.</summary>
+			NotFound = -7,
+		}
 
 		/// <summary>
 		/// Returns a human-readable error string for a WebTransport error code.
 		/// Uses the native wt_error_string() function when available; falls back
 		/// to the code constant name for well-known codes, or the raw integer.
 		/// </summary>
-		public static string ErrorString(int errorCode)
+		public static string ErrorString(WTError errorCode)
 		{
 #if !UNITY_WEBGL || UNITY_EDITOR
 			try
 			{
-				IntPtr ptr = wt_error_string(errorCode);
+				IntPtr ptr = wt_error_string((int)errorCode);
 				if (ptr != IntPtr.Zero)
 				{
 					string native = Marshal.PtrToStringUTF8(ptr);
 					if (!string.IsNullOrEmpty(native))
-						return $"{native} (code {errorCode})";
+						return $"{native} (code {(int)errorCode})";
 				}
 			}
 			catch (Exception ex)
@@ -139,15 +151,15 @@ namespace FishNet.Transporting.WebTransport.Native
 #endif
 			return errorCode switch
 			{
-				WT_OK => "OK",
-				WT_ERR_UNKNOWN => "ERR_UNKNOWN",
-				WT_ERR_INVALID_STATE => "ERR_INVALID_STATE",
-				WT_ERR_CONNECT_FAILED => "ERR_CONNECT_FAILED",
-				WT_ERR_TLS_FAILED => "ERR_TLS_FAILED",
-				WT_ERR_SEND_FAILED => "ERR_SEND_FAILED",
-				WT_ERR_BUFFER_FULL => "ERR_BUFFER_FULL",
-				WT_ERR_NOT_FOUND => "ERR_NOT_FOUND",
-				_ => $"Unknown ({errorCode})"
+				WTError.OK => "OK",
+				WTError.Unknown => "ERR_UNKNOWN",
+				WTError.InvalidState => "ERR_INVALID_STATE",
+				WTError.ConnectFailed => "ERR_CONNECT_FAILED",
+				WTError.TLSError => "ERR_TLS_FAILED",
+				WTError.SendFailed => "ERR_SEND_FAILED",
+				WTError.BufferFull => "ERR_BUFFER_FULL",
+				WTError.NotFound => "ERR_NOT_FOUND",
+				_ => $"Unknown ({(int)errorCode})"
 			};
 		}
 
@@ -200,6 +212,11 @@ namespace FishNet.Transporting.WebTransport.Native
 				 * worst-case. SpinWait avoids blocking the Unity main thread.
 				 * This path is rarely hit (only during concurrent initialization
 				 * race). */
+				// Spin-wait for concurrent initialization to complete.
+				// Blocking the calling thread for up to ~250ms is acceptable here
+				// because EnsureInitialized is only called during server/client startup,
+				// not during per-frame hot paths. If this becomes a bottleneck (e.g.,
+				// rapid server restart cycles), replace with ManualResetEventSlim.
 				for (int i = 0; i < 25 && !initialized; i++)
 					System.Threading.Thread.SpinWait(100);
 				/* Timed out — caller will get an error from the native operation; they can retry next frame. */
@@ -212,7 +229,7 @@ namespace FishNet.Transporting.WebTransport.Native
 			int result = wt_init();
 			if (result != 0)
 			{
-				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {ErrorString(result)}");
+				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {ErrorString((WTError)result)}");
 				initGuard = 0;
 				return false;
 			}
@@ -276,7 +293,7 @@ namespace FishNet.Transporting.WebTransport.Native
 			[MarshalAs(UnmanagedType.LPUTF8Str)] string alpn,
 			[MarshalAs(UnmanagedType.LPUTF8Str)] string bindAddress,
 			ushort port, uint maxClients,
-			ref NativeCallbacks.ServerCallbacks callbacks,
+			IntPtr callbacks,
 			IntPtr context);
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wt_server_destroy")]
@@ -286,7 +303,17 @@ namespace FishNet.Transporting.WebTransport.Native
 		{
 			if (server != null && !server.IsInvalid)
 			{
-				wt_server_destroy_impl(server.DangerousGetHandle());
+				bool release = false;
+				try
+				{
+					server.DangerousAddRef(ref release);
+					wt_server_destroy_impl(server.DangerousGetHandle());
+				}
+				finally
+				{
+					if (release)
+						server.DangerousRelease();
+				}
 				server.SetHandleAsInvalid();
 			}
 		}
@@ -382,7 +409,7 @@ namespace FishNet.Transporting.WebTransport.Native
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wt_client_create")]
 		public static extern SafeClientHandle wt_client_create(
-			ref NativeCallbacks.ClientCallbacks callbacks,
+			IntPtr callbacks,
 			IntPtr context);
 
 		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl, EntryPoint = "wt_client_destroy")]
@@ -392,7 +419,17 @@ namespace FishNet.Transporting.WebTransport.Native
 		{
 			if (client != null && !client.IsInvalid)
 			{
-				wt_client_destroy_impl(client.DangerousGetHandle());
+				bool release = false;
+				try
+				{
+					client.DangerousAddRef(ref release);
+					wt_client_destroy_impl(client.DangerousGetHandle());
+				}
+				finally
+				{
+					if (release)
+						client.DangerousRelease();
+				}
 				client.SetHandleAsInvalid();
 			}
 		}
@@ -441,7 +478,7 @@ namespace FishNet.Transporting.WebTransport.Native
 			string certificatePath, string privateKeyPath,
 			string alpn, string bindAddress, ushort port,
 			uint maxClients,
-			ref NativeCallbacks.ServerCallbacks callbacks,
+			IntPtr callbacks,
 			IntPtr context) => new SafeServerHandle();
 
 		internal static void wt_server_destroy_impl(IntPtr server) { }
@@ -458,7 +495,7 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static int wt_server_get_state(SafeServerHandle s) => 0;
 
 		public static SafeClientHandle wt_client_create(
-			ref NativeCallbacks.ClientCallbacks cb, IntPtr ctx) => new SafeClientHandle();
+			IntPtr cb, IntPtr ctx) => new SafeClientHandle();
 		internal static void wt_client_destroy_impl(IntPtr client) { }
 		public static void wt_client_destroy(SafeClientHandle client) { }
 		public static int wt_client_connect(SafeClientHandle c, string sn, string addr, ushort p, int tls) => -1;

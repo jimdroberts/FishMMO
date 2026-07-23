@@ -260,9 +260,17 @@ namespace FishMMO.Client
 		if (core == null || !initialized) return;
 		// Spread re-handshake attempts across ~1 second to prevent all admitted
 		// clients from hitting the SRP verify channel at the same instant.
-		int jitterMs = UnityEngine.Random.Range(0, 1000);
+		int jitterMs = System.Random.Shared.Next(0, 1000);
 		if (jitterMs > 0)
 			await System.Threading.Tasks.Task.Delay(jitterMs);
+		// Guard: between the jitter delay and the OnConnected/OnDisconnected calls,
+		// the transport may have fired connection state callbacks (e.g., disconnect
+		// due to timeout, or the server dropped us). If we call OnConnected on a
+		// stopped connection, the core state machine will be in an inconsistent
+		// state. Only proceed if the connection is still valid.
+		if (Client == null || Client.Connection == null ||
+			Client.Connection.ClientState == LocalConnectionState.Stopped)
+			return;
 		core.OnDisconnected();
 		core.OnConnected(connectionToken: null);
 	}

@@ -76,6 +76,24 @@ namespace FishMMO.Client
 		/// Also returns optional per-version <see cref="PatchInfo"/> (SHA-256, size,
 		/// availability) when <paramref name="clientVersion"/> is supplied.
 		/// </summary>
+		/// <remarks>
+		///
+		/// <para><b>TODO (future version):</b> The version manifest response from
+		/// <c>/latest_version</c> should include an HMAC signature computed over the
+		/// manifest fields (server version, SHA-256, patch URL) using the
+		/// <see cref="ClientApiSecret"/> shared key. The client would verify the
+		/// HMAC before trusting the patch hash, preventing a MITM from substituting
+		/// a malicious patch. Until this is implemented, the SHA-256 hash in the
+		/// manifest is carried over a TLS-protected transport — the risk is that
+		/// TLS alone does not protect against a compromised API gateway or
+		/// mis-issued certificate.</para>
+		///
+		/// <para><b>Integrity note:</b> The downloaded patch file is verified against
+		/// its SHA-256 hash, but the version manifest response (which contains the hash)
+		/// is NOT cryptographically signed. An attacker who can MITM the
+		/// <c>/latest_version</c> endpoint could substitute a malicious patch hash.
+		/// Future hardening: sign the manifest with HMAC or Ed25519.</para>
+		/// </remarks>
 		/// <param name="apiHost">The unified API host URL.</param>
 		/// <param name="clientVersion">Client's current version string, or null/empty.</param>
 		/// <param name="onComplete">Callback for successful version fetch.</param>

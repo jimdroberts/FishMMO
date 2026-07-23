@@ -26,10 +26,22 @@ set -euo pipefail
 # ── Constants ─────────────────────────────────────────────────────
 SCRIPT_NAME="$(basename "$0")"
 LOG_TAG="restore-db"
+PGPASSFILE=""  # will hold path to temp .pgpass; cleaned up on exit
 
 # ── Logging ───────────────────────────────────────────────────────
 log_info()  { echo "[$LOG_TAG] [$(date +'%H:%M:%S')] INFO  $*"; }
 log_error() { echo "[$LOG_TAG] [$(date +'%H:%M:%S')] ERROR $*" >&2; }
+
+# ── Cleanup Handler ───────────────────────────────────────────────
+cleanup() {
+    local exit_code=$?
+    # Securely remove the temporary .pgpass file if it was created
+    if [ -n "$PGPASSFILE" ] && [ -f "$PGPASSFILE" ]; then
+        rm -f "$PGPASSFILE"
+    fi
+    exit $exit_code
+}
+trap cleanup EXIT
 
 # ── Prerequisites ─────────────────────────────────────────────────
 if ! command -v pg_restore &>/dev/null; then
@@ -112,7 +124,13 @@ if [ -t 0 ]; then
 fi
 
 # ── Perform Restore ───────────────────────────────────────────────
-export PGPASSWORD="$PG_PASSWORD"
+# Create a temporary .pgpass file instead of using PGPASSWORD environment variable.
+# This avoids exposing the password in process listings (ps aux) and core dumps.
+PGPASSFILE=$(mktemp)
+chmod 600 "$PGPASSFILE"
+echo "$PG_HOST:$PG_PORT:*:$PG_USER:$PG_PASSWORD" > "$PGPASSFILE"
+export PGPASSFILE
+log_info "Using temporary .pgpass for authentication (password not exposed in process env)"
 
 # Step 1: Terminate existing connections and drop/recreate the database
 log_info "Terminating connections to '$TARGET_DB'..."
@@ -163,11 +181,16 @@ if ! pg_restore \
     --exit-on-error \
     "$BACKUP_FILE"; then
     log_error "pg_restore failed. The target database may be in an incomplete state."
-    unset PGPASSWORD
+    rm -f "$PGPASSFILE"
+    PGPASSFILE=""
+    unset PGPASSFILE
     exit 3
 fi
 
-unset PGPASSWORD
+# Remove the .pgpass file immediately after use (cleanup trap also handles this)
+rm -f "$PGPASSFILE"
+PGPASSFILE=""
+unset PGPASSFILE
 
 log_info "Database restore completed successfully."
 log_info "=== Restore finished: $TARGET_DB restored from $BACKUP_FILE ==="

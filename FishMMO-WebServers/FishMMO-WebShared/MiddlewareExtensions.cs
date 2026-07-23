@@ -51,7 +51,7 @@ namespace FishMMO.WebShared
                     if (exposeDiagnostics)
                     {
                         h["X-Server-Version"] = serverVersion;
-                        h["Server-Timing"] = "total;dur=" + started.Elapsed.TotalMilliseconds.ToString("F1");
+                        h["Server-Timing"] = "ttfb;dur=" + started.Elapsed.TotalMilliseconds.ToString("F1");
                     }
                     extraHeaders?.Invoke(h);
                     return Task.CompletedTask;

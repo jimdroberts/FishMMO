@@ -51,8 +51,14 @@ log_warn()  { echo "[$LOG_TAG] [$(date +'%H:%M:%S')] WARN  $*" >&2; }
 log_error() { echo "[$LOG_TAG] [$(date +'%H:%M:%S')] ERROR $*" >&2; }
 
 # ── Error Handler ─────────────────────────────────────────────────
+PGPASSFILE=""  # will hold path to temp .pgpass; cleaned up in cleanup()
+
 cleanup() {
     local exit_code=$?
+    # Securely remove the temporary .pgpass file if it was created
+    if [ -n "$PGPASSFILE" ] && [ -f "$PGPASSFILE" ]; then
+        rm -f "$PGPASSFILE"
+    fi
     if [ $exit_code -ne 0 ]; then
         log_error "Backup failed with exit code $exit_code"
     fi
@@ -80,11 +86,17 @@ if [ -n "$PG_CONN_STRING" ]; then
     log_info "Using connection string for database connection."
     # Parse common Npgsql connection string parameters.
     # Format: Host=host;Port=5432;Database=fishmmo;Username=user;Password=pass
-    PG_HOST=$(echo "$PG_CONN_STRING" | grep -oP 'Host=\K[^;]+' || echo "${PGHOST:-localhost}")
-    PG_PORT=$(echo "$PG_CONN_STRING" | grep -oP 'Port=\K[^;]+' || echo "${PGPORT:-5432}")
-    PG_DATABASE=$(echo "$PG_CONN_STRING" | grep -oP 'Database=\K[^;]+' || echo "${PGDATABASE:-fishmmo}")
-    PG_USER=$(echo "$PG_CONN_STRING" | grep -oP 'Username=\K[^;]+' || echo "${PGUSER:-fishmmo}")
-    PG_PASSWORD=$(echo "$PG_CONN_STRING" | grep -oP 'Password=\K[^;]+' || echo "${PGPASSWORD:-}")
+    # Use portable sed instead of GNU grep -oP for macOS/BSD compatibility.
+    PG_HOST=$(echo "$PG_CONN_STRING" | sed -n 's/.*Host=\([^;]*\).*/\1/p' | tail -1; echo "${PGHOST:-localhost}")
+    PG_HOST="${PG_HOST%$'\n'*}"; PG_HOST="${PG_HOST:-localhost}"
+    PG_PORT=$(echo "$PG_CONN_STRING" | sed -n 's/.*Port=\([^;]*\).*/\1/p' | tail -1; echo "${PGPORT:-5432}")
+    PG_PORT="${PG_PORT%$'\n'*}"; PG_PORT="${PG_PORT:-5432}"
+    PG_DATABASE=$(echo "$PG_CONN_STRING" | sed -n 's/.*Database=\([^;]*\).*/\1/p' | tail -1; echo "${PGDATABASE:-fishmmo}")
+    PG_DATABASE="${PG_DATABASE%$'\n'*}"; PG_DATABASE="${PG_DATABASE:-fishmmo}"
+    PG_USER=$(echo "$PG_CONN_STRING" | sed -n 's/.*Username=\([^;]*\).*/\1/p' | tail -1; echo "${PGUSER:-fishmmo}")
+    PG_USER="${PG_USER%$'\n'*}"; PG_USER="${PG_USER:-fishmmo}"
+    PG_PASSWORD=$(echo "$PG_CONN_STRING" | sed -n 's/.*Password=\([^;]*\).*/\1/p' | tail -1; echo "${PGPASSWORD:-}")
+    PG_PASSWORD="${PG_PASSWORD%$'\n'*}"; PG_PASSWORD="${PG_PASSWORD:-}"
 else
     # Fall back to individual environment variables
     PG_HOST="${PGHOST:-localhost}"
@@ -114,7 +126,13 @@ fi
 BACKUP_FILE="${BACKUP_DIR}/daily/${PG_DATABASE}_${TIMESTAMP}.dump"
 log_info "Starting pg_dump to: $BACKUP_FILE"
 
-export PGPASSWORD="$PG_PASSWORD"
+# Create a temporary .pgpass file instead of using PGPASSWORD environment variable.
+# This avoids exposing the password in process listings (ps aux) and core dumps.
+PGPASSFILE=$(mktemp)
+chmod 600 "$PGPASSFILE"
+echo "$PG_HOST:$PG_PORT:$PG_DATABASE:$PG_USER:$PG_PASSWORD" > "$PGPASSFILE"
+export PGPASSFILE
+log_info "Using temporary .pgpass for authentication (password not exposed in process env)"
 
 if ! "$PGDUMP" \
     --host="$PG_HOST" \
@@ -131,7 +149,10 @@ if ! "$PGDUMP" \
     exit 3
 fi
 
-unset PGPASSWORD
+# Remove the .pgpass file immediately after use (cleanup trap also handles this)
+rm -f "$PGPASSFILE"
+PGPASSFILE=""
+unset PGPASSFILE
 
 # Verify the dump is readable
 if ! "$PGDUMP" --format=custom --list "$BACKUP_FILE" &>/dev/null; then

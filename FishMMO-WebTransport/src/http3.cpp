@@ -119,11 +119,15 @@ static int qpack_varint_decode(const uint8_t* buf, size_t buf_len,
         return 0;
     }
 
-    /* Multi-byte: read 7-bit continuation chunks LSB first */
+    /* Multi-byte: read 7-bit continuation chunks LSB first.
+     * Guard against shift >= 64 which is undefined behavior in C.
+     * After 9 continuation bytes (shift=63), the 10th byte would
+     * trigger UB. We reject such oversized varints. */
     uint8_t pos = 1;
     uint64_t shift = 0;
     while (pos < (uint8_t)buf_len) {
         uint8_t byte = buf[pos];
+        if (shift >= 64) return -1;  /* prevent UB from over-long varint */
         val += (uint64_t)(byte & 0x7F) << shift;
         shift += 7;
         pos++;
@@ -489,7 +493,7 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
     memset(out, 0, sizeof(*out));
 
     uint8_t first = buf[0];
-    uint8_t consumed = 0;
+    size_t consumed = 0;
     bool name_from_static = false;
 
     if ((first & 0xC0) == 0x00) {
@@ -586,7 +590,7 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
         out->value[vlen] = '\0';
         out->value_len = (uint16_t)vlen;
     }
-    consumed += (uint8_t)vlen;
+    consumed += (size_t)vlen;
 
     return consumed;
 }
@@ -855,8 +859,11 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
         if (total == 0) return QUIC_STATUS_SUCCESS;
 
-        /* Cap at 64KB for HTTP/3 frames */
-        if (sctx->recv_offset + total > 65536) {
+        /* Cap at 64KB for HTTP/3 frames.
+         * Use overflow-safe check: ensure total doesn't push us past 64KB.
+         * (total > 65536) catches the large-payload overflow case;
+         * (recv_offset > 65536 - total) catches the gradual-accumulation case. */
+        if (total > 65536 || sctx->recv_offset > 65536 - total) {
             MsQuic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
             return QUIC_STATUS_ABORTED;
         }
@@ -1010,8 +1017,11 @@ h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
         if (total == 0) return QUIC_STATUS_SUCCESS;
 
-        /* Cap at 64KB for HTTP/3 frames */
-        if (sctx->recv_offset + total > 65536) {
+        /* Cap at 64KB for HTTP/3 frames.
+         * Use overflow-safe check: ensure total doesn't push us past 64KB.
+         * (total > 65536) catches the large-payload overflow case;
+         * (recv_offset > 65536 - total) catches the gradual-accumulation case. */
+        if (total > 65536 || sctx->recv_offset > 65536 - total) {
             MsQuic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
             return QUIC_STATUS_ABORTED;
         }

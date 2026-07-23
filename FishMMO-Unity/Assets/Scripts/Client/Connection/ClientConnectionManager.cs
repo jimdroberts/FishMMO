@@ -36,12 +36,16 @@ namespace FishMMO.Client
 		private ushort lastWorldPort;
 
 		/// <summary>Maximum reconnect attempts before giving up. Default 10.</summary>
+		[SerializeField]
 		public byte MaxReconnectAttempts = 10;
 		/// <summary>Base wait time in seconds between reconnect attempts. Default 5.</summary>
+		[SerializeField]
 		public float ReconnectAttemptWaitTime = 5f;
 		/// <summary>Maximum delay in seconds for exponential backoff. Default 60.</summary>
+		[SerializeField]
 		public float MaxReconnectDelay = 60f;
 		/// <summary>Timeout in seconds waiting for a connection to fully stop. Default 10.</summary>
+		[SerializeField]
 		public float ConnectionStopTimeoutSeconds = 10f;
 
 		/// <summary>Fired when a connection to the server is successfully established.</summary>
@@ -235,8 +239,14 @@ namespace FishMMO.Client
 				yield break;
 			}
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
-			NetworkManager.ClientManager.StartConnection(address, port);
-			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+			try
+			{
+				NetworkManager.ClientManager.StartConnection(address, port);
+			}
+			finally
+			{
+				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+			}
 			yield return null;
 		}
 	}

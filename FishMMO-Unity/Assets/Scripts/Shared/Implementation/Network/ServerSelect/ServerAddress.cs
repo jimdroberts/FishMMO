@@ -31,9 +31,15 @@ namespace FishMMO.Shared
 	/// Internal server bind address. For client-facing communication,
 	/// the address is always Constants.Configuration.GameHost — use
 	/// Port directly or ServerAddresses.Ports.
+	///
+	/// Converted from a mutable struct to a class to avoid the
+	/// pass-by-value silent data loss anti-pattern. The previous struct
+	/// warning about this has been removed since the class semantics
+	/// eliminate the issue: instances are passed by reference and
+	/// mutations are not silently lost.
 	/// </summary>
 	[Serializable]
-	public struct ServerAddress
+	public class ServerAddress
 	{
 		/// <summary>
 		/// IP address or hostname the server binds to.

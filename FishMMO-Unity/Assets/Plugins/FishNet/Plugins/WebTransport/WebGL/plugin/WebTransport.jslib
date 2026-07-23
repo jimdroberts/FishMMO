@@ -80,6 +80,12 @@ var FishWebTransport = {
                             if (session._closed) { try { streamReader.releaseLock(); } catch (_) {} return; }
                             if (sr.done) { streamReader.releaseLock(); return; }
                             var data = new Uint8Array(sr.value);
+                            // NOTE: _malloc failure silently drops data with no retry.
+                            // This is acceptable because WebTransport stream data is paced
+                            // by the sender — the next read will eventually arrive. However,
+                            // under extreme memory pressure this can cause sustained data loss.
+                            // A future improvement would be to buffer the dropped chunk and
+                            // retry _malloc after a brief delay.
                             var ptr = _malloc(data.length);
                             if (!ptr) {
                                 console.warn('[FishWT] malloc failed for stream data (' + data.length + ' bytes), dropping');
@@ -141,6 +147,8 @@ var FishWebTransport = {
                     }
                     session._dgramDoneRetries = 0;  /* reset on successful read */
                     var data = new Uint8Array(result.value);
+                    // NOTE: _malloc failure silently drops data with no retry.
+                    // Same limitation as _readBidiStreams — see comment there.
                     var ptr = _malloc(data.length);
                     if (!ptr) {
                         console.warn('[FishWT] malloc failed for datagram (' + data.length + ' bytes), dropping');
@@ -177,6 +185,7 @@ mergeInto(LibraryManager.library, {
         var session = {
             wt: null,
             _index: -1,
+            _errorFired: false,
             onOpen: onOpen,
             onClose: onClose,
             onStream: onStream,
@@ -202,6 +211,8 @@ mergeInto(LibraryManager.library, {
             FishWebTransport._readDatagrams(session);
         }).catch(function(err) {
             console.error('[FishWT] Ready failed: ' + err.message);
+            if (session._errorFired) return;
+            session._errorFired = true;
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onError, [index]);
         });
@@ -210,6 +221,8 @@ mergeInto(LibraryManager.library, {
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onClose, [index]);
         }).catch(function(err) {
+            if (session._errorFired) return;
+            session._errorFired = true;
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onError, [index]);
         });
@@ -351,8 +364,7 @@ mergeInto(LibraryManager.library, {
     },
 
     WTSetStreamThreshold: function(index, threshold) {
-        var session = FishWebTransport._get(index);
-        if (!session) return;
-        session._streamCongestionThreshold = threshold > 0 ? threshold : 500;
+        // Reserved for future stream congestion control.
+        // Currently not enforced -- streams are created on demand.
     }
 });

@@ -89,11 +89,12 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
         /* Per-connection total bound check — prevent multi-stream exhaustion.
          * atomic_fetch_add returns the OLD value, so we check if the NEW value
-         * would exceed the limit. */
+         * would exceed the limit. Use overflow-safe subtraction to prevent
+         * integer-wrapping bypass (prev_total near UINT32_MAX + total wraps). */
         {
             uint32_t prev_total = atomic_fetch_add(
                 &sctx->mgr->total_recv_bytes, total);
-            if (prev_total + total > WT_MAX_TOTAL_RECV_BUF) {
+            if (prev_total > WT_MAX_TOTAL_RECV_BUF - total) {
                 atomic_fetch_sub(&sctx->mgr->total_recv_bytes, total);
                 MsQuic->StreamShutdown(stream,
                                         QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);

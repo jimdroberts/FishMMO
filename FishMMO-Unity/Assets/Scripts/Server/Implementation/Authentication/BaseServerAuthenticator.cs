@@ -108,6 +108,27 @@ namespace FishMMO.Server.Implementation
 					"Set GameVersion in the MainBootstrap prefab to enable version enforcement.");
 			}
 #endif
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+			// Validate connection token HMAC key is configured in production.
+			// Without this key, all clients will be rejected (no connection token verification).
+			{
+				string? hmacKeyB64 = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
+				if (string.IsNullOrWhiteSpace(hmacKeyB64))
+				{
+					// Also check .cfg file fallback
+					if (Server?.Configuration != null)
+						Server.Configuration.TryGetString("ConnectionTokenHmacKeyBase64", out hmacKeyB64);
+				}
+				if (string.IsNullOrWhiteSpace(hmacKeyB64))
+				{
+					_ = Log.Error(LogPrefix,
+						"FATAL: ConnectionTokenHmacKeyBase64 is not configured. " +
+						"Clients will be unable to authenticate. " +
+						"Set ConnectionTokenHmacKeyBase64 in the server .cfg file " +
+						"or FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.");
+				}
+			}
+#endif
 			workerCts = new CancellationTokenSource();
 			shutdownToken = workerCts.Token;
 			Core.InitializeWorkers(workerCts.Token);

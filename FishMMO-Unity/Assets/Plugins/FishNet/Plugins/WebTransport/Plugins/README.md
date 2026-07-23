@@ -4,8 +4,10 @@ Native binaries for the WebTransport (QUIC/HTTP3) transport.
 
 ## Deployment-time Build Required
 
-Binaries are **not** checked into the repository. They must be built on each
-deployment server from the [FishMMO-WebTransport](../../../../../../../FishMMO-WebTransport)
+Binaries for Windows and macOS are **not** checked into the repository.
+The Linux x86_64 binary (`libfishmmo_webtransport.so`) is committed for
+convenience since Linux is the primary deployment target. All other
+platform binaries must be built from the [FishMMO-WebTransport](../../../../../../../FishMMO-WebTransport)
 C++ project before starting the game server.
 
 ### Per-platform Builds

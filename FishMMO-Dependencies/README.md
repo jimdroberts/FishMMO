@@ -6,7 +6,7 @@ of FishMMO. Building this project produces a folder of DLLs that is mirrored
 into `FishMMO-Unity/Assets/Dependencies/` so Unity can use the exact same
 package versions as the headless servers and EF Core migrator.
 
-There is intentionally no source code beyond a placeholder `Class1.cs` — the
+There is intentionally no source code beyond a placeholder `Placeholder.cs` — the
 project file (`FishMMO-Dependencies.csproj`) is the artifact that matters.
 
 ---
@@ -56,7 +56,7 @@ server, the database, and Unity all link against the same binaries.
 ```
 FishMMO-Dependencies/
 ├── FishMMO-Dependencies.csproj   # The PackageReference list (the real artifact)
-├── Class1.cs                     # Empty placeholder (required for a .csproj to compile)
+├── Placeholder.cs                     # Empty placeholder (required for a .csproj to compile)
 └── bin/Release/netstandard2.1/   # Output: all package DLLs + dependencies
                                   # → mirrored to FishMMO-Unity/Assets/Dependencies/
 ```

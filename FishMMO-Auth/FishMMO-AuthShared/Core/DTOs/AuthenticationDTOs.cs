@@ -98,7 +98,7 @@ namespace FishMMO.Auth.Core
 		/// <summary>Explicit message sequence number (server->client).</summary>
 		public uint Seq;
 		/// <summary>Encrypted signed auth token for World/Scene server authentication. Null if not enabled.</summary>
-		public byte[] Token;
+		public byte[]? Token;
 	}
 
 	/// <summary>

@@ -69,7 +69,9 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Composite index for character + time queries
 			builder.HasIndex(e => new { e.CharacterID, e.TimeCreated });
 
-			// Foreign key relationships (prevent orphaned mail rows)
+			// Foreign key relationships (application-managed referential integrity)
+			// NoAction means no CASCADE/SET NULL — the application handles referential
+			// integrity at the business-logic layer rather than the database layer.
 			builder.HasOne<CharacterEntity>()
 				.WithMany()
 				.HasForeignKey(e => e.CharacterID)

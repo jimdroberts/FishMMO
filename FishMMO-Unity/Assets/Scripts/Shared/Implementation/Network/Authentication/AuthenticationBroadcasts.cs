@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using FishNet.Broadcast;
 using FishMMO.Auth.Core;
 
@@ -24,12 +23,14 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>Multi-Field Struct Field Order:</b> Structs in this file with multiple fields
 	/// rely on FishNet's declaration-order serialization. <b>Do not reorder fields.</b>
-	/// The <see cref="System.Runtime.InteropServices.StructLayoutAttribute"/> with
-	/// <see cref="System.Runtime.InteropServices.LayoutKind.Sequential"/> is applied
-	/// where necessary (e.g. <see cref="TwoFactorSetupBroadcast"/>). C# defaults to
-	/// Sequential layout for structs, so the attribute is omitted on other structs for
-	/// brevity. If the compiler or runtime behavior changes, add the attribute explicitly,
-	/// using the <c>TwoFactorSetupBroadcast</c> declaration as a template.
+	/// FishNet's serializer reads and writes fields in declaration order, which is the
+	/// actual ordering guarantee — <b>not</b> CLR <c>StructLayout</c>. For non-blittable
+	/// structs (those containing reference-type fields like <c>byte[]</c>), the CLR
+	/// ignores <c>LayoutKind.Sequential</c> entirely and may reorder fields, especially
+	/// under IL2CPP AOT compilation.  Consequently, no struct in this file carries
+	/// <c>[StructLayout(LayoutKind.Sequential)]</c> — the attribute would be misleading
+	/// because it provides no actual ordering guarantee for types with reference-type
+	/// fields. Field ordering is solely enforced by convention and code review.
 	/// </para>
 
 	/// <summary>
@@ -264,6 +265,10 @@ namespace FishMMO.Shared
 		/// <summary>AES-GCM encrypted signed auth token (server->client).</summary>
 		public byte[] Token;
 
+		/// <summary>Result of the token renewal operation. Client should check this field
+		/// to distinguish success from failure before using the new token.</summary>
+		public ClientAuthenticationResult Result;
+
 		/// <summary>Explicit message sequence number (server->client).</summary>
 		public uint Seq;
 	}
@@ -297,12 +302,15 @@ namespace FishMMO.Shared
 	/// </para>
 	/// </summary>
 	/// <para><b>WARNING: Wire-protocol-dependent field order.</b>
-	/// FishNet serializes struct fields in declaration order. The
-	/// <see cref="LayoutKind.Sequential"/> attribute is REQUIRED to guarantee that
-	/// <see cref="OtpauthUri"/> is serialized before <see cref="RecoveryCodes"/>.
-	/// Reordering these fields will silently corrupt the nonce-derivation stream,
-	/// breaking TOTP setup for all users. DO NOT remove or change this attribute.</para>
-	[StructLayout(LayoutKind.Sequential)]
+	/// FishNet serializes struct fields in declaration order regardless of CLR layout.
+	/// The actual order guarantee comes from FishNet's serializer, not the CLR.
+	/// <!-- No [StructLayout(LayoutKind.Sequential)] here intentionally: for
+	///      non-blittable structs (those with byte[] fields), the CLR ignores
+	///      Sequential layout and IL2CPP may reorder fields anyway. The attribute
+	///      would be misleading. See the file-level doc comment for details. -->
+	/// The nonce-derivation protocol is therefore fragile and should ideally use an
+	/// explicit tagging scheme rather than declaration order.
+	/// Reordering these fields WILL break TOTP setup. DO NOT reorder.</para>
 	public struct TwoFactorSetupBroadcast : IBroadcast
 	{
 		/// <summary>

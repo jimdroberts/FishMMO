@@ -216,6 +216,14 @@ namespace FishMMO.Client
 
 			Application.logMessageReceived += OnLogMessage;
 
+			// Validate configuration: loginServerRequestTimeoutSeconds must be at least 1.
+			if (loginServerRequestTimeoutSeconds < 1)
+			{
+				Log.Warning("Client",
+					$"loginServerRequestTimeoutSeconds ({loginServerRequestTimeoutSeconds}) is too low. Defaulting to 10.");
+				loginServerRequestTimeoutSeconds = 10;
+			}
+
 			if (this.audioListener == null && Camera.main != null)
 				this.audioListener = Camera.main.gameObject.GetComponent<AudioListener>();
 
@@ -537,7 +545,7 @@ namespace FishMMO.Client
 			}
 			finally
 			{
-				foreach (var p in pending) { try { p.Request?.Abort(); } catch { } try { p.Request?.Dispose(); } catch { } }
+				foreach (var p in pending) { try { p.Request?.Abort(); } catch { /* Dispose/Abort exceptions are intentionally swallowed — the UnityWebRequest may already be disposed or the operation already complete. */ } try { p.Request?.Dispose(); } catch { /* Dispose/Abort exceptions are intentionally swallowed — the UnityWebRequest may already be disposed or the operation already complete. */ } }
 			}
 		}
 
@@ -688,6 +696,9 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.LoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Login; break;
 				case ClientAuthenticationResult.WorldLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.World; break;
 				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; DismissLoadingScreen(true); OnEnterGameWorld?.Invoke(); break;
+				default:
+					Log.Warning("Client", $"Unhandled auth result: {r}");
+					break;
 			}
 		}
 

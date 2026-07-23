@@ -31,6 +31,7 @@ namespace FishMMO.Client
 	{
 		private const string headerName = "X-FishMMO-Client";
 		private const string version = "v1";
+		private static readonly DateTime UnixEpoch = UnixEpoch;
 
 		/// <summary>
 		/// Computes the gate header for the given HTTP method + absolute URL
@@ -69,7 +70,7 @@ namespace FishMMO.Client
 			// a path the server will reject after the round trip.
 			string canonicalPath = CanonicalizePath(path)
 				?? throw new ArgumentException("URL path failed canonicalization", nameof(url));
-			long ts = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+			long ts = (long)(DateTime.UtcNow - UnixEpoch).TotalSeconds;
 			string nonce = GenerateNonce();
 			string methodUpper = method.ToUpperInvariant();
 

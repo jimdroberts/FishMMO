@@ -38,9 +38,9 @@ namespace FishMMO.Shared
 		#region Regular Expressions
 		// Static fields use PascalCase per .NET naming conventions (no `this.` prefix);
 		// usage follows the ClassName.FieldName pattern.
-		// Emails: Standard RFC-adjacent validation
+		// Emails: Standard RFC-adjacent validation (supports + aliases)
 		private static readonly Regex EmailUsernameRegex = new Regex(
-			@"^(?=.{3,320}$)[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?@[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$",
+			@"^(?=.{3,320}$)[a-zA-Z0-9](?:[a-zA-Z0-9._+-]*[a-zA-Z0-9])?@[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Usernames: Alphanumeric and underscores
@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 		// Passwords: Allow special characters (!@#$%^ etc) for better security
 		// Removed the restricted alphanumeric-only rule to encourage stronger passwords
 		private static readonly Regex PasswordRegex = new Regex(
-			@"^[a-zA-Z0-9!@#$%^&*()_+=\-\[\]{}|;:',.<>?]+$",
+			@"^[a-zA-Z0-9!@#$%^&*()_+=\-\[\]{}|;:',.<>?~`]+$",
 			RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
 		// Character Names: Starts with letter, allows single spaces between names (e.g. "Aragorn of Arnor")

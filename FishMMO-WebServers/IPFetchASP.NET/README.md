@@ -89,7 +89,7 @@ IpFetchServer/
 | Component | Responsibility |
 |---|---|
 | `LoginServerController` | Single-endpoint controller backing `GET /loginserver`. Reads active login servers from PostgreSQL via EF Core, returns `{ Ports, ConnectionToken }` envelope. Uses `SemaphoreSlim(1,1)` single-flight cache-stampede protection with 60s TTL + 0-10s random jitter. Issues stateless HMAC-SHA256 connection tokens — no database storage required. |
-| `ClientGate` (FishMMO-WebShared) | HMAC-SHA256 request signing validation with timestamp (±300s window) and nonce LRU replay protection (20,000 entries). Shared across IPFetch, Patcher, and WebGL servers. |
+| `ClientGate` (FishMMO-WebShared) | HMAC-SHA256 request signing validation with timestamp (±30s window) and nonce LRU replay protection (20,000 entries). Shared across IPFetch, Patcher, and WebGL servers. |
 | `IMemoryCache` (built-in) | 60-second TTL cache with jitter to prevent thundering-herd on cache expiry. Won't cache empty results (allows fast recovery when LoginServers register). |
 
 ## Endpoints

@@ -61,7 +61,7 @@ namespace FishMMO.Shared
 				rand = random.NextULong();
 			} while (rand >= limit);
 
-			return (long)(rand % range) + min;
+			return unchecked((long)(rand % range) + min);
 		}
 	}
 }

@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using FishMMO.Auth.Core;
 using FishMMO.Logging;
+using FishMMO.Shared;
 
 namespace FishMMO.Auth.Implementation
 {
@@ -236,11 +237,11 @@ namespace FishMMO.Auth.Implementation
 					// and defeat the timing-equalization guarantee.
 					if (keyFound && hmacKey != null)
 					{
-						CryptographicOperations.ZeroMemory(hmacKey);
+						CryptographicOperationsCompat.ZeroMemory(hmacKey);
 					}
 					hmacKey = null;
 				}
-				CryptographicOperations.ZeroMemory(rawToken);
+				CryptographicOperationsCompat.ZeroMemory(rawToken);
 				rawToken = null;
 
 				if (!verifyResult.IsValid)
@@ -328,8 +329,8 @@ namespace FishMMO.Auth.Implementation
 			}
 			catch (Exception ex)
 			{
-				if (rawToken != null) CryptographicOperations.ZeroMemory(rawToken);
-				if (hmacKey != null) CryptographicOperations.ZeroMemory(hmacKey);
+				if (rawToken != null) CryptographicOperationsCompat.ZeroMemory(rawToken);
+				if (hmacKey != null) CryptographicOperationsCompat.ZeroMemory(hmacKey);
 				await Log.Error(LogPrefix, $"Error during token auth: {ex}");
 				EnqueueMainThread(conn, () =>
 				{

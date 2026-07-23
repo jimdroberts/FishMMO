@@ -70,6 +70,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static void WriteCompressedStringToFile(string compressedString, string filePath)
 		{
+			if (filePath == null) throw new ArgumentNullException(nameof(filePath));
+
 			if (string.IsNullOrEmpty(compressedString)) return;
 
 			try
@@ -88,6 +90,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static string ReadCompressedStringFromFile(string filePath)
 		{
+			if (filePath == null) throw new ArgumentNullException(nameof(filePath));
+
 			if (!File.Exists(filePath)) return string.Empty;
 
 			try

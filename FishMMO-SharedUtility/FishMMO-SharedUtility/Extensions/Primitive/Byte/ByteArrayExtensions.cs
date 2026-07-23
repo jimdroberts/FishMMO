@@ -9,14 +9,14 @@ namespace FishMMO.Shared
 	public static class ByteArrayExtensions
 	{
 		/// <summary>
-		/// Compares two byte arrays for equality. 
+		/// Determines whether two byte arrays have equal content.
 		/// Utilizes optimized memory comparison for high-performance MMO networking tasks.
 		/// </summary>
 		/// <param name="first">The first byte array.</param>
 		/// <param name="second">The second byte array to compare against.</param>
 		/// <returns>True if arrays are equal in length and content; otherwise, false.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static bool Compare(this byte[] first, byte[] second)
+		public static bool ContentEquals(this byte[] first, byte[] second)
 		{
 			// Null checks to prevent NullReferenceException
 			if (first == null || second == null) return first == second;

@@ -31,21 +31,27 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>
 		/// Nonce context for server→client (send/encrypt) direction.
 		/// Owns the server prefix and send counter. Null until <see cref="PromoteToDirectional"/> is called.
+		/// Private setter prevents external code from bypassing the <see cref="clearLock"/> that
+		/// <see cref="Clear"/> and <see cref="NextSendNonce"/> use for thread safety.
 		/// </summary>
-		public CryptoHelper.GcmNonceContext? SendNonceCtx;
+		public CryptoHelper.GcmNonceContext? SendNonceCtx { get; private set; }
 
 		/// <summary>
 		/// Nonce context for client→server (receive/decrypt) direction.
 		/// Owns the client prefix and receive counter. Null until <see cref="PromoteToDirectional"/> is called.
+		/// Private setter prevents external code from bypassing the <see cref="clearLock"/> that
+		/// <see cref="Clear"/> and <see cref="NextReceiveNonce"/> use for thread safety.
 		/// </summary>
-		public CryptoHelper.GcmNonceContext? ReceiveNonceCtx;
+		public CryptoHelper.GcmNonceContext? ReceiveNonceCtx { get; private set; }
 
 		/// <summary>
 		/// Negotiated protocol version for this connection.
 		/// Set during the handshake and used in AAD construction for all subsequent messages.
 		/// Defaults to <see cref="CryptoHelper.ProtocolVersion"/> for backward compatibility.
+		/// NOTE: Public setter retained because <see cref="BaseAuthenticatorCore"/> writes this
+		/// from the handshake result. This is a simple ushort value (no lock needed).
 		/// </summary>
-		public ushort AgreedVersion;
+		public ushort AgreedVersion { get; set; }
 
 		/// <summary>Lock for thread-safe access to nonce contexts in Clear/NextSendNonce/NextReceiveNonce.</summary>
 		private readonly object clearLock = new object();
@@ -72,18 +78,15 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		/// <returns>Tuple of (12-byte nonce, sequence number).</returns>
 		/// <remarks>
-		/// <b>NOTE:</b> The lock only protects the reference-read of <c>SendNonceCtx</c>. After lock
-		/// release, <c>ctx.NextNonce()</c> is called on an unprotected reference. This is safe because
-		/// <c>Clear()</c> and <c>NextNonce()</c> are never called concurrently in the designed flow.
+		/// The lock is held across both the reference read and the <c>NextNonce()</c> call
+		/// to prevent a concurrent <see cref="Clear()"/> from disposing the context mid-operation.
 		/// </remarks>
 		public (byte[] Nonce, uint Sequence) NextSendNonce()
 		{
-			CryptoHelper.GcmNonceContext ctx;
 			lock (clearLock)
 			{
-				ctx = SendNonceCtx!;
+				return SendNonceCtx!.NextNonce();
 			}
-			return ctx.NextNonce();
 		}
 
 		/// <summary>
@@ -101,14 +104,16 @@ namespace FishMMO.Auth.Implementation
 		/// Builds the next client→server GCM nonce and advances the receive counter.
 		/// </summary>
 		/// <returns>Tuple of (12-byte nonce, sequence number).</returns>
+		/// <remarks>
+		/// The lock is held across both the reference read and the <c>NextNonce()</c> call
+		/// to prevent a concurrent <see cref="Clear()"/> from disposing the context mid-operation.
+		/// </remarks>
 		public (byte[] Nonce, uint Sequence) NextReceiveNonce()
 		{
-			CryptoHelper.GcmNonceContext ctx;
 			lock (clearLock)
 			{
-				ctx = ReceiveNonceCtx!;
+				return ReceiveNonceCtx!.NextNonce();
 			}
-			return ctx.NextNonce();
 		}
 
 		/// <summary>

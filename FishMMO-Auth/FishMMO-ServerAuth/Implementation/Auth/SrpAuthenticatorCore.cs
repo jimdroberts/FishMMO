@@ -239,6 +239,22 @@ namespace FishMMO.Auth.Implementation
 				}
 			}
 
+			// Startup validation: TotpMasterKey must be a valid 32-byte AES-256 key.
+			// If the master key is missing or misconfigured, TOTP verification silently fails
+			// for existing accounts (they cannot log in) and new accounts never get TOTP setup.
+			// A hard error at startup ensures the operator is immediately aware, rather than
+			// discovering the issue through support tickets about accounts unable to log in.
+			byte[]? totpKeySnapshot = totpMasterKey;
+			if (totpKeySnapshot == null || totpKeySnapshot.Length != 32)
+			{
+				string msg = $"TotpMasterKey is {(totpKeySnapshot == null ? "null" : $"length {totpKeySnapshot.Length} (expected 32)")}. " +
+					"TOTP two-factor authentication will be completely unavailable. " +
+					"Set TotpMasterKey to a valid 32-byte AES-256 key before calling InitializeWorkers, " +
+					"or disable TOTP enforcement in configuration if 2FA is not required.";
+				_ = Log.Error(LogPrefix, msg);
+				throw new InvalidOperationException(msg);
+			}
+
 			totpSemaphore = new SemaphoreSlim(MaxConcurrentTotpVerifications, MaxConcurrentTotpVerifications);
 
 			verifyChannel = Channel.CreateBounded<SrpVerifyRequest<TConnection>>(new BoundedChannelOptions(VerifyChannelCapacity)

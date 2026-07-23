@@ -50,6 +50,7 @@ public class PatchVersionService : IDisposable
 
 	private FileSystemWatcher? watcher;
 	private readonly object reindexLock = new();
+	private volatile bool _disposed;
 	private Timer? debounceTimer;
 
 	private static readonly Regex PatchFileNameRegex =
@@ -110,6 +111,7 @@ public class PatchVersionService : IDisposable
 
 	private void ScheduleReindex()
 	{
+		if (_disposed) return;
 		// Use CompareExchange so two FileSystemWatcher callbacks racing on the very
 		// first event can never construct two Timers (and leak the loser). After the timer
 		// exists, the cheap Change() call is safe to race on — Timer.Change is thread-safe.
@@ -120,6 +122,7 @@ public class PatchVersionService : IDisposable
 			{
 				lock (reindexLock)
 				{
+					if (_disposed) return;
 					try
 					{
 						InitializeLatestVersion();
@@ -143,12 +146,25 @@ public class PatchVersionService : IDisposable
 
 	public void Dispose()
 	{
-		watcher?.Dispose();
-		debounceTimer?.Dispose();
+		_disposed = true;
+
+		if (watcher != null)
+		{
+			watcher.EnableRaisingEvents = false;
+			watcher.Dispose();
+			watcher = null;
+		}
+
+		if (debounceTimer != null)
+		{
+			debounceTimer.Dispose();
+			debounceTimer = null;
+		}
 	}
 
 	private void InitializeLatestVersion()
 	{
+		if (_disposed) return;
 		var patchesDirectoryConfig = config["Patches:DirectoryName"] ?? "Patches";
 		var patchesPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, patchesDirectoryConfig));
 		PatchesRoot = patchesPath.EndsWith(Path.DirectorySeparatorChar) ? patchesPath : patchesPath + Path.DirectorySeparatorChar;

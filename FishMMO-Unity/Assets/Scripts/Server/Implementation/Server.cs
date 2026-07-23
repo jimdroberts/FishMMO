@@ -161,10 +161,9 @@ namespace FishMMO.Server.Implementation
 			CoreServer = new CoreServer(Configuration, ServerEvents);
 			NetworkWrapper = new FishNetNetworkWrapper(networkManager, Configuration, this);
 
-			ServerEvents.OnLoginServerInitialized -= loginServerInitializedLogHandler;
-			ServerEvents.OnWorldServerInitialized -= worldServerInitializedLogHandler;
-			ServerEvents.OnSceneServerInitialized -= sceneServerInitializedLogHandler;
-
+			// Subscribe server-initialized log handlers.
+			// Start() is called exactly once by Unity; duplicate subscription
+			// is not a concern here. Domain reload guards are handled by OnDestroy.
 			ServerEvents.OnLoginServerInitialized += loginServerInitializedLogHandler;
 			ServerEvents.OnWorldServerInitialized += worldServerInitializedLogHandler;
 			ServerEvents.OnSceneServerInitialized += sceneServerInitializedLogHandler;
@@ -475,6 +474,10 @@ namespace FishMMO.Server.Implementation
 					if (auth.AreWorkersDrained()) break;
 				}
 				else break;
+				// Thread.Sleep is acceptable here: PerformShutdown runs during OnDestroy,
+				// which cannot yield (no coroutine support). The sleep duration is
+				// bounded by workerDrainTimeoutSeconds (5s) and this path only executes
+				// during process teardown, not during normal gameplay.
 				System.Threading.Thread.Sleep(10);
 			}
 

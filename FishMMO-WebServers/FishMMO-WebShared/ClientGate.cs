@@ -139,7 +139,9 @@ namespace FishMMO.WebShared
                 }
 
                 long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                long skew = Math.Abs(now - ts);
+                // Safe absolute value: Math.Abs(long.MinValue) throws OverflowException.
+                long diff = now - ts;
+                long skew = diff < 0 ? (diff == long.MinValue ? long.MaxValue : -diff) : diff;
                 if (skew > MaxSkewSeconds)
                 {
                     await Reject(ctx, $"timestamp skew {skew}s exceeds {MaxSkewSeconds}s");

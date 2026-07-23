@@ -161,14 +161,14 @@ public class LoginServerController : ControllerBase
 	/// <summary>
 	/// Resolves the shared HMAC key for connection token signing.
 	/// Order: ConnectionToken:HmacKey in appsettings.json, then
-	/// CONNECTION_TOKEN_HMAC_KEY environment variable.
+	/// FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.
 	/// Returns null if neither is configured.
 	/// </summary>
 	private byte[]? GetConnectionTokenHmacKey()
 	{
 		var b64 = configuration["ConnectionToken:HmacKey"];
 		if (string.IsNullOrWhiteSpace(b64))
-			b64 = System.Environment.GetEnvironmentVariable("CONNECTION_TOKEN_HMAC_KEY");
+			b64 = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
 		if (string.IsNullOrWhiteSpace(b64))
 			return null;
 		try

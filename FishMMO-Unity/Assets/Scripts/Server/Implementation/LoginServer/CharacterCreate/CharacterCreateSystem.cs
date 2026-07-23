@@ -232,6 +232,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Validate spawnable prefab via Unity API
 			IPlayerCharacter characterPrefab = raceTemplate.Prefab.GetComponent<IPlayerCharacter>();
 			if (characterPrefab == null ||
+				characterPrefab.NetworkObject == null ||
 				Server.NetworkWrapper.NetworkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);

@@ -54,25 +54,22 @@ int32_t wt_session_init(
 bool wt_session_acquire(wt_session_t* session)
 {
     if (!session) return false;
-    /* Check the released flag BEFORE incrementing ref_count.
-     * Once released is set by wt_session_shutdown, no new acquires
-     * may succeed.  This prevents the use-after-free race where a
-     * concurrent wt_session_shutdown could set released, release the
-     * owner reference (ref_count 1 -> 0), and free(session) between
-     * our fetch_add and the subsequent fetch_sub on the prev==0 path.
-     * After the released check here, the session won't be freed while
-     * we hold a reference (free requires ref_count to hit 0 AND
-     * released to be true, and we are about to make ref_count > 0). */
-    if (atomic_load(&session->released)) return false;
 
-    uint32_t prev = atomic_fetch_add(&session->ref_count, 1);
-    if (prev == 0) {
-        /* refcount was 0 — session is already freed or being freed.
-         * Undo our increment. */
-        atomic_fetch_sub(&session->ref_count, 1);
-        return false;
+    /* Atomically increment ref_count only if it is > 0.  This CAS retry
+     * loop eliminates the TOCTOU race between the old separate "released"
+     * check and ref_count increment: a concurrent wt_session_shutdown /
+     * wt_session_release could set released=true and free(session) in the
+     * window between those two operations.  By operating on the SAME memory
+     * location (ref_count) for both the load and the compare-and-swap, we
+     * close that window entirely — if the session is being freed (ref_count
+     * drops to 0) between the load and the CAS, the CAS fails, expected is
+     * updated to 0, and the loop exits with false. */
+    unsigned int expected = atomic_load(&session->ref_count);
+    while (expected > 0) {
+        if (atomic_compare_exchange_strong(&session->ref_count, &expected, expected + 1))
+            return true;
     }
-    return true;
+    return false;
 }
 
 void wt_session_release(wt_session_t* session)

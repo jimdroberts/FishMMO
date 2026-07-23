@@ -4,6 +4,8 @@
 		<TargetFramework>netstandard2.1</TargetFramework>
 		<RootNamespace>FishMMO.Dependencies</RootNamespace>
 		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<LangVersion>latest</LangVersion>
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 	</PropertyGroup>
 
@@ -36,7 +38,7 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="5.0.17" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="5.0.17">
 			<PrivateAssets>all</PrivateAssets>
-			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<IncludeAssets>analyzers; build; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.4" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.4" />
@@ -73,6 +75,13 @@
 		<PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
 		<PackageReference Include="ZString" Version="2.6.0" />
 		<PackageReference Include="Otp.NET" Version="1.4.1" />
+		<!--
+			StackExchange.Redis and related packages are transitively pulled by FishMMO-AuthShared
+			but explicitly pinned here for version control consistency across the solution.
+		-->
+		<PackageReference Include="StackExchange.Redis" Version="2.8.0" />
+		<PackageReference Include="Pipelines.Sockets.Unofficial" Version="2.2.8" />
+		<PackageReference Include="StackExchange.Redis.Extensions.Core" Version="10.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -87,6 +96,7 @@
 		<ProjectReference Include="..\FishMMO-Auth\FishMMO-ServerAuth\FishMMO-ServerAuth.csproj" />
 		<ProjectReference Include="..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
 		<ProjectReference Include="..\FishMMO-SharedUtility\FishMMO-SharedUtility\FishMMO-SharedUtility.csproj" />
+		<ProjectReference Include="..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
 	</ItemGroup>
 
 	<Target Name="RemoveStaleDependencies" BeforeTargets="CopyDependenciesToUnity">

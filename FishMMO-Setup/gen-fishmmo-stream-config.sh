@@ -37,6 +37,8 @@ gen_port() {
 # session reaping.
 server {
     listen ${port} udp;
+    # IPv6 dual-stack: uncomment the line below and ensure nginx is built with --with-ipv6
+    # listen [::]:${port} udp;
     proxy_pass ${BACKEND_IP}:${port};
     # QUIC idle timeout is 120s (WT_DEFAULT_IDLE_TIMEOUT_MS).  Keep the nginx
     # proxy_timeout within the same envelope so the UDP session is not held open
@@ -91,6 +93,7 @@ fi
 ls "$TMPDIR" > "$TMPDIR/.generated-files"
 
 # Move new configs in (atomic per-file — no window with zero configs)
+shopt -s nullglob
 for f in "$TMPDIR"/*.conf; do
     mv "$f" "$STREAM_DIR/"
 done
@@ -101,5 +104,6 @@ for f in "$STREAM_DIR"/*.conf; do
         rm -f "$f"
     fi
 done
+shopt -u nullglob
 
 echo "Generated $(ls "$STREAM_DIR"/*.conf 2>/dev/null | wc -l) stream configs in $STREAM_DIR"

@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using System.Threading.RateLimiting;
 using FishMMO.Database.Npgsql;
 using FishMMO.WebShared;
@@ -25,6 +24,10 @@ namespace FishMMO.WebServer
 				Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", fishEnv);
 			}
 
+			// NOTE: The logging configuration (logging.json) typically writes to /var/log/fishmmo/.
+			// This directory MUST exist before the application starts. Deployment scripts (docker-compose,
+			// systemd unit, etc.) should ensure it is created with appropriate ownership and permissions.
+			// Failure to create this directory will cause Log.Initialize to fail silently or throw.
 			string loggingConfigPath = Path.Combine(AppContext.BaseDirectory, "logging.json");
 			await Log.Initialize(loggingConfigPath);
 			await Log.Info("Program", "Starting WebServer application...");
@@ -46,13 +49,9 @@ namespace FishMMO.WebServer
 
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
-				.ConfigureAppConfiguration((hostingContext, config) =>
-				{
-					// Working-directory overrides take precedence over bundled defaults.
-					string env = hostingContext.HostingEnvironment.EnvironmentName;
-					config.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json"), optional: true, reloadOnChange: true);
-					config.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), $"appsettings.{env}.json"), optional: true, reloadOnChange: true);
-				})
+				// NOTE: Host.CreateDefaultBuilder already loads appsettings.json and appsettings.{env}.json
+				// from the content root (AppContext.BaseDirectory). The explicit AddJsonFile calls are
+				// intentionally omitted to avoid unexpected config resolution when CWD differs.
 				.ConfigureLogging((context, logging) =>
 				{
 					logging.ClearProviders();
@@ -63,9 +62,19 @@ namespace FishMMO.WebServer
 					webBuilder.UseContentRoot(AppContext.BaseDirectory);
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
-						// Use nullable GetValue: if the key is missing, GetValue<int> returns 0
-							// (default(int)) which would bind Kestrel to a random OS port, not 8080.
-							int port = context.Configuration.GetValue<int?>("WebServer:HttpPort") ?? 8080;
+						// Parse port as a string to distinguish "missing" from "invalid".
+						// GetValue<int?>() silently returns 0 for malformed (non-null) values,
+						// which would bind Kestrel to a random OS port instead of the fallback.
+						int port = 8080;
+						string? portSetting = context.Configuration["WebServer:HttpPort"];
+						if (!string.IsNullOrEmpty(portSetting))
+						{
+							if (!int.TryParse(portSetting, out port) || port < 1 || port > 65535)
+							{
+								_ = Log.Warning("Kestrel", $"WebServer:HttpPort '{portSetting}' is invalid; falling back to port 8080.");
+								port = 8080;
+							}
+						}
 						// WebServer:HttpPort accepts both string ("8080") and number (8080) formats
 						// through the configuration binder. This inconsistency is intentional
 						// so operators can use either format in appsettings.json.
@@ -255,27 +264,31 @@ namespace FishMMO.WebServer
 
 			string? connectionString = configuration.GetConnectionString("NpgsqlConnection");
 			if (string.IsNullOrWhiteSpace(connectionString))
-			{
-				// Other startup code will fail loudly with a clearer "missing connection string"
-				// error; we shouldn't pre-empt that with a less specific Ssl Mode complaint.
-				return;
-			}
+				return; // Other startup code will fail with clearer error
 
-			string normalized = Regex.Replace(connectionString, @"\s+", "").ToLowerInvariant();
-			// Accept any of: sslmode=require / verifyca / verifyfull / sslmode=disable-explicit-with-allow flag.
-			bool hasRequire = normalized.Contains("sslmode=require")
-				|| normalized.Contains("sslmode=verifyca")
-				|| normalized.Contains("sslmode=verify-ca")
-				|| normalized.Contains("sslmode=verifyfull")
-				|| normalized.Contains("sslmode=verify-full");
-			if (!hasRequire)
+			// Use Npgsql's connection string builder for authoritative parsing
+			// instead of fragile regex matching that can be bypassed by quoted values
+			// or duplicate keys.
+			try
+			{
+				var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+				if (builder.SslMode != Npgsql.SslMode.Require &&
+					builder.SslMode != Npgsql.SslMode.VerifyCA &&
+					builder.SslMode != Npgsql.SslMode.VerifyFull)
+				{
+					throw new InvalidOperationException(
+						"In Production, the Npgsql ConnectionStrings:NpgsqlConnection must use " +
+						"'Ssl Mode=Require' (or VerifyCA / VerifyFull). The default 'Prefer' silently " +
+						"falls back to plaintext, exposing credentials. Set " +
+						"ConnectionStrings:AllowInsecureNpgsql=true to deliberately allow an " +
+						"unencrypted connection (e.g., loopback Unix socket).");
+				}
+			}
+			catch (InvalidOperationException) { throw; }
+			catch (Exception ex)
 			{
 				throw new InvalidOperationException(
-					"In Production, the Npgsql ConnectionStrings:NpgsqlConnection must include " +
-					"'Ssl Mode=Require' (or VerifyCA / VerifyFull). The default 'Prefer' silently " +
-					"falls back to plaintext, exposing credentials. Set " +
-					"ConnectionStrings:AllowInsecureNpgsql=true to deliberately allow an " +
-					"unencrypted connection (e.g., loopback Unix socket).");
+					$"Failed to parse Npgsql connection string for SSL validation: {ex.Message}", ex);
 			}
 		}
 	}

@@ -1,5 +1,6 @@
 using FishNet.Managing;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -55,6 +56,7 @@ namespace FishNet.Transporting.WebTransport
 				LogTransportWarning($"[WebTransport] SetConnectionState({connectionState}, {asServer}) skipped: transport is null. Was Initialize() called?");
 				return;
 			}
+			// transport is guaranteed non-null after this guard
 
 			this.connectionState = connectionState;
 			if (asServer)
@@ -111,22 +113,25 @@ namespace FishNet.Transporting.WebTransport
 		/// <param name="segment">The data segment to send.</param>
 		/// <param name="connectionId">The target connection ID, or -1 for broadcast on the server.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal void Send(Queue<Packet> queue, byte channelId, ArraySegment<byte> segment, int connectionId)
+		internal void Send(ConcurrentQueue<Packet> queue, byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
 			if (GetConnectionState() != LocalConnectionState.Started)
 				return;
 
-			// Backpressure: drop packets when queue exceeds limit to prevent
-			// unbounded memory growth under network congestion or slow clients.
-			if (queue.Count >= MaxOutgoingQueueSize)
-			{
-				if (channelId == 0)
-					LogTransportWarning($"[WebTransport] Outgoing queue full ({MaxOutgoingQueueSize}); dropping reliable packet.");
-				return;
-			}
-
 			Packet outgoing = new Packet(connectionId, segment, channelId);
 			queue.Enqueue(outgoing);
+
+			// Backpressure: if queue exceeds limit, drop the oldest packet.
+			// ConcurrentQueue is unbounded; we enforce the limit by dequeuing
+			// after enqueue rather than checking-before-enqueue (which would
+			// have a TOCTOU race with concurrent enqueues).
+			if (queue.Count > MaxOutgoingQueueSize)
+			{
+				if (queue.TryDequeue(out Packet dropped))
+					dropped.Dispose();
+				if (channelId == 0)
+					LogTransportWarning($"[WebTransport] Outgoing queue full ({MaxOutgoingQueueSize}); dropping reliable packet.");
+			}
 		}
 
 		/// <summary>
@@ -143,12 +148,10 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		/// <param name="queue">The outgoing packet queue to drain.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		internal void ClearPacketQueue(Queue<Packet> queue)
+		internal void ClearPacketQueue(ConcurrentQueue<Packet> queue)
 		{
-			int count = queue.Count;
-			for (int i = 0; i < count; i++)
+			while (queue.TryDequeue(out Packet p))
 			{
-				Packet p = queue.Dequeue();
 				p.Dispose();
 			}
 		}

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Transporting;
@@ -83,7 +84,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// they get immediate re-admission instead of being re-queued at the tail.
 		/// Entries expire after <see cref="RecentAdmitTtlSeconds"/>.
 		/// </summary>
-		private readonly HashSet<int> recentlyAdmitted = new HashSet<int>();
+		// ConcurrentDictionary used instead of HashSet for thread safety.
+		// OnClientDisconnected() is called from FishNet network callbacks (potentially
+		// on a transport thread), while TryEnqueue() and TryAdmitFromQueue() run on
+		// the Unity main thread. ConcurrentDictionary provides lock-free reads/writes.
+		private readonly ConcurrentDictionary<int, byte> recentlyAdmitted = new ConcurrentDictionary<int, byte>();
 		private const float RecentAdmitTtlSeconds = 15f;
 		private float nextRecentAdmitSweep;
 
@@ -203,9 +208,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Fast-pass: if this client was recently admitted from the queue
 			// but their re-handshake failed (auth cap still full), admit them
 			// immediately instead of re-queuing at the tail.
-			if (recentlyAdmitted.Contains(conn.ClientId))
+			if (recentlyAdmitted.ContainsKey(conn.ClientId))
 			{
-				recentlyAdmitted.Remove(conn.ClientId);
+				recentlyAdmitted.TryRemove(conn.ClientId, out _);
 				int pos = 0; // immediate re-admission
 				SendPositionUpdate(conn, pos, 0, queue.Count);
 				Log.Debug("LoginQueueSystem",
@@ -259,7 +264,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					// Track as recently admitted so that if their re-handshake
 					// fails (auth cap still full), they get a fast-pass through
 					// TryEnqueue instead of being re-queued at the tail.
-					recentlyAdmitted.Add(conn.ClientId);
+					recentlyAdmitted.TryAdd(conn.ClientId, 0);
 
 					// Position 0 = "you are being processed now — retry your handshake"
 					SendPositionUpdate(conn, 0, 0, 0);
@@ -317,7 +322,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="clientId">The FishNet client ID that disconnected.</param>
 		public void OnClientDisconnected(int clientId)
 		{
-			recentlyAdmitted.Remove(clientId);
+			recentlyAdmitted.TryRemove(clientId, out _);
 			// We can't look up the NetworkConnection from just the clientId
 			// without access to the ServerManager, but the next purge sweep
 			// will catch it. The recentlyAdmitted cleanup is the critical path

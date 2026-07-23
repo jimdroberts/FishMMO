@@ -796,6 +796,13 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// NOTE: This update intentionally does NOT use version gating (no <c>AND version &lt; {version_param}</c>)
+		/// because position data is considered "last writer wins" and is not critical for consistency.
+		/// Frequent position updates would cause excessive version conflicts under optimistic concurrency.
+		/// If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
+		/// and pass the incoming version as a parameter.
+		/// </remarks>
 		public async Task<DatabaseResult> UpdatePositionAsync(long characterId, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
@@ -839,6 +846,13 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// NOTE: This update intentionally does NOT use version gating (no <c>AND version &lt; {version_param}</c>)
+		/// because scene/position data is considered "last writer wins" and is not critical for consistency.
+		/// Frequent scene updates would cause excessive version conflicts under optimistic concurrency.
+		/// If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
+		/// and pass the incoming version as a parameter.
+		/// </remarks>
 		public async Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)

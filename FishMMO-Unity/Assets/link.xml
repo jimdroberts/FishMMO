@@ -14,4 +14,69 @@
     Referenced by: ClientCertificatePinning.cs
   -->
   <assembly fullname="Org.BouncyCastle" preserve="all"/>
+
+  <!--
+    FishMMO-AuthShared provides authentication DTOs and enums
+    (e.g. ClientAuthenticationResult, ConnectionEncryptionData) used
+    across client, server, and shared broadcast structs.  The linker
+    strips these in IL2CPP builds because they are only referenced
+    indirectly through FishNet serialization paths.
+
+    Referenced by: AuthenticationBroadcasts.cs, HandshakeService.cs, etc.
+  -->
+  <assembly fullname="FishMMO-AuthShared">
+    <type fullname="FishMMO.Auth.Core.*" preserve="all"/>
+  </assembly>
+
+  <!--
+    FishMMO.Shared contains network broadcast structs (auth handshake,
+    server select, world details), Constants (including GetWorkingDirectory
+    which calls System.AppContext), ServerAddress, WorldServerDetails,
+    and other types used across client and server assemblies.
+
+    Preserving the full assembly is safe since it is the primary shared
+    code assembly and all types are referenced at runtime.
+
+    Referenced by: Constants.cs, AuthenticationBroadcasts.cs, ServerAddress.cs,
+    WorldServerDetails.cs, and all shared network code.
+  -->
+  <assembly fullname="FishMMO.Shared" preserve="all"/>
+
+  <!--
+    FishMMO.Client contains client-side network handlers, UI controllers,
+    and security helpers that reference shared broadcast types.
+
+    Referenced by: all client-side code that sends/receives broadcasts.
+  -->
+  <assembly fullname="FishMMO.Client" preserve="all"/>
+
+  <!--
+    FishMMO.Server contains server-side systems that send world server
+    details, handle character select, and process network broadcasts.
+
+    Referenced by: ServerSelectSystem.cs, CharacterSelectSystem.cs, etc.
+  -->
+  <assembly fullname="FishMMO.Server" preserve="all"/>
+
+  <!--
+    System.AppContext is used by Constants.GetWorkingDirectory() to
+    obtain the application base directory via AppDomain.CurrentDomain
+    .BaseDirectory. Under IL2CPP the System.Runtime assembly is heavily
+    stripped and this type may be removed, causing a MissingMethodException.
+
+    Referenced by: Constants.cs
+  -->
+  <assembly fullname="System.Runtime">
+    <type fullname="System.AppContext" preserve="all"/>
+  </assembly>
+
+  <!--
+    WebTransport native types must be preserved for FishNet's WebTransport
+    plugin to function at runtime on IL2CPP platforms.  The plugin relies
+    on P/Invoke and native struct interop.  Missing types cause silent
+    connection failures on WebGL builds.
+
+    Referenced by: FishNet WebTransport transport.
+  -->
+  <assembly fullname="WebTransport" preserve="all"/>
 </linker>

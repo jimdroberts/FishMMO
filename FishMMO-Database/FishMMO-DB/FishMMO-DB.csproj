@@ -12,6 +12,11 @@
     <NoWarn>$(NoWarn);CS8618;CS8625</NoWarn>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+  <!-- EF Core 5.0 (EOL)
+       Entity Framework Core 5.0 reached end-of-life on 2022-03-09 and is no longer receiving
+       security patches. This version is pinned because the project targets netstandard2.1
+       (required for Unity compatibility), and EF Core 6.0+ dropped netstandard2.1 support.
+       Upgrading beyond 5.0 would require retargeting to .NET 6+ and verifying Unity interop. -->
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" Version="5.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.17" />

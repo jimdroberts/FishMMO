@@ -3,6 +3,7 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using FishMMO.Shared;
 
 namespace FishMMO.Auth.Implementation
 {
@@ -132,7 +133,7 @@ namespace FishMMO.Auth.Implementation
 			{
 				cookie = hmac.ComputeHash(data);
 			}
-			CryptographicOperations.ZeroMemory(data);
+			CryptographicOperationsCompat.ZeroMemory(data);
 			return cookie;
 		}
 
@@ -157,7 +158,7 @@ namespace FishMMO.Auth.Implementation
 
 			byte[] expected = ComputeHandshakeCookie(remoteIp, clientPublicKey, timeBucket, hmacKey, connectionId);
 			bool valid = CryptoHelper.FixedTimeEquals(cookie, expected);
-			CryptographicOperations.ZeroMemory(expected);
+			CryptographicOperationsCompat.ZeroMemory(expected);
 			return valid;
 		}
 
@@ -319,7 +320,7 @@ namespace FishMMO.Auth.Implementation
 				{
 					// DeriveSessionKeys zeros masterSecret (=sharedSecret) internally,
 					// but zero again defensively in case it threw before reaching its finally.
-					CryptographicOperations.ZeroMemory(sharedSecret);
+					CryptographicOperationsCompat.ZeroMemory(sharedSecret);
 				}
 			}
 			catch (CryptographicException)
@@ -328,7 +329,7 @@ namespace FishMMO.Auth.Implementation
 			}
 			finally
 			{
-				CryptographicOperations.ZeroMemory(transcriptHash);
+				CryptographicOperationsCompat.ZeroMemory(transcriptHash);
 			}
 		}
 
@@ -407,7 +408,7 @@ namespace FishMMO.Auth.Implementation
 				{
 					// DeriveSessionKeys zeros masterSecret (=sharedSecret) internally,
 					// but zero again defensively in case it threw before reaching its finally.
-					CryptographicOperations.ZeroMemory(sharedSecret);
+					CryptographicOperationsCompat.ZeroMemory(sharedSecret);
 				}
 			}
 			catch (CryptographicException)
@@ -416,7 +417,7 @@ namespace FishMMO.Auth.Implementation
 			}
 			finally
 			{
-				CryptographicOperations.ZeroMemory(transcriptHash);
+				CryptographicOperationsCompat.ZeroMemory(transcriptHash);
 			}
 		}
 
@@ -470,7 +471,7 @@ namespace FishMMO.Auth.Implementation
 			{
 				mac = hmac.ComputeHash(data);
 			}
-			CryptographicOperations.ZeroMemory(data);
+			CryptographicOperationsCompat.ZeroMemory(data);
 			return mac;
 		}
 

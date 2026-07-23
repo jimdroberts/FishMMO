@@ -262,8 +262,10 @@ namespace FishMMO.Database.Npgsql.Services
 			return outcome == ExceptionOutcome.Transient && attempt < RetryPolicy.MaxRetries;
 		}
 
-		private static readonly Random jitterRng = new Random();
-		private static readonly object jitterLock = new object();
+		// Thread-local Random instance avoids lock contention while maintaining thread safety.
+		// NOTE: Random.Shared (.NET 6+) is not available on netstandard2.1, so ThreadLocal<Random>
+		// is the best alternative for non-cryptographic jitter.
+		private static readonly ThreadLocal<Random> jitterRng = new ThreadLocal<Random>(() => new Random());
 
 		private TimeSpan GetRetryDelay(int attempt)
 		{
@@ -275,13 +277,9 @@ namespace FishMMO.Database.Npgsql.Services
 			// Linear backoff (BaseDelay * attempt) with small jitter to reduce thundering herd retries.
 			// For exponential backoff, use: BaseDelay * 2^(attempt-1).
 			// RandomNumberGenerator.GetInt32 was introduced in .NET 6 and is not available on netstandard2.1.
-			// Use lock-protected System.Random instead (jitter is non-cryptographic and infrequent).
+			// Random.Shared is also .NET 6+; use ThreadLocal<Random> instead.
 			int maxJitter = RetryPolicy.MaxJitterMs > 0 ? RetryPolicy.MaxJitterMs : 1;
-			int jitterMs;
-			lock (jitterLock)
-			{
-				jitterMs = jitterRng.Next(0, maxJitter);
-			}
+			int jitterMs = jitterRng.Value!.Next(0, maxJitter);
 			return TimeSpan.FromMilliseconds((RetryPolicy.BaseDelayMs * attempt) + jitterMs);
 		}
 
@@ -530,6 +528,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Delegates to the generic overload with a unit return value to eliminate code duplication.
 		/// A new context is created per attempt to avoid EF change-tracker state leaking across retries.
 		/// <see cref="StaleStateException"/> is treated as a logical conflict and is not retried.
+		/// <para>
+		/// IMPORTANT: This method does NOT create an explicit database transaction. Each raw SQL
+		/// statement within the delegate commits independently. For multi-statement atomicity,
+		/// use <see cref="ExecuteTransactionAsync(Func{NpgsqlDbContext, Task}, bool, string, CancellationToken)"/>
+		/// or wrap calls in a <see cref="DatabaseExecutionScope"/>.
+		/// </para>
 		/// </remarks>
 		protected async Task<DatabaseResult> ExecuteWriteAsync(
 			Func<NpgsqlDbContext, Task> action,
@@ -570,6 +574,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <remarks>
 		/// A new context is created per attempt to avoid EF change-tracker state leaking across retries.
 		/// <see cref="StaleStateException"/> is treated as a logical conflict and is not retried.
+		/// <para>
+		/// IMPORTANT: This method does NOT create an explicit database transaction. Each raw SQL
+		/// statement within the delegate commits independently. For multi-statement atomicity,
+		/// use <see cref="ExecuteTransactionAsync{TResult}(Func{NpgsqlDbContext, Task{TResult}}, bool, string, CancellationToken)"/>
+		/// or wrap calls in a <see cref="DatabaseExecutionScope"/>.
+		/// </para>
 		/// </remarks>
 		protected async Task<DatabaseResult<TResult>> ExecuteWriteAsync<TResult>(
 			Func<NpgsqlDbContext, Task<TResult>> action,

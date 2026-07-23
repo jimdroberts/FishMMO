@@ -22,6 +22,9 @@ namespace FishMMO.Shared
 			/// <summary>
 			/// Optional callback invoked when this node is removed from its owning list.
 			/// Set at construction time via <see cref="Add"/>.
+			///
+			/// IMPORTANT: This callback is invoked while the list lock is held.
+			/// Do NOT call Remove/Pop/Clear on the same list from this callback — it will deadlock.
 			/// </summary>
 			public Action? OnRemove { get; set; }
 
@@ -58,14 +61,64 @@ namespace FishMMO.Shared
 		private Node? head;
 		private Node? tail;
 
+		/// <summary>
+		/// Gets a snapshot of the head node. Note that the returned <see cref="Node"/>
+		/// reference is only a snapshot taken under the lock. By the time you use it,
+		/// the node may have been removed or its <see cref="Node.Value"/> may have been
+		/// cleared by another thread. For safe value access use <see cref="TryPeekHead"/> instead.
+		/// </summary>
 		public Node? Head
 		{
 			get { lock (syncLock) return head; }
 		}
 
+		/// <summary>
+		/// Gets a snapshot of the tail node. Note that the returned <see cref="Node"/>
+		/// reference is only a snapshot taken under the lock. By the time you use it,
+		/// the node may have been removed or its <see cref="Node.Value"/> may have been
+		/// cleared by another thread. For safe value access use <see cref="TryPeekTail"/> instead.
+		/// </summary>
 		public Node? Tail
 		{
 			get { lock (syncLock) return tail; }
+		}
+
+		/// <summary>
+		/// Safely reads the head value under the lock.
+		/// </summary>
+		/// <param name="value">When this method returns, contains the value of the head node, or <c>default</c> if the buffer is empty.</param>
+		/// <returns><c>true</c> if the buffer contained at least one node; otherwise <c>false</c>.</returns>
+		public bool TryPeekHead(out T value)
+		{
+			lock (syncLock)
+			{
+				if (head != null)
+				{
+					value = head.Value;
+					return true;
+				}
+				value = default!;
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Safely reads the tail value under the lock.
+		/// </summary>
+		/// <param name="value">When this method returns, contains the value of the tail node, or <c>default</c> if the buffer is empty.</param>
+		/// <returns><c>true</c> if the buffer contained at least one node; otherwise <c>false</c>.</returns>
+		public bool TryPeekTail(out T value)
+		{
+			lock (syncLock)
+			{
+				if (tail != null)
+				{
+					value = tail.Value;
+					return true;
+				}
+				value = default!;
+				return false;
+			}
 		}
 
 		/// <summary>
@@ -127,7 +180,17 @@ namespace FishMMO.Shared
 				} while (current != head);
 				if (!belongs) return;
 
-				node.OnRemove?.Invoke();
+				try
+				{
+					node.OnRemove?.Invoke();
+				}
+				catch (Exception ex)
+				{
+					// Swallow callback exceptions to prevent list corruption.
+					// If the application needs to observe these, it should handle
+					// errors inside the callback itself.
+					Console.WriteLine($"CircularBuffer Remove callback threw: {ex.Message}");
+				}
 
 				if (head == tail)
 				{
@@ -165,7 +228,15 @@ namespace FishMMO.Shared
 				Node node = tail;
 				T val = node.Value;
 
-				node.OnRemove?.Invoke();
+				try
+				{
+					node.OnRemove?.Invoke();
+				}
+				catch (Exception ex)
+				{
+					// Swallow callback exceptions to prevent list corruption.
+					Console.WriteLine($"CircularBuffer Pop callback threw: {ex.Message}");
+				}
 
 				if (head == tail)
 				{
@@ -228,7 +299,15 @@ namespace FishMMO.Shared
 					do
 					{
 						Node next = current.Next!;
-						current.OnRemove?.Invoke();
+						try
+				{
+					current.OnRemove?.Invoke();
+				}
+				catch (Exception ex)
+				{
+					// Swallow callback exceptions to prevent list corruption.
+					Console.WriteLine($"CircularBuffer Clear callback threw: {ex.Message}");
+				}
 						current.Clear();
 						current = next;
 					} while (current != head);

@@ -198,10 +198,10 @@ void wt_server_free_impl(wt_server_s* server)
     }
 
     /* Wait for pending SHUTDOWN_COMPLETE callbacks (bounded).
-     * 300 iterations * 10ms = 3 second max wait.
+     * 600 iterations * 10ms = 6 second max wait.
      * After nulling all owner pointers above, late callbacks are
      * harmless no-ops — no UAF even if the timeout fires. */
-    int retries = 300;
+    int retries = 600;
     while (atomic_load(&server->pending_shutdowns) > 0 && retries-- > 0) {
 #if defined(WT_PLATFORM_WINDOWS)
         Sleep(10);
@@ -413,8 +413,13 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
         wt_connection_id_t cid = server->pending_shutdown_queue[head % WT_MAX_CLIENTS];
         if (cid > 0 && cid <= server->max_clients) {
             wt_server_conn_t* c = &server->connections[cid];
-            if (c->pending_shutdown_session) {
-                wt_session_t* s = (wt_session_t*)atomic_ptr_load(&c->pending_shutdown_session);
+            /* Use atomic load to safely read pending_shutdown_session.
+             * A raw pointer read could be cached/reordered by the compiler
+             * on weakly-ordered architectures, causing the poll path to skip
+             * draining a pending session (leak). */
+            wt_session_t* s = (wt_session_t*)atomic_ptr_load(
+                &c->pending_shutdown_session);
+            if (s) {
                 atomic_ptr_store(&c->pending_shutdown_session, NULL);
                 wt_session_shutdown(s);
             }
@@ -565,9 +570,9 @@ void wt_server_disconnect_impl(
 
     /* Atomically claim the shutdown — prevents double-increment
      * if called twice for the same connection. */
-    HQUIC qconn = conn->quic_conn;
+    HQUIC qconn = (HQUIC)atomic_ptr_load(&conn->quic_conn);
     if (!qconn) return;  /* already shutting down */
-    conn->quic_conn = NULL;
+    atomic_ptr_store(&conn->quic_conn, NULL);
 
     /* Do NOT set in_use=false here — SHUTDOWN_COMPLETE owns that. */
     atomic_fetch_add(&server->pending_shutdowns, 1);
@@ -636,10 +641,20 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     }
 
     conn->id = conn_id;
-    conn->quic_conn = event->NEW_CONNECTION.Connection;
+    atomic_ptr_store(&conn->quic_conn, event->NEW_CONNECTION.Connection);
     conn->session = NULL;
     conn->h3_session = NULL;
-    conn->pending_shutdown_session = NULL;
+    /* If the previous occupant of this slot queued a pending shutdown
+     * that hasn't been drained by poll() yet, process it now to prevent
+     * a permanent session leak. See SHUTDOWN_COMPLETE handler. */
+    {
+        wt_session_t* stale = (wt_session_t*)atomic_ptr_load(
+            &conn->pending_shutdown_session);
+        if (stale) {
+            atomic_ptr_store(&conn->pending_shutdown_session, NULL);
+            wt_session_shutdown(stale);
+        }
+    }
     conn->remote_addr[0] = '\0';
     atomic_store(&conn->state, WT_CONN_STATE_HANDSHAKING);
     atomic_store(&conn->in_use, true);
@@ -648,9 +663,9 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
 
     atomic_fetch_add(&srv->connection_count, 1);
 
-    MsQuic->SetCallbackHandler(conn->quic_conn,
+    MsQuic->SetCallbackHandler((HQUIC)atomic_ptr_load(&conn->quic_conn),
                                 (void*)server_conn_cb, conn);
-    status = MsQuic->ConnectionSetConfiguration(conn->quic_conn,
+    status = MsQuic->ConnectionSetConfiguration((HQUIC)atomic_ptr_load(&conn->quic_conn),
                                         srv->session_config);
     if (QUIC_FAILED(status)) {
         WT_LOG_WARN("ConnectionSetConfiguration: 0x%x", status);
@@ -806,7 +821,12 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             uint32_t head = atomic_load(&sconn->owner->pending_shutdown_head);
             uint32_t tail = atomic_load(
                 &sconn->owner->pending_shutdown_tail);
-            if ((tail + 1 - head) >= WT_MAX_CLIENTS) {
+            /* Use subtraction-based full check to avoid uint32_t
+             * wraparound when tail is near UINT32_MAX.  The ring
+             * buffer holds WT_MAX_CLIENTS entries; we reject when
+             * occupancy reaches WT_MAX_CLIENTS - 1 to leave one
+             * guard slot. */
+            if ((tail - head) >= WT_MAX_CLIENTS - 1) {
                 WT_LOG_ERROR("Pending shutdown queue overflow — freeing session for connection %llu immediately (tail %u, head %u)",
                             (unsigned long long)sconn->id, tail, head);
                 /* ── CRITICAL: Free session immediately ───────────

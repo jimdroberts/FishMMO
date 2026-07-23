@@ -346,7 +346,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET email = {{0}} WHERE name_lowercase = {{1}}";
+				// When email is changed, reset the verified flag and verification code.
+				// The new email must be verified independently.
+				var sql = $@"UPDATE {TableName} SET email = {{0}}, verified = FALSE, verify_code = NULL WHERE name_lowercase = {{1}}";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { (object?)email ?? DBNull.Value, accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);

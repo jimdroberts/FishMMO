@@ -204,6 +204,11 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public void SetCertificatePath(string path)
 		{
+			// WARNING: The `path` parameter is nullable (string?), and we only check
+			// for null/empty here. We do NOT verify the file exists on disk.
+			// A future hardening pass should add System.IO.File.Exists(path) and
+			// log a clear error if the PEM file is missing -- otherwise msquic will
+			// fail with an opaque TLS error at bind time.
 			if (string.IsNullOrEmpty(path))
 			{
 				base.NetworkManager?.LogWarning("[WebTransport] Certificate path is null or empty. Skipping.");
@@ -217,6 +222,9 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public void SetPrivateKeyPath(string path)
 		{
+			// WARNING: The `path` parameter is nullable (string?), and we only check
+			// for null/empty here. We do NOT verify the file exists on disk.
+			// See comment in SetCertificatePath for rationale.
 			if (string.IsNullOrEmpty(path))
 			{
 				base.NetworkManager?.LogWarning("[WebTransport] Private key path is null or empty. Skipping.");
@@ -262,8 +270,11 @@ namespace FishNet.Transporting.WebTransport
 		/// <param name="value">The maximum number of clients (clamped to [1, 100000]).</param>
 		public override void SetMaximumClients(int value)
 		{
-			/* Security: clamp to valid range [1, 100000] to prevent
-			 * resource exhaustion from unbounded input. */
+			// Range validation is duplicated in ServerSocket.SetMaximumClients.
+			// Both layers validate defensively: WebTransport validates on the
+			// public API surface (callable from Inspector/editor code), while
+			// ServerSocket validates at the transport layer (callable from
+			// FishNet internals). Keep both — they protect different entry points.
 			if (value < 1 || value > 100000)
 			{
 				base.NetworkManager.LogWarning(
@@ -285,9 +296,9 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		public override void SetClientAddress(string address)
 		{
-			// NOTE: No input validation performed. The native library is responsible
-			// for validating address strings. Malformed addresses will produce
-			// native-level errors.
+			// NOTE: Input validation is minimal here -- the native library is
+			// responsible for rejecting malformed addresses. A future hardening
+			// pass should add a null/empty guard and basic URI format check.
 			this.clientAddress = address;
 		}
 
@@ -312,9 +323,9 @@ namespace FishNet.Transporting.WebTransport
 		/// </remarks>
 		public override void SetServerBindAddress(string address, IPAddressType addressType)
 		{
-			// NOTE: No input validation performed. The native library is responsible
-			// for validating address strings. Malformed addresses will produce
-			// native-level errors.
+			// NOTE: Input validation is minimal here -- the native library is
+			// responsible for rejecting malformed addresses. A future hardening
+			// pass should add a null/empty guard and basic URI format check.
 			this.serverBindAddress = address;
 		}
 
@@ -377,8 +388,11 @@ namespace FishNet.Transporting.WebTransport
 		private bool startServer()
 		{
 #if UNITY_STANDALONE_OSX && !UNITY_EDITOR
-				base.NetworkManager.LogError("[WebTransport] macOS standalone is not supported. Use Unity Editor on macOS or build from Windows/Linux. See FishMMO-WebTransport/README.md for manual build instructions.");
-				return false;
+				if (!WebTransportNative.EnsureInitialized())
+				{
+					base.NetworkManager.LogError("[WebTransport] macOS standalone requires libfishmmo_webtransport.dylib to be built. See FishMMO-WebTransport/README.md.");
+					return false;
+				}
 #endif
 			this.serverSocket.Initialize(this, MTU, certificatePath, privateKeyPath);
 			// ALPN (Application-Layer Protocol Negotiation) is hardcoded to "h3" for HTTP/3 (WebTransport) in
@@ -394,8 +408,11 @@ namespace FishNet.Transporting.WebTransport
 		private bool startClient(string address)
 		{
 #if UNITY_STANDALONE_OSX && !UNITY_EDITOR
-				base.NetworkManager.LogError("[WebTransport] macOS standalone is not supported. Use Unity Editor on macOS or build from Windows/Linux. See FishMMO-WebTransport/README.md for manual build instructions.");
-				return false;
+				if (!WebTransportNative.EnsureInitialized())
+				{
+					base.NetworkManager.LogError("[WebTransport] macOS standalone requires libfishmmo_webtransport.dylib to be built. See FishMMO-WebTransport/README.md.");
+					return false;
+				}
 #endif
 			this.clientSocket.Initialize(this, MTU);
 			return this.clientSocket.StartConnection(address, port, useTls: true);

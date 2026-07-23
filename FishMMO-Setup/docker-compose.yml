@@ -14,6 +14,28 @@
 #
 # Secrets are loaded from fishmmo-secrets.env — NEVER commit that file.
 # See .env.example for the full list of required variables.
+#
+# ── CENTRALIZED LOGGING ────────────────────────────────────────────
+# All services use the "json-file" Docker logging driver with size
+# limits and rotation.  This is adequate for a single-node deployment.
+#
+# For multi-node or production-observability setups, consider:
+#   1. Log shipping: Add a log shipper sidecar (Fluentd, Logstash,
+#      Vector) to each node that forwards logs to a central store
+#      (Elasticsearch, Loki, Grafana Cloud).
+#   2. Docker logging driver: Switch to a centralized driver at the
+#      daemon level (journald, gelf, syslog, fluentd) and configure
+#      log aggregation externally.
+#   3. Structured logging: Ensure each service emits structured logs
+#      (JSON) so they can be parsed and indexed easily.
+#   4. Monitoring: Set up log-based alerts (error rate spikes,
+#      authentication failures, crash loops) via your aggregation
+#      platform.
+#
+# ── HIGH AVAILABILITY NOTE ──────────────────────────────────────────
+# nginx is currently a single point of failure (SPOF) in this stack.
+# See comment at the nginx service definition for HA recommendations.
+# ────────────────────────────────────────────────────────────────────
 
 version: "3.9"
 
@@ -36,7 +58,7 @@ networks:
       config:
         - subnet: 172.20.0.0/16
           gateway: 172.20.0.1
-    internal: false
+    internal: true
   fishmmo_public:
     driver: bridge
     ipam:
@@ -53,12 +75,21 @@ services:
     image: postgres:16-alpine
     container_name: fishmmo-postgres
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
     networks:
       fishmmo_internal:
         aliases:
           - postgres
     ports:
-      - "5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -86,7 +117,7 @@ services:
       - "-c"
       - "shared_buffers=128MB"
       - "-c"
-      - "effective_cache_size=384MB"
+      - "effective_cache_size=256MB"
       - "-c"
       - "work_mem=8MB"
       - "-c"
@@ -111,6 +142,9 @@ services:
 
   # ═════════════════════════════════════════════════════════════════
   # Database Migrator (one-shot)
+  # NOTE: This runs on every `docker compose up`. All EF Core migrations
+  # MUST be idempotent — use IF NOT EXISTS guards in seed data and ensure
+  # Up() methods can be re-run safely against an already-migrated database.
   # ═════════════════════════════════════════════════════════════════
   db-migrator:
     image: fishmmo/db-migrator:latest
@@ -118,7 +152,11 @@ services:
     build:
       context: ../FishMMO-Database/FishMMO-DB-Migrator
       dockerfile: Dockerfile
-    restart: "no"
+    restart: on-failure
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       - fishmmo_internal
     environment:
@@ -131,6 +169,11 @@ services:
       resources:
         limits:
           memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ═════════════════════════════════════════════════════════════════
   # IP Fetch Server (ASP.NET — Login Server Discovery)
@@ -142,6 +185,10 @@ services:
       context: ../FishMMO-WebServers/IPFetchASP.NET/IpFetchServer
       dockerfile: Dockerfile
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       fishmmo_internal:
         aliases:
@@ -153,6 +200,7 @@ services:
       ConnectionStrings__NpgsqlConnection: ${ConnectionStrings__NpgsqlConnection}
       FISHMMO_ENVIRONMENT: Production
       FISHMMO_CLIENT_GATE_SECRET: ${FISHMMO_CLIENT_GATE_SECRET}
+      FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64: ${FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64}
       WebServer__HttpPort: 8080
     depends_on:
       postgres:
@@ -180,19 +228,60 @@ services:
   # ═════════════════════════════════════════════════════════════════
   # nginx Reverse Proxy
   # ═════════════════════════════════════════════════════════════════
+  # !!! SINGLE POINT OF FAILURE !!!
+  # This is the only nginx instance in the stack.  If it goes down:
+  #   - All game traffic (UDP/QUIC) is dropped — clients cannot reach
+  #     any game server.
+  #   - The HTTP API (login discovery, patcher) becomes unavailable.
+  #   - WebGL client downloads are blocked.
+  #
+  # For high-availability in production, consider:
+  #   1. Multi-instance: Run two or more nginx containers behind a
+  #      cloud load balancer (ALB/NLB on AWS, GLB on GCP, Azure LB).
+  #      Each instance forwards to the same game server backends.
+  #   2. Keepalived + VRRP: Deploy a floating IP between two nginx
+  #      hosts.  One is active, the other takes over on failure.
+  #      Requires host-level keepalived configuration outside Docker.
+  #   3. DNS round-robin: Use multiple A records for game.fishmmo.com
+  #      pointing to different nginx hosts.  Clients retry QUIC on
+  #      other addresses if the first is unreachable (QUIC supports
+  #      connection migration, but the client must attempt it).
+  #   4. Cloud LB: For cloud deployments, place an external load
+  #      balancer (NLB for UDP, ALB for HTTP) in front of nginx.
+  #      This also provides DDoS protection and SSL termination options.
+  #
+  # If you implement HA nginx, ensure the game server port ranges
+  # (7770-7999) are forwarded from each nginx instance to the same
+  # backends, and that the stream.d/*.conf configs are synchronized
+  # across instances (e.g., via shared volume or config management).
+  # ═════════════════════════════════════════════════════════════════
   nginx:
     image: nginx:1.25-alpine
     container_name: fishmmo-nginx
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     networks:
       fishmmo_internal:
         aliases:
           - nginx
       fishmmo_public: {}
     ports:
+      # HTTP/HTTPS for API, patcher, and WebGL content
       - "80:80"
       - "443:443"
-      - "443:443/udp"
+      - "443:443/udp"  # HTTP/3 (QUIC) for WebGL client
+      # Game server UDP ports forwarded through nginx stream proxy.
+      # Each game server needs its own port; the ranges below support:
+      #   7770-7779: Login Servers (up to 10 instances)
+      #   7780-7789: World Servers (up to 10 instances)
+      #   7790-7999: Scene Servers (up to 210 instances)
+      # Only ports actually in use consume kernel resources; unused
+      # ports in the range have negligible overhead.
       - "7770-7779:7770-7779/udp"
       - "7780-7789:7780-7789/udp"
       - "7790-7999:7790-7999/udp"
@@ -236,6 +325,12 @@ services:
       - all
       - game-servers
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     networks:
       fishmmo_internal:
         aliases:
@@ -253,6 +348,8 @@ services:
       FISHMMO_SMTP_PASSWORD: ${FISHMMO_SMTP_PASSWORD}
       ServerName: LoginServer
     depends_on:
+      db-migrator:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     deploy:
@@ -282,6 +379,12 @@ services:
       - all
       - game-servers
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     networks:
       fishmmo_internal:
         aliases:
@@ -296,6 +399,8 @@ services:
       FISHMMO_ENVIRONMENT: Production
       ServerName: WorldServer
     depends_on:
+      db-migrator:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     deploy:
@@ -325,6 +430,12 @@ services:
       - all
       - game-servers
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     networks:
       fishmmo_internal:
         aliases:
@@ -339,7 +450,10 @@ services:
       FISHMMO_ENVIRONMENT: Production
       ServerName: SceneServer
     depends_on:
-      - world-server
+      db-migrator:
+        condition: service_completed_successfully
+      world-server:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -364,6 +478,10 @@ services:
       - all
       - certbot
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       fishmmo_public: {}
     volumes:
@@ -374,3 +492,8 @@ services:
       resources:
         limits:
           memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

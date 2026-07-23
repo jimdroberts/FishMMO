@@ -306,10 +306,14 @@ namespace FishMMO.Database
 		/// Disposes the database orchestrator asynchronously.
 		/// Delegates to <see cref="ShutdownAsync"/> for graceful cleanup.
 		/// </summary>
+		/// <remarks>
+		/// NOTE: GC.SuppressFinalize is intentionally omitted because this class does not have a finalizer.
+		/// Calling SuppressFinalize on a non-finalizable object is a no-op but adds unnecessary metadata.
+		/// If a finalizer is ever added in the future, add GC.SuppressFinalize(this) back.
+		/// </remarks>
 		public async ValueTask DisposeAsync()
 		{
 			await ShutdownAsync().ConfigureAwait(false);
-			GC.SuppressFinalize(this);
 		}
 	}
 }

@@ -18,7 +18,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		#endregion
 
 		#region Queues
-		private Queue<Packet> outgoing = new Queue<Packet>();
+		private ConcurrentQueue<Packet> outgoing = new ConcurrentQueue<Packet>();
 		#endregion
 
 		private SafeClientHandle clientHandle;
@@ -30,8 +30,8 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// [AOT.MonoPInvokeCallback] entry points because IL2CPP cannot
 		/// marshal instance methods or lambdas to native code.
 		/// </summary>
-		private static readonly Dictionary<int, ClientSocket> webglSockets =
-			new Dictionary<int, ClientSocket>();
+		private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, ClientSocket> webglSockets =
+			new System.Collections.Concurrent.ConcurrentDictionary<int, ClientSocket>();
 
 		/// <summary>
 		/// Socket currently calling <see cref="StartConnection"/>, used if a
@@ -70,8 +70,15 @@ namespace FishNet.Transporting.WebTransport.Client
 		private long incomingEventCount;
 
 		/// <summary>
-		/// Maximum number of queued incoming events to prevent native heap exhaustion
-		/// from a flood of incoming packets.
+		/// Soft limit for queued incoming events to prevent native heap exhaustion
+		/// from a flood of incoming packets. The limit is enforced via
+		/// <see cref="Interlocked.Increment"/> check-before-enqueue, which has a
+		/// TOCTOU window — two concurrent callbacks may both pass the check,
+		/// resulting in a transient overage of up to (N-1) extra events where
+		/// N is the number of concurrent QUIC worker threads. This is intentional:
+		/// a hard bound would require a lock on the hot path; the soft bound with
+		/// deferred Decrement correction on drain is lock-free and the overage is
+		/// bounded by thread count, not unbounded.
 		/// </summary>
 		private const int MaxIncomingEvents = 10000;
 
@@ -83,8 +90,35 @@ namespace FishNet.Transporting.WebTransport.Client
 
 		/// <summary>
 		/// Pinned delegate handles (prevent GC collection of callback delegates).
+		/// The struct field roots the managed delegate instances so the GC does
+		/// not collect them while the native library holds function pointers.
 		/// </summary>
 		private NativeCallbacks.ClientCallbacks pinnedCallbacks;
+		/// <summary>
+		/// Pointer to unmanaged memory containing a Marshal.StructureToPtr copy
+		/// of <see cref="pinnedCallbacks"/>. Passed to <c>wt_client_create</c>
+		/// instead of <c>ref</c> to avoid GC relocation of the callback table.
+		/// Allocated in <see cref="StartConnection"/>; freed in <see cref="StopConnection"/>.
+		/// </summary>
+		private IntPtr pinnedCallbacksPtr = IntPtr.Zero;
+
+		/// <summary>
+		/// Finalizer -- drains the incoming event queue without invoking actions.
+		/// The .NET finalizer runs on an arbitrary thread, not the Unity main thread.
+		/// The queued actions call FishNet transport callbacks which must execute
+		/// on the main thread. In the abandoned-socket case this finalizer is a
+		/// last resort; normal cleanup goes through <see cref="StopConnection"/>
+		/// which invokes actions on the main thread and frees unmanaged memory.
+		/// </summary>
+		~ClientSocket()
+		{
+			while (incomingEvents.TryDequeue(out Action act))
+			{
+				// Drain without invoking -- finalizer thread is not the
+				// Unity main thread. Invoking FishNet callbacks here
+				// would cause data corruption / crashes.
+			}
+		}
 
 		/// <summary>
 		/// Initializes the client socket with the specified transport and MTU.
@@ -112,7 +146,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			while (incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
-				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
+				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.ToString()}"); }
 			}
 			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
@@ -159,13 +193,14 @@ namespace FishNet.Transporting.WebTransport.Client
 					return false;
 				}
 
-				lock (webglSockets)
-					webglSockets[webglIndex] = this;
+				webglSockets[webglIndex] = this;
 				webglPendingConnect = null;
 
 				// Configure congestion threshold to avoid silent data loss under
 				// game data rates (default 500, up from the previous hardcoded 80).
-				WebTransportJSLib.WTSetStreamThreshold(webglIndex, 500);
+				// TODO: WTSetStreamThreshold is a no-op in the jslib (reserved for future
+		// stream congestion control). Uncomment when the jslib implementation is ready.
+		// WebTransportJSLib.WTSetStreamThreshold(webglIndex, 500);
 
 				return true;
 			}
@@ -189,12 +224,24 @@ namespace FishNet.Transporting.WebTransport.Client
 				OnDatagram = new NativeCallbacks.ClientDatagramDelegate(HandleNativeDatagram),
 			};
 
+			// Copy the callback table to unmanaged memory so that the native
+			// library's stored pointer survives GC compaction.
+			int cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeCallbacks.ClientCallbacks>();
+			this.pinnedCallbacksPtr = System.Runtime.InteropServices.Marshal.AllocHGlobal(cbSize);
+			System.Runtime.InteropServices.Marshal.StructureToPtr(this.pinnedCallbacks, this.pinnedCallbacksPtr, false);
+
 			clientHandle = WebTransportNative.wt_client_create(
-				ref pinnedCallbacks,
+				this.pinnedCallbacksPtr,
 				IntPtr.Zero);
 
 			if (clientHandle == null || clientHandle.IsInvalid)
 			{
+				// Free unmanaged callback table on error path.
+				if (this.pinnedCallbacksPtr != IntPtr.Zero)
+				{
+					System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+					this.pinnedCallbacksPtr = IntPtr.Zero;
+				}
 				base.SetConnectionState(LocalConnectionState.Stopped, false);
 				return false;
 			}
@@ -211,6 +258,12 @@ namespace FishNet.Transporting.WebTransport.Client
 			{
 				WebTransportNative.wt_client_destroy(clientHandle);
 				clientHandle = null;
+				// Free unmanaged callback table on error path.
+				if (this.pinnedCallbacksPtr != IntPtr.Zero)
+				{
+					System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+					this.pinnedCallbacksPtr = IntPtr.Zero;
+				}
 				base.SetConnectionState(LocalConnectionState.Stopped, false);
 				return false;
 			}
@@ -237,7 +290,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			while (incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
-				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.Message}"); }
+				try { act?.Invoke(); } catch (System.Exception ex) { LogTransportWarning($"[WebTransport Client] Drain exception: {ex.ToString()}"); }
 			}
 			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
@@ -246,8 +299,7 @@ namespace FishNet.Transporting.WebTransport.Client
 #if UNITY_WEBGL && !UNITY_EDITOR
 			if (webglIndex >= 0)
 			{
-				lock (webglSockets)
-					webglSockets.Remove(webglIndex);
+				webglSockets.TryRemove(webglIndex, out _);
 				if (ReferenceEquals(webglPendingConnect, this))
 					webglPendingConnect = null;
 				WebTransportJSLib.WTDisconnect(webglIndex);
@@ -260,8 +312,17 @@ namespace FishNet.Transporting.WebTransport.Client
 				WebTransportNative.wt_client_destroy(clientHandle);
 				clientHandle = null;
 			}
+
+			// Free the unmanaged callback table allocated in StartConnection.
+			// Safe to call on IntPtr.Zero (no-op) if never allocated.
+			if (this.pinnedCallbacksPtr != IntPtr.Zero)
+			{
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+				this.pinnedCallbacksPtr = IntPtr.Zero;
+			}
 #endif
 
+			GC.SuppressFinalize(this);
 			base.SetConnectionState(LocalConnectionState.Stopped, false);
 			return true;
 		}
@@ -281,7 +342,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			while (incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
-				try { act?.Invoke(); } catch (Exception e) { LogTransportError(e.Message); }
+				try { act?.Invoke(); } catch (Exception e) { LogTransportError(e.ToString()); }
 			}
 		}
 
@@ -339,11 +400,10 @@ namespace FishNet.Transporting.WebTransport.Client
 				return;
 #endif
 
-			int count = outgoing.Count;
-			for (int i = 0; i < count; i++)
+			while (this.outgoing.TryDequeue(out Packet pkt))
 			{
-				Packet pkt = this.outgoing.Dequeue();
-
+				try
+				{
 #if UNITY_WEBGL && !UNITY_EDITOR
 				// IMPORTANT: return value means "queued for send", not "delivered".
 				// The underlying browser WebTransport API uses JS Promises which may
@@ -367,9 +427,13 @@ namespace FishNet.Transporting.WebTransport.Client
 				else
 					result = WebTransportNative.wt_client_send_stream(this.clientHandle, pkt.Data, pkt.Length);
 				if (result != 0)
-					transport.NetworkManager?.LogWarning($"[WebTransport Client] Send failed: {WebTransportNative.ErrorString(result)}");
+					transport.NetworkManager?.LogWarning($"[WebTransport Client] Send failed: {WebTransportNative.ErrorString((WTError)result)}");
 #endif
-				pkt.Dispose();
+				}
+				finally
+				{
+					pkt.Dispose();
+				}
 			}
 		}
 
@@ -392,11 +456,8 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private static bool TryGetWebGlSocket(int index, out ClientSocket socket)
 		{
-			lock (webglSockets)
-			{
-				if (index >= 0 && webglSockets.TryGetValue(index, out socket))
-					return true;
-			}
+			if (index >= 0 && webglSockets.TryGetValue(index, out socket))
+				return true;
 			// Race: callback fired before StartConnection registered the index.
 			socket = webglPendingConnect;
 			return socket != null;
@@ -407,6 +468,13 @@ namespace FishNet.Transporting.WebTransport.Client
 		{
 			if (!TryGetWebGlSocket(index, out ClientSocket socket))
 				return;
+			// Backpressure: drop if event queue is saturated.
+			if (System.Threading.Interlocked.Increment(ref socket.incomingEventCount) > MaxIncomingEvents)
+			{
+				System.Threading.Interlocked.Decrement(ref socket.incomingEventCount);
+				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping open event.");
+				return;
+			}
 			socket.incomingEvents.Enqueue(() =>
 				socket.SetConnectionState(LocalConnectionState.Started, false));
 		}
@@ -416,6 +484,13 @@ namespace FishNet.Transporting.WebTransport.Client
 		{
 			if (!TryGetWebGlSocket(index, out ClientSocket socket))
 				return;
+			// Backpressure: drop if event queue is saturated.
+			if (System.Threading.Interlocked.Increment(ref socket.incomingEventCount) > MaxIncomingEvents)
+			{
+				System.Threading.Interlocked.Decrement(ref socket.incomingEventCount);
+				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping close event.");
+				return;
+			}
 			socket.incomingEvents.Enqueue(() =>
 			{
 				socket.LogTransportWarning("[WebTransport Client] WebGL connection closed.");
@@ -472,6 +547,9 @@ namespace FishNet.Transporting.WebTransport.Client
 				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping datagram.");
 				return;
 			}
+			// WebGL is single-threaded, so managed allocations on the JS callback
+			// thread are safe (no GC corruption). At high data rates this creates
+			// GC pressure; if this becomes a bottleneck, switch to ByteArrayPool.
 			byte[] buf = new byte[length];
 			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
 			socket.incomingEvents.Enqueue(() =>
@@ -492,6 +570,13 @@ namespace FishNet.Transporting.WebTransport.Client
 		{
 			if (!TryGetWebGlSocket(index, out ClientSocket socket))
 				return;
+			// Backpressure: drop if event queue is saturated.
+			if (System.Threading.Interlocked.Increment(ref socket.incomingEventCount) > MaxIncomingEvents)
+			{
+				System.Threading.Interlocked.Decrement(ref socket.incomingEventCount);
+				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping error event.");
+				return;
+			}
 			socket.incomingEvents.Enqueue(() =>
 			{
 				socket.LogTransportError("[WebTransport Client] WebGL connection error.");
@@ -539,7 +624,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
-					LogTransportWarning("[WebTransport Client] Disconnected: " + WebTransportNative.ErrorString(errorCode));
+					LogTransportWarning("[WebTransport Client] Disconnected: " + WebTransportNative.ErrorString((WTError)errorCode));
 				StopConnection();
 			});
 		}
@@ -592,7 +677,7 @@ namespace FishNet.Transporting.WebTransport.Client
 					}
 					catch (System.Exception ex)
 					{
-						LogTransportWarning("[WebTransport Client] Receive error: " + ex.Message);
+						LogTransportWarning("[WebTransport Client] Receive error: " + ex.ToString());
 					}
 				}
 				finally
@@ -647,7 +732,7 @@ namespace FishNet.Transporting.WebTransport.Client
 					}
 					catch (System.Exception ex)
 					{
-						LogTransportWarning("[WebTransport Client] Receive error: " + ex.Message);
+						LogTransportWarning("[WebTransport Client] Receive error: " + ex.ToString());
 					}
 				}
 				finally

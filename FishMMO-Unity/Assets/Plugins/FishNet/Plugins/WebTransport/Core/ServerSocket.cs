@@ -46,7 +46,7 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <summary>
 		/// Outbound messages which need to be sent.
 		/// </summary>
-		private Queue<Packet> outgoing = new Queue<Packet>();
+		private ConcurrentQueue<Packet> outgoing = new ConcurrentQueue<Packet>();
 		/// <summary>
 		/// Connection IDs to disconnect next iteration.
 		/// </summary>
@@ -90,8 +90,15 @@ namespace FishNet.Transporting.WebTransport.Server
 		private SafeServerHandle serverHandle;
 
 		/// <summary>
-		/// Maximum number of queued incoming events to prevent native heap exhaustion
-		/// from a flood of incoming packets.
+		/// Soft limit for queued incoming events to prevent native heap exhaustion
+		/// from a flood of incoming packets. The limit is enforced via
+		/// <see cref="Interlocked.Increment"/> check-before-enqueue, which has a
+		/// TOCTOU window — two concurrent callbacks may both pass the check,
+		/// resulting in a transient overage of up to (N-1) extra events where
+		/// N is the number of concurrent QUIC worker threads. This is intentional:
+		/// a hard bound would require a lock on the hot path; the soft bound with
+		/// deferred Decrement correction on drain is lock-free and the overage is
+		/// bounded by thread count, not unbounded.
 		/// </summary>
 		private const int MaxIncomingEvents = 10000;
 
@@ -111,6 +118,12 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// Gets or sets the ALPN (Application-Layer Protocol Negotiation) string.
 		/// Setting to null resets to the default "h3".
 		/// </summary>
+		// NOTE: Setting to null resets the ALPN to "h3" (the default). This is an
+		// explicit design choice: the WebTransport spec requires HTTP/3 framing to be
+		// negotiated via ALPN, so a null value should never leave TLS unnegotiated --
+		// it simply falls back to the standard h3 identifier. The field default is
+		// also "h3" (see <see cref="alpn"/>), so this null-coalesce is a safety net
+		// for callers that explicitly set to null.
 		public string Alpn { get => alpn; set => alpn = value ?? "h3"; }
 
 		/// <summary>
@@ -131,9 +144,35 @@ namespace FishNet.Transporting.WebTransport.Server
 
 		/// <summary>
 		/// Pinned delegate handles (prevent GC collection of callback delegates).
+		/// The struct field roots the managed delegate instances so the GC does
+		/// not collect them while the native library holds function pointers.
 		/// </summary>
 		private NativeCallbacks.ServerCallbacks pinnedCallbacks;
+		/// <summary>
+		/// Pointer to unmanaged memory containing a Marshal.StructureToPtr copy
+		/// of <see cref="pinnedCallbacks"/>. Passed to <c>wt_server_create</c>
+		/// instead of <c>ref</c> to avoid GC relocation of the callback table.
+		/// Allocated in <see cref="StartConnection"/>; freed in <see cref="StopConnection"/>.
+		/// </summary>
+		private IntPtr pinnedCallbacksPtr = IntPtr.Zero;
 
+		/// <summary>
+		/// Finalizer -- drains the incoming event queue without invoking actions.
+		/// The .NET finalizer runs on an arbitrary thread, not the Unity main thread.
+		/// The queued actions call FishNet transport callbacks which must execute
+		/// on the main thread. In the abandoned-socket case this finalizer is a
+		/// last resort; normal cleanup goes through <see cref="StopConnection"/>
+		/// which invokes actions on the main thread and frees unmanaged memory.
+		/// </summary>
+		~ServerSocket()
+		{
+			while (incomingEvents.TryDequeue(out Action act))
+			{
+				// Drain without invoking -- finalizer thread is not the
+				// Unity main thread. Invoking FishNet callbacks here
+				// would cause data corruption / crashes.
+			}
+		}
 
 		/// <summary>
 		/// Initializes the server socket with the specified transport, MTU, and TLS certificate paths.
@@ -175,7 +214,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			while (this.incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
-				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.Message}"); }
+				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.ToString()}"); }
 			}
 			this.incomingEventCount = 0;
 
@@ -190,7 +229,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			this.maximumClients = maximumClients;
 			ResetQueues();
 
-			// Pin callback delegates
+			// Pin callback delegates (struct field roots managed delegates).
 			this.pinnedCallbacks = new NativeCallbacks.ServerCallbacks
 			{
 				OnConnect = new NativeCallbacks.ServerConnectDelegate(HandleNativeConnect),
@@ -198,6 +237,13 @@ namespace FishNet.Transporting.WebTransport.Server
 				OnStreamData = new NativeCallbacks.ServerStreamDataDelegate(HandleNativeStreamData),
 				OnDatagram = new NativeCallbacks.ServerDatagramDelegate(HandleNativeDatagram),
 			};
+
+			// Copy the callback table to unmanaged memory so that the native
+			// library's stored pointer survives GC compaction (pin only during
+			// P/Invoke is insufficient -- the runtime unpins after return).
+			int cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeCallbacks.ServerCallbacks>();
+			this.pinnedCallbacksPtr = System.Runtime.InteropServices.Marshal.AllocHGlobal(cbSize);
+			System.Runtime.InteropServices.Marshal.StructureToPtr(this.pinnedCallbacks, this.pinnedCallbacksPtr, false);
 
 			// Create native server
 			this.serverHandle = WebTransportNative.wt_server_create(
@@ -207,11 +253,16 @@ namespace FishNet.Transporting.WebTransport.Server
 				bindAddress,
 				port,
 				(uint)maximumClients,
-				ref this.pinnedCallbacks,
+				this.pinnedCallbacksPtr,
 				IntPtr.Zero);
-
 			if (this.serverHandle == null || this.serverHandle.IsInvalid)
 			{
+				// Free unmanaged callback table on error path.
+				if (this.pinnedCallbacksPtr != IntPtr.Zero)
+				{
+					System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+					this.pinnedCallbacksPtr = IntPtr.Zero;
+				}
 				base.SetConnectionState(LocalConnectionState.Stopped, true);
 				return false;
 			}
@@ -221,6 +272,12 @@ namespace FishNet.Transporting.WebTransport.Server
 			{
 				WebTransportNative.wt_server_destroy(this.serverHandle);
 				this.serverHandle = null;
+				// Free unmanaged callback table on error path.
+				if (this.pinnedCallbacksPtr != IntPtr.Zero)
+				{
+					System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+					this.pinnedCallbacksPtr = IntPtr.Zero;
+				}
 				base.SetConnectionState(LocalConnectionState.Stopped, true);
 				return false;
 			}
@@ -254,7 +311,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			while (this.incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
-				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.Message}"); }
+				try { act?.Invoke(); } catch (System.Exception ex) { transport.NetworkManager?.LogWarning($"[WebTransport Server] Drain exception: {ex.ToString()}"); }
 			}
 			this.incomingEventCount = 0;
 
@@ -265,6 +322,15 @@ namespace FishNet.Transporting.WebTransport.Server
 			WebTransportNative.wt_server_destroy(this.serverHandle);
 			this.serverHandle = null;
 
+			// Free the unmanaged callback table allocated in StartConnection.
+			// Safe to call on IntPtr.Zero (no-op) if never allocated.
+			if (this.pinnedCallbacksPtr != IntPtr.Zero)
+			{
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+				this.pinnedCallbacksPtr = IntPtr.Zero;
+			}
+
+			GC.SuppressFinalize(this);
 			base.SetConnectionState(LocalConnectionState.Stopped, true);
 			return true;
 		}
@@ -301,7 +367,7 @@ namespace FishNet.Transporting.WebTransport.Server
 		///
 		/// <para><b>Thread safety:</b> The returned pointer is atomically guarded by
 		/// <c>atomic_load(&amp;conn-&gt;in_use)</c> in the native code. The C# side marshals
-		/// (copies) the string immediately via <see cref="System.Runtime.InteropServices.Marshal.PtrToStringAnsi"/>,
+		/// (copies) the string immediately via <see cref="System.Runtime.InteropServices.Marshal.PtrToStringUTF8"/>,
 		/// so there is no dangling-pointer window on this side.</para>
 		/// </returns>
 		internal string GetConnectionAddress(int connectionId)
@@ -318,7 +384,7 @@ namespace FishNet.Transporting.WebTransport.Server
 					IntPtr addrPtr = WebTransportNative.wt_server_get_client_address(
 						handle, nativeId);
 					if (addrPtr != IntPtr.Zero)
-						return System.Runtime.InteropServices.Marshal.PtrToStringAnsi(addrPtr) ?? string.Empty;
+						return System.Runtime.InteropServices.Marshal.PtrToStringUTF8(addrPtr) ?? string.Empty;
 				}
 			}
 			finally
@@ -432,7 +498,7 @@ namespace FishNet.Transporting.WebTransport.Server
              * occur if we disconnected directly during iteration over this.clients. */
 			if (this.disconnectingNext.Count > 0)
 			{
-				foreach (int cid in this.disconnectingNext)
+				foreach (int cid in this.disconnectingNext.ToArray())
 					StopConnection(cid, true);
 				this.disconnectingNext.Clear();
 			}
@@ -448,33 +514,36 @@ namespace FishNet.Transporting.WebTransport.Server
 				return;
 			}
 
-			int count = this.outgoing.Count;
-			for (int i = 0; i < count; i++)
+			while (this.outgoing.TryDequeue(out Packet pkt))
 			{
-				Packet pkt = this.outgoing.Dequeue();
-				int connectionId = pkt.ConnectionId;
-
-				if (connectionId == -1) // Broadcast
+				try
 				{
-					this.clientsLock.EnterReadLock();
-					try
+					int connectionId = pkt.ConnectionId;
+
+					if (connectionId == -1) // Broadcast
 					{
-						foreach (int cid in this.clients)
+						this.clientsLock.EnterReadLock();
+						try
 						{
-							SendPacketToClient(pkt, cid);
+							foreach (int cid in this.clients)
+							{
+								SendPacketToClient(pkt, cid);
+							}
+						}
+						finally
+						{
+							this.clientsLock.ExitReadLock();
 						}
 					}
-					finally
+					else // Unicast
 					{
-						this.clientsLock.ExitReadLock();
+						SendPacketToClient(pkt, connectionId);
 					}
 				}
-				else // Unicast
+				finally
 				{
-					SendPacketToClient(pkt, connectionId);
+					pkt.Dispose();
 				}
-
-				pkt.Dispose();
 			}
 		}
 
@@ -498,7 +567,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			if (result != 0)
 			{
 				transport.NetworkManager?.LogWarning(
-					$"[WebTransport Server] Send to {connectionId} failed: {WebTransportNative.ErrorString(result)}");
+					$"[WebTransport Server] Send to {connectionId} failed: {WebTransportNative.ErrorString((WTError)result)}");
 			}
 		}
 
@@ -562,7 +631,7 @@ namespace FishNet.Transporting.WebTransport.Server
 					string remoteAddr = "unknown";
 					if (unmanagedAddr != IntPtr.Zero)
 					{
-						remoteAddr = System.Runtime.InteropServices.Marshal.PtrToStringAnsi(unmanagedAddr, addrLen) ?? "unknown";
+						remoteAddr = System.Runtime.InteropServices.Marshal.PtrToStringUTF8(unmanagedAddr, addrLen) ?? "unknown";
 					}
 
 					int fishNetId = this.nextConnectionId++;
@@ -627,7 +696,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			this.incomingEvents.Enqueue(() =>
 			{
 				if (errorCode != 0)
-					transport.NetworkManager?.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected: {WebTransportNative.ErrorString(errorCode)}");
+					transport.NetworkManager?.LogWarning($"[WebTransport Server] Client {nativeConnectionId} disconnected: {WebTransportNative.ErrorString((WTError)errorCode)}");
 
 				if (this.idMapFromNative.TryGetValue(nativeConnectionId, out int fishNetId))
 				{

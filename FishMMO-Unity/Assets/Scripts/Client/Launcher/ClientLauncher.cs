@@ -176,8 +176,10 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Timeout in seconds for the addressable scene load watchdog.
 		/// If the scene load takes longer than this, the Play button is re-enabled so the player can retry.
+		/// Can be overridden via configuration (e.g., Constants or a settings file) if a longer or shorter
+		/// timeout is needed for specific deployment scenarios (modded clients, slow patch servers, etc.).
 		/// </summary>
-		[Tooltip("Timeout in seconds for the addressable scene load watchdog.")]
+		[Tooltip("Timeout in seconds for the addressable scene load watchdog. Override via Constants or config for deployment-specific needs.")]
 		[SerializeField]
 		private float launchWatchdogTimeoutSeconds = 30f;
 		#endregion
@@ -466,6 +468,15 @@ namespace FishMMO.Client
 					buttonAction = PlayButtonConnect; // Re-check version — don't allow Play when client is ahead.
 					break;
 				case LauncherState.ServerRejectedVersion:
+					// NOTE: ServerRejectedVersion state is defined here and wired into
+					// the UI state machine for future use. The server-side authentication
+					// protocol currently handles version rejection during the handshake
+					// (returning ClientAuthenticationResult.VersionMismatch), which is
+					// rendered through a separate UI path. In a future version, the
+					// version-check endpoint may explicitly reject a client version
+					// without offering a patch, at which point this state should be
+					// activated with a user-facing message explaining that their
+					// client version is not supported.
 					buttonText = UIText.StatusServerRejectedVersion;
 					isButtonInteractable = true;
 					buttonAction = PlayButtonConnect; // Re-check version.
@@ -594,24 +605,30 @@ namespace FishMMO.Client
 		public void PlayButtonLaunch()
 		{
 			if (this.isLaunching) return;
-			this.isLaunching = true;
-			SetLauncherState(LauncherState.ReadyToPlay);
-			if (this.PlayButton != null)
-			{
-				this.PlayButton.interactable = false;
-			}
-
-			AddressableLoadProcessor.EnqueueLoad(new AddressableSceneLoadData("ClientPostboot", OnPostbootSceneLoaded));
 			try
 			{
-				AddressableLoadProcessor.BeginProcessQueue();
+				this.isLaunching = true;
+				SetLauncherState(LauncherState.ReadyToPlay);
+				if (this.PlayButton != null)
+				{
+					this.PlayButton.interactable = false;
+				}
+
+				AddressableLoadProcessor.EnqueueLoad(new AddressableSceneLoadData("ClientPostboot", OnPostbootSceneLoaded));
+				try
+				{
+					AddressableLoadProcessor.BeginProcessQueue();
+				}
+				catch (UnityException ex)
+				{
+					SetLauncherState(LauncherState.LaunchFailed,
+						$"Failed to load game scene: {ex.Message}. Check that Addressable bundles are built.");
+					return;
+				}
 			}
-			catch (UnityException ex)
+			finally
 			{
 				this.isLaunching = false;
-				SetLauncherState(LauncherState.LaunchFailed,
-					$"Failed to load game scene: {ex.Message}. Check that Addressable bundles are built.");
-				return;
 			}
 
 			// Start a watchdog — BeginProcessQueue() starts async work and returns immediately.
@@ -730,94 +747,111 @@ namespace FishMMO.Client
 		/// </summary>
 		private IEnumerator GetLatestVersion()
 		{
-			SetLauncherState(LauncherState.CheckingVersion);
-			this.isConnecting = true;
-
-			List<string> candidates = ApiHostResolver.GetCandidates();
-			if (candidates.Count == 0)
+			try
 			{
-				SetLauncherState(LauncherState.VersionCheckFailed, "No API host configured. Check Constants.cs Configuration.APIHost.");
-				this.isConnecting = false;
-				yield break;
-			}
+				SetLauncherState(LauncherState.CheckingVersion);
+				this.isConnecting = true;
 
-			string lastError = null;
-			VersionConfig serverVersion = default;
-			PatchInfo patchInfo = default;
-			bool succeeded = false;
-			string successfulHost = null;
+				List<string> candidates = ApiHostResolver.GetCandidates();
+				if (candidates.Count == 0)
+				{
+					SetLauncherState(LauncherState.VersionCheckFailed, "No API host configured. Check Constants.cs Configuration.APIHost.");
+					this.isConnecting = false;
+					yield break;
+				}
 
-			for (int i = 0; i < candidates.Count && !succeeded; i++)
-			{
-				string host = candidates[i];
-				bool callbackFired = false;
-				string attemptError = null;
+				string lastError = null;
+				VersionConfig serverVersion = default;
+				PatchInfo patchInfo = default;
+				bool succeeded = false;
+				string successfulHost = null;
 
-				yield return StartCoroutine(this.patchServerService.GetLatestVersion(
-					host,
-					MainBootstrapSystem.GameVersion,
-					onComplete: (sv, info) =>
+				for (int i = 0; i < candidates.Count && !succeeded; i++)
+				{
+					string host = candidates[i];
+					bool callbackFired = false;
+					string attemptError = null;
+
+					yield return StartCoroutine(this.patchServerService.GetLatestVersion(
+						host,
+						MainBootstrapSystem.GameVersion,
+						onComplete: (sv, info) =>
+						{
+							callbackFired = true;
+							serverVersion = sv;
+							patchInfo = info;
+							successfulHost = host;
+							succeeded = true;
+						},
+						onError: (error) =>
+						{
+							callbackFired = true;
+							attemptError = error;
+						}));
+
+					if (!succeeded)
 					{
-						callbackFired = true;
-						serverVersion = sv;
-						patchInfo = info;
-						successfulHost = host;
-						succeeded = true;
-					},
-					onError: (error) =>
-					{
-						callbackFired = true;
-						attemptError = error;
-					}));
+						lastError = attemptError ?? (callbackFired ? "Unknown error" : "No response");
+						Log.Debug("ClientLauncher", $"APIHost {host} version check failed ({lastError}); trying next.");
+					}
+				}
 
 				if (!succeeded)
 				{
-					lastError = attemptError ?? (callbackFired ? "Unknown error" : "No response");
-					Log.Debug("ClientLauncher", $"APIHost {host} version check failed ({lastError}); trying next.");
+					SetLauncherState(LauncherState.VersionCheckFailed,
+						lastError ?? "All API hosts failed. Check your internet connection and firewall.");
+					this.isConnecting = false;
+					yield break;
+				}
+
+				this.selectedApiHost = successfulHost;
+				this.latestVersionString = serverVersion.ToString(); // Store for updater launch
+				this.expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
+				Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
+
+				VersionConfig clientVersion;
+				try
+				{
+					clientVersion = VersionConfig.Parse(MainBootstrapSystem.GameVersion);
+				}
+				catch (ArgumentException)
+				{
+					SetLauncherState(LauncherState.VersionError,
+						$"Client version '{MainBootstrapSystem.GameVersion}' is not valid. Reinstall or delete version.txt.");
+					this.isConnecting = false;
+					yield break;
+				}
+
+				// Compare client and server versions to determine the appropriate action.
+				if (clientVersion < serverVersion)
+				{
+#if UNITY_WEBGL && !UNITY_EDITOR
+					// WebGL builds are always deployed at the server-expected version;
+					// there is no patch/updater mechanism in the browser sandbox.
+					// If this code path executes, the deployed WebGL build is outdated.
+					SetLauncherState(LauncherState.VersionError,
+						"Your browser client is outdated. Please refresh the page (Ctrl+F5) to get the latest version.");
+					this.isConnecting = false;
+					yield break;
+#else
+					this.isConnecting = false;
+					PlayButtonUpdate();
+#endif
+				}
+				else if (clientVersion > serverVersion)
+				{
+					Log.Warning("ClientLauncher", string.Format(UIText.LogDebugClientVersionAhead, MainBootstrapSystem.GameVersion, latestVersionString));
+					SetLauncherState(LauncherState.ClientAhead);
+					this.isConnecting = false;
+				}
+				else
+				{
+					SetLauncherState(LauncherState.ReadyToPlay);
+					this.isConnecting = false;
 				}
 			}
-
-			if (!succeeded)
+			finally
 			{
-				SetLauncherState(LauncherState.VersionCheckFailed,
-					lastError ?? "All API hosts failed. Check your internet connection and firewall.");
-				this.isConnecting = false;
-				yield break;
-			}
-
-			this.selectedApiHost = successfulHost;
-			this.latestVersionString = serverVersion.ToString(); // Store for updater launch
-			this.expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
-			Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
-
-			VersionConfig clientVersion;
-			try
-			{
-				clientVersion = VersionConfig.Parse(MainBootstrapSystem.GameVersion);
-			}
-			catch (ArgumentException)
-			{
-				SetLauncherState(LauncherState.VersionError,
-					$"Client version '{MainBootstrapSystem.GameVersion}' is not valid. Reinstall or delete version.txt.");
-				this.isConnecting = false;
-				yield break;
-			}
-
-			// Compare client and server versions to determine the appropriate action.
-			if (clientVersion < serverVersion)
-			{
-				this.isConnecting = false;
-				PlayButtonUpdate();
-			}
-			else if (clientVersion > serverVersion)
-			{
-				Log.Warning("ClientLauncher", string.Format(UIText.LogDebugClientVersionAhead, MainBootstrapSystem.GameVersion, latestVersionString));
-				SetLauncherState(LauncherState.ClientAhead);
-				this.isConnecting = false;
-			}
-			else
-			{
-				SetLauncherState(LauncherState.ReadyToPlay);
 				this.isConnecting = false;
 			}
 		}

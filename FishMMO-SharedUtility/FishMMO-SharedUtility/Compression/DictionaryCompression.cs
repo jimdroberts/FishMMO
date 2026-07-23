@@ -53,7 +53,7 @@ namespace FishMMO.Shared
 						{
 							long key = reader.ReadInt64();
 							string value = reader.ReadString();
-							dictionary.Add(key, value);
+							dictionary[key] = value;
 						}
 						return dictionary;
 					}

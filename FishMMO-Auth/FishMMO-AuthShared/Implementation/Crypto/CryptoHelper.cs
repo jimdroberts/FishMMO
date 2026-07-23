@@ -12,6 +12,7 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Security;
 using FishMMO.Auth.Core;
+using FishMMO.Shared;
 
 namespace FishMMO.Auth.Implementation
 {
@@ -125,7 +126,7 @@ namespace FishMMO.Auth.Implementation
 		/// <remarks>
 		/// <para><b>Mutability:</b> The byte[] fields are mutable references. Callers must
 		/// not share or alias them, and <b>must</b> zeroize via
-		/// <see cref="CryptographicOperations.ZeroMemory"/> when no longer needed.</para>
+		/// <see cref="CryptographicOperationsCompat.ZeroMemory"/> when no longer needed.</para>
 		/// <para><b>IDisposable usage:</b> Implement <c>using var keys = DeriveSessionKeys(…);</c>
 		/// to ensure <see cref="Dispose"/> zeroes all key material when the scope exits.
 		/// Because this is a <c>readonly struct</c>, the compiler calls <see cref="Dispose"/>
@@ -158,10 +159,10 @@ namespace FishMMO.Auth.Implementation
 			/// </remarks>
 			public void ZeroAll()
 			{
-				if (ClientToServerKey != null) CryptographicOperations.ZeroMemory(ClientToServerKey);
-				if (ServerToClientKey != null) CryptographicOperations.ZeroMemory(ServerToClientKey);
-				if (ClientPrefix != null) CryptographicOperations.ZeroMemory(ClientPrefix);
-				if (ServerPrefix != null) CryptographicOperations.ZeroMemory(ServerPrefix);
+				if (ClientToServerKey != null) CryptographicOperationsCompat.ZeroMemory(ClientToServerKey);
+				if (ServerToClientKey != null) CryptographicOperationsCompat.ZeroMemory(ServerToClientKey);
+				if (ClientPrefix != null) CryptographicOperationsCompat.ZeroMemory(ClientPrefix);
+				if (ServerPrefix != null) CryptographicOperationsCompat.ZeroMemory(ServerPrefix);
 			}
 
 			/// <summary>
@@ -215,7 +216,7 @@ namespace FishMMO.Auth.Implementation
 			}
 			finally
 			{
-				CryptographicOperations.ZeroMemory(masterSecret);
+				CryptographicOperationsCompat.ZeroMemory(masterSecret);
 			}
 		}
 
@@ -297,7 +298,7 @@ namespace FishMMO.Auth.Implementation
 			{
 				if (privateKey != null)
 				{
-					CryptographicOperations.ZeroMemory(privateKey);
+					CryptographicOperationsCompat.ZeroMemory(privateKey);
 					privateKey = null;
 				}
 			}
@@ -354,13 +355,13 @@ namespace FishMMO.Auth.Implementation
 			}
 			if (allZero)
 			{
-				CryptographicOperations.ZeroMemory(rawShared);
+				CryptographicOperationsCompat.ZeroMemory(rawShared);
 				throw new CryptographicException("X25519 produced all-zero shared secret (peer sent a small-order public key).");
 			}
 
 			// Never use raw ECDH output directly — derive a uniform key via HKDF.
 			byte[] derived = HkdfSha256(handshakeTranscriptHash, rawShared, Encoding.ASCII.GetBytes("fishmmo v1 x25519"), 32);
-			CryptographicOperations.ZeroMemory(rawShared);
+			CryptographicOperationsCompat.ZeroMemory(rawShared);
 			return derived;
 		}
 
@@ -451,7 +452,7 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Convenience wrapper around <see cref="CryptographicOperations.ZeroMemory"/> for code clarity.
+		/// Convenience wrapper around <see cref="CryptographicOperationsCompat.ZeroMemory"/> for code clarity.
 		/// Zeroes all bytes in the given key material.
 		/// Call on disconnect, logout, or rekey to destroy sensitive key material.
 		/// Null arrays are safely ignored.
@@ -461,7 +462,7 @@ namespace FishMMO.Auth.Implementation
 		public static void Destroy(byte[] key)
 		{
 			if (key != null)
-				CryptographicOperations.ZeroMemory(key);
+				CryptographicOperationsCompat.ZeroMemory(key);
 		}
 
 		/// <summary>
@@ -791,7 +792,7 @@ namespace FishMMO.Auth.Implementation
 				{
 					if (prefix != null)
 					{
-						CryptographicOperations.ZeroMemory(prefix);
+						CryptographicOperationsCompat.ZeroMemory(prefix);
 						prefix = null;
 					}
 					disposed = true;
@@ -859,7 +860,7 @@ namespace FishMMO.Auth.Implementation
 			}
 			finally
 			{
-				CryptographicOperations.ZeroMemory(output);
+				CryptographicOperationsCompat.ZeroMemory(output);
 			}
 		}
 
@@ -867,7 +868,7 @@ namespace FishMMO.Auth.Implementation
 		/// AES-GCM decrypt with Additional Authenticated Data (AAD).
 		/// </summary>
 		/// <returns>Decrypted plaintext. Callers <b>must</b> zeroize the returned array via
-		/// <see cref="CryptographicOperations.ZeroMemory"/> when no longer needed, as it
+		/// <see cref="CryptographicOperationsCompat.ZeroMemory"/> when no longer needed, as it
 		/// contains the original secret data.</returns>
 		/// <remarks>
 		/// Callers MUST treat a thrown <see cref="CryptographicException"/> as fatal to the
@@ -908,13 +909,13 @@ namespace FishMMO.Auth.Implementation
 			}
 			finally
 			{
-				CryptographicOperations.ZeroMemory(output);
+				CryptographicOperationsCompat.ZeroMemory(output);
 			}
 		}
 
 		/// <summary>
 		/// Compares two byte spans in constant time to prevent timing side-channel attacks.
-		/// Delegates to <see cref="CryptographicOperations.FixedTimeEquals"/> which is
+		/// Delegates to <see cref="CryptographicOperationsCompat.FixedTimeEquals"/> which is
 		/// guaranteed not to short-circuit on the first differing byte.
 		/// </summary>
 		/// <param name="left">First byte array.</param>
@@ -927,7 +928,7 @@ namespace FishMMO.Auth.Implementation
 				return false;
 			if (left.Length != right.Length)
 				return false;
-			return CryptographicOperations.FixedTimeEquals(left, right);
+			return CryptographicOperationsCompat.FixedTimeEquals(left, right);
 		}
 
 		/// <summary>
@@ -978,7 +979,7 @@ namespace FishMMO.Auth.Implementation
 			if (signature == null || signature.Length != HmacTagLength) return false;
 			byte[] computed = SignHmacSha256(key, data);
 			bool result = FixedTimeEquals(computed, signature);
-			CryptographicOperations.ZeroMemory(computed);
+			CryptographicOperationsCompat.ZeroMemory(computed);
 			return result;
 		}
 
@@ -1003,7 +1004,7 @@ namespace FishMMO.Auth.Implementation
 				var sb = new StringBuilder(hash.Length * 2);
 				for (int i = 0; i < hash.Length; i++)
 					sb.Append(hash[i].ToString("x2"));
-				CryptographicOperations.ZeroMemory(hash);
+				CryptographicOperationsCompat.ZeroMemory(hash);
 				return sb.ToString();
 			}
 		}
@@ -1065,7 +1066,7 @@ namespace FishMMO.Auth.Implementation
 			byte[] nameBytes = Encoding.UTF8.GetBytes(accountName);
 			if (nameBytes.Length > ushort.MaxValue)
 			{
-				CryptographicOperations.ZeroMemory(nameBytes);
+				CryptographicOperationsCompat.ZeroMemory(nameBytes);
 				throw new ArgumentException("Account name too long.", nameof(accountName));
 			}
 
@@ -1132,7 +1133,7 @@ namespace FishMMO.Auth.Implementation
 			// Random nonce (16 bytes)
 			byte[] nonce = GenerateKey(16);
 			Buffer.BlockCopy(nonce, 0, payload, offset, 16);
-			CryptographicOperations.ZeroMemory(nonce);
+			CryptographicOperationsCompat.ZeroMemory(nonce);
 			offset += 16;
 
 			// HMAC-SHA256 over payload
@@ -1143,9 +1144,9 @@ namespace FishMMO.Auth.Implementation
 			Buffer.BlockCopy(payload, 0, token, 0, payloadLength);
 			Buffer.BlockCopy(signature, 0, token, payloadLength, HmacTagLength);
 
-			CryptographicOperations.ZeroMemory(nameBytes);
-			CryptographicOperations.ZeroMemory(payload);
-			CryptographicOperations.ZeroMemory(signature);
+			CryptographicOperationsCompat.ZeroMemory(nameBytes);
+			CryptographicOperationsCompat.ZeroMemory(payload);
+			CryptographicOperationsCompat.ZeroMemory(signature);
 
 			return token;
 		}
@@ -1200,9 +1201,9 @@ namespace FishMMO.Auth.Implementation
 			{
 				byte[] computed = hmac.ComputeHash(signedToken, 0, payloadLength);
 				hmacValid = FixedTimeEquals(computed, signature);
-				CryptographicOperations.ZeroMemory(computed);
+				CryptographicOperationsCompat.ZeroMemory(computed);
 			}
-			CryptographicOperations.ZeroMemory(signature);
+			CryptographicOperationsCompat.ZeroMemory(signature);
 			// NOTE: signature is zeroed above before the HMAC validity check below.
 			// This ensures the copy is destroyed even on the early return path when
 			// !hmacValid. The signedToken buffer itself is a caller-owned reference
@@ -1418,12 +1419,12 @@ namespace FishMMO.Auth.Implementation
 				}
 				finally
 				{
-					CryptographicOperations.ZeroMemory(salt);
-					CryptographicOperations.ZeroMemory(nonce);
-					if (kek != null) CryptographicOperations.ZeroMemory(kek);
-					if (ciphertext != null) CryptographicOperations.ZeroMemory(ciphertext);
-					if (envelope != null) CryptographicOperations.ZeroMemory(envelope);
-					if (aad != null) CryptographicOperations.ZeroMemory(aad);
+					CryptographicOperationsCompat.ZeroMemory(salt);
+					CryptographicOperationsCompat.ZeroMemory(nonce);
+					if (kek != null) CryptographicOperationsCompat.ZeroMemory(kek);
+					if (ciphertext != null) CryptographicOperationsCompat.ZeroMemory(ciphertext);
+					if (envelope != null) CryptographicOperationsCompat.ZeroMemory(envelope);
+					if (aad != null) CryptographicOperationsCompat.ZeroMemory(aad);
 				}
 			}
 
@@ -1475,12 +1476,12 @@ namespace FishMMO.Auth.Implementation
 				}
 				finally
 				{
-					CryptographicOperations.ZeroMemory(salt);
-					CryptographicOperations.ZeroMemory(nonce);
-					CryptographicOperations.ZeroMemory(ciphertext);
-					CryptographicOperations.ZeroMemory(envelope);
-					if (kek != null) CryptographicOperations.ZeroMemory(kek);
-					if (aad != null) CryptographicOperations.ZeroMemory(aad);
+					CryptographicOperationsCompat.ZeroMemory(salt);
+					CryptographicOperationsCompat.ZeroMemory(nonce);
+					CryptographicOperationsCompat.ZeroMemory(ciphertext);
+					CryptographicOperationsCompat.ZeroMemory(envelope);
+					if (kek != null) CryptographicOperationsCompat.ZeroMemory(kek);
+					if (aad != null) CryptographicOperationsCompat.ZeroMemory(aad);
 				}
 			}
 
@@ -1498,7 +1499,7 @@ namespace FishMMO.Auth.Implementation
 				}
 				finally
 				{
-					CryptographicOperations.ZeroMemory(infoBytes);
+					CryptographicOperationsCompat.ZeroMemory(infoBytes);
 				}
 			}
 
@@ -1546,7 +1547,7 @@ namespace FishMMO.Auth.Implementation
 					byte[] bytes = GenerateKey(8);
 					string hex = BitConverter.ToString(bytes).Replace("-", "").ToUpperInvariant();
 					codes[i] = hex.Substring(0, 4) + "-" + hex.Substring(4, 4) + "-" + hex.Substring(8, 4) + "-" + hex.Substring(12, 4);
-					CryptographicOperations.ZeroMemory(bytes);
+					CryptographicOperationsCompat.ZeroMemory(bytes);
 				}
 				return codes;
 			}
@@ -1577,9 +1578,9 @@ namespace FishMMO.Auth.Implementation
 					byte[] hash = pbkdf2.GetBytes(Pbkdf2HashLength);
 					string result = RecoveryCodeEnvelopeV2Prefix + Pbkdf2Iterations.ToString(System.Globalization.CultureInfo.InvariantCulture)
 						+ ":" + Convert.ToBase64String(salt) + ":" + Convert.ToBase64String(hash);
-					CryptographicOperations.ZeroMemory(salt);
-					CryptographicOperations.ZeroMemory(hash);
-					CryptographicOperations.ZeroMemory(codeBytes);
+					CryptographicOperationsCompat.ZeroMemory(salt);
+					CryptographicOperationsCompat.ZeroMemory(hash);
+					CryptographicOperationsCompat.ZeroMemory(codeBytes);
 					return result;
 				}
 			}
@@ -1649,8 +1650,8 @@ namespace FishMMO.Auth.Implementation
 
 				if (salt.Length != Pbkdf2SaltLength || expectedHash.Length != Pbkdf2HashLength)
 				{
-					CryptographicOperations.ZeroMemory(salt);
-					CryptographicOperations.ZeroMemory(expectedHash);
+					CryptographicOperationsCompat.ZeroMemory(salt);
+					CryptographicOperationsCompat.ZeroMemory(expectedHash);
 					return false;
 				}
 
@@ -1660,8 +1661,8 @@ namespace FishMMO.Auth.Implementation
 				{
 					if (string.IsNullOrEmpty(accountId))
 					{
-						CryptographicOperations.ZeroMemory(salt);
-						CryptographicOperations.ZeroMemory(expectedHash);
+						CryptographicOperationsCompat.ZeroMemory(salt);
+						CryptographicOperationsCompat.ZeroMemory(expectedHash);
 						return false;
 					}
 					string normalizedAccount = accountId.Trim().ToLowerInvariant();
@@ -1676,10 +1677,10 @@ namespace FishMMO.Auth.Implementation
 				{
 					byte[] computedHash = pbkdf2.GetBytes(Pbkdf2HashLength);
 					bool result = FixedTimeEquals(computedHash, expectedHash);
-					CryptographicOperations.ZeroMemory(salt);
-					CryptographicOperations.ZeroMemory(expectedHash);
-					CryptographicOperations.ZeroMemory(computedHash);
-					CryptographicOperations.ZeroMemory(codeBytes);
+					CryptographicOperationsCompat.ZeroMemory(salt);
+					CryptographicOperationsCompat.ZeroMemory(expectedHash);
+					CryptographicOperationsCompat.ZeroMemory(computedHash);
+					CryptographicOperationsCompat.ZeroMemory(codeBytes);
 					return result;
 				}
 			}
@@ -1762,7 +1763,7 @@ namespace FishMMO.Auth.Implementation
 			/// (<c>InMemoryKey</c> holding the <c>byte[]</c> secret) relies solely on non-public fields,
 			/// so on IL2CPP builds this entire method does nothing.</para>
 			/// <para>This is an accepted defence-in-depth limitation. The primary zeroization path is
-			/// the caller's explicit <c>CryptographicOperations.ZeroMemory(plaintextSecret)</c> in the
+			/// the caller's explicit <c>CryptographicOperationsCompat.ZeroMemory(plaintextSecret)</c> in the
 			/// <c>finally</c> block. On IL2CPP, where reflection zeroization is unavailable, callers
 			/// must accept that the OtpNet internal copy persists until the next GC cycle.</para>
 			/// </remarks>
@@ -1801,7 +1802,7 @@ namespace FishMMO.Auth.Implementation
 
 								if (value is byte[] buf && buf.Length > 0)
 								{
-									CryptographicOperations.ZeroMemory(buf);
+									CryptographicOperationsCompat.ZeroMemory(buf);
 								}
 								else if (!f.FieldType.IsValueType && f.FieldType != typeof(string))
 								{

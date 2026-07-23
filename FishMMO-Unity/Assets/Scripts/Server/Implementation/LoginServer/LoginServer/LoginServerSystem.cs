@@ -245,12 +245,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				if (authenticator.TokenSigningKey != null)
 				{
-					CryptographicOperations.ZeroMemory(authenticator.TokenSigningKey);
+					CryptographicOperationsCompat.ZeroMemory(authenticator.TokenSigningKey);
 					authenticator.TokenSigningKey = null;
 				}
 				if (authenticator.TotpMasterKey != null)
 				{
-					CryptographicOperations.ZeroMemory(authenticator.TotpMasterKey);
+					CryptographicOperationsCompat.ZeroMemory(authenticator.TotpMasterKey);
 					authenticator.TotpMasterKey = null;
 				}
 			}
@@ -260,14 +260,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 				accountSystem is AccountCreationSystem concreteAccountSystem &&
 				concreteAccountSystem.TotpMasterKey != null)
 			{
-				CryptographicOperations.ZeroMemory(concreteAccountSystem.TotpMasterKey);
+				CryptographicOperationsCompat.ZeroMemory(concreteAccountSystem.TotpMasterKey);
 				concreteAccountSystem.TotpMasterKey = null;
 			}
 
 			// Zero the deployment signing-key KEK so a post-shutdown core dump cannot recover it.
 			if (this.signingKeyKek != null)
 			{
-				CryptographicOperations.ZeroMemory(this.signingKeyKek);
+				CryptographicOperationsCompat.ZeroMemory(this.signingKeyKek);
 				this.signingKeyKek = null;
 			}
 
@@ -376,7 +376,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				// next tick rather than silently writing a plaintext key.
 				if (signingKeyKek == null)
 				{
-					CryptographicOperations.ZeroMemory(newHmacKey);
+					CryptographicOperationsCompat.ZeroMemory(newHmacKey);
 					await Log.Warning("LoginServerSystem", "Signing key rotation aborted: KEK not loaded.");
 					return;
 				}
@@ -384,7 +384,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				DatabaseResult<LoginServerSigningKeyData> keyResult = await signingKeyService.UpsertAsync(serverId, wrappedNewHmacKey);
 				if (!keyResult.IsSuccess)
 				{
-					CryptographicOperations.ZeroMemory(newHmacKey);
+					CryptographicOperationsCompat.ZeroMemory(newHmacKey);
 					await Log.Warning("LoginServerSystem", $"Signing key rotation persistence failed: {keyResult.ErrorMessage}");
 					return;
 				}

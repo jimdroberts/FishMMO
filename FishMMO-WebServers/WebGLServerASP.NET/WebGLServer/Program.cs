@@ -26,6 +26,10 @@ namespace FishMMO.WebServer
 				Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", fishEnv);
 			}
 
+			// NOTE: The logging configuration (logging.json) typically writes to /var/log/fishmmo/.
+			// This directory MUST exist before the application starts. Deployment scripts (docker-compose,
+			// systemd unit, etc.) should ensure it is created with appropriate ownership and permissions.
+			// Failure to create this directory will cause Log.Initialize to fail silently or throw.
 			string loggingConfigPath = Path.Combine(AppContext.BaseDirectory, "logging.json");
 			await Log.Initialize(loggingConfigPath);
 			await Log.Info("Program", "Starting WebServer application...");
@@ -48,12 +52,9 @@ namespace FishMMO.WebServer
 
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
-				.ConfigureAppConfiguration((hostingContext, config) =>
-				{
-					string env = hostingContext.HostingEnvironment.EnvironmentName;
-					config.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json"), optional: true, reloadOnChange: true);
-					config.AddJsonFile(Path.Combine(Directory.GetCurrentDirectory(), $"appsettings.{env}.json"), optional: true, reloadOnChange: true);
-				})
+				// NOTE: Host.CreateDefaultBuilder already loads appsettings.json and appsettings.{env}.json
+				// from the content root (AppContext.BaseDirectory). The explicit AddJsonFile calls are
+				// intentionally omitted to avoid unexpected config resolution when CWD differs.
 				.ConfigureLogging((context, logging) =>
 				{
 					logging.ClearProviders();
@@ -74,11 +75,11 @@ namespace FishMMO.WebServer
 						options.ListenLocalhost(port);
 						// Hardening: WebGL host serves static files only — no request body expected.
 						options.Limits.MaxRequestBodySize = 16 * 1024;
-						Log.Info("Kestrel", $"Kestrel configured to listen on localhost on port {httpPort}.");
+						_ = Log.Info("Kestrel", $"Kestrel configured to listen on localhost on port {httpPort}.");
 					})
 					.ConfigureServices((context, services) =>
 					{
-						Log.Info("Services", "Registering services...");
+						_ = Log.Info("Services", "Registering services...");
 
 						// Compress static assets (.wasm, .data, .unityweb) to reduce
 						// bandwidth for large WebGL builds (20-50 MB uncompressed).
@@ -111,7 +112,7 @@ namespace FishMMO.WebServer
 								else
 								{
 									builder.WithOrigins(System.Array.Empty<string>()).AllowAnyMethod().AllowAnyHeader();
-									Log.Warning("CORS", "Cors:AllowedOrigins is unset; defaulting to deny. Configure explicit origins for browser clients.");
+									_ = Log.Warning("CORS", "Cors:AllowedOrigins is unset; defaulting to deny. Configure explicit origins for browser clients.");
 								}
 							});
 						});
@@ -148,7 +149,7 @@ namespace FishMMO.WebServer
 							};
 						});
 
-						Log.Info("Services", "All services registered.");
+						_ = Log.Info("Services", "All services registered.");
 					})
 					.Configure((context, app) =>
 					{

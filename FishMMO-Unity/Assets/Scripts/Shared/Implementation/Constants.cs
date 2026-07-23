@@ -26,6 +26,10 @@ namespace FishMMO.Shared
 #if UNITY_EDITOR
 			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
 #else
+			// Under IL2CPP, AppContext.BaseDirectory may be stripped if not preserved
+			// in link.xml. The Addressables-generated link.xml (in Library/) currently
+			// preserves the System namespace, so this is safe. If this throws
+			// MissingMethodException, add System.AppContext to the manual link.xml.
 			return AppDomain.CurrentDomain.BaseDirectory;
 #endif
 #else
@@ -54,10 +58,7 @@ namespace FishMMO.Shared
 			/// overridden by a config file or branding patch without recompiling.
 			/// </para>
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string ProjectName = "FishMMO";
 
 			/// <summary>
@@ -65,10 +66,7 @@ namespace FishMMO.Shared
 			/// Windows uses ".exe" suffix; Linux and macOS omit it.
 			/// <c>static readonly</c> required because of the <c>#if</c> conditional compilation.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string ClientExecutable =
 #if UNITY_STANDALONE_WIN
 				ProjectName + ".exe";
@@ -83,10 +81,7 @@ namespace FishMMO.Shared
 			/// Windows uses ".exe" suffix; Linux and macOS omit it.
 			/// <c>static readonly</c> required because of the <c>#if</c> conditional compilation.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string UpdaterExecutable =
 #if UNITY_STANDALONE_WIN
 				"Updater.exe";
@@ -104,10 +99,7 @@ namespace FishMMO.Shared
 			/// configuration (e.g. from a setup config file or environment variable).
 			/// </para>
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string SetupDirectory = "FishMMO-Setup";
 
 			/// <summary>
@@ -121,10 +113,7 @@ namespace FishMMO.Shared
 			/// <c>ApiHostResolver</c>) instead of modifying this constant.
 			/// </para>
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public const string APIHost = "https://api.fishmmo.com/";
 
 			/// <summary>
@@ -140,10 +129,7 @@ namespace FishMMO.Shared
 			/// <c>ApiHostResolver</c>) instead of modifying this constant.
 			/// </para>
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public const string GameHost = "game.fishmmo.com";
 
 			/// <summary>
@@ -154,10 +140,7 @@ namespace FishMMO.Shared
 			/// resolve at runtime and can be replaced for specialized layouts.
 			/// </para>
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string ScenePath = "Assets/Scenes/";
 
 			/// <summary>
@@ -173,55 +156,37 @@ namespace FishMMO.Shared
 			/// will pick it up automatically.
 			/// </para>
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string BootstrapScenePath = "Assets/Scenes/";
 
 			/// <summary>
 			/// Path for client-specific bootstrap scenes.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string ClientBootstrapScenePath = "Assets/Scenes/Client/";
 
 			/// <summary>
 			/// Path for server-specific bootstrap scenes.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string ServerBootstrapScenePath = "Assets/Scenes/Server/";
 
 			/// <summary>
 			/// Path template for world scene assets.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string WorldScenePath = "Assets/Scenes/WorldScene";
 
 			/// <summary>
 			/// Path for local development scene assets (not source-controlled).
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string LocalScenePath = "Assets/LOCAL/Scenes/";
 
 			/// <summary>
 			/// Maximum number of configurable player hotkeys.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public const int MaximumPlayerHotkeys = 12;
 		}
 
@@ -314,74 +279,50 @@ namespace FishMMO.Shared
 			/// <summary>
 			/// Movement speed while walking.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Movement speed in meters per second.</remarks>
 			public const float WalkSpeed = 1.5f;
 
 			/// <summary>
 			/// Movement speed while running.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Movement speed in meters per second.</remarks>
 			public const float RunSpeed = 4.0f;
 
 			/// <summary>
 			/// Movement speed while sprinting.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Movement speed in meters per second.</remarks>
 			public const float SprintSpeed = 6.0f;
 
 			/// <summary>
 			/// Stamina cost per second while sprinting.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Stamina units consumed per second while sprinting.</remarks>
 			public const float SprintStaminaCost = 5.0f;
 
 			/// <summary>
 			/// Movement speed while crouching.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Movement speed in meters per second.</remarks>
 			public const float CrouchSpeed = 2.0f;
 
 			/// <summary>
 			/// Upward velocity applied when jumping.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Upward velocity in meters per second.</remarks>
 			public const float JumpUpSpeed = 6.5f;
 
 			/// <summary>
 			/// Stamina cost per jump.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Stamina units consumed per jump.</remarks>
 			public const float JumpStaminaCost = 5.0f;
 
 			/// <summary>
 			/// Gravity vector applied to characters.
 			/// <c>static readonly</c> because <see cref="Vector3"/> is a non-primitive type and cannot be <c>const</c>.
 			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
+			/// <remarks>Standard gravity vector applied to character movement.</remarks>
 			public static readonly Vector3 Gravity = new Vector3(0, -14.0f, 0);
 		}
 	}

@@ -70,6 +70,12 @@ namespace FishMMO.Client
 			// Alert other security code (e.g. ClientSecurityBuildValidator) that the
 			// default placeholder API secret is still active in a release build.
 			IsPlaceholderSecret = true;
+
+#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
+			if (IsPlaceholderSecret)
+				throw new System.InvalidOperationException(
+					"API gate secret is the default placeholder. Replace before release.");
+#endif
 		}
 #endif
 

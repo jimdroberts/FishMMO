@@ -263,6 +263,7 @@ namespace FishMMO.Shared
 
 			try
 			{
+#if !UNITY_WEBGL
 				// Creates the directory if it does not already exist.
 				if (!Directory.Exists(fileDirectory))
 				{
@@ -291,6 +292,9 @@ namespace FishMMO.Shared
 				{
 					settingsLock.ExitReadLock();
 				}
+#else
+				Console.WriteLine("Warning: File I/O not supported on WebGL. Configuration was not saved to disk.");
+#endif
 			}
 			// Catches specific exceptions related to file access permissions.
 			catch (UnauthorizedAccessException ex)
@@ -353,9 +357,8 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			FileName = Path.GetFileNameWithoutExtension(fullFileName); // Stores only the base name of the file (without its extension).
-
 			string fullPath = Path.Combine(fileDirectory, fullFileName);
+#if !UNITY_WEBGL
 			if (!File.Exists(fullPath))
 			{
 				return false;
@@ -374,6 +377,8 @@ namespace FishMMO.Shared
 				settingsLock.EnterWriteLock();
 				try
 				{
+					FileName = Path.GetFileNameWithoutExtension(fullFileName); // Stores only the base name of the file (without its extension).
+
 					// Clears all existing settings before populating with new ones from the file.
 					this.settings.Clear();
 
@@ -383,7 +388,8 @@ namespace FishMMO.Shared
 					foreach (string line in lines)
 					{
 						// Skips lines that are empty or start with '#' or ';' (treated as comments).
-						if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#") || line.TrimStart().StartsWith(";"))
+						string trimmed = line.TrimStart();
+						if (trimmed.Length == 0 || trimmed[0] == '#' || trimmed[0] == ';')
 						{
 							continue;
 						}
@@ -429,6 +435,10 @@ namespace FishMMO.Shared
 				Console.WriteLine($"An unexpected error occurred while loading configuration from {fullPath}. {ex.Message}");
 				return false;
 			}
+#else
+			Console.WriteLine("Warning: File I/O not supported on WebGL. Configuration was not loaded from disk.");
+			return false;
+#endif
 		}
 
 		/// <summary>
