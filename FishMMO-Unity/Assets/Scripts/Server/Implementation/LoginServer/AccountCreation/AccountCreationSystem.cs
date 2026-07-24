@@ -809,8 +809,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 						return;
 					}
 
-					// Validate age range.
-					if (age < 0 || age > 200)
+					// Validate age range. Must be at least 13 (matching the client dropdown floor).
+					if (age < 13 || age > 200)
 					{
 						result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 

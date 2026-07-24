@@ -58,6 +58,13 @@ namespace FishMMO.Client
 		/// </summary>
 		private const int MinAgeSelectIndex = 1;
 
+		/// <summary>
+		/// True when this panel has an active registration/verification flow.
+		/// Used to gate auth-result handling and prevent cross-talk with UITKLogin,
+		/// which shares the same <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event.
+		/// </summary>
+		private bool isAuthFlowActive;
+
 		private TextField username;
 		private TextField email;
 		private TextField password;
@@ -79,7 +86,7 @@ namespace FishMMO.Client
 		private string savedTwoFactorSetupPath;
 
 		/// <summary>
-		/// Resolves and caches visual elements and wires up button callbacks.
+		/// Resolves and caches visual elements, populates age dropdown, and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
 		{
@@ -100,6 +107,17 @@ namespace FishMMO.Client
 			if (password != null)
 			{
 				password.isPasswordField = true;
+			}
+
+			// Populate age dropdown: index 0 = "Select your age", index 1 = "13", ..., index 108 = "120".
+			if (ageSelect != null)
+			{
+				var choices = new System.Collections.Generic.List<string>(109);
+				choices.Add("Select your age");
+				for (int age = 13; age <= 120; age++)
+					choices.Add(age.ToString());
+				ageSelect.choices = choices;
+				ageSelect.index = 0;
 			}
 
 			if (registerButton != null)
@@ -182,6 +200,12 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			// Only process auth results when this panel owns the active flow.
+			// Without this guard, hidden panels would still react to auth results
+			// intended for the other panel (e.g., UITKRegister force-disconnecting
+			// on InvalidUsernameOrPassword during UITKLogin's login attempt).
+			if (!isAuthFlowActive) return;
+
 			switch (result)
 			{
 				case ClientAuthenticationResult.AccountCreated:
@@ -358,21 +382,21 @@ namespace FishMMO.Client
 		private void OnVersionMismatch()
 			{
 				string myVersion = MainBootstrapSystem.GameVersion ?? "unknown";
-				if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
-				{
-					uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
-				}
-				pendingVerifyUsername = null;
-				DeleteSavedTwoFactorSetupFile();
-				Client.ForceDisconnect();
-				SetFormLocked(false);
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
+			{
+				uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
 			}
+			pendingVerifyUsername = null;
+			DeleteSavedTwoFactorSetupFile();
+			Client.ForceDisconnect();
+			SetFormLocked(false);
+		}
 
-			/// <summary>
-			/// Shows a dialog box for registration feedback and disconnects the client.
-			/// </summary>
-			/// <param name="message">The message to display.</param>
-			private void OnRegistrationDialog(string message)
+		/// <summary>
+		/// Shows a dialog box for registration feedback and disconnects the client.
+		/// </summary>
+		/// <param name="message">The message to display.</param>
+		private void OnRegistrationDialog(string message)
 		{
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
 			{
@@ -440,6 +464,8 @@ namespace FishMMO.Client
 			string emailText = email != null ? email.value : null;
 			string passwordText = password != null ? password.value : null;
 			int ageIndex = ageSelect != null ? ageSelect.index : 0;
+			// Map dropdown index to actual age: index 0 = not selected, index 1 = age 13, etc.
+			int age = ageIndex > 0 ? ageIndex + 12 : 0;
 
 			ClearAllFields();
 
@@ -482,7 +508,7 @@ namespace FishMMO.Client
 			{
 				pendingVerifyUsername = usernameText;
 					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
-				Connect(usernameText, passwordText, emailText, ageIndex);
+				Connect(usernameText, passwordText, emailText, age);
 			}));
 		}
 
@@ -567,10 +593,16 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets the locked state of all form controls (enables/disables interactivity).
+		/// Also manages the <see cref="isAuthFlowActive"/> flag: locking marks
+		/// the start of a registration flow; unlocking marks its termination.
 		/// </summary>
 		/// <param name="locked">True to lock (disable) controls, false to unlock.</param>
 		public void SetFormLocked(bool locked)
 		{
+			// Track auth-flow ownership: locking = start of flow, unlocking = end.
+			if (locked) isAuthFlowActive = true;
+			else isAuthFlowActive = false;
+
 			if (registerButton != null)
 			{
 				registerButton.SetEnabled(!locked);
