@@ -41,6 +41,7 @@ publish/
 msbuild.log
 msbuild.err
 msbuild.wrn
+.bak
 
 # --- .NET / NuGet ---
 project.lock.json
