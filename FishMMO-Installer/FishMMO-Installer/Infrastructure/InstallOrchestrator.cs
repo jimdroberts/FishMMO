@@ -72,7 +72,7 @@ namespace FishMMO.Installer
                         string? superPass = Environment.GetEnvironmentVariable("FISHMMO_PG_SUPERUSER_PASSWORD");
                         if (string.IsNullOrEmpty(superPass))
                         {
-                            superPass = InstallerProcessHelper.PromptForPassword(
+                            superPass = InstallerProcessHelper.PromptForRequiredPassword(
                                 $"Enter PostgreSQL superuser password (user '{superUser}'): ");
                         }
                         else
@@ -123,7 +123,7 @@ namespace FishMMO.Installer
                         InstallationConstants.FishMMOMonorepoRoot),
                     "create-migration" => await FromVoidAsync("create-migration", async () =>
                     {
-                        await PostgreSQLInstaller.CreateMigration();
+                        await PostgreSQLInstaller.CreateMigration(appSettings);
                         return true;
                     }),
                     "all" => await RunAllComponentsAsync(appSettings),

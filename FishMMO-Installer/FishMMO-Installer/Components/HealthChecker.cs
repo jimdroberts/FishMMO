@@ -119,9 +119,11 @@ namespace FishMMO.Installer
         {
             try
             {
+                string? username = DatabaseSecrets.TryResolveUsername();
+                string? password = DatabaseSecrets.TryResolvePassword();
                 string cs = $"Host={settings.Npgsql!.Host};Port={settings.Npgsql.Port};" +
-                            $"Database={settings.Npgsql.Database};Username={settings.Npgsql.Username};" +
-                            $"Password={settings.Npgsql.Password};ConnectionTimeout=5;Pooling=false";
+                            $"Database={settings.Npgsql.Database};Username={username ?? "unknown"};" +
+                            $"Password={password ?? "unknown"};ConnectionTimeout=5;Pooling=false";
                 await using var conn = new Npgsql.NpgsqlConnection(cs);
                 await conn.OpenAsync();
                 return true;

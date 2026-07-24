@@ -53,8 +53,13 @@ namespace FishMMO.Database
 				return File.Exists(local) ? local : Path.Combine(bundledDir, fileName);
 			}
 
-			return new ConfigurationBuilder()
-				.AddJsonFile(Resolve("appsettings.json"), optional: false)
+			// appsettings.json is optional — all non-sensitive settings have
+		// sensible C# defaults in NpgsqlSettings, and credentials are resolved
+		// exclusively from environment variables or /etc/fishmmo/db-secrets.env
+		// via DatabaseSecrets.  appsettings.json exists only as a convenience
+		// for overriding non-sensitive defaults (host, port, pool sizes, etc.).
+		return new ConfigurationBuilder()
+				.AddJsonFile(Resolve("appsettings.json"), optional: true)
 				.AddJsonFile(Resolve($"appsettings.{env}.json"), optional: true)
 				.AddEnvironmentVariables()
 				.Build();

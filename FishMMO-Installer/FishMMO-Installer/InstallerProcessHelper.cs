@@ -425,5 +425,39 @@ namespace FishMMO.Installer
 			return new string(chars.ToArray());
 		}
 
+		/// <summary>
+		/// Prompts for a required password. Loops until a non-empty value is entered.
+		/// Pressing Enter with no input re-prompts.
+		/// </summary>
+		/// <param name="prompt">The prompt text.</param>
+		/// <returns>A non-empty password string.</returns>
+		public static string PromptForRequiredPassword(string prompt)
+		{
+			while (true)
+			{
+				string result = PromptForPassword(prompt);
+				if (!string.IsNullOrWhiteSpace(result))
+					return result;
+				Console.WriteLine("  Password cannot be empty. Please enter a password.");
+			}
+		}
+		
+		/// <summary>
+		/// Prompts for required input. Loops until a non-empty value is entered.
+		/// Pressing Enter with no input re-prompts.
+		/// </summary>
+		/// <param name="prompt">The prompt text.</param>
+		/// <returns>A non-empty input string.</returns>
+		public static string PromptForRequiredInput(string prompt)
+		{
+			while (true)
+			{
+				string? result = PromptForInput(prompt);
+				if (!string.IsNullOrWhiteSpace(result))
+					return result.Trim();
+				Console.WriteLine("  Value cannot be empty. Please enter a value.");
+			}
+		}
+
 }
 }

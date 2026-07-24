@@ -481,7 +481,7 @@ namespace FishMMO.Installer
             }
         }
 
-        /// <summary>Database sub-menu: PostgreSQL, PgBouncer, FishMMO DB management.</summary>
+        /// <summary>Database sub-menu: 3-step database setup (secrets, PostgreSQL, PgBouncer, FishMMO DB).</summary>
         private static async Task DatabaseMenu()
         {
             while (true)
@@ -489,13 +489,14 @@ namespace FishMMO.Installer
                 Console.Clear();
                 Console.WriteLine("=== Database ===");
                 Console.WriteLine();
-                Console.WriteLine("1 : Install PostgreSQL");
-                Console.WriteLine("2 : Install PgBouncer (Connection Pooler)");
-                Console.WriteLine("3 : Install FishMMO Database (User/Schema/Initial Migration)");
-                Console.WriteLine("4 : Create New Database Migration");
-                Console.WriteLine("5 : Grant User Permissions on Database");
-                Console.WriteLine("6 : Delete FishMMO Database (DANGEROUS!)");
-                Console.WriteLine("7 : Configure PgBouncer (generate pgbouncer.ini + userlist.txt, Linux)");
+                Console.WriteLine("1 : Configure Database Secrets (env vars / secrets file)");
+                Console.WriteLine("2 : Install PostgreSQL");
+                Console.WriteLine("3 : Install PgBouncer (Connection Pooler)");
+                Console.WriteLine("4 : Install FishMMO Database (User/Schema/Initial Migration)");
+                Console.WriteLine("5 : Create New Database Migration");
+                Console.WriteLine("6 : Grant User Permissions on Database");
+                Console.WriteLine("7 : Delete FishMMO Database (DANGEROUS!)");
+                Console.WriteLine("8 : Configure PgBouncer (Linux)");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -504,36 +505,39 @@ namespace FishMMO.Installer
                 switch (key.Key)
                 {
                     case ConsoleKey.D1:
+                        await DatabaseSecretsInstaller.ConfigureDatabaseSecrets();
+                        break;
+                    case ConsoleKey.D2:
                         await HandleWithSettings(
                             s => s.Npgsql?.Host,
                             "Npgsql host",
                             s => PostgreSQLInstaller.InstallPostgreSQL(s));
                         break;
-                    case ConsoleKey.D2:
+                    case ConsoleKey.D3:
                         await PgBouncerInstaller.InstallPgBouncer(appSettings);
                         break;
-                    case ConsoleKey.D3:
+                    case ConsoleKey.D4:
                         await HandleWithSuperuser(
                             s => s.Npgsql?.Database,
                             "Npgsql database",
                             PostgreSQLInstaller.InstallFishMMODatabase);
                         break;
-                    case ConsoleKey.D4:
-                        await PostgreSQLInstaller.CreateMigration();
-                        break;
                     case ConsoleKey.D5:
-                        await HandleWithSuperuser(
-                            s => s.Npgsql?.Username,
-                            "Npgsql database/username",
-                            PostgreSQLInstaller.GrantUserPermissions);
+                        await PostgreSQLInstaller.CreateMigration(appSettings);
                         break;
                     case ConsoleKey.D6:
                         await HandleWithSuperuser(
                             s => s.Npgsql?.Database,
                             "Npgsql database",
-                            PostgreSQLInstaller.DeleteFishMMODatabase);
+                            (u, p, s) => PostgreSQLInstaller.GrantUserPermissions(u, p, s));
                         break;
                     case ConsoleKey.D7:
+                        await HandleWithSuperuser(
+                            s => s.Npgsql?.Database,
+                            "Npgsql database",
+                            PostgreSQLInstaller.DeleteFishMMODatabase);
+                        break;
+                    case ConsoleKey.D8:
                         await PgBouncerInstaller.ConfigurePgBouncerLinuxAsync(appSettings);
                         break;
                     case ConsoleKey.D0:
@@ -645,7 +649,7 @@ namespace FishMMO.Installer
             }
         }
 
-        /// <summary>Configuration sub-menu: AppSettings secure setup.</summary>
+        /// <summary>Configuration sub-menu: Web servers, Discord bot, and CMS settings.</summary>
         private static async Task ConfigurationMenu()
         {
             while (true)
@@ -653,7 +657,9 @@ namespace FishMMO.Installer
                 Console.Clear();
                 Console.WriteLine("=== Configuration ===");
                 Console.WriteLine();
-                Console.WriteLine("1 : Configure AppSettings (Secure Setup)");
+                Console.WriteLine("1 : Configure Web Server Settings (IPFetch, Patcher, WebGL)");
+                Console.WriteLine("2 : Configure Discord Bot Settings");
+                Console.WriteLine("3 : Configure CMS Server Settings");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -663,6 +669,12 @@ namespace FishMMO.Installer
                 {
                     case ConsoleKey.D1:
                         await AppSettingsInstaller.ConfigureAppSettings();
+                        break;
+                    case ConsoleKey.D2:
+                        await AppSettingsInstaller.ConfigureDiscordBotComponent();
+                        break;
+                    case ConsoleKey.D3:
+                        await AppSettingsInstaller.ConfigureCmsComponent();
                         break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:
@@ -712,7 +724,7 @@ namespace FishMMO.Installer
                 return;
             }
             string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
-            string superPassword = InstallerProcessHelper.PromptForPassword($"Enter PostgreSQL Superuser Password (username is '{superUsername}'): ");
+            string superPassword = InstallerProcessHelper.PromptForRequiredPassword($"Enter PostgreSQL Superuser Password (username is '{superUsername}'): ");
             await handler(superUsername, superPassword, appSettings);
         }
     }

@@ -5,11 +5,13 @@ using Npgsql;
 
 Console.WriteLine("FishMMO DB Migrator starting...");
 
-// NOTE: Connection string is read directly from environment variable and bypasses NpgsqlDbConfiguration validation.
-// Migrator is a standalone tool with minimal dependencies — configuration validation is deferred to runtime.
-// See FishMMO.Database.Npgsql.NpgsqlDbConfiguration for the canonical connection-string validation logic
-// used by the host application (server processes). The Migrator does not reuse that class to avoid
-// pulling in the full database-layer assembly's configuration pipeline.
+// NOTE: Connection string is resolved from environment variables.
+// Priority order:
+//   1. FISHMMO_CONNECTION_STRING (full DSN)
+//   2. ConnectionStrings__NpgsqlConnection (full DSN)
+//   3. Individual FISHMMO_DB_* env vars (assembled into a DSN)
+// The Migrator does NOT read appsettings.json for credentials — use
+// /etc/fishmmo/db-secrets.env or environment variables.
 string? connectionString = Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_STRING");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -17,10 +19,38 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    Console.Error.WriteLine("FATAL: Neither FISHMMO_CONNECTION_STRING nor ConnectionStrings__NpgsqlConnection "
-        + "environment variable is set. The Migrator requires a database connection string to apply migrations. "
-        + "Example: FISHMMO_CONNECTION_STRING=\"Host=127.0.0.1;Port=5432;Database=fish_mmo;Username=fishmmo;Password=...\"");
-    return 1;
+    // Build connection string from individual env vars (preferred for security).
+    string? dbHost = Environment.GetEnvironmentVariable("FISHMMO_DB_HOST") ?? "127.0.0.1";
+    string? dbPort = Environment.GetEnvironmentVariable("FISHMMO_DB_PORT") ?? "5432";
+    string? dbName = Environment.GetEnvironmentVariable("FISHMMO_DB_NAME") ?? "fishmmo";
+    string? dbUser = Environment.GetEnvironmentVariable("FISHMMO_DB_USERNAME");
+    string? dbPass = Environment.GetEnvironmentVariable("FISHMMO_DB_PASSWORD");
+
+    if (string.IsNullOrWhiteSpace(dbUser) || string.IsNullOrWhiteSpace(dbPass))
+    {
+        Console.Error.WriteLine("FATAL: No database credentials configured.");
+        Console.Error.WriteLine("  Set either:");
+        Console.Error.WriteLine("    FISHMMO_CONNECTION_STRING=\"Host=127.0.0.1;Port=5432;Database=fishmmo;Username=...;Password=...\"");
+        Console.Error.WriteLine("  Or individual env vars:");
+        Console.Error.WriteLine("    FISHMMO_DB_HOST=127.0.0.1");
+        Console.Error.WriteLine("    FISHMMO_DB_PORT=5432");
+        Console.Error.WriteLine("    FISHMMO_DB_NAME=fishmmo");
+        Console.Error.WriteLine("    FISHMMO_DB_USERNAME=fishmmo_app");
+        Console.Error.WriteLine("    FISHMMO_DB_PASSWORD=...");
+        Console.Error.WriteLine("  Or source /etc/fishmmo/db-secrets.env in your service unit.");
+        return 1;
+    }
+
+    var csb = new NpgsqlConnectionStringBuilder
+    {
+        Host = dbHost,
+        Port = int.TryParse(dbPort, out int p) ? p : 5432,
+        Database = dbName,
+        Username = dbUser,
+        Password = dbPass,
+    };
+    connectionString = csb.ConnectionString;
+    Console.WriteLine("Connection string built from FISHMMO_DB_* environment variables.");
 }
 
 // Determine the database schema to use for migrations.

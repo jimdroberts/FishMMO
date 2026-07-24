@@ -86,6 +86,12 @@ namespace FishMMO.Installer
 		/// <param name="description">Human-readable description of the identifier type.</param>
 		private static void ValidateIdentifier(string identifier, string paramName, string description)
 		{
+			if (string.IsNullOrWhiteSpace(identifier))
+			{
+				throw new ArgumentException(
+					$"{description} is not configured. Set '{paramName}' in appsettings.json or via the FISHMMO_DB_USERNAME environment variable.",
+					paramName);
+			}
 			if (!Regex.IsMatch(identifier, @"^[a-zA-Z0-9_]+$"))
 			{
 				throw new ArgumentException($"Invalid {description} format. Values can only contain alphanumeric characters and underscores.", paramName);
@@ -110,7 +116,7 @@ namespace FishMMO.Installer
 		private static async Task<bool> InstallPostgreSQLWindows(AppSettings appSettings)
 		{
 			string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
-			string superPassword = InstallerProcessHelper.PromptForPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
+			string superPassword = InstallerProcessHelper.PromptForRequiredPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
 
 			if (!InstallerProcessHelper.PromptForYesNo("Install PostgreSQL server?"))
 			{
@@ -337,7 +343,7 @@ namespace FishMMO.Installer
 				if (!isArch && InstallerProcessHelper.PromptForYesNo("Update PostgreSQL Superuser Password?"))
 				{
 					string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
-					string superPassword = InstallerProcessHelper.PromptForPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
+					string superPassword = InstallerProcessHelper.PromptForRequiredPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
 					ValidateIdentifier(superUsername, nameof(superUsername), "superuser name");
 
 					// Pipe the ALTER USER statement to psql via stdin so the password
@@ -384,8 +390,13 @@ namespace FishMMO.Installer
 		{
 			try
 			{
+				// Resolve database credentials from DatabaseSecrets (env vars or secrets file)
+				string dbUsername = DatabaseSecrets.TryResolveUsername()
+					?? throw new InvalidOperationException("Database username not configured. Run 'Configure Database Secrets' first.");
+				string dbPassword = DatabaseSecrets.TryResolvePassword()
+					?? throw new InvalidOperationException("Database password not configured. Run 'Configure Database Secrets' first.");
 				ValidateIdentifier(appSettings.Npgsql.Database, nameof(appSettings.Npgsql.Database), "database name");
-				ValidateIdentifier(appSettings.Npgsql.Username, nameof(appSettings.Npgsql.Username), "username");
+				ValidateIdentifier(dbUsername, nameof(dbUsername), "username");
 
 				await Log.Info("FishMMOInstaller", $"Attempting to connect to PostgreSQL at {appSettings.Npgsql.Host}:{appSettings.Npgsql.Port}");
 				string connectionString = BuildConnectionString(appSettings.Npgsql.Host, appSettings.Npgsql.Port, superUsername, superPassword, InstallationConstants.PostgreSQLDefaultAdminDb);
@@ -416,50 +427,75 @@ namespace FishMMO.Installer
 						}
 					}
 
-					if (InstallerProcessHelper.PromptForYesNo($"Create User Role '{appSettings.Npgsql.Username}' for database access?"))
+					if (InstallerProcessHelper.PromptForYesNo($"Create User Role '{dbUsername}' for database access?"))
 					{
 						using (var checkUserCommand = new NpgsqlCommand($"SELECT 1 FROM pg_roles WHERE rolname = @username", connection))
 						{
-							checkUserCommand.Parameters.AddWithValue("username", appSettings.Npgsql.Username);
+							checkUserCommand.Parameters.AddWithValue("username", dbUsername);
 							var result = await checkUserCommand.ExecuteScalarAsync();
 							if (result != null)
 							{
-								await Log.Info("FishMMOInstaller", $"User role '{appSettings.Npgsql.Username}' already exists. Skipping creation.");
+								await Log.Info("FishMMOInstaller", $"User role '{dbUsername}' already exists. Skipping creation.");
 							}
 							else
 							{
-								await Log.Info("FishMMOInstaller", $"Creating user role '{appSettings.Npgsql.Username}'...");
-								await CreateUser(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Password);
-								await Log.Info("FishMMOInstaller", $"User role '{appSettings.Npgsql.Username}' created successfully.");
+								await Log.Info("FishMMOInstaller", $"Creating user role '{dbUsername}'...");
+								await CreateUser(connection, dbUsername, dbPassword);
+								await Log.Info("FishMMOInstaller", $"User role '{dbUsername}' created successfully.");
 							}
 						}
-						await Log.Info("FishMMOInstaller", $"Granting privileges on database '{appSettings.Npgsql.Database}' to user '{appSettings.Npgsql.Username}'...");
-						await GrantPrivileges(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Database);
+						await Log.Info("FishMMOInstaller", $"Granting privileges on database '{appSettings.Npgsql.Database}' to user '{dbUsername}'...");
+						await GrantPrivileges(connection, dbUsername, appSettings.Npgsql.Database);
 						await Log.Info("FishMMOInstaller", "Privileges granted successfully.");
-					}
 
-					await Log.Info("FishMMOInstaller", "FishMMO Database components installed/configured.");
+					// Credentials are NOT written here — use 'Configure Database Secrets'
+					// (Step 1) to write /etc/fishmmo/db-secrets.env.
+				}
+
+				await Log.Info("FishMMOInstaller", "FishMMO Database components installed/configured.");
 				}
 
 				if (InstallerProcessHelper.PromptForYesNo("Create Initial Migration and apply to database?"))
 				{
-					Console.WriteLine("Creating Initial database migration...");
-					bool initialMigrationCreated = await DotNetInstaller.RunEFMigrationAsync("Initial");
-					if (!initialMigrationCreated)
+					// Check if migration files already exist (e.g. from a previous run).
+					// If they do, skip 'migrations add' to avoid "The name 'Initial' is used
+					// by an existing migration" errors and go straight to 'database update'.
+					// Check the runtime copy in the Installer's output directory,
+					// not the monorepo source — migrations are now generated there.
+					string migrationsDir = Path.Combine(
+						InstallerProcessHelper.GetWorkingDirectory(),
+						"FishMMO-Database", "FishMMO-DB",
+						InstallationConstants.MigrationsOutputDirectory);
+					bool migrationFilesExist = Directory.Exists(migrationsDir)
+						&& Directory.GetFiles(migrationsDir, "*.cs", SearchOption.TopDirectoryOnly).Length > 0;
+
+					if (!migrationFilesExist)
 					{
-						await Log.Error("FishMMOInstaller", "Failed to create the initial migration.");
-						return;
+						Console.WriteLine("Creating Initial database migration...");
+						bool initialMigrationCreated = await DotNetInstaller.RunEFMigrationAsync("Initial");
+						if (!initialMigrationCreated)
+						{
+							await Log.Error("FishMMOInstaller", "Failed to create the initial migration.");
+							return;
+						}
+					}
+					else
+					{
+						await Log.Info("FishMMOInstaller", "Migration files already exist — skipping 'migrations add' step.");
 					}
 
 					Console.WriteLine("Updating database...");
-					bool initialMigrationApplied = await DotNetInstaller.RunEFDatabaseUpdateAsync();
+					string superuserConnStr = BuildConnectionString(
+						appSettings.Npgsql.Host, appSettings.Npgsql.Port,
+						superUsername, superPassword, appSettings.Npgsql.Database);
+					bool initialMigrationApplied = await DotNetInstaller.RunEFDatabaseUpdateAsync(superuserConnStr);
 					if (!initialMigrationApplied)
 					{
 						await Log.Error("FishMMOInstaller", "Initial migration was created but database update failed.");
 						return;
 					}
 
-					await Log.Info("FishMMOInstaller", "Initial Migration completed and applied.");
+					await Log.Info("FishMMOInstaller", "Migration completed and applied.");
 				}
 			}
 			catch (NpgsqlException npgEx)
@@ -474,8 +510,11 @@ namespace FishMMO.Installer
 
 		/// <summary>
 		/// Creates a new database migration and applies it using dotnet ef commands.
+		/// Prompts for the PostgreSQL superuser password so the migration can be
+		/// applied via <c>dotnet ef database update --connection</c>, which bypasses
+		/// the design-time factory and its potentially stale appsettings.json.
 		/// </summary>
-		public static async Task CreateMigration()
+		public static async Task CreateMigration(AppSettings appSettings)
 		{
 			Console.Clear();
 
@@ -492,6 +531,34 @@ namespace FishMMO.Installer
 				return;
 			}
 
+			// Check for duplicate migration name before prompting for credentials.
+			// EF Core names files as <timestamp>_<Name>.cs — if any file matches
+			// the pattern *_<name>.cs, the migration already exists.
+			// Check the runtime copy, not the monorepo source.
+			string migrationsDir = Path.Combine(
+				InstallerProcessHelper.GetWorkingDirectory(),
+				"FishMMO-Database", "FishMMO-DB",
+				InstallationConstants.MigrationsOutputDirectory);
+			if (Directory.Exists(migrationsDir))
+			{
+				string pattern = $"*_{migrationName}.cs";
+				string[] existing = Directory.GetFiles(migrationsDir, pattern, SearchOption.TopDirectoryOnly);
+				if (existing.Length > 0)
+				{
+					await Log.Warning("FishMMOInstaller",
+						$"A migration named '{migrationName}' already exists ({Path.GetFileName(existing[0])}). " +
+						"Choose a different name.");
+					return;
+				}
+			}
+
+			// Prompt for superuser credentials so 'database update' can pass them
+			// via --connection, which avoids the design-time factory's potentially
+			// stale appsettings.json (e.g. wrong database name in bin/ output).
+			string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
+			string superPassword = InstallerProcessHelper.PromptForRequiredPassword(
+				$"Enter PostgreSQL Superuser Password (username is '{superUsername}'): ");
+
 			await Log.Info("FishMMOInstaller", $"Creating a new migration '{migrationName}'...");
 
 			bool migrationSuccess = await DotNetInstaller.RunEFMigrationAsync(migrationName);
@@ -504,7 +571,10 @@ namespace FishMMO.Installer
 
 			await Log.Info("FishMMOInstaller", $"Updating the database with migration '{migrationName}'...");
 
-			bool updateSuccess = await DotNetInstaller.RunEFDatabaseUpdateAsync();
+			string superuserConnStr = BuildConnectionString(
+				appSettings.Npgsql.Host, appSettings.Npgsql.Port,
+				superUsername, superPassword, appSettings.Npgsql.Database);
+			bool updateSuccess = await DotNetInstaller.RunEFDatabaseUpdateAsync(superuserConnStr);
 
 			if (updateSuccess)
 			{
@@ -590,7 +660,7 @@ namespace FishMMO.Installer
 		/// <param name="superUsername">PostgreSQL superuser name.</param>
 		/// <param name="superPassword">PostgreSQL superuser password.</param>
 		/// <param name="appSettings">Application settings for database configuration.</param>
-		public static async Task GrantUserPermissions(string superUsername, string superPassword, AppSettings appSettings)
+		public static async Task GrantUserPermissions(string superUsername, string superPassword, AppSettings appSettings, string? appUsername = null)
 		{
 			Console.Clear();
 			await Log.Info("FishMMOInstaller", "--- Grant User Permissions ---");
@@ -600,7 +670,7 @@ namespace FishMMO.Installer
 			if (string.IsNullOrWhiteSpace(dbName)) dbName = defaultDbName;
 			ValidateIdentifier(dbName, nameof(dbName), "database name");
 
-			string defaultUsername = appSettings.Npgsql.Username ?? "fishmmo_user";
+			string defaultUsername = appUsername ?? "fishmmo_user";
 			string? usernameToGrant = InstallerProcessHelper.PromptForInput($"Enter username to grant permissions to (default: {defaultUsername}): ");
 			if (string.IsNullOrWhiteSpace(usernameToGrant)) usernameToGrant = defaultUsername;
 			ValidateIdentifier(usernameToGrant, nameof(usernameToGrant), "username");
@@ -764,5 +834,6 @@ namespace FishMMO.Installer
 				await cmd.ExecuteNonQueryAsync();
 			}
 		}
-	}
+
+		}
 }
