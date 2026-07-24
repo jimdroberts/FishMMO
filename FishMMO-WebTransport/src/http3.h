@@ -196,16 +196,25 @@ typedef struct h3_session_s {
      * bypassing origin-based access control. */
     bool                    allow_native_clients;
 
-    /* M-1: freed flag for UAF defense in h3_stream_cb RECEIVE.
-     * Set atomically as the first operation in h3_session_free,
-     * checked before calling h3_server_process_data in the RECEIVE
-     * callback.  Mitigated by msquic's per-stream callback serialization
-     * (no concurrent RECEIVE for the same stream), but a concurrent
-     * SHUTDOWN_COMPLETE on the connection can free the h3_session
-     * while a RECEIVE callback for a different stream is executing.
-     * The freed flag provides defense-in-depth: after it is set,
-     * no new RECEIVE callback will process data on this session. */
-    atomic_bool             freed;
+    /* M-1: Refcount-based lifetime management for h3_session_t.
+     * The session is shared between the connection owner (ref_count=1 at
+     * creation) and any in-flight RECEIVE / PEER_SEND_SHUTDOWN callbacks.
+     *
+     * - h3_session_acquire() CAS-loops to increment ref_count iff it is > 0
+     *   AND released == false.  Returns true if the acquire succeeded (the
+     *   session is guaranteed to remain alive for the caller's duration).
+     * - h3_session_release() CAS-loops to decrement ref_count.  When
+     *   ref_count reaches 0 AND released == true, the session is freed.
+     * - h3_session_free() sets released = true, performs cleanup that does
+     *   NOT require the session struct itself to remain alive (control-
+     *   stream abort, stream_ctx_list drain), then drops the owner reference
+     *   via h3_session_release().  The actual free() + mutex_destroy is
+     *   deferred until all concurrent acquires have released.
+     *
+     * This is the same pattern used by wt_session_t (session.h/session.c). */
+    atomic_uint              ref_count;      /* 1 = owner reference */
+    atomic_bool              released;       /* owner intends to free;
+                                             * new acquires fail after this */
 
     void*               parent_ptr;     /* wt_server_conn_t* or wt_client_s* */
 } h3_session_t;
@@ -297,6 +306,24 @@ int h3_client_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
  * Safe to call with NULL — no-op.
  */
 void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx);
+
+/**
+ * Acquire a reference on an h3_session_t.  Returns true if the acquire
+ * succeeded, guaranteeing h3 remains alive until h3_session_release().
+ * Returns false if the session is already being freed (released == true)
+ * or ref_count has dropped to zero.
+ *
+ * Every successful acquire() MUST be paired with a release().
+ */
+bool h3_session_acquire(h3_session_t* h3);
+
+/**
+ * Release a reference on an h3_session_t.  If this is the last reference
+ * AND released == true, frees the session and destroys the mutex.
+ *
+ * Safe to call with NULL — no-op.
+ */
+void h3_session_release(h3_session_t* h3);
 
 #ifdef __cplusplus
 }

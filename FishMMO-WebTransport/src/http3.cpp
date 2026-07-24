@@ -1050,37 +1050,24 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * synchronously, h3_server_process_data calls h3->on_ready
          * which creates the wt_session.
          *
-         * ── M-1: TOCTOU UAF on sctx->h3 ──────────────────────────
-         * The h3 pointer is snapshot from sctx->h3, then h3->freed is
-         * checked, then h3_server_process_data is called.  Between the
-         * snapshot and the freed check, a concurrent h3_session_free()
-         * (called from SHUTDOWN_COMPLETE on the QUIC connection thread)
-         * may set h3->freed=true and begin cleaning up the session.
+         * ── M-1: refcount-based lifetime for h3_session_t ─────────
+         * h3_session_acquire() CAS-loops to increment h3->ref_count
+         * only if ref_count > 0 AND released == false.  If it succeeds,
+         * h3 is guaranteed to remain alive for the entire duration of
+         * h3_server_process_data — even if h3_session_free() runs
+         * concurrently on another thread and sets released=true.
+         * h3_session_free defers the actual free() + mutex_destroy to
+         * h3_session_release(), which only executes them when
+         * ref_count == 0 AND released == true.
          *
-         * Mitigation layers:
-         *   (a) msquic guarantees per-stream callback serialization:
-         *       no two threads fire callbacks for the same stream
-         *       concurrently.  The RECEIVE callback and SHUTDOWN_COMPLETE
-         *       are on different handles (stream vs connection), so
-         *       they can race across streams.
-         *   (b) The atomic freed flag: h3_session_free sets freed=true
-         *       as its VERY FIRST operation, before any cleanup.  The
-         *       RECEIVE handler checks h3->freed after snapshotting h3.
-         *       If freed is observed as true BEFORE the call, we skip
-         *       processing entirely.  If freed is observed as false, the
-         *       cleanup hasn't started yet, so h3 is still valid.
-         *
-         * Trigger sequence (all paths mitigated by layer b):
-         *   1. RECEIVE fires for stream A on QUIC worker thread T1
-         *   2. T1 loads sctx->h3 → gets valid h3 pointer
-         *   3. SHUTDOWN_COMPLETE fires for the connection on thread T2
-         *   4. T2 calls h3_session_free → sets h3->freed=true → frees h3
-         *   5. T1 checks h3->freed → reads true → skips processing ✓
-         *      OR (without the flag) T1 calls h3_server_process_data
-         *      on freed memory → UAF */
+         * This is the same pattern as wt_session_acquire/release
+         * (session.h/session.c) and eliminates the TOCTOU window that
+         * a simple freed-flag check would have (check passes, then
+         * free runs on another thread while process_data is executing). */
         h3_session_t* h3 = sctx->h3;
-        if (h3 && !atomic_load(&h3->freed)) {
+        if (h3 && h3_session_acquire(h3)) {
             int hr = h3_server_process_data(h3, sctx);
+            h3_session_release(h3);
             if (hr < 0) {
                 MsQuic->StreamShutdown(stream,
                     QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
@@ -1098,12 +1085,13 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * handshake data would remain buffered and unprocessed,
          * causing the handshake to hang indefinitely. */
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
-            /* Snapshot h3 and check freed before dereference.
-             * See RECEIVE case for the full M-1 TOCTOU analysis —
+            /* Snapshot h3 and acquire a ref before dereference.
+             * See RECEIVE case for the full M-1 refcount analysis —
              * same race applies here. */
             h3_session_t* h3 = sctx->h3;
-            if (h3 && !atomic_load(&h3->freed)) {
+            if (h3 && h3_session_acquire(h3)) {
                 int hr = h3_server_process_data(h3, sctx);
+                h3_session_release(h3);
                 if (hr < 0) {
                     MsQuic->StreamShutdown(stream,
                         QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
@@ -1325,11 +1313,12 @@ h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         }
 
         /* Process buffered data for client HTTP/3 handshake.
-         * Snapshot h3 and check freed before dereference —
-         * same M-1 TOCTOU safeguard as the server-side RECEIVE path. */
+         * Acquire a ref on h3 — same M-1 refcount pattern as the
+         * server-side RECEIVE path. */
         h3_session_t* h3 = sctx->h3;
-        if (h3 && !atomic_load(&h3->freed)) {
+        if (h3 && h3_session_acquire(h3)) {
             h3_client_process_data(h3, sctx);
+            h3_session_release(h3);
         }
         return QUIC_STATUS_SUCCESS;
     }
@@ -1339,11 +1328,10 @@ h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * This handles the case where the 200 OK data arrives in the
          * same stream event as the FIN from the server. */
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
-            /* Snapshot h3 and check freed before dereference.
-             * Same M-1 safeguard as the server-side PEER_SEND_SHUTDOWN path. */
             h3_session_t* h3 = sctx->h3;
-            if (h3 && !atomic_load(&h3->freed)) {
+            if (h3 && h3_session_acquire(h3)) {
                 h3_client_process_data(h3, sctx);
+                h3_session_release(h3);
             }
         }
         return QUIC_STATUS_SUCCESS;
@@ -1583,6 +1571,52 @@ typedef struct {
  * Public API Implementation
  * ═══════════════════════════════════════════════════════════════ */
 
+/* ── h3_session_t refcounting ───────────────────────────────────
+ * Same CAS-loop pattern as wt_session_acquire / wt_session_release
+ * (session.h/session.c).  h3_session_t is shared between the
+ * connection owner and in-flight RECEIVE/PEER_SEND_SHUTDOWN callbacks
+ * on QUIC worker threads.  The owner sets released=true in
+ * h3_session_free; callbacks acquire before entering process_data and
+ * release after.  The session is only freed when ref_count reaches 0
+ * AND released is true. */
+
+bool h3_session_acquire(h3_session_t* h3)
+{
+    if (!h3) return false;
+    unsigned int expected = atomic_load(&h3->ref_count);
+    for (;;) {
+        if (expected == 0) return false;
+        if (atomic_load(&h3->released)) return false;
+        if (atomic_compare_exchange_strong(
+                &h3->ref_count, &expected, expected + 1))
+            return true;
+    }
+}
+
+void h3_session_release(h3_session_t* h3)
+{
+    if (!h3) return;
+    unsigned int expected = atomic_load(&h3->ref_count);
+    for (;;) {
+        if (expected == 0) return;   /* underflow guard */
+        unsigned int next = expected - 1;
+        if (atomic_compare_exchange_strong(
+                &h3->ref_count, &expected, next)) {
+            if (next == 0 && atomic_load(&h3->released)) {
+                /* Last reference + owner has released —
+                 * safe to destroy the mutex and free. */
+#if defined(WT_PLATFORM_WINDOWS)
+                DeleteCriticalSection(&h3->stream_ctx_lock);
+#else
+                pthread_mutex_destroy(&h3->stream_ctx_lock);
+#endif
+                free(h3);
+            }
+            return;
+        }
+    }
+}
+
 h3_session_t* h3_session_create(
     HQUIC quic_conn, bool is_server,
     h3_on_session_ready_fn on_ready,
@@ -1599,6 +1633,7 @@ h3_session_t* h3_session_create(
     h3->handshake_complete = false;
     h3->allow_native_clients = true;  /* default: backward compatible */
     h3->expected_authority[0] = '\0'; /* default: skip validation */
+    atomic_store(&h3->ref_count, 1);  /* owner reference */
 
     if (is_server) {
         h3->server_state = H3_SRV_WAIT_CONTROL_STREAM;
@@ -1620,14 +1655,12 @@ void h3_session_free(h3_session_t* h3)
 {
     if (!h3) return;
 
-    /* M-1: Defensively mark the session as freed BEFORE any actual
-     * cleanup.  h3_stream_cb RECEIVE handlers may have snapshot the
-     * h3 pointer before we got here; after this store they will see
-     * freed==true and skip processing.  Without this, a concurrent
-     * RECEIVE callback (from a different stream on the same connection)
-     * could call h3_server_process_data on a partially-freed session.
-     * Mitigated by msquic's per-stream callback serialization. */
-    atomic_store(&h3->freed, true);
+    /* M-1: Block new acquires while we tear down.  Already-acquired
+     * references (from in-flight RECEIVE / PEER_SEND_SHUTDOWN callbacks)
+     * keep the struct alive until they release.  The actual free() +
+     * mutex_destroy is deferred to h3_session_release() when ref_count
+     * reaches 0. */
+    atomic_store(&h3->released, true);
 
     /* Shut down tracked control streams to trigger SHUTDOWN_COMPLETE,
      * which StreamClose's the handle exactly once in h3_send_only_stream_cb.
@@ -1700,14 +1733,11 @@ void h3_session_free(h3_session_t* h3)
     }
     H3_UNLOCK(h3);
 
-    /* Destroy stream context list mutex */
-#if defined(WT_PLATFORM_WINDOWS)
-    DeleteCriticalSection(&h3->stream_ctx_lock);
-#else
-    pthread_mutex_destroy(&h3->stream_ctx_lock);
-#endif
-
-    free(h3);
+    /* Drop the owner reference.  If no concurrent acquires are in flight,
+     * ref_count reaches 0 and h3_session_release frees h3 + destroys the
+     * mutex.  If acquires ARE in flight, the last release() by the last
+     * callback will perform the actual free. */
+    h3_session_release(h3);
 }
 
 #if 0
