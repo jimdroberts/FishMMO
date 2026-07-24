@@ -320,14 +320,18 @@ wt_server_s* wt_server_alloc_impl(
     srv->user_context = context;
 
     /* Copy allowed origins for CORS validation on browser WebTransport
-     * connections.  Empty string (or NULL) = reject (Origin required).
-     * Set allowed_origins="*" for dev/testing to allow all origins. */
+     * connections.  When allowed_origins is NULL, the calloc-zeroed
+     * buffer stays empty, which signals "allow all origins" (the
+     * h3_server_process_data CONNECT validator treats an empty
+     * allowed_origins field as no restriction).  Set explicitly to "*"
+     * for the same effect in dev/testing.  A non-empty comma-separated
+     * list enables strict origin validation. */
     if (allowed_origins) {
         strncpy(srv->allowed_origins, allowed_origins,
                 sizeof(srv->allowed_origins) - 1);
         srv->allowed_origins[sizeof(srv->allowed_origins) - 1] = '\0';
     }
-    /* else: calloc already zeroed the buffer — empty = reject */
+    /* else: calloc already zeroed the buffer — empty = allow all origins */
 
     /* expected_authority is zeroed by calloc (empty = skip validation).
      * allow_native_clients defaults to true for backward compatibility.
@@ -990,27 +994,9 @@ static uint32_t rate_limiter_hash(const uint8_t* bytes, uint32_t len)
     return h;
 }
 
-/* ── 64-bit atomic helpers ───────────────────────────────────────
- * Used for the rate-limiter timestamp to avoid torn reads on 32-bit
- * architectures (ARM) where a 64-bit load/store compiles to two
- * 32-bit instructions.  Torn timestamps produce arbitrary values
- * that can permanently disable or bypass rate limiting. */
-
-#if defined(_MSC_VER)
-static inline uint64_t atomic_load_u64(volatile uint64_t* p) {
-    return (uint64_t)_InterlockedCompareExchange64((volatile __int64*)p, 0, 0);
-}
-static inline void atomic_store_u64(volatile uint64_t* p, uint64_t v) {
-    _InterlockedExchange64((volatile __int64*)p, (__int64)v);
-}
-#else
-static inline uint64_t atomic_load_u64(volatile uint64_t* p) {
-    return __atomic_load_n(p, __ATOMIC_RELAXED);
-}
-static inline void atomic_store_u64(volatile uint64_t* p, uint64_t v) {
-    __atomic_store_n(p, v, __ATOMIC_RELAXED);
-}
-#endif
+/* The rate limiter uses 64-bit timestamps for per-IP connection
+ * tracking.  The atomic_load_u64 / atomic_store_u64 helpers are
+ * provided by webtransport_internal.h. */
 
 /* Check/update rate limit for a remote address.  Returns true if
  * the connection is allowed, false if it should be refused.
@@ -1708,13 +1694,14 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * to determine the client type, and calls on_h3_session_ready
          * when the session is established. */
         if (sconn->h3_session && !sconn->h3_session->handshake_complete) {
-            /* h3_session_accept_stream returns false for data streams
-             * that should go to wt_stream_manager. But during handshake,
-             * all streams go through HTTP/3 routing. */
             h3_stream_ctx_t* out_sctx = NULL;
+            const bool is_uni =
+                (event->PEER_STREAM_STARTED.Flags &
+                 QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL) != 0;
             int hr = h3_server_handle_stream(
                 sconn->h3_session,
                 event->PEER_STREAM_STARTED.Stream,
+                is_uni,
                 &out_sctx);
             if (hr == 0) {
                 /* HTTP/3 consumed the stream (control/request stream).

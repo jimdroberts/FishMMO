@@ -41,15 +41,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ── Stream context list lock helpers ────────────────────────── */
-#if defined(WT_PLATFORM_WINDOWS)
-  #define H3_LOCK(h3)    EnterCriticalSection(&(h3)->stream_ctx_lock)
-  #define H3_UNLOCK(h3)  LeaveCriticalSection(&(h3)->stream_ctx_lock)
-#else
-  #define H3_LOCK(h3)    pthread_mutex_lock(&(h3)->stream_ctx_lock)
-  #define H3_UNLOCK(h3)  pthread_mutex_unlock(&(h3)->stream_ctx_lock)
-#endif
-
 /* ═══════════════════════════════════════════════════════════════
  * QUIC Variable-Length Integer (RFC 9000 §16)
  * ═══════════════════════════════════════════════════════════════ */
@@ -588,10 +579,15 @@ typedef struct {
  * Parse a single QPACK-encoded field line from buf.
  * Returns bytes consumed, or -1 on error.
  *
- * We support:
- *   - Indexed static table field (0x00 prefix = 00xxxxxx)
- *   - Literal with static table name reference (0x5N prefix = 0101xxxx)
- *   - Literal without name reference (0x2N prefix = 001xxxxx)
+ * Supports the request/push-stream field line encodings from RFC 9204:
+ *   - Indexed field line (1Txxxxxx, §4.3.1) — 6-bit index prefix
+ *   - Literal with name reference (01Txxxxx, §4.3.2) — 4-bit name-index prefix
+ *   - Literal without name reference (001NHxxx, §4.3.3) — 3-bit name-len prefix
+ *   - Post-base indexed/literal (0000xxxx) — rejected (no dynamic table)
+ *   - Literal with dynamic name ref (0001xxxx) — rejected (no dynamic table)
+ *
+ * Prefix sizes verified against google/quiche QPACK instruction definitions
+ * (qpack_instructions.cc).
  */
 static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
                              h3_header_t* out)
@@ -601,17 +597,22 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
 
     uint8_t first = buf[0];
     size_t consumed = 0;
-    bool name_from_static = false;
 
-    if ((first & 0xC0) == 0x00) {
-        /* Indexed field line (static table).  Per RFC 9204 §4.3.1,
-         * the entire field (name AND value) comes from the static
-         * table.  Only the varint-encoded index is on the wire —
-         * there is NO value following the index.  Return immediately
-         * to prevent the value reader from consuming subsequent
-         * bytes as a non-existent wire value.
-         *
-         * Use qpack_varint_decode with prefix_bits=6 (00xxxxxx). */
+    /* ── Indexed Field Line (RFC 9204 §4.3.1) ──────────────────
+     *   0   1   2   3   4   5   6   7
+     * +---+---+---+---+---+---+---+---+
+     * | 1 | T |      Index (6+)      |
+     * +---+---+---+---+---+---+---+---+
+     * T=0 → static table, T=1 → dynamic table.
+     * 6-bit prefix for the index (verified against QUICHE). */
+    if ((first & 0x80) != 0) {
+        bool is_static = (first & 0x40) == 0;
+        if (!is_static) {
+            /* Dynamic-table indexed — we don't maintain a dynamic table. */
+            WT_LOG_WARN("QPACK: indexed dynamic table ref (byte 0x%02x) — "
+                        "no dynamic table, rejecting", first);
+            return -1;
+        }
         uint8_t nbytes;
         uint64_t idx;
         if (qpack_varint_decode(buf, buf_len, &idx, &nbytes, 6) < 0) return -1;
@@ -625,28 +626,44 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
         }
         return (int)nbytes;
     }
-    else if ((first & 0xC0) == 0x40) {
-        /* Literal with name reference (static table: 01 prefix).
-         * Use qpack_varint_decode with prefix_bits=6 (01xxxxxx). */
+
+    /* ── Literal Field Line With Name Reference (RFC 9204 §4.3.2) ─
+     *   0   1   2   3   4   5   6   7
+     * +---+---+---+---+---+---+---+---+
+     * | 0 | 1 | T |  Name Index (4+) |
+     * +---+---+---+---+---+---+---+---+
+     * T=0 → static table, T=1 → dynamic table.
+     * 4-bit prefix for the name index (verified against QUICHE). */
+    if ((first & 0xC0) == 0x40) {
+        bool is_static = (first & 0x20) == 0;  /* bit 5 = T */
+        if (!is_static) {
+            WT_LOG_WARN("QPACK: literal name ref to dynamic table (byte 0x%02x) — "
+                        "no dynamic table, rejecting", first);
+            return -1;
+        }
         uint8_t nbytes;
         uint64_t idx;
-        if (qpack_varint_decode(buf, buf_len, &idx, &nbytes, 6) < 0) return -1;
+        if (qpack_varint_decode(buf, buf_len, &idx, &nbytes, 4) < 0) return -1;
         consumed = nbytes;
         const char* sname = qpack_static_name(idx, &out->name_len);
-        if (!sname) return -1;
+        if (!sname) {
+            WT_LOG_WARN("QPACK: literal name ref idx=%llu not in static table", idx);
+            return -1;
+        }
         memcpy(out->name, sname, out->name_len);
-        name_from_static = true;
+        /* Fall through to value reader below */
     }
+    /* ── Literal Field Line Without Name Reference (RFC 9204 §4.3.3) ─
+     *   0   1   2   3   4   5   6   7
+     * +---+---+---+---+---+---+---+---+
+     * | 0 | 0 | 1 | N | H |NameLen(3+)|
+     * +---+---+---+---+---+---+---+---+
+     * N=never-indexed, H=Huffman flag for name, 3-bit name-length prefix
+     * (verified against QUICHE). */
     else if ((first & 0xE0) == 0x20) {
-        /* Literal without name reference (001 prefix).
-         * The name is encoded inline.  Format:
-         *   001 N H LLLL+ [name string] [H value_len+] [value string]
-         * N=never-indexed, H=Huffman flag, LLLL=4-bit name length prefix
-         * (RFC 9204 §4.3.2: bits 7-5=001, bit 4=N, bits 3-0=4-bit prefix).
-         * Use qpack_varint_decode with prefix_bits=4 for the name length. */
         uint64_t name_len_val;
         uint8_t nbytes;
-        if (qpack_varint_decode(buf, buf_len, &name_len_val, &nbytes, 4) < 0)
+        if (qpack_varint_decode(buf, buf_len, &name_len_val, &nbytes, 3) < 0)
             return -1;
         out->name_len = (uint8_t)name_len_val;
         consumed = nbytes;
@@ -654,14 +671,21 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
         if (out->name_len >= sizeof(out->name)) return -1;
         memcpy(out->name, buf + consumed, out->name_len);
         consumed += out->name_len;
-        /* name_from_static stays false */
+        /* Fall through to value reader below */
     }
-    else if ((first & 0xF0) == 0x10) {
-        /* Literal with name reference (dynamic table: 0001 prefix).
-         * We don't support dynamic tables. */
+    /* ── Post-base / dynamic-only forms (RFC 9204 §4.3.4–§4.3.6) ──
+     *   0000xxxx → post-base indexed (4-bit index prefix)
+     *   0001xxxx → literal with dynamic name ref (3-bit index prefix)
+     * Dynamic table is not supported. */
+    else if ((first & 0xF0) == 0x00) {
+        WT_LOG_WARN("QPACK: post-base instruction (byte 0x%02x) — "
+                    "no dynamic table, rejecting", first);
         return -1;
     }
     else {
+        /* 0001xxxx — literal with dynamic-table name ref */
+        WT_LOG_WARN("QPACK: literal with dynamic-table name ref (byte 0x%02x) — "
+                    "no dynamic table, rejecting", first);
         return -1;
     }
 
@@ -720,34 +744,44 @@ static int h3_write_settings(uint8_t* out)
 {
     uint8_t* p = out;
     /* SETTINGS frame: type=4.
-     * Advertises both SETTINGS_ENABLE_WEBTRANSPORT (RFC 9220 §5) and
-     * SETTINGS_H3_DATAGRAM (RFC 9297 §5.1).  Chrome requires
-     * SETTINGS_ENABLE_WEBTRANSPORT to proceed with the WebTransport
-     * handshake; without it the browser treats this as a plain H3
-     * connection and never sends the CONNECT request. */
+     * Chrome WebTransport requires ALL of:
+     *   - SETTINGS_ENABLE_CONNECT_PROTOCOL (0x08) — Extended CONNECT
+     *   - SETTINGS_H3_DATAGRAM (0x33)
+     *   - SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742)
+     *   - SETTINGS_WT_MAX_SESSIONS (0x14e9db3d) ≥ 1  (Chromium)
+     * Without ENABLE_CONNECT_PROTOCOL / ENABLE_WEBTRANSPORT the browser
+     * never sends CONNECT and hangs until QUIC_NETWORK_IDLE_TIMEOUT. */
     uint8_t type_buf[8], len_buf[8];
     uint8_t type_n = varint_encode(H3_FRAME_SETTINGS, type_buf);
 
-    /* Encode two settings:
-     *   1. SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742) = 1  → 5 bytes
-     *   2. SETTINGS_H3_DATAGRAM        (0x33)       = 1  → 2 bytes
-     *                                             total = 7 bytes */
-    uint8_t  settings_payload[16];
+    uint8_t  settings_payload[48];
     uint8_t* sp = settings_payload;
+    uint8_t id_buf[8], val_buf[8];
+    uint8_t id_n, val_n;
 
-    /* SETTINGS_ENABLE_WEBTRANSPORT = 1 (4-byte varint ID + 1-byte value) */
-    uint8_t wt_id_buf[8], wt_val_buf[8];
-    uint8_t wt_sid_n = varint_encode(H3_SETTINGS_ENABLE_WEBTRANSPORT, wt_id_buf);
-    uint8_t wt_sval_n = varint_encode(1, wt_val_buf);
-    memcpy(sp, wt_id_buf, wt_sid_n); sp += wt_sid_n;
-    memcpy(sp, wt_val_buf, wt_sval_n); sp += wt_sval_n;
+    /* SETTINGS_ENABLE_CONNECT_PROTOCOL = 1 */
+    id_n  = varint_encode(H3_SETTINGS_ENABLE_CONNECT_PROTOCOL, id_buf);
+    val_n = varint_encode(1, val_buf);
+    memcpy(sp, id_buf, id_n); sp += id_n;
+    memcpy(sp, val_buf, val_n); sp += val_n;
 
-    /* SETTINGS_H3_DATAGRAM = 1 (1-byte varint ID + 1-byte value) */
-    uint8_t dg_id_buf[8], dg_val_buf[8];
-    uint8_t dg_sid_n = varint_encode(H3_SETTINGS_DATAGRAM, dg_id_buf);
-    uint8_t dg_sval_n = varint_encode(1, dg_val_buf);
-    memcpy(sp, dg_id_buf, dg_sid_n); sp += dg_sid_n;
-    memcpy(sp, dg_val_buf, dg_sval_n); sp += dg_sval_n;
+    /* SETTINGS_H3_DATAGRAM = 1 */
+    id_n  = varint_encode(H3_SETTINGS_DATAGRAM, id_buf);
+    val_n = varint_encode(1, val_buf);
+    memcpy(sp, id_buf, id_n); sp += id_n;
+    memcpy(sp, val_buf, val_n); sp += val_n;
+
+    /* SETTINGS_ENABLE_WEBTRANSPORT = 1 */
+    id_n  = varint_encode(H3_SETTINGS_ENABLE_WEBTRANSPORT, id_buf);
+    val_n = varint_encode(1, val_buf);
+    memcpy(sp, id_buf, id_n); sp += id_n;
+    memcpy(sp, val_buf, val_n); sp += val_n;
+
+    /* SETTINGS_WT_MAX_SESSIONS = 1 (Chromium requires a non-zero max) */
+    id_n  = varint_encode(H3_SETTINGS_WT_MAX_SESSIONS, id_buf);
+    val_n = varint_encode(1, val_buf);
+    memcpy(sp, id_buf, id_n); sp += id_n;
+    memcpy(sp, val_buf, val_n); sp += val_n;
 
     uint32_t settings_payload_len = (uint32_t)(sp - settings_payload);
 
@@ -986,7 +1020,21 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             uint32_t new_cap = sctx->recv_capacity ? sctx->recv_capacity * 2 : 4096;
             if (new_cap < needed) new_cap = needed;
             uint8_t* newbuf = (uint8_t*)realloc(sctx->recv_buf, new_cap);
-            if (!newbuf) return QUIC_STATUS_OUT_OF_MEMORY;
+            if (!newbuf) {
+                /* realloc failure under memory pressure — the original
+                 * buffer is still valid (realloc semantics) but is too
+                 * small for incoming data.  Returning OUT_OF_MEMORY would
+                 * leave the stream open with an undersized buffer, causing
+                 * the next RECEIVE to hit the same failure in a tight loop.
+                 * Shut down the stream to prevent corruption and let the
+                 * peer retry. */
+                WT_LOG_ERROR("h3_stream_cb: realloc(%u) failed for stream — "
+                             "shutting down (recv_offset=%u, total=%u)",
+                             new_cap, sctx->recv_offset, total);
+                MsQuic->StreamShutdown(stream,
+                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                return QUIC_STATUS_OUT_OF_MEMORY;
+            }
             sctx->recv_buf = newbuf;
             sctx->recv_capacity = new_cap;
         }
@@ -1000,9 +1048,17 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         /* Process buffered data for HTTP/3 handshake detection
          * and state machine advancement. If the handshake completes
          * synchronously, h3_server_process_data calls h3->on_ready
-         * which creates the wt_session. */
-        if (sctx->h3) {
-            int hr = h3_server_process_data(sctx->h3, sctx);
+         * which creates the wt_session.
+         *
+         * Snapshot sctx->h3 before dereference: a concurrent
+         * SHUTDOWN_COMPLETE may free the h3_session via
+         * h3_session_free while this RECEIVE callback is still
+         * executing on another QUIC worker thread.  The snapshot
+         * doesn't prevent the free, but it ensures we use a
+         * consistent pointer value for the null check + call. */
+        h3_session_t* h3 = sctx->h3;
+        if (h3) {
+            int hr = h3_server_process_data(h3, sctx);
             if (hr < 0) {
                 MsQuic->StreamShutdown(stream,
                     QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
@@ -1020,8 +1076,11 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * handshake data would remain buffered and unprocessed,
          * causing the handshake to hang indefinitely. */
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
-            if (sctx->h3) {
-                int hr = h3_server_process_data(sctx->h3, sctx);
+            /* Snapshot h3 before dereference — see RECEIVE case above
+             * for rationale (concurrent SHUTDOWN_COMPLETE UAF). */
+            h3_session_t* h3 = sctx->h3;
+            if (h3) {
+                int hr = h3_server_process_data(h3, sctx);
                 if (hr < 0) {
                     MsQuic->StreamShutdown(stream,
                         QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
@@ -1099,28 +1158,91 @@ void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx)
     H3_UNLOCK(h3);
 }
 
-/* ── Send-only control-stream callback ──────────────────────────
- * Used for HTTP/3 control streams and request streams where the
- * only purpose is to send a fixed buffer (with FIN), then clean up.
- * Without a callback, SEND_COMPLETE events are silently dropped and
- * the ClientContext (malloc'd buffer) is leaked.
+/* ── Send-only control-stream context ───────────────────────────
+ * Tracks H3 control streams so we can:
+ *  - free send buffers on SEND_COMPLETE
+ *  - StreamClose exactly once on SHUTDOWN_COMPLETE
+ *  - clear h3->server_control_stream / client_control_stream safely
+ *
+ * NEVER call StreamClose from error paths when this callback is installed —
+ * use StreamShutdown(ABORT) and let SHUTDOWN_COMPLETE close the handle.
+ * Double StreamClose → QuicStreamFree SEGV (production Login crash after
+ * browser SETTINGS).
  */
+typedef struct h3_send_only_ctx_s {
+    HQUIC           stream;
+    h3_session_t*   h3;
+    int             role;       /* 1 = server_control, 2 = client_control, 0 = other */
+    volatile int    closed;     /* 0 = open, 1 = StreamClose done */
+} h3_send_only_ctx_t;
+
+static void h3_send_only_clear_session_ref(h3_send_only_ctx_t* c, HQUIC stream)
+{
+    if (!c || !c->h3) return;
+    H3_LOCK(c->h3);
+    if (c->role == 1 && c->h3->server_control_stream == stream)
+        c->h3->server_control_stream = NULL;
+    if (c->role == 2 && c->h3->client_control_stream == stream)
+        c->h3->client_control_stream = NULL;
+    H3_UNLOCK(c->h3);
+}
+
+/* Abort a send-only stream without StreamClose (callback owns close). */
+static void h3_send_only_abort(HQUIC stream)
+{
+    if (!stream) return;
+    MsQuic->StreamShutdown(
+        stream,
+        QUIC_STREAM_SHUTDOWN_FLAG_ABORT | QUIC_STREAM_SHUTDOWN_FLAG_IMMEDIATE,
+        0);
+}
+
 static QUIC_STATUS QUIC_API
 h3_send_only_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 {
-    (void)stream;
-    (void)ctx;
+    h3_send_only_ctx_t* c = (h3_send_only_ctx_t*)ctx;
+
     switch (event->Type) {
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
+        /* Always free the app buffer once. If StreamSend failed, the
+         * caller already free'd and passed no ownership — ClientContext
+         * is only set on successful StreamSend. */
         free(event->SEND_COMPLETE.ClientContext);
         break;
-    case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE:
-        MsQuic->StreamClose(stream);
+
+    case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE: {
+        h3_send_only_clear_session_ref(c, stream);
+        /* Exactly one StreamClose for this handle. */
+        if (c) {
+            if (!c->closed) {
+                c->closed = 1;
+                MsQuic->StreamClose(stream);
+            }
+            free(c);
+        } else {
+            /* Legacy NULL ctx path — still only close once. */
+            MsQuic->StreamClose(stream);
+        }
         break;
+    }
+
     default:
         break;
     }
     return QUIC_STATUS_SUCCESS;
+}
+
+/** Allocate send-only ctx bound to stream; returns NULL on OOM. */
+static h3_send_only_ctx_t* h3_send_only_ctx_create(
+    HQUIC stream, h3_session_t* h3, int role)
+{
+    h3_send_only_ctx_t* c = (h3_send_only_ctx_t*)calloc(1, sizeof(*c));
+    if (!c) return NULL;
+    c->stream = stream;
+    c->h3 = h3;
+    c->role = role;
+    c->closed = 0;
+    return c;
 }
 
 /**
@@ -1158,7 +1280,17 @@ h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             uint32_t new_cap = sctx->recv_capacity ? sctx->recv_capacity * 2 : 4096;
             if (new_cap < needed) new_cap = needed;
             uint8_t* newbuf = (uint8_t*)realloc(sctx->recv_buf, new_cap);
-            if (!newbuf) return QUIC_STATUS_OUT_OF_MEMORY;
+            if (!newbuf) {
+                /* realloc failure under memory pressure — shut down the
+                 * stream to prevent an infinite retry loop (see server-side
+                 * h3_stream_cb for full rationale). */
+                WT_LOG_ERROR("h3_client_stream_cb: realloc(%u) failed for stream — "
+                             "shutting down (recv_offset=%u, total=%u)",
+                             new_cap, sctx->recv_offset, total);
+                MsQuic->StreamShutdown(stream,
+                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                return QUIC_STATUS_OUT_OF_MEMORY;
+            }
             sctx->recv_buf = newbuf;
             sctx->recv_capacity = new_cap;
         }
@@ -1169,9 +1301,12 @@ h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             sctx->recv_offset += bufs[i].Length;
         }
 
-        /* Process buffered data for client HTTP/3 handshake */
-        if (sctx->h3) {
-            h3_client_process_data(sctx->h3, sctx);
+        /* Process buffered data for client HTTP/3 handshake.
+         * Snapshot h3 before dereference — same UAF guard as the
+         * server-side h3_stream_cb RECEIVE path. */
+        h3_session_t* h3 = sctx->h3;
+        if (h3) {
+            h3_client_process_data(h3, sctx);
         }
         return QUIC_STATUS_SUCCESS;
     }
@@ -1181,8 +1316,11 @@ h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * This handles the case where the 200 OK data arrives in the
          * same stream event as the FIN from the server. */
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
-            if (sctx->h3) {
-                h3_client_process_data(sctx->h3, sctx);
+            /* Snapshot h3 before dereference — same UAF guard as
+             * the server-side path. */
+            h3_session_t* h3 = sctx->h3;
+            if (h3) {
+                h3_client_process_data(h3, sctx);
             }
         }
         return QUIC_STATUS_SUCCESS;
@@ -1267,8 +1405,12 @@ static int h3_parse_frames(const uint8_t* buf, size_t buf_len,
  * HEADERS Parser — Extract Pseudo-Headers from EncodedFieldSection
  * ═══════════════════════════════════════════════════════════════
  * Parses QPACK-encoded field lines and extracts pseudo-headers
- * into a simple struct. Supports literal-with-name-reference,
- * indexed static table, and literal-without-name-reference encodings.
+ * into a simple struct.
+ *
+ * On request/push streams the EncodedFieldSection is prefixed with:
+ *   - Required Insert Count (8-bit prefix varint, RFC 9204 §4.5.1)
+ *   - Delta Base           (7-bit prefix varint + sign, RFC 9204 §4.5.2)
+ * Both are typically 0x00 for initial requests with no dynamic table.
  */
 
 typedef struct {
@@ -1280,22 +1422,86 @@ typedef struct {
     char    origin[256];
 } h3_parsed_headers_t;
 
+/** Log a hex+ascii dump at WT_LOG_INFO level (16 bytes/line). */
+static void h3_hex_dump(const char* label, const uint8_t* data, size_t len)
+{
+    if (!data || len == 0) return;
+    char line[80];
+    WT_LOG_INFO("%s (%zu bytes):", label, len);
+    for (size_t i = 0; i < len; i += 16) {
+        int pos = 0;
+        pos += snprintf(line + pos, sizeof(line) - (size_t)pos, "  %04zx: ", i);
+        for (size_t j = 0; j < 16; j++) {
+            if (i + j < len)
+                pos += snprintf(line + pos, sizeof(line) - (size_t)pos,
+                                "%02x ", data[i + j]);
+            else
+                pos += snprintf(line + pos, sizeof(line) - (size_t)pos, "   ");
+        }
+        pos += snprintf(line + pos, sizeof(line) - (size_t)pos, " |");
+        for (size_t j = 0; j < 16 && i + j < len; j++) {
+            uint8_t c = data[i + j];
+            line[pos++] = (c >= 32 && c < 127) ? (char)c : '.';
+        }
+        line[pos++] = '|';
+        line[pos] = '\0';
+        WT_LOG_INFO("%s", line);
+    }
+}
+
 static bool h3_parse_headers(const uint8_t* data, uint64_t data_len,
                              h3_parsed_headers_t* out)
 {
     memset(out, 0, sizeof(*out));
     uint64_t parsed = 0;
 
+    /* ── Skip field-section prefix (RFC 9204 §4.3) ─────────────
+     * Required Insert Count: 8-bit prefix varint.
+     * For initial requests with no dynamic-table refs this is 0x00. */
+    if (parsed < data_len) {
+        uint64_t ric_val;
+        uint8_t ric_nbytes;
+        if (qpack_varint_decode(data + parsed, (size_t)(data_len - parsed),
+                                &ric_val, &ric_nbytes, 8) == 0) {
+            parsed += ric_nbytes;
+        } else {
+            WT_LOG_ERROR("QPACK: failed to decode Required Insert Count "
+                         "(data_len=%llu)", data_len);
+            h3_hex_dump("HEADERS payload (truncated RIC)", data, (size_t)data_len);
+            return false;
+        }
+    }
+
+    /* Delta Base: 7-bit prefix + sign bit (RFC 9204 §4.5.2).
+     * Typically 0x00 (sign=positive, value=0). */
+    if (parsed < data_len) {
+        uint64_t base_val;
+        uint8_t base_nbytes;
+        if (qpack_varint_decode(data + parsed, (size_t)(data_len - parsed),
+                                &base_val, &base_nbytes, 7) == 0) {
+            parsed += base_nbytes;
+        } else {
+            WT_LOG_ERROR("QPACK: failed to decode Delta Base "
+                         "(data_len=%llu, parsed=%llu)", data_len, parsed);
+            h3_hex_dump("HEADERS payload (truncated Base)", data, (size_t)data_len);
+            return false;
+        }
+    }
+
+    WT_LOG_INFO("QPACK: RIC+Base skipped (%llu bytes prefix, %llu remaining for fields)",
+                parsed, data_len - parsed);
+
+    /* ── Parse field lines ──────────────────────────────────── */
     while (parsed < data_len) {
-        /* QPACK field lines are self-delimiting — there is NO per-field
-         * length prefix on the wire (RFC 9204). Each call to
-         * qpack_parse_field consumes one complete field line and returns
-         * the number of bytes consumed. */
         h3_header_t hdr;
         int consumed = qpack_parse_field(data + parsed,
                                          (size_t)(data_len - parsed), &hdr);
         if (consumed < 0) {
-            return false;  /* Fail the entire header parse on any decode error */
+            WT_LOG_WARN("QPACK: field decode failed at offset %llu/%llu",
+                        parsed, data_len);
+            h3_hex_dump("HEADERS payload (decode failure point)",
+                        data, (size_t)data_len);
+            return false;
         }
         parsed += (uint64_t)consumed;
 
@@ -1304,11 +1510,13 @@ static bool h3_parse_headers(const uint8_t* data, uint64_t data_len,
             size_t cp = hdr.value_len < sizeof(out->method)-1
                         ? hdr.value_len : sizeof(out->method)-1;
             memcpy(out->method, hdr.value, cp);
+            WT_LOG_INFO("QPACK: parsed :method = %s", out->method);
         }
         else if (hdr.name_len == 9 && memcmp(hdr.name, ":protocol", 9) == 0) {
             size_t cp = hdr.value_len < sizeof(out->protocol)-1
                         ? hdr.value_len : sizeof(out->protocol)-1;
             memcpy(out->protocol, hdr.value, cp);
+            WT_LOG_INFO("QPACK: parsed :protocol = %s", out->protocol);
         }
         else if (hdr.name_len == 5 && memcmp(hdr.name, ":path", 5) == 0) {
             size_t cp = hdr.value_len < sizeof(out->path)-1
@@ -1319,6 +1527,7 @@ static bool h3_parse_headers(const uint8_t* data, uint64_t data_len,
             size_t cp = hdr.value_len < sizeof(out->authority)-1
                         ? hdr.value_len : sizeof(out->authority)-1;
             memcpy(out->authority, hdr.value, cp);
+            WT_LOG_INFO("QPACK: parsed :authority = %s", out->authority);
         }
         else if (hdr.name_len == 7 && memcmp(hdr.name, ":status", 7) == 0) {
             size_t cp = hdr.value_len < sizeof(out->status)-1
@@ -1329,6 +1538,7 @@ static bool h3_parse_headers(const uint8_t* data, uint64_t data_len,
             size_t cp = hdr.value_len < sizeof(out->origin)-1
                         ? hdr.value_len : sizeof(out->origin)-1;
             memcpy(out->origin, hdr.value, cp);
+            WT_LOG_INFO("QPACK: parsed origin = %s", out->origin);
         }
         /* Ignore unknown headers */
     }
@@ -1387,20 +1597,42 @@ void h3_session_free(h3_session_t* h3)
 {
     if (!h3) return;
 
-    /* Shut down tracked control streams to trigger SHUTDOWN_COMPLETE
-     * which frees their per-stream contexts (allocated by
-     * h3_stream_ctx_create).  These control streams use
-     * h3_send_only_stream_cb (no h3_stream_ctx_t), so the shutdown
-     * is purely for QUIC resource cleanup. */
-    if (h3->server_control_stream) {
-        MsQuic->StreamShutdown(h3->server_control_stream,
-                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-        h3->server_control_stream = NULL;
+    /* Shut down tracked control streams to trigger SHUTDOWN_COMPLETE,
+     * which StreamClose's the handle exactly once in h3_send_only_stream_cb.
+     * Do NOT StreamClose here — that double-closed and SEGVd in QuicStreamFree.
+     *
+     * CRITICAL: Null c->h3 in the send_ctx BEFORE calling h3_send_only_abort.
+     * h3_send_only_abort → StreamShutdown(ABORT|IMMEDIATE) is ASYNCHRONOUS —
+     * the SHUTDOWN_COMPLETE callback may fire on a QUIC worker thread AFTER
+     * this function returns and frees h3.  If c->h3 still points to h3 at
+     * that point, h3_send_only_clear_session_ref will lock a mutex in freed
+     * memory → SEGV in pthread_mutex_lock / QuicStreamFree. */
+    HQUIC srv_ctrl = NULL;
+    HQUIC cli_ctrl = NULL;
+    void* srv_ctx = NULL;
+    void* cli_ctx = NULL;
+    H3_LOCK(h3);
+    srv_ctrl = h3->server_control_stream;
+    h3->server_control_stream = NULL;
+    srv_ctx = h3->server_control_ctx;
+    h3->server_control_ctx = NULL;
+    cli_ctrl = h3->client_control_stream;
+    h3->client_control_stream = NULL;
+    cli_ctx = h3->client_control_ctx;
+    h3->client_control_ctx = NULL;
+    H3_UNLOCK(h3);
+
+    /* Detach h3 back-pointer BEFORE queuing async abort — the callback
+     * will see c->h3 == NULL and skip h3_send_only_clear_session_ref. */
+    if (srv_ctx) ((h3_send_only_ctx_t*)srv_ctx)->h3 = NULL;
+    if (cli_ctx) ((h3_send_only_ctx_t*)cli_ctx)->h3 = NULL;
+
+    if (srv_ctrl) {
+        WT_LOG_INFO("H3: session_free aborting server control stream %p", (void*)srv_ctrl);
+        h3_send_only_abort(srv_ctrl);
     }
-    if (h3->client_control_stream) {
-        MsQuic->StreamShutdown(h3->client_control_stream,
-                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-        h3->client_control_stream = NULL;
+    if (cli_ctrl) {
+        h3_send_only_abort(cli_ctrl);
     }
 
     /* Free all tracked h3_stream_ctx_t objects still on the list.
@@ -1487,9 +1719,17 @@ int32_t h3_client_connect(h3_session_t* h3,
      */
 
     HQUIC ctrl_stream = NULL;
+    h3_send_only_ctx_t* ctrl_ctx =
+        h3_send_only_ctx_create(NULL, h3, 2 /* client_control */);
+    if (!ctrl_ctx) return -1;
+
     QUIC_STATUS st = MsQuic->StreamOpen(h3->quic_conn,
-        QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL, h3_send_only_stream_cb, NULL, &ctrl_stream);
-    if (QUIC_FAILED(st)) return -1;
+        QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL, h3_send_only_stream_cb, ctrl_ctx, &ctrl_stream);
+    if (QUIC_FAILED(st)) {
+        free(ctrl_ctx);
+        return -1;
+    }
+    ctrl_ctx->stream = ctrl_stream;
 
     /* Write stream type byte + SETTINGS frame */
     uint8_t ctrl_data[256];
@@ -1500,35 +1740,41 @@ int32_t h3_client_connect(h3_session_t* h3,
     /* Start stream with the type byte, then send SETTINGS */
     st = MsQuic->StreamStart(ctrl_stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
     if (QUIC_FAILED(st)) {
-        MsQuic->StreamClose(ctrl_stream);
+        h3_send_only_abort(ctrl_stream);
         return -1;
     }
 
     uint8_t* ctrl_copy = (uint8_t*)malloc((size_t)ctrl_total);
-    if (!ctrl_copy) { MsQuic->StreamClose(ctrl_stream); return -1; }
+    if (!ctrl_copy) {
+        h3_send_only_abort(ctrl_stream);
+        return -1;
+    }
     memcpy(ctrl_copy, ctrl_data, (size_t)ctrl_total);
 
     {
         QUIC_BUFFER buf;
         buf.Buffer = ctrl_copy;
         buf.Length = (uint32_t)ctrl_total;
+        H3_LOCK(h3);
+        h3->client_control_stream = ctrl_stream;
+        h3->client_control_ctx = ctrl_ctx;
+        H3_UNLOCK(h3);
         st = MsQuic->StreamSend(ctrl_stream, &buf, 1,
                                  QUIC_SEND_FLAG_NONE, ctrl_copy);
         if (QUIC_FAILED(st)) {
             free(ctrl_copy);
-            /* NOTE: StreamClose is called directly because the stream was
-             * started but never had StreamSend called on it. StreamShutdown
-             * is not needed.  An unstarted stream has no protocol state to
-             * shut down; the only resource held is the QUIC stream handle
-             * itself, which StreamClose releases directly.  Calling
-             * StreamShutdown on an unstarted stream would produce undefined
-             * behaviour (QUIC_STATUS_INVALID_STATE). */
-            MsQuic->StreamClose(ctrl_stream);
+            H3_LOCK(h3);
+            if (h3->client_control_stream == ctrl_stream) {
+                h3->client_control_stream = NULL;
+                h3->client_control_ctx = NULL;
+            }
+            H3_UNLOCK(h3);
+            /* Detach h3 before async abort — same UAF guard as h3_session_free. */
+            ctrl_ctx->h3 = NULL;
+            h3_send_only_abort(ctrl_stream);
             return -1;
         }
     }
-
-    h3->client_control_stream = ctrl_stream;
 
     /* 2. Save path and authority for the on_ready callback */
     if (path)
@@ -1635,45 +1881,55 @@ int32_t h3_client_connect(h3_session_t* h3,
  *         -1 on handshake failure
  */
 int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
+                            bool is_unidirectional,
                             h3_stream_ctx_t** out_sctx)
 {
     *out_sctx = NULL;
 
     if (h3->server_state == H3_SRV_ESTABLISHED) {
         /* WebTransport session already established —
-         * this is a regular data stream */
+         * this is a regular data stream (bidi only from our app layer).
+         * Uni streams after establish (rare) are still owned by H3/QPACK. */
+        if (is_unidirectional) {
+            h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, h3);
+            if (!sctx) return -1;
+            sctx->is_unidirectional = true;
+            sctx->stream_type = -1;
+            *out_sctx = sctx;
+            return 0;
+        }
         return 1;
     }
 
     /* Create stream context for buffered read */
     h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, h3);
     if (!sctx) return -1;
+    sctx->is_unidirectional = is_unidirectional;
     *out_sctx = sctx;
 
-    if (h3->server_state == H3_SRV_WAIT_CONTROL_STREAM) {
-        /* This is the first peer stream — could be HTTP/3 control
-         * stream or raw QUIC data stream.  We'll know when the
-         * first RECEIVE event arrives (checked in the data handler). */
-        sctx->stream_type = -1;  /* detection pending */
-        h3->server_state = H3_SRV_GOT_SETTINGS;  /* transition */
+    if (is_unidirectional) {
+        /* Uni streams are HTTP/3 infrastructure (control 0x00, QPACK 0x02/0x03).
+         * Never promote them to CONNECT or native game protocol — Chrome often
+         * opens QPACK encoder/decoder *before* or *beside* the control stream.
+         * Mis-detecting 0x02 as "native" causes silent handshake hang
+         * (QUIC_NETWORK_IDLE_TIMEOUT) or SEGV on garbage "game" packets. */
+        sctx->stream_type = -1;  /* resolve type byte on first RECEIVE */
+        sctx->is_request = false;
         return 0;
     }
 
-    if (h3->server_state == H3_SRV_GOT_SETTINGS) {
-        /* Protocol detection is still pending on the first stream.
-         * A second PEER_STREAM_STARTED before RECEIVE data on stream 1
-         * means we don't yet know whether this is HTTP/3 or native.
-         * Create a stream context so data is buffered, but DO NOT
-         * transition to WAIT_CONNECT — the native detection path
-         * (h3_server_process_data, first-byte check) would be skipped
-         * and the connection misdiagnosed.  Classification is deferred
-         * until RECEIVE data on stream 1 confirms the client type. */
-        sctx->stream_type = -1;  /* classification deferred */
+    /* Bidirectional peer stream during handshake. */
+    if (h3->server_state == H3_SRV_WAIT_CONTROL_STREAM ||
+        h3->server_state == H3_SRV_GOT_SETTINGS) {
+        /* First bidi may be native game data (non-H3) OR we still wait for
+         * control-stream SETTINGS before accepting CONNECT. Detection is
+         * deferred until RECEIVE (first byte). */
+        sctx->stream_type = -1;
         return 0;
     }
 
     if (h3->server_state == H3_SRV_WAIT_CONNECT) {
-        /* HTTP/3 has been confirmed — this is the CONNECT request stream. */
+        /* Expected CONNECT request stream after H3 SETTINGS exchange. */
         sctx->is_request = true;
         return 0;
     }
@@ -1694,109 +1950,242 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
  */
 int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
 {
-    if (h3->server_state == H3_SRV_ESTABLISHED) return 1;
+    if (h3->server_state == H3_SRV_ESTABLISHED && !sctx->is_unidirectional)
+        return 1;
 
     if (sctx->recv_offset == 0) return 0;  /* no data yet */
 
-    /* Protocol detection: check first byte */
+    /* Protocol / stream-type detection: inspect first byte */
     if (sctx->stream_type == -1) {
         if (sctx->recv_offset < 1) return 0;
         uint8_t first_byte = sctx->recv_buf[0];
 
-        if (first_byte == H3_STREAM_CONTROL) {
-            /* HTTP/3 control stream detected!
-             * This is a browser WebTransport client. */
-            sctx->stream_type = H3_STREAM_CONTROL;
+        /* ── Unidirectional HTTP/3 streams (control / QPACK) ──
+         * MUST never fall through to native detection. Chrome WebTransport
+         * opens QPACK encoder (0x02) and decoder (0x03) uni streams that
+         * often arrive before or without waiting for control (0x00). Treating
+         * them as native caused QUIC_NETWORK_IDLE_TIMEOUT on the browser
+         * (no SETTINGS/CONNECT completed) and risk of SEGV on garbage data. */
+        if (sctx->is_unidirectional) {
+            if (first_byte == H3_STREAM_CONTROL) {
+                sctx->stream_type = H3_STREAM_CONTROL;
 
-            /* Send server SETTINGS response */
-            uint8_t settings_buf[64];
-            int settings_len = h3_write_settings(settings_buf);
+                /* Send server SETTINGS (only once). Stream lifetime:
+                 * StreamClose only inside h3_send_only_stream_cb SHUTDOWN_COMPLETE.
+                 * Error paths use StreamShutdown(ABORT) — never double-close. */
+                if (!h3->server_control_stream) {
+                    uint8_t settings_buf[128];
+                    int settings_len = h3_write_settings(settings_buf);
 
-            /* Open server control stream */
-            HQUIC srv_ctrl = NULL;
-            QUIC_STATUS st = MsQuic->StreamOpen(
-                h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
-                h3_send_only_stream_cb, NULL, &srv_ctrl);
-            if (QUIC_FAILED(st)) return -1;
-
-            st = MsQuic->StreamStart(srv_ctrl,
-                                      QUIC_STREAM_START_FLAG_IMMEDIATE);
-            if (QUIC_FAILED(st)) {
-                MsQuic->StreamClose(srv_ctrl);
-                return -1;
-            }
-
-            /* Send: stream type byte (0x00) + SETTINGS frame */
-            uint8_t* srv_data = (uint8_t*)malloc((size_t)(1 + settings_len));
-            if (!srv_data) { MsQuic->StreamClose(srv_ctrl); return -1; }
-            srv_data[0] = H3_STREAM_CONTROL;
-            memcpy(srv_data + 1, settings_buf, (size_t)settings_len);
-
-            {
-                QUIC_BUFFER buf;
-                buf.Buffer = srv_data;
-                buf.Length = (uint32_t)(1 + settings_len);
-                st = MsQuic->StreamSend(srv_ctrl, &buf, 1,
-                                         QUIC_SEND_FLAG_NONE, srv_data);
-                if (QUIC_FAILED(st)) {
-                    free(srv_data);
-                    MsQuic->StreamClose(srv_ctrl);
-                    return -1;
-                }
-            }
-            h3->server_control_stream = srv_ctrl;
-            h3->server_state = H3_SRV_WAIT_CONNECT;
-
-            /* HTTP/3 confirmed — any streams that opened while protocol
-             * detection was pending (GOT_SETTINGS state) are CONNECT
-             * request candidates.  Mark them so the CONNECT validation
-             * path processes them when their RECEIVE data arrives. */
-            H3_LOCK(h3);
-            {
-                h3_stream_ctx_t* ds = h3->stream_ctx_list;
-                while (ds) {
-                    if (ds != sctx && ds->stream_type == -1) {
-                        ds->is_request = true;
+                    HQUIC srv_ctrl = NULL;
+                    h3_send_only_ctx_t* send_ctx =
+                        h3_send_only_ctx_create(NULL, h3, 1 /* server_control */);
+                    if (!send_ctx) {
+                        WT_LOG_ERROR("H3: OOM allocating server control stream context");
+                        return -1;
                     }
-                    ds = ds->next;
-                }
-            }
-            H3_UNLOCK(h3);
 
-            /* Parse client SETTINGS from this stream (after type byte) */
-            if (sctx->recv_offset > 1) {
-                size_t offset = 1; /* skip stream type byte */
-                h3_parse_frames(sctx->recv_buf + 1,
-                                sctx->recv_offset - 1,
-                                &offset, NULL, NULL);
-            }
-            return 0;
-        }
-        else {
-            /* NOT a control stream. If we're already in HTTP/3 mode
-             * (control stream was processed and we're waiting for a
-             * CONNECT request), route through CONNECT validation at
-             * line 1518 instead of the raw/native fallback.
-             * Without this check, any browser WebTransport CONNECT
-             * request bypasses all security validation (CORS origin
-             * check, :method, :protocol, :authority). */
-            if (h3->server_state >= H3_SRV_WAIT_CONNECT) {
-                sctx->stream_type = H3_STREAM_REQUEST;
-                sctx->is_request = true;
-                /* Parse the HEADERS frame on this stream.
-                 * h3_server_process_data will be called again after
-                 * more data arrives on this stream, and the CONNECT
-                 * validation path at line 1518 will handle it. */
-                if (sctx->recv_offset > 0) {
-                    size_t pos = 0;
-                    h3_parse_frames(sctx->recv_buf, sctx->recv_offset,
-                                    &pos, NULL, NULL);
+                    QUIC_STATUS st = MsQuic->StreamOpen(
+                        h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
+                        h3_send_only_stream_cb, send_ctx, &srv_ctrl);
+                    if (QUIC_FAILED(st)) {
+                        WT_LOG_ERROR("H3: StreamOpen server control failed: 0x%x", st);
+                        free(send_ctx);
+                        return -1;
+                    }
+                    send_ctx->stream = srv_ctrl;
+
+                    WT_LOG_INFO("H3: server control stream open %p", (void*)srv_ctrl);
+
+                    st = MsQuic->StreamStart(srv_ctrl,
+                                              QUIC_STREAM_START_FLAG_IMMEDIATE);
+                    if (QUIC_FAILED(st)) {
+                        WT_LOG_ERROR("H3: StreamStart server control failed: 0x%x", st);
+                        /* Stream was opened with callback — abort; SHUTDOWN_COMPLETE closes. */
+                        h3_send_only_abort(srv_ctrl);
+                        return -1;
+                    }
+
+                    uint8_t* srv_data = (uint8_t*)malloc((size_t)(1 + settings_len));
+                    if (!srv_data) {
+                        h3_send_only_abort(srv_ctrl);
+                        return -1;
+                    }
+                    srv_data[0] = H3_STREAM_CONTROL;
+                    memcpy(srv_data + 1, settings_buf, (size_t)settings_len);
+
+                    {
+                        QUIC_BUFFER buf;
+                        buf.Buffer = srv_data;
+                        buf.Length = (uint32_t)(1 + settings_len);
+                        /* Publish handle BEFORE Send so concurrent teardown can find it. */
+                        H3_LOCK(h3);
+                        h3->server_control_stream = srv_ctrl;
+                        h3->server_control_ctx = send_ctx;
+                        H3_UNLOCK(h3);
+
+                        st = MsQuic->StreamSend(srv_ctrl, &buf, 1,
+                                                 QUIC_SEND_FLAG_NONE, srv_data);
+                        if (QUIC_FAILED(st)) {
+                            /* StreamSend failed: we still own srv_data (no SEND_COMPLETE). */
+                            free(srv_data);
+                            H3_LOCK(h3);
+                            if (h3->server_control_stream == srv_ctrl) {
+                                h3->server_control_stream = NULL;
+                                h3->server_control_ctx = NULL;
+                            }
+                            H3_UNLOCK(h3);
+                            /* Detach h3 before async abort — same UAF guard as h3_session_free. */
+                            send_ctx->h3 = NULL;
+                            WT_LOG_ERROR("H3: StreamSend server SETTINGS failed: 0x%x stream=%p",
+                                         st, (void*)srv_ctrl);
+                            h3_send_only_abort(srv_ctrl);
+                            return -1;
+                        }
+                    }
+                    h3->server_state = H3_SRV_WAIT_CONNECT;
+                    WT_LOG_INFO("H3: browser control stream seen; sent server SETTINGS "
+                                "(ENABLE_CONNECT_PROTOCOL+WT+DATAGRAM+MAX_SESSIONS) stream=%p",
+                                (void*)srv_ctrl);
+
+                    /* ── Open server QPACK uni streams ────────────────
+                     * RFC 9204: server MUST open encoder (0x02) and decoder (0x03)
+                     * uni streams.  First instruction on encoder stream MUST be
+                     * Set Dynamic Table Capacity (= 0 for static-table-only).
+                     * Without this, some clients (including Chromium) may not
+                     * consider the QPACK setup complete and may stall. */
+                    {
+                        /* QPACK encoder stream: type 0x02 + Set Dynamic Table Capacity=0 */
+                        const uint8_t qpack_enc_data[] = {
+                            0x02,  /* QPACK encoder stream type */
+                            0x20   /* Set Dynamic Table Capacity = 0
+                                    * (001 00000: 3-bit tag + 5-bit prefix varint) */
+                        };
+                        HQUIC qenc = NULL;
+                        h3_send_only_ctx_t* qenc_ctx =
+                            h3_send_only_ctx_create(NULL, NULL, 0);
+                        if (qenc_ctx) {
+                            QUIC_STATUS qst = MsQuic->StreamOpen(
+                                h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
+                                h3_send_only_stream_cb, qenc_ctx, &qenc);
+                            if (QUIC_SUCCEEDED(qst)) {
+                                qenc_ctx->stream = qenc;
+                                qst = MsQuic->StreamStart(
+                                    qenc, QUIC_STREAM_START_FLAG_IMMEDIATE);
+                                if (QUIC_SUCCEEDED(qst)) {
+                                    uint8_t* copy = (uint8_t*)malloc(sizeof(qpack_enc_data));
+                                    if (copy) {
+                                        memcpy(copy, qpack_enc_data, sizeof(qpack_enc_data));
+                                        QUIC_BUFFER buf;
+                                        buf.Buffer = copy;
+                                        buf.Length = sizeof(qpack_enc_data);
+                                        qst = MsQuic->StreamSend(qenc, &buf, 1,
+                                            QUIC_SEND_FLAG_NONE, copy);
+                                        if (QUIC_SUCCEEDED(qst)) {
+                                            WT_LOG_INFO("H3: server QPACK encoder stream open "
+                                                        "stream=%p (Set Dynamic Table Capacity=0)",
+                                                        (void*)qenc);
+                                        } else {
+                                            free(copy);
+                                            h3_send_only_abort(qenc);
+                                        }
+                                    } else {
+                                        h3_send_only_abort(qenc);
+                                    }
+                                } else {
+                                    h3_send_only_abort(qenc);
+                                }
+                            } else {
+                                free(qenc_ctx);
+                            }
+                        }
+
+                        /* QPACK decoder stream: type byte 0x03 only.
+                         * No decoder instructions needed for static-table-only. */
+                        const uint8_t qpack_dec_data[] = { 0x03 };
+                        HQUIC qdec = NULL;
+                        h3_send_only_ctx_t* qdec_ctx =
+                            h3_send_only_ctx_create(NULL, NULL, 0);
+                        if (qdec_ctx) {
+                            QUIC_STATUS qst = MsQuic->StreamOpen(
+                                h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
+                                h3_send_only_stream_cb, qdec_ctx, &qdec);
+                            if (QUIC_SUCCEEDED(qst)) {
+                                qdec_ctx->stream = qdec;
+                                qst = MsQuic->StreamStart(
+                                    qdec, QUIC_STREAM_START_FLAG_IMMEDIATE);
+                                if (QUIC_SUCCEEDED(qst)) {
+                                    uint8_t* copy = (uint8_t*)malloc(sizeof(qpack_dec_data));
+                                    if (copy) {
+                                        memcpy(copy, qpack_dec_data, sizeof(qpack_dec_data));
+                                        QUIC_BUFFER buf;
+                                        buf.Buffer = copy;
+                                        buf.Length = sizeof(qpack_dec_data);
+                                        qst = MsQuic->StreamSend(qdec, &buf, 1,
+                                            QUIC_SEND_FLAG_NONE, copy);
+                                        if (QUIC_SUCCEEDED(qst)) {
+                                            WT_LOG_INFO("H3: server QPACK decoder stream open "
+                                                        "stream=%p (static-table only)",
+                                                        (void*)qdec);
+                                        } else {
+                                            free(copy);
+                                            h3_send_only_abort(qdec);
+                                        }
+                                    } else {
+                                        h3_send_only_abort(qdec);
+                                    }
+                                } else {
+                                    h3_send_only_abort(qdec);
+                                }
+                            } else {
+                                free(qdec_ctx);
+                            }
+                        }
+                    }
+                }
+
+                if (sctx->recv_offset > 1) {
+                    size_t offset = 1; /* skip stream type byte */
+                    h3_parse_frames(sctx->recv_buf + 1,
+                                    sctx->recv_offset - 1,
+                                    &offset, NULL, NULL);
                 }
                 return 0;
             }
 
-            /* Raw/native protocol detected — not HTTP/3.
-             * Signal to the caller to proceed with wt_session.
+            if (first_byte == H3_STREAM_QPACK_ENCODER ||
+                first_byte == H3_STREAM_QPACK_DECODER) {
+                sctx->stream_type = (int)first_byte;
+                WT_LOG_INFO("H3: accepting QPACK uni stream type=0x%02x (no native fallback)",
+                            (unsigned)first_byte);
+                /* Drain / ignore QPACK; we use static table only. */
+                return 0;
+            }
+
+            /* Unknown uni stream type — ignore, never native-fallback. */
+            sctx->stream_type = (int)first_byte;
+            WT_LOG_WARN("H3: ignoring unknown uni stream type=0x%02x",
+                        (unsigned)first_byte);
+            return 0;
+        }
+
+        /* ── Bidirectional stream ── */
+        if (first_byte == H3_STREAM_CONTROL) {
+            /* Non-standard: control type on bidi — treat as H3 control. */
+            WT_LOG_WARN("H3: control type byte on bidi stream — treating as control");
+            sctx->is_unidirectional = true;
+            /* Keep stream_type == -1 and re-enter uni control path. */
+            return h3_server_process_data(h3, sctx);
+        }
+
+        if (h3->server_state >= H3_SRV_WAIT_CONNECT) {
+            /* Browser CONNECT request after SETTINGS exchange. */
+            sctx->stream_type = H3_STREAM_REQUEST;
+            sctx->is_request = true;
+            /* Continue into CONNECT parse below (stream_type no longer -1). */
+        } else {
+            /* Raw/native protocol: first bidi byte is not H3 control.
+             * Only valid for native FishMMO clients, never for browsers.
              *
              * ── Native-client access control ─────────────────
              * When allowed_origins is configured (non-empty, not "*"),
@@ -1904,6 +2293,11 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                         }
                         if (pos + flen <= sctx->recv_offset) {
                             if (ftype == H3_FRAME_HEADERS) {
+                                WT_LOG_INFO("H3: HEADERS frame len=%llu on CONNECT candidate "
+                                            "stream=%p", flen, (void*)sctx->quic_stream);
+                                h3_hex_dump("HEADERS frame payload (raw EncodedFieldSection)",
+                                            sctx->recv_buf + pos, (size_t)flen);
+
                                 if (h3_parse_headers(sctx->recv_buf + pos,
                                                      flen, &phdr)) {
                                     /* Validate CONNECT */
@@ -2127,6 +2521,13 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                             }
                                         }
 
+                                        WT_LOG_INFO("H3: CONNECT accepted — method=%s protocol=%s "
+                                                    "origin=%s path=%s authority=%s",
+                                                    phdr.method, phdr.protocol,
+                                                    phdr.origin[0] ? phdr.origin : "(none)",
+                                                    phdr.path[0] ? phdr.path : "(none)",
+                                                    phdr.authority[0] ? phdr.authority : "(none)");
+
                                         /* Copy path & authority for the on_ready callback */
                                         if (phdr.path[0])
                                             strncpy(h3->request_path, phdr.path, sizeof(h3->request_path)-1);
@@ -2192,7 +2593,22 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                     }
                 }
 
-                /* If we reach here, parsing failed or wrong request */
+                /* If we reach here, one of:
+                 *   - h3_parse_headers returned false (QPACK decode failed)
+                 *   - :method != "CONNECT" or :protocol != "webtransport"
+                 *   - h3_parse_frames or varint_decode failed
+                 *
+                 * Log what we decoded (if anything) so ops can tell QPACK decode
+                 * failures apart from genuine invalid CONNECT fields. */
+                if (phdr.method[0] == '\0' && phdr.protocol[0] == '\0') {
+                    WT_LOG_ERROR("H3: CONNECT handshake failed — QPACK decode error "
+                                 "(no pseudo-headers extracted from HEADERS frame)");
+                } else {
+                    WT_LOG_WARN("H3: Invalid CONNECT — method=%s protocol=%s "
+                                "(need method=CONNECT protocol=webtransport)",
+                                phdr.method[0] ? phdr.method : "(empty)",
+                                phdr.protocol[0] ? phdr.protocol : "(empty)");
+                }
                 if (h3->on_error) {
                     h3->on_error(h3->callback_ctx, -1,
                                  "Invalid CONNECT request");

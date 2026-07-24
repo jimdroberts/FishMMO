@@ -62,6 +62,9 @@ extern "C" {
 
 #define H3_SETTINGS_ENABLE_WEBTRANSPORT  0x2b603742  /* RFC 9220 §5 — WebTransport support */
 #define H3_SETTINGS_DATAGRAM             0x33        /* RFC 9297 §5.1 — HTTP/3 DATAGRAM support */
+#define H3_SETTINGS_ENABLE_CONNECT_PROTOCOL 0x08     /* RFC 9220 / RFC 8441 — Extended CONNECT required by Chrome WT */
+/* draft-ietf-webtrans-http3 SETTINGS_WT_MAX_SESSIONS (formerly draft id varies; Chrome accepts 0x14e9db3d). */
+#define H3_SETTINGS_WT_MAX_SESSIONS      0x14e9db3d
 
 /* ── QPACK encoding prefixes ─────────────────────────────────── */
 #define QPACK_INDEXED_STATIC    0xC0  /* 11xxxxxx — indexed static table entry */
@@ -117,6 +120,7 @@ typedef struct h3_stream_ctx_s {
     uint32_t            recv_offset;
     uint32_t            recv_capacity;
     bool                is_request;     /* true if this is the CONNECT request stream */
+    bool                is_unidirectional; /* true if QUIC uni stream (control/QPACK); never native game data */
     struct h3_session_s* h3;            /* back-pointer to HTTP/3 session (for data processing) */
     struct h3_stream_ctx_s* next;       /* linked list for session cleanup */
     atomic_bool             freed;          /* CAS guard — prevents double-free when
@@ -132,10 +136,12 @@ typedef struct h3_session_s {
     /* Server state */
     h3_server_state_t   server_state;
     HQUIC               server_control_stream;
+    void*               server_control_ctx;   /* h3_send_only_ctx_t* — for teardown nulling */
 
     /* Client state */
     h3_client_state_t   client_state;
     HQUIC               client_control_stream;
+    void*               client_control_ctx;   /* h3_send_only_ctx_t* — for teardown nulling */
 
     /* Handshake data */
     char                request_path[256];
@@ -193,6 +199,15 @@ typedef struct h3_session_s {
     void*               parent_ptr;     /* wt_server_conn_t* or wt_client_s* */
 } h3_session_t;
 
+/* ── Stream context list lock helpers ────────────────────────── */
+#if defined(WT_PLATFORM_WINDOWS)
+  #define H3_LOCK(h3)    EnterCriticalSection(&(h3)->stream_ctx_lock)
+  #define H3_UNLOCK(h3)  LeaveCriticalSection(&(h3)->stream_ctx_lock)
+#else
+  #define H3_LOCK(h3)    pthread_mutex_lock(&(h3)->stream_ctx_lock)
+  #define H3_UNLOCK(h3)  pthread_mutex_unlock(&(h3)->stream_ctx_lock)
+#endif
+
 /* ── API ────────────────────────────────────────────────────── */
 
 /**
@@ -241,6 +256,7 @@ int32_t h3_client_connect(
  *        -1  = error
  */
 int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
+                            bool is_unidirectional,
                             h3_stream_ctx_t** out_sctx);
 
 /**

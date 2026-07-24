@@ -71,7 +71,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// H13: Disable core dumps and unprivileged ptrace as early as possible so subsequent
 			// allocations of TOTP/signing-key material are not exposed via /proc/<pid>/mem or core
 			// files. Failure is non-fatal on platforms without prctl (Windows, macOS).
-			if (ProcessHardening.TryDisableCoreDumpAndPtrace(out string hardeningStatus))
+			//
+			// Set FISHMMO_ALLOW_COREDUMPS=1 to skip this hardening step — required for
+			// debugging native crashes (SEGV, SIGBUS) in libfishmmo_webtransport or MsQuic.
+			// Core dumps MUST be re-disabled before returning to production.
+			bool allowCoredumps = string.Equals(
+				Environment.GetEnvironmentVariable("FISHMMO_ALLOW_COREDUMPS"),
+				"1", StringComparison.OrdinalIgnoreCase);
+			if (allowCoredumps)
+			{
+				Log.Warning("LoginServerSystem",
+					"FISHMMO_ALLOW_COREDUMPS=1 — core dumps are ENABLED. " +
+					"Key material may be exposed in core files. " +
+					"Unset this variable before returning to production.");
+			}
+			else if (ProcessHardening.TryDisableCoreDumpAndPtrace(out string hardeningStatus))
 			{
 				Log.Debug("LoginServerSystem", $"Process hardening: {hardeningStatus}");
 			}
