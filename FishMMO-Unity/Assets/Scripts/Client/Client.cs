@@ -261,6 +261,19 @@ namespace FishMMO.Client
 
 			Connection.OnReconnectFailed += this.onReconnectFailedQuitToLogin;
 
+			// When a non-reconnectable connection fails (e.g. login server unreachable),
+			// invalidate the cached login server list so the next attempt re-fetches from
+			// IPFetch instead of retrying the same potentially dead server/port.
+			Connection.OnConnectionAttemptFailed += () =>
+			{
+				if (this.loginServerPorts != null)
+				{
+					Log.Info("Client", "Login server connection attempt failed — invalidating cached server list.");
+					this.loginServerPorts = null;
+					this.cachedConnectionToken = null;
+				}
+			};
+
 			this.combatDisplay = new ClientCombatDisplay();
 			this.combatDisplay.Initialize();
 

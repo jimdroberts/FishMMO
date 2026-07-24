@@ -62,6 +62,8 @@ namespace FishMMO.Client
 		public float MaxReconnectDelay { get; set; } = 60f;
 		/// <summary>Timeout in seconds waiting for a connection to fully stop. Default 10.</summary>
 		public float ConnectionStopTimeoutSeconds { get; set; } = 10f;
+		/// <summary>Timeout in seconds waiting for a new connection to reach Started state. Default 20.</summary>
+		public float ConnectionEstablishTimeoutSeconds { get; set; } = 20f;
 
 		/// <summary>Fired when a connection to the server is successfully established.</summary>
 		public event Action OnConnectionSuccessful;
@@ -69,6 +71,8 @@ namespace FishMMO.Client
 		public event Action<int, int> OnReconnectAttempt;
 		/// <summary>Fired when all reconnect attempts are exhausted without success.</summary>
 		public event Action OnReconnectFailed;
+		/// <summary>Fired when a non-reconnectable connection attempt fails (e.g. login server unreachable).</summary>
+		public event Action OnConnectionAttemptFailed;
 
 		/// <summary>Returns true if the current connection type supports reconnection (World or Scene).</summary>
 		public bool CanReconnect =>
@@ -224,6 +228,12 @@ namespace FishMMO.Client
 						// once in TryReconnect() when the actual reconnect begins, so
 						// consumers don't receive duplicate events per cycle.
 					}
+					else if (!forceDisconnect)
+					{
+						// Non-reconnectable connection failed (e.g. login server).
+						// Fire so listeners can invalidate cached discovery data.
+						OnConnectionAttemptFailed?.Invoke();
+					}
 					CurrentConnectionType = ServerConnectionType.None;
 					break;
 				case LocalConnectionState.Started:
@@ -291,13 +301,57 @@ namespace FishMMO.Client
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
 			try
 			{
+				Log.Info("ClientConnection", $"StartConnection host={address} port={port} isWorld={isWorldServer} timeout={ConnectionEstablishTimeoutSeconds}s");
 				NetworkManager.ClientManager.StartConnection(address, port);
 			}
-			finally
+			catch (System.Exception ex)
 			{
+				Log.Error("ClientConnection", $"StartConnection threw: {ex}");
 				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				yield break;
 			}
-			yield return null;
+
+			// Wait for the connection to reach Started or Stopped, with a timeout.
+			// The connectingGuard stays acquired during this wait to prevent
+			// concurrent ConnectToServer calls from starting a second connection
+			// while this one is still being established.
+			float connectDeadline = Time.realtimeSinceStartup + Mathf.Max(1f, ConnectionEstablishTimeoutSeconds);
+			int connectMaxIters = Mathf.CeilToInt(ConnectionEstablishTimeoutSeconds * 120f); // ~120 checks/s
+			while (ClientState == LocalConnectionState.Starting && Time.realtimeSinceStartup < connectDeadline)
+			{
+				if (--connectMaxIters <= 0)
+				{
+					Log.Error("ClientConnection", "Connection establish wait iteration limit exceeded.");
+					NetworkManager.ClientManager.StopConnection();
+					System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+					yield break;
+				}
+				yield return null;
+			}
+
+			if (ClientState == LocalConnectionState.Stopped)
+			{
+				// The transport already reported an error (WebGlOnError / HandleNativeDisconnect).
+				// Log context and release the guard — the UI layer will surface the error.
+				Log.Error("ClientConnection", $"Connection to {address}:{port} failed before reaching Started state. " +
+					"The transport reported an error — check preceding [WebTransport Client] log lines for the specific reason.");
+				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				yield break;
+			}
+
+			if (ClientState != LocalConnectionState.Started)
+			{
+				// Still in Starting state — timed out waiting for the transport to connect.
+				string serverType = isWorldServer ? "world" : "login";
+				Log.Error("ClientConnection", $"Could not reach {serverType} server {address}:{port} " +
+					$"within {ConnectionEstablishTimeoutSeconds}s. " +
+					"Check network/UDP (QUIC), DNS resolution, and that the server is running and accepting connections on this port.");
+				NetworkManager.ClientManager.StopConnection();
+				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				yield break;
+			}
+
+			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 		}
 	}
 }

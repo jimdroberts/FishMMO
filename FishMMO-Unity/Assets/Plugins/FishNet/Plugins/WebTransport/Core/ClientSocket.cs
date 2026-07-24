@@ -593,6 +593,20 @@ namespace FishNet.Transporting.WebTransport.Client
 		{
 			if (!TryGetWebGlSocket(index, out ClientSocket socket))
 				return;
+			// Retrieve the real error message from the JS session before it
+			// may be removed by the disconnect path. The message was stored
+			// by the jslib onError / ready.catch / closed.catch paths.
+			string errorDetail = null;
+			try
+			{
+				IntPtr msgPtr = WebTransportJSLib.WTGetLastErrorMessage(index);
+				if (msgPtr != IntPtr.Zero)
+				{
+					errorDetail = System.Runtime.InteropServices.Marshal.PtrToStringUTF8(msgPtr);
+					WebTransportJSLib.WASMFree(msgPtr);
+				}
+			}
+			catch { /* best-effort — never let error retrieval prevent cleanup */ }
 			// Backpressure: drop if event queue is saturated.
 			if (System.Threading.Interlocked.Increment(ref socket.incomingEventCount) > MaxIncomingEvents)
 			{
@@ -600,9 +614,23 @@ namespace FishNet.Transporting.WebTransport.Client
 				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping error event.");
 				return;
 			}
+			// Capture errorDetail in a local so the lambda captures the string,
+			// not a variable that may be mutated before the lambda executes.
+			string capturedDetail = errorDetail;
 			socket.incomingEvents.Enqueue(() =>
 			{
-				socket.LogTransportError("[WebTransport Client] WebGL connection error.");
+				if (string.IsNullOrEmpty(capturedDetail))
+					socket.LogTransportError("[WebTransport Client] WebGL connection error (no detail available — check browser console for [FishWT] messages).");
+				else if (capturedDetail.StartsWith("Ready failed:", StringComparison.Ordinal))
+					socket.LogTransportError($"[WebTransport Client] WebGL connection rejected by server: {capturedDetail} (check TLS/cert/Origin/server config)");
+				else if (capturedDetail.StartsWith("Create failed:", StringComparison.Ordinal))
+					socket.LogTransportError($"[WebTransport Client] WebGL connection create failed: {capturedDetail}");
+				else if (capturedDetail.StartsWith("Closed:", StringComparison.Ordinal))
+					socket.LogTransportError($"[WebTransport Client] WebGL connection closed with error: {capturedDetail}");
+				else if (capturedDetail == "WebTransport not supported")
+					socket.LogTransportError("[WebTransport Client] WebTransport API not supported by this browser.");
+				else
+					socket.LogTransportError($"[WebTransport Client] WebGL connection error: {capturedDetail}");
 				socket.SetConnectionState(LocalConnectionState.Stopped, false);
 			});
 		}

@@ -179,6 +179,14 @@ namespace FishMMO.Client
 		{
 			if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
+				// If the connection dropped while the user was in the middle of account
+				// creation (form locked, waiting for server response), surface an error
+				// so the player knows what happened instead of silently unlocking the form.
+				if (isAuthFlowActive)
+				{
+					ShowValidationError("Connection to login server lost. Please check your network and try again. " +
+						"If the problem persists, the login server may be temporarily down.");
+				}
 				StatusMessage.text = "";
 				SetFormLocked(false);
 				pendingVerifyUsername = null;

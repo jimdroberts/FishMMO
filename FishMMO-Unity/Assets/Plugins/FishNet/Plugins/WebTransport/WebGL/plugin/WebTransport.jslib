@@ -26,6 +26,7 @@ var LibraryFishWebTransport = {
     // ------------------------------------------------------------------
     $FishWebTransport: {
         _transports: {},
+        _lastErrors: {},  // error messages keyed by index, persists after _remove
         _nextIndex: 1,
 
         /** Compatible dynCall wrapper — uses wasmTable when available
@@ -48,6 +49,9 @@ var LibraryFishWebTransport = {
         },
         _remove: function(index) {
             delete FishWebTransport._transports[index];
+            // Keep _lastErrors for one extra retrieval cycle so
+            // WTGetLastErrorMessage can be called after _remove.
+            // The next WTGetLastErrorMessage call cleans it up.
         },
         _add: function(session) {
             var idx = FishWebTransport._nextIndex++;
@@ -210,12 +214,9 @@ var LibraryFishWebTransport = {
     WTConnect: function(urlPtr, onOpen, onClose, onStream, onDatagram, onError) {
         var url = UTF8ToString(urlPtr);
 
-        if (typeof WebTransport === 'undefined') {
-            console.error('[FishWT] WebTransport not supported');
-            FishWebTransport._dynCall('vi', onError, [-1]);
-            return -1;
-        }
-
+        // Create the session object first so it's available for the
+        // "WebTransport not supported" check below (though no error is
+        // stored on the session — errors go to _lastErrors map).
         var session = {
             wt: null,
             _index: -1,
@@ -227,6 +228,13 @@ var LibraryFishWebTransport = {
             onError: onError
         };
 
+        if (typeof WebTransport === 'undefined') {
+            console.error('[FishWT] WebTransport not supported');
+            FishWebTransport._lastErrors[-1] = 'WebTransport not supported';
+            FishWebTransport._dynCall('vi', onError, [-1]);
+            return -1;
+        }
+
         var index = FishWebTransport._add(session);
         session._index = index;
 
@@ -234,6 +242,7 @@ var LibraryFishWebTransport = {
             session.wt = new WebTransport(url);
         } catch (e) {
             console.error('[FishWT] Create failed: ' + e.message);
+            FishWebTransport._lastErrors[index] = 'Create failed: ' + e.message;
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onError, [index]);
             return -1;
@@ -247,6 +256,7 @@ var LibraryFishWebTransport = {
             console.error('[FishWT] Ready failed: ' + err.message);
             if (session._errorFired) return;
             session._errorFired = true;
+            FishWebTransport._lastErrors[index] = 'Ready failed: ' + (err.message || 'unknown');
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onError, [index]);
         });
@@ -257,6 +267,7 @@ var LibraryFishWebTransport = {
         }).catch(function(err) {
             if (session._errorFired) return;
             session._errorFired = true;
+            FishWebTransport._lastErrors[index] = 'Closed: ' + (err.message || 'unknown');
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onError, [index]);
         });
@@ -439,6 +450,30 @@ var LibraryFishWebTransport = {
     WTSetStreamThreshold: function(index, threshold) {
         // Reserved for future stream congestion control.
         // Currently not enforced -- streams are created on demand.
+    },
+
+    /** Retrieve the last error message stored for the given session index.
+     *  Reads from the _lastErrors map which persists after session _remove.
+     *  Cleans up the stored error entry after reading (one-shot).
+     *  Returns a pointer to a UTF-8 string allocated on the WASM heap.
+     *  The caller (C#) MUST free the returned pointer via _free() after
+     *  marshalling the string.
+     *  Returns 0 (NULL) if no error is stored for this index. */
+    WTGetLastErrorMessage__deps: ['$FishWebTransport'],
+    WTGetLastErrorMessage: function(index) {
+        var msg = FishWebTransport._lastErrors[index];
+        if (!msg) return 0;
+        // Clean up after read — one-shot retrieval.
+        delete FishWebTransport._lastErrors[index];
+        if (typeof msg !== 'string') msg = String(msg);
+        // Truncate to 1024 bytes to bound WASM heap allocation.
+        if (msg.length > 1024) msg = msg.substring(0, 1021) + '...';
+        // UTF-8 encode into the WASM heap.  _malloc / _free are provided
+        // by Emscripten and exported to C# via [DllImport("__Internal")].
+        var ptr = _malloc(msg.length + 1);
+        if (!ptr) return 0;
+        stringToUTF8(msg, ptr, msg.length + 1);
+        return ptr;
     }
 };
 
