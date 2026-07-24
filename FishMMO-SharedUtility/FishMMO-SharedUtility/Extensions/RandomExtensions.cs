@@ -45,11 +45,9 @@ namespace FishMMO.Shared
 			ulong rand;
 			if (range == ulong.MaxValue)
 			{
-				do
-				{
-					rand = random.NextULong();
-				} while (rand == ulong.MaxValue);
-				return (long)rand + min;
+				// Full ulong range — no rejection needed. Every possible random
+				// value is valid because range == ulong.MaxValue.
+				return (long)random.NextULong() + min;
 			}
 
 			// Calculate limit for rejection sampling to ensure perfectly uniform distribution

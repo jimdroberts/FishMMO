@@ -199,7 +199,7 @@ namespace FishMMO.Shared
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask DefaultLayer = 1 << LayerMask.NameToLayer("Default");
+			public static readonly LayerMask DefaultLayer = SafeGetLayerMask("Default");
 
 			/// <summary>
 			/// Ignore Raycast layer, used for UI and non-interactive objects.
@@ -208,7 +208,7 @@ namespace FishMMO.Shared
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask IgnoreRaycast = 1 << LayerMask.NameToLayer("Ignore Raycast");
+			public static readonly LayerMask IgnoreRaycast = SafeGetLayerMask("Ignore Raycast");
 
 			/// <summary>
 			/// Ground layer, used for terrain and walkable surfaces.
@@ -217,7 +217,7 @@ namespace FishMMO.Shared
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask Ground = 1 << LayerMask.NameToLayer("Ground");
+			public static readonly LayerMask Ground = SafeGetLayerMask("Ground");
 
 			/// <summary>
 			/// Obstruction layer mask combining Default and Ground layers,
@@ -236,8 +236,22 @@ namespace FishMMO.Shared
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask Player = 1 << LayerMask.NameToLayer("Player");
+			public static readonly LayerMask Player = SafeGetLayerMask("Player");
 
+			/// <summary>
+			/// Calls <see cref="LayerMask.NameToLayer"/> and converts the result to a bit mask.
+			/// Returns 0 (empty mask) instead of 0x80000000 when the layer name is not found.
+			/// This prevents <c>1 &lt;&lt; -1</c> which produces an incorrect sign-extended bit.
+			/// </summary>
+			/// <param name="layerName">The name of the layer.</param>
+			/// <returns>A bit mask with the layer bit set, or 0 if the layer was not found.</returns>
+			private static int SafeGetLayerMask(string layerName)
+			{
+				int layer = LayerMask.NameToLayer(layerName);
+				if (layer < 0) return 0;
+				return 1 << layer;
+			}
+			
 			static Layers()
 			{
 				var missing = Validate();

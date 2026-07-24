@@ -109,38 +109,67 @@ namespace FishNet.Transporting.WebTransport.Client
 		private IntPtr pinnedCallbacksPtr = IntPtr.Zero;
 
 		/// <summary>
-		/// Finalizer -- drains the incoming event queue without invoking actions.
-		/// The .NET finalizer runs on an arbitrary thread, not the Unity main thread.
-		/// The queued actions call FishNet transport callbacks which must execute
-		/// on the main thread. In the abandoned-socket case this finalizer is a
-		/// last resort; normal cleanup goes through <see cref="StopConnection"/>
-		/// which invokes actions on the main thread and frees unmanaged memory.
+		/// Finalizer -- clears the incoming event queue WITHOUT invoking actions.
+		/// The .NET finalizer runs on an arbitrary thread (the GC finalizer thread),
+		/// NOT the Unity main thread. The queued actions call FishNet transport
+		/// callbacks and eventually Unity APIs (SetConnectionState, etc.) which
+		/// are NOT thread-safe. This finalizer only frees unmanaged resources.
+		/// Normal cleanup goes through <see cref="Dispose"/> / <see cref="StopConnection"/>
+		/// on the main thread.
 		/// </summary>
 		~ClientSocket()
 		{
+			// Drain the event queue without invoking -- the finalizer thread
+			// must not call Unity APIs or user callbacks.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				// Invoke each action so that unmanaged memory held by native
-				// callbacks (Marshal.AllocHGlobal) is freed via their finally blocks.
-				// The action bodies check connection state and skip FishNet callbacks
-				// when the transport is not in Started state.
-				// We swallow exceptions — the finalizer thread cannot safely
-				// propagate them, and the process is shutting down.
-				try { act?.Invoke(); } catch { /* swallow — finalizer */ }
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 			}
-			Dispose();
+			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+			if (webglIndex >= 0)
+			{
+				webglSockets.TryRemove(webglIndex, out _);
+				if (ReferenceEquals(webglPendingConnect, this))
+					webglPendingConnect = null;
+				webglIndex = -1;
+			}
+#else
+			// Free pinned callback table allocated via Marshal.AllocHGlobal.
+			if (this.pinnedCallbacksPtr != IntPtr.Zero)
+			{
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+				this.pinnedCallbacksPtr = IntPtr.Zero;
+			}
+			// clientHandle is a SafeHandle -- its own finalizer will release it
+			// via ReleaseHandle (which has the IsLibraryDeinitialized guard).
+#endif
 		}
 
 		/// <summary>
-		/// Releases all unmanaged resources (native handles, pinned callback table).
+		/// Releases all managed and unmanaged resources.
 		/// Safe to call multiple times; subsequent calls are no-ops.
-		/// Called from <see cref="StopConnection"/> on the main thread and from
-		/// the finalizer on the finalizer thread.
+		/// Drains pending incoming events so that unmanaged memory held by
+		/// native callbacks (Marshal.AllocHGlobal) is freed via their finally
+		/// blocks. MUST be called from the Unity main thread because the queued
+		/// actions invoke FishNet/Unity callbacks.
+		/// Called from <see cref="StopConnection"/> on the main thread.
 		/// </summary>
 		public void Dispose()
 		{
 			if (System.Threading.Interlocked.Exchange(ref this.disposed, 1) != 0)
 				return;
+
+			// Drain pending incoming events, INVOKING each action so that
+			// unmanaged memory (Marshal.AllocHGlobal) held by native callbacks
+			// is properly freed via their finally blocks.
+			while (incomingEvents.TryDequeue(out Action act))
+			{
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
+				try { act?.Invoke(); } catch { /* swallow */ }
+			}
+			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
 #if UNITY_WEBGL && !UNITY_EDITOR
 			if (webglIndex >= 0)
@@ -539,6 +568,8 @@ namespace FishNet.Transporting.WebTransport.Client
 				socket.LogTransportWarning("[WebTransport Client] Incoming event queue full; dropping stream data.");
 				return;
 			}
+			// WebGL is single-threaded — managed allocations on the JS callback
+			// thread are safe.  TODO(perf): ByteArrayPool — see WebGlOnDatagram.
 			byte[] buf = new byte[length];
 			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
 			socket.incomingEvents.Enqueue(() =>
@@ -573,6 +604,10 @@ namespace FishNet.Transporting.WebTransport.Client
 			// WebGL is single-threaded, so managed allocations on the JS callback
 			// thread are safe (no GC corruption). At high data rates this creates
 			// GC pressure; if this becomes a bottleneck, switch to ByteArrayPool.
+			//
+			// TODO(perf): Using ByteArrayPool.Retrieve(length) requires tracking
+			// buffer ownership through the FishNet data path so buffers can be
+			// returned to the pool after FishNet finishes with the ArraySegment.
 			byte[] buf = new byte[length];
 			System.Runtime.InteropServices.Marshal.Copy(dataPtr, buf, 0, length);
 			socket.incomingEvents.Enqueue(() =>

@@ -204,6 +204,11 @@ namespace FishMMO.Server.Implementation
 						"Clients will be unable to authenticate. " +
 						"Set ConnectionTokenHmacKeyBase64 in the server .cfg file " +
 						"or FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.");
+					throw new InvalidOperationException(
+						"ConnectionTokenHmacKeyBase64 is not configured. " +
+						"The server cannot start without a valid HMAC key for connection token verification. " +
+						"Set ConnectionTokenHmacKeyBase64 in the server .cfg file " +
+						"or FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.");
 				}
 #else
 				if (string.IsNullOrWhiteSpace(hmacKeyB64))

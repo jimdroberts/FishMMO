@@ -196,6 +196,17 @@ typedef struct h3_session_s {
      * bypassing origin-based access control. */
     bool                    allow_native_clients;
 
+    /* M-1: freed flag for UAF defense in h3_stream_cb RECEIVE.
+     * Set atomically as the first operation in h3_session_free,
+     * checked before calling h3_server_process_data in the RECEIVE
+     * callback.  Mitigated by msquic's per-stream callback serialization
+     * (no concurrent RECEIVE for the same stream), but a concurrent
+     * SHUTDOWN_COMPLETE on the connection can free the h3_session
+     * while a RECEIVE callback for a different stream is executing.
+     * The freed flag provides defense-in-depth: after it is set,
+     * no new RECEIVE callback will process data on this session. */
+    atomic_bool             freed;
+
     void*               parent_ptr;     /* wt_server_conn_t* or wt_client_s* */
 } h3_session_t;
 

@@ -224,12 +224,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 				// Wire the same TOTP master key to the account creation system.
 				// Each consumer gets its own copy so a ZeroMemory on one does not
 				// corrupt the other's key material.
-				if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem) &&
-					accountSystem is AccountCreationSystem concreteAccountSystem)
+				if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem))
 				{
-					byte[] totpMasterKeyCopy = new byte[totpMasterKey.Length];
-					Buffer.BlockCopy(totpMasterKey, 0, totpMasterKeyCopy, 0, totpMasterKeyCopy.Length);
-					concreteAccountSystem.TotpMasterKey = totpMasterKeyCopy;
+					if (accountSystem is AccountCreationSystem concreteAccountSystem)
+					{
+						byte[] totpMasterKeyCopy = new byte[totpMasterKey.Length];
+						Buffer.BlockCopy(totpMasterKey, 0, totpMasterKeyCopy, 0, totpMasterKeyCopy.Length);
+						concreteAccountSystem.TotpMasterKey = totpMasterKeyCopy;
+					}
+					else
+					{
+						Log.Warning("LoginServerSystem", "accountSystem is not AccountCreationSystem -- TOTP master key not forwarded.");
+					}
 				}
 			}
 			else

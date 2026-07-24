@@ -496,12 +496,39 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Sets a string value for a given setting name.
-		/// Throws an <see cref="ArgumentNullException"/> if the setting name is null or whitespace.
-		/// If the <paramref name="value"/> is null, an empty string is stored.
+		/// Throws an <see cref="ArgumentNullException"/> if the setting name is null or whitespace,
+		/// or if the <paramref name="value"/> is null.
 		/// </summary>
 		/// <param name="name">The name of the setting.</param>
-		/// <param name="value">The string value to set.</param>
+		/// <param name="value">The string value to set. Must not be null.</param>
 		public void Set(string name, string value)
+		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
+			if (string.IsNullOrWhiteSpace(name))
+			{
+				throw new ArgumentNullException(nameof(name), "Setting name cannot be null or empty.");
+			}
+			if (value == null)
+				throw new ArgumentNullException(nameof(value), $"Configuration key '{name}' cannot be set to null.");
+			settingsLock.EnterWriteLock();
+			try
+			{
+				this.settings[name] = value;
+			}
+			finally
+			{
+				settingsLock.ExitWriteLock();
+			}
+		}
+
+		/// <summary>
+		/// Sets a string value for a given setting name, allowing null values.
+		/// If <paramref name="value"/> is null, an empty string is stored.
+		/// Throws an <see cref="ArgumentNullException"/> if the setting name is null or whitespace.
+		/// </summary>
+		/// <param name="name">The name of the setting.</param>
+		/// <param name="value">The string value to set, or null to store an empty string.</param>
+		public void SetOptional(string name, string? value)
 		{
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (string.IsNullOrWhiteSpace(name))
@@ -511,7 +538,7 @@ namespace FishMMO.Shared
 			settingsLock.EnterWriteLock();
 			try
 			{
-				this.settings[name] = value ?? string.Empty; // Assigns the value; if 'value' is null, it stores an empty string.
+				this.settings[name] = value ?? string.Empty;
 			}
 			finally
 			{

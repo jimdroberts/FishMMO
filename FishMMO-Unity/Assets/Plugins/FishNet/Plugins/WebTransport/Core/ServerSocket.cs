@@ -188,29 +188,49 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// </summary>
 		~ServerSocket()
 		{
+			// Drain the event queue WITHOUT invoking actions -- the finalizer
+			// runs on the GC finalizer thread, not the Unity main thread, and
+			// the queued actions call FishNet/Unity callbacks which are not
+			// thread-safe.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
-				// Invoke each action so that unmanaged memory held by native
-				// callbacks (Marshal.AllocHGlobal) is freed via their finally blocks.
-				// The action bodies check connection state and skip FishNet callbacks
-				// when the transport is not in Started state.
-				// We swallow exceptions — the finalizer thread cannot safely
-				// propagate them, and the process is shutting down.
-				try { act?.Invoke(); } catch { /* swallow — finalizer */ }
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
 			}
-			Dispose();
+			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
+
+			// Free pinned callbacks table allocated via Marshal.AllocHGlobal.
+			if (this.pinnedCallbacksPtr != IntPtr.Zero)
+			{
+				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
+				this.pinnedCallbacksPtr = IntPtr.Zero;
+			}
+			// serverHandle is a SafeHandle; its own finalizer will release it
+			// via ReleaseHandle (which has the IsLibraryDeinitialized guard).
 		}
 
 		/// <summary>
-		/// Releases all unmanaged resources (native handles, pinned callback table).
+		/// Releases all managed and unmanaged resources.
 		/// Safe to call multiple times; subsequent calls are no-ops.
-		/// Called from <see cref="StopConnection"/> on the main thread and from
-		/// the finalizer on the finalizer thread.
+		/// Drains pending incoming events so that unmanaged memory held by
+		/// native callbacks (Marshal.AllocHGlobal) is freed via their finally
+		/// blocks. MUST be called from the Unity main thread because the queued
+		/// actions invoke FishNet/Unity callbacks.
+		/// Called from <see cref="StopConnection"/> on the main thread.
 		/// </summary>
 		public void Dispose()
 		{
 			if (System.Threading.Interlocked.Exchange(ref this.disposed, 1) != 0)
 				return;
+
+			// Drain pending incoming events, INVOKING each action so that
+			// unmanaged memory (Marshal.AllocHGlobal) held by native callbacks
+			// is properly freed via their finally blocks.
+			while (this.incomingEvents.TryDequeue(out Action act))
+			{
+				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
+				try { act?.Invoke(); } catch { /* swallow */ }
+			}
+			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
 			if (this.serverHandle != null && !this.serverHandle.IsInvalid)
 			{

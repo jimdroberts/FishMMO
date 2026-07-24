@@ -292,7 +292,19 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Unity Update. Delegates tick processing to the Connection manager.
 		/// </summary>
-		private void Update() => Connection?.Update();
+		private void Update()
+		{
+			Connection?.Update();
+			
+			if (pendingErrorStackTrace != null)
+			{
+				string st = pendingErrorStackTrace;
+				pendingErrorStackTrace = null;
+				if (Connection?.ClientState == LocalConnectionState.Stopped) return;
+				try { loginAuthenticator?.RevokeAndClearAuthToken(); } catch { }
+				Connection?.ForceDisconnect();
+			}
+		}
 
 		/// <summary>
 		/// Unity OnDestroy. Cleans up event subscriptions, managers, authenticator, connection, and settings.
@@ -768,9 +780,19 @@ namespace FishMMO.Client
 		}
 
 		// ── Log guard ───────────────────────────────────────────────────
-
+		
 		/// <summary>
-		/// Handles Unity log messages. Forces a disconnect on unhandled exceptions from the networking stack.
+		/// Set by <see cref="OnLogMessage"/> on any thread when a networking-related
+		/// exception is logged.  Checked and cleared on the main thread in
+		/// <see cref="Update"/> so that Unity API calls (ForceDisconnect, auth
+		/// token revocation) always execute on the main thread.
+		/// </summary>
+		private volatile string pendingErrorStackTrace;
+		
+		/// <summary>
+		/// Handles Unity log messages. Thread-safe: stores the stack trace in a
+		/// volatile field for main-thread processing in <see cref="Update"/>.
+		/// Forces a disconnect on unhandled exceptions from the networking stack.
 		/// </summary>
 		/// <param name="condition">The log message.</param>
 		/// <param name="stackTrace">The stack trace.</param>
@@ -779,10 +801,8 @@ namespace FishMMO.Client
 		{
 			if (type != LogType.Exception) return;
 			Log.Error("Client", stackTrace);
-			if (Connection?.ClientState == LocalConnectionState.Stopped) return;
 			if (string.IsNullOrEmpty(stackTrace) || !IsNetworkStack(stackTrace)) return;
-			try { loginAuthenticator?.RevokeAndClearAuthToken(); } catch { }
-			Connection?.ForceDisconnect();
+			pendingErrorStackTrace = stackTrace;
 		}
 		/// <summary>
 		/// Determines whether a stack trace originates from the networking layer.

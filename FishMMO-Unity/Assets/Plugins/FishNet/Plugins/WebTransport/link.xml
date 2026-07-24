@@ -12,4 +12,33 @@
 		and the native interop surface survive IL2CPP managed code stripping.
 	-->
 	<assembly fullname="WebTransport" preserve="all"/>
+
+	<!--
+		HtmlAgilityPack relies on reflection for HTML document parsing,
+		type resolution, and XPath evaluation.  Under IL2CPP the managed
+		code linker strips unreferenced types, causing runtime failures
+		in HTML parsing operations.
+
+		Referenced by: WebTransport/WebGL HTTP response handling.
+	-->
+	<assembly fullname="HtmlAgilityPack" preserve="all"/>
+
+	<!--
+		Org.BouncyCastle relies on reflection for algorithm lookup,
+		ASN.1 type activation, and cryptographic service resolution.
+		On IL2CPP / AOT platforms the managed-code linker strips
+		unreferenced types, causing runtime crashes.
+
+		Referenced by: ClientCertificatePinning.cs
+	-->
+	<assembly fullname="Org.BouncyCastle" preserve="all"/>
+
+	<!--
+		System.AppContext is used to obtain the application base
+		directory.  Under IL2CPP the System.Runtime assembly is
+		heavily stripped and this type may be removed.
+
+		Referenced by: Constants.cs (GetWorkingDirectory)
+	-->
+	<assembly fullname="System.AppContext" preserve="all"/>
 </linker>

@@ -529,12 +529,10 @@ namespace FishMMO.Auth.Implementation
 					}
 				}
 
-				OnAuthResultCallback(result);
-
-				if (result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null)
-				{
-					OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
-				}
+				OnAuthResultCallback(
+					result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null
+						? ClientAuthenticationResult.TokenDecryptFailed
+						: result);
 
 				_ = Log.Debug(LogPrefix, result.ToString());
 

@@ -102,10 +102,22 @@ namespace FishMMO.Client
 					RedirectStandardError = true,
 					CreateNoWindow = true
 				};
-				startInfo.ArgumentList.Add($"-version={currentClientVersion}");
-				startInfo.ArgumentList.Add($"-latestversion={latestServerVersion}");
-				startInfo.ArgumentList.Add($"-pid={Process.GetCurrentProcess().Id}");
-				startInfo.ArgumentList.Add($"-exe={Constants.Configuration.ClientExecutable}");
+				try
+				{
+					startInfo.ArgumentList.Add($"-version={currentClientVersion}");
+					startInfo.ArgumentList.Add($"-latestversion={latestServerVersion}");
+					startInfo.ArgumentList.Add($"-pid={Process.GetCurrentProcess().Id}");
+					startInfo.ArgumentList.Add($"-exe={Constants.Configuration.ClientExecutable}");
+				}
+				catch (NotSupportedException)
+				{
+					// IL2CPP fallback: some Mono/IL2CPP versions do not support ArgumentList.
+					// Build the arguments string manually with proper shell quoting.
+					startInfo.Arguments = $"-version=\"{currentClientVersion}\"" + " "
+						+ $"-latestversion=\"{latestServerVersion}\"" + " "
+						+ $"-pid={Process.GetCurrentProcess().Id}" + " "
+						+ $"-exe=\"{Constants.Configuration.ClientExecutable}\"";
+				}
 
 				process = new Process { StartInfo = startInfo };
 

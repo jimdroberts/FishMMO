@@ -1050,14 +1050,36 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * synchronously, h3_server_process_data calls h3->on_ready
          * which creates the wt_session.
          *
-         * Snapshot sctx->h3 before dereference: a concurrent
-         * SHUTDOWN_COMPLETE may free the h3_session via
-         * h3_session_free while this RECEIVE callback is still
-         * executing on another QUIC worker thread.  The snapshot
-         * doesn't prevent the free, but it ensures we use a
-         * consistent pointer value for the null check + call. */
+         * ── M-1: TOCTOU UAF on sctx->h3 ──────────────────────────
+         * The h3 pointer is snapshot from sctx->h3, then h3->freed is
+         * checked, then h3_server_process_data is called.  Between the
+         * snapshot and the freed check, a concurrent h3_session_free()
+         * (called from SHUTDOWN_COMPLETE on the QUIC connection thread)
+         * may set h3->freed=true and begin cleaning up the session.
+         *
+         * Mitigation layers:
+         *   (a) msquic guarantees per-stream callback serialization:
+         *       no two threads fire callbacks for the same stream
+         *       concurrently.  The RECEIVE callback and SHUTDOWN_COMPLETE
+         *       are on different handles (stream vs connection), so
+         *       they can race across streams.
+         *   (b) The atomic freed flag: h3_session_free sets freed=true
+         *       as its VERY FIRST operation, before any cleanup.  The
+         *       RECEIVE handler checks h3->freed after snapshotting h3.
+         *       If freed is observed as true BEFORE the call, we skip
+         *       processing entirely.  If freed is observed as false, the
+         *       cleanup hasn't started yet, so h3 is still valid.
+         *
+         * Trigger sequence (all paths mitigated by layer b):
+         *   1. RECEIVE fires for stream A on QUIC worker thread T1
+         *   2. T1 loads sctx->h3 → gets valid h3 pointer
+         *   3. SHUTDOWN_COMPLETE fires for the connection on thread T2
+         *   4. T2 calls h3_session_free → sets h3->freed=true → frees h3
+         *   5. T1 checks h3->freed → reads true → skips processing ✓
+         *      OR (without the flag) T1 calls h3_server_process_data
+         *      on freed memory → UAF */
         h3_session_t* h3 = sctx->h3;
-        if (h3) {
+        if (h3 && !atomic_load(&h3->freed)) {
             int hr = h3_server_process_data(h3, sctx);
             if (hr < 0) {
                 MsQuic->StreamShutdown(stream,
@@ -1076,10 +1098,11 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * handshake data would remain buffered and unprocessed,
          * causing the handshake to hang indefinitely. */
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
-            /* Snapshot h3 before dereference — see RECEIVE case above
-             * for rationale (concurrent SHUTDOWN_COMPLETE UAF). */
+            /* Snapshot h3 and check freed before dereference.
+             * See RECEIVE case for the full M-1 TOCTOU analysis —
+             * same race applies here. */
             h3_session_t* h3 = sctx->h3;
-            if (h3) {
+            if (h3 && !atomic_load(&h3->freed)) {
                 int hr = h3_server_process_data(h3, sctx);
                 if (hr < 0) {
                     MsQuic->StreamShutdown(stream,
@@ -1302,10 +1325,10 @@ h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         }
 
         /* Process buffered data for client HTTP/3 handshake.
-         * Snapshot h3 before dereference — same UAF guard as the
-         * server-side h3_stream_cb RECEIVE path. */
+         * Snapshot h3 and check freed before dereference —
+         * same M-1 TOCTOU safeguard as the server-side RECEIVE path. */
         h3_session_t* h3 = sctx->h3;
-        if (h3) {
+        if (h3 && !atomic_load(&h3->freed)) {
             h3_client_process_data(h3, sctx);
         }
         return QUIC_STATUS_SUCCESS;
@@ -1316,10 +1339,10 @@ h3_client_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * This handles the case where the 200 OK data arrives in the
          * same stream event as the FIN from the server. */
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
-            /* Snapshot h3 before dereference — same UAF guard as
-             * the server-side path. */
+            /* Snapshot h3 and check freed before dereference.
+             * Same M-1 safeguard as the server-side PEER_SEND_SHUTDOWN path. */
             h3_session_t* h3 = sctx->h3;
-            if (h3) {
+            if (h3 && !atomic_load(&h3->freed)) {
                 h3_client_process_data(h3, sctx);
             }
         }
@@ -1597,6 +1620,15 @@ void h3_session_free(h3_session_t* h3)
 {
     if (!h3) return;
 
+    /* M-1: Defensively mark the session as freed BEFORE any actual
+     * cleanup.  h3_stream_cb RECEIVE handlers may have snapshot the
+     * h3 pointer before we got here; after this store they will see
+     * freed==true and skip processing.  Without this, a concurrent
+     * RECEIVE callback (from a different stream on the same connection)
+     * could call h3_server_process_data on a partially-freed session.
+     * Mitigated by msquic's per-stream callback serialization. */
+    atomic_store(&h3->freed, true);
+
     /* Shut down tracked control streams to trigger SHUTDOWN_COMPLETE,
      * which StreamClose's the handle exactly once in h3_send_only_stream_cb.
      * Do NOT StreamClose here — that double-closed and SEGVd in QuicStreamFree.
@@ -1651,13 +1683,18 @@ void h3_session_free(h3_session_t* h3)
     h3->stream_ctx_list = NULL;
     while (sctx) {
         h3_stream_ctx_t* next = sctx->next;
-        /* Unlock during free to avoid holding the lock across
-         * deallocation (free is not guaranteed to be fast). The list
-         * head has already been detached, so concurrent unlinkers
-         * will find an empty list and no-op. */
+        /* CAS guard: a concurrent SHUTDOWN_COMPLETE / PEER_SEND_ABORTED
+         * on a QUIC worker thread may have already freed this context
+         * despite msquic's stream-before-connection ordering — defensive
+         * double-free prevention.  Only free if our CAS wins. */
+        int expected = 0;
+        bool we_own = atomic_compare_exchange_strong(
+            &sctx->freed, &expected, 1);
         H3_UNLOCK(h3);
-        free(sctx->recv_buf);
-        free(sctx);
+        if (we_own) {
+            free(sctx->recv_buf);
+            free(sctx);
+        }
         H3_LOCK(h3);
         sctx = next;
     }

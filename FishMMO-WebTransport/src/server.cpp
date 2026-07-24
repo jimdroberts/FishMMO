@@ -168,6 +168,12 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
             /* Collect pending sctx entries — unlink from tracking
              * list under the lock, save needed fields locally. */
             struct {
+                h3_stream_ctx_t* sctx;   /* freed only after the QUIC stream's
+                                          * callback handler has been reassigned
+                                          * by wt_stream_manager_accept_stream —
+                                          * freeing it earlier leaves the stream
+                                          * still registered to h3_stream_cb with
+                                          * a dangling ctx pointer (UAF/SEGV). */
                 HQUIC quic_stream;
                 uint8_t* recv_buf;
                 uint32_t recv_offset;
@@ -203,13 +209,21 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
                         ds->h3 = NULL;  /* prevent unlink in callback */
 
                         /* Save fields for processing outside lock */
+                        pending[idx].sctx = ds;
                         pending[idx].quic_stream = ds->quic_stream;
                         pending[idx].recv_buf = ds->recv_buf;
                         pending[idx].recv_offset = ds->recv_offset;
                         ds->recv_buf = NULL;  /* ownership transferred */
                         idx++;
 
-                        free(ds);  /* sctx struct freed; data lives on */
+                        /* Do NOT free(ds) here. The QUIC stream's callback
+                         * handler is still h3_stream_cb with ctx == ds until
+                         * wt_stream_manager_accept_stream() reassigns it below
+                         * (outside this lock). Freeing ds now would leave a
+                         * window where a QUIC worker thread can deliver an
+                         * event (RECEIVE / PEER_SEND_SHUTDOWN / SHUTDOWN_COMPLETE)
+                         * on this stream against freed memory. ds is freed
+                         * further down, after the handler swap. */
                     }
                     ds = next;
                 }
@@ -224,6 +238,9 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
                     wt_stream_manager_accept_stream(
                         session->stream_mgr,
                         pending[i].quic_stream);
+                    /* Stream's callback handler is now the stream_manager's
+                     * handler, not h3_stream_cb — safe to free the old sctx. */
+                    free(pending[i].sctx);
 
                     if (pending[i].recv_buf &&
                         pending[i].recv_offset > 0 &&
@@ -351,6 +368,7 @@ wt_server_s* wt_server_alloc_impl(
         srv->max_clients + 1, sizeof(wt_server_conn_t));
     if (!srv->connections) { free(srv); return NULL; }
 
+    srv->h3_sweep_cursor = 1;
     wt_datagram_queue_init(&srv->dgram_queue);
     return srv;
 }
@@ -704,8 +722,7 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
      * index on the next frame, so all connections are eventually
      * covered over multiple poll cycles. */
     {
-        static uint32_t h3_sweep_cursor = 1;
-        uint32_t start = h3_sweep_cursor;
+        uint32_t start = server->h3_sweep_cursor;
         uint32_t checked = 0;
         const uint32_t max_check = 64;
         uint64_t now = rate_limiter_now_ms();
@@ -748,9 +765,9 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
 
         /* Advance cursor for the next frame.  Wrap around to 1
          * (index 0 is reserved for WT_CONNECTION_ID_NONE). */
-        h3_sweep_cursor = start + checked;
-        if (h3_sweep_cursor > server->max_clients)
-            h3_sweep_cursor = 1;
+        server->h3_sweep_cursor = start + checked;
+        if (server->h3_sweep_cursor > server->max_clients)
+            server->h3_sweep_cursor = 1;
     }
 
     wt_datagram_queue_drain(&server->dgram_queue,

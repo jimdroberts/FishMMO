@@ -59,6 +59,27 @@ var LibraryFishWebTransport = {
             return idx;
         },
 
+        /** Allocate WASM heap memory with retry. Under extreme memory pressure _malloc can
+         *  transiently return 0 (NULL). This helper retries up to maxAttempts times with
+         *  delayMs between each attempt, allowing the GC to free memory between retries.
+         *  Returns a Promise that resolves with the pointer (or null if all retries fail). */
+        _mallocRetry: function(size, maxAttempts, delayMs) {
+            return new Promise(function(resolve) {
+                function tryMalloc(attempt) {
+                    var ptr = _malloc(size);
+                    if (ptr) {
+                        resolve(ptr);
+                    } else if (attempt < maxAttempts) {
+                        setTimeout(function() { tryMalloc(attempt + 1); }, delayMs);
+                    } else {
+                        console.error('[FishWT] _malloc failed for ' + size + ' bytes after ' + maxAttempts + ' attempts');
+                        resolve(null);
+                    }
+                }
+                tryMalloc(1);
+            });
+        },
+
         /** Read incoming bidirectional streams, deliver data via onStream callback.
          *  Wraps the pump in a retry loop: if the reader becomes errored or the
          *  pump fails, it waits 1s and re-creates the reader. This prevents a
@@ -109,22 +130,21 @@ var LibraryFishWebTransport = {
                                 if (session._closed) { try { streamReader.releaseLock(); } catch (_) {} return; }
                                 if (sr.done) { streamReader.releaseLock(); return; }
                                 var data = new Uint8Array(sr.value);
-                                // NOTE: _malloc failure silently drops data with no retry.
-                                // This is acceptable because WebTransport stream data is paced
-                                // by the sender — the next read will eventually arrive. However,
-                                // under extreme memory pressure this can cause sustained data loss.
-                                // A future improvement would be to buffer the dropped chunk and
-                                // retry _malloc after a brief delay.
-                                var ptr = _malloc(data.length);
-                                if (!ptr) {
-                                    console.warn('[FishWT] malloc failed for stream data (' + data.length + ' bytes), dropping');
-                                    streamReader.releaseLock();
-                                    return;
-                                }
-                                HEAPU8.set(data, ptr);
-                                FishWebTransport._dynCall('viii', session.onStream, [session._index, ptr, data.length]);
-                                _free(ptr);
-                                readStream();
+                                // Retry _malloc up to 3 times with 10ms delay between attempts.
+                                // Under extreme WASM heap pressure, _malloc can transiently return
+                                // 0 (NULL). A brief delay allows GC to run and free memory.
+                                // If all retries fail, the chunk is dropped with a console.error
+                                // warning so the C# caller can respond to sustained data loss.
+                                return FishWebTransport._mallocRetry(data.length, 3, 10).then(function(ptr) {
+                                    if (ptr) {
+                                        HEAPU8.set(data, ptr);
+                                        FishWebTransport._dynCall('viii', session.onStream, [session._index, ptr, data.length]);
+                                        _free(ptr);
+                                    } else {
+                                        console.warn('[FishWT] malloc failed for stream data (' + data.length + ' bytes) after 3 retries');
+                                    }
+                                    readStream();
+                                });
                             }).catch(function(e) {
                                 console.warn('[FishWT] stream read error: ' + e.message);
                                 try { streamReader.releaseLock(); } catch (_) {}
@@ -181,18 +201,18 @@ var LibraryFishWebTransport = {
                         }
                         session._dgramDoneRetries = 0;  /* reset on successful read */
                         var data = new Uint8Array(result.value);
-                        // NOTE: _malloc failure silently drops data with no retry.
-                        // Same limitation as _readBidiStreams — see comment there.
-                        var ptr = _malloc(data.length);
-                        if (!ptr) {
-                            console.warn('[FishWT] malloc failed for datagram (' + data.length + ' bytes), dropping');
+                        // Retry _malloc up to 3 times with 10ms delay between attempts.
+                        // Same pattern and rationale as _readBidiStreams.
+                        return FishWebTransport._mallocRetry(data.length, 3, 10).then(function(ptr) {
+                            if (ptr) {
+                                HEAPU8.set(data, ptr);
+                                FishWebTransport._dynCall('viii', session.onDatagram, [session._index, ptr, data.length]);
+                                _free(ptr);
+                            } else {
+                                console.warn('[FishWT] malloc failed for datagram (' + data.length + ' bytes) after 3 retries');
+                            }
                             pump();
-                            return;
-                        }
-                        HEAPU8.set(data, ptr);
-                        FishWebTransport._dynCall('viii', session.onDatagram, [session._index, ptr, data.length]);
-                        _free(ptr);
-                        pump();
+                        });
                     }).catch(function(e) {
                         console.error('[FishWT] dgram read error: ' + e.message);
                         try { reader.releaseLock(); } catch (_) {}

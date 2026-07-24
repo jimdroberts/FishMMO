@@ -592,7 +592,7 @@ namespace FishMMO.Auth.Implementation
 				PurgeConnectionAuthState(conn, disconnect: true);
 				return;
 			}
-			if (!sem.Wait(0))
+			if (!sem.Wait(TimeSpan.Zero))
 			{
 				BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true);
 				return;

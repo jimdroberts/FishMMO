@@ -145,6 +145,11 @@ typedef struct wt_server_s {
          * single atomic 64-bit load/store. */
         uint64_t last_connect_ms;
     } rate_limits[WT_RATE_LIMIT_BUCKETS];
+
+        /* C-3: cursor for the H3 handshake timeout sweep.
+         * Stored on the struct (not a static local) so that
+         * wt_server_poll_impl is safe to call from multiple threads. */
+        uint32_t                h3_sweep_cursor;
 } wt_server_s;
 
 /* ── Internal API (called by webtransport_api.cpp) ──────────── */
